@@ -17,7 +17,7 @@
     inherit (self) outputs;
   in {
     nixosConfigurations = {
-      BeAsT = nixpkgs.lib.nixosSystem {
+      desktop = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         specialArgs = {inherit inputs outputs;};
         modules = [./nixos/configuration.nix];
@@ -25,10 +25,35 @@
     };
 
     homeConfigurations = {
-      "nsimon@BeAsT" = home-manager.lib.homeManagerConfiguration {
+      desktop = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
         extraSpecialArgs = {inherit inputs outputs;};
-        modules = [./modules/home.nix];
+        modules = [
+          ./modules/home.nix
+          {
+            home = {
+              username = "nsimon";
+              homeDirectory = "/home/nsimon";
+            };
+            systemd.user.startServices = "sd-switch";
+          }
+        ];
+      };
+
+      macbookpro = home-manager.lib.homeManagerConfiguration rec {
+        pkgs = nixpkgs.legacyPackages.x86_64-darwin;
+        modules = [
+          ./modules/home.nix
+          {
+            home = {
+              homeDirectory = "/Users/nsimon";
+              username = "nsimon";
+            };
+            xdg.configFile."nix/nix.conf".text = ''
+              experimental-features = nix-command flakes
+            '';
+          }
+        ];
       };
     };
   };

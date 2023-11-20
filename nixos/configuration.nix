@@ -118,6 +118,7 @@
     swaylock
     pipewire
     wireplumber
+    gnome.nautilus
   ];
 
   programs.gnupg.agent = {
