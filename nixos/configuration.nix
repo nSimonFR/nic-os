@@ -1,4 +1,4 @@
-{ inputs, lib, config, pkgs, ... }:
+{ inputs, lib, config, pkgs, username, hostname, ... }:
 {
   imports = [
     ./hardware-configuration.nix
@@ -35,7 +35,7 @@
   };
 
   networking = {
-    hostName = "BeAsT";
+    hostName = hostname;
     networkmanager.enable = true;
   };
 
@@ -90,7 +90,7 @@
   fileSystems."/mnt/Games_SSD" = {
     device = "/dev/disk/by-label/Games\\x20SSD";
     fsType = "lowntfs-3g";
-    options = [ "rw" "uid=nsimon" "gid=100" "user" "exec" "umast=000"];
+    options = [ "rw" "uid=${username}" "gid=100" "user" "exec" "umast=000"];
   };
 
   services.blueman.enable = true;
@@ -142,9 +142,9 @@
   programs.zsh.enable = true;
 
   users.defaultUserShell = pkgs.zsh;
-  users.users.nsimon = {
+  users.users.${username}= {
     isNormalUser = true;
-    home = "/home/nsimon";
+    home = "/home/${username}";
     extraGroups = [
       "wheel" # Enable ‘sudo’ for the user.
       "audio" # Enables pulseaudio management

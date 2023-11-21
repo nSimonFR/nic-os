@@ -16,47 +16,25 @@
     ...
   } @ inputs: let
     inherit (self) outputs;
+    username = "nsimon";
   in {
-    nixosConfigurations = {
-      desktop = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        specialArgs = {inherit inputs outputs;};
-        modules = [./nixos/configuration.nix];
-      };
+    nixosConfigurations."BeAsT" = nixpkgs.lib.nixosSystem rec {
+      system = "x86_64-linux";
+      specialArgs = {inherit inputs outputs username; hostname="BeAsT";};
+      modules = [./nixos/configuration.nix];
     };
 
     homeConfigurations = {
-      desktop = home-manager.lib.homeManagerConfiguration {
+      desktop = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        extraSpecialArgs = {inherit inputs outputs;};
-        modules = [
-          ./modules/home.nix
-          {
-            home = {
-              username = "nsimon";
-              homeDirectory = "/home/nsimon";
-            };
-            systemd.user.startServices = "sd-switch";
-          }
-        ];
+        extraSpecialArgs = {inherit inputs outputs username;};
+        modules = [./nixos/home.nix ./modules/home.nix];
       };
 
       macbookpro = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-darwin;
-        extraSpecialArgs = {inherit inputs outputs;};
-        modules = [
-          ./modules/home.nix
-          ./macos/applications.nix
-          {
-            home = {
-              homeDirectory = "/Users/nsimon";
-              username = "nsimon";
-            };
-            xdg.configFile."nix/nix.conf".text = ''
-              experimental-features = nix-command flakes
-            '';
-          }
-        ];
+        extraSpecialArgs = {inherit inputs outputs username;};
+        modules = [./macos/home.nix ./modules/home.nix];
       };
     };
   };
