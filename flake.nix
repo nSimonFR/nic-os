@@ -6,6 +6,7 @@
     home-manager.url = "github:nix-community/home-manager/release-23.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     nix-gaming.url = "github:fufexan/nix-gaming";
+    mac-app-util.url = "github:hraban/mac-app-util";
   };
 
   outputs = {
@@ -42,8 +43,10 @@
 
       macbookpro = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-darwin;
+        extraSpecialArgs = {inherit inputs outputs;};
         modules = [
           ./modules/home.nix
+          ./macos/applications.nix
           {
             home = {
               homeDirectory = "/Users/nsimon";
