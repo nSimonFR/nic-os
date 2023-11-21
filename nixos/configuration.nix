@@ -87,12 +87,6 @@
     nvidia.modesetting.enable = true;
   };
 
-  fileSystems."/mnt/Games_SSD" = {
-    device = "/dev/disk/by-label/Games\\x20SSD";
-    fsType = "lowntfs-3g";
-    options = [ "rw" "uid=${username}" "gid=100" "user" "exec" "umast=000"];
-  };
-
   services.blueman.enable = true;
   services.printing.enable = true;
   services.openssh.enable = true;

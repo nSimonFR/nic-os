@@ -42,7 +42,6 @@ with pkgs; {
 
     _1password
     _1password-gui
-    #firefox
     spotify
     slack
 

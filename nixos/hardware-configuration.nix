@@ -14,14 +14,20 @@
   boot.extraModulePackages = [ ];
 
   fileSystems."/" =
-    { device = "/dev/disk/by-uuid/a919c36d-6ce6-48f3-b915-a5237be9d227";
+    { device = "/dev/disk/by-label/nic-os";
       fsType = "ext4";
     };
 
   fileSystems."/boot" =
-    { device = "/dev/disk/by-uuid/ADBE-ADCE";
+    { device = "/dev/disk/by-label/boot";
       fsType = "vfat";
     };
+
+  fileSystems."/mnt/Games_SSD" = {
+    device = "/dev/disk/by-label/Games\\x20SSD";
+    fsType = "lowntfs-3g";
+    options = [ "rw" "uid=${username}" "gid=users" "user" "exec" "umast=000"];
+  };
 
   swapDevices = [ ];
 
