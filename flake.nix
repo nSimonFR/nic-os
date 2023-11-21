@@ -17,21 +17,23 @@
   } @ inputs: let
     inherit (self) outputs;
     username = "nsimon";
+    nixconfig = "BeAsT";
+    macconfig = "nBook-Pro";
   in {
-    nixosConfigurations."BeAsT" = nixpkgs.lib.nixosSystem rec {
+    nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
       system = "x86_64-linux";
-      specialArgs = {inherit inputs outputs username; hostname="BeAsT";};
+      specialArgs = {inherit inputs outputs username; hostname=nixconfig;};
       modules = [./nixos/configuration.nix];
     };
 
     homeConfigurations = {
-      desktop = home-manager.lib.homeManagerConfiguration rec {
+      ${nixconfig} = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
         extraSpecialArgs = {inherit inputs outputs username;};
         modules = [./nixos/home.nix ./modules/home.nix];
       };
 
-      macbookpro = home-manager.lib.homeManagerConfiguration rec {
+      ${macconfig} = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-darwin;
         extraSpecialArgs = {inherit inputs outputs username;};
         modules = [./macos/home.nix ./modules/home.nix];
