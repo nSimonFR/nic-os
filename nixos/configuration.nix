@@ -15,23 +15,24 @@
         canTouchEfiVariables = true;
         efiSysMountPoint = "/boot";
       };
-      grub = {
-        devices = ["nodev"];
-        efiSupport = true;
-        enable = true;
-        extraEntries = ''
-          menuentry "Windows" {
-            insmod part_gpt
-            insmod fat
-            insmod search_fs_uuid
-            insmod chain
-            search --fs-uuid --set=root $FS_UUID
-            chainloader /EFI/Microsoft/Boot/bootmgfw.efi
-          }
-        '';
-      };
+      systemd-boot.enable = true;
+      #grub = {
+      #  devices = ["nodev"];
+      #  efiSupport = true;
+      #  enable = true;
+      #  extraEntries = ''
+      #    menuentry "Windows" {
+      #      insmod part_gpt
+      #      insmod fat
+      #      insmod search_fs_uuid
+      #      insmod chain
+      #      search --fs-uuid --set=root $FS_UUID
+      #      chainloader /EFI/Microsoft/Boot/bootmgfw.efi
+      #    }
+      #  '';
+      # };
     };
-    supportedFilesystems = ["ntfs"];
+    # supportedFilesystems = ["ntfs"];
   };
 
   networking = {
@@ -77,28 +78,28 @@
   ];
 
   sound.enable = true;
-  hardware = {
-    opengl.driSupport32Bit = true;
-    bluetooth.enable = true;
-    bluetooth.powerOnBoot = true;
-    pulseaudio.enable = true;
-    pulseaudio.support32Bit = true;
-    opengl.enable = true;
-    nvidia.modesetting.enable = true;
-  };
+  # hardware = {
+  #   opengl.driSupport32Bit = true;
+  #   bluetooth.enable = true;
+  #   bluetooth.powerOnBoot = true;
+  #   pulseaudio.enable = true;
+  #   pulseaudio.support32Bit = true;
+  #   opengl.enable = true;
+  #   nvidia.modesetting.enable = true;
+  # };
 
-  services.blueman.enable = true;
-  services.printing.enable = true;
-  services.openssh.enable = true;
-  services.gvfs.enable = true;
-  services.xserver = {
-    enable = true;
-    videoDrivers = ["nvidia"];
-    displayManager.gdm = {
-      enable = true;
-      wayland = true;
-    };
-  };
+  # services.blueman.enable = true;
+  # services.printing.enable = true;
+  # services.openssh.enable = true;
+  # services.gvfs.enable = true;
+  # services.xserver = {
+  #   enable = true;
+  #   videoDrivers = ["nvidia"];
+  #   displayManager.gdm = {
+  #     enable = true;
+  #     wayland = true;
+  #   };
+  # };
 
   environment.systemPackages = with pkgs; [
     home-manager
@@ -120,12 +121,12 @@
     enableSSHSupport = true;
   };
 
-  programs.hyprland = {
-    enable = true;
-    xwayland.enable = true;
-    xwayland.hidpi = true;
-    nvidiaPatches = true;
-  };
+  # programs.hyprland = {
+  #   enable = true;
+  #   xwayland.enable = true;
+  #   xwayland.hidpi = true;
+  #   nvidiaPatches = true;
+  # };
 
   programs.steam = {
     enable = true;
