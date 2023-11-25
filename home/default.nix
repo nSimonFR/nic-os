@@ -6,11 +6,10 @@
   ...
 }: {
   imports = [
-    ./common.nix
+    ./programs.nix
   ];
 
   home.stateVersion = "23.05";
-  programs.home-manager.enable = true;
   nixpkgs = {
     config = {
       allowUnfree = true;

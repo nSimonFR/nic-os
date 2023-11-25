@@ -55,6 +55,8 @@ with pkgs; {
     '')
   ];
 
+  programs.home-manager.enable = true;
+
   programs.vscode = {
     enable = true;
     extensions = with pkgs.vscode-extensions; [

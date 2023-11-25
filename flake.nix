@@ -30,13 +30,13 @@
       ${nixconfig} = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
         extraSpecialArgs = {inherit inputs outputs username;};
-        modules = [./nixos/home.nix ./modules/home.nix];
+        modules = [./home ./nixos/home.nix];
       };
 
       ${macconfig} = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-darwin;
         extraSpecialArgs = {inherit inputs outputs username;};
-        modules = [./macos/home.nix ./modules/home.nix];
+        modules = [./home ./macos/home.nix];
       };
     };
   };
