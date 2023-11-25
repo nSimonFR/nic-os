@@ -1,11 +1,7 @@
+{ ... }:
 {
-  inputs,
-  lib,
-  config,
-  pkgs,
-  ...
-}: {
   imports = [
+    ./vscode
     ./programs.nix
   ];
 
