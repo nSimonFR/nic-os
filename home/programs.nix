@@ -1,5 +1,7 @@
 { pkgs, inputs, ... }:
 with pkgs; {
+  programs.home-manager.enable = true;
+
   home.packages = [
     awscli
     bash
@@ -54,13 +56,4 @@ with pkgs; {
       exec ${pkgs.discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
     '')
   ];
-
-  programs.home-manager.enable = true;
-
-  programs.vscode = {
-    enable = true;
-    extensions = with pkgs.vscode-extensions; [
-      vscodevim.vim
-    ];
-  };
 }
