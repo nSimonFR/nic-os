@@ -1,7 +1,7 @@
 [user]
   email = nsimon@pm.me
   name = Nicolas Simon
-	signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
+  signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
 [color]
   ui = true
 [push]
@@ -11,8 +11,19 @@
   excludesfile = ~/.gitignore
 [difftool]
   prompt = false
+[rebase]
+  autosquash = true
 [sequence]
-  editor = rebase-editor
+  editor = interactive-rebase-tool
+[interactive-rebase-tool]
+  inputAbort = Esc
+  inputForceRebase = Enter
+  inputForceAbort = q
+  inputForceRebase = w
+  inputMoveLeft = h
+  inputMoveRight = l
+  inputMoveSelectionDown = Right
+  inputMoveSelectionUp = Left
 [status]
   submoduleSummary = false
 [commit]

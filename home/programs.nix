@@ -15,6 +15,7 @@ with pkgs; {
     ed
     gh
     git
+    git-interactive-rebase-tool
     git-extras
     git-lfs
     gnupg
