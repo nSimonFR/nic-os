@@ -1,0 +1,10 @@
+source ${0:a:h}/setopt.zsh
+source ${0:a:h}/exports.zsh
+source ${0:a:h}/docker-compose.zsh
+source ${0:a:h}/gpg-agent.zsh
+source ${0:a:h}/zsh_hooks.zsh
+source ${0:a:h}/colors.zsh
+source ${0:a:h}/functions.zsh
+source ${0:a:h}/trusk.zsh
+source ${0:a:h}/aliases.zsh
+source ${0:a:h}/bindkeys.zsh
