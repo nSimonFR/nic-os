@@ -1,0 +1,28 @@
+[user]
+  email = nsimon@pm.me
+  name = Nicolas Simon
+	signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
+[color]
+  ui = true
+[push]
+  default = current
+[core]
+  autocrlf = false
+  excludesfile = ~/.gitignore
+[difftool]
+  prompt = false
+[sequence]
+  editor = rebase-editor
+[status]
+  submoduleSummary = false
+[commit]
+  gpgsign = true
+[gpg]
+  program = /usr/local/bin/gpg
+[alias]
+  d = difftool
+  co = checkout
+  br = branch
+  l = log --graph
+  pf = !sh -c 'git push origin --force-with-lease $1' -
+  graph = log --all --graph --decorate=short --color --format=format:'%C(bold blue)%h%C(reset) %C(auto)%d%C(reset)\n         %C(cyan)[%cr]%C(reset)  %x09%C(blue)%an: %s %C(reset)'

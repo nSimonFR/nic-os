@@ -1,5 +1,6 @@
 { pkgs, inputs, ... }:
 with pkgs; {
+  xdg.enable = true;
   programs.home-manager.enable = true;
 
   home.packages = [
@@ -56,4 +57,8 @@ with pkgs; {
       exec ${pkgs.discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
     '')
   ];
+
+  xdg.configFile."git/config".source = ./dotfiles/gitconfig;
+  xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
+  xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
 }
