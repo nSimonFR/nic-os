@@ -1,6 +1,23 @@
-# NicOS - My nix configs w/ flake
+# Nic-OS - My nix configs w/ flake
 
-## NixOS - Fresh install
+This repository replaces my configuration / dotfiles repository.
+
+This allows centralized and reproductable management of:
+
+- My linux computer management with NixOS
+- Dotfiles and custom configurations for programs
+- **TODO:** management of MacOS settings too (With [nix-darwin](https://github.com/LnL7/nix-darwin))
+
+All that, via a declarative and functional approach _("os-management-as-code")_ thanks to;
+
+- [Nix package manager & NixOS](https://nixos.org/)
+- [home-manager](https://github.com/nix-community/home-manager) _(Centralized management of programs for both Linux & MacOS)_
+
+> **Why nic-os ?**
+>
+> Profesionally, I'm known as "NicoS", and this manages my NixOS ! 😛
+
+## NixOS - Base install
 
 ### Start
 
@@ -9,11 +26,32 @@ sudo su
 nix-shell -p nixFlakes git
 ```
 
-### Mount disk
+### Configuration
 
-Either mount your disk as in [./nixos/hardward-configuration.nix](./nixos/hardware-configuration.nix)
+Apply disk configuration from [hardward-configuration.nix](./nixos/hardware-configuration.nix) - or switch to [custom installation](#nixos---custom-install).
 
-Or, mount any of your disks as you wish ([Guide](https://nixos.org/manual/nixos/stable/#sec-installation-manual-partitioning)) and re-generate `hardware-configuration.nix`:
+### Install
+
+```
+nixos-install --flake github:nSimonFR/nic-os#BeAsT
+```
+
+## NixOS - Custom install
+
+Make sure you're [started correctly](#start) !
+
+### Clone repo
+
+```
+git clone git@github.com:nSimonFR/nic-os.git
+cd nic-os
+```
+
+### Mount disk / hardware configuration
+
+Mount your disks as you wish ([Guide](https://nixos.org/manual/nixos/stable/#sec-installation-manual-partitioning))
+
+Then, re-generate and move `hardware-configuration.nix`:
 
 ```sh
 nixos-generate-config --root /mnt
@@ -30,10 +68,12 @@ vim flake.nix
 ### Install
 
 ```sh
-nixos-install --flake github:nSimonFR/nic-os#BeAsT # Or your own !
+nixos-install --flake .#YourConfigName
 ```
 
 ## MacOS - Install
+
+Pre-requesite: [clone](#clone-repo).
 
 ### Install `nix`
 
@@ -48,16 +88,22 @@ nix-shell -p nixUnstable --command "nix build --experimental-features 'nix-comma
 ./result/activate
 ```
 
-## Apply updates
+## Apply updates (local)
 
-### Home Manager (All configurations)
+### NixOS / BeAsT
 
 ```sh
-home-manager switch --flake github:nSimonFR/nic-os#BeAsT # Or any configuration !
+nixos-rebuild switch --flake .#BeAsT
 ```
 
-### NixOS
+### Home Manager - NixOS
 
 ```sh
-nixos-rebuild switch --flake github:nSimonFR/nic-os#BeAsT # Or your own !
+home-manager switch --flake .#BeAsT
+```
+
+### Home Manager - MacOS
+
+```sh
+home-manager switch --flake .#nBook-Pro
 ```
