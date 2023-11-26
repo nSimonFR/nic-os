@@ -62,4 +62,5 @@ with pkgs; {
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;
   xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
+  home.file.".vimrc".source = ./dotfiles/vim;
 }

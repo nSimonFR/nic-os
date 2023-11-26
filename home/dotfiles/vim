@@ -1,0 +1,62 @@
+" Functions
+function FixTabs()
+	if &expandtab
+		set noexpandtab
+	else
+		set expandtab
+	endif
+	retab!
+endfunction
+
+function CenterPane()
+	lefta vnew
+	wincmd w
+	exec 'vertical resize '. string(&columns * 0.75)
+endfunction
+
+fun! FixSpaces()
+	let save_cursor = getpos(".")
+	let old_query = getreg('/')
+	silent! %s/\s\+$//e
+	call setpos('.', save_cursor)
+	call setreg('/', old_query)
+endfun
+
+" Autocmd
+autocmd StdinReadPre * let s:std_in=1
+autocmd BufWritePre *.c,*.txt,*.js,*.py,*.wiki,*.sh,*.coffee :call FixSpaces()
+
+if has("autocmd")
+	au BufReadPost * if line("'\"") > 0 && line("'\"") <= line("$")
+		\| exe "normal! g'\"" | endif
+endif
+
+syntax on
+" colorscheme molokai
+" set undodir=~/.config/nvim/undodir/
+set undofile
+set background=dark
+set encoding=utf-8
+set t_Co=256
+set noswapfile
+set list listchars=tab:»·,trail:·
+set cc=80
+set ts=2
+set sw=2
+set expandtab
+set cindent
+set ruler
+set relativenumber
+set number
+set mouse=""
+set colorcolumn=80
+set noerrorbells
+set visualbell
+set wildmenu
+set wildmode=longest:full,full
+set pastetoggle=<F2>
+set langmenu=en_US
+set clipboard=unnamed
+
+let g:jsx_ext_required = 0
+let $LANG = 'en_US'
