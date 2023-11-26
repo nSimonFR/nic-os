@@ -6,6 +6,7 @@ with pkgs; {
   home.packages = [
     awscli
     bash
+    btop
     coreutils-full
     curl
     ctop
@@ -20,7 +21,6 @@ with pkgs; {
     gource
     gzip
     terraform
-    htop
     jq
     k9s
     kubeseal
@@ -52,6 +52,7 @@ with pkgs; {
 
     (pkgs.discord.override {
       withOpenASAR = true;
+      # withVencord = true;
     })
     (pkgs.writeShellScriptBin "discord-fixed" ''
       exec ${pkgs.discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
