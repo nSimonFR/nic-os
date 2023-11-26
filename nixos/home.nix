@@ -1,5 +1,10 @@
-{ inputs, lib, config, pkgs, username, ... }:
+{ username, hyprland, ... }:
 {
+  imports = [
+    hyprland.homeManagerModules.default
+    ../home/hyprland
+  ];
+
   home = {
     username = username;
     homeDirectory = "/home/${username}";
