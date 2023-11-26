@@ -1,0 +1,94 @@
+/* #region Tabs */
+#TabsToolbar {
+  display: none !important;
+}
+/* #endregion */
+
+/* #region Sidebar */
+#sidebar-header {
+  color: white !important;
+  background: black !important;
+}
+
+#sidebar-icon {
+  width: 0 !important;
+}
+
+#sidebar-box[sidebarcommand="treestyletab_piro_sakura_ne_jp-sidebar-action"]
+  #sidebar-close {
+  display: none !important;
+}
+
+#sidebar {
+  max-width: none !important;
+  min-width: 0px !important;
+}
+
+:root {
+  --thin-tab-width: 25px;
+  --wide-tab-width: 200px;
+}
+
+#sidebar-box:not([sidebarcommand="treestyletab_piro_sakura_ne_jp-sidebar-action"]) {
+  min-width: var(--wide-tab-width) !important;
+  max-width: var(--wide-tab-width) !important;
+}
+
+#sidebar-box[sidebarcommand="treestyletab_piro_sakura_ne_jp-sidebar-action"] {
+  position: relative !important;
+  overflow-x: hidden !important;
+  transition: all 50ms !important;
+  min-width: var(--thin-tab-width) !important;
+  max-width: var(--thin-tab-width) !important;
+  opacity: 1 !important;
+}
+
+#sidebar-box[sidebarcommand="treestyletab_piro_sakura_ne_jp-sidebar-action"]
+  + #sidebar-splitter {
+  display: none !important;
+}
+
+#sidebar-box[sidebarcommand="treestyletab_piro_sakura_ne_jp-sidebar-action"]:hover {
+  position: relative !important;
+  transition: all 500ms !important;
+  min-width: var(--wide-tab-width) !important;
+  max-width: var(--wide-tab-width) !important;
+  margin-right: calc(
+    (var(--wide-tab-width) - var(--thin-tab-width)) * -1
+  ) !important;
+  z-index: 1;
+}
+/* #endregion */
+
+/* #region Navbar */
+#nav-bar {
+  border-bottom: 1.2px solid #777777;
+  border-radius: 5px;
+}
+
+/* Nav bar on top */
+#navigator-toolbox toolbar:not(#nav-bar):not(#toolbar-menubar) {
+  -moz-box-ordinal-group: 10 !important;
+}
+
+/* indicators - hide  */
+.private-browsing-indicator {
+  display: none !important;
+}
+.accessibility-indicator {
+  display: none !important;
+}
+
+/* window controls hide*/
+#TabsToolbar #window-controls {
+  display: none !important;
+}
+
+/* caption buttons - hide */
+*|*:root[tabsintitlebar]:not([inFullscreen="true"])
+  #toolbar-menubar[autohide="true"]
+  ~ #TabsToolbar
+  .titlebar-buttonbox-container {
+  display: none !important;
+}
+/* #endregion */
