@@ -8,7 +8,7 @@
   default = current
 [core]
   autocrlf = false
-  excludesfile = ~/.gitignore
+  excludesfile = ~/.config/git/ignore
 [difftool]
   prompt = false
 [rebase]
@@ -29,7 +29,7 @@
 [commit]
   gpgsign = true
 [gpg]
-  program = /usr/local/bin/gpg
+  program = gpg
 [alias]
   d = difftool
   co = checkout
