@@ -14,6 +14,12 @@
     profiles.${username} = {
       userChrome = builtins.readFile ./userChrome.css;
       userContent = builtins.readFile ./userContent.css;
+      settings = {
+        "toolkit.legacyUserProfileCustomizations.stylesheets" = true;
+        "browser.startup.page" = 3;
+        "browser.aboutConfig.showWarning" = false;
+        "browser.toolbars.bookmarks.visibility" = false;
+      };
     };
   };
 

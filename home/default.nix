@@ -25,6 +25,7 @@
     direnv
     docker
     ed
+    google-cloud-sdk
     gh
     git
     git-interactive-rebase-tool
@@ -36,11 +37,17 @@
     terraform
     jq
     k9s
+    kompose
+    krew
+    kubectl
     kubeseal
     less
     nano
+    nodejs
+    nodePackages.npm
     nmap
     openssh
+    pinentry
     rclone
     ripgrep
     rsync
@@ -55,14 +62,14 @@
     youtube-dl
     yq
     zsh
-
-    _1password
+  ] ++ lib.optionals stdenv.isDarwin [
+    cocoapods
+    m-cli # useful macOS CLI commands
+  ] ++ lib.optionals (!stdenv.isDarwin) [
     _1password-gui
-    spotify
     slack
-
+    spotify
     #inputs.nix-gaming.packages.${pkgs.system}.star-citizen
-
     (pkgs.discord.override {
       withOpenASAR = true;
       # withVencord = true;
@@ -71,6 +78,11 @@
       exec ${pkgs.discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
     '')
   ];
+
+  # TODO
+  # - Unclutter
+  # - Contexts.App
+  # - AirBuddy
 
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;
   xdg.configFile."git/ignore".source = ./dotfiles/gitignore;

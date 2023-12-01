@@ -2,17 +2,21 @@
   description = "nSimon nix config";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-23.05";
-    home-manager.url = "github:nix-community/home-manager/release-23.05";
+    nixpkgs.url = github:nixos/nixpkgs/nixos-23.05;
+    home-manager.url = github:nix-community/home-manager/release-23.05;
+    nix-gaming.url = github:fufexan/nix-gaming;
+    mac-app-util.url = github:hraban/mac-app-util;
+    darwin.url = github:lnl7/nix-darwin;
+
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
-    nix-gaming.url = "github:fufexan/nix-gaming";
-    mac-app-util.url = "github:hraban/mac-app-util";
+    darwin.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs = {
     self,
     nixpkgs,
     home-manager,
+    darwin,
     ...
   } @ inputs: let
     inherit (self) outputs;
@@ -26,6 +30,12 @@
       modules = [./nixos/configuration.nix];
     };
 
+    darwinConfigurations.nBookPro = darwin.lib.darwinSystem rec {
+      system = "aarch64-darwin";
+      specialArgs = {inherit inputs outputs username; hostname="nBookPro";};
+      modules = [home-manager.darwinModules.home-manager ./macos/configuration.nix];
+    };
+
     homeConfigurations = {
       ${nixconfig} = home-manager.lib.homeManagerConfiguration rec {
         pkgs = nixpkgs.legacyPackages.x86_64-linux;
@@ -34,7 +44,7 @@
       };
 
       ${macconfig} = home-manager.lib.homeManagerConfiguration rec {
-        pkgs = nixpkgs.legacyPackages.x86_64-darwin;
+        pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         extraSpecialArgs = {inherit inputs outputs username;};
         modules = [./home ./macos/home.nix];
       };
