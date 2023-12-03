@@ -67,6 +67,7 @@
     vim
     watchman
     wget
+    yarn
     youtube-dl
     yq
     zsh
