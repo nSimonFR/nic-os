@@ -4,6 +4,8 @@
   signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
 [color]
   ui = true
+[init]
+  defaultBranch = main
 [push]
   default = current
 [core]
@@ -35,5 +37,6 @@
   co = checkout
   br = branch
   l = log --graph
+  p = push
   pf = !sh -c 'git push origin --force-with-lease $1' -
   graph = log --all --graph --decorate=short --color --format=format:'%C(bold blue)%h%C(reset) %C(auto)%d%C(reset)\n         %C(cyan)[%cr]%C(reset)  %x09%C(blue)%an: %s %C(reset)'

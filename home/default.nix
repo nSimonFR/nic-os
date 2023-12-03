@@ -11,11 +11,16 @@
     allowUnfreePredicate = _: true;
   };
 
-  programs.home-manager.enable = true;
   home.stateVersion = "23.05";
+  programs.home-manager.enable = true;
+  fonts.fontconfig.enable = true;
   xdg.enable = true;
 
   home.packages = with pkgs; [
+    fira-code
+    fira-code-symbols
+    font-awesome
+  ] ++ [
     awscli
     bash
     btop
@@ -32,6 +37,8 @@
     git-extras
     git-lfs
     gnupg
+    gnused
+    gnugrep
     gource
     gzip
     terraform
@@ -45,6 +52,7 @@
     nano
     nodejs
     nodePackages.npm
+    nodePackages.node-gyp
     nmap
     openssh
     pinentry

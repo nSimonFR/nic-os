@@ -22,7 +22,7 @@
     inherit (self) outputs;
     username = "nsimon";
     nixconfig = "BeAsT";
-    macconfig = "nBook-Pro";
+    macconfig = "nBookPro";
   in {
     nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
       system = "x86_64-linux";
@@ -30,9 +30,9 @@
       modules = [./nixos/configuration.nix];
     };
 
-    darwinConfigurations.nBookPro = darwin.lib.darwinSystem rec {
+    darwinConfigurations.${macconfig} = darwin.lib.darwinSystem rec {
       system = "aarch64-darwin";
-      specialArgs = {inherit inputs outputs username; hostname="nBookPro";};
+      specialArgs = {inherit inputs outputs username; hostname=macconfig;};
       modules = [home-manager.darwinModules.home-manager ./macos/configuration.nix];
     };
 
