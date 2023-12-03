@@ -2,10 +2,10 @@
 # alt - return : ~/bin/new-iterm-window.scpt
 
 # focus window
-#ctrl - left  : yabai -m window --focus west
-#ctrl - right : yabai -m window --focus east
-#ctrl - up    : yabai -m window --focus north
-#ctrl - down  : yabai -m window --focus south
+ctrl - left  : yabai -m window --focus west
+ctrl - right : yabai -m window --focus east
+ctrl - up    : yabai -m window --focus north
+ctrl - down  : yabai -m window --focus south
 
 # focus window (stack)
 alt - tab : yabai -m window --focus stack.next || yabai -m window --focus stack.first
@@ -57,10 +57,10 @@ ctrl + shift + alt - 9 : yabai -m window --space  9; yabai -m space --focus  9
 ctrl + shift + alt - 0 : yabai -m window --space 10; yabai -m space --focus 10
 
 # resize region like i3
-ctrl - left  : yabai -m window --resize left:  -20:  0; yabai -m window --resize right:-20:0
-ctrl - down  : yabai -m window --resize bottom:  0: 20; yabai -m window --resize top:0:20
-ctrl - up    : yabai -m window --resize top:     0:-20; yabai -m window --resize bottom:0:-20 
-ctrl - right : yabai -m window --resize right:  20:  0; yabai -m window --resize left:20:0
+ctrl + shift - left  : yabai -m window --resize left:  -20:  0; yabai -m window --resize right:-20:0
+ctrl + shift - down  : yabai -m window --resize bottom:  0: 20; yabai -m window --resize top:0:20
+ctrl + shift - up    : yabai -m window --resize top:     0:-20; yabai -m window --resize bottom:0:-20 
+ctrl + shift - right : yabai -m window --resize right:  20:  0; yabai -m window --resize left:20:0
 
 # Move windows around
 alt - r : yabai -m space --rotate 90
