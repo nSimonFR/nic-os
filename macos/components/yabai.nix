@@ -11,8 +11,8 @@
   enableScriptingAddition = true;
   config = {
     layout = "stack";
-    #window_border = "on";
-    #window_border_width = 3;
+    window_border = "on";
+    window_border_width = 3;
     active_window_border_color = "0xff81a1c1";
     normal_window_border_color = "0xff3b4252";
     window_border_hidpi = "on";
