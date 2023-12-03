@@ -46,4 +46,9 @@
     TheUnarchiver = 425424353;
     AutoMute = 1118136179;
   };
+
+  # TODO
+  # - Unclutter
+  # - Contexts.App
+  # - AirBuddy
 }

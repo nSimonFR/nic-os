@@ -90,11 +90,6 @@
     '')
   ];
 
-  # TODO
-  # - Unclutter
-  # - Contexts.App
-  # - AirBuddy
-
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;
   xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
