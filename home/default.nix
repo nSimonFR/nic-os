@@ -81,12 +81,12 @@
     slack
     spotify
     #inputs.nix-gaming.packages.${pkgs.system}.star-citizen
-    (pkgs.discord.override {
+    (discord.override {
       withOpenASAR = true;
       # withVencord = true;
     })
-    (pkgs.writeShellScriptBin "discord-fixed" ''
-      exec ${pkgs.discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
+    (writeShellScriptBin "discord-fixed" ''
+      exec ${discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
     '')
   ];
 
