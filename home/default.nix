@@ -56,6 +56,8 @@
     nmap
     openssh
     pinentry
+    pulumi
+    pulumiPackages.pulumi-language-nodejs
     rclone
     ripgrep
     rsync
