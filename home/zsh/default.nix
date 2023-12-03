@@ -26,5 +26,11 @@
       # Will load the whole folder and source nsimon.plugin.zsh:
       { name = "nsimon"; src = ../dotfiles/zsh; }
     ];
+
+    initExtra = ''
+      if [[ $(uname -m) == 'arm64' ]]; then
+        eval "$(/opt/homebrew/bin/brew shellenv)"
+      fi
+    '';
   };
 }
