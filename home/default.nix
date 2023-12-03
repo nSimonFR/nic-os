@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, unstablepkgs,... }:
 {
   imports = [
     ./firefox
@@ -56,8 +56,8 @@
     nmap
     openssh
     pinentry
-    pulumi
-    pulumiPackages.pulumi-language-nodejs
+    unstablepkgs.pulumi
+    unstablepkgs.pulumiPackages.pulumi-language-nodejs
     rclone
     ripgrep
     rsync
