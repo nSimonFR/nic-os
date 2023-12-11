@@ -73,5 +73,3 @@ alt - f : yabai -m window --toggle zoom-fullscreen
 
 # float / unfloat window and center on screen
 alt - t : yabai -m window --toggle float; yabai -m window --grid 4:4:1:1:2:2
-
-cmd + ctrl - q : open -b com.apple.ScreenSaver.Engine
