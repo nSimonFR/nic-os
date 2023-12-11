@@ -26,6 +26,7 @@
   casks = [
     "1password"
     "android-studio"
+    "cyberduck"
     "iterm2"
     "linear-linear"
     "macmediakeyforwarder"
