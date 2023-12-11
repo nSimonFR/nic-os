@@ -22,3 +22,7 @@ bindkey -M vicmd 'j' history-substring-search-down
 # Autosuggest
 bindkey "^[^[[B" autosuggest-execute
 bindkey "^[[1;5B" autosuggest-execute
+
+# iTerm compatibility
+bindkey "[D" backward-word
+bindkey "[C" forward-word
