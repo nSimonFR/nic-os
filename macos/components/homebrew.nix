@@ -20,6 +20,7 @@
   ];
 
   brews = [
+    "helm"
     "pinentry-touchid"
   ];
 
@@ -27,6 +28,7 @@
     "1password"
     "android-studio"
     "cyberduck"
+    "docker"
     "iterm2"
     "linear-linear"
     "macmediakeyforwarder"
