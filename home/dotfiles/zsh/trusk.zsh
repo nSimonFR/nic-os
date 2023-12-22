@@ -1,5 +1,5 @@
 # TODO Switch with yours
-SED=gsed
+SED=sed
 
 function greset() {
   if [ `git branch --list main` ]; then
@@ -16,7 +16,7 @@ function greset() {
 function get-version() {
   if [ $# -eq 0 ]
     then base=.
-    else base=$1
+    else base=$2
   fi
   cat ./$base/package.json | jq -r '.version'
 }
