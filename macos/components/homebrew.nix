@@ -37,6 +37,7 @@
     "rewind"
     "rocket"
     "slack"
+    "steam"
     "spotify"
     "telegram"
     "whatsapp"
