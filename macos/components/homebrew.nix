@@ -29,17 +29,17 @@
     "android-studio"
     "cyberduck"
     "docker"
+    "firefox-developer-edition"
     "iterm2"
     "linear-linear"
     "macmediakeyforwarder"
+    "postman"
     "rewind"
-    "firefox-developer-edition"
     "rocket"
     "slack"
     "spotify"
     "telegram"
     "whatsapp"
-    "postman"
   ];
 
   masApps = {
