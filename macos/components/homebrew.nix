@@ -30,6 +30,7 @@
     "cyberduck"
     "docker"
     "firefox-developer-edition"
+    "google-chrome"
     "iterm2"
     "linear-linear"
     "macmediakeyforwarder"
