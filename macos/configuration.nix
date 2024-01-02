@@ -1,4 +1,4 @@
-{ config, pkgs, username, hostname, ... }:
+{ config, pkgs, username, hostname, lib, ... }:
 {
   services.nix-daemon.enable = true;
   #nix.configureBuildUsers = true;
@@ -25,6 +25,13 @@
   services.skhd = {
     enable = true;
     skhdConfig = builtins.readFile ../home/dotfiles/skhdrc;
+  };
+
+  launchd.daemons."shutdown-work".serviceConfig = {
+    ProgramArguments = [ "pkill" "Slack" "Linear" "Cyberduck"];
+    StartCalendarInterval = [ { Hour = 18; Minute = 00; } ];
+    StandardErrorPath = "/var/log/shutdown-work.log";
+    StandardOutPath = "/var/log/shutdown-work.log";
   };
 
   # Silence the 'last login' shell message
