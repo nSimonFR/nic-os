@@ -6,14 +6,12 @@
   caskArgs.language = "en-GB";
 
   onActivation = {
-    autoUpdate = true;
-    upgrade = true;
+    # autoUpdate = true;
+    # upgrade = true;
     cleanup = "zap";
   };
   
   taps = [
-    "homebrew/core"
-    "homebrew/cask"
     "homebrew/cask-versions"
     "jorgelbg/tap"
     "koekeishiya/formulae"
