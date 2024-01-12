@@ -30,7 +30,7 @@
     direnv
     docker
     ed
-    google-cloud-sdk
+    (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
     gh
     git
     git-interactive-rebase-tool
