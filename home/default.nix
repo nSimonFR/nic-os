@@ -56,6 +56,7 @@
     nmap
     openssh
     pinentry
+    postgresql
     unstablepkgs.pulumi
     unstablepkgs.pulumiPackages.pulumi-language-nodejs
     rclone
