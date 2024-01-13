@@ -18,7 +18,9 @@
     screencapture.location = "/tmp";
 
     finder = {
+      AppleShowAllFiles = true;
       AppleShowAllExtensions = true;
+      _FXShowPosixPathInTitle = true;
       FXEnableExtensionChangeWarning = false;
       CreateDesktop = false;
       FXPreferredViewStyle = "Nlsv"; # list view
@@ -34,7 +36,7 @@
       "com.apple.AppleMultitouchTrackpad".TrackpadThreeFingerDrag = true;
 
       # Finder's default location upon open
-      #"com.apple.finder".NewWindowTargetPath = "file://${home}/";
+      "com.apple.finder".NewWindowTargetPath = "file:///tmp";
     };
 
     NSGlobalDomain = {
@@ -48,9 +50,4 @@
       AppleInterfaceStyle = "Dark";
     };
   };
-
-  # activationScripts.postUserActivation.text = ''
-  #   echo "Upgrading Homebrew Casks..."
-  #   brew upgrade --casks
-  # '';
 }
