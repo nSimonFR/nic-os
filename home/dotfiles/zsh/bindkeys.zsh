@@ -13,16 +13,6 @@ bindkey "^F"      forward-char                         # ctrl-f
 bindkey "^B"      backward-char                        # ctrl-b
 bindkey -e   # Default to standard emacs bindings, regardless of editor string
 
-# history-substring-search
-bindkey "^[[A" history-substring-search-up
-bindkey "^[[B" history-substring-search-down
-bindkey -M vicmd 'k' history-substring-search-up
-bindkey -M vicmd 'j' history-substring-search-down
-
-# Autosuggest
-bindkey "^[^[[B" autosuggest-execute
-bindkey "^[[1;5B" autosuggest-execute
-
 # iTerm compatibility
 bindkey "[D" backward-word
 bindkey "[C" forward-word

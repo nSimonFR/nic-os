@@ -21,6 +21,7 @@
     fira-code-symbols
     font-awesome
   ] ++ [
+    atuin
     awscli
     bash
     btop
