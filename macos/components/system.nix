@@ -40,7 +40,7 @@
 
     NSGlobalDomain = {
       AppleICUForce24HourTime = true;
-      AppleInterfaceStyleSwitchesAutomatically = true;
+      AppleInterfaceStyleSwitchesAutomatically = false;
       AppleShowScrollBars = "WhenScrolling";
       NSNavPanelExpandedStateForSaveMode = true;
       "com.apple.mouse.tapBehavior" = 1;
