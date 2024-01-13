@@ -7,15 +7,16 @@
   };
 
   defaults = {
+    loginwindow.GuestEnabled = false;
+    spaces.spans-displays = false;
+    screencapture.location = "/tmp";
+
     dock = {
       autohide = true;
       mru-spaces = false;
       minimize-to-application = true;
       show-recents = false;
     };
-
-    spaces.spans-displays = false;
-    screencapture.location = "/tmp";
 
     finder = {
       AppleShowAllFiles = true;
@@ -26,8 +27,6 @@
       FXPreferredViewStyle = "Nlsv"; # list view
       ShowPathbar = true;
     };
-
-    loginwindow.GuestEnabled = false;
 
     CustomUserPreferences = {
       # 3 finger dragging
