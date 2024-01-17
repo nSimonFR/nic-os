@@ -1,15 +1,18 @@
 # TODO Switch with yours
 SED=sed
 
-function greset() {
-  if [ `git branch --list main` ]; then
-    BRANCH="main"
-  elif [ `git branch --list develop` ]; then
-    BRANCH="develop"
-  else
-    BRANCH="master"
-  fi
+function gmaster() {
+  BRANCH="master"
+  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
+}
 
+function gmain() {
+  BRANCH="master"
+  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
+}
+
+function gdevelop() {
+  BRANCH="master"
   git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
 }
 
