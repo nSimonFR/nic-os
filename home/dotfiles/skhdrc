@@ -17,6 +17,10 @@ shift + alt - j : yabai -m window —warp south
 shift + alt - k : yabai -m window —warp north
 shift + alt - l : yabai -m window —warp east
 
+# Music player
+ctrl + shift - left  : osascript -e 'tell application "Spotify" to previous track'
+ctrl + shift - right : osascript -e 'tell application "Spotify" to next track'
+
 # balance size of windows - Not working ?
 shift + alt - 0 : yabai -m space —balance 
 
