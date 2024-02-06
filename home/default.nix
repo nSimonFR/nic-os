@@ -11,7 +11,7 @@
     allowUnfreePredicate = _: true;
   };
 
-  home.stateVersion = "23.05";
+  home.stateVersion = "23.11";
   programs.home-manager.enable = true;
   fonts.fontconfig.enable = true;
   xdg.enable = true;
