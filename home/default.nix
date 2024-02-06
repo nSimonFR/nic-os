@@ -29,7 +29,6 @@
     curl
     ctop
     direnv
-    docker
     ed
     (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
     gh
@@ -80,6 +79,7 @@
     m-cli # useful macOS CLI commands
   ] ++ lib.optionals (!stdenv.isDarwin) [
     _1password-gui
+    docker
     slack
     spotify
     #inputs.nix-gaming.packages.${pkgs.system}.star-citizen
