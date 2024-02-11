@@ -50,8 +50,7 @@
     kubeseal
     less
     nano
-    nodejs
-    nodePackages.npm
+    nodejs_20
     nodePackages.node-gyp
     nmap
     openssh
