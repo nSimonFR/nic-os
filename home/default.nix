@@ -30,6 +30,7 @@
     ctop
     direnv
     ed
+    fzf
     (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
     gh
     git
@@ -72,6 +73,7 @@
     yarn
     youtube-dl
     yq
+    zoxide
     zsh
   ] ++ lib.optionals stdenv.isDarwin [
     cocoapods

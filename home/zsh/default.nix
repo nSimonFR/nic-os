@@ -16,7 +16,6 @@
       enable = true;
       plugins = [
         { name = "zsh-users/zsh-syntax-highlighting"; }
-        { name = "agkozak/zsh-z"; }
         { name = "spaceship-prompt/spaceship-prompt"; }
       ];
     };

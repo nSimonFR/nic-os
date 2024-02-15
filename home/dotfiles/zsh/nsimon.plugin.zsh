@@ -9,3 +9,4 @@ source ${0:a:h}/trusk.zsh
 source ${0:a:h}/aliases.zsh
 source ${0:a:h}/bindkeys.zsh
 source ${0:a:h}/atuin.zsh
+source ${0:a:h}/zoxide.zsh
