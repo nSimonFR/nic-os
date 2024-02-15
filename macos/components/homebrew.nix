@@ -40,6 +40,7 @@
     "spotify"
     "telegram"
     "whatsapp"
+    "zed"
   ];
 
   masApps = {
