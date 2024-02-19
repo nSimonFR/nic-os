@@ -44,6 +44,7 @@
         _FXSortFoldersFirst = true;
         # When performing a search, search the current folder by default
         FXDefaultSearchScope = "SCcf";
+        DisableAllAnimations = true;
       };
 
       "com.apple.screensaver" = {
