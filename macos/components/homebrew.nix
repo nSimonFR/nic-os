@@ -31,6 +31,7 @@
     "google-chrome"
     "iterm2"
     "linear-linear"
+    "maccy"
     "macmediakeyforwarder"
     "postman"
     "rewind"
