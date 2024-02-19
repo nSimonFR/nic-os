@@ -10,7 +10,7 @@
     # upgrade = true;
     cleanup = "zap";
   };
-  
+
   taps = [
     "homebrew/cask-versions"
     "jorgelbg/tap"
@@ -39,6 +39,7 @@
     "steam"
     "spotify"
     "telegram"
+    "vanilla"
     "whatsapp"
     "zed"
   ];
