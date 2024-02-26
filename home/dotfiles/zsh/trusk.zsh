@@ -35,7 +35,8 @@ alias dc-pgres='dc exec postgres-db psql -U postgres'
 alias proxy-up="export http_proxy=localhost:8888 https_proxy=localhost:8888"
 
 alias proxy-prod="gcloud beta compute ssh trusk-production-gke-bastion --tunnel-through-iap --project trusk-production-kkypwi --zone europe-west1-c -- -fNT -M -S /tmp/trusk-production-gke-bastion.socket -L8888:127.0.0.1:8888 && proxy-up"
-alias proxy-prod-postgres="gcloud beta compute ssh trusk-production-gke-bastion --tunnel-through-iap --project trusk-production-kkypwi --zone europe-west1-c -- -fNT -M -S /tmp/trusk-production-gke-bastion.socket && proxy-up"
+alias proxy-prod-postgres-api='gcloud beta compute ssh trusk-production-gke-bastion --tunnel-through-iap --project trusk-production-kkypwi --zone europe-west1-c -- -fNT -M -S /tmp/trusk-production-gke-bastion.socket -L5432:$TRUSK_POSTGRES_API_IP:5432 && proxy-up'
+alias proxy-prod-postgres-common='gcloud beta compute ssh trusk-production-gke-bastion --tunnel-through-iap --project trusk-production-kkypwi --zone europe-west1-c -- -fNT -M -S /tmp/trusk-production-gke-bastion.socket -L5432:$TRUSK_POSTGRES_COMMON_IP:5432 && proxy-up'
 alias proxy-prod-down="unset http_proxy https_proxy && ssh -S /tmp/trusk-production-gke-bastion.socket -O exit trusk-production-gke-bastion -q"
 
 alias proxy-staging="gcloud beta compute ssh trusk-staging-gke-bastion --tunnel-through-iap --project trusk-staging-3rpyod --zone europe-west1-c -- -fNT -M -S /tmp/trusk-staging-gke-bastion.socket -L8888:127.0.0.1:8888 -o ServerAliveInterval=60 && proxy-up"
@@ -60,4 +61,3 @@ function encrypt() {
   rm $FILEPATH
   eval "proxy-$1-down"
 }
-
