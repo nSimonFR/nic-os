@@ -33,6 +33,8 @@
     "linear-linear"
     "maccy"
     "macmediakeyforwarder"
+    "mpv"
+    "plex"
     "postman"
     "rewind"
     "rocket"
@@ -41,6 +43,7 @@
     "spotify"
     "telegram"
     "vanilla"
+    "webtorrent"
     "whatsapp"
     "zed"
   ];
