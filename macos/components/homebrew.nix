@@ -15,10 +15,12 @@
     "homebrew/cask-versions"
     "jorgelbg/tap"
     "koekeishiya/formulae"
+    "dbt-labs/dbt"
   ];
 
   brews = [
     "helm"
+    "dbt-postgres"
     "pinentry-touchid"
   ];
 
