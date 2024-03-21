@@ -57,6 +57,7 @@
     openssh
     pinentry
     postgresql
+    python3
     unstablepkgs.pulumi
     unstablepkgs.pulumiPackages.pulumi-language-nodejs
     rclone
