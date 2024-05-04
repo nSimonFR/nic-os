@@ -30,6 +30,7 @@
     "cyberduck"
     "docker"
     "firefox-developer-edition"
+    "godot"
     "google-chrome"
     "iterm2"
     "linear-linear"
