@@ -28,6 +28,7 @@
     "1password"
     "android-studio"
     "arc"
+    "beeper"
     "cyberduck"
     "docker"
     "firefox-developer-edition"
