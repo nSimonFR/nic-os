@@ -27,6 +27,7 @@
   casks = [
     "1password"
     "android-studio"
+    "arc"
     "cyberduck"
     "docker"
     "firefox-developer-edition"

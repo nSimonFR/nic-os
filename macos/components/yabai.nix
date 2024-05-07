@@ -56,6 +56,7 @@
     yabai -m rule --add label="VirtualBox" app="^VirtualBox$" manage=off
     yabai -m rule --add label="Unclutter" app="^Unclutter$" manage=off
     yabai -m rule --add label="iStat" app=".*iStat.*" manage=off
-    #yabai -m rule --add label="IINA" app="^IINA$" manage=off
+    yabai -m rule --add app="^Arc$" title="^$" mouse_follows_focus=off
+    # yabai -m rule --add label="IINA" app="^IINA$" manage=off
   '';
 }
