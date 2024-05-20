@@ -34,6 +34,7 @@
     "firefox-developer-edition"
     "godot"
     "google-chrome"
+    "gramps"
     "iterm2"
     "linear-linear"
     "maccy"
