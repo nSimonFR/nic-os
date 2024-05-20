@@ -56,6 +56,7 @@
     nmap
     openssh
     pinentry
+    poppler_utils
     postgresql
     python3
     unstablepkgs.pulumi
