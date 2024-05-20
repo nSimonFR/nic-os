@@ -27,6 +27,13 @@
     skhdConfig = builtins.readFile ../home/dotfiles/skhdrc;
   };
 
+  launchd.daemons."start-programs".serviceConfig = {
+    ProgramArguments = [ "open" "/Applications/Vanilla.app/"];
+    RunAtLoad = true;
+    StandardErrorPath = "/var/log/start-programs.log";
+    StandardOutPath = "/var/log/start-programs.log";
+  };
+
   launchd.daemons."shutdown-work".serviceConfig = {
     ProgramArguments = [ "pkill" "Slack" "Linear" "Cyberduck" "Postman" "Spark Desktop"];
     StartCalendarInterval = [ { Hour = 18; Minute = 00; } ];
