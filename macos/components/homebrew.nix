@@ -48,6 +48,7 @@
     "steam"
     "spotify"
     "telegram"
+    "transmission"
     "vanilla"
     "webtorrent"
     "whatsapp"
