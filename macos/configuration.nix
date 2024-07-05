@@ -14,8 +14,6 @@
 
   programs.zsh.enable = true;
 
-  fonts.fontDir.enable = true;
-
   #environment.systemPackages = [ pkgs.gcc ];
 
   security.pam.enableSudoTouchIdAuth = true;
