@@ -30,6 +30,7 @@
     "arc"
     "beeper"
     "cyberduck"
+    "disk-inventory-x"
     "docker"
     "firefox-developer-edition"
     "godot"
