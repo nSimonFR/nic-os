@@ -41,6 +41,7 @@
     "linear-linear"
     "maccy"
     "macmediakeyforwarder"
+    "obsidian"
     "stolendata-mpv"
     "plex"
     "postman"
