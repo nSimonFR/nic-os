@@ -38,6 +38,7 @@
     "gramps"
     "iterm2"
     "jordanbaird-ice"
+    "ledger-live"
     "linear-linear"
     "maccy"
     "macmediakeyforwarder"
