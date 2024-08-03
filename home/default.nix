@@ -62,6 +62,7 @@
     unstablepkgs.pulumi
     unstablepkgs.pulumiPackages.pulumi-language-nodejs
     rclone
+    redis
     ripgrep
     rsync
     sops
