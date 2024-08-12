@@ -18,6 +18,8 @@
   updateRefs = true
 [sequence]
   editor = interactive-rebase-tool
+[push]
+  autoSetupRemote = true
 [interactive-rebase-tool]
   inputAbort = Esc
   inputForceRebase = Enter
