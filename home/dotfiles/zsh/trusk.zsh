@@ -52,7 +52,7 @@ function decrypt() {
   # Takes an env to use a proxy and a relative filepath to decrypt.
   # 
   # Usage: 
-  #   decrypt [prod/staging] path/to/file.yaml
+  #   decrypt [prod/staging] path/to/file.yaml # For "preview", you can use "staging"
   # 
   # Example:
   #   decrypt staging deployment/configurations/production/secrets/sealed.yaml
@@ -71,7 +71,7 @@ function encrypt() {
   # NO NEED TO PREFIX DECRYPTED-filename !
   # 
   # Usage: 
-  #   decrypt [prod/staging] path/to/file.yaml
+  #   decrypt [prod/staging] path/to/file.yaml # For "preview", you can use "staging"
   # 
   # Example:
   #   decrypt staging deployment/configurations/production/secrets/sealed.yaml
@@ -82,26 +82,4 @@ function encrypt() {
   kubeseal -o yaml --controller-namespace sealed-secrets-system --controller-name sealed-secrets-sealed-secrets-operator < $FILEPATH > $2
   rm $FILEPATH
   eval "proxy-$1-down"
-}
-
-function decrypt-preview() {
-  # Same as `decrypt``, but specific to preview env (Uses staging as proxy)
-
-  eval "proxy-staging"
-  PATH_TO_KEY=~/MyDocuments/TRUSK/backup-sealed-secrets-staging.key
-  FILEPATH=`dirname $1`/DECRYPTED-`basename $1`
-  kubectl config set-context trusk-staging >/dev/null
-  kubeseal --recovery-unseal -o yaml --recovery-private-key $PATH_TO_KEY < $1 > $FILEPATH
-  eval "proxy-staging-down"
-}
-
-function encrypt-preview() {
-  # Same as `encrypt`, but specific to preview env (Uses staging as proxy)
-
-  eval "proxy-staging"
-  FILEPATH=`dirname $1`/DECRYPTED-`basename $1`
-  kubectl config set-context trusk-staging >/dev/null
-  kubeseal -o yaml --controller-namespace sealed-secrets-system --controller-name sealed-secrets-sealed-secrets-operator < $FILEPATH > $1
-  rm $FILEPATH
-  eval "proxy-staging-down"
 }
