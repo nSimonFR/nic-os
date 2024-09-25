@@ -38,6 +38,7 @@
     "gramps"
     "iterm2"
     "jordanbaird-ice"
+    "keyboardcleantool"
     "ledger-live"
     "linear-linear"
     "maccy"
