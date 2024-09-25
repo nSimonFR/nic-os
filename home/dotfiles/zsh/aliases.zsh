@@ -1,3 +1,4 @@
+alias e="cursor" # My current main editor
 alias ls='ls -GFh'
 alias ll='ls -GFhl'
 alias v="vim"
