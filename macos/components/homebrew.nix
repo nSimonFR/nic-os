@@ -29,6 +29,7 @@
     "android-studio"
     "arc"
     "beeper"
+    "cursor"
     "cyberduck"
     "disk-inventory-x"
     "docker"
