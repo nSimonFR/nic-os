@@ -16,9 +16,11 @@
     "jorgelbg/tap"
     "koekeishiya/formulae"
     "dbt-labs/dbt"
+    "auth0/auth0-cli"
   ];
 
   brews = [
+    "auth0"
     "helm"
     "dbt-postgres"
     "pinentry-touchid"
