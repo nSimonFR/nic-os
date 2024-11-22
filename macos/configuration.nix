@@ -32,13 +32,6 @@
     StandardOutPath = "/var/log/start-programs.log";
   };
 
-  launchd.daemons."shutdown-work".serviceConfig = {
-    ProgramArguments = [ "pkill" "Slack" "Linear" "Cyberduck" "Postman" "Spark Desktop"];
-    StartCalendarInterval = [ { Hour = 18; Minute = 00; } ];
-    StandardErrorPath = "/var/log/shutdown-work.log";
-    StandardOutPath = "/var/log/shutdown-work.log";
-  };
-
   # Silence the 'last login' shell message
   #home-manager.users.${username}.home.file.".hushlogin".text = "";
 
