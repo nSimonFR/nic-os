@@ -1,3 +1,4 @@
 style = 'compact'
 workspace = true
 filter_mode_shell_up_key_binding = "directory"
+enter_accept = false
