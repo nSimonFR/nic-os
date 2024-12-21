@@ -107,3 +107,19 @@ home-manager switch --flake .#BeAsT
 ```sh
 home-manager switch --flake .#nBook-Pro
 ```
+
+## Update packages
+
+```sh
+nix flake update
+nix-channel --update
+nix-env -u
+```
+
+Then, re-apply local updates depending of your implementation !
+
+After all that, you can cleanup your install with;
+
+```sh
+nix-collect-garbage -d
+```
