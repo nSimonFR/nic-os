@@ -2,9 +2,9 @@
 {
   programs.zsh = {
     enable = true;
-    enableAutosuggestions = true;
     enableCompletion = true;
     autocd = true;
+    autosuggestion.enable = true;
 
     history = {
       ignoreDups = true;

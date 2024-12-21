@@ -14,11 +14,9 @@
 
   programs.zsh.enable = true;
 
-  #environment.systemPackages = [ pkgs.gcc ];
+  environment.systemPackages = [ pkgs.gcc ];
 
   security.pam.enableSudoTouchIdAuth = true;
-
-  services.activate-system.enable = true;
 
   services.skhd = {
     enable = true;

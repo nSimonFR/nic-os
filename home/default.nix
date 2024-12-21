@@ -11,7 +11,7 @@
     allowUnfreePredicate = _: true;
   };
 
-  home.stateVersion = "23.11";
+  home.stateVersion = "24.11";
   programs.home-manager.enable = true;
   fonts.fontconfig.enable = true;
   xdg.enable = true;
@@ -55,7 +55,6 @@
     nodePackages.node-gyp
     nmap
     openssh
-    pinentry
     poppler_utils
     postgresql
     python3
@@ -74,7 +73,6 @@
     watchman
     wget
     yarn
-    youtube-dl
     yq
     zoxide
     zsh

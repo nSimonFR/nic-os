@@ -1,5 +1,7 @@
 { ... }:
 {
+  stateVersion = 5;
+  
   keyboard = {
     enableKeyMapping = true;
     remapCapsLockToEscape = true;
