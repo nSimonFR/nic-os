@@ -46,7 +46,6 @@
     jq
     k9s
     kompose
-    krew
     kubectl
     kubeseal
     less
@@ -58,8 +57,6 @@
     poppler_utils
     postgresql
     python3
-    unstablepkgs.pulumi
-    unstablepkgs.pulumiPackages.pulumi-language-nodejs
     rclone
     redis
     ripgrep
