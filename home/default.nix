@@ -62,6 +62,7 @@
     ripgrep
     rsync
     sops
+    thefuck
     time
     tmux
     tree
