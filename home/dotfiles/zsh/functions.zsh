@@ -35,8 +35,6 @@ createpr() {
     BODY=" "
   fi
   URL=$(gh pr create -t $BRANCH -a "@me" --draft -b $BODY)
-  echo Opening $URL
-  open $URL
 }
 #endregion
 
