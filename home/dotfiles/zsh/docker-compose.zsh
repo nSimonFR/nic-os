@@ -1,5 +1,6 @@
 export COMPOSE_HTTP_TIMEOUT=300
 
+alias docker-compose='docker compose'
 alias dc='docker compose'
 alias dp='docker ps -q | xargs docker pause'
 alias de='docker exec -it'
