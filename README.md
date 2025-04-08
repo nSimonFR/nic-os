@@ -78,13 +78,19 @@ Pre-requesite: [clone](#clone-repo).
 ### Install `nix`
 
 ```sh
-sh <(curl -L https://nixos.org/nix/install) --darwin-use-unencrypted-nix-store-volume --daemon
+sh <(curl -L https://nixos.org/nix/install) --daemon
+```
+
+### Install darwin-rebuild
+
+```sh
+nix run nix-darwin/nix-darwin-24.11#darwin-rebuild -- switch --flake .#nBookPro --show-trace
 ```
 
 ### Home Manager install
 
 ```sh
-nix-shell -p nixUnstable --command "nix build --experimental-features 'nix-command flakes' '.#homeConfigurations.nBook-Pro.activationPackage'" # Or replace host
+nix-shell -p nixVersions.latest --command "nix build --experimental-features 'nix-command flakes' '.#homeConfigurations.nBookPro.activationPackage'" # Or replace host
 ./result/activate
 ```
 
@@ -105,7 +111,7 @@ home-manager switch --flake .#BeAsT
 ### Home Manager - MacOS
 
 ```sh
-home-manager switch --flake .#nBook-Pro
+home-manager switch --flake .#nBookPro
 ```
 
 ## Update packages
