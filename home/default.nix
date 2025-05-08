@@ -34,9 +34,10 @@
     (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
     gh
     git
-    git-interactive-rebase-tool
     git-extras
+    git-interactive-rebase-tool
     git-lfs
+    git-spice
     gnupg
     gnused
     gnugrep

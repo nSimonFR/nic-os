@@ -49,3 +49,5 @@
   graph = log --all --graph --decorate=short --color --format=format:'%C(bold blue)%h%C(reset) %C(auto)%d%C(reset)\n         %C(cyan)[%cr]%C(reset)  %x09%C(blue)%an: %s %C(reset)'
   staash = stash --all
   b = blame -w -C -C -C
+[spice "branchCreate"]
+  commit = false
