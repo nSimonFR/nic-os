@@ -16,3 +16,5 @@ bindkey -e   # Default to standard emacs bindings, regardless of editor string
 # iTerm compatibility
 bindkey "[D" backward-word
 bindkey "[C" forward-word
+
+autoload -U select-word-style && select-word-style bash
