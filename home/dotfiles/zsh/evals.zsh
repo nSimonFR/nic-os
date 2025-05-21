@@ -5,3 +5,5 @@ atuin login 1> /dev/null
 
 eval "$(zoxide init zsh)"
 alias cd="z"
+
+eval "$(gs shell completion zsh)"
