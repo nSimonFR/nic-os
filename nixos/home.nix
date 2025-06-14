@@ -7,6 +7,8 @@
 
     packages = with pkgs; [
       # TODO sort A-Z
+      rofi
+      cliphist
       kitty
       _1password-gui
       docker
