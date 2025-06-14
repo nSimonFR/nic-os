@@ -2,20 +2,18 @@
 {
   imports = [
     ./firefox
-    ./vscode
+    #./vscode
     ./zsh
   ];
 
-  nixpkgs.config = {
-    allowUnfree = true;
-    allowUnfreePredicate = _: true;
-  };
+  nixpkgs.config.allowUnfree = true;
 
   home.stateVersion = "25.05";
   programs.home-manager.enable = true;
   fonts.fontconfig.enable = true;
   xdg.enable = true;
 
+  # These are only cli-based shared packages
   home.packages = with pkgs; [
     fira-code
     fira-code-symbols
@@ -78,19 +76,6 @@
   ] ++ lib.optionals stdenv.isDarwin [
     cocoapods
     m-cli # useful macOS CLI commands
-  ] ++ lib.optionals (!stdenv.isDarwin) [
-    _1password-gui
-    docker
-    slack
-    spotify
-    #inputs.nix-gaming.packages.${pkgs.system}.star-citizen
-    (discord.override {
-      withOpenASAR = true;
-      # withVencord = true;
-    })
-    (writeShellScriptBin "discord-fixed" ''
-      exec ${discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
-    '')
   ];
 
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;

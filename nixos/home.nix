@@ -1,18 +1,29 @@
 { config, pkgs, inputs, ... }:
 {
-  home.username = "nsimon";
-  home.homeDirectory = "/home/nsimon";
-  home.stateVersion = "25.05";
+  home = {
+    # TODO use var
+    username = "nsimon";
+    homeDirectory = "/home/nsimon";
 
-  home.packages = with pkgs; [
-    git
-    kitty
-  ];
+    packages = with pkgs; [
+      # TODO sort A-Z
+      kitty
+      _1password-gui
+      docker
+      slack
+      spotify
+      (discord.override {
+        withOpenASAR = true;
+        withVencord = true;
+      })
+      (writeShellScriptBin "discord-fixed" ''
+        exec ${discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
+      '')
+    ];
+  };
 
   wayland.windowManager.hyprland = {
     enable = true;
     extraConfig = builtins.readFile ./hyprland.conf;
   };
-
-  programs.home-manager.enable = true;
 }
