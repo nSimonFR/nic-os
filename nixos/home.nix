@@ -1,9 +1,18 @@
-{ inputs, lib, config, pkgs, username, ... }:
+{ config, pkgs, inputs, ... }:
 {
-  home = {
-    username = username;
-    homeDirectory = "/home/${username}";
+  home.username = "nsimon";
+  home.homeDirectory = "/home/nsimon";
+  home.stateVersion = "25.05";
+
+  home.packages = with pkgs; [
+    git
+    kitty
+  ];
+
+  wayland.windowManager.hyprland = {
+    enable = true;
+    extraConfig = builtins.readFile ./hyprland.conf;
   };
 
-  systemd.user.startServices = "sd-switch";
+  programs.home-manager.enable = true;
 }
