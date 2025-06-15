@@ -73,6 +73,8 @@
     package = config.boot.kernelPackages.nvidiaPackages.stable;
   };
 
+  security.polkit.enable = true;
+
   services.xserver.videoDrivers = ["nvidia"];
 
   services.greetd = {
