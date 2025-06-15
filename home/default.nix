@@ -1,9 +1,10 @@
-{ pkgs, unstablepkgs,... }:
+{ pkgs, unstablepkgs, lib, stdenv, ... }:
 {
   imports = [
+    ./packages.nix
     ./firefox
-    #./vscode
     ./zsh
+    #./vscode
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -12,71 +13,6 @@
   programs.home-manager.enable = true;
   fonts.fontconfig.enable = true;
   xdg.enable = true;
-
-  # These are only cli-based shared packages
-  home.packages = with pkgs; [
-    fira-code
-    fira-code-symbols
-    font-awesome
-  ] ++ [
-    atuin
-    awscli
-    bash
-    btop
-    coreutils-full
-    curl
-    ctop
-    direnv
-    ed
-    fzf
-    (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
-    gh
-    git
-    git-extras
-    git-interactive-rebase-tool
-    git-lfs
-    git-spice
-    gnupg
-    gnused
-    gnugrep
-    gource
-    gzip
-    terraform
-    jq
-    k9s
-    kompose
-    kubectl
-    kubeseal
-    less
-    nano
-    nodejs_20
-    nodePackages.node-gyp
-    nmap
-    openssh
-    poppler_utils
-    postgresql
-    python3
-    rclone
-    redis
-    ripgrep
-    rsync
-    sops
-    thefuck
-    time
-    tmux
-    tree
-    unzip
-    vim
-    watchman
-    wget
-    yarn
-    yq
-    zoxide
-    zsh
-  ] ++ lib.optionals stdenv.isDarwin [
-    cocoapods
-    m-cli # useful macOS CLI commands
-  ];
 
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;
   xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
