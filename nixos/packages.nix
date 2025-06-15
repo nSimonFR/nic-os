@@ -9,9 +9,6 @@
       withOpenASAR = true;
       withVencord = true;
     })
-    (writeShellScriptBin "discord-fixed" ''
-      exec ${discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
-    '')
     docker
     dunst
     eww
