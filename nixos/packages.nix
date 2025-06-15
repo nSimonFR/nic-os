@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, inputs, ... }:
 {
   home.packages = with pkgs; [
     _1password-gui
@@ -16,6 +16,7 @@
     lxqt.lxqt-policykit
     pavucontrol
     pipewire
+    inputs.quickshell.packages.${pkgs.system}.default
     rofi
     slack
     spotify
