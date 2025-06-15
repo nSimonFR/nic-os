@@ -1,4 +1,4 @@
-{ config, pkgs, inputs, ... }:
+{ config, pkgs, inputs, username, ... }:
 {
   imports = [
     ./hyprpaper.nix
@@ -6,9 +6,8 @@
   ];
 
   home = {
-    # TODO use var
-    username = "nsimon";
-    homeDirectory = "/home/nsimon";
+    username = username;
+    homeDirectory = "/home/${username}";
 
     sessionVariables = {
       QT_STYLE_OVERRIDE = "Adwaita-Dark";
