@@ -88,17 +88,6 @@
     };
   };
 
-  #systemd.services.greetd.serviceConfig = {
-  #  Type = "idle";
-  #  StandardInput = "tty";
-  #  StandardOutput = "tty";
-  #  StandardError = "journal"; # Without this errors will spam on screen
-  #  TTYReset = true;
-  #  TTYVHangup = true;
-  #  TTYVTDisallocate = true;
-  #};
-
-  # Enable sound.
   services.pipewire = {
     enable = true;
     pulse.enable = true;
@@ -117,12 +106,6 @@
     fsType = "ntfs3";
     options = [ "uid=1000" "gid=100" "umask=0000" ];
   };
-
-  # Open ports in the firewall.
-  # networking.firewall.allowedTCPPorts = [ ... ];
-  # networking.firewall.allowedUDPPorts = [ ... ];
-  # Or disable the firewall altogether.
-  # networking.firewall.enable = false;
 
   system.stateVersion = "25.05"; # DO NOT UPDATE UNLESS YOU KNOW WHAT YOU'RE DOING
 
