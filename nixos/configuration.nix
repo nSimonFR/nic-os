@@ -44,6 +44,7 @@
     vim
     wget
     cage
+    ntfs3g
   ];
 
   programs.gnupg.agent = {
@@ -98,12 +99,24 @@
   #};
 
   # Enable sound.
-  # services.pulseaudio.enable = true;
-  # OR
-  # services.pipewire = {
-  #   enable = true;
-  #   pulse.enable = true;
-  # };
+  services.pipewire = {
+    enable = true;
+    pulse.enable = true;
+  };
+
+  programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true;
+    dedicatedServer.openFirewall = true;
+    localNetworkGameTransfers.openFirewall = true;
+  };
+  hardware.steam-hardware.enable = true;
+
+  fileSystems."/mnt/games" = {
+    device = "/dev/disk/by-label/Games\\x20SSD";
+    fsType = "ntfs3";
+    options = [ "uid=1000" "gid=100" "umask=0000" ];
+  };
 
   # Open ports in the firewall.
   # networking.firewall.allowedTCPPorts = [ ... ];
