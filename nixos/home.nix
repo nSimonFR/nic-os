@@ -1,5 +1,9 @@
 { config, pkgs, inputs, ... }:
 {
+  imports = [
+    ./hyprpaper.nix
+  ];
+
   home = {
     # TODO use var
     username = "nsimon";
@@ -44,11 +48,6 @@
     };
   };
 
-  wayland.windowManager.hyprland = {
-    enable = true;
-    extraConfig = builtins.readFile ./hyprland.conf;
-  };
-
   gtk = {
     enable = true;
 
@@ -72,5 +71,10 @@
     enable = true;
     platformTheme.name = "qt5ct";
     style.name = "Adwaita-Dark";
+  };
+
+  wayland.windowManager.hyprland = {
+    enable = true;
+    extraConfig = builtins.readFile ./hyprland.conf;
   };
 }
