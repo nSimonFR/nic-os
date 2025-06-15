@@ -7,8 +7,16 @@
 
     packages = with pkgs; [
       # TODO sort A-Z
+      dconf
+      lxqt.lxqt-policykit
       rofi
       cliphist
+      code-cursor
+      dunst
+      pipewire
+      pavucontrol
+      wireplumber
+      eww
       kitty
       _1password-gui
       docker
