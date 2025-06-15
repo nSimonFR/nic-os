@@ -1,22 +1,10 @@
 { config, pkgs, ... }:
 {
   home.packages = with pkgs; [
-    # TODO sort A-Z
-    dconf
-    lxqt.lxqt-policykit
-    rofi
+    _1password-gui
     cliphist
     code-cursor
-    dunst
-    pipewire
-    pavucontrol
-    wireplumber
-    eww
-    kitty
-    _1password-gui
-    docker
-    slack
-    spotify
+    dconf
     (discord.override {
       withOpenASAR = true;
       withVencord = true;
@@ -24,5 +12,16 @@
     (writeShellScriptBin "discord-fixed" ''
       exec ${discord}/bin/discord --enable-features=UseOzonePlatform --ozone-platform=wayland
     '')
+    docker
+    dunst
+    eww
+    kitty
+    lxqt.lxqt-policykit
+    pavucontrol
+    pipewire
+    rofi
+    slack
+    spotify
+    wireplumber
   ];
 } 
