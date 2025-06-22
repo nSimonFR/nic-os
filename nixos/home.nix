@@ -1,7 +1,13 @@
 { config, pkgs, inputs, username, ... }:
-{
+let 
+  wallpaper = pkgs.fetchurl {
+    url = "https://i.redd.it/mvev8aelh7zc1.png";
+    hash = "sha256-lJjIq+3140a5OkNy/FAEOCoCcvQqOi73GWJGwR2zT9w";
+  };
+  defaultSinkId = "49";
+in {
   imports = [
-    ./hyprpaper.nix
+    inputs.zen-browser.homeModules.twilight
     ./packages.nix
   ];
 
@@ -12,6 +18,18 @@
     sessionVariables = {
       QT_STYLE_OVERRIDE = "Adwaita-Dark";
       QT_QPA_PLATFORMTHEME = "qt5ct";
+
+      WINE_FULLSCREEN = "1";
+      WINE_FULLSCREEN_MODE = "3840,1600";
+      WINE_FULLSCREEN_RECT = "0,0,3840,1600";
+      XDG_SESSION_TYPE = "wayland";
+      WAYLAND_DISPLAY = "wayland-1";
+
+      # MANGOHUD = "1";
+      # VK_INSTANCE_LAYERS = "VK_LAYER_MANGOHUD_overlay";
+      # LD_PRELOAD = "${pkgs.mangohud}/lib/libMangoHud_opengl.so";
+
+      SDL_JOYSTICK_HIDAPI = "0";
     };
 
     pointerCursor = {
@@ -36,7 +54,7 @@
     };
 
     font = {
-      name = "Sans";
+      name = "Fira Code Nerd Font";
       size = 11;
     };
   };
@@ -49,6 +67,63 @@
 
   wayland.windowManager.hyprland = {
     enable = true;
-    extraConfig = builtins.readFile ./hyprland.conf;
+    extraConfig = builtins.readFile ./dotfiles/hypr/hyprland.conf;
+  };
+
+  services.xembed-sni-proxy.enable = true;
+
+  services.hyprpaper = {
+    enable = true;
+    settings = {
+      ipc = "on";
+
+      preload = [
+        (builtins.toString wallpaper)
+      ];
+
+      wallpaper = [
+        ",${builtins.toString wallpaper}"
+      ];
+    };
+  };
+
+  programs.zen-browser = {
+    enable = true;
+    nativeMessagingHosts = [ pkgs.firefoxpwa ];
+    policies = {
+      DisableAppUpdate = true;
+      DisableTelemetry = true;
+    };
+  };
+
+  systemd.user.services.set-default-audio = {
+    Unit = {
+      Description = "Set default PipeWire audio output";
+      After = [ "pipewire.service" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.wireplumber}/bin/wpctl set-default ${defaultSinkId}";
+    };
+    Install = {
+      WantedBy = [ "default.target" ];
+    };
+  };
+
+  xdg.portal.enable = true;
+
+  xdg.configFile."hypr/hypridle.conf".source = ./dotfiles/hypr/hypridle.conf;
+  xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;
+  xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
+  xdg.configFile."MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
+  xdg.configFile."alacritty/alacritty.toml".source = ./dotfiles/alacritty.toml;
+
+  xdg.configFile."rofi" = {
+    source = ./dotfiles/rofi;
+    recursive = true;
+  };
+
+  xdg.configFile."waybar" = {
+    source = ./dotfiles/waybar;
+    recursive = true;
   };
 }

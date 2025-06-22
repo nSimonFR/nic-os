@@ -20,7 +20,7 @@
 
   services.skhd = {
     enable = true;
-    skhdConfig = builtins.readFile ../home/dotfiles/skhdrc;
+    skhdConfig = builtins.readFile ./skhdrc;
   };
 
   launchd.daemons."start-programs".serviceConfig = {

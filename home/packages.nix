@@ -2,9 +2,10 @@
 
 {
   home.packages = with pkgs; [
-    fira-code
-    fira-code-symbols
-    font-awesome
+    # Fonts
+    nerd-fonts.fira-code
+
+    # CLI
     atuin
     awscli
     bash
@@ -60,6 +61,7 @@
     zoxide
     zsh
   ] ++ lib.optionals pkgs.stdenv.isDarwin [
+    # MacOS-specific
     cocoapods
     m-cli
   ];

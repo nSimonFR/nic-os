@@ -1,0 +1,82 @@
+/* MACOS SPOTLIGHT LIKE THEME FOR ROFI  */
+/* Author: Newman Sanchez (https://github.com/newmanls) */
+
+* {
+    font:   "Montserrat 12";
+
+    background-color:   transparent;
+    text-color:         @foreground;
+
+    margin:     0;
+    padding:    0;
+    spacing:    0;
+}
+
+@import "../colors.rasi"
+
+window {
+    background-color:   @background;
+
+    location:       center;
+    width:          640;
+    border-radius:  8;
+}
+
+inputbar {
+    font:       "Montserrat 20";
+    padding:    12px;
+    spacing:    12px;
+    children:   [ entry ];
+}
+
+entry {
+    font:   inherit;
+
+    placeholder         : "Search";
+    placeholder-color   : @foreground;
+}
+
+message {
+    border:             2px 0 0;
+    border-color:       @background-alt;
+    background-color:   @background-alt;
+}
+
+textbox {
+    padding:    8px 24px;
+}
+
+listview {
+    lines:      10;
+    columns:    1;
+
+    /*
+    fixed-height:   false;
+    */
+
+    border:         1px 0 0;
+    border-color:   @background-alt;
+}
+
+element {
+    padding:            8px 16px;
+    spacing:            16px;
+    background-color:   transparent;
+}
+
+element normal active {
+    text-color: @selected;
+}
+
+element alternate active {
+    text-color: @selected;
+}
+
+element selected normal, element selected active {
+    background-color:   @selected;
+    text-color:         @foreground;
+}
+
+element-text {
+    text-color: inherit;
+}

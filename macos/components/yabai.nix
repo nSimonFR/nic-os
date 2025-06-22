@@ -38,25 +38,5 @@
     #window_gap = 10;
     #external_bar = "all:0:0";
   };
-  extraConfig = ''
-    yabai -m config --space 3 layout bsp
-    yabai -m config --space 0 layout float
-
-    yabai -m rule --add app='System Preferences' manage=off
-    yabai -m rule --add label="Finder" app="^Finder$" title="(Co(py|nnect)|Move|Info|Pref)" manage=off
-    yabai -m rule --add label="Firefox" app="^Firefox" title="^Opening" manage=off
-    yabai -m rule --add label="Safari" app="^Safari$" title="^(General|(Tab|Password|Website|Extension)s|AutoFill|Se(arch|curity)|Privacy|Advance)$" manage=off
-    yabai -m rule --add label="System Preferences" app="^System Preferences$" manage=off
-    yabai -m rule --add label="Activity Monitor" app="^Activity Monitor$" manage=off
-    yabai -m rule --add label="Calculator" app="^Calculator$" manage=off
-    yabai -m rule --add label="Dictionary" app="^Dictionary$" manage=off
-    yabai -m rule --add label="The Unarchiver" app="^The Unarchiver$" manage=off
-    yabai -m rule --add label="Archive Utility" app="^Archive Utility$" manage=off
-    yabai -m rule --add label="VirtualBox" app="^VirtualBox$" manage=off
-    yabai -m rule --add label="Unclutter" app="^Unclutter$" manage=off
-    yabai -m rule --add label="iStat" app=".*iStat.*" manage=off
-    yabai -m rule --add label="Gramps" app="^Gramps$" manage=off
-    yabai -m rule --add label="Arc" app="^Arc$" title="^$" mouse_follows_focus=off
-    # yabai -m rule --add label="IINA" app="^IINA$" manage=off
-  '';
+  extraConfig = builtins.readFile ./dotfiles/yabairc;
 }

@@ -2,18 +2,17 @@
 {
   imports = [
     ./packages.nix
-    ./firefox
-    ./zsh
-    #./vscode
+    ./zsh.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
 
+  fonts.fontconfig.enable = true;
+
   home.stateVersion = "25.05";
   programs.home-manager.enable = true;
-  fonts.fontconfig.enable = true;
-  xdg.enable = true;
 
+  xdg.enable = true;
   xdg.configFile."git/config".source = ./dotfiles/gitconfig;
   xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
