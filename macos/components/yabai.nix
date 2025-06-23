@@ -38,5 +38,5 @@
     #window_gap = 10;
     #external_bar = "all:0:0";
   };
-  extraConfig = builtins.readFile ./dotfiles/yabairc;
+  extraConfig = builtins.readFile ../dotfiles/yabairc;
 }

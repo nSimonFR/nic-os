@@ -1,6 +1,5 @@
 { config, pkgs, username, hostname, lib, ... }:
 {
-  services.nix-daemon.enable = true;
   #nix.configureBuildUsers = true;
 
   nix.extraOptions = ''
@@ -16,11 +15,11 @@
 
   environment.systemPackages = [ pkgs.gcc ];
 
-  security.pam.enableSudoTouchIdAuth = true;
+  security.pam.services.sudo_local.touchIdAuth = true;
 
   services.skhd = {
     enable = true;
-    skhdConfig = builtins.readFile ./skhdrc;
+    skhdConfig = builtins.readFile ./dotfiles/skhdrc;
   };
 
   launchd.daemons."start-programs".serviceConfig = {
@@ -30,10 +29,7 @@
     StandardOutPath = "/var/log/start-programs.log";
   };
 
-  # Silence the 'last login' shell message
-  #home-manager.users.${username}.home.file.".hushlogin".text = "";
-
-  system = import ./components/system.nix { inherit pkgs; };
+  system = import ./components/system.nix { inherit pkgs username; };
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs; };
 }

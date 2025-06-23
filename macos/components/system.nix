@@ -1,5 +1,7 @@
-{ ... }:
+{ username, ... }:
 {
+  primaryUser = username;
+  
   stateVersion = 5;
   
   keyboard = {
