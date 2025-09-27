@@ -86,18 +86,16 @@ in {
     };
   };
 
-  systemd.user.services.set-default-audio = {
-    Unit = {
-      Description = "Set default PipeWire audio output";
-      After = [ "pipewire.service" ];
-    };
-    Service = {
-      ExecStart = "${pkgs.wireplumber}/bin/wpctl set-default ${defaultSinkId}";
-    };
-    Install = {
-      WantedBy = [ "default.target" ];
-    };
-  };
+  # systemd.user.services.set-default-audio = {
+  #   Unit = {
+  #     Description = "Set default PipeWire audio output";
+  #     After = [ "pipewire.service" ];
+  #   };
+  #   Service = {
+  #     ExecStart = "${pkgs.wireplumber}/bin/wpctl set-default ${defaultSinkId}";
+  #   };
+  #   Install = { WantedBy = [ "default.target" ]; };
+  # };
 
   xdg.portal.enable = true;
 
