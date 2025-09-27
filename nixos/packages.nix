@@ -1,19 +1,15 @@
-{ config, pkgs, inputs, unstablepkgs, ... }:
-{
+{ config, pkgs, inputs, unstablepkgs, ... }: {
   home.packages = with pkgs; [
     _1password-gui
     alacritty
+    beeper
     cliphist
     code-cursor
     dconf
-    (discord.override {
-      withOpenASAR = true;
-      withVencord = true;
-    })
     docker
     dualsensectl
     dunst
-    unstablepkgs.gamescope
+    goverlay
     hypridle
     hyprlock
     hyprshot
@@ -26,24 +22,27 @@
     papirus-icon-theme
     pavucontrol
     pipewire
-    protontricks
     rofi
     slack
     spotify
-    usbutils
-    vulkan-tools
-    vulkan-loader
-    vulkan-validation-layers
     wev
     waybar
-    wine64
     wireplumber
     wl-clipboard
 
-    inputs.quickshell.packages.${pkgs.system}.default
+    (discord.override {
+      withOpenASAR = true;
+      withVencord = true;
+    })
 
-    #(inputs.nix-gaming.packages.${pkgs.hostPlatform.system}.star-citizen.override {
-    #  tricks = [ "arial" "vcrun2019" "win10" "sound=alsa" ];
-    #})
+    (pkgs.lutris.override {
+      extraPkgs = pkgs: [
+        pkgs.wineWowPackages.waylandFull
+        pkgs.winetricks
+        pkgs.proton-ge-bin
+        pkgs.gamescope
+        pkgs.gamemode
+      ];
+    })
   ];
 }
