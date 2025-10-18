@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Adjust input and output volume using pactl
+# Adjust input and output volume using wpctl
 #
 # Author: Jesse Mirabel <github.com/sejjy>
 # Created: September 07, 2025
@@ -11,7 +11,7 @@ NID=2425 # Notification ID
 
 usage() {
 	printf '\nUsage: %s [OPTIONS]\n' "$0"
-	printf '\nAdjust input and output volume using pactl\n'
+	printf '\nAdjust input and output volume using wpctl\n'
 	printf '\nOPTIONS:'
 	printf "\n    input            Set device as '@DEFAULT_SOURCE@'"
 	printf "\n    output           Set device as '@DEFAULT_SINK@'\n"
@@ -55,13 +55,14 @@ get-info() {
 	local default_device=$3
 	local current_volume output current_status
 
-	current_volume=$(pactl "$volume" "$default_device" |
-		awk '{print $5}' | tr -d %)
+	# wpctl prints fractional volume (0.00..1.00) and may append [MUTED]
+	output=$(wpctl get-volume "$default_device")
+	current_volume=$(echo "$output" | awk '{print $2}')
+	current_volume=$(printf '%s\n' "$current_volume" | awk '{printf("%d", $1*100 + 0.5)}')
 
-	output=$(pactl "$status" "$default_device")
 	case $output in
-		*yes) current_status='Unmuted' ;;
-		*no) current_status='Muted' ;;
+		*\[MUTED\]*) current_status='Muted' ;;
+		*) current_status='Unmuted' ;;
 	esac
 
 	echo "$current_volume" "$current_status"
@@ -96,7 +97,7 @@ volumectl() {
 
 	case $action in
 		'mute')
-			pactl "set-$status" "$default_device" toggle
+			wpctl set-mute "$default_device" toggle
 
 			icon=$(get-icon "$icon_name" "$current_status")
 			notify-send "$title: $current_status" -i "$icon" -r $NID
@@ -112,7 +113,7 @@ volumectl() {
 			;;
 	esac
 
-	pactl "set-$volume" "$default_device" "$new_volume%"
+	wpctl set-volume "$default_device" "$new_volume%"
 
 	icon=$(get-icon "$icon_name" "$new_volume")
 	notify-send "$title: $new_volume" -h int:value:"$new_volume" -i "$icon" -r $NID
@@ -121,7 +122,7 @@ volumectl() {
 main() {
 	local device=$1
 	local action=$2
-	local value=${3:-$VALUE}
+	local value=${5:-$VALUE}
 
 	case $device in
 		'input' | 'output')
