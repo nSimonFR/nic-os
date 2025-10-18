@@ -18,8 +18,8 @@
       fsType = "ext4";
     };
 
-  fileSystems."/boot" =
-    { device = "/dev/disk/by-label/NIXBOOT";
+  fileSystems."/boot/efi" =
+    { device = "/dev/disk/by-label/NIXEFI";
       fsType = "vfat";
       options = [ "fmask=0022" "dmask=0022" ];
     };
