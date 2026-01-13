@@ -4,7 +4,12 @@ let
     owner = "jdelahayes";
     domain = "voltalis";
     version = "master";
-    src = inputs.ha-voltalis-src;
+    src = pkgs.fetchFromGitHub {
+      owner = "jdelahayes";
+      repo = "ha-voltalis";
+      rev = "master";
+      sha256 = "sha256-lCqXtVEkhwmLYosWycO2GbECglEp9wfFFaIDuSFUBBk=";
+    };
   };
 in {
   # We run HA in a container; disable native service
@@ -56,7 +61,7 @@ in {
         install -d -m 0755 /etc/ha-linky
         if [ ! -f /etc/ha-linky/ha-linky.env ]; then
           cat > /etc/ha-linky/ha-linky.env <<'EOF'
-    SUPERVISOR_TOKEN=
+    SUPERVISOR_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI3NjQ2ODI3NGViY2Q0MmExYTk3ODdjYjc3ZTE1Nzg5NyIsImlhdCI6MTc1ODk2NjYzNywiZXhwIjoyMDc0MzI2NjM3fQ.oB6vtdLXttU6gPrE8tBLVs3eFNzF8mJZfxONhdTNvRo
     WS_URL=ws://127.0.0.1:8123/api/websocket
     EOF
           chmod 0640 /etc/ha-linky/ha-linky.env
@@ -67,14 +72,25 @@ in {
     {
       "meters": [
         {
-          "prm": "",
-          "token": "",
+          "prm": "07233719170885",
+          "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTg1MzcwNjgsImV4cCI6MTg1MzA1ODY2OCwic3ViIjpbIjA3MjMzNzE5MTcwODg1Il19.qjBHucmniovg7S1wv64-gx_MEmlVXyEY8chU3IPDaF4",
           "name": "Linky consumption",
           "action": "sync",
           "production": false
+        },
+        {
+          "prm": "07233719170885",
+          "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTg1MzcwNjgsImV4cCI6MTg1MzA1ODY2OCwic3ViIjpbIjA3MjMzNzE5MTcwODg1Il19.qjBHucmniovg7S1wv64-gx_MEmlVXyEY8chU3IPDaF4",
+          "name": "Linky production",
+          "action": "sync",
+          "production": true
         }
       ],
-      "costs": []
+      "costs": [
+        {
+          "price": 0.0337
+        }
+      ]
     }
     JSON
           chmod 0640 /etc/home-assistant/ha-linky/options.json
@@ -91,7 +107,7 @@ in {
     fi
     # Copy Voltalis custom component into config dir so it works inside the container
     rm -rf /var/lib/hass/custom_components/voltalis
-    mkdir -p /var/lib/hass/custom_components/voltalis
-    cp -r ${haVoltalis}/* /var/lib/hass/custom_components/voltalis/ || true
+    mkdir -p /var/lib/hass/custom_components
+    cp -r ${haVoltalis}/custom_components/voltalis /var/lib/hass/custom_components/ || true
   '';
 }

@@ -1,0 +1,143 @@
+{
+  "device": {
+    "type": "openrgb",
+    "output": "127.0.0.1:6742",
+    "colorOrder": "rgb",
+    "latchTime": 0
+  },
+  "color": {
+    "channelAdjustment": [
+      {
+        "id": "default",
+        "leds": "*",
+        "pureRed": {
+          "redChannel": 255,
+          "greenChannel": 0,
+          "blueChannel": 0
+        },
+        "pureGreen": {
+          "redChannel": 0,
+          "greenChannel": 255,
+          "blueChannel": 0
+        },
+        "pureBlue": {
+          "redChannel": 0,
+          "greenChannel": 0,
+          "blueChannel": 255
+        }
+      }
+    ]
+  },
+  "smoothing": {
+    "enable": true,
+    "type": "linear",
+    "time_ms": 200,
+    "updateFrequency": 25.0
+  },
+  "grabberV4L2": [
+    {
+      "enable": false
+    }
+  ],
+  "framegrabber": {
+    "enable": true,
+    "type": "qt",
+    "width": 80,
+    "height": 45,
+    "frequency_Hz": 10.0,
+    "priority": 890,
+    "cropLeft": 0,
+    "cropRight": 0,
+    "cropTop": 0,
+    "cropBottom": 0
+  },
+  "blackborderdetector": {
+    "enable": true,
+    "threshold": 5,
+    "unknownFrameCnt": 600,
+    "borderFrameCnt": 50,
+    "maxInconsistentCnt": 10,
+    "blurRemoveCnt": 1,
+    "mode": "default"
+  },
+  "foregroundEffect": {
+    "enable": true,
+    "type": "effect",
+    "color-start": [
+      255,
+      174,
+      11
+    ],
+    "color-end": [
+      100,
+      100,
+      100
+    ],
+    "duration_ms": 3000
+  },
+  "backgroundEffect": {
+    "enable": false,
+    "type": "effect",
+    "color": [
+      0,
+      0,
+      0
+    ],
+    "effect": "Warm mood blobs"
+  },
+  "forwarder": {
+    "enable": false,
+    "json": [],
+    "proto": []
+  },
+  "jsonServer": {
+    "port": 19444
+  },
+  "protoServer": {
+    "port": 19445
+  },
+  "boblightServer": {
+    "enable": false,
+    "port": 19333,
+    "priority": 128
+  },
+  "webConfig": {
+    "port": 8090,
+    "document_root": ""
+  },
+  "effects": {
+    "paths": [
+      "/usr/share/hyperion/effects",
+      "$HOME/.hyperion/effects"
+    ]
+  },
+  "instCapture": {
+    "systemEnable": true,
+    "systemPriority": 250,
+    "v4lEnable": false,
+    "v4lPriority": 240
+  },
+  "network": {
+    "internetAccessAPI": true,
+    "ipWhitelist": [],
+    "apiAuth": false,
+    "localAdminAuth": false
+  },
+  "leds": [
+    {
+      "index": 0,
+      "hscan": {
+        "minimum": 0.0,
+        "maximum": 1.0
+      },
+      "vscan": {
+        "minimum": 0.0,
+        "maximum": 1.0
+      }
+    }
+  ],
+  "general": {
+    "name": "My Hyperion Config",
+    "watchedVersionBranch": "Stable"
+  }
+}

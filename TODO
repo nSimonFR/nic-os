@@ -1,0 +1,18 @@
+- Primary display is incorrect for Games (SC/The Alter)
+  - Trying Gamescope (Steam)
+    - as a session manager;
+      - works with hdr but switching hard gives "burned-out" colors
+      - without hdr there are graphical glitches
+    - steam window doesn't display when trying in hyprland
+  - I heard about a "disable monitor at a kernel level" or something ?
+- Star Citizen doesn't boot
+  - RSI Launcher missing ?
+    - => reinstall should fix
+- Dualsense has issues:
+  - the alters: recognized but no rumble
+  - gow ragnarock: not recognized
+- Check other accessory compatibility;
+  - joysticks
+  - tobii 5
+  - keyboard, mouse and monitor colors
+- rice everything

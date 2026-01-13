@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Star Citizen (Fixed)
+Comment=Star Citizen with DXVK/NVIDIA fixes for freezing issues
+Exec=/home/nsimon/nic-os/nixos/star-citizen-wrapper.sh
+Icon=applications-games
+Terminal=false
+Categories=Game;
+
+

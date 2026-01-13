@@ -2,16 +2,17 @@
   description = "nSimon nix config";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/release-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/release-25.11";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs-master.url = "github:NixOS/nixpkgs/master";
 
     darwin = {
-      url = "github:lnl7/nix-darwin/nix-darwin-25.05";
+      url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.05";
+      url = "github:nix-community/home-manager/release-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
@@ -21,18 +22,36 @@
       inputs.home-manager.follows = "home-manager";
     };
 
-    nix-gaming.url = "github:fufexan/nix-gaming";
+    nix-gaming = {
+      url = "github:fufexan/nix-gaming?rev=8b636f0470cb263aa1472160457f4b2fba420425";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    nix-citizen = {
+      url = "github:3kynox/nix-citizen?ref=fix/eac-error-70003-icu-dotnet";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     mac-app-util.url = "github:hraban/mac-app-util";
   };
 
   outputs =
-    { self, nixpkgs, nixpkgs-unstable, home-manager, darwin, ... }@inputs:
+    {
+      self,
+      nixpkgs,
+      nixpkgs-unstable,
+      nixpkgs-master,
+      home-manager,
+      darwin,
+      ...
+    }@inputs:
     let
       inherit (self) outputs;
       username = "nsimon";
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
-    in {
+    in
+    {
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
         specialArgs = {
@@ -48,27 +67,55 @@
           inherit inputs outputs username;
           hostname = macconfig;
         };
-        modules =
-          [ home-manager.darwinModules.home-manager ./macos/configuration.nix ];
+        modules = [
+          home-manager.darwinModules.home-manager
+          ./macos/configuration.nix
+        ];
       };
 
       homeConfigurations = {
         ${nixconfig} = home-manager.lib.homeManagerConfiguration rec {
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          pkgs = import nixpkgs {
+            system = "x86_64-linux";
+            config.allowUnfree = true;
+          };
           extraSpecialArgs = {
             inherit inputs outputs username;
-            unstablepkgs = nixpkgs-unstable.legacyPackages.x86_64-linux.pkgs;
+            unstablepkgs = import nixpkgs-unstable {
+              system = "x86_64-linux";
+              config.allowUnfree = true;
+            };
+            masterpkgs = import nixpkgs-master {
+              system = "x86_64-linux";
+              config.allowUnfree = true;
+            };
           };
-          modules = [ ./home ./nixos/home.nix ];
+          modules = [
+            ./home
+            ./nixos/home.nix
+          ];
         };
 
         ${macconfig} = home-manager.lib.homeManagerConfiguration rec {
-          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+          pkgs = import nixpkgs {
+            system = "aarch64-darwin";
+            config.allowUnfree = true;
+          };
           extraSpecialArgs = {
             inherit inputs outputs username;
-            unstablepkgs = nixpkgs-unstable.legacyPackages.aarch64-darwin.pkgs;
+            unstablepkgs = import nixpkgs-unstable {
+              system = "aarch64-darwin";
+              config.allowUnfree = true;
+            };
+            masterpkgs = import nixpkgs-master {
+              system = "aarch64-darwin";
+              config.allowUnfree = true;
+            };
           };
-          modules = [ ./home ./macos/home.nix ];
+          modules = [
+            ./home
+            ./macos/home.nix
+          ];
         };
       };
     };

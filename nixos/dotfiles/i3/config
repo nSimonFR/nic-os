@@ -1,0 +1,197 @@
+# i3 config - ported from Hyprland
+# Mod key = Super (Windows key)
+set $mod Mod4
+
+# Font for window titles
+font pango:monospace 8
+
+# Use Mouse+$mod to drag floating windows
+floating_modifier $mod
+
+# Mouse bindings for better window control
+# Right-click on title bar to toggle floating
+bindsym --border button3 floating toggle
+# Middle-click on title bar to kill window
+bindsym --border button2 kill
+
+# Start a terminal (kitty works on both X11 and Wayland)
+bindsym $mod+Return exec kitty
+
+# Kill focused window
+bindsym $mod+q kill
+
+# Start dmenu (program launcher)
+bindsym $mod+space exec dmenu_run
+
+# Change focus with vim keys
+bindsym $mod+h focus left
+bindsym $mod+j focus down
+bindsym $mod+k focus up
+bindsym $mod+l focus right
+
+# Change focus with arrow keys
+bindsym $mod+Left focus left
+bindsym $mod+Down focus down
+bindsym $mod+Up focus up
+bindsym $mod+Right focus right
+
+# Move focused window with vim keys
+bindsym $mod+Shift+h move left
+bindsym $mod+Shift+j move down
+bindsym $mod+Shift+k move up
+bindsym $mod+Shift+l move right
+
+# Move focused window with arrow keys
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Down move down
+bindsym $mod+Shift+Up move up
+bindsym $mod+Shift+Right move right
+
+# Split in horizontal orientation
+bindsym $mod+b split h
+
+# Split in vertical orientation
+bindsym $mod+v split v
+
+# Fullscreen toggle
+bindsym $mod+f fullscreen toggle
+
+# Toggle tiling / floating
+bindsym $mod+t floating toggle
+
+# Change container layout (stacked, tabbed, toggle split)
+bindsym $mod+s layout stacking
+bindsym $mod+w layout tabbed
+bindsym $mod+e layout toggle split
+
+# Focus the parent container
+bindsym $mod+a focus parent
+
+# Define workspace names
+set $ws1 "1"
+set $ws2 "2"
+set $ws3 "3"
+set $ws4 "4"
+set $ws5 "5"
+set $ws6 "6"
+set $ws7 "7"
+set $ws8 "8"
+set $ws9 "9"
+
+# Switch to workspace
+bindsym $mod+1 workspace number $ws1
+bindsym $mod+2 workspace number $ws2
+bindsym $mod+3 workspace number $ws3
+bindsym $mod+4 workspace number $ws4
+bindsym $mod+5 workspace number $ws5
+bindsym $mod+6 workspace number $ws6
+bindsym $mod+7 workspace number $ws7
+bindsym $mod+8 workspace number $ws8
+bindsym $mod+9 workspace number $ws9
+
+# Move focused container to workspace
+bindsym $mod+Shift+1 move container to workspace number $ws1
+bindsym $mod+Shift+2 move container to workspace number $ws2
+bindsym $mod+Shift+3 move container to workspace number $ws3
+bindsym $mod+Shift+4 move container to workspace number $ws4
+bindsym $mod+Shift+5 move container to workspace number $ws5
+bindsym $mod+Shift+6 move container to workspace number $ws6
+bindsym $mod+Shift+7 move container to workspace number $ws7
+bindsym $mod+Shift+8 move container to workspace number $ws8
+bindsym $mod+Shift+9 move container to workspace number $ws9
+
+# Reload the configuration file
+bindsym $mod+Shift+r reload
+
+# Restart i3 inplace (preserves your layout/session)
+bindsym $mod+Shift+e restart
+
+# Exit i3 (logs you out of your X session)
+bindsym $mod+Control+Delete exec "i3-msg exit"
+
+# Lock screen
+bindsym $mod+Control+q exec i3lock -c 000000
+
+# Resize window (you can also use the mouse for that)
+mode "resize" {
+        bindsym h resize shrink width 10 px or 10 ppt
+        bindsym j resize grow height 10 px or 10 ppt
+        bindsym k resize shrink height 10 px or 10 ppt
+        bindsym l resize grow width 10 px or 10 ppt
+
+        bindsym Left resize shrink width 10 px or 10 ppt
+        bindsym Down resize grow height 10 px or 10 ppt
+        bindsym Up resize shrink height 10 px or 10 ppt
+        bindsym Right resize grow width 10 px or 10 ppt
+
+        bindsym Return mode "default"
+        bindsym Escape mode "default"
+        bindsym $mod+r mode "default"
+}
+
+bindsym $mod+r mode "resize"
+
+# Window colors
+client.focused          #FFFFFF #FFFFFF #000000 #FFFFFF   #FFFFFF
+client.focused_inactive #070707 #070707 #FFFFFF #070707   #070707
+client.unfocused        #070707 #070707 #888888 #070707   #070707
+client.urgent           #FF0000 #FF0000 #FFFFFF #FF0000   #FF0000
+
+# Gaps (similar to Hyprland)
+gaps inner 8
+gaps outer 16
+
+# Window borders
+default_border pixel 2
+default_floating_border pixel 2
+
+# Title bars for floating windows (makes them easier to move/resize)
+for_window [floating] border normal 2
+
+# RSI Launcher / Star Citizen window rules - exact class names from Wine
+for_window [class="rsi launcher.exe"] floating disable, border pixel 2
+for_window [class="^rsi launcher.exe$"] floating disable, border pixel 2
+for_window [title="RSI Launcher"] floating disable, border pixel 2
+
+# Star Citizen - prevent fullscreen to avoid i3 crashes
+for_window [class="starcitizen.exe"] floating disable, border pixel 2, fullscreen disable
+for_window [class="^starcitizen.exe$"] floating disable, border pixel 2, fullscreen disable
+for_window [title="Star Citizen"] floating disable, border pixel 2, fullscreen disable
+
+# Start i3bar to display a workspace bar
+bar {
+        status_command i3status
+        position top
+        colors {
+                background #000000
+                statusline #FFFFFF
+                separator  #666666
+
+                focused_workspace  #FFFFFF #FFFFFF #000000
+                active_workspace   #333333 #333333 #FFFFFF
+                inactive_workspace #070707 #070707 #888888
+                urgent_workspace   #FF0000 #FF0000 #FFFFFF
+        }
+}
+
+# Monitor configuration - matching Hyprland layout
+# Acer (portrait/rotated 90° counter-clockwise) on LEFT, LG (ultrawide) on RIGHT
+exec --no-startup-id xrandr --output DP-0 --mode 3840x1600 --rate 160 --pos 1080x0 --rotate normal --output HDMI-0 --mode 1920x1080 --rate 60 --pos 0x0 --rotate left --primary
+
+# Workspace assignments to monitors
+workspace $ws1 output DP-0
+workspace $ws2 output DP-0
+workspace $ws3 output DP-0
+workspace $ws4 output DP-0
+workspace $ws5 output DP-0
+workspace $ws6 output HDMI-0
+workspace $ws7 output HDMI-0
+
+# Set wallpaper (same as Hyprland)
+exec_always --no-startup-id feh --bg-scale ~/wallpaper.png
+
+# Auto-start applications
+exec --no-startup-id discord
+exec --no-startup-id spotify
+
+

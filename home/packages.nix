@@ -1,7 +1,13 @@
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  masterpkgs,
+  lib,
+  ...
+}:
 
 {
-  home.packages = with pkgs;
+  home.packages =
+    with pkgs;
     [
       # Fonts
       nerd-fonts.fira-code
@@ -13,18 +19,18 @@
       btop
       coreutils-full
       curl
+      masterpkgs.cursor-cli
       ctop
       direnv
       ed
       fzf
-      (google-cloud-sdk.withExtraComponents
-        [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
+      (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
       gh
       git
       git-extras
       git-interactive-rebase-tool
       git-lfs
-      git-spice
+      # git-spice
       gnupg
       gnused
       gnugrep
@@ -38,13 +44,13 @@
       kubeseal
       less
       nano
-      nixfmt
+      nixfmt-rfc-style
       nodejs_20
       nodePackages.node-gyp
       nmap
       openssh
       p7zip
-      poppler_utils
+      poppler-utils
       postgresql
       (python312.withPackages (ps: with ps; [
         pandas
@@ -55,7 +61,7 @@
       ripgrep
       rsync
       sops
-      thefuck
+      #thefuck
       time
       tmux
       tree
@@ -67,7 +73,8 @@
       yq
       zoxide
       zsh
-    ] ++ lib.optionals pkgs.stdenv.isDarwin [
+    ]
+    ++ lib.optionals pkgs.stdenv.isDarwin [
       # MacOS-specific
       cocoapods
       m-cli

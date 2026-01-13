@@ -1,15 +1,19 @@
-{ pkgs, unstablepkgs, lib, stdenv, ... }:
+{
+  pkgs,
+  unstablepkgs,
+  lib,
+  stdenv,
+  ...
+}:
 {
   imports = [
     ./packages.nix
     ./zsh.nix
   ];
 
-  nixpkgs.config.allowUnfree = true;
-
   fonts.fontconfig.enable = true;
 
-  home.stateVersion = "25.05";
+  home.stateVersion = "25.11";
   programs.home-manager.enable = true;
 
   xdg.enable = true;
