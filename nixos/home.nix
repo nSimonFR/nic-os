@@ -1,10 +1,15 @@
-{ config, pkgs, inputs, username, ... }:
-let defaultSinkId = "59";
-in {
+{
+  config,
+  pkgs,
+  inputs,
+  username,
+  ...
+}:
+{
   imports = [
     inputs.zen-browser.homeModules.twilight
     ./packages.nix
-    ./pipewire-noise.nix
+    ./audio.nix
   ];
 
   home = {
@@ -15,17 +20,13 @@ in {
       QT_STYLE_OVERRIDE = "Adwaita-Dark";
       QT_QPA_PLATFORMTHEME = "qt5ct";
 
-      WINE_FULLSCREEN = "1";
-      WINE_FULLSCREEN_MODE = "3840,1600";
-      WINE_FULLSCREEN_RECT = "0,0,3840,1600";
-      XDG_SESSION_TYPE = "wayland";
-      WAYLAND_DISPLAY = "wayland-1";
+      # Vulkan shader cache size (increase from default ~1GB to 10GB)
+      "MESA_SHADER_CACHE_MAX_SIZE" = "10G";
+      "MESA_DISK_CACHE_MAX_SIZE" = "10G";
 
-      # MANGOHUD = "1";
-      # VK_INSTANCE_LAYERS = "VK_LAYER_MANGOHUD_overlay";
-      # LD_PRELOAD = "${pkgs.mangohud}/lib/libMangoHud_opengl.so";
-
-      SDL_JOYSTICK_HIDAPI = "0";
+      # NVIDIA shader cache size (10GB = 10737418240 bytes)
+      "__GL_SHADER_DISK_CACHE_SIZE" = "10737418240";
+      "__GL_SHADER_DISK_CACHE_SKIP_CLEANUP" = "1";
     };
 
     pointerCursor = {
@@ -66,44 +67,46 @@ in {
     extraConfig = builtins.readFile ./dotfiles/hypr/hyprland.conf;
   };
 
-  services.xembed-sni-proxy.enable = true;
+  # services.xembed-sni-proxy.enable = true;
 
   services.hyprpaper = {
     enable = true;
     settings = {
       ipc = "on";
       preload = [ "~/wallpaper.png" ];
-      wallpaper = [ ",~/wallpaper.png" ];
+      wallpaper = [
+        "desc:LG Electronics 38GN950 008NTKFBE741,~/wallpaper.png"
+        "desc:Acer Technologies GN246HL LW3EE0058532,~/wallpaper.png"
+      ];
     };
   };
 
   programs.zen-browser = {
     enable = true;
-    nativeMessagingHosts = [ pkgs.firefoxpwa ];
+    # nativeMessagingHosts = [ pkgs."1password" ];
     policies = {
       DisableAppUpdate = true;
       DisableTelemetry = true;
     };
   };
 
-  # systemd.user.services.set-default-audio = {
-  #   Unit = {
-  #     Description = "Set default PipeWire audio output";
-  #     After = [ "pipewire.service" ];
-  #   };
-  #   Service = {
-  #     ExecStart = "${pkgs.wireplumber}/bin/wpctl set-default ${defaultSinkId}";
-  #   };
-  #   Install = { WantedBy = [ "default.target" ]; };
+  # xdg.portal = {
+  #   enable = true;
+  #   extraPortals = with pkgs; [
+  #     xdg-desktop-portal-hyprland
+  #     xdg-desktop-portal-gtk
+  #   ];
+  #   config.common.default = "*";
   # };
-
-  xdg.portal.enable = true;
 
   xdg.configFile."hypr/hypridle.conf".source = ./dotfiles/hypr/hypridle.conf;
   xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;
   xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
   xdg.configFile."MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
   xdg.configFile."alacritty/alacritty.toml".source = ./dotfiles/alacritty.toml;
+  xdg.configFile."i3/config".source = ./dotfiles/i3/config;
+  xdg.configFile."i3status/config".source = ./dotfiles/i3/i3status.conf;
+  xdg.configFile."kitty/kitty.conf".source = ./dotfiles/kitty/kitty.conf;
 
   xdg.configFile."rofi" = {
     source = ./dotfiles/rofi;

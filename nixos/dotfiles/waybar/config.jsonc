@@ -51,7 +51,7 @@
 	-------------*/
 
 	"layer": "top",
-	"output": [ "DP-1", "DP-2" ],
+	"output": ["HDMI-A-0", "HDMI-A-1", "HDMI-A-2"],
 	"position": "bottom",
 	"height": 0,
 	"width": 0,
