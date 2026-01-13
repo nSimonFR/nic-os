@@ -46,7 +46,10 @@
       p7zip
       poppler_utils
       postgresql
-      python3
+      (python312.withPackages (ps: with ps; [
+        pandas
+        requests
+      ]))
       rclone
       redis
       ripgrep
