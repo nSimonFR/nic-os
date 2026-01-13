@@ -17,12 +17,14 @@
     "koekeishiya/formulae"
     "dbt-labs/dbt"
     "auth0/auth0-cli"
+    "Sikarugir-App/sikarugir"
   ];
 
   brews = [
     "auth0"
-    "helm"
+    "cookcli"
     "dbt-postgres"
+    "helm"
     "pinentry-touchid"
   ];
 
@@ -34,7 +36,8 @@
     "cursor"
     "cyberduck"
     "disk-inventory-x"
-    "docker"
+    "docker-desktop"
+    "epic-games"
     "firefox@developer-edition"
     "godot"
     "google-chrome"
@@ -49,17 +52,21 @@
     "obsidian"
     "plex"
     "postman"
+    "qbittorrent"
     "rewind"
     "rocket"
+    "sikarugir"
     "slack"
     "steam"
     "stolendata-mpv"
     "spotify"
     "telegram"
     "transmission"
+    "warp"
     "webtorrent"
     "whatsapp"
     "zed"
+    "zen"
   ];
 
   masApps = {
@@ -69,5 +76,6 @@
     Amphetamine = 937984704;
     TheUnarchiver = 425424353;
     AutoMute = 1118136179;
+    Timepage = 989178902;
   };
 }

@@ -2,10 +2,10 @@
 {
   enable = true;
   package = (pkgs.yabai.overrideAttrs (o: rec {
-    version = "7.1.14";
+    version = "7.1.16";
     src = builtins.fetchTarball {
       url = "https://github.com/koekeishiya/yabai/releases/download/v${version}/yabai-v${version}.tar.gz";
-      sha256 = "sha256:0h4q7y5rywb6c39plw4zzjcnx98f0xbkgcasj723q1agncg8scvh";
+      sha256 = "sha256:133b49xff3fmf2zj16h48ygpdxr26sfs9wmavs2igsmdqslvwhxc";
     };
   }));
   enableScriptingAddition = true;

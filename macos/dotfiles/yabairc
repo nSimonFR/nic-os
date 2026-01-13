@@ -1,4 +1,5 @@
 yabai -m config --space 3 layout bsp
+yabai -m config --space 9 layout bsp
 yabai -m config --space 0 layout float
 
 yabai -m rule --add app='System Preferences' manage=off
