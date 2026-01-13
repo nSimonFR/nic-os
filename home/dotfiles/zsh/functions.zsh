@@ -16,7 +16,9 @@ gb() {
 
 #region gh tools
 pr() {
-  gh pr checkout $1
+  if [ -n "$1" ]; then
+    gh pr checkout $1
+  fi
   gh pr view --web
 }
 
