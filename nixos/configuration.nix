@@ -91,6 +91,8 @@ in
     ];
 
     supportedFilesystems = [ "ntfs3" ];
+
+    binfmt.emulatedSystems = [ "aarch64-linux" ];
   };
 
   networking.hostName = "BeAsT";
@@ -164,7 +166,7 @@ in
 
   programs.gnupg.agent = {
     enable = true;
-    enableSSHSupport = true;
+    enableSSHSupport = false;
     pinentryPackage = pkgs.pinentry-curses;
   };
 
@@ -522,6 +524,7 @@ in
   system.stateVersion = "25.11"; # DO NOT UPDATE UNLESS YOU KNOW WHAT YOU'RE DOING
 
   nix.settings = {
+    trusted-users = [ "root" username ];
     substituters = [
       "https://nix-gaming.cachix.org"
       "https://nix-citizen.cachix.org"
