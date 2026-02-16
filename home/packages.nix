@@ -2,6 +2,7 @@
   pkgs,
   masterpkgs,
   lib,
+  devSetup ? false,
   ...
 }:
 
@@ -14,7 +15,6 @@
 
       # CLI
       atuin
-      awscli
       bash
       btop
       coreutils-full
@@ -24,7 +24,6 @@
       direnv
       ed
       fzf
-      (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
       gh
       git
       git-extras
@@ -34,9 +33,7 @@
       gnupg
       gnused
       gnugrep
-      gource
       gzip
-      terraform
       jq
       k9s
       kompose
@@ -45,17 +42,21 @@
       less
       nano
       nixfmt-rfc-style
-      nodejs_20
+      (lib.lowPrio nodejs_22) # lowPrio to avoid conflict with openclaw
       nodePackages.node-gyp
       nmap
       openssh
       p7zip
       poppler-utils
-      postgresql
-      (python312.withPackages (ps: with ps; [
-        pandas
-        requests
-      ]))
+      # Use lowPrio to avoid conflict with openclaw's bundled python
+      (lib.lowPrio (
+        python312.withPackages (
+          ps: with ps; [
+            pandas
+            requests
+          ]
+        )
+      ))
       rclone
       redis
       ripgrep
@@ -73,6 +74,14 @@
       yq
       zoxide
       zsh
+    ]
+    ++ lib.optionals devSetup [
+      # Dev tools (heavy packages, only on dev machines)
+      awscli
+      (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
+      gource
+      postgresql
+      terraform
     ]
     ++ lib.optionals pkgs.stdenv.isDarwin [
       # MacOS-specific

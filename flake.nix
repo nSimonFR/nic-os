@@ -28,11 +28,13 @@
     };
 
     nix-citizen = {
-      url = "github:3kynox/nix-citizen?ref=fix/eac-error-70003-icu-dotnet";
+      url = "github:LovingMelody/nix-citizen/experimental";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     mac-app-util.url = "github:hraban/mac-app-util";
+
+    nix-openclaw.url = "github:openclaw/nix-openclaw";
 
     nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
   };
@@ -79,7 +81,11 @@
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
         };
-        modules = [ ./rpi5/configuration.nix ];
+        modules = [
+          home-manager.nixosModules.home-manager
+          { nixpkgs.overlays = [ inputs.nix-openclaw.overlays.default ]; }
+          ./rpi5/configuration.nix
+        ];
       };
 
       darwinConfigurations.${macconfig} = darwin.lib.darwinSystem rec {
@@ -102,6 +108,7 @@
           };
           extraSpecialArgs = {
             inherit inputs outputs username;
+            devSetup = false;
             unstablepkgs = import nixpkgs-unstable {
               system = "x86_64-linux";
               config.allowUnfree = true;
@@ -124,6 +131,7 @@
           };
           extraSpecialArgs = {
             inherit inputs outputs username;
+            devSetup = true;
             unstablepkgs = import nixpkgs-unstable {
               system = "aarch64-darwin";
               config.allowUnfree = true;
