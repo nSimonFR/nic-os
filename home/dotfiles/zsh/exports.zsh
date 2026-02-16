@@ -22,5 +22,8 @@ export ZSH_AUTOSUGGEST_MANUAL_REBIND=1
 
 export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 
+# 1Password SSH agent
+export SSH_AUTH_SOCK=~/.1password/agent.sock
+
 # Mac-OS specific so path will be ignored on other systems
 export PATH=/opt/homebrew/bin:$PATH

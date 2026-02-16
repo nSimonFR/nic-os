@@ -94,12 +94,45 @@ nix-shell -p nixVersions.latest --command "nix build --experimental-features 'ni
 ./result/activate
 ```
 
+## Raspberry Pi 5 - Install
+
+Uses [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi) for vendor kernel, firmware, and bootloader.
+
+### Build installer image
+
+Requires `boot.binfmt.emulatedSystems = [ "aarch64-linux" ]` on BeAsT.
+
+```sh
+nix build 'github:nvmd/nixos-raspberrypi#installerImages.rpi5' --accept-flake-config
+```
+
+### Flash to SD card
+
+```sh
+zstdcat result/sd-image/*.img.zst > /tmp/nixos-rpi5-installer.img
+sudo dd if=/tmp/nixos-rpi5-installer.img of=/dev/sdX bs=4M status=progress conv=fsync
+```
+
+### Boot & switch to final config
+
+Boot the Pi from the SD card, connect via SSH, then:
+
+```sh
+sudo nixos-rebuild switch --flake /path/to/nic-os#rpi5
+```
+
 ## Apply updates (local)
 
 ### NixOS / BeAsT
 
 ```sh
 nixos-rebuild switch --flake .#BeAsT
+```
+
+### Raspberry Pi 5
+
+```sh
+nixos-rebuild switch --flake .#rpi5 --target-host nsimon@rpi5 --use-remote-sudo
 ```
 
 ### Home Manager - NixOS

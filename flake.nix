@@ -33,6 +33,17 @@
     };
 
     mac-app-util.url = "github:hraban/mac-app-util";
+
+    nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
+  };
+
+  nixConfig = {
+    extra-substituters = [
+      "https://nixos-raspberrypi.cachix.org"
+    ];
+    extra-trusted-public-keys = [
+      "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
+    ];
   };
 
   outputs =
@@ -50,6 +61,7 @@
       username = "nsimon";
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
+      rpiconfig = "rpi5";
     in
     {
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
@@ -59,6 +71,15 @@
           hostname = nixconfig;
         };
         modules = [ ./nixos/configuration.nix ];
+      };
+
+      nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
+        specialArgs = {
+          inherit inputs outputs username;
+          hostname = rpiconfig;
+          nixos-raspberrypi = inputs.nixos-raspberrypi;
+        };
+        modules = [ ./rpi5/configuration.nix ];
       };
 
       darwinConfigurations.${macconfig} = darwin.lib.darwinSystem rec {
@@ -115,6 +136,28 @@
           modules = [
             ./home
             ./macos/home.nix
+          ];
+        };
+
+        ${rpiconfig} = home-manager.lib.homeManagerConfiguration rec {
+          pkgs = import nixpkgs {
+            system = "aarch64-linux";
+            config.allowUnfree = true;
+          };
+          extraSpecialArgs = {
+            inherit inputs outputs username;
+            unstablepkgs = import nixpkgs-unstable {
+              system = "aarch64-linux";
+              config.allowUnfree = true;
+            };
+            masterpkgs = import nixpkgs-master {
+              system = "aarch64-linux";
+              config.allowUnfree = true;
+            };
+          };
+          modules = [
+            ./home
+            ./rpi5/home.nix
           ];
         };
       };
