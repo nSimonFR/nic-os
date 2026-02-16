@@ -3,6 +3,7 @@
   lib,
   pkgs,
   inputs,
+  outputs,
   username,
   ...
 }:
@@ -545,5 +546,29 @@ in
     automatic = true;
     dates = "weekly";
     options = "--delete-older-than 30d";
+  };
+
+  # Home Manager — integrated so nixos-rebuild deploys user config too
+  home-manager = {
+    useGlobalPkgs = true;
+    useUserPackages = true;
+    extraSpecialArgs = {
+      inherit inputs outputs username;
+      devSetup = false;
+      unstablepkgs = import inputs.nixpkgs-unstable {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
+      masterpkgs = import inputs.nixpkgs-master {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
+    };
+    users.${username} = {
+      imports = [
+        ../home
+        ./home.nix
+      ];
+    };
   };
 }

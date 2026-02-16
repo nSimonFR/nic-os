@@ -72,7 +72,10 @@
           inherit inputs outputs username;
           hostname = nixconfig;
         };
-        modules = [ ./nixos/configuration.nix ];
+        modules = [
+          home-manager.nixosModules.home-manager
+          ./nixos/configuration.nix
+        ];
       };
 
       nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
@@ -100,74 +103,5 @@
         ];
       };
 
-      homeConfigurations = {
-        ${nixconfig} = home-manager.lib.homeManagerConfiguration rec {
-          pkgs = import nixpkgs {
-            system = "x86_64-linux";
-            config.allowUnfree = true;
-          };
-          extraSpecialArgs = {
-            inherit inputs outputs username;
-            devSetup = false;
-            unstablepkgs = import nixpkgs-unstable {
-              system = "x86_64-linux";
-              config.allowUnfree = true;
-            };
-            masterpkgs = import nixpkgs-master {
-              system = "x86_64-linux";
-              config.allowUnfree = true;
-            };
-          };
-          modules = [
-            ./home
-            ./nixos/home.nix
-          ];
-        };
-
-        ${macconfig} = home-manager.lib.homeManagerConfiguration rec {
-          pkgs = import nixpkgs {
-            system = "aarch64-darwin";
-            config.allowUnfree = true;
-          };
-          extraSpecialArgs = {
-            inherit inputs outputs username;
-            devSetup = true;
-            unstablepkgs = import nixpkgs-unstable {
-              system = "aarch64-darwin";
-              config.allowUnfree = true;
-            };
-            masterpkgs = import nixpkgs-master {
-              system = "aarch64-darwin";
-              config.allowUnfree = true;
-            };
-          };
-          modules = [
-            ./home
-            ./macos/home.nix
-          ];
-        };
-
-        ${rpiconfig} = home-manager.lib.homeManagerConfiguration rec {
-          pkgs = import nixpkgs {
-            system = "aarch64-linux";
-            config.allowUnfree = true;
-          };
-          extraSpecialArgs = {
-            inherit inputs outputs username;
-            unstablepkgs = import nixpkgs-unstable {
-              system = "aarch64-linux";
-              config.allowUnfree = true;
-            };
-            masterpkgs = import nixpkgs-master {
-              system = "aarch64-linux";
-              config.allowUnfree = true;
-            };
-          };
-          modules = [
-            ./home
-            ./rpi5/home.nix
-          ];
-        };
-      };
     };
 }

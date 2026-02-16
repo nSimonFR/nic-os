@@ -87,13 +87,6 @@ sh <(curl -L https://nixos.org/nix/install) --daemon
 nix run nix-darwin/nix-darwin-24.11#darwin-rebuild -- switch --flake .#nBookPro --show-trace
 ```
 
-### Home Manager install
-
-```sh
-nix-shell -p nixVersions.latest --command "nix build --experimental-features 'nix-command flakes' '.#homeConfigurations.nBookPro.activationPackage'" # Or replace host
-./result/activate
-```
-
 ## Raspberry Pi 5 - Install
 
 Uses [nixos-raspberrypi](https://github.com/nvmd/nixos-raspberrypi) for vendor kernel, firmware, and bootloader.
@@ -121,30 +114,28 @@ Boot the Pi from the SD card, connect via SSH, then:
 sudo nixos-rebuild switch --flake /path/to/nic-os#rpi5
 ```
 
-## Apply updates (local)
+## Apply updates
+
+Home Manager is integrated as a NixOS/Darwin module on all machines, so each command below deploys both system and user config in one step.
+
+> **Note:** Use the `path:` prefix (e.g. `path:.#BeAsT`) for local builds so Nix reads files directly from disk, bypassing the git index. This means you don't need to `git add` new files before building.
 
 ### NixOS / BeAsT
 
 ```sh
-nixos-rebuild switch --flake .#BeAsT
+sudo nixos-rebuild switch --flake path:.#BeAsT
+```
+
+### MacOS / nBookPro
+
+```sh
+darwin-rebuild switch --flake path:.#nBookPro
 ```
 
 ### Raspberry Pi 5
 
 ```sh
-nixos-rebuild switch --flake .#rpi5 --target-host nsimon@rpi5 --use-remote-sudo
-```
-
-### Home Manager - NixOS
-
-```sh
-home-manager switch --flake .#BeAsT
-```
-
-### Home Manager - MacOS
-
-```sh
-home-manager switch --flake .#nBookPro
+nixos-rebuild switch --flake path:.#rpi5 --target-host nsimon@rpi5.local --use-remote-sudo
 ```
 
 ## Update packages

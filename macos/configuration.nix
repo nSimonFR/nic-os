@@ -1,4 +1,4 @@
-{ config, pkgs, username, hostname, lib, ... }:
+{ config, pkgs, inputs, outputs, username, hostname, lib, ... }:
 {
   #nix.configureBuildUsers = true;
 
@@ -32,4 +32,28 @@
   system = import ./components/system.nix { inherit pkgs username; };
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs; };
+
+  # Home Manager — integrated so darwin-rebuild deploys user config too
+  home-manager = {
+    useGlobalPkgs = true;
+    useUserPackages = true;
+    extraSpecialArgs = {
+      inherit inputs outputs username;
+      devSetup = true;
+      unstablepkgs = import inputs.nixpkgs-unstable {
+        system = "aarch64-darwin";
+        config.allowUnfree = true;
+      };
+      masterpkgs = import inputs.nixpkgs-master {
+        system = "aarch64-darwin";
+        config.allowUnfree = true;
+      };
+    };
+    users.${username} = {
+      imports = [
+        ../home
+        ./home.nix
+      ];
+    };
+  };
 }

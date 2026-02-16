@@ -2,10 +2,14 @@
   config,
   pkgs,
   inputs,
+  outputs,
   username,
   nixos-raspberrypi,
   ...
 }:
+let
+  system = "aarch64-linux";
+in
 {
   imports = with nixos-raspberrypi.nixosModules; [
     raspberry-pi-5.base
@@ -135,5 +139,28 @@
     automatic = true;
     dates = "weekly";
     options = "--delete-older-than 30d";
+  };
+
+  # Home Manager — integrated so nixos-rebuild deploys user config too
+  home-manager = {
+    useGlobalPkgs = true;
+    useUserPackages = true;
+    extraSpecialArgs = {
+      inherit inputs outputs username;
+      unstablepkgs = import inputs.nixpkgs-unstable {
+        inherit system;
+        config.allowUnfree = true;
+      };
+      masterpkgs = import inputs.nixpkgs-master {
+        inherit system;
+        config.allowUnfree = true;
+      };
+    };
+    users.${username} = {
+      imports = [
+        ../home
+        ./home.nix
+      ];
+    };
   };
 }

@@ -1,0 +1,21 @@
+---
+description: Auto-deploy BeAsT NixOS system and Home Manager configuration after changes
+globs: nixos/**/*.nix, home/**/*.nix, flake.nix
+alwaysApply: false
+---
+
+# BeAsT Deployment
+
+After making changes, apply the configuration from the repo root (`/home/nsimon/nic-os`).
+
+**Important:** Always use `path:` prefix (e.g. `path:.#BeAsT`) instead of bare `.#BeAsT` so that Nix reads all files from disk directly. This avoids the need to `git add` new files before building.
+
+## Deploy (system + home-manager in one step)
+
+Home Manager is integrated as a NixOS module, so a single command deploys everything:
+
+```sh
+sudo nixos-rebuild switch --flake path:.#BeAsT
+```
+
+If the build fails, read the error output and fix the Nix configuration before retrying.
