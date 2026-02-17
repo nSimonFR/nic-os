@@ -18,6 +18,7 @@ in
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
+    ./dyndns.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -92,6 +93,37 @@ in
   services.openssh = {
     enable = true;
     settings.PermitRootLogin = "prohibit-password";
+  };
+
+  # ── Fail2ban: ban IPs after repeated failed auth attempts ──────────
+  services.fail2ban = {
+    enable = true;
+    maxretry = 5;
+    bantime = "1h";
+    bantime-increment = {
+      enable = true; # double ban time on repeat offenders
+      maxtime = "48h";
+    };
+    jails.sshd = {
+      settings = {
+        enabled = true;
+        filter = "sshd";
+        maxretry = 3;
+      };
+    };
+  };
+
+  # ── Automatic updates: pull from GitHub and rebuild daily ──────────
+  system.autoUpgrade = {
+    enable = true;
+    flake = "github:nSimonFR/nic-os#rpi5";
+    dates = "04:00";
+    randomizedDelaySec = "30min";
+    allowReboot = true;
+    rebootWindow = {
+      lower = "04:00";
+      upper = "06:00";
+    };
   };
 
   environment.systemPackages = with pkgs; [
