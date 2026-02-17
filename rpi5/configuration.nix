@@ -18,7 +18,12 @@ in
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
-    ../shared/tailscale.nix
+    # Tailscale with server features (subnet routing, SSH, exit node)
+    (import ../shared/tailscale.nix {
+      role = "server";
+      enableSSH = true;
+      advertiseExitNode = true;
+    })
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -29,7 +34,6 @@ in
     hostName = "rpi5";
     useNetworkd = true;
     firewall.allowedUDPPorts = [
-      5353 # mDNS
       9 # Wake-on-LAN
     ];
     wireless.iwd = {
@@ -44,18 +48,7 @@ in
     };
   };
 
-  # mDNS: broadcast rpi5.local on the local network
-  services.resolved = {
-    enable = true;
-    extraConfig = ''
-      MulticastDNS=yes
-    '';
-  };
-
-  systemd.network.networks = {
-    "99-ethernet-default-dhcp".networkConfig.MulticastDNS = "yes";
-    "99-wireless-client-dhcp".networkConfig.MulticastDNS = "yes";
-  };
+  services.resolved.enable = true;
 
   # Wake-on-LAN: enable magic packet wake on the ethernet interface
   systemd.network.links."50-ethernet-wol" = {

@@ -49,7 +49,14 @@
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs; };
 
-  services.tailscale.enable = true;
+  services.tailscale = {
+    enable = true;
+    # macOS doesn't support all Linux Tailscale options via nix-darwin
+    # Tailscale automatically handles NAT traversal on macOS
+    # 
+    # Manual setup via CLI:
+    # tailscale up --accept-routes --accept-dns
+  };
 
   # Home Manager — integrated so darwin-rebuild deploys user config too
   home-manager = {

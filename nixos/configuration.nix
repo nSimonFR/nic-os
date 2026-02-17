@@ -58,7 +58,8 @@ in
     ./openrgb-lg.nix # OpenRGB with LG monitor support
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
-    ../shared/tailscale.nix
+    # Tailscale client configuration
+    (import ../shared/tailscale.nix { role = "client"; })
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -541,13 +542,7 @@ in
     group = "seat";
   };
 
-  # mDNS resolution for .local hostnames (e.g. rpi5.local)
-  services.resolved = {
-    enable = true;
-    extraConfig = ''
-      MulticastDNS=yes
-    '';
-  };
+  services.resolved.enable = true;
 
   hardware.bluetooth.enable = true;
   services.blueman.enable = true;
