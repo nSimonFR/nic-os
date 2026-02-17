@@ -20,6 +20,14 @@
       QT_STYLE_OVERRIDE = "Adwaita-Dark";
       QT_QPA_PLATFORMTHEME = "qt5ct";
 
+      # Make Electron apps (Cursor, Discord, Slack, etc.) use native Wayland
+      # This fixes clipboard copy/paste between Electron apps and Wayland
+      ELECTRON_OZONE_PLATFORM_HINT = "auto";
+      NIXOS_OZONE_WL = "1";
+
+      # 1Password SSH agent
+      SSH_AUTH_SOCK = "$HOME/.1password/agent.sock";
+
       # Vulkan shader cache size (increase from default ~1GB to 10GB)
       "MESA_SHADER_CACHE_MAX_SIZE" = "10G";
       "MESA_DISK_CACHE_MAX_SIZE" = "10G";
@@ -90,14 +98,7 @@
     };
   };
 
-  # xdg.portal = {
-  #   enable = true;
-  #   extraPortals = with pkgs; [
-  #     xdg-desktop-portal-hyprland
-  #     xdg-desktop-portal-gtk
-  #   ];
-  #   config.common.default = "*";
-  # };
+  # XDG portal is enabled at the system level in configuration.nix
 
   xdg.configFile."hypr/hypridle.conf".source = ./dotfiles/hypr/hypridle.conf;
   xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;

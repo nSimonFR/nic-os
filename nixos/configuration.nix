@@ -55,11 +55,9 @@ in
   imports = [
     # inputs.nix-gaming.nixosModules.platformOptimizations
     ./hardware-configuration.nix
-    ./home-assistant.nix
     ./openrgb-lg.nix # OpenRGB with LG monitor support
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
-    # ./star-citizen-env.nix # Star Citizen DXVK/Wine fixes
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -95,6 +93,9 @@ in
 
     binfmt.emulatedSystems = [ "aarch64-linux" ];
   };
+
+  # Star Citizen / LUG: hard open file limit (GE-Proton7-14-SC & LUG manual install)
+  systemd.settings.Manager.DefaultLimitNOFILE = 524288;
 
   networking.hostName = "BeAsT";
   time.timeZone = "Europe/Paris";
@@ -176,14 +177,29 @@ in
   services.openssh.enable = true;
 
   # services.flatpak.enable = true;
-  # xdg.portal = {
-  #   enable = true;
-  #   extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-  #   config.common.default = "gtk";
-  # };
+  xdg.portal = {
+    enable = true;
+    extraPortals = [
+      pkgs.xdg-desktop-portal-hyprland
+      pkgs.xdg-desktop-portal-gtk
+    ];
+    config.common.default = [
+      "hyprland"
+      "gtk"
+    ];
+  };
   programs.nix-ld.enable = true;
 
   security.polkit.enable = true;
+
+  # Cache polkit auth for 1Password (~5 min), similar to sudo behavior
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id === "com.1password.1Password.unlock" && subject.isInGroup("users")) {
+        return polkit.Result.AUTH_SELF_KEEP;
+      }
+    });
+  '';
 
   # 1Password GUI with proper polkit integration
   programs._1password-gui = {
@@ -464,13 +480,18 @@ in
       }
     ];
     allowedUDPPortRanges = allowedTCPPortRanges;
-    allowedTCPPorts = [ 8123 ];
-    allowedUDPPorts = [ 8123 ];
   };
 
   virtualisation.docker = {
     enable = true;
   };
+
+  # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
+  # services.ollama = {
+  #   enable = true;
+  #   package = pkgs.ollama-cuda;
+  #   loadModels = [ "qwen2.5:14b" ];
+  # };
 
   services.hardware.openrgb = {
     enable = true;
@@ -519,13 +540,24 @@ in
     group = "seat";
   };
 
+  # mDNS resolution for .local hostnames (e.g. rpi5.local)
+  services.resolved = {
+    enable = true;
+    extraConfig = ''
+      MulticastDNS=yes
+    '';
+  };
+
   hardware.bluetooth.enable = true;
   services.blueman.enable = true;
 
   system.stateVersion = "25.11"; # DO NOT UPDATE UNLESS YOU KNOW WHAT YOU'RE DOING
 
   nix.settings = {
-    trusted-users = [ "root" username ];
+    trusted-users = [
+      "root"
+      username
+    ];
     substituters = [
       "https://nix-gaming.cachix.org"
       "https://nix-citizen.cachix.org"

@@ -1,4 +1,10 @@
-{ config, lib, pkgs, inputs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  inputs,
+  ...
+}:
 let
   haVoltalis = pkgs.buildHomeAssistantComponent rec {
     owner = "jdelahayes";
@@ -11,7 +17,8 @@ let
       sha256 = "sha256-lCqXtVEkhwmLYosWycO2GbECglEp9wfFFaIDuSFUBBk=";
     };
   };
-in {
+in
+{
   # We run HA in a container; disable native service
   services.home-assistant.enable = false;
 
@@ -20,19 +27,26 @@ in {
 
     containers.homeassistant = {
       image = "ghcr.io/home-assistant/home-assistant:stable";
-      environment = { TZ = "Europe/Paris"; };
+      environment = {
+        TZ = "Europe/Paris";
+      };
       volumes = [
         "/var/lib/hass:/config"
         "/run/dbus:/run/dbus:ro"
         "/run/udev:/run/udev:ro"
       ];
-      extraOptions =
-        [ "--network=host" "--cap-add=NET_ADMIN" "--cap-add=NET_RAW" ];
+      extraOptions = [
+        "--network=host"
+        "--cap-add=NET_ADMIN"
+        "--cap-add=NET_RAW"
+      ];
     };
 
     containers.ha-linky = {
       image = "ha-linky:latest";
-      environment = { TZ = "Europe/Paris"; };
+      environment = {
+        TZ = "Europe/Paris";
+      };
       environmentFiles = [ "/etc/ha-linky/ha-linky.env" ];
       volumes = [ "/etc/home-assistant/ha-linky:/data" ];
       extraOptions = [ "--network=host" ];
@@ -42,14 +56,22 @@ in {
   systemd.services.ha-linky-build = {
     description = "Build ha-linky Docker image";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network-online.target" "docker.service" ];
-    wants = [ "network-online.target" "docker.service" ];
-    path = [ pkgs.git pkgs.docker ];
+    after = [
+      "network-online.target"
+      "docker.service"
+    ];
+    wants = [
+      "network-online.target"
+      "docker.service"
+    ];
+    path = [
+      pkgs.git
+      pkgs.docker
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
-      ExecStart =
-        "${pkgs.docker}/bin/docker build https://github.com/bokub/ha-linky.git -f standalone.Dockerfile -t ha-linky";
+      ExecStart = "${pkgs.docker}/bin/docker build https://github.com/bokub/ha-linky.git -f standalone.Dockerfile -t ha-linky";
     };
   };
 
@@ -110,4 +132,8 @@ in {
     mkdir -p /var/lib/hass/custom_components
     cp -r ${haVoltalis}/custom_components/voltalis /var/lib/hass/custom_components/ || true
   '';
+
+  # Home Assistant web UI
+  networking.firewall.allowedTCPPorts = [ 8123 ];
+  networking.firewall.allowedUDPPorts = [ 8123 ];
 }

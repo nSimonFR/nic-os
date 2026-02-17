@@ -15,6 +15,9 @@ in
     raspberry-pi-5.base
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
+    ./home-assistant.nix
+    ./firefly-iii.nix
+    ./blocky.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -24,7 +27,10 @@ in
   networking = {
     hostName = "rpi5";
     useNetworkd = true;
-    firewall.allowedUDPPorts = [ 5353 ];
+    firewall.allowedUDPPorts = [
+      5353 # mDNS
+      9 # Wake-on-LAN
+    ];
     wireless.iwd = {
       enable = true;
       settings = {
@@ -37,9 +43,23 @@ in
     };
   };
 
+  # mDNS: broadcast rpi5.local on the local network
+  services.resolved = {
+    enable = true;
+    extraConfig = ''
+      MulticastDNS=yes
+    '';
+  };
+
   systemd.network.networks = {
     "99-ethernet-default-dhcp".networkConfig.MulticastDNS = "yes";
     "99-wireless-client-dhcp".networkConfig.MulticastDNS = "yes";
+  };
+
+  # Wake-on-LAN: enable magic packet wake on the ethernet interface
+  systemd.network.links."50-ethernet-wol" = {
+    matchConfig.OriginalName = "end*";
+    linkConfig.WakeOnLan = "magic";
   };
 
   time.timeZone = "Europe/Paris";
@@ -56,6 +76,7 @@ in
       "wheel"
       "video"
       "networkmanager"
+      "docker"
     ];
     home = "/home/${username}";
     openssh.authorizedKeys.keys = [
@@ -78,7 +99,18 @@ in
     wget
     usbutils
     tree
+    ethtool # useful to verify WoL status: ethtool end0 | grep Wake
   ];
+
+  virtualisation.docker.enable = true;
+
+  # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
+  # (the module hardcodes these paths)
+  system.activationScripts.binCompat = ''
+    mkdir -p /bin
+    ln -sf ${pkgs.coreutils}/bin/mkdir /bin/mkdir
+    ln -sf ${pkgs.coreutils}/bin/ln /bin/ln
+  '';
 
   programs.gnupg.agent = {
     enable = true;
@@ -147,6 +179,7 @@ in
     useUserPackages = true;
     extraSpecialArgs = {
       inherit inputs outputs username;
+      devSetup = false;
       unstablepkgs = import inputs.nixpkgs-unstable {
         inherit system;
         config.allowUnfree = true;
@@ -158,6 +191,7 @@ in
     };
     users.${username} = {
       imports = [
+        inputs.nix-openclaw.homeManagerModules.openclaw
         ../home
         ./home.nix
       ];
