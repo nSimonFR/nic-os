@@ -26,7 +26,7 @@
 
   users.users.${username}.home = "/Users/${username}";
 
-  environment.systemPackages = [ pkgs.gcc ];
+  environment.systemPackages = [ pkgs.gcc pkgs.gnupg ];
 
   security.pam.services.sudo_local.touchIdAuth = true;
 
