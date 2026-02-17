@@ -185,6 +185,24 @@
         "type": "indirect"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_4"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -202,6 +220,27 @@
       "original": {
         "owner": "nix-community",
         "ref": "release-25.11",
+        "repo": "home-manager",
+        "type": "github"
+      }
+    },
+    "home-manager_2": {
+      "inputs": {
+        "nixpkgs": [
+          "nix-openclaw",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1767909183,
+        "narHash": "sha256-u/bcU0xePi5bgNoRsiqSIwaGBwDilKKFTz3g0hqOBAo=",
+        "owner": "nix-community",
+        "repo": "home-manager",
+        "rev": "cd6e96d56ed4b2a779ac73a1227e0bb1519b3509",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
         "repo": "home-manager",
         "type": "github"
       }
@@ -241,16 +280,16 @@
         "treefmt-nix": "treefmt-nix_3"
       },
       "locked": {
-        "lastModified": 1766846984,
-        "narHash": "sha256-vhEBoIp8YsF9uuftCnNMskumWFwj03Au2/QEjwmSvRI=",
-        "owner": "3kynox",
+        "lastModified": 1771190984,
+        "narHash": "sha256-7A0iSXE1ytfOoQH1XhSyRH42z3wgvSi2pBtUp1AAgdQ=",
+        "owner": "LovingMelody",
         "repo": "nix-citizen",
-        "rev": "41709c68a03acd5ba3c683894d1cbd289cc574cb",
+        "rev": "1003170e56ceb12eeed2d30f31325e956d2c9732",
         "type": "github"
       },
       "original": {
-        "owner": "3kynox",
-        "ref": "fix/eac-error-70003-icu-dotnet",
+        "owner": "LovingMelody",
+        "ref": "experimental",
         "repo": "nix-citizen",
         "type": "github"
       }
@@ -320,6 +359,45 @@
         "type": "github"
       }
     },
+    "nix-openclaw": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "home-manager": "home-manager_2",
+        "nix-steipete-tools": "nix-steipete-tools",
+        "nixpkgs": "nixpkgs_6"
+      },
+      "locked": {
+        "lastModified": 1771312600,
+        "narHash": "sha256-Tu57h+WtKbLwyuUVGoaNxVB3duE6+C5XtyQamelAMAE=",
+        "owner": "openclaw",
+        "repo": "nix-openclaw",
+        "rev": "d5308d2a678d333f1d75b7d0caa6f7e83bb10ed1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openclaw",
+        "repo": "nix-openclaw",
+        "type": "github"
+      }
+    },
+    "nix-steipete-tools": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_5"
+      },
+      "locked": {
+        "lastModified": 1771225034,
+        "narHash": "sha256-wBQWNm+m5532KFZPz4q41NVGP7Ixak8X2vqFggNoSOY=",
+        "owner": "openclaw",
+        "repo": "nix-steipete-tools",
+        "rev": "b668498d7d2e8e7d5bc74133fb82f5cd48288ac4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openclaw",
+        "repo": "nix-steipete-tools",
+        "type": "github"
+      }
+    },
     "nixos-images": {
       "inputs": {
         "nixos-stable": [
@@ -351,7 +429,7 @@
         "argononed": "argononed",
         "flake-compat": "flake-compat_2",
         "nixos-images": "nixos-images",
-        "nixpkgs": "nixpkgs_5"
+        "nixpkgs": "nixpkgs_7"
       },
       "locked": {
         "lastModified": 1769297295,
@@ -511,6 +589,38 @@
     },
     "nixpkgs_5": {
       "locked": {
+        "lastModified": 1767364772,
+        "narHash": "sha256-fFUnEYMla8b7UKjijLnMe+oVFOz6HjijGGNS1l7dYaQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "16c7794d0a28b5a37904d55bcca36003b9109aaa",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_6": {
+      "locked": {
+        "lastModified": 1767767207,
+        "narHash": "sha256-Mj3d3PfwltLmukFal5i3fFt27L6NiKXdBezC1EBuZs4=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "5912c1772a44e31bf1c63c0390b90501e5026886",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixos-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_7": {
+      "locked": {
         "lastModified": 1769296100,
         "narHash": "sha256-T5VGtbz2X+waw2P1dYvLa56osxj3cNZArfa5aRBVT+s=",
         "owner": "nvmd",
@@ -525,7 +635,7 @@
         "type": "github"
       }
     },
-    "nixpkgs_6": {
+    "nixpkgs_8": {
       "locked": {
         "lastModified": 1768308168,
         "narHash": "sha256-hpyyrn8j8gyQM/s4ie3vukz3e/GAhH2vsc8sCqGDLnI=",
@@ -548,8 +658,9 @@
         "mac-app-util": "mac-app-util",
         "nix-citizen": "nix-citizen",
         "nix-gaming": "nix-gaming_2",
+        "nix-openclaw": "nix-openclaw",
         "nixos-raspberrypi": "nixos-raspberrypi",
-        "nixpkgs": "nixpkgs_6",
+        "nixpkgs": "nixpkgs_8",
         "nixpkgs-master": "nixpkgs-master",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "zen-browser": "zen-browser"
@@ -586,6 +697,21 @@
       }
     },
     "systems_3": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
+        "type": "github"
+      }
+    },
+    "systems_4": {
       "locked": {
         "lastModified": 1681028828,
         "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",

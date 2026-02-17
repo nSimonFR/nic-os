@@ -1,9 +1,2 @@
-eval $(thefuck --alias)
-
-eval "$(atuin init zsh)"
-atuin login 1> /dev/null
-
-eval "$(zoxide init zsh)"
-alias cd="z"
-
-eval "$(gs shell completion zsh)"
+(( $+commands[atuin] )) && eval "$(atuin init zsh)" && atuin login 1> /dev/null
+(( $+commands[zoxide] )) && eval "$(zoxide init zsh)" && alias cd="z"

@@ -9,6 +9,8 @@
   ...
 }:
 {
+  nixpkgs.config.allowUnfree = true;
+
   #nix.configureBuildUsers = true;
 
   nix.extraOptions = ''
@@ -21,6 +23,8 @@
   };
 
   programs.zsh.enable = true;
+
+  users.users.${username}.home = "/Users/${username}";
 
   environment.systemPackages = [ pkgs.gcc ];
 

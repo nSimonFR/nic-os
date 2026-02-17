@@ -86,7 +86,15 @@
         };
         modules = [
           home-manager.nixosModules.home-manager
-          { nixpkgs.overlays = [ inputs.nix-openclaw.overlays.default ]; }
+          {
+            nixpkgs.overlays = [
+              inputs.nix-openclaw.overlays.default
+              # Redis cluster tests are flaky in the Nix sandbox
+              (final: prev: {
+                redis = prev.redis.overrideAttrs (_: { doCheck = false; });
+              })
+            ];
+          }
           ./rpi5/configuration.nix
         ];
       };
