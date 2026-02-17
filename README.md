@@ -134,8 +134,10 @@ darwin-rebuild switch --flake path:.#nBookPro
 
 ### Raspberry Pi 5
 
+Builds on the Pi itself to avoid cross-compilation, then activates remotely:
+
 ```sh
-nixos-rebuild switch --flake path:.#rpi5 --target-host nsimon@rpi5.local --use-remote-sudo
+nixos-rebuild switch --flake path:.#rpi5 --build-host nsimon@rpi5.local --target-host nsimon@rpi5.local --use-remote-sudo
 ```
 
 ## Update packages
