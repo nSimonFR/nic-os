@@ -1,4 +1,13 @@
-{ config, pkgs, inputs, outputs, username, hostname, lib, ... }:
+{
+  config,
+  pkgs,
+  inputs,
+  outputs,
+  username,
+  hostname,
+  lib,
+  ...
+}:
 {
   #nix.configureBuildUsers = true;
 
@@ -23,7 +32,10 @@
   };
 
   launchd.daemons."start-programs".serviceConfig = {
-    ProgramArguments = [ "open" "/Applications/Vanilla.app/"];
+    ProgramArguments = [
+      "open"
+      "/Applications/Vanilla.app/"
+    ];
     RunAtLoad = true;
     StandardErrorPath = "/var/log/start-programs.log";
     StandardOutPath = "/var/log/start-programs.log";
@@ -32,6 +44,8 @@
   system = import ./components/system.nix { inherit pkgs username; };
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs; };
+
+  services.tailscale.enable = true;
 
   # Home Manager — integrated so darwin-rebuild deploys user config too
   home-manager = {

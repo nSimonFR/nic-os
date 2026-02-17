@@ -58,6 +58,7 @@ in
     ./openrgb-lg.nix # OpenRGB with LG monitor support
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
+    ../shared/tailscale.nix
   ];
 
   nixpkgs.config.allowUnfree = true;

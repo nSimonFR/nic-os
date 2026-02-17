@@ -18,7 +18,7 @@ in
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
-    ./dyndns.nix
+    ../shared/tailscale.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
