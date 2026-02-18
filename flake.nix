@@ -86,8 +86,15 @@
         };
         modules = [
           home-manager.nixosModules.home-manager
-          {
+          ({ inputs, ... }: {
             nixpkgs.overlays = [
+              # uv 0.9.26 from release-25.11 fails to build on aarch64-linux; use nixpkgs-unstable
+              (final: prev: {
+                uv = (import inputs.nixpkgs-unstable {
+                  system = prev.stdenv.hostPlatform.system;
+                  config.allowUnfree = true;
+                }).uv;
+              })
               inputs.nix-openclaw.overlays.default
               # Redis cluster tests are flaky in the Nix sandbox
               (final: prev: {
@@ -97,7 +104,7 @@
                 });
               })
             ];
-          }
+          })
           ./rpi5/configuration.nix
         ];
       };
