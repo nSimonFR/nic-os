@@ -43,7 +43,7 @@
   # Custom entrypoint adds fr-stet-societe-generale (Société Générale) to the
   # TrueLayer provider list at container startup, then runs the original CMD.
   virtualisation.oci-containers.containers.truelayer2firefly = {
-    image = "erwind/truelayer2firefly:latest";
+    image = "truelayer2firefly:arm64";
     volumes = [
       "/var/lib/truelayer2firefly:/app/data"
     ];
@@ -70,7 +70,7 @@
         sed -i '/"source_id": (/{n;s/linked_account\["id"\]/(None if linked_account is None else linked_account["id"])/;}' /app/importer2firefly.py
         sed -i '/"source_name": (/{n;s/linked_account\["attributes"\]\["name"\]/("(unknown revenue account)" if linked_account is None else linked_account["attributes"]["name"])/;}' /app/importer2firefly.py
 
-        exec poetry run uvicorn truelayer2firefly:app --host 0.0.0.0 --port 3000
+        exec poetry run uvicorn truelayer2firefly:app --host 0.0.0.0 --port 8081
       ''
     ];
     # Use host networking so the container can reach Firefly III on localhost:8080
@@ -89,12 +89,6 @@
       }
     ];
   };
-
-  # Open firewall for local access
-  networking.firewall.allowedTCPPorts = [
-    8080 # Firefly III (nginx)
-    3000 # TrueLayer2Firefly
-  ];
 
   # Automatically generate APP_KEY if it doesn't exist and ensure correct ownership
   system.activationScripts.firefly-iii-app-key = ''
