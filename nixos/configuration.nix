@@ -59,7 +59,7 @@ in
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
     # Tailscale client configuration
-    (import ../shared/tailscale.nix { role = "client"; })
+    (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
   ];
 
   nixpkgs.config.allowUnfree = true;
