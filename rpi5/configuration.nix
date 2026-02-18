@@ -33,9 +33,6 @@ in
   networking = {
     hostName = "rpi5";
     useNetworkd = true;
-    firewall.allowedUDPPorts = [
-      9 # Wake-on-LAN
-    ];
     wireless.iwd = {
       enable = true;
       settings = {
@@ -49,12 +46,6 @@ in
   };
 
   services.resolved.enable = true;
-
-  # Wake-on-LAN: enable magic packet wake on the ethernet interface
-  systemd.network.links."50-ethernet-wol" = {
-    matchConfig.OriginalName = "end*";
-    linkConfig.WakeOnLan = "magic";
-  };
 
   time.timeZone = "Europe/Paris";
 
@@ -124,8 +115,7 @@ in
     wget
     usbutils
     tree
-    ethtool # useful to verify WoL status: ethtool end0 | grep Wake
-    wakeonlan
+    ethtool
   ];
 
   virtualisation.docker.enable = true;
