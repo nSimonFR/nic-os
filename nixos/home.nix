@@ -12,6 +12,10 @@
     ./audio.nix
   ];
 
+  programs.zsh.zplug.plugins = [
+    { name = "MichaelAquilina/zsh-auto-notify"; }
+  ];
+
   home = {
     username = username;
     homeDirectory = "/home/${username}";
