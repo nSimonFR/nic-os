@@ -21,7 +21,7 @@
   extraUpFlags ? []
 }:
 
-{ lib, ... }:
+{ lib, pkgs, ... }:
 
 let
   # Determine routing features based on role
@@ -40,12 +40,38 @@ let
     ++ (lib.optionals advertiseExitNode [ "--advertise-exit-node" ])
     ++ extraUpFlags
   );
+  
+  # Command to bring up Tailscale with all configured flags
+  upCommand = lib.concatStringsSep " " (
+    [ "${pkgs.tailscale}/bin/tailscale" "up" ]
+    ++ upFlags
+    ++ lib.optionals enableSSH [ "--accept-risk=lose-ssh" ]
+  );
 in
 {
   services.tailscale = {
     enable = true;
     useRoutingFeatures = routingFeatures;
     extraUpFlags = upFlags;
+  };
+  
+  # Autoconnect service to apply flags on boot
+  systemd.services.tailscale-autoconnect = {
+    description = "Tailscale autoconnect with configured flags";
+    after = [ "network-pre.target" "tailscaled.service" ];
+    wants = [ "network-pre.target" "tailscaled.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # Wait for tailscaled to be ready
+      sleep 2
+      
+      # Bring up Tailscale with configured flags
+      ${upCommand}
+    '';
   };
   
   networking.firewall = {
