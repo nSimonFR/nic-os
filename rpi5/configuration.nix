@@ -125,6 +125,7 @@ in
     usbutils
     tree
     ethtool # useful to verify WoL status: ethtool end0 | grep Wake
+    wakeonlan
   ];
 
   virtualisation.docker.enable = true;

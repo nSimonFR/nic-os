@@ -102,6 +102,12 @@ in
   networking.hostName = "BeAsT";
   time.timeZone = "Europe/Paris";
 
+  # Wake-on-LAN: enable magic packet wake on the primary ethernet interface
+  systemd.network.links."50-ethernet-wol" = {
+    matchConfig.OriginalName = "eno*";
+    linkConfig.WakeOnLan = "magic";
+  };
+
   i18n = {
     defaultLocale = "en_US.UTF-8";
     #extraLocales = [ "fr_FR.utf8" ];
@@ -143,6 +149,7 @@ in
   environment.systemPackages = with pkgs; [
     cage
     ddcutil
+    ethtool # verify WoL: ethtool eno1 | grep Wake
     dmenu
     feh
     gamescope

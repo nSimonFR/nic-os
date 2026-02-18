@@ -26,6 +26,7 @@
     "dbt-postgres"
     "helm"
     "pinentry-touchid"
+    "wakeonlan"
   ];
 
   casks = [
