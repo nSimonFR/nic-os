@@ -25,5 +25,8 @@ export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 # 1Password SSH agent
 export SSH_AUTH_SOCK=~/.1password/agent.sock
 
+# home-manager packages (needed when integrated with nix-darwin)
+export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:$PATH"
+
 # Mac-OS specific so path will be ignored on other systems
 export PATH=/opt/homebrew/bin:$PATH
