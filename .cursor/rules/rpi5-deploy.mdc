@@ -15,7 +15,7 @@ After making changes to RPi5 or shared home configuration files, apply them over
 Home Manager is integrated as a NixOS module, so a single command deploys everything:
 
 ```sh
-nixos-rebuild switch --flake path:.#rpi5 --build-host nsimon@rpi5.local --target-host nsimon@rpi5.local --use-remote-sudo
+nixos-rebuild switch --flake path:.#rpi5 --build-host nsimon@rpi5 --target-host nsimon@rpi5 --sudo
 ```
 
 Run from the repo root (`/home/nsimon/nic-os`).

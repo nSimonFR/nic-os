@@ -28,6 +28,7 @@ in
     _1password-gui
     beeper
     cliphist
+    libnotify
     masterpkgs.code-cursor
     dconf
     docker
@@ -44,6 +45,7 @@ in
     lxqt.lxqt-policykit
     mangohud
     mpv
+    qbittorrent
     neofetch
     papirus-icon-theme
     pavucontrol
@@ -58,10 +60,10 @@ in
     wl-clipboard
     xorg.xeyes
 
-    # LUG Helper for Star Citizen on Linux
-    cabextract
-    unzip
-    winetricks
+    # ISO mounting / reading
+    fuseiso
+    cdrtools
+    p7zip
 
     # vesktop
     # webcord
@@ -80,33 +82,12 @@ in
       ];
     })
 
-    (inputs.nix-citizen.packages.${pkgs.system}.star-citizen-git.override {
-      # disableEac = false;
-      # preCommands = ''
-      #   export DXVK_HUD=compiler;
-      #   export MANGO_HUD=1;
-      # '';
-      # helperScript.enable = true;
-      # patchXwayland = true;
-      # umu.enable = true;
-      location = "/mnt/games-linux/star-citizen";
-    })
-
-    # (inputs.star-citizen-nix-gaming.packages.${pkgs.system}.star-citizen.override {
-    #   wineDllOverrides = [ ];
-    #   useUmu = true;
-    #   gameScopeEnable = true;
-    #   gamescope = pkgs.gamescope.overrideAttrs (_: {
-    #     NIX_CFLAGS_COMPILE = [ "-fno-fast-math" ];
-    #   });
-    #   gameScopeArgs = [
-    #     "--backend"
-    #     "sdl"
-    #     # "--fullscreen"
-    #     "--force-grab-cursor"
-    #     # "--expose-wayland"
-    #     "--force-windows-fullscreen"
-    #   ];
+    # Star Citizen RSI Launcher
+    # FIXME: nix-citizen's wine-astral passes `wineRelease` to nixpkgs base.nix,
+    # which no longer accepts it on release-25.11. Uncomment when nix-citizen is updated.
+    # (inputs.nix-citizen.packages.${pkgs.stdenv.hostPlatform.system}.rsi-launcher-unwrapped.override {
+    #   # umu.enable = true;
+    #   location = "/mnt/games-linux/star-citizen";
     # })
   ];
 }
