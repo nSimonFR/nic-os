@@ -81,28 +81,41 @@ in
   system.activationScripts.haLinkyBootstrap.text = ''
         set -eu
         install -d -m 0755 /etc/ha-linky
-        if [ ! -f /etc/ha-linky/ha-linky.env ]; then
-          cat > /etc/ha-linky/ha-linky.env <<'EOF'
-    SUPERVISOR_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI3NjQ2ODI3NGViY2Q0MmExYTk3ODdjYjc3ZTE1Nzg5NyIsImlhdCI6MTc1ODk2NjYzNywiZXhwIjoyMDc0MzI2NjM3fQ.oB6vtdLXttU6gPrE8tBLVs3eFNzF8mJZfxONhdTNvRo
+        install -d -m 0755 /etc/home-assistant/ha-linky
+
+        # Seed secret files with placeholders on first deploy
+        if [ ! -f /etc/ha-linky/supervisor-token ]; then
+          echo "CHANGE_ME" > /etc/ha-linky/supervisor-token
+          chmod 0600 /etc/ha-linky/supervisor-token
+        fi
+        if [ ! -f /etc/ha-linky/linky-token ]; then
+          echo "CHANGE_ME" > /etc/ha-linky/linky-token
+          chmod 0600 /etc/ha-linky/linky-token
+        fi
+
+        # Build ha-linky.env from the secret file
+        SUPERVISOR_TOKEN=$(cat /etc/ha-linky/supervisor-token)
+        cat > /etc/ha-linky/ha-linky.env <<EOF
+    SUPERVISOR_TOKEN=$SUPERVISOR_TOKEN
     WS_URL=ws://127.0.0.1:8123/api/websocket
     EOF
-          chmod 0640 /etc/ha-linky/ha-linky.env
-        fi
-        install -d -m 0755 /etc/home-assistant/ha-linky
-        if [ ! -f /etc/home-assistant/ha-linky/options.json ]; then
-          cat > /etc/home-assistant/ha-linky/options.json <<'JSON'
+        chmod 0640 /etc/ha-linky/ha-linky.env
+
+        # Build options.json from the secret file
+        LINKY_TOKEN=$(cat /etc/ha-linky/linky-token)
+        cat > /etc/home-assistant/ha-linky/options.json <<EOF
     {
       "meters": [
         {
           "prm": "07233719170885",
-          "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTg1MzcwNjgsImV4cCI6MTg1MzA1ODY2OCwic3ViIjpbIjA3MjMzNzE5MTcwODg1Il19.qjBHucmniovg7S1wv64-gx_MEmlVXyEY8chU3IPDaF4",
+          "token": "$LINKY_TOKEN",
           "name": "Linky consumption",
           "action": "sync",
           "production": false
         },
         {
           "prm": "07233719170885",
-          "token": "eyJhbGciOiJIUzI1NiJ9.eyJpYXQiOjE3NTg1MzcwNjgsImV4cCI6MTg1MzA1ODY2OCwic3ViIjpbIjA3MjMzNzE5MTcwODg1Il19.qjBHucmniovg7S1wv64-gx_MEmlVXyEY8chU3IPDaF4",
+          "token": "$LINKY_TOKEN",
           "name": "Linky production",
           "action": "sync",
           "production": true
@@ -114,9 +127,8 @@ in
         }
       ]
     }
-    JSON
-          chmod 0640 /etc/home-assistant/ha-linky/options.json
-        fi
+    EOF
+        chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
 
   system.activationScripts.hassConfigDir.text = ''
