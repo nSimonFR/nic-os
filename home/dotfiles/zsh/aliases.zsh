@@ -16,6 +16,17 @@ alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit no
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
+# Rebuild the current machine's NixOS/nix-darwin configuration
+rebuild-os() {
+  local repo=~/nic-os
+  case "$(hostname)" in
+    BeAsT)     (cd "$repo" && sudo nixos-rebuild switch --flake path:.#BeAsT) ;;
+    rpi5)      (cd "$repo" && sudo nixos-rebuild switch --flake path:.#rpi5) ;;
+    nBookPro)  (cd "$repo" && sudo darwin-rebuild switch --flake path:.#nBookPro && sudo yabai --load-sa) ;;
+    *)         echo "Unknown machine: $(hostname)" ;;
+  esac
+}
+
 # Cross-platform clipboard aliases
 if [[ "$OSTYPE" == darwin* ]]; then
   alias copy="pbcopy"
