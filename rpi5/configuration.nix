@@ -185,7 +185,7 @@ in
       "https://cache.garnix.io"
     ];
     trusted-public-keys = [
-      "cache.nixos.org-1:6NCHdD59X431o0gGypjAp7Ad76rJXldK03C6G6OM="
+      "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
       "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
     ];
