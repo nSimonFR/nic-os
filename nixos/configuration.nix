@@ -93,13 +93,19 @@ in
 
     supportedFilesystems = [ "ntfs3" ];
 
-    binfmt.emulatedSystems = [ "aarch64-linux" ];
+    # binfmt.emulatedSystems = [ "aarch64-linux" ]; # not needed — rpi5 builds natively via --build-host
   };
 
   # Star Citizen / LUG: hard open file limit (GE-Proton7-14-SC & LUG manual install)
   systemd.settings.Manager.DefaultLimitNOFILE = 524288;
 
   networking.hostName = "BeAsT";
+
+  # Wake-on-LAN: allow magic-packet wake on the ethernet interface.
+  # WOL is Layer 2 only — only devices on the same physical LAN (i.e. rpi5)
+  # can send the magic packet; Tailscale and the internet cannot reach it.
+  networking.interfaces.eno1.wakeOnLan.enable = true;
+
   time.timeZone = "Europe/Paris";
 
   # Wake-on-LAN: enable magic packet wake on the primary ethernet interface
@@ -161,6 +167,7 @@ in
     kdePackages.kwalletmanager
     ntfs3g
     usbutils
+    ethtool # verify WoL status: ethtool eno1 | grep Wake
     vim
     vulkan-tools
     vulkan-loader
