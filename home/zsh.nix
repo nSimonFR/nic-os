@@ -25,8 +25,8 @@
       { name = "nsimon"; src = ./dotfiles/zsh; }
     ];
 
-    initExtra = ''
-      # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent
+    initContent = ''
+      # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent/initExtra
     '';
   };
 }
