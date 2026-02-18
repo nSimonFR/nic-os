@@ -556,7 +556,23 @@ in
     group = "seat";
   };
 
-  services.resolved.enable = true;
+  # ── DNS: use RPi5 blocky (ad/tracker/malware blocking) ──────────────
+  # Primary = LAN (lowest latency), Fallback = Tailscale (works remotely)
+  # Last-resort fallback to Cloudflare if RPi5 is completely unreachable
+  networking.nameservers = [
+    "192.168.1.100"  # RPi5 – LAN
+    "100.122.54.2"   # RPi5 – Tailscale
+  ];
+
+  services.resolved = {
+    enable = true;
+    fallbackDns = [
+      "1.1.1.1"        # Cloudflare – last resort if RPi5 is down
+      "9.9.9.9"        # Quad9 – last resort
+    ];
+    # Don't let DHCP override our DNS settings
+    dnsovertls = "opportunistic";
+  };
 
   hardware.bluetooth.enable = true;
   services.blueman.enable = true;
