@@ -104,6 +104,12 @@
 
   # XDG portal is enabled at the system level in configuration.nix
 
+  # Cache GPG passphrase for ~400 days so git commit signing doesn't prompt every time
+  home.file.".gnupg/gpg-agent.conf".text = ''
+    default-cache-ttl 2592000
+    max-cache-ttl 2592000
+  '';
+
   xdg.configFile."hypr/hypridle.conf".source = ./dotfiles/hypr/hypridle.conf;
   xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;
   xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
