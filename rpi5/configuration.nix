@@ -115,7 +115,8 @@ in
     wget
     usbutils
     tree
-    ethtool
+    ethtool # useful to verify WoL status: ethtool end0 | grep Wake
+    wakeonlan
   ];
 
   virtualisation.docker.enable = true;
@@ -197,6 +198,7 @@ in
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
+    backupFileExtension = "hm-backup";
     extraSpecialArgs = {
       inherit inputs outputs username;
       devSetup = false;
