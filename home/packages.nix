@@ -19,6 +19,7 @@
       btop
       coreutils-full
       curl
+      claude-code
       masterpkgs.cursor-cli
       ctop
       direnv
