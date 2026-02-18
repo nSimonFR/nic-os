@@ -37,8 +37,8 @@
           ads = [
             # Steven Black unified hosts — ads + malware
             "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
-            # Hagezi Pro++ — very strict ads/tracking/analytics/affiliate blocking
-            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/hosts/pro.plus.txt"
+            # Hagezi Ultimate — most comprehensive ads/tracking/analytics blocking
+            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/hosts/ultimate.txt"
           ];
           # Malware, phishing, cryptojacking, scam
           threats = [
@@ -49,10 +49,7 @@
 
         # Apply all denylist groups to every client on the network
         clientGroupsBlock = {
-          default = [
-            "ads"
-            "threats"
-          ];
+          default = [ "ads" "threats" ];
         };
 
         # Return 0.0.0.0 / :: for blocked queries (fastest for clients)

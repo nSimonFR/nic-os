@@ -8,16 +8,24 @@ alwaysApply: false
 
 After making changes to RPi5 or shared home configuration files, apply them over SSH.
 
-**Important:** Always use `path:` prefix (e.g. `path:.#rpi5`) instead of bare `.#rpi5` so that Nix reads all files from disk directly. This avoids the need to `git add` new files before building.
+`nixos-rebuild` is **not available on macOS**. The correct workflow is to rsync changed files to the rpi5, then run the rebuild remotely over SSH.
+
+**Important:** Always use `path:` prefix so Nix reads files from disk without requiring `git add`.
 
 ## Deploy (system + home-manager in one step)
 
-Home Manager is integrated as a NixOS module, so a single command deploys everything:
-
 ```sh
-nixos-rebuild switch --flake path:.#rpi5 --build-host nsimon@rpi5 --target-host nsimon@rpi5 --sudo
+# 1. Sync changed files (adjust path as needed for what changed)
+rsync -av /Users/nsimon/nic-os/rpi5/ nsimon@rpi5:~/nic-os/rpi5/
+
+# 2. Build and switch on the rpi5
+ssh nsimon@rpi5 "cd ~/nic-os && sudo nixos-rebuild switch --flake path:.#rpi5 2>&1"
 ```
 
-Run from the repo root (`/home/nsimon/nic-os`).
+If only specific files changed, sync just those files instead of the whole directory to save time:
+
+```sh
+rsync -av /Users/nsimon/nic-os/rpi5/some-file.nix nsimon@rpi5:~/nic-os/rpi5/some-file.nix
+```
 
 If the build fails, read the error output and fix the Nix configuration before retrying.
