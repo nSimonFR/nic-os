@@ -46,7 +46,7 @@
     "iterm2"
     "jordanbaird-ice"
     "keyboardcleantool"
-    "ledger-live"
+    "ledger-wallet"
     "linear-linear"
     "maccy"
     "macmediakeyforwarder"
