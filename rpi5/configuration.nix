@@ -115,7 +115,7 @@ in
     wget
     usbutils
     tree
-    ethtool # useful to verify WoL status: ethtool end0 | grep Wake
+    ethtool
     wakeonlan
   ];
 
@@ -199,6 +199,7 @@ in
     useGlobalPkgs = true;
     useUserPackages = true;
     backupFileExtension = "hm-backup";
+    backupCommand = "rm -f";
     extraSpecialArgs = {
       inherit inputs outputs username;
       devSetup = false;
