@@ -134,7 +134,57 @@ zcode() {
   (z $* && code .)
 }
 
-clip() {
-  pbcopy
+copy() {
+  if [[ "$OSTYPE" == darwin* ]]; then
+    pbcopy
+  elif [[ -n "$WAYLAND_DISPLAY" ]]; then
+    wl-copy
+  elif [[ -n "$DISPLAY" ]]; then
+    xclip -selection clipboard
+  fi
+}
+
+paste() {
+  if [[ "$OSTYPE" == darwin* ]]; then
+    pbpaste
+  elif [[ -n "$WAYLAND_DISPLAY" ]]; then
+    wl-paste
+  elif [[ -n "$DISPLAY" ]]; then
+    xclip -selection clipboard -o
+  fi
 }
 #endregion
+
+function gmaster() {
+  BRANCH="master"
+  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
+}
+
+function gmain() {
+  BRANCH="main"
+  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
+}
+  
+function gdevelop() {
+  BRANCH="develop"
+  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
+}
+
+# Rebuild the current machine's NixOS/nix-darwin configuration
+function rebuild-os() {
+  local repo=~/nic-os
+  case "$(hostname)" in
+    BeAsT)     (cd "$repo" && sudo nixos-rebuild switch --flake path:.#BeAsT) ;;
+    rpi5)      (cd "$repo" && sudo nixos-rebuild switch --flake path:.#rpi5) ;;
+    nBookPro)  (cd "$repo" && sudo darwin-rebuild switch --flake path:.#nBookPro && sudo yabai --load-sa) ;;
+    *)         echo "Unknown machine: $(hostname)" ;;
+  esac
+}
+
+function get-version() {
+  if [ $# -eq 0 ]
+    then base=.
+    else base=$2
+  fi
+  cat ./$base/package.json | jq -r '.version'
+}

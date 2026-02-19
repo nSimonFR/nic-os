@@ -1,28 +1,3 @@
-# TODO Switch with yours
-SED=sed
-
-function gmaster() {
-  BRANCH="master"
-  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
-}
-
-function gmain() {
-  BRANCH="master"
-  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
-}
-
-function gdevelop() {
-  BRANCH="master"
-  git checkout $BRANCH && git fetch && git rebase origin/$BRANCH
-}
-
-function get-version() {
-  if [ $# -eq 0 ]
-    then base=.
-    else base=$2
-  fi
-  cat ./$base/package.json | jq -r '.version'
-}
 
 export HOST=fr
 export ENV=development
