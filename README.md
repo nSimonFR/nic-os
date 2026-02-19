@@ -111,7 +111,7 @@ sudo dd if=/tmp/nixos-rpi5-installer.img of=/dev/sdX bs=4M status=progress conv=
 Boot the Pi from the SD card, connect via SSH, then:
 
 ```sh
-sudo nixos-rebuild switch --flake /path/to/nic-os#rpi5
+sudo nixos-rebuild switch --flake 'path:.#rpi5'
 ```
 
 ## Apply updates

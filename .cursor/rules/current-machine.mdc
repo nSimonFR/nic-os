@@ -1,0 +1,9 @@
+---
+description: Current machine context
+globs: 
+alwaysApply: true
+---
+
+# Current Machine
+
+You are running on **rpi5** (aarch64-linux). Commands run locally on this machine — no need to SSH.
