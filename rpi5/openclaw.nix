@@ -9,7 +9,7 @@
     "/home/nsimon/.secrets/openclaw.env";
 
   programs.openclaw = {
-    documents = ./documents;
+    documents = ./openclaw-documents;
 
     bundledPlugins = {
       summarize.enable = true;
@@ -23,6 +23,11 @@
 
       config = {
         gateway.mode = "local";
+
+        commands = {
+          native = true;
+          nativeSkills = true;
+        };
 
         agents.defaults = {
           skipBootstrap = true;
