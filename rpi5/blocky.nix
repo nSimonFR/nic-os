@@ -39,6 +39,8 @@
             "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
             # Hagezi Ultimate — most comprehensive ads/tracking/analytics blocking
             "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/hosts/ultimate.txt"
+            # OISD Big — aggregated meta-blocklist covering gaps in the above
+            "https://big.oisd.nl/domainswild2"
           ];
           # Malware, phishing, cryptojacking, scam
           threats = [
