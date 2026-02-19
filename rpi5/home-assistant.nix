@@ -112,13 +112,6 @@ in
           "name": "Linky consumption",
           "action": "sync",
           "production": false
-        },
-        {
-          "prm": "07233719170885",
-          "token": "$LINKY_TOKEN",
-          "name": "Linky production",
-          "action": "sync",
-          "production": true
         }
       ],
       "costs": [
