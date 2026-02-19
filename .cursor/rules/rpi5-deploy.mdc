@@ -6,13 +6,19 @@ alwaysApply: false
 
 # RPi5 Deployment
 
-After making changes to RPi5 or shared home configuration files, apply them over SSH.
+After making changes to RPi5 or shared home configuration files, apply them.
 
 `nixos-rebuild` is **not available on macOS**. The correct workflow is to rsync changed files to the rpi5, then run the rebuild remotely over SSH.
 
 **Important:** Always use `path:` prefix so Nix reads files from disk without requiring `git add`.
 
-## Deploy (system + home-manager in one step)
+## Deploy locally (on rpi5)
+
+```sh
+sudo nixos-rebuild switch --flake 'path:.#rpi5'
+```
+
+## Deploy remotely (from another machine via SSH)
 
 ```sh
 # 1. Sync changed files (adjust path as needed for what changed)
