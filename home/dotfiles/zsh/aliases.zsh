@@ -1,3 +1,4 @@
+alias ai="cursor-agent --force"
 alias e="cursor" # My current main editor
 alias ls='ls -GFh'
 alias ll='ls -GFhl'
