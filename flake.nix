@@ -15,6 +15,11 @@
       url = "github:nix-community/home-manager/release-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    
+    nixos-raspberrypi = {
+      url = "github:nvmd/nixos-raspberrypi/main";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     zen-browser = {
       url = "github:0xc000022070/zen-browser-flake";
@@ -22,21 +27,17 @@
       inputs.home-manager.follows = "home-manager";
     };
 
-    nix-gaming = {
-      url = "github:fufexan/nix-gaming?rev=8b636f0470cb263aa1472160457f4b2fba420425";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     nix-citizen = {
       url = "github:LovingMelody/nix-citizen";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    nix-openclaw = {
+      url = "github:openclaw/nix-openclaw";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     mac-app-util.url = "github:hraban/mac-app-util";
-
-    nix-openclaw.url = "github:openclaw/nix-openclaw";
-
-    nixos-raspberrypi.url = "github:nvmd/nixos-raspberrypi/main";
   };
 
   nixConfig = {
