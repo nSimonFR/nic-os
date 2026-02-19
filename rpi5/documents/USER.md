@@ -1,15 +1,17 @@
 # User Profile
 
 ## About
-- Name: nsimon
+- Name: Nico (nsimon)
+- Role: Technical engineer
+- Location: Paris
 - System: NixOS Linux
-- Primary interests: System administration, development, automation
 
 ## Preferences
-- Communication: Direct and technical
-- Format: Prefer concise responses with code examples when relevant
-- Tools: Comfortable with command line, Nix, and modern development tools
+- Communication: Direct and technical, no glazing
+- Format: Straight to the point, concise responses
+- Tools: Command line, Nix, modern development tools
 
 ## Notes
 - Uses NixOS with home-manager for system configuration
 - Prefers declarative configuration over imperative commands
+- Works on difficult technical tasks
