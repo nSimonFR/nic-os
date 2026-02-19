@@ -37,9 +37,9 @@
             "anthropic/claude-opus-4-6" = {
               alias = "opus";
             };
-            "google/gemini-2.0-flash" = {
-              alias = "flash";
-            };
+            # "google/gemini-2.5-flash-lite" = {
+            #   alias = "flash";
+            # };
             "anthropic/claude-haiku-3.5" = {
               alias = "haiku";
             };
