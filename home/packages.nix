@@ -20,6 +20,7 @@
       coreutils-full
       curl
       claude-code
+      codex
       masterpkgs.cursor-cli
       ctop
       direnv
