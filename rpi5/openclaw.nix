@@ -32,11 +32,11 @@
         agents.defaults = {
           skipBootstrap = true;
           model = {
-            primary = "anthropic/claude-3-5-haiku-latest";
-            fallbacks = [ ];
+            primary = "anthropic/claude-haiku-4-5";
+            fallbacks = [ "openai-codex/gpt-5.3-codex" ];
           };
           models = {
-            "anthropic/claude-sonnet-4-5" = {
+            "anthropic/claude-sonnet-4-6" = {
               alias = "sonnet";
             };
             "anthropic/claude-opus-4-6" = {
@@ -45,8 +45,11 @@
             # "google/gemini-2.5-flash-lite" = {
             #   alias = "flash";
             # };
-            "anthropic/claude-3-5-haiku-latest" = {
+            "anthropic/claude-haiku-4-5" = {
               alias = "haiku";
+            };
+            "openai-codex/gpt-5.3-codex" = {
+              alias = "codex";
             };
           };
         };
@@ -57,6 +60,11 @@
           allowFrom = [ 82389391 ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
+        };
+
+        # Enable OpenAI Codex (ChatGPT) OAuth so fallback model works
+        plugins.entries."openai-codex-auth" = {
+          enabled = true;
         };
       };
     };
