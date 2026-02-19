@@ -27,7 +27,7 @@
         agents.defaults = {
           skipBootstrap = true;
           model = {
-            primary = "anthropic/claude-haiku-3.5";
+            primary = "anthropic/claude-3-5-haiku-latest";
             fallbacks = [ ];
           };
           models = {
@@ -40,7 +40,7 @@
             # "google/gemini-2.5-flash-lite" = {
             #   alias = "flash";
             # };
-            "anthropic/claude-haiku-3.5" = {
+            "anthropic/claude-3-5-haiku-latest" = {
               alias = "haiku";
             };
           };
