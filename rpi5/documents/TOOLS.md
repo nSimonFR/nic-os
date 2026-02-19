@@ -28,6 +28,14 @@
 - To check: `readlink -f <file>` — if it points to `/nix/store/`, it's managed
 - **Only `~/.secrets/` and user-created non-symlinked files are writable**
 
+## Updating OpenClaw Settings (Fast Path)
+- For quick config changes, you can update **both** files simultaneously:
+  1. `~/nic-os/rpi5/openclaw.nix` (Nix source of truth)
+  2. `~/.openclaw/openclaw.json` (live runtime config)
+- The changes to both files **must be identical** in intent — keep them in sync
+- Then restart the gateway: `systemctl --user restart openclaw-gateway`
+- This avoids a full `nixos-rebuild` for immediate effect while keeping the Nix source correct for the next rebuild
+
 ## Notes
 - Prefer editing existing Nix files over creating new ones
 - Test changes with `nix build --dry-run` before applying
