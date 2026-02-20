@@ -31,7 +31,7 @@
         
         # Direct Tailnet: gateway listens on Tailscale IP, reachable as ws://rpi5:18789 (MagicDNS)
         # No Serve needed; same tailnet = direct access. Token from openclaw.env.
-        gateway.bind = "tailnet";
+        gateway.bind = "loopback";
         gateway.auth.mode = "token";
         gateway.auth.token = "\${OPENCLAW_GATEWAY_TOKEN}";
 

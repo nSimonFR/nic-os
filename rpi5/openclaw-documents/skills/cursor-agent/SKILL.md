@@ -195,6 +195,12 @@ Enable/disable servers on the fly:
 
 **Note:** Server names with spaces are fully supported.
 
+## OpenClaw Policy (this setup)
+
+When used from OpenClaw on this host:
+- Launch Cursor work as an **OpenClaw sub-agent** (isolated run) for non-trivial tasks.
+- Prefer **force mode** (`-f` / `--force`) unless a safer non-force run is explicitly required.
+
 ## Workflows
 
 ### Code Review
