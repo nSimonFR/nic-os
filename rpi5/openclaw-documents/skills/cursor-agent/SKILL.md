@@ -9,63 +9,6 @@ author: Pushpinder Pal Singh
 
 This skill provides a comprehensive guide and set of workflows for utilizing the Cursor CLI tool, including all features from the January 2026 update.
 
-## Installation
-
-### Standard Installation (macOS, Linux, Windows WSL)
-
-```bash
-curl https://cursor.com/install -fsS | bash
-```
-
-### Homebrew (macOS only)
-
-```bash
-brew install --cask cursor-cli
-```
-
-### Post-Installation Setup
-
-**macOS:**
-- Add to PATH in `~/.zshrc` (zsh) or `~/.bashrc` (bash):
-  ```bash
-  export PATH="$HOME/.local/bin:$PATH"
-  ```
-- Restart terminal or run `source ~/.zshrc` (or `~/.bashrc`)
-- Requires macOS 10.15 or later
-- Works on both Intel and Apple Silicon Macs
-
-**Linux/Ubuntu:**
-- Restart your terminal or source your shell config
-- Verify with `agent --version`
-
-**Both platforms:**
-- Commands: `agent` (primary) and `cursor-agent` (backward compatible)
-- Verify installation: `agent --version` or `cursor-agent --version`
-
-## Authentication
-
-Authenticate via browser:
-
-```bash
-agent login
-```
-
-Or use API key:
-
-```bash
-export CURSOR_API_KEY=your_api_key_here
-```
-
-## Update
-
-Keep your CLI up to date:
-
-```bash
-agent update
-# or
-agent upgrade
-```
-
 ## Commands
 
 ### Interactive Mode
@@ -213,11 +156,13 @@ ls -la /path/to/project/
 ```
 
 **Why this works:**
+
 - tmux provides a persistent pseudo-terminal (PTY)
 - Cursor's TUI requires interactive terminal capabilities
 - Direct `agent` calls from subprocess/exec hang without TTY
 
 **What does NOT work:**
+
 ```bash
 # ❌ These will hang indefinitely:
 agent "task"                    # No TTY
@@ -229,6 +174,8 @@ script -c "agent ..." /dev/null # May crash Cursor
 ## Rules & Configuration
 
 The agent automatically loads rules from:
+
+
 - `.cursor/rules`
 - `AGENTS.md`
 - `CLAUDE.md`

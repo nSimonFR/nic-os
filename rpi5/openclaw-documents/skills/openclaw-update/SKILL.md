@@ -1,7 +1,7 @@
 ---
 name: openclaw-update
 description: Safely update OpenClaw config and skills via NixOS rebuild with optional backup. Use when the user wants to update OpenClaw, change skills, or back up the current config.
-metadata: {"openclaw":{"emoji":"💾","requires":{"bins":["git","rsync"]},"tags":["backup","restore","update","nixos"]}}
+metadata: {"openclaw":{"emoji":"💾","requires":{"bins":["git"]},"tags":["backup","restore","update","nixos"]}}
 ---
 
 # OpenClaw Update (NixOS)
@@ -39,22 +39,13 @@ tar -czf ~/openclaw-backup-$(date +%Y%m%d-%H%M%S).tar.gz \
 # Or just commit the current state
 cd ~/nic-os
 git add rpi5/openclaw.nix rpi5/openclaw-documents/
-git commit --no-gpg-sign -m "chore: backup openclaw config before update"
+git commit --no-gpg-sign -m "backup openclaw config before update"
 ```
 
 ## Update Skills
 
 Skills live in `~/nic-os/rpi5/openclaw-documents/skills/`.
 To add or modify a skill, edit the SKILL.md file there, then rebuild:
-
-```bash
-# After editing skill files:
-cd ~/nic-os
-rsync -av rpi5/ nsimon@rpi5:~/nic-os/rpi5/
-ssh nsimon@rpi5 "cd ~/nic-os && sudo nixos-rebuild switch --flake 'path:.#rpi5' 2>&1"
-```
-
-Or from the RPi5 directly:
 
 ```bash
 cd ~/nic-os
