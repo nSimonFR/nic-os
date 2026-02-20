@@ -21,6 +21,7 @@
       summarize.enable = true;
       peekaboo.enable = false;
       sag.enable = false;
+      gogcli.enable = true;
     };
 
     instances.default = {
@@ -29,8 +30,7 @@
       config = {
         gateway.mode = "local";
         
-        # Direct Tailnet: gateway listens on Tailscale IP, reachable as ws://rpi5:18789 (MagicDNS)
-        # No Serve needed; same tailnet = direct access. Token from openclaw.env.
+        # Gateway bound to loopback; access can be direct on tailnet or via Tailscale Serve HTTPS (WSS).
         gateway.bind = "loopback";
         gateway.auth.mode = "token";
         gateway.auth.token = "\${OPENCLAW_GATEWAY_TOKEN}";
