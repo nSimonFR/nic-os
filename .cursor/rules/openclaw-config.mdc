@@ -1,0 +1,35 @@
+---
+description: Managing OpenClaw configuration, skills, and secrets via NixOS
+globs: rpi5/openclaw.nix, rpi5/openclaw-documents/**
+alwaysApply: false
+---
+
+# OpenClaw Configuration via NixOS
+
+## File Layout
+
+- `rpi5/openclaw.nix` — gateway config (models, channels, plugins, auth). Generates `~/.openclaw/openclaw.json` as a Nix store symlink.
+- `rpi5/openclaw-documents/` — documents and skills, deployed to `~/.openclaw/workspace/`
+- `rpi5/openclaw-documents/skills/<name>/SKILL.md` — skill definitions (auto-discovered by `builtins.readDir`)
+- `~/.secrets/openclaw.env` — runtime env vars (API keys, tokens). Loaded by the gateway systemd service as `EnvironmentFile`. NOT Nix-managed; edit directly.
+
+## Critical Rules
+
+1. **NEVER edit `~/.openclaw/openclaw.json`** — it's a read-only Nix store symlink. Edit `rpi5/openclaw.nix` and rebuild.
+2. **NEVER edit files under `~/.openclaw/workspace/skills/`** — they're Nix-managed. Edit under `rpi5/openclaw-documents/skills/` and rebuild.
+3. **Skills with unmet `requires.env` are hidden.** If a skill's SKILL.md frontmatter declares `metadata.openclaw.requires.env: ["SOME_VAR"]`, that var must be present in `~/.secrets/openclaw.env` or the skill won't appear.
+4. After editing `openclaw.nix` or `openclaw-documents/`: rebuild with `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
+5. After editing `~/.secrets/openclaw.env` only: `systemctl --user restart openclaw-gateway` (no rebuild needed)
+
+## Adding a New Skill
+
+1. Create `rpi5/openclaw-documents/skills/<name>/SKILL.md` with YAML frontmatter
+2. If the skill needs env vars, add them to `~/.secrets/openclaw.env`
+3. Rebuild. The skill is auto-discovered — no changes to `openclaw.nix` needed.
+
+## Debugging
+
+- `openclaw skills` — shows ready/missing status for all skills
+- `journalctl --user -u openclaw-gateway -n 50 --no-pager` — gateway logs
+- `journalctl --user -u home-manager-nsimon.service -n 50 --no-pager` — home-manager activation errors
+- "would be clobbered" error: delete the blocking file at the path shown, then rebuild
