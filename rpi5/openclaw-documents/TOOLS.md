@@ -62,6 +62,17 @@ If any requirement is unmet, OpenClaw hides the skill (shows as "missing" in `op
 | Skill content or new skill | `~/nic-os/rpi5/openclaw-documents/skills/` | Rebuild |
 | API keys, tokens, env vars for skills | `~/.secrets/openclaw.env` | `systemctl --user restart openclaw-gateway` |
 
+### Google Integration (gogcli plugin)
+
+The `gogcli` bundled plugin provides Gmail and Google Calendar access via the `gog` binary. OAuth is handled locally per-user:
+
+```bash
+gog auth credentials          # import OAuth client credentials
+gog auth add <email> --services gmail,calendar  # authorize a Google account
+```
+
+Optionally set `GOG_ACCOUNT=<email>` in `~/.secrets/openclaw.env` to pin a default account for the gateway.
+
 ### Useful Commands
 
 - `openclaw skills` — list all skills and their status (ready/missing)
