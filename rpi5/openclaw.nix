@@ -43,8 +43,8 @@
         agents.defaults = {
           skipBootstrap = true;
           model = {
-            primary = "anthropic/claude-haiku-4-5";
-            fallbacks = [ "openai-codex/gpt-5.3-codex" ];
+            primary = "openai-codex/gpt-5.3-codex";
+            fallbacks = [ "anthropic/claude-haiku-4-5" ];
           };
           models = {
             "anthropic/claude-sonnet-4-6" = {
