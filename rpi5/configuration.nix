@@ -194,6 +194,26 @@ in
     options = "--delete-older-than 30d";
   };
 
+  # Declarative Tailscale Serve for OpenClaw WSS (tailnet-only)
+  systemd.services.tailscale-serve-openclaw = {
+    description = "Tailscale Serve HTTPS proxy for OpenClaw gateway";
+    after = [ "network-online.target" "tailscaled.service" ];
+    wants = [ "network-online.target" "tailscaled.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # Ensure previous config is cleared, then apply desired serve mapping
+      ${pkgs.tailscale}/bin/tailscale serve reset || true
+      ${pkgs.tailscale}/bin/tailscale serve --bg --https 443 http://127.0.0.1:18789
+    '';
+    preStop = ''
+      ${pkgs.tailscale}/bin/tailscale serve --https=443 off || true
+    '';
+  };
+
   # Home Manager — integrated so nixos-rebuild deploys user config too
   home-manager = {
     useGlobalPkgs = true;
