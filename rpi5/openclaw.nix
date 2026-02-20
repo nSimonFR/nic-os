@@ -11,10 +11,15 @@
   programs.openclaw = {
     documents = ./openclaw-documents;
 
+    skills = map (name: {
+      inherit name;
+      mode = "copy";
+      source = toString (./openclaw-documents/skills + "/${name}");
+    }) (builtins.attrNames (builtins.readDir ./openclaw-documents/skills));
+
     bundledPlugins = {
       summarize.enable = true;
       peekaboo.enable = false;
-      oracle.enable = false;
       sag.enable = false;
     };
 
@@ -23,6 +28,12 @@
 
       config = {
         gateway.mode = "local";
+        
+        # Direct Tailnet: gateway listens on Tailscale IP, reachable as ws://rpi5:18789 (MagicDNS)
+        # No Serve needed; same tailnet = direct access. Token from openclaw.env.
+        gateway.bind = "tailnet";
+        gateway.auth.mode = "token";
+        gateway.auth.token = "\${OPENCLAW_GATEWAY_TOKEN}";
 
         commands = {
           native = true;
@@ -62,9 +73,8 @@
           timeoutSeconds = 120;
         };
 
-        # Enable OpenAI Codex (ChatGPT) OAuth so fallback model works
-        plugins.entries."openai-codex-auth" = {
-          enabled = true;
+        plugins.entries = {
+          "telegram".enabled = true;
         };
       };
     };
