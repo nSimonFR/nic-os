@@ -197,12 +197,15 @@ in
   # Declarative Tailscale Serve for OpenClaw WSS (tailnet-only)
   systemd.services.tailscale-serve-openclaw = {
     description = "Tailscale Serve HTTPS proxy for OpenClaw gateway";
-    after = [ "network-online.target" "tailscaled.service" ];
-    wants = [ "network-online.target" "tailscaled.service" ];
+    after = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+    wants = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+    requires = [ "tailscale-autoconnect.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      Restart = "on-failure";
+      RestartSec = "15s";
     };
     script = ''
       # Ensure previous config is cleared, then apply desired serve mapping
