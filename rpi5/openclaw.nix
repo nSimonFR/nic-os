@@ -11,11 +11,17 @@
   programs.openclaw = {
     documents = ./openclaw-documents;
 
-    skills = map (name: {
-      inherit name;
-      mode = "copy";
-      source = toString (./openclaw-documents/skills + "/${name}");
-    }) (builtins.attrNames (builtins.readDir ./openclaw-documents/skills));
+    skills =
+      let
+        skillEntries = builtins.readDir ./openclaw-documents/skills;
+        skillDirs = builtins.filter (name: skillEntries.${name} == "directory")
+          (builtins.attrNames skillEntries);
+      in
+      map (name: {
+        inherit name;
+        mode = "copy";
+        source = toString (./openclaw-documents/skills + "/${name}");
+      }) skillDirs;
 
     bundledPlugins = {
       summarize.enable = true;
