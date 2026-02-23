@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   outputs,
@@ -11,7 +12,11 @@ let
   system = "aarch64-linux";
 in
 {
+  # Workaround for nixpkgs 25.11 rename.nix <-> nixos-raspberrypi conflict
+  disabledModules = [ "rename.nix" ];
+
   imports = with nixos-raspberrypi.nixosModules; [
+    (lib.mkAliasOptionModule [ "environment" "checkConfigurationOptions" ] [ "_module" "check" ])
     raspberry-pi-5.base
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
