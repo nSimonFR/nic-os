@@ -114,6 +114,30 @@ Boot the Pi from the SD card, connect via SSH, then:
 sudo nixos-rebuild switch --flake 'path:.#rpi5'
 ```
 
+## Commit message linting
+
+This repository uses [commitlint](https://commitlint.js.org/) to enforce Conventional Commits.
+
+### One-time local setup (git hook)
+
+```sh
+git config core.hooksPath .githooks
+```
+
+### Run commitlint locally
+
+Validate a commit message file:
+
+```sh
+pnpm dlx @commitlint/cli --config commitlint.config.cjs --edit .git/COMMIT_EDITMSG
+```
+
+Validate the latest commit message:
+
+```sh
+git log -1 --pretty=%B | pnpm dlx @commitlint/cli --config commitlint.config.cjs
+```
+
 ## Apply updates
 
 Home Manager is integrated as a NixOS/Darwin module on all machines, so each command below deploys both system and user config in one step.
