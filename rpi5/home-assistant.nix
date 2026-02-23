@@ -48,7 +48,10 @@ in
         TZ = "Europe/Paris";
       };
       environmentFiles = [ "/etc/ha-linky/ha-linky.env" ];
-      volumes = [ "/etc/home-assistant/ha-linky:/data" ];
+      volumes = [
+        "/etc/home-assistant/ha-linky:/config"
+        "/etc/home-assistant/ha-linky:/data"
+      ];
       extraOptions = [ "--network=host" ];
     };
   };
