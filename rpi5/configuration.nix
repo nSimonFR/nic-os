@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   outputs,
@@ -11,7 +12,14 @@ let
   system = "aarch64-linux";
 in
 {
+  # Work around option declaration clash on nixpkgs 25.11:
+  # rename.nix declares removed boot.loader.raspberryPi while nixos-raspberrypi
+  # reintroduces compatibility for raspberry-pi module.
+  disabledModules = [ "rename.nix" ];
+
   imports = with nixos-raspberrypi.nixosModules; [
+    # restore alias that rename.nix normally provides and is referenced by NixOS internals
+    (lib.mkAliasOptionModule [ "environment" "checkConfigurationOptions" ] [ "_module" "check" ])
     raspberry-pi-5.base
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
