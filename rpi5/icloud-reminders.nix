@@ -6,10 +6,8 @@
   };
 
   config = lib.mkIf config.services.icloud-reminders.enable {
-    # Install vdirsyncer
     environment.systemPackages = [ pkgs.vdirsyncer ];
 
-    # vdirsyncer configuration
     home-manager.users.nsimon.xdg.configFile."vdirsyncer/config".text = ''
       [general]
       status_path = "~/.cache/vdirsyncer"
@@ -27,10 +25,9 @@
 
       [storage icloud_reminders_remote]
       type = "caldav"
-      # Manually configure with your iCloud credentials
-      # Format: https://ICLOUD_EMAIL:ICLOUD_APP_PASSWORD@caldav.icloud.com/calendars/caldav/Reminders/
-      # Example: https://you@icloud.com:xxxx-xxxx-xxxx-xxxx@caldav.icloud.com/calendars/caldav/Reminders/
-      # WARNING: Do not commit plaintext credentials. Use vdirsyncer discover + interactive auth instead.
+      url = "https://caldav.icloud.com/"
+      username.fetch = ["command", "bash", "-c", "source ~/.secrets/openclaw.env 2>/dev/null; printf '%s' \"$ICLOUD_EMAIL\""]
+      password.fetch = ["command", "bash", "-c", "source ~/.secrets/openclaw.env 2>/dev/null; printf '%s' \"$ICLOUD_APP_PASSWORD\""]
       ssl_verify = true
     '';
   };
