@@ -1,88 +1,31 @@
 # Tools & Conventions
 
-## System Environment
+## System
 
-- Operating System: NixOS Linux
-- Shell: zsh
-- Package Manager: Nix (with flakes)
-- Configuration: Home-manager
+- OS: NixOS | Shell: zsh | Package Manager: Nix (flakes)
+- Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
+- **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
+- Secrets: `~/.secrets/` (writable)
+- Skills: `~/nic-os/rpi5/openclaw-documents/skills/<name>/SKILL.md`
 
-## Local Tools
+## OpenClaw Architecture
 
-- `nix` - Package management and builds
-- `home-manager` - User environment management
-- `git` - Version control
-- `systemctl --user` - User service management
+- **Config source:** `~/nic-os/rpi5/openclaw.nix` (gateway, models, channels, plugins)
+- **Documents/skills:** `~/nic-os/rpi5/openclaw-documents/` → deployed to `~/.openclaw/workspace/`
+- **Runtime config:** `~/.openclaw/openclaw.json` (Nix-managed symlink, read-only)
+- **Env vars:** `~/.secrets/openclaw.env` (loaded by systemd service)
+- **Gateway service:** `openclaw-gateway` (user systemd unit)
 
-## Conventions
+## Config Changes
 
-- Configuration files are in `~/nic-os/`
-- Secrets are stored in `~/.secrets/`
-- **IMPORTANT**: After any ~/nic-os changes, rebuild system:
-  ```bash
-  sudo nixos-rebuild switch --flake 'path:.#rpi5'
-  ```
-- Changes won't apply without explicit rebuild
+| Change | Edit | Then |
+|--------|------|------|
+| Models, channels, plugins, gateway | `~/nic-os/rpi5/openclaw.nix` | Rebuild |
+| Skill content | `~/nic-os/rpi5/openclaw-documents/skills/` | Rebuild |
+| API keys, tokens, env vars | `~/.secrets/openclaw.env` | `systemctl --user restart openclaw-gateway` |
 
-## Read-Only Filesystem Policy
+## Useful Commands
 
-- Files symlinked to `/nix/store/` are **immutable** — never write to them
-- System config (`/etc/`), systemd units, and home-manager dotfiles are **managed by Nix** — never edit directly
-- OpenClaw config, documents, and skills are deployed from `~/nic-os/rpi5/` — edit there, then rebuild
-- `~/.openclaw/openclaw.json` is a **Nix-managed symlink** — never edit directly
-- To check: `readlink -f <file>` — if it points to `/nix/store/`, it's managed
-- **Only `~/.secrets/` and user-created non-symlinked files are writable**
-
-## OpenClaw Configuration
-
-### Architecture
-
-- **Nix source of truth**: `~/nic-os/rpi5/openclaw.nix` — gateway config, models, channels, plugins
-- **Documents & skills source**: `~/nic-os/rpi5/openclaw-documents/` — deployed to `~/.openclaw/workspace/`
-- **Runtime config**: `~/.openclaw/openclaw.json` — Nix-managed symlink, DO NOT edit
-- **Secrets/env vars**: `~/.secrets/openclaw.env` — loaded as `EnvironmentFile` by the gateway systemd service
-- **Gateway service**: `openclaw-gateway` (user systemd unit)
-
-### Skills
-
-Skills live in `~/nic-os/rpi5/openclaw-documents/skills/<name>/SKILL.md`. The Nix config auto-discovers all subdirectories via `builtins.readDir`. Each SKILL.md has YAML frontmatter with optional `metadata.openclaw.requires`:
-
-- `requires.bins` — binaries that must be in PATH
-- `requires.env` — environment variables that must be set
-
-If any requirement is unmet, OpenClaw hides the skill (shows as "missing" in `openclaw skills`).
-
-**Environment variables for skills** must be set in `~/.secrets/openclaw.env` so the gateway process has them. They are NOT automatically available in interactive shells.
-
-### Changing Config vs Changing Secrets
-
-| Change | Where to edit | Then |
-|--------|--------------|------|
-| Models, channels, plugins, gateway settings | `~/nic-os/rpi5/openclaw.nix` | `sudo nixos-rebuild switch --flake 'path:~/nic-os#rpi5'` |
-| Skill content or new skill | `~/nic-os/rpi5/openclaw-documents/skills/` | Rebuild |
-| API keys, tokens, env vars for skills | `~/.secrets/openclaw.env` | `systemctl --user restart openclaw-gateway` |
-
-### Google Integration (gogcli plugin)
-
-The `gogcli` bundled plugin provides Gmail and Google Calendar access via the `gog` binary. OAuth is handled locally per-user:
-
-```bash
-gog auth credentials          # import OAuth client credentials
-gog auth add <email> --services gmail,calendar  # authorize a Google account
-```
-
-Optionally set `GOG_ACCOUNT=<email>` in `~/.secrets/openclaw.env` to pin a default account for the gateway.
-
-### Useful Commands
-
-- `openclaw skills` — list all skills and their status (ready/missing)
-- `systemctl --user status openclaw-gateway` — check gateway health
-- `systemctl --user restart openclaw-gateway` — apply env var changes without rebuild
-- `journalctl --user -u openclaw-gateway -n 50 --no-pager` — gateway logs
-- `journalctl --user -u home-manager-nsimon.service -n 50 --no-pager` — home-manager activation logs
-
-## Notes
-
-- Prefer editing existing Nix files over creating new ones
-- Test changes with `nix build --dry-run` before applying
-- If home-manager fails with "would be clobbered", delete the blocking file and rebuild
+- `openclaw skills` — list skills (ready/missing)
+- `systemctl --user status openclaw-gateway` — check health
+- `journalctl --user -u openclaw-gateway -n 50 --no-pager` — logs

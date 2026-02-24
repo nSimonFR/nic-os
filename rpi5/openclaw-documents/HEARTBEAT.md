@@ -1,17 +1,9 @@
 # Heartbeat Checklist
 
-Quick status check:
+Quick status checks:
+- 🏥 **System health:** Failed services, resource usage
+- 🌤️ **Weather (Paris):** Temp, condition, humidity, wind
+- 📊 **OpenClaw:** Context %, day quota remaining
+- 💾 **Memory:** Important updates
 
-- 🏥 Check system health (failed services, resource usage)
-- 📢 Review any pending notifications
-- 🌤️ Check weather for location (currently: Paris)
-- 📊 Check usage and costs (context %, token usage, session costs)
-- 💾 Update memory with important recent events
-
-## Weather Location
-
-Current: **Paris** 🇫🇷
-
-To change: `Set heartbeat weather location to <city>`
-
-Examples: London 🇬🇧 | Berlin 🇩🇪 | Lyon 🇫🇷
+**Change location:** Set heartbeat weather location to `<city>`
