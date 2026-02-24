@@ -7,6 +7,7 @@
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
     "/home/nsimon/.secrets/openclaw.env";
+  systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
 
   programs.openclaw = {
     documents = ./openclaw-documents;
