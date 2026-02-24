@@ -1,6 +1,6 @@
 ---
 name: icloud-reminders
-description: Sync iCloud Reminders to OpenClaw via CalDAV.
+description: Sync iCloud Reminders via CalDAV + vdirsyncer.
 metadata:
   openclaw:
     requires:
@@ -8,49 +8,52 @@ metadata:
       env: ["ICLOUD_EMAIL", "ICLOUD_APP_PASSWORD"]
 ---
 
-# iCloud Reminders Integration
+# iCloud Reminders
 
-Sync iCloud Reminders to OpenClaw via CalDAV (CalDAV VTODO format).
+Sync iCloud Reminders to local cache via CalDAV (vdirsyncer).
 
-## What You Need to Configure
+## Setup
 
-1. **Apple ID + App-Specific Password**
-   - Go to appleid.apple.com → Security → App-specific passwords
-   - Create password labeled "rpi5-caldav"
-   - Store in `~/.secrets/openclaw.env`:
-     ```bash
-     ICLOUD_EMAIL="your-apple-id@icloud.com"
-     ICLOUD_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
-     ```
+### 1. Apple App-Specific Password
+- Go to [appleid.apple.com](https://appleid.apple.com) → Security → App-specific passwords
+- Select "Mac" / "Other (custom)"
+- Label: `rpi5-caldav`
+- Copy the 16-char password
 
-2. **CalDAV Server Details**
-   - iCloud CalDAV URL: `https://caldav.icloud.com/`
-   - Reminders collection: `/calendars/caldav/Reminders/`
-   - Full URL: `https://<ICLOUD_EMAIL>@caldav.icloud.com/calendars/caldav/Reminders/`
+### 2. Add Credentials
+Edit `~/.secrets/openclaw.env`:
+```bash
+ICLOUD_EMAIL="your-apple-id@icloud.com"
+ICLOUD_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+```
 
-3. **Sync Schedule**
-   - Edit `~/.openclaw/workspace/cron-icloud-sync.nix` to set sync interval
-   - Default: every 15 minutes
-   - Can adjust based on your needs
+### 3. Enable Module
+Edit `~/nic-os/rpi5/configuration.nix`, add to imports:
+```nix
+./icloud-reminders.nix
+```
 
-## How It Works
+Rebuild:
+```bash
+cd ~/nic-os
+sudo nixos-rebuild switch --flake 'path:.#rpi5'
+```
 
-1. **vdirsyncer** syncs iCloud Reminders (VTODO) to local cache (`~/.cache/icloud-reminders/`)
-2. **Sync script** processes reminders and creates OpenClaw events/reminders
-3. **Cron job** runs periodically (configurable)
-4. **OpenClaw** announces new reminders via chat
-
-## Manual Sync
+## Usage
 
 ```bash
+# Discover reminders collection
 vdirsyncer discover icloud_reminders
+
+# Sync reminders
 vdirsyncer sync
-# Check results:
-cat ~/.cache/icloud-reminders/*/
+
+# View synced reminders
+ls ~/.cache/icloud-reminders/
 ```
 
 ## Troubleshooting
 
-- **Auth fails**: Verify app-specific password (not main iCloud password)
-- **No reminders sync**: Check CalDAV URL and ensure Reminders is enabled on iCloud
-- **Cron not running**: Check systemd timer: `systemctl --user status openclaw-icloud-sync.timer`
+- **Auth fails**: Use **app-specific password**, not main iCloud password
+- **No reminders**: Ensure Reminders is enabled on iCloud.com
+- **Config issues**: `vdirsyncer verify` to test credentials
