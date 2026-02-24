@@ -15,7 +15,7 @@
       [pair icloud_reminders]
       a = "icloud_reminders_local"
       b = "icloud_reminders_remote"
-      collections = ["Reminders"]
+      collections = ["home", "work"]
       metadata = ["color", "displayname"]
 
       [storage icloud_reminders_local]
