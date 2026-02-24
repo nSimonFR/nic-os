@@ -23,6 +23,7 @@ in
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
+    ./icloud-reminders.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
@@ -51,6 +52,7 @@ in
   };
 
   services.resolved.enable = true;
+  services.icloud-reminders.enable = true;
 
   time.timeZone = "Europe/Paris";
 

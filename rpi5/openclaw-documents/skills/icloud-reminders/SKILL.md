@@ -27,10 +27,10 @@ ICLOUD_EMAIL="your-apple-id@icloud.com"
 ICLOUD_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
 ```
 
-### 3. Enable Module
-Edit `~/nic-os/rpi5/configuration.nix`, add to imports:
+### 3. Enable Service
+vdirsyncer is auto-enabled. If needed, verify in `~/nic-os/rpi5/configuration.nix`:
 ```nix
-./icloud-reminders.nix
+services.icloud-reminders.enable = true;
 ```
 
 Rebuild:
