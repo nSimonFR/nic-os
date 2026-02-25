@@ -28,7 +28,6 @@
       url = "https://caldav.icloud.com/"
       username.fetch = ["command", "bash", "-c", "source ~/.secrets/openclaw.env 2>/dev/null; printf '%s' \"$ICLOUD_EMAIL\""]
       password.fetch = ["command", "bash", "-c", "source ~/.secrets/openclaw.env 2>/dev/null; printf '%s' \"$ICLOUD_APP_PASSWORD\""]
-      ssl_verify = true
     '';
   };
 }
