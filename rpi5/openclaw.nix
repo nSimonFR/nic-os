@@ -70,6 +70,16 @@
               alias = "codex";
             };
           };
+          # Explicit heartbeat configuration (replaces OpenClaw's internal default)
+          heartbeat = {
+            every = "30m";  # Every 30 minutes (current observed default)
+            activeHours = {
+              start = "06:00";
+              end = "23:59";
+              timezone = "Europe/Paris";
+            };
+            suppressToolErrorWarnings = true;
+          };
         };
 
         channels.telegram = {
