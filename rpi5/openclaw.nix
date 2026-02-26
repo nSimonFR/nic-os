@@ -72,10 +72,10 @@
           };
           # Explicit heartbeat configuration (replaces OpenClaw's internal default)
           heartbeat = {
-            every = "30m";  # Every 30 minutes (current observed default)
+            every = "1h";   # Every 1 hour
             activeHours = {
-              start = "06:00";
-              end = "23:59";
+              start = "09:00";
+              end = "23:00";
               timezone = "Europe/Paris";
             };
             suppressToolErrorWarnings = true;
