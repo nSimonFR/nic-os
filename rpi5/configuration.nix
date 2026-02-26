@@ -115,6 +115,7 @@ in
     tree
     ethtool
     wakeonlan
+    sqlite  # SQL database for structured data storage
   ];
 
   virtualisation.docker.enable = true;
