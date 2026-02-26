@@ -70,15 +70,13 @@
               alias = "codex";
             };
           };
-          # Explicit heartbeat configuration (replaces OpenClaw's internal default)
           heartbeat = {
-            every = "1h";   # Every 1 hour
+            every = "1h";
             activeHours = {
               start = "09:00";
               end = "23:00";
               timezone = "Europe/Paris";
             };
-            suppressToolErrorWarnings = true;
           };
         };
 
