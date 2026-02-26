@@ -1,6 +1,5 @@
 {
   pkgs,
-  unstablepkgs,
   lib,
   stdenv,
   ...

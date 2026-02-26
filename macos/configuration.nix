@@ -82,10 +82,6 @@
     extraSpecialArgs = {
       inherit inputs outputs username;
       devSetup = true;
-      unstablepkgs = import inputs.nixpkgs-unstable {
-        system = "aarch64-darwin";
-        config.allowUnfree = true;
-      };
       masterpkgs = import inputs.nixpkgs-master {
         system = "aarch64-darwin";
         config.allowUnfree = true;

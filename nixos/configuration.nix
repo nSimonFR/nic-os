@@ -610,10 +610,6 @@ in
     extraSpecialArgs = {
       inherit inputs outputs username;
       devSetup = false;
-      unstablepkgs = import inputs.nixpkgs-unstable {
-        system = "x86_64-linux";
-        config.allowUnfree = true;
-      };
       masterpkgs = import inputs.nixpkgs-master {
         system = "x86_64-linux";
         config.allowUnfree = true;
