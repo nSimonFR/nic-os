@@ -40,6 +40,7 @@
     "docker-desktop"
     "epic-games"
     "firefox@developer-edition"
+    "ghostty"
     "godot"
     "google-chrome"
     "gramps"
