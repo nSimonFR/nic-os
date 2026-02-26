@@ -39,14 +39,7 @@ in
     hostName = "rpi5";
     useNetworkd = true;
     wireless.iwd = {
-      enable = true;
-      settings = {
-        Network = {
-          EnableIPv6 = true;
-          RoutePriorityOffset = 300;
-        };
-        Settings.AutoConnect = true;
-      };
+      enable = false;
     };
   };
 
@@ -199,28 +192,47 @@ in
     options = "--delete-older-than 7d";
   };
 
-  # Declarative Tailscale Serve for OpenClaw WSS (tailnet-only)
-  systemd.services.tailscale-serve-openclaw = {
-    description = "Tailscale Serve HTTPS proxy for OpenClaw gateway";
-    after = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
-    wants = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
-    requires = [ "tailscale-autoconnect.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      Restart = "on-failure";
-      RestartSec = "15s";
+  # Tailscale Serve: declarative service proxies (easily extensible)
+  # To add a new service, append to serveServices list: { port = XXXX; name = "name"; localPort = YYYY; }
+  systemd.services.tailscale-serve =
+    let
+      serveServices = [
+        { port = 443; name = "openclaw"; localPort = 18789; }
+        { port = 8443; name = "blocky"; localPort = 4000; }
+      ];
+      
+      serveCommands = lib.concatMapStringsSep "\n    " (service:
+        "# ${service.name}: https://rpi5:${toString service.port}"
+        + "\n    ${pkgs.tailscale}/bin/tailscale serve --bg --https=${toString service.port} http://127.0.0.1:${toString service.localPort}"
+      ) serveServices;
+      
+      serveStopCommands = lib.concatMapStringsSep "\n      " (service:
+        "${pkgs.tailscale}/bin/tailscale serve --https=${toString service.port} off || true"
+      ) serveServices;
+    in
+    {
+      description = "Tailscale Serve HTTPS proxies for local services (tailnet-only)";
+      after = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+      wants = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+      requires = [ "tailscale-autoconnect.service" ];
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        Restart = "on-failure";
+        RestartSec = "15s";
+      };
+      script = ''
+        sleep 2
+        # Reset all Tailscale Serve routes to ensure clean state
+        ${pkgs.tailscale}/bin/tailscale serve reset || true
+        # Now configure all routes atomically
+        ${serveCommands}
+      '';
+      preStop = ''
+        ${serveStopCommands}
+      '';
     };
-    script = ''
-      # Ensure previous config is cleared, then apply desired serve mapping
-      ${pkgs.tailscale}/bin/tailscale serve reset || true
-      ${pkgs.tailscale}/bin/tailscale serve --bg --https 443 http://127.0.0.1:18789
-    '';
-    preStop = ''
-      ${pkgs.tailscale}/bin/tailscale serve --https=443 off || true
-    '';
-  };
 
   # Home Manager — integrated so nixos-rebuild deploys user config too
   home-manager = {
