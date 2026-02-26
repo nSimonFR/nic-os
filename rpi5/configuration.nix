@@ -224,6 +224,9 @@ in
       };
       script = ''
         sleep 2
+        # Reset all Tailscale Serve routes to ensure clean state
+        ${pkgs.tailscale}/bin/tailscale serve reset || true
+        # Now configure all routes atomically
         ${serveCommands}
       '';
       preStop = ''
