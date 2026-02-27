@@ -6,12 +6,12 @@
 - Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
 - **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
 - Secrets: `~/.secrets/` (writable)
-- Skills: `~/nic-os/rpi5/openclaw-documents/skills/<name>/SKILL.md`
+- Skills: `~/nic-os/rpi5/openclaw/skills/<name>/SKILL.md`
 
 ## OpenClaw Architecture
 
-- **Config source:** `~/nic-os/rpi5/openclaw.nix` (gateway, models, channels, plugins)
-- **Documents/skills:** `~/nic-os/rpi5/openclaw-documents/` → deployed to `~/.openclaw/workspace/`
+- **Config source:** `~/nic-os/rpi5/openclaw/openclaw.nix` (gateway, models, channels, plugins)
+- **Documents/skills:** `~/nic-os/rpi5/openclaw/` → deployed to `~/.openclaw/workspace/`
 - **Runtime config:** `~/.openclaw/openclaw.json` (Nix-managed symlink, read-only)
 - **Env vars:** `~/.secrets/openclaw.env` (loaded by systemd service)
 - **Gateway service:** `openclaw-gateway` (user systemd unit)
@@ -20,8 +20,8 @@
 
 | Change | Edit | Then |
 |--------|------|------|
-| Models, channels, plugins, gateway | `~/nic-os/rpi5/openclaw.nix` | Rebuild |
-| Skill content | `~/nic-os/rpi5/openclaw-documents/skills/` | Rebuild |
+| Models, channels, plugins, gateway | `~/nic-os/rpi5/openclaw/openclaw.nix` | Rebuild |
+| Skill content | `~/nic-os/rpi5/openclaw/skills/` | Rebuild |
 | API keys, tokens, env vars | `~/.secrets/openclaw.env` | `systemctl --user restart openclaw-gateway` |
 
 ## Useful Commands

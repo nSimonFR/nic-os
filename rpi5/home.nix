@@ -6,7 +6,7 @@
 }:
 {
   imports = [
-    ./openclaw.nix
+    ./openclaw/openclaw.nix
   ];
 
   home.packages = with pkgs; [

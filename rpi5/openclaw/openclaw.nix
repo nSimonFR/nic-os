@@ -21,7 +21,7 @@ in
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
 
   programs.openclaw = {
-    documents = ./openclaw-documents;
+    documents = ./.;
     excludeTools = [ "pnpm" ];
 
     customPlugins = [

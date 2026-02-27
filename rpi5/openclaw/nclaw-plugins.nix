@@ -4,7 +4,7 @@
 }:
 let
   pkgs = import nixpkgs { inherit system; };
-  skillsRoot = ./openclaw-documents/skills;
+  skillsRoot = ./skills;
   skillEntries = builtins.readDir skillsRoot;
   skillDirs = builtins.filter (name: skillEntries.${name} == "directory")
     (builtins.attrNames skillEntries);
