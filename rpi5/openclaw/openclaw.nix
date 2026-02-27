@@ -6,12 +6,12 @@
   ...
 }:
 let
-  bundledExtensionsDir = "~/.openclaw/bundled-extensions";
+  bundledExtensionsDir = "/home/nsimon/.openclaw/bundled-extensions";
   bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
 in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
-    "~/.secrets/openclaw.env";
+    "/home/nsimon/.secrets/openclaw.env";
   systemd.user.services.openclaw-gateway.Service.Environment =
     [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
@@ -88,7 +88,7 @@ in
 
         channels.telegram = {
           enabled = true;
-          tokenFile = "~/.secrets/telegram-bot-token";
+          tokenFile = "/home/nsimon/.secrets/telegram-bot-token";
           allowFrom = [ 82389391 ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
