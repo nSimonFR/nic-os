@@ -69,8 +69,18 @@
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
       rpiconfig = "rpi5";
+      nclawPluginSource =
+        let
+          narHash =
+            if self ? narHash then self.narHash else self.sourceInfo.narHash;
+        in
+        builtins.unsafeDiscardStringContext "path:${self.outPath}?narHash=${narHash}";
     in
     {
+      openclawPlugin = system: import ./rpi5/nclaw-plugin.nix {
+        inherit nixpkgs system;
+      };
+
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
         specialArgs = {
@@ -88,6 +98,7 @@
           inherit inputs outputs username;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
+          inherit nclawPluginSource;
         };
         modules = [
           home-manager.nixosModules.home-manager
