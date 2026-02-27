@@ -10,7 +10,6 @@ let
     name:
     skillEntries.${name} == "directory"
     && builtins.pathExists (skillsRoot + "/${name}/SKILL.md")
-    && name != "clawhub"
   ) (builtins.attrNames skillEntries);
   skillPaths = map (name: skillsRoot + "/${name}") skillDirs;
 in
