@@ -77,7 +77,7 @@
         builtins.unsafeDiscardStringContext "path:${self.outPath}?narHash=${narHash}";
     in
     {
-      openclawPlugin = system: import ./rpi5/nclaw-plugin.nix {
+      openclawPlugin = system: import ./rpi5/openclaw/nclaw-plugins.nix {
         inherit nixpkgs system;
       };
 

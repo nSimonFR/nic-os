@@ -20,7 +20,7 @@ Use this skill to search, inspect, and install skills with `npx --yes clawhub`.
   - `--workdir /tmp/clawhub-work`
   - `--dir skills`
 - Canonical `nClaw` destination:
-  - `/home/nsimon/nic-os/rpi5/openclaw-documents/skills`
+  - `/home/nsimon/nic-os/rpi5/openclaw/skills`
 
 ## Core Commands
 
@@ -44,8 +44,8 @@ After EVERY install/inspect/search flow, ask this exact question before ending:
 If user says **yes**:
 
 ```bash
-mkdir -p /home/nsimon/nic-os/rpi5/openclaw-documents/skills
-mv /tmp/clawhub-work/skills/<slug> /home/nsimon/nic-os/rpi5/openclaw-documents/skills/<slug>
+mkdir -p /home/nsimon/nic-os/rpi5/openclaw/skills
+mv /tmp/clawhub-work/skills/<slug> /home/nsimon/nic-os/rpi5/openclaw/skills/<slug>
 ```
 
 If user says **no**, do not move anything.

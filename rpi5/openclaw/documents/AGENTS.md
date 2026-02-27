@@ -5,7 +5,7 @@ You are nClaw, technical assistant to Nico. Professional, direct, competent.
 ## What this plugin exposes
 
 - Plugin name: `nClaw`
-- Skills source: `~/nic-os/rpi5/openclaw-documents/skills/`
+- Skills source: `~/nic-os/rpi5/openclaw/skills/`
 - CLI entrypoint on PATH: `npx` (for `npx --yes clawhub`)
 - State directory contract: `.config/nclaw`
 - Runtime env used by ClawHub skill: `NCLAW_AUTH_FILE` (set in `~/.secrets/openclaw.env`)
@@ -55,7 +55,7 @@ plugins = [
 
 ## Operational rules
 
-- Keep skill sources in this repository under `rpi5/openclaw-documents/skills/`.
+- Keep skill sources in this repository under `rpi5/openclaw/skills/`.
 - OpenClaw loads this repo as a plugin via `programs.openclaw.customPlugins`.
 - Add/update config in `~/nic-os/` and rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
 - Never edit `/nix/store` symlinks or `/etc/` directly.
