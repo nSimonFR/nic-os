@@ -6,8 +6,12 @@ let
   pkgs = import nixpkgs { inherit system; };
   skillsRoot = ./skills;
   skillEntries = builtins.readDir skillsRoot;
-  skillDirs = builtins.filter (name: skillEntries.${name} == "directory")
-    (builtins.attrNames skillEntries);
+  skillDirs = builtins.filter (
+    name:
+    skillEntries.${name} == "directory"
+    && builtins.pathExists (skillsRoot + "/${name}/SKILL.md")
+    && name != "clawhub"
+  ) (builtins.attrNames skillEntries);
   skillPaths = map (name: skillsRoot + "/${name}") skillDirs;
 in
 {
