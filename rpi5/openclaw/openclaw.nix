@@ -6,12 +6,12 @@
   ...
 }:
 let
-  bundledExtensionsDir = "/home/nsimon/.openclaw/bundled-extensions";
+  bundledExtensionsDir = "~/.openclaw/bundled-extensions";
   bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
 in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
-    "/home/nsimon/.secrets/openclaw.env";
+    "~/.secrets/openclaw.env";
   systemd.user.services.openclaw-gateway.Service.Environment =
     [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
@@ -88,12 +88,13 @@ in
 
         channels.telegram = {
           enabled = true;
-          tokenFile = "/home/nsimon/.secrets/telegram-bot-token";
+          tokenFile = "~/.secrets/telegram-bot-token";
           allowFrom = [ 82389391 ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
         };
 
+        plugins.entries.acpx.enabled = true;
       };
     };
   };
