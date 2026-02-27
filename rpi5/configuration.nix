@@ -6,6 +6,7 @@
   outputs,
   username,
   nixos-raspberrypi,
+  nclawPluginSource,
   ...
 }:
 let
@@ -239,10 +240,9 @@ in
   home-manager = {
     useGlobalPkgs = true;
     useUserPackages = true;
-    backupFileExtension = "hm-backup";
     backupCommand = "rm -f";
     extraSpecialArgs = {
-      inherit inputs outputs username;
+      inherit inputs outputs username nclawPluginSource;
       devSetup = false;
       unstablepkgs = import inputs.nixpkgs-unstable {
         inherit system;

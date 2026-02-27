@@ -2,27 +2,33 @@
   config,
   pkgs,
   lib,
+  nclawPluginSource,
   ...
 }:
+let
+  bundledExtensionsDir = "/home/nsimon/.openclaw/bundled-extensions";
+  bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
+in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
     "/home/nsimon/.secrets/openclaw.env";
+  systemd.user.services.openclaw-gateway.Service.Environment =
+    [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
+  systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
+    "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
+    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
+  ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
 
   programs.openclaw = {
     documents = ./openclaw-documents;
+    excludeTools = [ "pnpm" ];
 
-    skills =
-      let
-        skillEntries = builtins.readDir ./openclaw-documents/skills;
-        skillDirs = builtins.filter (name: skillEntries.${name} == "directory")
-          (builtins.attrNames skillEntries);
-      in
-      map (name: {
-        inherit name;
-        mode = "copy";
-        source = toString (./openclaw-documents/skills + "/${name}");
-      }) skillDirs;
+    customPlugins = [
+      {
+        source = nclawPluginSource;
+      }
+    ];
 
     bundledPlugins = {
       summarize.enable = true;
@@ -88,9 +94,6 @@
           timeoutSeconds = 120;
         };
 
-        plugins.entries = {
-          "telegram".enabled = true;
-        };
       };
     };
   };

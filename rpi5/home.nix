@@ -1,11 +1,17 @@
 {
   inputs,
+  pkgs,
   username,
   ...
 }:
 {
   imports = [
     ./openclaw.nix
+  ];
+
+  home.packages = with pkgs; [
+    nodejs_22
+    pnpm
   ];
 
   home = {
