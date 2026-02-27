@@ -2,7 +2,7 @@
   config,
   pkgs,
   lib,
-  nclawPluginSource,
+  nClawSkillsSource,
   ...
 }:
 let
@@ -21,12 +21,12 @@ in
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
 
   programs.openclaw = {
-    documents = ./.;
+    documents = ./documents;
     excludeTools = [ "pnpm" ];
 
     customPlugins = [
       {
-        source = nclawPluginSource;
+        source = nClawSkillsSource;
       }
     ];
 
