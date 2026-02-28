@@ -3,11 +3,18 @@
   pkgs,
   lib,
   nClawSkillsSource,
+  openclawSource,
   ...
 }:
 let
-  bundledExtensionsDir = "/home/nsimon/.openclaw/bundled-extensions";
+  bundledRuntimeDir = "/home/nsimon/.openclaw/bundled-runtime";
+  bundledExtensionsDir = "${bundledRuntimeDir}/extensions";
+  bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
   bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
+  bundledNodeModulesSource = "${pkgs.openclaw-gateway}/lib/openclaw/node_modules";
+  customExtensionsDir = "/home/nsimon/.openclaw/custom-extensions";
+  customAcpxDir = "${customExtensionsDir}/acpx";
+  customAcpxSource = "${openclawSource}/extensions/acpx";
 in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
@@ -16,7 +23,10 @@ in
     [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
     "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
+    "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
+    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${customAcpxSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \"${customAcpxSource}/\" \"${customAcpxDir}/\"; fi'"
+    "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
 
@@ -24,11 +34,13 @@ in
     documents = ./documents;
     excludeTools = [ "pnpm" ];
 
+
     customPlugins = [
       {
         source = nClawSkillsSource;
       }
     ];
+
 
     bundledPlugins = {
       summarize.enable = true;
@@ -94,6 +106,9 @@ in
           timeoutSeconds = 120;
         };
 
+        tools.sessions.visibility = "all";
+
+        plugins.load.paths = [ customAcpxDir ];
         plugins.entries.acpx.enabled = true;
       };
     };
