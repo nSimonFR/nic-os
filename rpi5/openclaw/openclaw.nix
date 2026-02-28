@@ -107,6 +107,7 @@ in
         };
 
         tools.sessions.visibility = "all";
+        tools.agentToAgent.enabled = true;
 
         plugins.load.paths = [ customAcpxDir ];
         plugins.entries.acpx.enabled = true;
