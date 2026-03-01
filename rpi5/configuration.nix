@@ -12,6 +12,7 @@
 }:
 let
   system = "aarch64-linux";
+  blogwatcherPkg = pkgs.callPackage ../shared/pkgs/blogwatcher.nix { };
 in
 {
   # Workaround for nixpkgs 25.11 rename.nix <-> nixos-raspberrypi conflict
@@ -118,7 +119,7 @@ in
     ethtool
     wakeonlan
     sqlite  # SQL database for structured data storage
-    blogwatcher
+    blogwatcherPkg
   ];
 
   virtualisation.docker.enable = true;

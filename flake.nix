@@ -115,9 +115,6 @@
                   config.allowUnfree = true;
                 }).uv;
               })
-              (final: prev: {
-                blogwatcher = prev.callPackage ./shared/pkgs/blogwatcher.nix { };
-              })
               inputs.nix-openclaw.overlays.default
               # Redis cluster tests are flaky in the Nix sandbox
               (final: prev: {
