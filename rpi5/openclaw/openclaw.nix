@@ -98,6 +98,14 @@ in
           };
         };
 
+        # Enable classic subagent runtime alongside ACP runtime.
+        agents.list = [
+          {
+            id = "main";
+            default = true;
+          }
+        ];
+
         channels.telegram = {
           enabled = true;
           tokenFile = "/home/nsimon/.secrets/telegram-bot-token";
@@ -110,6 +118,7 @@ in
         tools.agentToAgent.enabled = true;
 
         acp = {
+          dispatch.enabled = true;
           defaultAgent = "cursor-agent";
           allowedAgents = [ "cursor-agent" "codex" ];
         };
