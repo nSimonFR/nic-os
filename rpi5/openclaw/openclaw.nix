@@ -116,6 +116,12 @@ in
 
         plugins.load.paths = [ customAcpxDir ];
         plugins.entries.acpx.enabled = true;
+
+        plugins.entries."voice-call" = {
+          enabled = true;
+          provider = "mock";
+          inboundPolicy = "disabled";
+        };
       };
     };
   };
