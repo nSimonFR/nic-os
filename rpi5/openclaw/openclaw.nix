@@ -109,6 +109,11 @@ in
         tools.sessions.visibility = "all";
         tools.agentToAgent.enabled = true;
 
+        acp = {
+          defaultAgent = "cursor-agent";
+          allowedAgents = [ "cursor-agent" "codex" ];
+        };
+
         plugins.load.paths = [ customAcpxDir ];
         plugins.entries.acpx.enabled = true;
       };
