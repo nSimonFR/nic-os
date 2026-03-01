@@ -118,6 +118,8 @@ in
     ethtool
     wakeonlan
     sqlite  # SQL database for structured data storage
+    go      # required for blogwatcher install/build
+    gcc     # required for Go cgo builds (blogwatcher)
   ];
 
   virtualisation.docker.enable = true;
