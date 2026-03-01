@@ -119,8 +119,6 @@ in
 
         plugins.entries."voice-call" = {
           enabled = true;
-          provider = "mock";
-          inboundPolicy = "disabled";
         };
       };
     };
