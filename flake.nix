@@ -36,6 +36,10 @@
       url = "github:openclaw/nix-openclaw";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    openclaw-source = {
+      url = "github:openclaw/openclaw";
+      flake = false;
+    };
 
     mac-app-util.url = "github:hraban/mac-app-util";
   };
@@ -69,16 +73,15 @@
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
       rpiconfig = "rpi5";
-      nClawSkillsSource =
-        let
-          narHash =
-            if self ? narHash then self.narHash else self.sourceInfo.narHash;
-        in
-        builtins.unsafeDiscardStringContext "path:${self.outPath}?narHash=${narHash}";
+      # Use direct working-tree path so local/untracked skill changes are visible immediately.
+      nClawSkillsSource = "path:/home/nsimon/nic-os";
     in
     {
-      openclawPlugin = system: import ./rpi5/openclaw/nclaw-skills.nix {
-        inherit nixpkgs system;
+      # OpenClaw expects a single plugin object at flake output `openclawPlugin`.
+      # Keep this pure by pinning an explicit target system instead of currentSystem.
+      openclawPlugin = import ./rpi5/openclaw/nclaw-skills.nix {
+        inherit nixpkgs;
+        system = "aarch64-linux";
       };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
@@ -99,6 +102,7 @@
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           inherit nClawSkillsSource;
+          openclawSource = inputs.openclaw-source;
         };
         modules = [
           home-manager.nixosModules.home-manager

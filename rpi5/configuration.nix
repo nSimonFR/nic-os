@@ -7,6 +7,7 @@
   username,
   nixos-raspberrypi,
   nClawSkillsSource,
+  openclawSource,
   ...
 }:
 let
@@ -242,7 +243,13 @@ in
     useUserPackages = true;
     backupCommand = "rm -f";
     extraSpecialArgs = {
-      inherit inputs outputs username nClawSkillsSource;
+      inherit
+        inputs
+        outputs
+        username
+        nClawSkillsSource
+        openclawSource
+        ;
       devSetup = false;
       unstablepkgs = import inputs.nixpkgs-unstable {
         inherit system;

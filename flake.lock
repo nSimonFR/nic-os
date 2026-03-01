@@ -567,6 +567,22 @@
         "type": "github"
       }
     },
+    "openclaw-source": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1772264157,
+        "narHash": "sha256-79f6VNOhW5LnZPkd2vzrFKVc4kcDzSXdCJokjcUCZpg=",
+        "owner": "openclaw",
+        "repo": "openclaw",
+        "rev": "b297bae0275c99867053d4e89f833131b3f64317",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openclaw",
+        "repo": "openclaw",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "darwin": "darwin",
@@ -578,6 +594,7 @@
         "nixpkgs": "nixpkgs_6",
         "nixpkgs-master": "nixpkgs-master",
         "nixpkgs-unstable": "nixpkgs-unstable",
+        "openclaw-source": "openclaw-source",
         "zen-browser": "zen-browser"
       }
     },
