@@ -24,11 +24,30 @@ in
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
     "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
     "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
-    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
+    "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w \"${bundledExtensionsDir}\" 2>/dev/null || true'"
+    "${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx"
+    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude \"acpx/\" \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${customAcpxSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \"${customAcpxSource}/\" \"${customAcpxDir}/\"; fi'"
     "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
+  home.sessionVariables = {
+    OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+  };
+  programs.zsh.sessionVariables = {
+    OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+  };
+  programs.zsh.envExtra = ''
+    export OPENCLAW_BUNDLED_PLUGINS_DIR="${bundledExtensionsDir}"
+  '';
+  home.activation.copyOpenClawBundledPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
+    ${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w "${bundledExtensionsDir}" 2>/dev/null || true'
+    ${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx || true
+    if [ -d "${bundledExtensionsSource}" ]; then
+      ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude "acpx/" "${bundledExtensionsSource}/" "${bundledExtensionsDir}/"
+    fi
+  '';
 
   programs.openclaw = {
     documents = ./documents;
