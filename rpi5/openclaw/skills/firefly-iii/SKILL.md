@@ -1,27 +1,21 @@
 ---
 name: firefly-iii
 description: Manage personal finances via Firefly III API. Use when user asks about budgets, transactions, accounts, categories, piggy banks, subscriptions, recurring transactions, or financial reports. Supports creating, listing, updating transactions; managing accounts and balances; setting budgets; tracking savings goals.
+metadata: {"openclaw":{"emoji":"💶","requires":{"env":["FIREFLY_TOKEN"]},"primaryEnv":"FIREFLY_TOKEN"}}
 ---
 
 # Firefly III
 
 Firefly III is a self-hosted personal finance manager. This skill provides API access for managing finances.
 
-## Configuration
-
-Required environment:
-- `FIREFLY_URL`: Base URL (e.g., `https://budget.example.com`)
-- `FIREFLY_TOKEN`: Personal Access Token (stored at `~/.firefly_token`)
-
-Get token: Profile → OAuth → Personal Access Tokens → Create new token
-
 ## API Basics
 
 ```bash
-TOKEN=$(cat ~/.firefly_token)
-BASE="$FIREFLY_URL/api/v1"
+# Local Firefly III API endpoint
+BASE="http://localhost:8080/api/v1"
+
 curl -s "$BASE/endpoint" \
-  -H "Authorization: Bearer $TOKEN" \
+  -H "Authorization: Bearer $FIREFLY_TOKEN" \
   -H "Accept: application/json" \
   -H "Content-Type: application/json"
 ```
