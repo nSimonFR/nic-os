@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+"""Firefly III Sumeria CSV Importer"""
+import os, sys, csv
+from datetime import datetime
+from subprocess import run
+
+API_URL = os.environ.get("FIREFLY_API_URL", "http://localhost:8080/api/v1")
+TOKEN = os.environ.get("FIREFLY_TOKEN")
+SUMERIA_ID = 9
+DRY_RUN = "--dry-run" in sys.argv
+
+if not TOKEN:
+    print("❌ Error: FIREFLY_TOKEN not set")
+    sys.exit(1)
+
+if not sys.argv[1:]:
+    print("Usage: sumeria_import <csv_file> [--dry-run]")
+    sys.exit(1)
+
+csv_file = sys.argv[1]
+if not os.path.exists(csv_file):
+    print(f"❌ Error: {csv_file} not found")
+    sys.exit(1)
+
+def categorize(label):
+    u = label.upper()
+    if any(x in u for x in ["CLAUDE", "OPENAI", "ANTHROPIC"]):
+        return 7  # Professional
+    if "INSTITUT" in u:
+        return 4  # Health
+    if any(x in u for x in ["CAFE", "SUSHI", "MEKONG", "TABLIER", "SAVEURS", "LEBOUILLON", "ANJU", "PICARD", "MAGNO", "RESTAURANT", "CRF", "FABRIQUE", "R ET"]):
+        return 3  # Food
+    if "UBER" in u:
+        return 6  # Transport
+    if any(x in u for x in ["AMAZON", "MAISON", "WALLABIES", "LUDIFOLIE", "G20", "FLEUR"]):
+        return 9  # Essentials
+    # Gifts category removed - moved to Unknown
+    if "Internal bank transfer" in label:
+        return 16  # Internal Transfer
+    return 12  # Unknown
+
+print(f"📂 Parsing {csv_file}...")
+
+with open(csv_file) as f:
+    reader = csv.reader(f)
+    for _ in range(10): next(reader)  # Skip metadata
+    
+    created = 0
+    for row in reader:
+        if len(row) < 5 or not row[0]: continue
+        
+        date, label, debit, credit = row[0], row[1], row[2], row[3]
+        if not (credit.strip() or debit.strip()): continue
+        
+        # Parse amount
+        if credit.strip():
+            amount, typ = float(credit), "deposit"
+            src, dst = "1", SUMERIA_ID
+        else:
+            amount, typ = abs(float(debit)), "withdrawal"
+            src, dst = SUMERIA_ID, SUMERIA_ID
+        
+        # Date: DD/MM/YYYY -> YYYY-MM-DD
+        d, m, y = date.split("/")
+        iso_date = f"{y}-{m}-{d}"
+        
+        cat = categorize(label)
+        if "Internal" in label: typ = "transfer"
+        
+        if DRY_RUN:
+            print(f"  {iso_date} | {label[:40]:40} | €{amount:7.2f} | Cat {cat}")
+        else:
+            json_data = f'{{"transactions":[{{"type":"{typ}","date":"{iso_date}","amount":"{amount:.2f}","description":"{label}","source_id":"{src}","destination_id":"{dst}","category_id":"{cat}"}}]}}'
+            result = run(["curl", "-s", "-X", "POST", f"{API_URL}/transactions", 
+                         "-H", f"Authorization: Bearer {TOKEN}",
+                         "-H", "Content-Type: application/json",
+                         "-d", json_data], capture_output=True, text=True)
+            if "id" in result.stdout or "201" in result.stdout:
+                print("✓", end="", flush=True)
+                created += 1
+            else:
+                print("✗", end="", flush=True)
+
+print(f"\n✅ {'Preview' if DRY_RUN else f'Created {created} transaction(s)'}")
+if DRY_RUN:
+    print(f"\nRun without --dry-run to import these transactions")
