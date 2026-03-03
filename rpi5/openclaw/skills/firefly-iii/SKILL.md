@@ -20,6 +20,23 @@ curl -s "$BASE/endpoint" \
   -H "Content-Type: application/json"
 ```
 
+## Realtime API Documentation (always check first)
+
+Before using less-common endpoints or fields, fetch and inspect the current OpenAPI spec:
+
+```bash
+DOC_URL="https://api-docs.firefly-iii.org/firefly-iii-6.5.1-v1.yaml"
+DOC_CACHE="/tmp/firefly-iii-openapi.yaml"
+
+curl -fsSL "$DOC_URL" -o "$DOC_CACHE"
+
+# Quick checks
+grep -n "^openapi:\|^info:\|^  version:" "$DOC_CACHE" | head -n 5
+grep -n "^  /transactions:\|^  /rules:\|^  /accounts:" "$DOC_CACHE"
+```
+
+When in doubt, prefer fields/endpoints confirmed in this spec over memory/examples.
+
 ## Core Endpoints
 
 ### Accounts
