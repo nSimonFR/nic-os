@@ -26,6 +26,7 @@ in
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
+    ./ghostfolio.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
@@ -124,6 +125,9 @@ in
 
   virtualisation.docker.enable = true;
 
+  # ── Ghostfolio: Wealth management software ──────────────────────────
+  services.ghostfolio.enable = true;
+
   # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
   # (the module hardcodes these paths)
   system.activationScripts.binCompat = ''
@@ -204,6 +208,7 @@ in
       serveServices = [
         { port = 443; name = "openclaw"; localPort = 18789; }
         { port = 8443; name = "blocky"; localPort = 4000; }
+        { port = 8444; name = "ghostfolio"; localPort = 3333; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:
