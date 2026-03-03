@@ -21,6 +21,12 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    services.redis.servers.ghostfolio = {
+      enable = true;
+      bind = "127.0.0.1";
+      port = 6379;
+    };
+
     services.postgresql = {
       enable = true;
       ensureDatabases = [ "ghostfolio" ];
@@ -44,8 +50,8 @@ in
     # Systemd service for Ghostfolio
     systemd.services.ghostfolio = {
       description = "Ghostfolio - Wealth Management Software";
-      after = [ "network-online.target" "postgresql.service" ];
-      wants = [ "network-online.target" "postgresql.service" ];
+      after = [ "network-online.target" "postgresql.service" "redis-ghostfolio.service" ];
+      wants = [ "network-online.target" "postgresql.service" "redis-ghostfolio.service" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {
