@@ -1,6 +1,7 @@
 {
   pkgs,
   masterpkgs,
+  unstablePkgs,
   lib,
   devSetup ? false,
   ...
@@ -19,7 +20,7 @@
       btop
       coreutils-full
       curl
-      claude-code
+      unstablePkgs.claude-code
       codex
       masterpkgs.cursor-cli
       ctop

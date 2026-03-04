@@ -258,7 +258,7 @@ in
         openclawSource
         ;
       devSetup = false;
-      unstablepkgs = import inputs.nixpkgs-unstable {
+      unstablePkgs = import inputs.nixpkgs-unstable {
         inherit system;
         config.allowUnfree = true;
       };

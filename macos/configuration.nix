@@ -86,6 +86,10 @@
         system = "aarch64-darwin";
         config.allowUnfree = true;
       };
+      unstablePkgs = import inputs.nixpkgs-unstable {
+        system = "aarch64-darwin";
+        config.allowUnfree = true;
+      };
     };
     users.${username} = {
       imports = [
