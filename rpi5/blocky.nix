@@ -49,6 +49,32 @@
           ];
         };
 
+        allowlists = {
+          # Keep Yahoo Finance provider reachable for Ghostfolio.
+          # These must be in active clientGroupsBlock groups so they
+          # override matching denylist entries.
+          ads = [
+            ''
+              fc.yahoo.com
+              finance.yahoo.com
+              query1.finance.yahoo.com
+              query2.finance.yahoo.com
+              guce.yahoo.com
+              consent.yahoo.com
+            ''
+          ];
+          threats = [
+            ''
+              fc.yahoo.com
+              finance.yahoo.com
+              query1.finance.yahoo.com
+              query2.finance.yahoo.com
+              guce.yahoo.com
+              consent.yahoo.com
+            ''
+          ];
+        };
+
         # Apply all denylist groups to every client on the network
         clientGroupsBlock = {
           default = [ "ads" "threats" ];

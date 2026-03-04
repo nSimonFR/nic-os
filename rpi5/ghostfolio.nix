@@ -59,6 +59,8 @@ in
         PORT = toString cfg.port;
         DATABASE_URL = "postgresql://ghostfolio@localhost/ghostfolio?host=/run/postgresql";
         # Ghostfolio-specific env vars
+        # Reduce Yahoo Finance request pressure to avoid 429 throttling.
+        CACHE_QUOTES_TTL = "900000"; # 15 minutes in milliseconds
         PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
       };
 
