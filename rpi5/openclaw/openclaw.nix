@@ -114,6 +114,11 @@ in
               end = "23:00";
               timezone = "Europe/Paris";
             };
+            # Explicit Telegram delivery target for visible heartbeat reports.
+            target = "telegram";
+            to = "82389391";
+            accountId = "default";
+            directPolicy = "allow";
           };
         };
 
