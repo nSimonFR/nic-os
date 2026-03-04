@@ -109,11 +109,34 @@
           ({ inputs, ... }: {
             nixpkgs.overlays = [
               # uv 0.9.26 from release-25.11 fails to build on aarch64-linux; use nixpkgs-unstable
-              (final: prev: {
-                uv = (import inputs.nixpkgs-unstable {
+              (final: prev: rec {
+                unstablePkgs = import inputs.nixpkgs-unstable {
                   system = prev.stdenv.hostPlatform.system;
                   config.allowUnfree = true;
-                }).uv;
+                };
+                uv =
+                  unstablePkgs.uv;
+                # Keep Ghostfolio current to pick up Yahoo upstream fixes.
+                # Temporary pin to 2.247.0 until nixpkgs ships this version.
+                ghostfolio = unstablePkgs.ghostfolio.overrideAttrs (old: rec {
+                  version = "2.247.0";
+                  src = prev.fetchFromGitHub {
+                    owner = "ghostfolio";
+                    repo = "ghostfolio";
+                    tag = version;
+                    hash = "sha256-pUFrbPNyHis18Ta/p8DNfM0dz7R7ucGd981gleCFQyw=";
+                    leaveDotGit = true;
+                    postFetch = ''
+                      date -u -d "@$(git -C $out log -1 --pretty=%ct)" +%s%3N > $out/SOURCE_DATE_EPOCH
+                      find "$out" -name .git -print0 | xargs -0 rm -rf
+                    '';
+                  };
+                  npmDepsHash = "sha256-eDzoCT28gRhmHxRHKUXl2Gm0Rpso/R5SKaxCuFkZjS8=";
+                  npmDeps = prev.fetchNpmDeps {
+                    inherit src;
+                    hash = npmDepsHash;
+                  };
+                });
               })
               inputs.nix-openclaw.overlays.default
               # Redis cluster tests are flaky in the Nix sandbox
