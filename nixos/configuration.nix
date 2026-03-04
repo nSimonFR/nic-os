@@ -614,6 +614,10 @@ in
         system = "x86_64-linux";
         config.allowUnfree = true;
       };
+      unstablePkgs = import inputs.nixpkgs-unstable {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+      };
     };
     users.${username} = {
       imports = [
