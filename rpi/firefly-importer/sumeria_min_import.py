@@ -145,8 +145,49 @@ def find_matching_internal_source(day, amount, dest_account_id):
     return None
 
 
-def has_existing_transfer_from_source(day, amount, source_id):
-    # If an opposite-side import already created a transfer, don't duplicate as withdrawal.
+def get_accounts_index():
+    code, res = api("GET", "/accounts?limit=500")
+    if code != 200:
+        return {}
+    out = {}
+    for a in res.get("data", []):
+        aid = str(a.get("id"))
+        name = (a.get("attributes", {}).get("name") or "").strip().lower()
+        if name:
+            out[name] = aid
+    return out
+
+
+def parse_internal_target_label(label):
+    m = re.search(r"internal bank transfer emitted\s*-\s*(.+)$", label, flags=re.I)
+    return m.group(1).strip().lower() if m else None
+
+
+def parse_internal_source_label(label):
+    m = re.search(r"internal bank transfer received\s*-\s*(.+)$", label, flags=re.I)
+    return m.group(1).strip().lower() if m else None
+
+
+def resolve_destination_account_id(target_label, accounts_index, source_id):
+    if not target_label:
+        return None
+
+    # Common Sumeria labels first.
+    if target_label == "savings" and "sumeria savings" in accounts_index:
+        aid = accounts_index["sumeria savings"]
+        return aid if aid != str(source_id) else None
+    if target_label == "current" and "sumeria current" in accounts_index:
+        aid = accounts_index["sumeria current"]
+        return aid if aid != str(source_id) else None
+
+    # Generic name contains match.
+    for name, aid in accounts_index.items():
+        if target_label in name and aid != str(source_id):
+            return aid
+    return None
+
+
+def has_existing_transfer(day, amount, source_id, destination_id=None):
     for j in iter_day_journals(day, "transfer"):
         for t in j.get("attributes", {}).get("transactions", []):
             try:
@@ -157,12 +198,38 @@ def has_existing_transfer_from_source(day, amount, source_id):
                 continue
             if str(t.get("source_id") or "") != str(source_id):
                 continue
+            if destination_id and str(t.get("destination_id") or "") != str(destination_id):
+                continue
             return True
     return False
 
 
+def find_matching_internal_deposit(day, amount, source_id, target_label=None):
+    # Used when destination account was imported first and stored as a deposit.
+    for j in iter_day_journals(day, "deposit"):
+        jid = j.get("id")
+        for t in j.get("attributes", {}).get("transactions", []):
+            desc = (t.get("description") or "").lower()
+            if "internal bank transfer received" not in desc:
+                continue
+            if target_label and target_label not in desc:
+                continue
+            try:
+                t_amount = abs(float(str(t.get("amount", "0")).replace(",", ".")))
+            except Exception:
+                continue
+            if t_amount != amount:
+                continue
+            dst_id = str(t.get("destination_id") or "")
+            if not dst_id or dst_id == str(source_id):
+                continue
+            return {"destination_id": dst_id, "journal_id": str(jid), "description": t.get("description") or ""}
+    return None
+
+
 def import_rows(rows, account_id, account_name, tag):
     created, failed, merged = 0, 0, 0
+    accounts_index = get_accounts_index()
     for r in rows:
         is_credit = bool(r["credit"])
         amount = abs(float((r["credit"] or r["debit"]).replace(",", ".")))
@@ -180,11 +247,23 @@ def import_rows(rows, account_id, account_name, tag):
         }
 
         if is_credit:
-            src_match = find_matching_internal_source(r["date"], amount, account_id)
             matched_withdrawal_journal = None
+
+            # If label points to a known source account, create transfer directly
+            # even when source statement import happened later (reversed order).
+            source_label = parse_internal_source_label(r["label"])
+            direct_source_id = resolve_destination_account_id(source_label, accounts_index, account_id)
+
+            src_match = find_matching_internal_source(r["date"], amount, account_id)
             if src_match:
                 tx.update({"type": "transfer", "source_id": src_match["source_id"], "destination_id": str(account_id)})
                 matched_withdrawal_journal = src_match.get("journal_id")
+            elif direct_source_id:
+                # avoid duplicate transfer creation if it already exists
+                if has_existing_transfer(r["date"], amount, direct_source_id, account_id):
+                    merged += 1
+                    continue
+                tx.update({"type": "transfer", "source_id": str(direct_source_id), "destination_id": str(account_id)})
             else:
                 tx.update({"type": "deposit", "source_name": "External", "destination_id": str(account_id)})
 
@@ -201,11 +280,40 @@ def import_rows(rows, account_id, account_name, tag):
                 print(f"FAIL {r['date']} {r['label'][:45]} :: {code} {res.get('message','')}")
             continue
 
-        # Debit side: if it's an internal emitted transfer and a transfer from this source already exists,
-        # skip this row to avoid duplicate withdrawal representation.
-        if "internal bank transfer emitted" in label_l and has_existing_transfer_from_source(r["date"], amount, account_id):
-            merged += 1
-            continue
+        # Debit side internal transfer handling:
+        # 1) dedupe by source+destination+day+amount when possible,
+        # 2) reconcile previously-created deposit (destination imported first),
+        # 3) otherwise create withdrawal fallback.
+        if "internal bank transfer emitted" in label_l:
+            target_label = parse_internal_target_label(r["label"])
+            expected_dest_id = resolve_destination_account_id(target_label, accounts_index, account_id)
+
+            if has_existing_transfer(r["date"], amount, account_id, expected_dest_id):
+                merged += 1
+                continue
+
+            dep_match = find_matching_internal_deposit(r["date"], amount, account_id, target_label)
+            if dep_match:
+                transfer_tx = {
+                    "type": "transfer",
+                    "date": r["date"] + "T00:00:00+01:00",
+                    "amount": f"{amount:.2f}",
+                    "description": dep_match.get("description") or r["label"],
+                    "source_id": str(account_id),
+                    "destination_id": str(dep_match["destination_id"]),
+                    "tags": [tag],
+                    "import_hash_v2": import_hash_v2,
+                }
+                c_code, c_res = api("POST", "/transactions", {"transactions": [transfer_tx]})
+                if c_code in (200, 201):
+                    created += 1
+                    d_code, _ = api("DELETE", f"/transactions/{dep_match['journal_id']}")
+                    if d_code in (200, 204):
+                        merged += 1
+                    continue
+                failed += 1
+                print(f"FAIL {r['date']} {r['label'][:45]} :: {c_code} {c_res.get('message','')}")
+                continue
 
         tx.update({"type": "withdrawal", "source_id": str(account_id), "destination_name": "Sumeria Expense"})
         code, res = api("POST", "/transactions", {"transactions": [tx]})
