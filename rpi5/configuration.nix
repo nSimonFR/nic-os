@@ -58,7 +58,6 @@ in
 
   users.users.${username} = {
     isNormalUser = true;
-    initialPassword = "changeme";
     extraGroups = [
       "wheel"
       "video"
@@ -209,8 +208,7 @@ in
     let
       serveServices = [
         { port = 443; name = "openclaw"; localPort = 18789; }
-        { port = 8443; name = "blocky"; localPort = 4000; }
-        { port = 8444; name = "ghostfolio"; localPort = 3333; }
+        { port = 3333; name = "ghostfolio"; localPort = 3333; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:
