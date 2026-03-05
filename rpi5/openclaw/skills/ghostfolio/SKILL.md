@@ -1,6 +1,6 @@
 ---
 name: ghostfolio
-description: Manage and query Ghostfolio portfolio data (performance, holdings, dividends) using the API with the required anonymous access-token exchange flow.
+description: Manage and query Ghostfolio portfolio data (performance, holdings, dividends) using API endpoints and token auth patterns.
 metadata: {"openclaw":{"emoji":"👻","requires":{"env":["GHOSTFOLIO_TOKEN"]},"primaryEnv":"GHOSTFOLIO_TOKEN"}}
 ---
 
@@ -8,125 +8,122 @@ metadata: {"openclaw":{"emoji":"👻","requires":{"env":["GHOSTFOLIO_TOKEN"]},"p
 
 Use this skill when the user asks about Ghostfolio portfolio metrics, holdings, dividends, or API troubleshooting.
 
-## Required Auth Flow (important)
-
-Protected endpoints may return `401` if you send the long-lived access token directly as a Bearer token.
-
-Use this two-step flow:
-
-1. Exchange access token via `POST /api/v1/auth/anonymous`
-2. Use returned `authToken` JWT as `Authorization: Bearer <authToken>` for protected endpoints
-
 ## Environment Variables
 
 ```bash
-# Local service usually works without DNS.
+# Prefer local access when available
 export GHOSTFOLIO_BASE_URL="http://127.0.0.1:3333"
-# Example remote URL (optional):
+# Optional remote example:
 # export GHOSTFOLIO_BASE_URL="https://rpi5.gate-mintaka.ts.net:8444"
 
-# Long-lived token supplied by user/admin.
+# Long-lived token supplied by user/admin
 export GHOSTFOLIO_TOKEN="..."
 
-# Recommended to avoid timezone-dependent surprises in responses.
+# Optional but recommended
 export GHOSTFOLIO_TIMEZONE="Europe/Paris"
 ```
 
-## Safe Curl + jq Templates
+## Auth Modes
 
-### 1) Exchange access token for JWT
+Ghostfolio setups can differ. Support both modes:
+
+### Mode A — Direct bearer (works in some environments)
 
 ```bash
-AUTH_JSON=$(curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/auth/anonymous" \
-  -H 'Content-Type: application/json' \
-  --data "{\"accessToken\":\"$GHOSTFOLIO_TOKEN\"}")
-
-AUTH_TOKEN=$(printf '%s' "$AUTH_JSON" | jq -r '.authToken')
-
-if [ -z "$AUTH_TOKEN" ] || [ "$AUTH_TOKEN" = "null" ]; then
-  echo "Failed to obtain authToken" >&2
-  printf '%s\n' "$AUTH_JSON" | jq . >&2
-  exit 1
-fi
+AUTH_HEADER="Authorization: Bearer $GHOSTFOLIO_TOKEN"
 ```
 
-### 2) Portfolio performance (`/api/v2/portfolio/performance`)
+### Mode B — Anonymous exchange (required in some environments)
 
 ```bash
-curl -fsS "$GHOSTFOLIO_BASE_URL/api/v2/portfolio/performance" \
-  -H "Authorization: Bearer $AUTH_TOKEN" \
-  -H 'Accept: application/json' \
-  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
-| jq .
-```
-
-### 3) Holdings (`/api/v1/portfolio/holdings`)
-
-```bash
-curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/portfolio/holdings" \
-  -H "Authorization: Bearer $AUTH_TOKEN" \
-  -H 'Accept: application/json' \
-  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
-| jq .
-```
-
-### 4) Dividends (`/api/v1/portfolio/dividends`)
-
-```bash
-curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/portfolio/dividends" \
-  -H "Authorization: Bearer $AUTH_TOKEN" \
-  -H 'Accept: application/json' \
-  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
-| jq .
-```
-
-## Practical one-shot helper
-
-```bash
-GHOSTFOLIO_BASE_URL="${GHOSTFOLIO_BASE_URL:-http://127.0.0.1:3333}"
-GHOSTFOLIO_TIMEZONE="${GHOSTFOLIO_TIMEZONE:-Europe/Paris}"
-
 AUTH_TOKEN=$(curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/auth/anonymous" \
   -H 'Content-Type: application/json' \
   --data "{\"accessToken\":\"$GHOSTFOLIO_TOKEN\"}" \
 | jq -r '.authToken')
 
-for endpoint in \
-  /api/v2/portfolio/performance \
-  /api/v1/portfolio/holdings \
-  /api/v1/portfolio/dividends
- do
-  echo "=== $endpoint ==="
-  curl -fsS "$GHOSTFOLIO_BASE_URL$endpoint" \
-    -H "Authorization: Bearer $AUTH_TOKEN" \
+[ -n "$AUTH_TOKEN" ] && [ "$AUTH_TOKEN" != "null" ] || {
+  echo "Failed to obtain authToken" >&2
+  exit 1
+}
+
+AUTH_HEADER="Authorization: Bearer $AUTH_TOKEN"
+```
+
+## Endpoint Templates
+
+### Portfolio performance
+
+```bash
+curl -fsS "$GHOSTFOLIO_BASE_URL/api/v2/portfolio/performance?range=ytd" \
+  -H "$AUTH_HEADER" \
+  -H 'Accept: application/json' \
+  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
+| jq .
+```
+
+### Holdings
+
+```bash
+curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/portfolio/holdings?range=ytd" \
+  -H "$AUTH_HEADER" \
+  -H 'Accept: application/json' \
+  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
+| jq .
+```
+
+### Dividends
+
+```bash
+curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/portfolio/dividends?groupBy=month&range=ytd" \
+  -H "$AUTH_HEADER" \
+  -H 'Accept: application/json' \
+  -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
+| jq .
+```
+
+## Quick connectivity + auth probe
+
+```bash
+# 1) Try direct bearer first
+for ep in \
+  '/api/v2/portfolio/performance?range=ytd' \
+  '/api/v1/portfolio/holdings?range=ytd' \
+  '/api/v1/portfolio/dividends?groupBy=month&range=ytd'
+do
+  code=$(curl -s -o /tmp/gf_probe.json -w '%{http_code}' "$GHOSTFOLIO_BASE_URL$ep" \
+    -H "Authorization: Bearer $GHOSTFOLIO_TOKEN" \
     -H 'Accept: application/json' \
-    -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE" \
-  | jq .
- done
+    -H "x-ghostfolio-timezone: $GHOSTFOLIO_TIMEZONE")
+  echo "direct $ep -> $code"
+done
+
+# 2) If direct is 401/403, try anonymous exchange
+AUTH_TOKEN=$(curl -fsS "$GHOSTFOLIO_BASE_URL/api/v1/auth/anonymous" \
+  -H 'Content-Type: application/json' \
+  --data "{\"accessToken\":\"$GHOSTFOLIO_TOKEN\"}" | jq -r '.authToken')
+
+echo "anonymous exchange token present: $([ -n "$AUTH_TOKEN" ] && [ "$AUTH_TOKEN" != "null" ] && echo yes || echo no)"
 ```
 
 ## Troubleshooting
 
 - `401 Unauthorized`
-  - Most common cause: using the long-lived access token directly as Bearer.
-  - Fix: redo `/api/v1/auth/anonymous` exchange and use returned `authToken`.
-  - If still failing, JWT may be expired; exchange again.
+  - Token invalid for this auth mode, token expired, or wrong token type.
+  - Try the other auth mode (direct vs anonymous exchange).
 
 - `403 Forbidden`
-  - Token is valid but does not grant access to requested portfolio resources.
-  - Verify the access token belongs to the expected Ghostfolio account/environment.
+  - Token recognized but not authorized for the requested resources.
+  - Verify account/environment and permissions.
 
-- Missing/incorrect timezone behavior
-  - Add `x-ghostfolio-timezone: Europe/Paris` (or user timezone) on requests.
-  - Inconsistent date-boundary outputs often come from missing timezone header.
+- Timezone inconsistencies
+  - Send `x-ghostfolio-timezone` (or at least `Timezone`) explicitly.
 
 - Connectivity issues
-  - Prefer local base URL first: `http://127.0.0.1:3333`
-  - Remote TLS path can work too (example): `https://rpi5.gate-mintaka.ts.net:8444`
-  - For self-signed/local certs during diagnostics, temporary `curl -k` may help.
+  - Prefer local URL (`http://127.0.0.1:3333`) if service runs locally.
+  - For remote TLS diagnostics only, temporary `curl -k` can help.
 
 ## Safety Notes
 
 - Never print or commit real tokens in logs/docs.
-- Keep `GHOSTFOLIO_TOKEN` and exchanged `authToken` in env/shell memory only.
-- Prefer `curl -fsS` so HTTP/API errors surface clearly in automation.
+- Keep tokens in environment variables only.
+- Use `curl -fsS` so HTTP/API errors are not silently ignored.
