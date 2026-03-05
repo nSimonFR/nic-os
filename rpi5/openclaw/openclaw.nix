@@ -144,7 +144,7 @@ in
         acp = {
           dispatch.enabled = true;
           defaultAgent = "cursor-agent";
-          allowedAgents = [ "cursor-agent" "codex" ];
+          allowedAgents = [ "cursor-agent" "codex" "claude" ];
         };
 
         plugins.load.paths = [ customAcpxDir ];
