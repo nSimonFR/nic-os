@@ -103,6 +103,8 @@ in
   system.autoUpgrade = {
     enable = true;
     flake = "github:nSimonFR/nic-os#rpi5";
+    # Required because flake outputs reference a local path source for OpenClaw skills.
+    flags = [ "--impure" ];
     dates = "04:00";
     randomizedDelaySec = "30min";
     allowReboot = true;
