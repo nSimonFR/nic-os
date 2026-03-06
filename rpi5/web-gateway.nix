@@ -1,21 +1,9 @@
 { pkgs, ... }:
 {
   # Stage 1 web-gateway: central Nginx path-based routing behind Tailscale Serve.
-  #
-  # Goals for this slice:
-  # - Keep existing direct service endpoints operational (e.g. tailscale :3333).
-  # - Add a single HTTPS entrypoint on localhost:8443 for incremental migration.
-  # - Provide path routes for Firefly, Ghostfolio, and OpenClaw.
-  #
-  # Planned next slices:
-  # 1) Move more services behind this gateway with explicit path prefixes.
-  # 2) Decide whether to retire legacy direct Tailscale Serve ports.
-  # 3) Tighten auth/TLS policies and optional access controls per route.
-
   services.nginx = {
     enable = true;
 
-    # Include websocket-compatible defaults for OpenClaw gateway traffic.
     appendHttpConfig = ''
       map $http_upgrade $connection_upgrade {
         default upgrade;
@@ -24,7 +12,6 @@
     '';
 
     virtualHosts."web-gateway.local" = {
-      # Local-only listener used by Tailscale Serve as HTTPS frontend.
       listen = [
         {
           addr = "127.0.0.1";
@@ -45,7 +32,6 @@
         '';
       };
 
-      # New staged path routes.
       locations."= /firefly" = {
         return = "302 /firefly/";
       };
