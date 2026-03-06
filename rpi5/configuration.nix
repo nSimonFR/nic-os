@@ -125,8 +125,6 @@ in
     hydroxide
   ];
 
-  # No systemd user service by default; run it manually only when needed.
-
   virtualisation.docker.enable = true;
 
   # ── Ghostfolio: Wealth management software ──────────────────────────
