@@ -122,7 +122,10 @@ in
     wakeonlan
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
+    hydroxide
   ];
+
+  # No systemd user service by default; run it manually only when needed.
 
   virtualisation.docker.enable = true;
 
