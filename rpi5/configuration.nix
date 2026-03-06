@@ -27,6 +27,7 @@ in
     ./firefly-iii.nix
     ./blocky.nix
     ./ghostfolio.nix
+    ./web-gateway
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
@@ -208,8 +209,12 @@ in
   systemd.services.tailscale-serve =
     let
       serveServices = [
-        { port = 443; name = "openclaw"; localPort = 18789; }
-        { port = 3333; name = "ghostfolio"; localPort = 3333; }
+        # Stage 1: front Door on Nginx gateway (path-based routes).
+        # Keeps :443 available while allowing incremental migration by path.
+        { port = 443; name = "web-gateway"; localPort = 8443; }
+
+        # Backward compatibility: keep direct Ghostfolio endpoint for now.
+        { port = 3333; name = "ghostfolio-legacy"; localPort = 3333; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:
