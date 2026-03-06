@@ -83,6 +83,7 @@
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
       rpiconfig = "rpi5";
+      tailnetFqdn = "rpi5.gate-mintaka.ts.net";
       telegramChatId = 82389391;
       # Use direct working-tree path so local/untracked skill changes are visible immediately.
       nClawSkillsSource = "path:/home/nsimon/nic-os";
@@ -213,6 +214,7 @@
                   username
                   nClawSkillsSource
                   telegramChatId
+                  tailnetFqdn
                   ;
                 openclawSource = inputs.openclaw-source;
                 devSetup = false;
