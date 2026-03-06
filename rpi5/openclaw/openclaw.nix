@@ -19,8 +19,10 @@ in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
     "/home/nsimon/.secrets/openclaw.env";
-  systemd.user.services.openclaw-gateway.Service.Environment =
-    [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
+  systemd.user.services.openclaw-gateway.Service.Environment = [
+    "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}"
+    "PATH=/run/current-system/sw/bin:/run/wrappers/bin:/nix/var/nix/profiles/default/bin"
+  ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
     "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
     "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
@@ -152,6 +154,31 @@ in
 
         plugins.entries."voice-call" = {
           enabled = true;
+          config = {
+            provider = "twilio";
+            fromNumber = "+33159580386";
+
+            twilio = {
+              accountSid = "\${TWILIO_ACCOUNT_SID}";
+              authToken = "\${TWILIO_AUTH_TOKEN}";
+            };
+
+            serve = {
+              port = 3334;
+              path = "/voice/webhook";
+            };
+
+            # Explicit public webhook URL for Twilio signature validation
+            # when OpenClaw is behind an external tunnel/proxy.
+            publicUrl = "https://rpi5.gate-mintaka.ts.net/voice/webhook";
+
+            outbound.defaultMode = "notify";
+
+            # Inbound calls (secure allowlist mode)
+            inboundPolicy = "allowlist";
+            allowFrom = [ "+33612356362" ];
+            inboundGreeting = "Hello, this is OpenClaw. How can I help you?";
+          };
         };
       };
     };
