@@ -499,6 +499,11 @@ in
 
   virtualisation.docker = {
     enable = true;
+    autoPrune = {
+      enable = true;
+      dates = "weekly";
+      flags = [ "--all" ];
+    };
   };
 
   # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
@@ -600,8 +605,13 @@ in
   nix.gc = {
     automatic = true;
     dates = "weekly";
-    options = "--delete-older-than 30d";
+    options = "--delete-older-than 5d";
   };
+
+  # Limit journal size to 200MB
+  services.journald.extraConfig = ''
+    SystemMaxUse=200M
+  '';
 
   # Home Manager — integrated so nixos-rebuild deploys user config too
   home-manager = {
