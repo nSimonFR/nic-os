@@ -37,8 +37,13 @@
       "MESA_DISK_CACHE_MAX_SIZE" = "10G";
 
       # NVIDIA shader cache size (10GB = 10737418240 bytes)
+      "__GL_SHADER_DISK_CACHE" = "1";
       "__GL_SHADER_DISK_CACHE_SIZE" = "10737418240";
       "__GL_SHADER_DISK_CACHE_SKIP_CLEANUP" = "1";
+
+      # Wine sync (ESync/FSync) - improves game performance
+      "WINEESYNC" = "1";
+      "WINEFSYNC" = "1";
     };
 
     pointerCursor = {

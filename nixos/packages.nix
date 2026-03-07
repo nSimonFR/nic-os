@@ -80,13 +80,5 @@ in
         pkgs.gamemode
       ];
     })
-
-    # Star Citizen RSI Launcher
-    # FIXME: nix-citizen's wine-astral passes `wineRelease` to nixpkgs base.nix,
-    # which no longer accepts it on release-25.11. Uncomment when nix-citizen is updated.
-    # (inputs.nix-citizen.packages.${pkgs.stdenv.hostPlatform.system}.rsi-launcher-unwrapped.override {
-    #   # umu.enable = true;
-    #   location = "/mnt/games-linux/star-citizen";
-    # })
   ];
 }
