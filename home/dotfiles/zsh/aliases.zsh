@@ -16,3 +16,6 @@ alias cpr="createpr"
 alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit node enabled (via RPi5)"'
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
+
+# Claude Code - resume last conversation (useful for tmux session restore)
+alias cr="claude --continue"
