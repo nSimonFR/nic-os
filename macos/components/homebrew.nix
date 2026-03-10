@@ -18,6 +18,7 @@
     "dbt-labs/dbt"
     "auth0/auth0-cli"
     "Sikarugir-App/sikarugir"
+    "RhetTbull/osxphotos"
   ];
 
   brews = [
@@ -26,6 +27,7 @@
     "dbt-postgres"
     "helm"
     "pinentry-touchid"
+    "RhetTbull/osxphotos/osxphotos"
     "wakeonlan"
   ];
 
