@@ -28,6 +28,12 @@ export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 # 1Password SSH agent
 export SSH_AUTH_SOCK=~/.1password/agent.sock
 
+# Use personal identity only in real terminal sessions (agents have no TTY)
+if [[ -t 0 ]]; then
+  git() { GIT_CONFIG_GLOBAL=~/.config/git/config-personal command git "$@" }
+  gh() { GH_TOKEN=$(command gh auth token --user nSimonFR 2>/dev/null) command gh "$@" }
+fi
+
 # home-manager packages (needed when integrated with nix-darwin)
 export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:$PATH"
 

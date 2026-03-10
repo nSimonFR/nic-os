@@ -1,53 +1,9 @@
+[include]
+  path = ~/.config/git/config-shared
 [user]
-  email = nsimon@pm.me
-  name = Nicolas Simon
-  signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
-[color]
-  ui = true
-[init]
-  defaultBranch = main
-[push]
-  default = current
+  email = nsimon+ai@pm.me
+  name = nSimonFR-ai
 [core]
-  autocrlf = false
-  excludesfile = ~/.config/git/ignore
-[difftool]
-  prompt = false
-[rebase]
-  autosquash = true
-  updateRefs = true
-[sequence]
-  editor = interactive-rebase-tool
-[push]
-  autoSetupRemote = true
-[interactive-rebase-tool]
-  inputAbort = Esc
-  inputForceRebase = Enter
-  inputForceAbort = q
-  inputForceRebase = w
-  inputMoveLeft = h
-  inputMoveRight = l
-  inputMoveSelectionDown = Right
-  inputMoveSelectionUp = Left
-[status]
-  submoduleSummary = false
+  sshCommand = ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none
 [commit]
-  gpgsign = true
-[gpg]
-  program = gpg
-[branch]
-  sort = -committerdate
-[rerere]
-  enabled = true
-[alias]
-  d = difftool
-  co = checkout
-  br = branch
-  l = log --graph
-  p = push
-  pf = !sh -c 'git push origin --force-with-lease $1' -
-  graph = log --all --graph --decorate=short --color --format=format:'%C(bold blue)%h%C(reset) %C(auto)%d%C(reset)\n         %C(cyan)[%cr]%C(reset)  %x09%C(blue)%an: %s %C(reset)'
-  staash = stash --all
-  b = blame -w -C -C -C
-[spice "branchCreate"]
-  commit = false
+  gpgsign = false
