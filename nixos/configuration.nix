@@ -613,27 +613,4 @@ in
     SystemMaxUse=200M
   '';
 
-  # Home Manager — integrated so nixos-rebuild deploys user config too
-  home-manager = {
-    useGlobalPkgs = true;
-    useUserPackages = true;
-    extraSpecialArgs = {
-      inherit inputs outputs username;
-      devSetup = false;
-      masterpkgs = import inputs.nixpkgs-master {
-        system = "x86_64-linux";
-        config.allowUnfree = true;
-      };
-      unstablePkgs = import inputs.nixpkgs-unstable {
-        system = "x86_64-linux";
-        config.allowUnfree = true;
-      };
-    };
-    users.${username} = {
-      imports = [
-        ../home
-        ./home.nix
-      ];
-    };
-  };
 }

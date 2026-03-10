@@ -12,10 +12,16 @@ After making changes to RPi5 or shared home configuration files, apply them.
 
 **Important:** Always use `path:` prefix so Nix reads files from disk without requiring `git add`.
 
-## Deploy locally (on rpi5)
+## Deploy system locally (on rpi5)
 
 ```sh
 sudo nixos-rebuild switch --flake 'path:.#rpi5'
+```
+
+## Deploy Home Manager locally (on rpi5)
+
+```sh
+home-manager switch --flake 'path:.#nsimon@rpi5'
 ```
 
 ## Deploy remotely (from another machine via SSH)
@@ -24,8 +30,11 @@ sudo nixos-rebuild switch --flake 'path:.#rpi5'
 # 1. Sync changed files (adjust path as needed for what changed)
 rsync -av /Users/nsimon/nic-os/rpi5/ nsimon@rpi5:~/nic-os/rpi5/
 
-# 2. Build and switch on the rpi5
+# 2. System config
 ssh nsimon@rpi5 "cd ~/nic-os && sudo nixos-rebuild switch --flake path:.#rpi5 2>&1"
+
+# 3. Home Manager config (user packages, dotfiles)
+ssh nsimon@rpi5 "cd ~/nic-os && home-manager switch --flake path:.#nsimon@rpi5 2>&1"
 ```
 
 If only specific files changed, sync just those files instead of the whole directory to save time:

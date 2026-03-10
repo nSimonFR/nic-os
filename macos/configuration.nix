@@ -75,27 +75,4 @@
     # tailscale up --accept-routes --accept-dns
   };
 
-  # Home Manager — integrated so darwin-rebuild deploys user config too
-  home-manager = {
-    useGlobalPkgs = true;
-    useUserPackages = true;
-    extraSpecialArgs = {
-      inherit inputs outputs username;
-      devSetup = true;
-      masterpkgs = import inputs.nixpkgs-master {
-        system = "aarch64-darwin";
-        config.allowUnfree = true;
-      };
-      unstablePkgs = import inputs.nixpkgs-unstable {
-        system = "aarch64-darwin";
-        config.allowUnfree = true;
-      };
-    };
-    users.${username} = {
-      imports = [
-        ../home
-        ./home.nix
-      ];
-    };
-  };
 }

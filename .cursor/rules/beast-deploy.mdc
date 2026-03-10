@@ -10,12 +10,18 @@ After making changes, apply the configuration from the repo root (`/home/nsimon/
 
 **Important:** Always use `path:` prefix (e.g. `path:.#BeAsT`) instead of bare `.#BeAsT` so that Nix reads all files from disk directly. This avoids the need to `git add` new files before building.
 
-## Deploy (system + home-manager in one step)
-
-Home Manager is integrated as a NixOS module, so a single command deploys everything:
+## Deploy system (NixOS)
 
 ```sh
 sudo nixos-rebuild switch --flake path:.#BeAsT
 ```
+
+## Deploy Home Manager (user config, dotfiles, Hyprland, packages)
+
+```sh
+home-manager switch --flake path:.#nsimon@BeAsT
+```
+
+Run both commands if changes span system and home configuration. Home Manager changes (dotfiles, user packages, Hyprland config) only need the `home-manager switch` command.
 
 If the build fails, read the error output and fix the Nix configuration before retrying.

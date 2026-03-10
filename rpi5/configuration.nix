@@ -6,12 +6,9 @@
   outputs,
   username,
   nixos-raspberrypi,
-  nClawSkillsSource,
-  openclawSource,
   ...
 }:
 let
-  system = "aarch64-linux";
   blogwatcherPkg = pkgs.callPackage ../shared/pkgs/blogwatcher.nix { };
 in
 {
@@ -245,35 +242,4 @@ in
       '';
     };
 
-  # Home Manager — integrated so nixos-rebuild deploys user config too
-  home-manager = {
-    useGlobalPkgs = true;
-    useUserPackages = true;
-    backupCommand = "rm -f";
-    extraSpecialArgs = {
-      inherit
-        inputs
-        outputs
-        username
-        nClawSkillsSource
-        openclawSource
-        ;
-      devSetup = false;
-      unstablePkgs = import inputs.nixpkgs-unstable {
-        inherit system;
-        config.allowUnfree = true;
-      };
-      masterpkgs = import inputs.nixpkgs-master {
-        inherit system;
-        config.allowUnfree = true;
-      };
-    };
-    users.${username} = {
-      imports = [
-        inputs.nix-openclaw.homeManagerModules.openclaw
-        ../home
-        ./home.nix
-      ];
-    };
-  };
 }

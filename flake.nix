@@ -91,7 +91,6 @@
           hostname = nixconfig;
         };
         modules = [
-          home-manager.nixosModules.home-manager
           ./nixos/configuration.nix
         ];
       };
@@ -101,11 +100,8 @@
           inherit inputs outputs username;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
-          inherit nClawSkillsSource;
-          openclawSource = inputs.openclaw-source;
         };
         modules = [
-          home-manager.nixosModules.home-manager
           ({ inputs, ... }: {
             nixpkgs.overlays = [
               # uv 0.9.26 from release-25.11 fails to build on aarch64-linux; use nixpkgs-unstable
@@ -159,9 +155,84 @@
           hostname = macconfig;
         };
         modules = [
-          home-manager.darwinModules.home-manager
           ./macos/configuration.nix
         ];
+      };
+
+      homeConfigurations = {
+        "${username}@${nixconfig}" = home-manager.lib.homeManagerConfiguration {
+          pkgs = import nixpkgs {
+            system = "x86_64-linux";
+            config.allowUnfree = true;
+          };
+          extraSpecialArgs = {
+            inherit inputs outputs username;
+            devSetup = false;
+            masterpkgs = import nixpkgs-master {
+              system = "x86_64-linux";
+              config.allowUnfree = true;
+            };
+            unstablePkgs = import nixpkgs-unstable {
+              system = "x86_64-linux";
+              config.allowUnfree = true;
+            };
+          };
+          modules = [
+            ./home
+            ./nixos/home.nix
+          ];
+        };
+
+        "${username}@${rpiconfig}" = home-manager.lib.homeManagerConfiguration {
+          pkgs = import nixpkgs {
+            system = "aarch64-linux";
+            config.allowUnfree = true;
+            overlays = [
+              inputs.nix-openclaw.overlays.default
+            ];
+          };
+          extraSpecialArgs = {
+            inherit inputs outputs username nClawSkillsSource;
+            openclawSource = inputs.openclaw-source;
+            devSetup = false;
+            unstablePkgs = import nixpkgs-unstable {
+              system = "aarch64-linux";
+              config.allowUnfree = true;
+            };
+            masterpkgs = import nixpkgs-master {
+              system = "aarch64-linux";
+              config.allowUnfree = true;
+            };
+          };
+          modules = [
+            inputs.nix-openclaw.homeManagerModules.openclaw
+            ./home
+            ./rpi5/home.nix
+          ];
+        };
+
+        "${username}@${macconfig}" = home-manager.lib.homeManagerConfiguration {
+          pkgs = import nixpkgs {
+            system = "aarch64-darwin";
+            config.allowUnfree = true;
+          };
+          extraSpecialArgs = {
+            inherit inputs outputs username;
+            devSetup = true;
+            masterpkgs = import nixpkgs-master {
+              system = "aarch64-darwin";
+              config.allowUnfree = true;
+            };
+            unstablePkgs = import nixpkgs-unstable {
+              system = "aarch64-darwin";
+              config.allowUnfree = true;
+            };
+          };
+          modules = [
+            ./home
+            ./macos/home.nix
+          ];
+        };
       };
 
     };
