@@ -126,6 +126,8 @@ in
 
   # Environment variables moved to hyprland.conf for Hyprland-specific setup
 
+  security.sudo.wheelNeedsPassword = false;
+
   programs.zsh.enable = true;
   users.defaultUserShell = pkgs.zsh;
 
