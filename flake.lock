@@ -256,7 +256,7 @@
         "nix-gaming": "nix-gaming",
         "nix-github-actions": "nix-github-actions",
         "nixpkgs": [
-          "nixpkgs"
+          "nixpkgs-unstable"
         ],
         "systems": "systems_3",
         "treefmt-nix": "treefmt-nix_3"
