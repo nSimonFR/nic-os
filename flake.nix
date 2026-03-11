@@ -27,9 +27,12 @@
       inputs.home-manager.follows = "home-manager";
     };
 
+    nix-gaming.url = "github:fufexan/nix-gaming";
+
     nix-citizen = {
       url = "github:LovingMelody/nix-citizen";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
+      inputs.nix-gaming.follows = "nix-gaming";
     };
 
     nix-openclaw = {

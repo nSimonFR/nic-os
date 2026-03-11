@@ -78,11 +78,18 @@ in
       "nvidia-drm.modeset=1" # CRITICAL: Required for NVIDIA on Wayland/Xwayland
       "nvidia-drm.fbdev=1" # Enable framebuffer device support
       "acpi_enforce_resources=lax" # Fix OpenRGB I2C/SMBus detection bug (GitLab issue #5059)
+      "zswap.enabled=0" # Disable zswap when using zram (Star Citizen optimization)
     ];
 
     kernel.sysctl = {
       "vm.max_map_count" = 16777216;
       "fs.file-max" = 524288;
+      "vm.swappiness" = 100; # Use zram more aggressively
+      "vm.dirty_ratio" = 5; # Cap dirty pages at ~1.6GB (was 6.4GB) to avoid write bursts on DRAM-less NVMe
+      "vm.dirty_background_ratio" = 2; # Start flushing at ~640MB (was 3.2GB)
+      "vm.dirty_expire_centisecs" = 1500; # Flush dirty pages after 15s (was 30s)
+      "vm.dirty_writeback_centisecs" = 300; # Check for dirty pages every 3s (was 5s)
+      "vm.min_free_kbytes" = 262144; # Keep 256MB free to prevent emergency reclaim I/O storms
     };
 
     kernelModules = [
@@ -172,6 +179,8 @@ in
     vim
     vulkan-tools
     vulkan-loader
+    vulkan-validation-layers
+    dxvk
     wayland
     wayland-protocols
     wget
@@ -206,7 +215,17 @@ in
       "gtk"
     ];
   };
-  programs.nix-ld.enable = true;
+  programs.nix-ld = {
+    enable = true;
+    # Enable 32-bit support for pressure-vessel/Steam runtime
+    libraries = with pkgs; [
+      # 32-bit libraries for Steam/Proton/pressure-vessel
+      pkgsi686Linux.glibc
+    ];
+  };
+
+  # Symlink 32-bit dynamic linker for pressure-vessel compatibility
+  environment.etc."ld-linux.so.2".source = "${pkgs.pkgsi686Linux.glibc}/lib/ld-linux.so.2";
 
   security.polkit.enable = true;
 
@@ -433,26 +452,19 @@ in
     device = "/dev/disk/by-label/Games-Linux";
     fsType = "ext4";
     options = [
-      "uid=1000"
-      "gid=100"
-      "umask=0000"
-      "force"
       "nofail"
       "x-systemd.automount"
       "noauto"
     ];
   };
 
-  swapDevices = [
-    {
-      device = "/var/lib/swapfile";
-      size = 8 * 1024; # 8 GB Swap
-    }
-  ];
+  # Disk swap disabled - using zram only for better performance
+  swapDevices = [ ];
 
   zramSwap = {
     enable = true;
-    memoryMax = 16 * 1024 * 1024 * 1024; # 16 GB ZRAM
+    memoryPercent = 100; # 32GB zram = ~64-96GB effective with compression
+    algorithm = "zstd"; # Best compression ratio for Star Citizen
   };
 
   services.udev = {
@@ -464,6 +476,10 @@ in
 
       # DualSense controller
       KERNEL=="hidraw*", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6", MODE="0666", TAG+="uaccess"
+
+      # VKB devices for Star Citizen
+      # Covers all VKB-Sim devices (Gladiator EVO L SEM, Gladiator EVO R, etc.)
+      KERNEL=="hidraw*", ATTRS{idVendor}=="231d", ATTRS{idProduct}=="*", MODE="0660", TAG+="uaccess"
 
       # OpenRGB USB HID device access for RGB keyboards/mice/devices
       # Drevo Calibur RGB Keyboard
@@ -608,7 +624,7 @@ in
   nix.gc = {
     automatic = true;
     dates = "weekly";
-    options = "--delete-older-than 5d";
+    options = "--delete-older-than 30d";
   };
 
   # Limit journal size to 200MB
