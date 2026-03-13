@@ -11,33 +11,6 @@ let
   # Toggle between LightDM (true) and ReGreet (false)
   useLightdm = false;
 
-  hyprlandWrapper = pkgs.writeShellScriptBin "hyprland-nvidia" ''
-    # NVIDIA-specific environment variables for Wayland
-    export LIBVA_DRIVER_NAME=nvidia
-    export GBM_BACKEND=nvidia-drm
-    export __GLX_VENDOR_LIBRARY_NAME=nvidia
-    export WLR_NO_HARDWARE_CURSORS=1
-
-    # Additional NVIDIA Wayland fixes
-    export __GL_GSYNC_ALLOWED=1
-    export __GL_VRR_ALLOWED=1
-
-    # Run Hyprland
-    exec ${pkgs.hyprland}/bin/Hyprland "$@"
-  '';
-
-  hyprlandSession =
-    (pkgs.writeTextDir "share/wayland-sessions/hyprland.desktop" ''
-      [Desktop Entry]
-      Name=Hyprland
-      Description=A dynamic tiling Wayland compositor
-      Exec=${hyprlandWrapper}/bin/hyprland-nvidia
-      Type=Application
-    '').overrideAttrs
-      (old: {
-        passthru.providedSessions = [ "hyprland" ];
-      });
-
   i3Session =
     (pkgs.writeTextDir "share/xsessions/i3.desktop" ''
       [Desktop Entry]
@@ -75,6 +48,8 @@ in
       "mem_sleep_default=s2idle"
       "nvidia.NVreg_PreserveVideoMemoryAllocations=0"
       "nvidia.NVreg_EnableGpuSuspend=1"
+      "nvidia.NVreg_RegistryDwords=RMGpuTdr=0x7FFFFFFF" # Disable GPU TDR timeout (Star Citizen pipeline rebuild)
+      "nvidia.NVreg_EnableGpuFirmware=0" # Disable GSP firmware (fixes Vulkan pipeline compile timeouts)
       "nvidia-drm.modeset=1" # CRITICAL: Required for NVIDIA on Wayland/Xwayland
       "nvidia-drm.fbdev=1" # Enable framebuffer device support
       "acpi_enforce_resources=lax" # Fix OpenRGB I2C/SMBus detection bug (GitLab issue #5059)
@@ -151,6 +126,8 @@ in
       "input"
       "seat" # Required for Wayland seat management
       "i2c" # Required for OpenRGB monitor control
+      "libvirtd" # VM management
+      "kvm" # KVM acceleration
     ];
     home = "/home/${username}";
 
@@ -173,7 +150,9 @@ in
     i3status
     kdePackages.kwallet
     kdePackages.kwalletmanager
+    libvirt # virsh CLI for VM management
     ntfs3g
+    opentrack # Head tracking for Tobii VM passthrough
     usbutils
     ethtool # verify WoL status: ethtool eno1 | grep Wake
     vim
@@ -204,6 +183,8 @@ in
 
   services.flatpak.enable = true;
   
+  programs.hyprland.enable = true;
+
   xdg.portal = {
     enable = true;
     extraPortals = [
@@ -250,8 +231,8 @@ in
   };
 
   hardware.nvidia = {
-    open = true;
-    package = config.boot.kernelPackages.nvidiaPackages.latest;
+    open = false; # Proprietary modules: open modules have Vulkan pipeline compilation timeout bug (Xid 109)
+    package = config.boot.kernelPackages.nvidiaPackages.production; # 580.119.02 — 590.x has Vulkan pipeline timeout
 
     modesetting.enable = true;
     nvidiaSettings = true;
@@ -351,7 +332,6 @@ in
   };
 
   services.displayManager.sessionPackages = [
-    hyprlandSession
     i3Session
   ];
 
@@ -499,6 +479,10 @@ in
       SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", TAG+="uaccess"
       SUBSYSTEM=="usb", ATTRS{idVendor}=="0b05", TAG+="uaccess"
       SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", TAG+="uaccess"
+
+      # Tobii Eye Tracker 5 - VM USB passthrough with autosuspend disabled
+      # Disable power management to ensure stable passthrough and adequate power delivery
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2104", ATTR{idProduct}=="0313", ATTR{power/control}="on", ATTR{power/autosuspend}="-1", MODE="0666", TAG+="uaccess"
     '';
 
     packages = [ pkgs.game-devices-udev-rules ];
@@ -514,16 +498,23 @@ in
       }
     ];
     allowedUDPPortRanges = allowedTCPPortRanges;
+    allowedUDPPorts = [ 4242 ]; # opentrack UDP from Tobii VM
   };
 
   virtualisation.docker = {
     enable = true;
-    autoPrune = {
-      enable = true;
-      dates = "weekly";
-      flags = [ "--all" ];
+  };
+
+  # Libvirt/QEMU for Tobii Eye Tracker VM passthrough
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu = {
+      swtpm.enable = true; # TPM emulation for Windows 11
+      vhostUserPackages = [ pkgs.virtiofsd ]; # Required for virtiofs
     };
   };
+  virtualisation.spiceUSBRedirection.enable = true;
+  programs.virt-manager.enable = true;
 
   # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
   # services.ollama = {
