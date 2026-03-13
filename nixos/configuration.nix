@@ -441,6 +441,20 @@ in
     ];
   };
 
+  fileSystems."/mnt/media" = {
+    device = "/dev/disk/by-label/Media\\x20HDD";
+    fsType = "ntfs3";
+    options = [
+      "uid=1000"
+      "gid=100"
+      "umask=0000"
+      "force"
+      "nofail"
+      "x-systemd.automount"
+      "noauto"
+    ];
+  };
+
   # Disk swap disabled - using zram only for better performance
   swapDevices = [ ];
 
