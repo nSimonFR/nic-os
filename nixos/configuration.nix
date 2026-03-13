@@ -221,6 +221,11 @@ in
         return polkit.Result.AUTH_SELF_KEEP;
       }
     });
+    polkit.addRule(function(action, subject) {
+      if (action.id.indexOf("com.feralinteractive.GameMode") === 0 && subject.isInGroup("users")) {
+        return polkit.Result.YES;
+      }
+    });
   '';
 
   # 1Password GUI with proper polkit integration
@@ -390,6 +395,14 @@ in
     settings = {
       general = {
         renice = 10;
+        desiredgov = "performance";
+        softrealtime = "auto";
+        ioprio = 0;
+      };
+      gpu = {
+        apply_gpu_optimisations = "accept-responsibility";
+        gpu_device = 1;
+        nv_powermizer_mode = 1;
       };
       custom = {
         start = "${pkgs.libnotify}/bin/notify-send 'GameMode started'";

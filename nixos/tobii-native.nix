@@ -174,7 +174,7 @@ let
   };
 
   # ── opentrack-tobii ──────────────────────────────────────────────────
-  # OpenTrack AppImage build with Tobii input plugin
+  # OpenTrack AppImage with Tobii input plugin (for Tobii → UDP relay)
   opentrack-tobii = pkgs.appimageTools.wrapType2 {
     pname = "opentrack-tobii";
     version = "2026.1.0";
@@ -185,13 +185,73 @@ let
     };
   };
 
+  # ── opentrack-sc ─────────────────────────────────────────────────────
+  # Star Citizen fork of opentrack with UMU/Proton Wine prefix fixes
+  # https://github.com/Priton-CE/opentrack-StarCitizen (wine-extended-proton branch)
+  opentrack-sc = let
+    aruco = pkgs.callPackage
+      "${pkgs.path}/pkgs/by-name/op/opentrack/aruco.nix" {};
+    xplaneSdk = pkgs.fetchzip {
+      url = "https://developer.x-plane.com/wp-content/plugins/code-sample-generation/sdk_zip_files/XPSDK411.zip";
+      hash = "sha256-zay5QrHJctllVFl+JhlyTDzH68h5UoxncEt+TpW3UgI=";
+    };
+  in pkgs.stdenv.mkDerivation {
+    pname = "opentrack-sc";
+    version = "2024.1.1-sc";
+
+    src = pkgs.fetchFromGitHub {
+      owner = "Priton-CE";
+      repo = "opentrack-StarCitizen";
+      rev = "4dd97af0f139f3ddc8f34a24ee961a1046015d3f";
+      hash = "sha256-xN4Z1Cpmj8ktqWCQYPZTfqznHrYe28qlKkPoQxHRPJ8=";
+    };
+
+    strictDeps = true;
+
+    nativeBuildInputs = [
+      pkgs.cmake
+      pkgs.ninja
+      pkgs.pkg-config
+      pkgs.libsForQt5.wrapQtAppsHook
+      pkgs.wineWowPackages.stable
+    ];
+
+    buildInputs = [
+      aruco
+      pkgs.eigen
+      pkgs.xorg.libXdmcp
+      pkgs.libevdev
+      pkgs.onnxruntime
+      pkgs.opencv4
+      pkgs.procps
+      pkgs.libsForQt5.qtbase
+      pkgs.libsForQt5.qttools
+    ];
+
+    cmakeFlags = [
+      (lib.cmakeBool "SDK_WINE" true)
+      (lib.cmakeFeature "SDK_ARUCO_LIBPATH" "${aruco}/lib/libaruco.a")
+      (lib.cmakeFeature "SDK_XPLANE" xplaneSdk.outPath)
+    ];
+
+    postInstall = ''
+      install -Dt $out/share/icons/hicolor/256x256 $src/gui/images/opentrack.png
+    '';
+
+    dontWrapQtApps = true;
+    preFixup = ''
+      wrapQtApp $out/bin/opentrack
+    '';
+  };
+
 in
 {
   # Make packages available
   environment.systemPackages = [
     tobii-stream-engine
     tobii-pro-eye-tracker-manager
-    opentrack-tobii
+    opentrack-tobii  # Tobii input → UDP relay
+    opentrack-sc     # UDP input → Wine/Proton output to SC
   ];
 
   # ── Systemd services ────────────────────────────────────────────────
