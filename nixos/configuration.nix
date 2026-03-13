@@ -31,6 +31,7 @@ in
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
     ./piper-autoprofile.nix
+    ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
   ];
@@ -497,7 +498,7 @@ in
       SUBSYSTEM=="usb", ATTRS{idVendor}=="0b05", TAG+="uaccess"
       SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", TAG+="uaccess"
 
-      # Tobii Eye Tracker 5 - VM USB passthrough with autosuspend disabled
+      # Tobii Eye Tracker 5 - Native Linux + VM passthrough with autosuspend disabled
       # Disable power management to ensure stable passthrough and adequate power delivery
       ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2104", ATTR{idProduct}=="0313", ATTR{power/control}="on", ATTR{power/autosuspend}="-1", MODE="0666", TAG+="uaccess"
     '';
