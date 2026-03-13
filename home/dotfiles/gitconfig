@@ -1,7 +1,7 @@
 [include]
   path = ~/.config/git/config-shared
 [user]
-  email = nsimon+ai@pm.me
+  email = 13413730+nSimonFR@users.noreply.github.com
   name = nSimonFR-ai
 [core]
   sshCommand = ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none
