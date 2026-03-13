@@ -30,6 +30,7 @@ in
     ./openrgb-lg.nix # OpenRGB with LG monitor support
     ./hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
+    ./piper-autoprofile.nix
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
   ];
@@ -153,6 +154,8 @@ in
     libvirt # virsh CLI for VM management
     ntfs3g
     opentrack # Head tracking for Tobii VM passthrough
+    piper # GUI for Logitech G502 configuration (DPI, buttons, RGB)
+    input-remapper # Remap keys/mouse buttons for games
     usbutils
     ethtool # verify WoL status: ethtool eno1 | grep Wake
     vim
@@ -590,6 +593,9 @@ in
 
   hardware.bluetooth.enable = true;
   services.blueman.enable = true;
+
+  # Required for Piper (mouse configuration GUI)
+  services.ratbagd.enable = true;
 
   system.stateVersion = "25.11"; # DO NOT UPDATE UNLESS YOU KNOW WHAT YOU'RE DOING
 
