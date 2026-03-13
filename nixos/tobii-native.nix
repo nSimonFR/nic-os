@@ -202,7 +202,25 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${tobii-engine}/share/tobii_engine/tobii_engine --daemonize";
+      StateDirectory = "tobii_engine";
+      ExecStartPre = pkgs.writeShellScript "tobii-engine-setup" ''
+        # Copy engine files to writable state dir so config.db can be written
+        src="${tobii-engine}/share/tobii_engine"
+        dst="/var/lib/tobii_engine"
+        # Only copy if not already populated (preserve calibration data)
+        if [ ! -f "$dst/tobii_engine" ]; then
+          ${pkgs.coreutils}/bin/cp -r "$src"/* "$dst"/
+          ${pkgs.coreutils}/bin/chmod -R u+w "$dst"
+        else
+          # Always update binary + libs from store (new derivation version)
+          ${pkgs.coreutils}/bin/cp -f "$src/tobii_engine" "$dst/"
+          ${pkgs.coreutils}/bin/cp -rf "$src/lib" "$dst/"
+          ${pkgs.coreutils}/bin/cp -rf "$src/platform_modules" "$dst/"
+          ${pkgs.coreutils}/bin/chmod -R u+w "$dst"
+        fi
+      '';
+      ExecStart = "/var/lib/tobii_engine/tobii_engine --daemonize";
+      WorkingDirectory = "/var/lib/tobii_engine";
       Restart = "on-abort";
     };
   };
