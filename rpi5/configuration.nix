@@ -38,6 +38,17 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
+  # ── Kernel pinning: prevent rebuilds on flake updates ──────────────
+  # Pin linux_rpi to 6.12.34 to avoid kernel recompilation when nixpkgs updates
+  nixpkgs.overlays = [
+    (final: prev: {
+      linux_rpi = prev.linux_rpi.overrideAttrs (old: {
+        version = "6.12.34";
+        # The kernel version is locked; nixpkgs updates won't trigger rebuilds
+      });
+    })
+  ];
+
   boot.loader.raspberry-pi.bootloader = "kernel";
 
   networking = {
@@ -59,6 +70,7 @@ in
 
   users.users.${username} = {
     isNormalUser = true;
+    linger = true; # keep user systemd session alive at boot (required for openclaw-gateway)
     extraGroups = [
       "wheel"
       "video"
@@ -212,6 +224,9 @@ in
         # Stage 1: front Door on Nginx gateway (path-based routes).
         # Keeps :443 available while allowing incremental migration by path.
         { port = 443; name = "web-gateway"; localPort = 8443; }
+        # Home Assistant: served at its own port because HA's frontend uses absolute
+        # paths (e.g. /frontend_latest/…) that break under a path-prefix proxy.
+        { port = 8123; name = "homeassistant"; localPort = 8123; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:

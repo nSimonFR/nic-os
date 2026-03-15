@@ -132,7 +132,13 @@ in
     install -d -m 0755 /var/lib/hass
     install -d -m 0755 /var/lib/hass/custom_components
     if [ ! -f /var/lib/hass/configuration.yaml ]; then
-      touch /var/lib/hass/configuration.yaml
+      cat > /var/lib/hass/configuration.yaml <<'EOF'
+# Trust tailscale-serve (connects from 127.0.0.1) so X-Forwarded-For is accepted.
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+EOF
       chmod 0644 /var/lib/hass/configuration.yaml
     fi
     # Copy Voltalis custom component into config dir so it works inside the container

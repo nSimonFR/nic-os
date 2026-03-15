@@ -31,6 +31,11 @@ in
     "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
+  # Create log directory before the service starts; without it systemd fails at
+  # STDOUT setup (status=209) because StandardOutput=append:/tmp/openclaw/...
+  systemd.user.tmpfiles.rules = [
+    "d /tmp/openclaw 0755 - - -"
+  ];
   home.sessionVariables = {
     OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
   };
