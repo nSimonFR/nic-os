@@ -27,6 +27,7 @@
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
   xdg.configFile."atuin/config.toml".source = ./dotfiles/atuin.toml;
   xdg.configFile."mpv/mpv.conf".source = ./dotfiles/mpv.conf;
+  xdg.configFile."btop/btop.conf".source = ./dotfiles/btop.conf;
   xdg.configFile."ghostty/config".source = ./dotfiles/ghostty;
   xdg.configFile."zed/settings.json".source = ./dotfiles/zed-settings.json;
 
