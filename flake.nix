@@ -44,6 +44,11 @@
       flake = false;
     };
 
+    ragenix = {
+      url = "github:yaxitech/ragenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     mac-app-util.url = "github:hraban/mac-app-util";
   };
 
@@ -147,6 +152,7 @@
               })
             ];
           })
+          inputs.ragenix.nixosModules.default
           ./rpi5/configuration.nix
         ];
       };

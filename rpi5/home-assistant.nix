@@ -86,26 +86,16 @@ in
         install -d -m 0755 /etc/ha-linky
         install -d -m 0755 /etc/home-assistant/ha-linky
 
-        # Seed secret files with placeholders on first deploy
-        if [ ! -f /etc/ha-linky/supervisor-token ]; then
-          echo "CHANGE_ME" > /etc/ha-linky/supervisor-token
-          chmod 0600 /etc/ha-linky/supervisor-token
-        fi
-        if [ ! -f /etc/ha-linky/linky-token ]; then
-          echo "CHANGE_ME" > /etc/ha-linky/linky-token
-          chmod 0600 /etc/ha-linky/linky-token
-        fi
-
-        # Build ha-linky.env from the secret file
-        SUPERVISOR_TOKEN=$(cat /etc/ha-linky/supervisor-token)
+        # Build ha-linky.env from the agenix-managed secret
+        SUPERVISOR_TOKEN=$(cat /run/agenix/supervisor-token)
         cat > /etc/ha-linky/ha-linky.env <<EOF
     SUPERVISOR_TOKEN=$SUPERVISOR_TOKEN
     WS_URL=ws://127.0.0.1:8123/api/websocket
     EOF
         chmod 0640 /etc/ha-linky/ha-linky.env
 
-        # Build options.json from the secret file
-        LINKY_TOKEN=$(cat /etc/ha-linky/linky-token)
+        # Build options.json from the agenix-managed secret
+        LINKY_TOKEN=$(cat /run/agenix/linky-token)
         cat > /etc/home-assistant/ha-linky/options.json <<EOF
     {
       "meters": [
