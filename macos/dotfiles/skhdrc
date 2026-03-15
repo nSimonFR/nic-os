@@ -1,5 +1,5 @@
 # open terminal
-cmd + shift - 0x32 : open -a iTerm .
+cmd + shift - 0x32 : /usr/bin/open -na /Applications/Ghostty.app
 
 # focus window
 ctrl - left  : yabai -m window --focus west

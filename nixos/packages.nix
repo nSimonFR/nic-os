@@ -33,7 +33,7 @@ in
     docker
     dualsensectl
     dunst
-    kitty
+    ghostty
     goverlay
     hypridle
     hyprlock

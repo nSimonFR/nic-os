@@ -11,18 +11,6 @@ let
   # Toggle between LightDM (true) and ReGreet (false)
   useLightdm = false;
 
-  i3Session =
-    (pkgs.writeTextDir "share/xsessions/i3.desktop" ''
-      [Desktop Entry]
-      Name=i3
-      Comment=improved dynamic tiling window manager
-      Exec=${pkgs.i3}/bin/i3
-      Type=Application
-      Keywords=tiling;wm;windowmanager;window;manager;
-    '').overrideAttrs
-      (old: {
-        passthru.providedSessions = [ "i3" ];
-      });
 in
 {
   imports = [
@@ -148,9 +136,7 @@ in
     gamescope
     regreet
     i2c-tools
-    i3
-    i3status
-    kdePackages.kwallet
+kdePackages.kwallet
     kdePackages.kwalletmanager
     libvirt # virsh CLI for VM management
     ntfs3g
@@ -341,7 +327,6 @@ in
   };
 
   services.displayManager.sessionPackages = [
-    i3Session
   ];
 
   environment.etc = {

@@ -120,9 +120,7 @@
   xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
   xdg.configFile."MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
   xdg.configFile."alacritty/alacritty.toml".source = ./dotfiles/alacritty.toml;
-  xdg.configFile."i3/config".source = ./dotfiles/i3/config;
-  xdg.configFile."i3status/config".source = ./dotfiles/i3/i3status.conf;
-  xdg.configFile."kitty/kitty.conf".source = ./dotfiles/kitty/kitty.conf;
+  # Ghostty config is managed in shared home/default.nix via xdg.configFile
 
   xdg.configFile."rofi" = {
     source = ./dotfiles/rofi;
