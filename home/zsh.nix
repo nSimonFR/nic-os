@@ -27,6 +27,7 @@
 
     initContent = ''
       # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent/initExtra
+      [[ -f ~/.secrets/zsh.zsh ]] && source ~/.secrets/zsh.zsh
     '';
   };
 }
