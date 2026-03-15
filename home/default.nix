@@ -1,7 +1,6 @@
 {
   pkgs,
   lib,
-  stdenv,
   ...
 }:
 {
@@ -32,8 +31,8 @@
   xdg.configFile."zed/settings.json".source = ./dotfiles/zed-settings.json;
 
   # Cursor: macOS uses ~/Library/Application Support/, Linux uses ~/.config/
-  home.file."${if stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/settings.json".source = ./dotfiles/cursor-settings.json;
-  home.file."${if stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/keybindings.json".source = ./dotfiles/cursor-keybindings.json;
+  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/settings.json".source = ./dotfiles/cursor-settings.json;
+  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/keybindings.json".source = ./dotfiles/cursor-keybindings.json;
 
   home.file.".vimrc".source = ./dotfiles/vim;
 }

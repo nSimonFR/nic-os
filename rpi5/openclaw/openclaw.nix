@@ -53,13 +53,11 @@ in
     documents = ./documents;
     excludeTools = [ "pnpm" ];
 
-
     customPlugins = [
       {
         source = nClawSkillsSource;
       }
     ];
-
 
     bundledPlugins = {
       summarize.enable = true;
