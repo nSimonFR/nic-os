@@ -18,7 +18,7 @@ let
 in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
-    "/home/nsimon/.secrets/openclaw.env";
+    "/run/agenix/openclaw-env";
   systemd.user.services.openclaw-gateway.Service.Environment =
     [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
@@ -130,7 +130,7 @@ in
 
         channels.telegram = {
           enabled = true;
-          tokenFile = "/home/nsimon/.secrets/telegram-bot-token";
+          tokenFile = "/run/agenix/telegram-bot-token";
           allowFrom = [ 82389391 ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
