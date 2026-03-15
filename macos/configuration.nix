@@ -64,7 +64,7 @@
 
   system = import ./components/system.nix { inherit pkgs username; };
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
-  services.yabai = import ./components/yabai.nix { inherit pkgs; };
+  services.yabai = import ./components/yabai.nix { inherit pkgs inputs; };
 
   services.tailscale = {
     enable = true;

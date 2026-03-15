@@ -1,13 +1,13 @@
-{ pkgs, ... }:
+{ pkgs, inputs, ... }:
+let
+  masterpkgs = import inputs.nixpkgs-master {
+    inherit (pkgs) system;
+    config.allowUnfree = true;
+  };
+in
 {
   enable = true;
-  package = (pkgs.yabai.overrideAttrs (o: rec {
-    version = "7.1.16";
-    src = builtins.fetchTarball {
-      url = "https://github.com/koekeishiya/yabai/releases/download/v${version}/yabai-v${version}.tar.gz";
-      sha256 = "sha256:133b49xff3fmf2zj16h48ygpdxr26sfs9wmavs2igsmdqslvwhxc";
-    };
-  }));
+  package = masterpkgs.yabai;
   enableScriptingAddition = true;
   config = {
     layout = "stack";
