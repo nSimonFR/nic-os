@@ -22,7 +22,7 @@
       # APP_KEY must be exactly 32 characters - generate with:
       # head -c 32 /dev/urandom | base64 | head -c 32
       # Store it in this file (create the file manually):
-      APP_KEY_FILE = "/var/lib/firefly-iii/app-key.txt";
+      APP_KEY_FILE = "/run/agenix/firefly-app-key";
 
       # SQLite database (simplest setup, no external DB needed)
       DB_CONNECTION = "sqlite";
@@ -110,18 +110,9 @@
     ];
   };
 
-  # Automatically generate APP_KEY if it doesn't exist and ensure correct ownership
-  system.activationScripts.firefly-iii-app-key = ''
+  # Ensure data directories exist for Firefly III and TrueLayer
+  system.activationScripts.firefly-iii-dirs = ''
     mkdir -p /var/lib/firefly-iii
     mkdir -p /var/lib/truelayer2firefly
-    if [ ! -f /var/lib/firefly-iii/app-key.txt ]; then
-      echo "Generating Firefly III APP_KEY..."
-      # Generate a 32-character base64 key
-      head -c 32 /dev/urandom | base64 | head -c 32 > /var/lib/firefly-iii/app-key.txt
-      echo "APP_KEY generated successfully"
-    fi
-    # Always ensure correct permissions and ownership
-    chmod 600 /var/lib/firefly-iii/app-key.txt
-    chown firefly-iii:firefly-iii /var/lib/firefly-iii/app-key.txt 2>/dev/null || true
   '';
 }
