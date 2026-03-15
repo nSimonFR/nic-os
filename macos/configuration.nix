@@ -32,7 +32,7 @@
     # Tailscale IP first (works everywhere), LAN second (home network),
     # Cloudflare/Quad9 last resort if RPi5 is unreachable
     dns = [
-      "192.168.1.100"  # RPi5 – LAN (home network only)
+      "192.168.1.68"   # RPi5 – LAN (home network only)
       "100.122.54.2"   # RPi5 – Tailscale
       "1.1.1.1"        # Cloudflare – fallback
       "9.9.9.9"        # Quad9 – fallback

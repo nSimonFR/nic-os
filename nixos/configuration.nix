@@ -605,7 +605,7 @@ in
   # Primary = LAN (lowest latency), Fallback = Tailscale (works remotely)
   # Last-resort fallback to Cloudflare if RPi5 is completely unreachable
   networking.nameservers = [
-    "192.168.1.100"  # RPi5 – LAN
+    "192.168.1.68"   # RPi5 – LAN
     "100.122.54.2"   # RPi5 – Tailscale
   ];
 
