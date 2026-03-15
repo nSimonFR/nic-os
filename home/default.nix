@@ -20,20 +20,20 @@
   ];
 
   xdg.enable = true;
-  xdg.configFile."git/config".source = ./dotfiles/gitconfig;
-  xdg.configFile."git/config-shared".source = ./dotfiles/gitconfig-shared;
-  xdg.configFile."git/config-personal".source = ./dotfiles/gitconfig-personal;
-  xdg.configFile."git/ignore".source = ./dotfiles/gitignore;
+  xdg.configFile."git/config".source = ./dotfiles/git/gitconfig;
+  xdg.configFile."git/config-shared".source = ./dotfiles/git/gitconfig-shared;
+  xdg.configFile."git/config-personal".source = ./dotfiles/git/gitconfig-personal;
+  xdg.configFile."git/ignore".source = ./dotfiles/git/gitignore;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
   xdg.configFile."atuin/config.toml".source = ./dotfiles/atuin.toml;
   xdg.configFile."mpv/mpv.conf".source = ./dotfiles/mpv.conf;
   xdg.configFile."btop/btop.conf".source = ./dotfiles/btop.conf;
   xdg.configFile."ghostty/config".source = ./dotfiles/ghostty;
-  xdg.configFile."zed/settings.json".source = ./dotfiles/zed-settings.json;
+  xdg.configFile."zed/settings.json".source = ./dotfiles/editor/zed-settings.json;
 
   # Cursor: macOS uses ~/Library/Application Support/, Linux uses ~/.config/
-  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/settings.json".source = ./dotfiles/cursor-settings.json;
-  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/keybindings.json".source = ./dotfiles/cursor-keybindings.json;
+  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/settings.json".source = ./dotfiles/editor/cursor-settings.json;
+  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/keybindings.json".source = ./dotfiles/editor/cursor-keybindings.json;
 
-  home.file.".vimrc".source = ./dotfiles/vim;
+  home.file.".vimrc".source = ./dotfiles/editor/vim;
 }

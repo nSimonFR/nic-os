@@ -9,7 +9,7 @@
   ...
 }:
 let
-  blogwatcherPkg = pkgs.callPackage ../shared/pkgs/blogwatcher.nix { };
+  blogwatcherPkg = pkgs.callPackage ./blogwatcher.nix { };
 in
 {
   # Workaround for nixpkgs 25.11 rename.nix <-> nixos-raspberrypi conflict
@@ -20,6 +20,7 @@ in
     raspberry-pi-5.base
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
+    ./secrets.nix
     ./home-assistant.nix
     ./firefly-iii.nix
     ./blocky.nix
@@ -120,6 +121,7 @@ in
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
     hydroxide
+    inputs.ragenix.packages.${pkgs.system}.default  # ragenix CLI for editing secrets
   ];
 
   virtualisation.docker.enable = true;

@@ -15,9 +15,9 @@ in
 {
   imports = [
     ./hardware-configuration.nix
-    ./openrgb-lg.nix # OpenRGB with LG monitor support
-    ./hyperion-openrgb.nix # Hyperion with OpenRGB support
-    ./hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
+    ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
+    ./rgb/hyperion-openrgb.nix # Hyperion with OpenRGB support
+    ./rgb/hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
     ./piper-autoprofile.nix
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
     # Tailscale client configuration
