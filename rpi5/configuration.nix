@@ -37,6 +37,11 @@ in
 
   boot.loader.raspberry-pi.bootloader = "kernel";
 
+  # Headless server — blacklist vc4 GPU driver to prevent silent CPU stall
+  # when accessing uninitialized HDMI registers (firmware doesn't init HSM clock
+  # without a monitor connected, causing vc4_hdmi_runtime_resume to hang).
+  boot.blacklistedKernelModules = [ "vc4" ];
+
   networking = {
     hostName = "rpi5";
     useNetworkd = true;
