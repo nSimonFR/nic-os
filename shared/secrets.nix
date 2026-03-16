@@ -6,4 +6,5 @@ in {
   "supervisor-token.age".publicKeys = [ nsimon ];
   "linky-token.age".publicKeys = [ nsimon ];
   "firefly-app-key.age".publicKeys = [ nsimon ];
+  "linky-prm.age".publicKeys = [ nsimon ];
 }

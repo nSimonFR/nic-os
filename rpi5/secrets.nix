@@ -2,23 +2,26 @@
 {
   age.secrets = {
     openclaw-env = {
-      file = ../secrets/openclaw.env.age;
+      file = ../shared/openclaw.env.age;
       owner = "nsimon";
     };
     telegram-bot-token = {
-      file = ../secrets/telegram-bot-token.age;
+      file = ../shared/telegram-bot-token.age;
       owner = "nsimon";
     };
     supervisor-token = {
-      file = ../secrets/supervisor-token.age;
+      file = ../shared/supervisor-token.age;
     };
     linky-token = {
-      file = ../secrets/linky-token.age;
+      file = ../shared/linky-token.age;
     };
     firefly-app-key = {
-      file = ../secrets/firefly-app-key.age;
+      file = ../shared/firefly-app-key.age;
       owner = "firefly-iii";
       group = "firefly-iii";
+    };
+    linky-prm = {
+      file = ../shared/linky-prm.age;
     };
   };
 }

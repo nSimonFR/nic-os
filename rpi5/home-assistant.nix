@@ -94,13 +94,14 @@ in
     EOF
         chmod 0640 /etc/ha-linky/ha-linky.env
 
-        # Build options.json from the agenix-managed secret
+        # Build options.json from agenix-managed secrets
         LINKY_TOKEN=$(cat /run/agenix/linky-token)
+        LINKY_PRM=$(cat /run/agenix/linky-prm)
         cat > /etc/home-assistant/ha-linky/options.json <<EOF
     {
       "meters": [
         {
-          "prm": "07233719170885",
+          "prm": "$LINKY_PRM",
           "token": "$LINKY_TOKEN",
           "name": "Linky consumption",
           "action": "sync",
