@@ -8,8 +8,21 @@
 {
   imports = [
     inputs.zen-browser.homeModules.twilight
+    inputs.nix-flatpak.homeManagerModules.nix-flatpak
     ./packages.nix
     ./audio.nix
+  ];
+
+  services.flatpak.remotes = [
+    {
+      name = "RSILauncher";
+      location = "https://mactan-sc.github.io/rsilauncher/RSILauncher.flatpakrepo";
+    }
+  ];
+
+  services.flatpak.packages = [
+    { appId = "io.github.mactan_sc.RSILauncher"; origin = "RSILauncher"; }
+    { appId = "org.freedesktop.Platform.VulkanLayer.MangoHud"; origin = "flathub"; }
   ];
 
   programs.zsh.zplug.plugins = [
