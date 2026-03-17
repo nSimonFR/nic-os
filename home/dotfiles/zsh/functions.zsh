@@ -182,6 +182,16 @@ function rebuild-os() {
 }
 
 
+# Edit an age-encrypted secret using 1Password for key access
+function age-edit() {
+  local file="${1:?Usage: age-edit <file.age>}"
+  local tmp=$(mktemp)
+  op read "op://Private/h25mo5drlr52rx2vg7czosn5y4/private key" | age -d -i - "$file" > "$tmp" \
+    && vim "$tmp" \
+    && age -R ~/.ssh/id_rsa.pub -o "$file" "$tmp"
+  rm -f "$tmp"
+}
+
 function get-version() {
   if [ $# -eq 0 ]
     then base=.
