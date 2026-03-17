@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ pkgs, config, ... }:
 {
   programs.zsh = {
     enable = true;
@@ -11,7 +11,7 @@
       save = 1000000;
       size = 1000000;
     };
-      
+
     zplug = {
       enable = true;
       plugins = [
@@ -28,7 +28,7 @@
     initContent = ''
       # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent/initExtra
       # Source agenix-managed secrets (env vars, tokens)
-      [ -f /run/agenix/zlogin ] && source /run/agenix/zlogin
+      [ -f "${config.age.secrets.zlogin.path}" ] && source "${config.age.secrets.zlogin.path}"
     '';
   };
 }

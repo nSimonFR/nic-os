@@ -1,9 +1,4 @@
 { config, ... }:
 {
-  age.secrets = {
-    zlogin = {
-      file = ./zlogin.age;
-      owner = "nsimon";
-    };
-  };
+  age.secrets.zlogin.file = ./zlogin.age;
 }

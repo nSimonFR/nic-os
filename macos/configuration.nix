@@ -9,8 +9,6 @@
   ...
 }:
 {
-  imports = [ ../shared/agenix.nix ];
-
   nixpkgs.config.allowUnfree = true;
 
   #nix.configureBuildUsers = true;

@@ -1,7 +1,5 @@
 { config, ... }:
 {
-  imports = [ ../shared/agenix.nix ];
-
   age.secrets = {
     openclaw-env = {
       file = ../shared/openclaw.env.age;

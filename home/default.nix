@@ -5,6 +5,7 @@
 }:
 {
   imports = [
+    ../shared/agenix.nix
     ./packages.nix
     ./zsh.nix
   ];

@@ -102,7 +102,6 @@
           hostname = nixconfig;
         };
         modules = [
-          inputs.ragenix.nixosModules.default
           ./nixos/configuration.nix
         ];
       };
@@ -204,7 +203,6 @@
           hostname = macconfig;
         };
         modules = [
-          inputs.ragenix.darwinModules.default
           ./macos/configuration.nix
         ];
       };
@@ -228,6 +226,7 @@
             };
           };
           modules = [
+            inputs.ragenix.homeManagerModules.default
             ./home
             ./nixos/home.nix
           ];
@@ -255,6 +254,7 @@
             };
           };
           modules = [
+            inputs.ragenix.homeManagerModules.default
             inputs.nix-openclaw.homeManagerModules.openclaw
             ./home
             ./rpi5/home.nix
@@ -279,6 +279,7 @@
             };
           };
           modules = [
+            inputs.ragenix.homeManagerModules.default
             ./home
             ./macos/home.nix
           ];
