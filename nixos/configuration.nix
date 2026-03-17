@@ -14,6 +14,7 @@ let
 in
 {
   imports = [
+    ../shared/agenix.nix
     ./hardware-configuration.nix
     ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
     ./rgb/hyperion-openrgb.nix # Hyperion with OpenRGB support

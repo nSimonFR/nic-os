@@ -27,7 +27,8 @@
 
     initContent = ''
       # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent/initExtra
-      [[ -f ~/.secrets/zsh.zsh ]] && source ~/.secrets/zsh.zsh
+      # Source agenix-managed secrets (env vars, tokens)
+      [ -f /run/agenix/zlogin ] && source /run/agenix/zlogin
     '';
   };
 }

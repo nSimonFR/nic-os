@@ -15,6 +15,7 @@
       nerd-fonts.fira-code
 
       # CLI
+      age
       atuin
       bash
       btop

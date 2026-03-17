@@ -102,6 +102,7 @@
           hostname = nixconfig;
         };
         modules = [
+          inputs.ragenix.nixosModules.default
           ./nixos/configuration.nix
         ];
       };
@@ -203,6 +204,7 @@
           hostname = macconfig;
         };
         modules = [
+          inputs.ragenix.darwinModules.default
           ./macos/configuration.nix
         ];
       };
