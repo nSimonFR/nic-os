@@ -182,13 +182,13 @@ function rebuild-os() {
 }
 
 
-# Edit an age-encrypted secret using 1Password for key access
+# Edit an age-encrypted secret
 function age-edit() {
   local file="${1:?Usage: age-edit <file.age>}"
   local tmp=$(mktemp)
-  op read "op://Private/h25mo5drlr52rx2vg7czosn5y4/private key" | age -d -i - "$file" > "$tmp" \
+  age -d -i ~/.ssh/age "$file" > "$tmp" \
     && vim "$tmp" \
-    && age -R ~/.ssh/id_rsa.pub -o "$file" "$tmp"
+    && age -R ~/.ssh/age.pub -R ~/.ssh/id_rsa.pub -o "$file" "$tmp"
   rm -f "$tmp"
 }
 
