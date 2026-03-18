@@ -9,9 +9,95 @@
   ...
 }:
 let
-  blogwatcherPkg = pkgs.callPackage ./blogwatcher.nix { };
+  blogwatcherPkg = pkgs.callPackage ../shared/pkgs/blogwatcher.nix { };
+
+  # Fix nixos-raspberrypi bug: kernelboot-gen-builder.sh writes default/cmdline.txt
+  # with a hardcoded nix store path instead of a profile symlink, causing boot failure
+  # after nix GC deletes the store path (weekly GC).
+  #
+  # Root cause: the "default" entry receives $generationPath as the raw store path
+  # (e.g. /nix/store/…-nixos-system-rpi5-…), while numbered entries receive the
+  # stable profile symlink (/nix/var/nix/profiles/system-N-link). We rebuild the
+  # full bootloader chain from nixos-raspberrypi source with a patched
+  # kernelboot-gen-builder.sh that uses /nix/var/nix/profiles/system/init for the
+  # "default" entry instead of the GC-able store path.
+  rpiBootSrc = "${nixos-raspberrypi}/modules/system/boot/loader/raspberrypi/generational";
+  rpiCfg = config.boot.loader.raspberry-pi;
+
+  # Python patch: replace the init= line in addEntry() with a symlink-stable version
+  patchScript = pkgs.writeText "patch-kernelboot.py" ''
+    import sys
+    src = open(sys.argv[1]).read()
+    old = '    echo "$(cat "$generationPath/kernel-params") init=$generationPath/init" > "$genDir/cmdline.txt"'
+    new = (
+        '    local initPath="$generationPath/init"\n'
+        '    if [ "$generationName" = "default" ]; then\n'
+        '        initPath="/nix/var/nix/profiles/system/init"\n'
+        '    fi\n'
+        '    echo "$(cat "$generationPath/kernel-params") init=$initPath" > "$genDir/cmdline.txt"'
+    )
+    assert old in src, "Patch target not found in kernelboot-gen-builder.sh"
+    open(sys.argv[1], "w").write(src.replace(old, new))
+  '';
+
+  patchedKernelbootGenBuilderSrc = pkgs.runCommand "kernelboot-gen-builder-patched.sh" { } ''
+    cp ${rpiBootSrc}/kernelboot-gen-builder.sh $out
+    chmod +w $out
+    ${pkgs.python3}/bin/python3 ${patchScript} $out
+  '';
+
+  deviceTreeInstaller = pkgs.replaceVarsWith {
+    src = "${rpiBootSrc}/install-device-tree.sh";
+    isExecutable = true;
+    replacements = {
+      inherit (pkgs) bash;
+      path = pkgs.lib.makeBinPath [ pkgs.coreutils ];
+      firmware = rpiCfg.firmwarePackage;
+    };
+  };
+
+  kernelbootGenBuilder = pkgs.replaceVarsWith {
+    src = patchedKernelbootGenBuilderSrc;
+    isExecutable = true;
+    replacements = {
+      inherit (pkgs) bash;
+      path = pkgs.lib.makeBinPath [ pkgs.coreutils ];
+      installDeviceTree =
+        let args = lib.optionalString (!rpiCfg.useGenerationDeviceTree) " -r";
+        in "${deviceTreeInstaller}${args}";
+    };
+  };
+
+  firmwareInstaller = pkgs.replaceVarsWith {
+    src = "${rpiBootSrc}/install-firmware.sh";
+    isExecutable = true;
+    replacements = {
+      inherit (pkgs) bash;
+      path = pkgs.lib.makeBinPath [ pkgs.coreutils ];
+      firmware = rpiCfg.firmwarePackage;
+      configTxt = rpiCfg.configTxtPackage;
+    };
+  };
+
+  patchedBootloader = pkgs.replaceVarsWith {
+    src = "${rpiBootSrc}/nixos-generations-builder.sh";
+    isExecutable = true;
+    replacements = {
+      inherit (pkgs) bash;
+      path = pkgs.lib.makeBinPath [ pkgs.coreutils pkgs.gnused ];
+      installFirmwareBuilder = firmwareInstaller;
+      nixosGenerationsDir = rpiCfg.nixosGenerationsDir;
+      nixosGenBuilder = kernelbootGenBuilder;
+    };
+  };
 in
 {
+  # Override the bootloader installer (nixos-raspberrypi sets mkOverride 60;
+  # mkForce = priority 50 wins) with the patched version built above.
+  system.build.installBootLoader = lib.mkForce (
+    "${patchedBootloader} -g ${toString rpiCfg.configurationLimit} -f ${rpiCfg.firmwarePath} -c"
+  );
+
   # Workaround for nixpkgs 25.11 rename.nix <-> nixos-raspberrypi conflict
   disabledModules = [ "rename.nix" ];
 
@@ -103,7 +189,7 @@ in
 
   # ── Automatic updates: pull from GitHub and rebuild daily ──────────
   system.autoUpgrade = {
-    enable = true;
+    enable = false;
     flake = "github:nSimonFR/nic-os#rpi5";
     # Required because flake outputs reference a local path source for OpenClaw skills.
     flags = [ "--impure" ];
@@ -166,11 +252,25 @@ in
       fsType = "ext4";
       options = [ "noatime" ];
     };
+    # NVMe RAID-1 array for /home (Docker data at /home/state/var-lib/docker)
+    "/home" = {
+      device = "/dev/md/home";
+      fsType = "ext4";
+      options = [ "noatime" ];
+    };
+    # Bind /home/state/var-lib → /var/lib for Docker state
+    # No x-initrd.mount: systemd mounts this in stage-2 after /home is ready
+    "/var/lib" = {
+      device = "/home/state/var-lib";
+      fsType = "none";
+      options = [ "bind" "nofail" ];
+    };
   };
 
   swapDevices = [
     {
-      device = "/var/lib/swapfile";
+      # Swapfile on root (NIXOS_SD) — avoids ordering dependency on /home mount
+      device = "/swapfile";
       size = 2 * 1024;
     }
   ];
