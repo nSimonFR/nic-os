@@ -49,7 +49,10 @@
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = "${pkgs.docker}/bin/docker build https://github.com/erwindouna/truelayer2firefly.git -t truelayer2firefly:arm64";
-      ExecStartPost = "${pkgs.coreutils}/bin/mkdir -p /var/lib/truelayer2firefly && ${pkgs.coreutils}/bin/touch /var/lib/truelayer2firefly/.image-built";
+      ExecStartPost = [
+        "${pkgs.coreutils}/bin/mkdir -p /var/lib/truelayer2firefly"
+        "${pkgs.coreutils}/bin/touch /var/lib/truelayer2firefly/.image-built"
+      ];
     };
   };
   systemd.services."docker-truelayer2firefly".requires = [ "truelayer2firefly-build.service" ];
