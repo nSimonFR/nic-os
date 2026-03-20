@@ -140,7 +140,6 @@ kdePackages.kwallet
     kdePackages.kwalletmanager
     libvirt # virsh CLI for VM management
     ntfs3g
-    opentrack # Head tracking for Tobii VM passthrough
     piper # GUI for Logitech G502 configuration (DPI, buttons, RGB)
     input-remapper # Remap keys/mouse buttons for games
     usbutils
@@ -475,7 +474,11 @@ kdePackages.kwallet
 
       # VKB devices for Star Citizen
       # Covers all VKB-Sim devices (Gladiator EVO L SEM, Gladiator EVO R, etc.)
+      # TAG+="uaccess" on event/js nodes is required for Flatpak sandbox access
+      # (group membership is lost in the Flatpak namespace, uaccess logind ACL is not)
       KERNEL=="hidraw*", ATTRS{idVendor}=="231d", ATTRS{idProduct}=="*", MODE="0660", TAG+="uaccess"
+      KERNEL=="event*", ATTRS{idVendor}=="231d", TAG+="uaccess"
+      KERNEL=="js*", ATTRS{idVendor}=="231d", TAG+="uaccess"
 
       # OpenRGB USB HID device access for RGB keyboards/mice/devices
       # Drevo Calibur RGB Keyboard

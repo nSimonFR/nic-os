@@ -246,6 +246,10 @@ let
 
 in
 {
+  # Expose /libexec in the system profile so opentrack-sc's NPClient DLLs are reachable
+  # at the stable path Z:/run/current-system/sw/libexec/opentrack/ from within the Flatpak.
+  environment.pathsToLink = [ "/libexec" ];
+
   # Make packages available
   environment.systemPackages = [
     tobii-stream-engine
@@ -258,7 +262,7 @@ in
   systemd.services.tobii-engine = {
     description = "Tobii Engine Service";
     after = [ "network.target" ];
-    wantedBy = [ "graphical.target" ];
+    wantedBy = lib.mkForce [];
 
     serviceConfig = {
       Type = "simple";
@@ -285,11 +289,28 @@ in
     };
   };
 
+  # ── opentrack-sc user service ────────────────────────────────────────
+  # Runs opentrack-sc *inside* the RSILauncher Flatpak sandbox so it inherits
+  # WINEPREFIX=/var/data/prefix and PROTONPATH=GE-Proton, sharing SC's wineserver.
+  # Not started automatically — manage manually:
+  #   systemctl --user start opentrack-sc
+  #   systemctl --user stop  opentrack-sc
+  systemd.user.services.opentrack-sc = {
+    description = "OpenTrack SC — TrackIR head tracking for Star Citizen";
+    after = [ "graphical-session.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${pkgs.flatpak}/bin/flatpak run --command=${opentrack-sc}/bin/opentrack io.github.mactan_sc.RSILauncher";
+      Restart = "on-failure";
+      RestartSec = "3s";
+    };
+  };
+
   systemd.services.tobii-usb = {
     description = "Tobii USB Service";
     requires = [ "tobii-engine.service" ];
     after = [ "tobii-engine.service" ];
-    wantedBy = [ "graphical.target" ];
+    wantedBy = lib.mkForce [];
 
     serviceConfig = {
       Type = "forking";

@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   username,
@@ -12,6 +13,17 @@
     ./packages.nix
     ./audio.nix
   ];
+
+  # Grant RSILauncher access to:
+  # - /nix/store:ro  so Wine can load NPClient64.dll from its nix store path
+  # - /run/current-system:ro  so Z:/run/current-system/sw/libexec/opentrack/ is reachable inside the sandbox
+  # The Flatpak already has shared=ipc which covers POSIX shared memory for the TrackIR file mapping.
+  home.activation.rsiLauncherFlatpakOverrides = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    ${pkgs.flatpak}/bin/flatpak override --user io.github.mactan_sc.RSILauncher \
+      --filesystem=/nix/store:ro \
+      --filesystem=/run/current-system:ro \
+      --filesystem=/home/${username}/mangohud-logs
+  '';
 
   services.flatpak.remotes = [
     {
@@ -132,6 +144,8 @@
   xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;
   xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
   xdg.configFile."MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
+  # MangoHud config for RSILauncher Flatpak (reads from Flatpak-specific XDG_CONFIG_HOME)
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
   xdg.configFile."alacritty/alacritty.toml".source = ./dotfiles/alacritty.toml;
   # Ghostty config is managed in shared home/default.nix via xdg.configFile
 
