@@ -121,6 +121,15 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
+  # Fix ghostfolio npmDepsHash mismatch in nixpkgs 25.11 (package-lock.json changed)
+  nixpkgs.overlays = [
+    (final: prev: {
+      ghostfolio = prev.ghostfolio.overrideAttrs (old: {
+        npmDepsHash = "sha256-4nLNRIBvYZuwWFqp7nfrEvvLkTzii8KAbdzRdwj9Ahg=";
+      });
+    })
+  ];
+
   boot.loader.raspberry-pi.bootloader = "kernel";
 
   # Force USB mass storage mode for Realtek RTL9210 NVMe-over-USB adapter.
