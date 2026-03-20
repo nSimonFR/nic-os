@@ -232,7 +232,11 @@ in
   virtualisation.docker.enable = true;
 
   # ── Ghostfolio: Wealth management software ──────────────────────────
+  # Use internal port 13333 to avoid conflict with tailscale serve
+  # which binds the external port 3333 on the tailscale interface before
+  # ghostfolio starts, causing EADDRINUSE when ghostfolio tries 0.0.0.0:3333.
   services.ghostfolio.enable = true;
+  services.ghostfolio.port = 13333;
 
   # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
   # (the module hardcodes these paths)
@@ -329,7 +333,7 @@ in
     let
       serveServices = [
         { port = 443; name = "openclaw"; localPort = 18789; }
-        { port = 3333; name = "ghostfolio"; localPort = 3333; }
+        { port = 3333; name = "ghostfolio"; localPort = 13333; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:
