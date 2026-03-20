@@ -9,7 +9,7 @@
   ...
 }:
 let
-  blogwatcherPkg = pkgs.callPackage ../shared/pkgs/blogwatcher.nix { };
+  blogwatcherPkg = pkgs.callPackage ./blogwatcher.nix { };
 
   # Fix nixos-raspberrypi bug: kernelboot-gen-builder.sh writes default/cmdline.txt
   # with a hardcoded nix store path instead of a profile symlink, causing boot failure
@@ -123,6 +123,10 @@ in
 
   boot.loader.raspberry-pi.bootloader = "kernel";
 
+  # Force USB mass storage mode for Realtek RTL9210 NVMe-over-USB adapter.
+  # Without this quirk the kernel uses UAS which breaks enumeration on RPi5.
+  boot.kernelParams = [ "usb-storage.quirks=0bda:9210:u" ];
+
   # Headless server — blacklist vc4 GPU driver to prevent silent CPU stall
   # when accessing uninitialized HDMI registers (firmware doesn't init HSM clock
   # without a monitor connected, causing vc4_hdmi_runtime_resume to hang).
@@ -212,7 +216,6 @@ in
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
     hydroxide
-    inputs.ragenix.packages.${pkgs.system}.default  # ragenix CLI for editing secrets
   ];
 
   virtualisation.docker.enable = true;
