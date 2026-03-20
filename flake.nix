@@ -111,7 +111,30 @@
           ({ inputs, ... }: {
             nixpkgs.overlays = [
               # uv 0.9.26 from release-25.11 fails to build on aarch64-linux; use nixpkgs-unstable
-              (final: prev: rec {
+              (final: prev:
+              let
+                # prefetch-npm-deps leaves a zero-filled cache entry for
+                # stylehacks-6.1.1 on aarch64-linux (bug in prefetch-npm-deps).
+                # Reconstruct the valid index entry from the known integrity hash
+                # and the content that IS correctly stored in the FOD.
+                npmStylehacksFix = prev.writeText "fix-npm-stylehacks.py" ''
+                  import hashlib, json, os
+                  url = "https://registry.npmjs.org/stylehacks/-/stylehacks-6.1.1.tgz"
+                  integrity = "sha512-gSTTEQ670cJNoaeIp9KX6lZmm8LJ3jPB5yJmX8Zq/wQxOsAFXV3qjWzHas3YYk1qesuVIyYWWUpZ0vSE/dTSGg=="
+                  size = 9516
+                  key = "make-fetch-happen:request-cache:" + url
+                  body = json.dumps({"key": key, "integrity": integrity, "time": 0, "size": size, "metadata": {"url": url, "options": {"compress": True}}}, separators=(",", ":"))
+                  sha1 = hashlib.sha1(body.encode()).hexdigest()
+                  entry = sha1 + "\t" + body
+                  tmp = os.environ["tmpCache"]
+                  path = os.path.join(tmp, "_cacache/index-v5/47/46/dcd39de6f4df2818ec596aba6950bada076ac5938d40ccfa4ad3922b0981")
+                  os.makedirs(os.path.dirname(path), exist_ok=True)
+                  with open(path, "w") as f:
+                      f.write(entry)
+                  print("Reconstructed stylehacks-6.1.1 npm cache index entry")
+                '';
+              in
+              rec {
                 unstablePkgs = import inputs.nixpkgs-unstable {
                   system = prev.stdenv.hostPlatform.system;
                   config.allowUnfree = true;
@@ -139,20 +162,16 @@
                     hash = npmDepsHash;
                   };
                   # prefetch-npm-deps leaves a zero-filled cache entry for
-                  # @rollup/rollup-win32-arm64-msvc on aarch64-linux, causing
-                  # npmConfigHook (which runs as a postPatchHook) to fail with
-                  # "invalid cache index entry: missing tab separator".
+                  # stylehacks-6.1.1 on aarch64-linux, causing npmConfigHook
+                  # (a postPatchHook) to fail with "dependency should have a hash".
                   # Fix: in postPatch (runs before postPatchHooks/npmConfigHook),
-                  # copy npmDeps to a writable tempdir and remove corrupt entries.
+                  # copy npmDeps to a writable tmpdir and reconstruct the corrupt
+                  # index entry with valid JSON using the known integrity hash.
                   postPatch = (old.postPatch or "") + ''
                     tmpCache=$(mktemp -d)
                     cp -r "$npmDeps"/. "$tmpCache"/
                     chmod -R u+w "$tmpCache"
-                    find "$tmpCache"/_cacache/index-v5 -type f | while IFS= read -r f; do
-                      if ! grep -q $'\t' "$f" 2>/dev/null; then
-                        rm -f "$f"
-                      fi
-                    done
+                    tmpCache="$tmpCache" ${prev.python3}/bin/python3 ${npmStylehacksFix}
                     export npmDeps="$tmpCache"
                   '';
                 });
