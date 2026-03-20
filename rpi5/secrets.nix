@@ -1,5 +1,10 @@
 { config, ... }:
 {
+  # System-level age identity: use the user's personal age key file.
+  # Secrets are encrypted to nsimon-age (not host SSH keys), so we must
+  # point the NixOS agenix module at the user's key on the rpi5 filesystem.
+  age.identityPaths = [ "/home/nsimon/.ssh/age" ];
+
   age.secrets = {
     openclaw-env = {
       file = ../shared/openclaw.env.age;
