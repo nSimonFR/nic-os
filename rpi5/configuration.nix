@@ -231,8 +231,7 @@ in
   virtualisation.docker.enable = true;
 
   # ── Ghostfolio: Wealth management software ──────────────────────────
-  # Temporarily disabled: npmDepsHash needs update (build fails with cache error)
-  services.ghostfolio.enable = false;
+  services.ghostfolio.enable = true;
 
   # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
   # (the module hardcodes these paths)

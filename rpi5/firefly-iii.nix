@@ -38,6 +38,23 @@
     };
   };
 
+  # Build truelayer2firefly Docker image from source (no public arm64 image available)
+  systemd.services.truelayer2firefly-build = {
+    description = "Build truelayer2firefly Docker image";
+    wantedBy = [ "multi-user.target" ];
+    requires = [ "docker.service" ];
+    after = [ "docker.service" ];
+    unitConfig.ConditionPathExists = "!/var/lib/truelayer2firefly/.image-built";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.docker}/bin/docker build https://github.com/erwindouna/truelayer2firefly.git -t truelayer2firefly:arm64";
+      ExecStartPost = "${pkgs.coreutils}/bin/mkdir -p /var/lib/truelayer2firefly && ${pkgs.coreutils}/bin/touch /var/lib/truelayer2firefly/.image-built";
+    };
+  };
+  systemd.services."docker-truelayer2firefly".requires = [ "truelayer2firefly-build.service" ];
+  systemd.services."docker-truelayer2firefly".after = [ "truelayer2firefly-build.service" ];
+
   # TrueLayer2Firefly - Open Banking sync for Firefly III
   # https://github.com/erwindouna/truelayer2firefly
   # Custom entrypoint adds fr-stet-societe-generale (Société Générale) to the
