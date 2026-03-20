@@ -129,7 +129,10 @@ in
 
   # Enable software RAID (mdadm) so HOME_RAID assembles automatically at boot.
   boot.swraid.enable = true;
-  boot.swraid.mdadmConf = "MAILADDR root";
+  boot.swraid.mdadmConf = ''
+    MAILADDR root
+    ARRAY /dev/md/rpi5:home metadata=1.2 UUID=a058cca3:f96a9b00:11735dda:85b80a0c
+  '';
 
   # Headless server — blacklist vc4 GPU driver to prevent silent CPU stall
   # when accessing uninitialized HDMI registers (firmware doesn't init HSM clock
