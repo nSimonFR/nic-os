@@ -140,9 +140,11 @@
                   };
                   # prefetch-npm-deps leaves a zero-filled cache entry for
                   # @rollup/rollup-win32-arm64-msvc on aarch64-linux, causing
-                  # npmConfigHook to fail with "invalid cache index entry: missing tab separator".
-                  # Fix: copy npmDeps to a writable tempdir and remove corrupt entries.
-                  preConfigure = ''
+                  # npmConfigHook (which runs as a postPatchHook) to fail with
+                  # "invalid cache index entry: missing tab separator".
+                  # Fix: in postPatch (runs before postPatchHooks/npmConfigHook),
+                  # copy npmDeps to a writable tempdir and remove corrupt entries.
+                  postPatch = (old.postPatch or "") + ''
                     tmpCache=$(mktemp -d)
                     cp -r "$npmDeps"/. "$tmpCache"/
                     chmod -R u+w "$tmpCache"
