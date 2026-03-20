@@ -127,6 +127,10 @@ in
   # Without this quirk the kernel uses UAS which breaks enumeration on RPi5.
   boot.kernelParams = [ "usb-storage.quirks=0bda:9210:u" ];
 
+  # Enable software RAID (mdadm) so HOME_RAID assembles automatically at boot.
+  boot.swraid.enable = true;
+  boot.swraid.mdadmConf = "MAILADDR root";
+
   # Headless server — blacklist vc4 GPU driver to prevent silent CPU stall
   # when accessing uninitialized HDMI registers (firmware doesn't init HSM clock
   # without a monitor connected, causing vc4_hdmi_runtime_resume to hang).
