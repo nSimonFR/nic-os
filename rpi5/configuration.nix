@@ -218,7 +218,8 @@ in
   virtualisation.docker.enable = true;
 
   # ── Ghostfolio: Wealth management software ──────────────────────────
-  services.ghostfolio.enable = true;
+  # Temporarily disabled: npmDepsHash needs update (build fails with cache error)
+  services.ghostfolio.enable = false;
 
   # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
   # (the module hardcodes these paths)
@@ -248,22 +249,24 @@ in
       ];
     };
     "/" = {
-      device = "/dev/disk/by-label/NIXOS_SD";
+      device = "/dev/disk/by-label/NIXOS_SSD";
       fsType = "ext4";
       options = [ "noatime" ];
     };
     # NVMe RAID-1 array for /home (Docker data at /home/state/var-lib/docker)
     "/home" = {
-      device = "/dev/md/home";
+      device = "/dev/disk/by-label/HOME_RAID";
       fsType = "ext4";
       options = [ "noatime" ];
     };
     # Bind /home/state/var-lib → /var/lib for Docker state
-    # No x-initrd.mount: systemd mounts this in stage-2 after /home is ready
+    # neededForBoot = false: prevent NixOS from auto-adding x-initrd.mount.
+    # /home (RAID-1) is only available in stage-2, so this bind must be stage-2 only.
     "/var/lib" = {
       device = "/home/state/var-lib";
       fsType = "none";
       options = [ "bind" "nofail" ];
+      neededForBoot = false;
     };
   };
 

@@ -18,7 +18,8 @@
     
     nixos-raspberrypi = {
       url = "github:nvmd/nixos-raspberrypi/main";
-      inputs.nixpkgs.follows = "nixpkgs";
+      # Do NOT follow nixpkgs: let nixos-raspberrypi use its own pinned nixpkgs
+      # so the kernel derivation hash matches what Garnix/cachix pre-built.
     };
 
     zen-browser = {
