@@ -121,11 +121,23 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
-  # Fix ghostfolio npmDepsHash mismatch in nixpkgs 25.11 (package-lock.json changed)
+  # Fix ghostfolio build on aarch64-linux in nixpkgs 25.11:
+  # prefetch-npm-deps creates a zero-filled (corrupt) cache entry for
+  # @rollup/rollup-win32-arm64-msvc, causing npmConfigHook validation to fail
+  # with "invalid cache index entry: missing tab separator".
+  # Fix: create a patched npmDeps that removes zero-filled entries.
   nixpkgs.overlays = [
     (final: prev: {
       ghostfolio = prev.ghostfolio.overrideAttrs (old: {
-        npmDepsHash = "sha256-4nLNRIBvYZuwWFqp7nfrEvvLkTzii8KAbdzRdwj9Ahg=";
+        npmDeps = prev.runCommand "ghostfolio-npm-deps-fixed" { } ''
+          cp -r ${old.npmDeps} $out
+          chmod -R u+w $out
+          find $out/_cacache/index-v5 -type f | while IFS= read -r f; do
+            if ! grep -q $'\t' "$f" 2>/dev/null; then
+              rm -f "$f"
+            fi
+          done
+        '';
       });
     })
   ];
