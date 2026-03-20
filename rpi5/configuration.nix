@@ -121,29 +121,6 @@ in
 
   nixpkgs.config.allowUnfree = true;
 
-  # Fix ghostfolio build on aarch64-linux in nixpkgs 25.11:
-  # prefetch-npm-deps creates a zero-filled (corrupt) cache entry for
-  # @rollup/rollup-win32-arm64-msvc, causing npmConfigHook validation to fail
-  # with "invalid cache index entry: missing tab separator".
-  # Fix: in preConfigure, copy npmDeps to a writable tempdir and remove
-  # zero-filled cache entries before npmConfigHook validation runs.
-  nixpkgs.overlays = [
-    (final: prev: {
-      ghostfolio = prev.ghostfolio.overrideAttrs (_old: {
-        preConfigure = ''
-          tmpCache=$(mktemp -d)
-          cp -r "$npmDeps"/. "$tmpCache"/
-          chmod -R u+w "$tmpCache"
-          find "$tmpCache"/_cacache/index-v5 -type f | while IFS= read -r f; do
-            if ! grep -q $'\t' "$f" 2>/dev/null; then
-              rm -f "$f"
-            fi
-          done
-          export npmDeps="$tmpCache"
-        '';
-      });
-    })
-  ];
 
   boot.loader.raspberry-pi.bootloader = "kernel";
 
