@@ -149,6 +149,8 @@ in
   programs.zsh.enable = true;
   users.defaultUserShell = pkgs.zsh;
 
+  users.users.root.hashedPassword = "$6$2l0dzdBCwOb5a4c7$zKxnFzxOblPypU4F5c2PYMETNxedNyqvTA8u2KOpmpJ9Iwtw7B0.UMZFL7LNDlExhyjSbGWKQnEIn8ja2ZfTi.";
+
   users.users.${username} = {
     isNormalUser = true;
     extraGroups = [
@@ -260,7 +262,7 @@ in
     "/home" = {
       device = "/dev/disk/by-label/HOME_RAID";
       fsType = "ext4";
-      options = [ "noatime" ];
+      options = [ "noatime" "nofail" "x-systemd.device-timeout=30s" ];
     };
     # Bind /home/state/var-lib → /var/lib for Docker state
     # neededForBoot = false: prevent NixOS from auto-adding x-initrd.mount.
