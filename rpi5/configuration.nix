@@ -340,8 +340,10 @@ in
   systemd.services.tailscale-serve =
     let
       serveServices = [
-        { port = 443; name = "openclaw"; localPort = 18789; }
-        { port = 3333; name = "ghostfolio"; localPort = 13333; }
+        { port = 18789; name = "openclaw"; localPort = 18789; }
+        { port = 13333; name = "ghostfolio"; localPort = 13333; }
+        { port = 8080; name = "firefly-iii"; localPort = 8080; }
+        { port = 8123; name = "home-assistant"; localPort = 8123; }
       ];
       
       serveCommands = lib.concatMapStringsSep "\n    " (service:
