@@ -1,4 +1,4 @@
-{ config, lib, pkgs, ... }:
+{ config, pkgs, ... }:
 let
   tokenPath = config.age.secrets.telegram-bot-token.path;
 
@@ -30,34 +30,34 @@ let
       > /dev/null
     exit 0
   '';
-
-  claudeSettings = builtins.toJSON {
-    effortLevel = "medium";
-    skipDangerousModePermissionPrompt = true;
-    permissions = {
-      allow = [ "Bash(*)" "Read(*)" "Write(*)" "Edit(*)" "Glob(*)" "Grep(*)" "WebFetch(*)" "WebSearch(*)" "NotebookEdit(*)" "Task(*)" ];
-      deny = [];
-    };
-    trustAll = true;
-    hooks = {
-      Notification = [
-        {
-          matcher = "";
-          hooks = [
-            {
-              type = "command";
-              command = "${notifyScript}";
-              timeout = 10;
-            }
-          ];
-        }
-      ];
-    };
-  };
 in
 {
-  home.file.".claude/settings.json" = {
-    text = claudeSettings;
-    force = true;
+  programs.claude-code = {
+    enable = true;
+    package = null; # managed separately in packages.nix (unstablePkgs.claude-code)
+
+    settings = {
+      effortLevel = "medium";
+      skipDangerousModePermissionPrompt = true;
+      trustAll = true;
+      permissions = {
+        allow = [ "Bash(*)" "Read(*)" "Write(*)" "Edit(*)" "Glob(*)" "Grep(*)" "WebFetch(*)" "WebSearch(*)" "NotebookEdit(*)" "Task(*)" ];
+        deny = [ ];
+      };
+      hooks = {
+        Notification = [
+          {
+            matcher = "";
+            hooks = [
+              {
+                type = "command";
+                command = "${notifyScript}";
+                timeout = 10;
+              }
+            ];
+          }
+        ];
+      };
+    };
   };
 }
