@@ -174,6 +174,14 @@ in
     ];
   };
 
+  # Fallback for SSH sessions where pam_systemd doesn't propagate XDG_RUNTIME_DIR
+  # (non-PTY SSH, Tailscale SSH, etc.). Required for agenix secrets at $XDG_RUNTIME_DIR/agenix/.
+  environment.extraInit = ''
+    if [ -z "$XDG_RUNTIME_DIR" ]; then
+      export XDG_RUNTIME_DIR="/run/user/$(id -u)"
+    fi
+  '';
+
   security.sudo = {
     enable = true;
     wheelNeedsPassword = false;

@@ -39,6 +39,7 @@
     nix-openclaw = {
       url = "github:openclaw/nix-openclaw";
       inputs.nixpkgs.follows = "nixpkgs";
+      inputs.nix-steipete-tools.inputs.nixpkgs.follows = "nixpkgs";
     };
     openclaw-source = {
       url = "github:openclaw/openclaw";
@@ -192,6 +193,35 @@
             ];
           })
           inputs.ragenix.nixosModules.default
+          inputs.home-manager.nixosModules.home-manager
+          {
+            home-manager = {
+              useGlobalPkgs = true;
+              useUserPackages = true;
+              backupFileExtension = "hm-backup";
+              extraSpecialArgs = {
+                inherit inputs outputs username nClawSkillsSource;
+                openclawSource = inputs.openclaw-source;
+                devSetup = false;
+                unstablePkgs = import nixpkgs-unstable {
+                  system = "aarch64-linux";
+                  config.allowUnfree = true;
+                };
+                masterpkgs = import nixpkgs-master {
+                  system = "aarch64-linux";
+                  config.allowUnfree = true;
+                };
+              };
+              users.${username} = {
+                imports = [
+                  inputs.ragenix.homeManagerModules.default
+                  inputs.nix-openclaw.homeManagerModules.openclaw
+                  ./home
+                  ./rpi5/home.nix
+                ];
+              };
+            };
+          }
           ./rpi5/configuration.nix
         ];
       };
