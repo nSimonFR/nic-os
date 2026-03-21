@@ -144,10 +144,26 @@
   xdg.configFile."hypr/hyprlock.conf".source = ./dotfiles/hypr/hyprlock.conf;
   xdg.configFile."dunst/dunstrc".source = ./dotfiles/dunstrc;
   xdg.configFile."MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
-  # MangoHud config for RSILauncher Flatpak (reads from Flatpak-specific XDG_CONFIG_HOME)
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
   xdg.configFile."alacritty/alacritty.toml".source = ./dotfiles/alacritty.toml;
   # Ghostty config is managed in shared home/default.nix via xdg.configFile
+
+  # MangoHud config for RSILauncher Flatpak (reads from Flatpak-specific XDG_CONFIG_HOME)
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
+    # Override the flatpak-exported desktop entry to launch with gamemode
+  xdg.desktopEntries."io.github.mactan_sc.RSILauncher" = {
+    name = "RSI Launcher";
+    genericName = "RSI Launcher";
+    comment = "RSI Launcher";
+    icon = "io.github.mactan_sc.RSILauncher";
+    exec = "gamemoderun flatpak run io.github.mactan_sc.RSILauncher";
+    categories = [ "Game" ];
+    startupNotify = true;
+    settings = {
+      Keywords = "Star Citizen;StarCitizen;";
+      X-Flatpak = "io.github.mactan_sc.RSILauncher";
+      X-Flatpak-Tags = "proprietary;";
+    };
+  };
 
   xdg.configFile."rofi" = {
     source = ./dotfiles/rofi;
