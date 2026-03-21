@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   username,
   ...
@@ -16,27 +17,34 @@
 
     settings = {
       APP_ENV = "local";
-      APP_URL = "http://localhost:8080";
+      # Accessed via Tailscale Serve HTTPS on port 8080; must match the external URL.
+      # With TRUSTED_PROXIES="**", X-Forwarded-* headers override this for dynamic requests,
+      # but APP_URL is still used for artisan commands, email links, and OAuth callbacks.
+      APP_URL = "https://rpi5:8080";
       SITE_OWNER = "${username}@localhost";
 
-      # APP_KEY must be exactly 32 characters - generate with:
-      # head -c 32 /dev/urandom | base64 | head -c 32
-      # Store it in this file (create the file manually):
+      # APP_KEY: generate with: echo "base64:$(head -c 32 /dev/urandom | base64)"
+      # The nixpkgs module reads this file and sets APP_KEY at service start.
       APP_KEY_FILE = "/run/agenix/firefly-app-key";
 
       # SQLite database (simplest setup, no external DB needed)
       DB_CONNECTION = "sqlite";
 
-      # Trusted proxies for reverse proxy setups
+      # Trusted proxies for reverse proxy setups (Tailscale Serve terminates TLS)
       TRUSTED_PROXIES = "**";
 
       # Timezone
       TZ = config.time.timeZone;
 
-      # Disable telemetry
-      SEND_TELEMETRY = false;
+      # Disable telemetry — must be a string "false", not a Nix bool (bool false → empty string)
+      SEND_TELEMETRY = "false";
     };
   };
+
+  # PrivateUsers = true (set by nixpkgs commonServiceConfig) requires user namespace support.
+  # Override to false for RPi5 compatibility until confirmed working.
+  systemd.services.firefly-iii-setup.serviceConfig.PrivateUsers = lib.mkForce false;
+  systemd.services.firefly-iii-cron.serviceConfig.PrivateUsers = lib.mkForce false;
 
   # Build truelayer2firefly Docker image from source (no public arm64 image available)
   systemd.services.truelayer2firefly-build = {
