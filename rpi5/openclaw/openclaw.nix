@@ -4,10 +4,10 @@
   lib,
   nClawSkillsSource,
   openclawSource,
+  telegramChatId,
   ...
 }:
 let
-  telegram = import ../../shared/telegram.nix;
   bundledRuntimeDir = "/home/nsimon/.openclaw/bundled-runtime";
   bundledExtensionsDir = "${bundledRuntimeDir}/extensions";
   bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
@@ -133,7 +133,7 @@ in
             };
             # Explicit Telegram delivery target for visible heartbeat reports.
             target = "telegram";
-            to = builtins.toString telegram.chatId;
+            to = builtins.toString telegramChatId;
             accountId = "default";
             directPolicy = "allow";
           };
@@ -150,7 +150,7 @@ in
         channels.telegram = {
           enabled = true;
           tokenFile = config.age.secrets.telegram-bot-token.path;
-          allowFrom = [ telegram.chatId ];
+          allowFrom = [ telegramChatId ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
         };

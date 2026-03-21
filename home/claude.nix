@@ -2,14 +2,14 @@
   config,
   pkgs,
   unstablePkgs,
+  telegramChatId,
   ...
 }:
 let
-  telegram = import ../shared/telegram.nix;
   tokenPath = config.age.secrets.telegram-bot-token.path;
 
   notifyScript = pkgs.writeShellScript "claude-telegram-notify" ''
-    CHAT_ID="${builtins.toString telegram.chatId}"
+    CHAT_ID="${builtins.toString telegramChatId}"
     TOKEN_FILE="${tokenPath}"
     [[ -f "$TOKEN_FILE" ]] || TOKEN_FILE="/run/user/$(id -u)/agenix/telegram-bot-token"
     [[ -f "$TOKEN_FILE" ]] || exit 0
