@@ -19,9 +19,13 @@ in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
     "/run/agenix/openclaw-env";
-  systemd.user.services.openclaw-gateway.Service.Environment =
-    [ "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}" ];
+  systemd.user.services.openclaw-gateway.Service.Environment = [
+    "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}"
+    "OPENCLAW_NO_RESPAWN=1"
+    "NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache"
+  ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
+    "${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache"
     "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
     "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
     "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w \"${bundledExtensionsDir}\" 2>/dev/null || true'"
@@ -33,14 +37,23 @@ in
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
   home.sessionVariables = {
     OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+    OPENCLAW_NO_RESPAWN = "1";
+    NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
   };
   programs.zsh.sessionVariables = {
     OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+    OPENCLAW_NO_RESPAWN = "1";
+    NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
   };
   programs.zsh.envExtra = ''
     export OPENCLAW_BUNDLED_PLUGINS_DIR="${bundledExtensionsDir}"
+    export OPENCLAW_NO_RESPAWN=1
+    export NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
+    [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
+    [ -n "$ANTHROPIC_API_KEY" ] && export CLAUDE_CODE_OAUTH_TOKEN="$ANTHROPIC_API_KEY"
   '';
   home.activation.copyOpenClawBundledPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    ${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache
     ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
     ${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w "${bundledExtensionsDir}" 2>/dev/null || true'
     ${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx || true
@@ -60,10 +73,15 @@ in
     ];
 
     bundledPlugins = {
-      summarize.enable = true;
+      # All nix-steipete-tools bundled plugins hardcode nixpkgs@16c7794 with narHash=sha256-fFUnEYMla8b7...
+      # but Nix 2.31.2 on this system computes sha256-gmcdsc6Barl... for the same rev.
+      # Disabled until nix-steipete-tools updates its flake.lock files.
+      # Track: https://github.com/openclaw/nix-steipete-tools
+      summarize.enable = false;
       peekaboo.enable = false;
       sag.enable = false;
-      gogcli.enable = true;
+      gogcli.enable = false;
+      goplaces.enable = false;
     };
 
     instances.default = {

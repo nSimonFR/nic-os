@@ -23,7 +23,7 @@
     firefly-app-key = {
       file = ../shared/firefly-app-key.age;
       owner = "firefly-iii";
-      group = "firefly-iii";
+      group = "nginx"; # firefly-iii user's primary group; no separate firefly-iii group exists
     };
     linky-prm = {
       file = ../shared/linky-prm.age;

@@ -3,7 +3,7 @@
 ## System
 
 - OS: NixOS | Shell: zsh | Package Manager: Nix (flakes)
-- Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
+- Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5' --impure`
 - **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
 - Secrets: `~/.secrets/` (writable)
 - Skills: `~/nic-os/rpi5/openclaw/skills/<name>/SKILL.md`
