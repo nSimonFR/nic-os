@@ -34,9 +34,16 @@
   xdg.configFile."zed/settings.json".source = ./dotfiles/editor/zed-settings.json;
 
   # Cursor: macOS uses ~/Library/Application Support/, Linux uses ~/.config/
-  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/settings.json".source = ./dotfiles/editor/cursor-settings.json;
-  home.file."${if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"}/Cursor/User/keybindings.json".source = ./dotfiles/editor/cursor-keybindings.json;
+  home.file."${
+    if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"
+  }/Cursor/User/settings.json".source =
+    ./dotfiles/editor/cursor-settings.json;
+  home.file."${
+    if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"
+  }/Cursor/User/keybindings.json".source =
+    ./dotfiles/editor/cursor-keybindings.json;
 
   home.file.".vimrc".source = ./dotfiles/editor/vim;
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source = ./dotfiles/starcitizen-lug/launcher.cfg;
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
+    ./dotfiles/starcitizen-lug/launcher.cfg;
 }
