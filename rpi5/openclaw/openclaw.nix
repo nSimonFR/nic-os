@@ -7,6 +7,7 @@
   ...
 }:
 let
+  telegram = import ../../shared/telegram.nix;
   bundledRuntimeDir = "/home/nsimon/.openclaw/bundled-runtime";
   bundledExtensionsDir = "${bundledRuntimeDir}/extensions";
   bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
@@ -89,7 +90,7 @@ in
 
       config = {
         gateway.mode = "local";
-        
+
         # Gateway bound to loopback; access can be direct on tailnet or via Tailscale Serve HTTPS (WSS).
         gateway.bind = "loopback";
         gateway.auth.mode = "token";
@@ -132,7 +133,7 @@ in
             };
             # Explicit Telegram delivery target for visible heartbeat reports.
             target = "telegram";
-            to = "82389391";
+            to = builtins.toString telegram.chatId;
             accountId = "default";
             directPolicy = "allow";
           };
@@ -148,8 +149,8 @@ in
 
         channels.telegram = {
           enabled = true;
-          tokenFile = "/run/agenix/telegram-bot-token";
-          allowFrom = [ 82389391 ];
+          tokenFile = config.age.secrets.telegram-bot-token.path;
+          allowFrom = [ telegram.chatId ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
         };
@@ -160,7 +161,11 @@ in
         acp = {
           dispatch.enabled = true;
           defaultAgent = "cursor-agent";
-          allowedAgents = [ "cursor-agent" "codex" "claude" ];
+          allowedAgents = [
+            "cursor-agent"
+            "codex"
+            "claude"
+          ];
         };
 
         plugins.load.paths = [ customAcpxDir ];

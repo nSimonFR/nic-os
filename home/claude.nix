@@ -5,11 +5,13 @@
   ...
 }:
 let
+  telegram = import ../shared/telegram.nix;
   tokenPath = config.age.secrets.telegram-bot-token.path;
 
   notifyScript = pkgs.writeShellScript "claude-telegram-notify" ''
-    CHAT_ID="82389391"
-    TOKEN_FILE="${tokenPath:-/run/user/$(id -u)/agenix/telegram-bot-token}"
+    CHAT_ID="${builtins.toString telegram.chatId}"
+    TOKEN_FILE="${tokenPath}"
+    [[ -f "$TOKEN_FILE" ]] || TOKEN_FILE="/run/user/$(id -u)/agenix/telegram-bot-token"
     [[ -f "$TOKEN_FILE" ]] || exit 0
     BOT_TOKEN=$(cat "$TOKEN_FILE")
     [[ -z "$BOT_TOKEN" ]] && exit 0
