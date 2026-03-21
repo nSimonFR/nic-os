@@ -1,4 +1,9 @@
-{ config, pkgs, unstablePkgs, ... }:
+{
+  config,
+  pkgs,
+  unstablePkgs,
+  ...
+}:
 let
   tokenPath = config.age.secrets.telegram-bot-token.path;
 
@@ -43,7 +48,18 @@ in
       skipDangerousModePermissionPrompt = true;
       trustAll = true;
       permissions = {
-        allow = [ "Bash(*)" "Read(*)" "Write(*)" "Edit(*)" "Glob(*)" "Grep(*)" "WebFetch(*)" "WebSearch(*)" "NotebookEdit(*)" "Task(*)" ];
+        allow = [
+          "Bash(*)"
+          "Read(*)"
+          "Write(*)"
+          "Edit(*)"
+          "Glob(*)"
+          "Grep(*)"
+          "WebFetch(*)"
+          "WebSearch(*)"
+          "NotebookEdit(*)"
+          "Task(*)"
+        ];
         deny = [ ];
       };
       hooks = {

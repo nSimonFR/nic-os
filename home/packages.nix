@@ -22,7 +22,7 @@
       btop
       coreutils-full
       curl
-codex
+      codex
       masterpkgs.cursor-cli
       ctop
       direnv
