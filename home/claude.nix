@@ -9,7 +9,7 @@ let
 
   notifyScript = pkgs.writeShellScript "claude-telegram-notify" ''
     CHAT_ID="82389391"
-    TOKEN_FILE="${tokenPath}"
+    TOKEN_FILE="${tokenPath:-/run/user/$(id -u)/agenix/telegram-bot-token}"
     [[ -f "$TOKEN_FILE" ]] || exit 0
     BOT_TOKEN=$(cat "$TOKEN_FILE")
     [[ -z "$BOT_TOKEN" ]] && exit 0
