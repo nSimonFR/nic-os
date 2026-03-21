@@ -18,5 +18,5 @@ alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node 
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
 # Claude Code: disable nonessential traffic + intercept SSH probe (gh#21108)
-alias claude='CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" PATH="$HOME/.claude/bin:$PATH" claude --dangerously-skip-permissions'
+alias claude='GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" PATH="$HOME/.claude/bin:$PATH" claude --dangerously-skip-permissions'
 alias cr="claude --continue"

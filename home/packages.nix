@@ -22,8 +22,7 @@
       btop
       coreutils-full
       curl
-      unstablePkgs.claude-code
-      codex
+codex
       masterpkgs.cursor-cli
       ctop
       direnv

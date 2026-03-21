@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, unstablePkgs, ... }:
 let
   tokenPath = config.age.secrets.telegram-bot-token.path;
 
@@ -32,9 +32,11 @@ let
   '';
 in
 {
+  home.sessionVariables.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1";
+
   programs.claude-code = {
     enable = true;
-    package = null; # managed separately in packages.nix (unstablePkgs.claude-code)
+    package = unstablePkgs.claude-code;
 
     settings = {
       effortLevel = "medium";
