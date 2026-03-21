@@ -38,4 +38,9 @@
 
   home.file.".vimrc".source = ./dotfiles/editor/vim;
   home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source = ./dotfiles/starcitizen-lug/launcher.cfg;
+
+  home.file.".local/bin/claude-telegram-notify.sh" = {
+    source = ./dotfiles/claude-telegram-notify.sh;
+    executable = true;
+  };
 }
