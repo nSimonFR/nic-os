@@ -291,28 +291,30 @@ in
   # Inject Telegram secrets into Grafana before it starts.
   # systemd loads EnvironmentFile before ExecStartPre runs, so the env file
   # must be created by a separate prerequisite oneshot service.
+  # grafana-secrets: write the bot token to a file outside grafana's RuntimeDirectory.
+  # grafana's RuntimeDirectory (/run/grafana) is cleaned up on every stop, so we use
+  # /run/grafana-telegram.env instead. Without RemainAfterExit, the service goes
+  # inactive after each run and systemd re-runs it whenever grafana (re)starts.
   systemd.services.grafana-secrets = {
     description = "Prepare Grafana secret environment file";
     before      = [ "grafana.service" ];
     wantedBy    = [ "grafana.service" ];
     serviceConfig = {
-      Type            = "oneshot";
-      RemainAfterExit = true;
-      # (+) runs as root so we can read the agenix secret and write to /run/grafana/
+      Type = "oneshot";
+      # (+) runs as root to read the agenix secret
       ExecStart = "+${pkgs.writeShellScript "grafana-inject-telegram-secrets" ''
         token=$(< ${config.age.secrets.telegram-bot-token.path})
-        mkdir -p /run/grafana
-        printf 'TELEGRAM_BOT_TOKEN=%s\n' "$token" > /run/grafana/telegram.env
-        chown root:grafana /run/grafana/telegram.env
-        chmod 640 /run/grafana/telegram.env
+        printf 'TELEGRAM_BOT_TOKEN=%s\n' "$token" > /run/grafana-telegram.env
+        chown root:grafana /run/grafana-telegram.env
+        chmod 640 /run/grafana-telegram.env
       ''}";
     };
   };
 
   # grafana.service reads the env file prepared by grafana-secrets.service
   systemd.services.grafana = {
-    after   = [ "grafana-secrets.service" ];
+    after    = [ "grafana-secrets.service" ];
     requires = [ "grafana-secrets.service" ];
-    serviceConfig.EnvironmentFile = "/run/grafana/telegram.env";
+    serviceConfig.EnvironmentFile = "/run/grafana-telegram.env";
   };
 }
