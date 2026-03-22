@@ -114,6 +114,7 @@ in
     ./blocky.nix
     ./ghostfolio.nix
     ./scrutiny.nix
+    ./monitoring.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
@@ -248,7 +249,7 @@ in
     pinentryPackage = pkgs.pinentry-curses;
   };
 
-  hardware.bluetooth.enable = false;
+  hardware.bluetooth.enable = lib.mkForce false;
 
   fileSystems = {
     "/boot/firmware" = {

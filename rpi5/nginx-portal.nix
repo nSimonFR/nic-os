@@ -20,6 +20,18 @@
     listen = [{ addr = "127.0.0.1"; port = 8082; }];
   };
 
+  # Dedicated vhost for nginx_exporter (Prometheus). Only reachable from loopback.
+  services.nginx.virtualHosts."nginx-metrics" = {
+    listen = [{ addr = "127.0.0.1"; port = 9080; }];
+    locations."/nginx_status" = {
+      extraConfig = ''
+        stub_status on;
+        allow 127.0.0.1;
+        deny all;
+      '';
+    };
+  };
+
   services.nginx.virtualHosts."portal" = {
     listen = [{ addr = "127.0.0.1"; port = 8080; }];
 

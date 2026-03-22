@@ -7,7 +7,8 @@
 
     settings = {
       web.listen = {
-        port = 9090;
+        # Port 9090 is reserved for Prometheus; use 9099 here.
+        port = 9099;
         host = "127.0.0.1";
       };
 
@@ -25,7 +26,7 @@
   };
 
   # Compose the Telegram notification URL at runtime from the existing bot token secret
-  # and the inline chat ID (not sensitive). This privileged ExecStartPre (+) runs as root
+  # and an inline chat ID (not sensitive). This privileged ExecStartPre (+) runs as root
   # before the module's own preStart (which processes _secret substitutions), so the
   # telegram-url file is ready when genJqSecretsReplacementSnippet reads it.
   systemd.services.scrutiny.serviceConfig.ExecStartPre = lib.mkBefore [
