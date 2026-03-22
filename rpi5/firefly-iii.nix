@@ -108,17 +108,6 @@
     ];
   };
 
-  # Override Firefly III nginx vhost to listen on loopback only (proxied from nginx-portal.nix).
-  # The nixpkgs module defaults to 0.0.0.0; restrict to 127.0.0.1 so only the portal reaches it.
-  services.nginx.virtualHosts."firefly.local" = {
-    listen = [
-      {
-        addr = "127.0.0.1";
-        port = 8082;
-      }
-    ];
-  };
-
   # Ensure data directories exist for Firefly III and TrueLayer
   system.activationScripts.firefly-iii-dirs = ''
     mkdir -p /var/lib/firefly-iii
