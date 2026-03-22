@@ -11,11 +11,10 @@ let
   };
 
   dashboardsDir = pkgs.linkFarm "grafana-dashboards" [
-    { name = "node-exporter.json"; path = fetchDashboard 1860 "node-exporter"; }
-    { name = "postgres.json";      path = fetchDashboard 9628 "postgres";      }
-    { name = "redis.json";         path = fetchDashboard 763  "redis";         }
-    { name = "blocky.json";        path = fetchDashboard 13768 "blocky";       }
-    { name = "scrutiny.json";      path = fetchDashboard 20393 "scrutiny";     }
+    { name = "node-exporter.json"; path = fetchDashboard 1860  "node-exporter"; }
+    { name = "postgres.json";      path = fetchDashboard 9628  "postgres";      }
+    { name = "redis.json";         path = fetchDashboard 763   "redis";         }
+    { name = "blocky.json";        path = fetchDashboard 13768 "blocky";        }
   ];
 
   alertRules = pkgs.writeText "alert-rules.yml" (builtins.toJSON {
