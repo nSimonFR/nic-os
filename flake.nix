@@ -110,7 +110,7 @@
 
       nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
         specialArgs = {
-          inherit inputs outputs username;
+          inherit inputs outputs username telegramChatId;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
         };
