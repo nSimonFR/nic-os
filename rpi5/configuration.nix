@@ -213,21 +213,6 @@ in
     };
   };
 
-  # ── Automatic updates: pull from GitHub and rebuild daily ──────────
-  system.autoUpgrade = {
-    enable = false;
-    flake = "github:nSimonFR/nic-os#rpi5";
-    # Required because flake outputs reference a local path source for OpenClaw skills.
-    flags = [ "--impure" ];
-    dates = "04:00";
-    randomizedDelaySec = "30min";
-    allowReboot = true;
-    rebootWindow = {
-      lower = "04:00";
-      upper = "06:00";
-    };
-  };
-
   environment.systemPackages = with pkgs; [
     vim
     wget
@@ -263,7 +248,7 @@ in
     pinentryPackage = pkgs.pinentry-curses;
   };
 
-  hardware.bluetooth.enable = true;
+  hardware.bluetooth.enable = false;
 
   fileSystems = {
     "/boot/firmware" = {
