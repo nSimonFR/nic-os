@@ -44,6 +44,100 @@ let
       ${pkgs.python3}/bin/python3 ${patchScript} ${raw} ${promUid} > $out
     '';
 
+  # Custom systemd services dashboard — shows failed/active/inactive unit counts
+  # and a sortable table of all service units with colour-coded state.
+  systemdDashboard = pkgs.writeText "systemd.json" (builtins.toJSON {
+    title   = "Systemd Services";
+    uid     = "systemd-services";
+    tags    = [ "systemd" "linux" ];
+    refresh = "30s";
+    time    = { from = "now-1h"; to = "now"; };
+    panels  = [
+      # Row 1: stat panels for failed / active / inactive counts
+      {
+        id = 1; type = "stat"; title = "Failed Services"; gridPos = { x=0; y=0; w=4; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.thresholds = {
+          mode = "absolute";
+          steps = [ { color = "green"; value = null; } { color = "red"; value = 1; } ];
+        };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "count(node_systemd_unit_state{state=\"failed\"} == 1) or vector(0)";
+          refId = "A"; instant = true; }];
+      }
+      {
+        id = 2; type = "stat"; title = "Active Services"; gridPos = { x=4; y=0; w=4; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.color = { mode = "fixed"; fixedColor = "green"; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "count(node_systemd_unit_state{state=\"active\"} == 1)";
+          refId = "A"; instant = true; }];
+      }
+      {
+        id = 3; type = "stat"; title = "Inactive Services"; gridPos = { x=8; y=0; w=4; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.color = { mode = "fixed"; fixedColor = "blue"; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "count(node_systemd_unit_state{state=\"inactive\"} == 1)";
+          refId = "A"; instant = true; }];
+      }
+      # Row 2: failed services list (prominent, always visible)
+      {
+        id = 4; type = "table"; title = "Failed Services";
+        gridPos = { x=0; y=4; w=24; h=6; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.sortBy = [{ displayName = "Unit"; desc = false; }];
+        fieldConfig.overrides = [{
+          matcher = { id = "byName"; options = "State"; };
+          properties = [{ id = "custom.displayMode"; value = "color-background"; }
+                        { id = "color"; value = { mode = "fixed"; fixedColor = "red"; }; }];
+        }];
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "node_systemd_unit_state{state=\"failed\"} == 1";
+          refId = "A"; instant = true;
+          format = "table"; }];
+        transformations = [
+          { id = "filterFieldsByName";
+            options.include.names = [ "name" "type" "Value" ]; }
+          { id = "organize";
+            options.renameByName = { name = "Unit"; type = "Type"; Value = "State"; }; }
+        ];
+      }
+      # Row 3: all service units table
+      {
+        id = 5; type = "table"; title = "All Service Units";
+        gridPos = { x=0; y=10; w=24; h=16; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.sortBy = [{ displayName = "State"; desc = false; }];
+        fieldConfig.overrides = [
+          { matcher = { id = "byName"; options = "active"; };
+            properties = [{ id = "custom.displayMode"; value = "color-background"; }
+                          { id = "color"; value = { mode = "fixed"; fixedColor = "green"; }; }]; }
+          { matcher = { id = "byName"; options = "failed"; };
+            properties = [{ id = "custom.displayMode"; value = "color-background"; }
+                          { id = "color"; value = { mode = "fixed"; fixedColor = "red"; }; }]; }
+        ];
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "node_systemd_unit_state{type=\"service\"} == 1";
+          refId = "A"; instant = true;
+          format = "table"; }];
+        transformations = [
+          { id = "filterFieldsByName";
+            options.include.names = [ "name" "state" "Value" ]; }
+          { id = "organize";
+            options.renameByName = { name = "Unit"; state = "State"; }; }
+        ];
+      }
+    ];
+    schemaVersion = 38;
+  });
+
   dashboardsDir = pkgs.linkFarm "grafana-dashboards" [
     { name = "node-exporter.json"; path = fetchDashboard 1860  "node-exporter"; }
     { name = "postgres.json";      path = fetchDashboard 9628  "postgres";      }
@@ -52,6 +146,8 @@ let
     { name = "blackbox.json";      path = fetchDashboard 7587  "blackbox";      }
     { name = "nginx.json";         path = fetchDashboard 12708 "nginx";         }
     { name = "rpi-docker.json";    path = fetchDashboard 15120 "rpi-docker";    }
+    { name = "disk.json";          path = fetchDashboard 9852  "disk";          }
+    { name = "systemd.json";       path = systemdDashboard;                     }
   ];
 
   alertRules = pkgs.writeText "alert-rules.yml" (builtins.toJSON {
@@ -59,33 +155,13 @@ let
       {
         name = "system";
         rules = [
+          # ── Availability ──────────────────────────────────────────────────
           {
             alert = "InstanceDown";
             expr  = "up == 0";
             for   = "5m";
             labels.severity = "critical";
-            annotations.summary = "Instance {{ $labels.instance }} is down";
-          }
-          {
-            alert = "HighCpuLoad";
-            expr  = "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 85";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "High CPU on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
-          }
-          {
-            alert = "HighMemoryUsage";
-            expr  = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "High memory on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
-          }
-          {
-            alert = "DiskAlmostFull";
-            expr  = "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"})) * 100 > 85";
-            for   = "10m";
-            labels.severity = "warning";
-            annotations.summary = "Disk almost full on {{ $labels.instance }} ({{ $labels.mountpoint }}): {{ $value | printf \"%.1f\" }}%";
+            annotations.summary = "Prometheus target {{ $labels.instance }} is down";
           }
           {
             alert = "ServiceDown";
@@ -95,11 +171,87 @@ let
             annotations.summary = "Service {{ $labels.instance }} is unreachable";
           }
           {
+            alert = "ServiceSlowResponse";
+            expr  = "probe_duration_seconds > 5";
+            for   = "5m";
+            labels.severity = "warning";
+            annotations.summary = "Service {{ $labels.instance }} responding slowly ({{ $value | printf \"%.1f\" }}s)";
+          }
+          # ── Systemd ───────────────────────────────────────────────────────
+          {
+            alert = "SystemdUnitFailed";
+            expr  = "node_systemd_unit_state{state=\"failed\"} == 1";
+            for   = "2m";
+            labels.severity = "critical";
+            annotations.summary = "Systemd unit {{ $labels.name }} is in failed state";
+          }
+          # ── CPU / Load ────────────────────────────────────────────────────
+          {
+            alert = "HighCpuLoad";
+            expr  = "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 85";
+            for   = "5m";
+            labels.severity = "warning";
+            annotations.summary = "High CPU on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
+          }
+          {
             alert = "HighLoadAverage";
             expr  = "node_load5 > 4";
             for   = "10m";
             labels.severity = "warning";
-            annotations.summary = "High load average on {{ $labels.instance }}: {{ $value | printf \"%.2f\" }}";
+            annotations.summary = "High 5m load on {{ $labels.instance }}: {{ $value | printf \"%.2f\" }}";
+          }
+          # ── Memory ───────────────────────────────────────────────────────
+          {
+            alert = "HighMemoryUsage";
+            expr  = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90";
+            for   = "5m";
+            labels.severity = "warning";
+            annotations.summary = "High memory on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
+          }
+          # ── Disk ─────────────────────────────────────────────────────────
+          {
+            alert = "DiskAlmostFull";
+            expr  = "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"})) * 100 > 85";
+            for   = "10m";
+            labels.severity = "warning";
+            annotations.summary = "Disk almost full on {{ $labels.instance }} ({{ $labels.mountpoint }}): {{ $value | printf \"%.1f\" }}%";
+          }
+          {
+            alert = "DiskCritical";
+            expr  = "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"})) * 100 > 95";
+            for   = "5m";
+            labels.severity = "critical";
+            annotations.summary = "Disk critically full on {{ $labels.instance }} ({{ $labels.mountpoint }}): {{ $value | printf \"%.1f\" }}%";
+          }
+          {
+            alert = "FilesystemReadOnly";
+            expr  = "node_filesystem_readonly{fstype!~\"tmpfs|devtmpfs|squashfs|iso9660\"} == 1";
+            for   = "5m";
+            labels.severity = "critical";
+            annotations.summary = "Filesystem {{ $labels.mountpoint }} is read-only on {{ $labels.instance }} (possible corruption)";
+          }
+          # ── RAID ─────────────────────────────────────────────────────────
+          {
+            alert = "RAIDDegraded";
+            expr  = "node_md_disks_active < node_md_disks";
+            for   = "5m";
+            labels.severity = "critical";
+            annotations.summary = "RAID array {{ $labels.device }} is degraded: {{ $value }} of {{ printf `node_md_disks{device=\"%s\"}` $labels.device | query | first | value }} disks active";
+          }
+          # ── Temperature (RPi5) ───────────────────────────────────────────
+          {
+            alert = "HighCpuTemperature";
+            expr  = "node_hwmon_temp_celsius{chip=~\".*thermal.*\",sensor=\"temp1\"} > 75";
+            for   = "5m";
+            labels.severity = "warning";
+            annotations.summary = "RPi5 CPU temperature high: {{ $value | printf \"%.1f\" }}°C";
+          }
+          {
+            alert = "CriticalCpuTemperature";
+            expr  = "node_hwmon_temp_celsius{chip=~\".*thermal.*\",sensor=\"temp1\"} > 85";
+            for   = "2m";
+            labels.severity = "critical";
+            annotations.summary = "RPi5 CPU temperature critical: {{ $value | printf \"%.1f\" }}°C — throttling imminent";
           }
         ];
       }
