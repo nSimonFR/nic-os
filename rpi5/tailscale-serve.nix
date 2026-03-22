@@ -6,6 +6,7 @@ let
     { port = 8080;  backend = "http://127.0.0.1:8080";  } # nginx portal (firefly)
     { port = 8123;  backend = "http://127.0.0.1:8123";  } # home-assistant
     { port = 13333; backend = "http://127.0.0.1:13333"; } # ghostfolio
+    { port = 9090;  backend = "http://127.0.0.1:9090";  } # scrutiny (disk health)
   ];
 
   # Publicly-accessible services (tailscale funnel).
