@@ -3,12 +3,23 @@ let
   prometheusPort = 9090;
   grafanaPort    = 3000;
 
-  # Fetch community dashboards at eval time (requires --impure or network sandbox).
-  # IDs: node-exporter-full=1860, postgres=9628, redis=763, blocky=13768, scrutiny=20393
-  fetchDashboard = id: name: builtins.fetchurl {
-    url = "https://grafana.com/api/dashboards/${toString id}/revisions/latest/download";
-    name = "${name}.json";
-  };
+  # Prometheus datasource UID — set by the provisioned datasource in this file.
+  promUid = "PBFA97CFB590B2093";
+
+  # Fetch a community dashboard and patch out datasource variable references
+  # (${DS_PROM}, ${DS_PROMETHEUS}, etc.) with the actual provisioned UID.
+  # Community dashboards use these placeholders expecting the user to map them
+  # at import time; provisioned dashboards skip that step so we fix it at build time.
+  fetchDashboard = id: name:
+    let
+      raw = builtins.fetchurl {
+        url = "https://grafana.com/api/dashboards/${toString id}/revisions/latest/download";
+        name = "${name}-raw.json";
+      };
+    in
+    pkgs.runCommand "${name}.json" { } ''
+      sed 's/''${DS_PROM}/${promUid}/g; s/''${DS_PROMETHEUS}/${promUid}/g' ${raw} > $out
+    '';
 
   dashboardsDir = pkgs.linkFarm "grafana-dashboards" [
     { name = "node-exporter.json"; path = fetchDashboard 1860  "node-exporter"; }
