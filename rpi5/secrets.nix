@@ -7,7 +7,7 @@
 
   age.secrets = {
     openclaw-env = {
-      file = ../shared/openclaw.env.age;
+      file = ./secrets/openclaw.env.age;
       owner = "nsimon";
     };
     telegram-bot-token = {
@@ -15,21 +15,21 @@
       owner = "nsimon";
     };
     supervisor-token = {
-      file = ../shared/supervisor-token.age;
+      file = ./secrets/supervisor-token.age;
     };
     linky-token = {
-      file = ../shared/linky-token.age;
+      file = ./secrets/linky-token.age;
     };
     firefly-app-key = {
-      file = ../shared/firefly-app-key.age;
+      file = ./secrets/firefly-app-key.age;
       owner = "firefly-iii";
       group = "nginx"; # firefly-iii user's primary group; no separate firefly-iii group exists
     };
     linky-prm = {
-      file = ../shared/linky-prm.age;
+      file = ./secrets/linky-prm.age;
     };
     openclaw-codex-auth = {
-      file = ../shared/openclaw-codex-auth.age;
+      file = ./secrets/openclaw-codex-auth.age;
       owner = "nsimon";
     };
   };
