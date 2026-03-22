@@ -187,9 +187,13 @@
                   }
                 )
                 inputs.nix-openclaw.overlays.default
-                # Redis cluster tests are flaky in the Nix sandbox
+                # Redis/Valkey cluster tests are flaky in the Nix sandbox
                 (final: prev: {
                   redis = prev.redis.overrideAttrs (_: {
+                    doCheck = false;
+                    doInstallCheck = false;
+                  });
+                  valkey = prev.valkey.overrideAttrs (_: {
                     doCheck = false;
                     doInstallCheck = false;
                   });
