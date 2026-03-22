@@ -1,6 +1,5 @@
 {
   pkgs,
-  masterpkgs,
   unstablePkgs,
   lib,
   devSetup ? false,
