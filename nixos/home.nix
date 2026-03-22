@@ -22,7 +22,8 @@
     ${pkgs.flatpak}/bin/flatpak override --user io.github.mactan_sc.RSILauncher \
       --filesystem=/nix/store:ro \
       --filesystem=/run/current-system:ro \
-      --filesystem=/home/${username}/mangohud-logs
+      --filesystem=/home/${username}/mangohud-logs \
+      --talk-name=com.feralinteractive.GameMode
   '';
 
   services.flatpak.remotes = [
@@ -149,21 +150,27 @@
 
   # MangoHud config for RSILauncher Flatpak (reads from Flatpak-specific XDG_CONFIG_HOME)
   home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
-    # Override the flatpak-exported desktop entry to launch with gamemode
-  xdg.desktopEntries."io.github.mactan_sc.RSILauncher" = {
-    name = "RSI Launcher";
-    genericName = "RSI Launcher";
-    comment = "RSI Launcher";
-    icon = "io.github.mactan_sc.RSILauncher";
-    exec = "gamemoderun flatpak run io.github.mactan_sc.RSILauncher";
-    categories = [ "Game" ];
-    startupNotify = true;
-    settings = {
-      Keywords = "Star Citizen;StarCitizen;";
-      X-Flatpak = "io.github.mactan_sc.RSILauncher";
-      X-Flatpak-Tags = "proprietary;";
-    };
-  };
+    # Override the flatpak-exported desktop entry to launch with gamemode.
+  # Must use xdg.dataFile (→ $XDG_DATA_HOME/applications/) rather than
+  # xdg.desktopEntries (→ home-manager profile in $XDG_DATA_DIRS) because the
+  # Flatpak-exported entry appears earlier in $XDG_DATA_DIRS and would otherwise
+  # take precedence over the home-manager profile path.
+  xdg.dataFile."applications/io.github.mactan_sc.RSILauncher.desktop".text = ''
+    [Desktop Entry]
+    Categories=Game
+    Comment=RSI Launcher
+    Exec=flatpak run --command=gamemoderun io.github.mactan_sc.RSILauncher rsi-run
+    GenericName=RSI Launcher
+    Icon=io.github.mactan_sc.RSILauncher
+    Keywords=Star Citizen;StarCitizen;
+    Name=RSI Launcher
+    StartupNotify=true
+    Terminal=false
+    Type=Application
+    Version=1.5
+    X-Flatpak=io.github.mactan_sc.RSILauncher
+    X-Flatpak-Tags=proprietary;
+  '';
 
   xdg.configFile."rofi" = {
     source = ./dotfiles/rofi;
