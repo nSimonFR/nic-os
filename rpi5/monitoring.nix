@@ -6,10 +6,33 @@ let
   # Prometheus datasource UID — set by the provisioned datasource in this file.
   promUid = "PBFA97CFB590B2093";
 
-  # Fetch a community dashboard and patch out datasource variable references
-  # (${DS_PROM}, ${DS_PROMETHEUS}, etc.) with the actual provisioned UID.
-  # Community dashboards use these placeholders expecting the user to map them
-  # at import time; provisioned dashboards skip that step so we fix it at build time.
+  # Fetch a community dashboard and patch it for standalone (non-Kubernetes) use:
+  # - Replace ${DS_PROM}/${DS_PROMETHEUS} datasource placeholders with the real UID
+  # - Replace ${VAR_BLOCKY_URL} with the local Blocky API URL
+  # - Hide the 'pod' variable (Kubernetes label absent on standalone) and default to .*
+  patchScript = pkgs.writeText "patch-dashboard.py" ''
+    import json, sys, re
+
+    uid   = sys.argv[2]
+    raw   = open(sys.argv[1]).read()
+
+    # Datasource placeholders and Blocky URL
+    raw = raw.replace("''${DS_PROM}",        uid)
+    raw = raw.replace("''${DS_PROMETHEUS}",  uid)
+    raw = raw.replace("''${VAR_BLOCKY_URL}", "http://localhost:4000")
+
+    d = json.loads(raw)
+
+    # Hide pod/namespace Kubernetes variables and set a catch-all default
+    for v in d.get("templating", {}).get("list", []):
+        if v.get("name") in ("pod", "namespace"):
+            v["hide"]    = 2        # 2 = hidden from UI
+            v["current"] = {"selected": True, "text": "All", "value": ".*"}
+            v["options"] = [{"selected": True, "text": "All", "value": ".*"}]
+
+    print(json.dumps(d))
+  '';
+
   fetchDashboard = id: name:
     let
       raw = builtins.fetchurl {
@@ -18,7 +41,7 @@ let
       };
     in
     pkgs.runCommand "${name}.json" { } ''
-      sed 's/''${DS_PROM}/${promUid}/g; s/''${DS_PROMETHEUS}/${promUid}/g' ${raw} > $out
+      ${pkgs.python3}/bin/python3 ${patchScript} ${raw} ${promUid} > $out
     '';
 
   dashboardsDir = pkgs.linkFarm "grafana-dashboards" [

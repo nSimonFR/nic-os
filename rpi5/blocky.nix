@@ -7,8 +7,11 @@
       # Listen on all interfaces so LAN clients can use the RPi as DNS
       ports = {
         dns = 53;
-        http = 4000; # API + Prometheus metrics (localhost only by default)
+        http = 4000;
       };
+
+      # Expose /metrics on the HTTP port for Prometheus scraping
+      prometheus.enable = true;
 
       # Privacy-respecting upstream DNS (DNS-over-HTTPS)
       upstreams = {
