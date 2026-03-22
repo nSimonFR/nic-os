@@ -16,9 +16,9 @@ let
     uid   = sys.argv[2]
     raw   = open(sys.argv[1]).read()
 
-    # Datasource placeholders and Blocky URL
-    raw = raw.replace("''${DS_PROM}",        uid)
-    raw = raw.replace("''${DS_PROMETHEUS}",  uid)
+    # Replace any ${DS_*} datasource placeholder with the real UID,
+    # and fix the Blocky URL variable.
+    raw = re.sub(r'\$\{DS_[^}]+\}', uid, raw)
     raw = raw.replace("''${VAR_BLOCKY_URL}", "http://localhost:4000")
 
     d = json.loads(raw)
@@ -321,7 +321,7 @@ in
             "http://127.0.0.1:8082"    # firefly-iii
             "http://127.0.0.1:13333"   # ghostfolio
             "http://127.0.0.1:8123"    # home-assistant
-            "http://127.0.0.1:18789"   # openclaw
+            "http://127.0.0.1:18789/health"   # openclaw
             "http://127.0.0.1:8081"    # truelayer2firefly
           ];
         }];
