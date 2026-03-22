@@ -17,9 +17,9 @@
 
     settings = {
       APP_ENV = "local";
-      # Accessed via Tailscale Serve HTTPS on port 8080; must match the external URL.
-      # With TRUSTED_PROXIES="**", X-Forwarded-* headers override this for dynamic requests,
-      # but APP_URL is still used for artisan commands, email links, and OAuth callbacks.
+      # Accessed via nginx portal on port 8080; APP_URL is the external base.
+      # With TRUSTED_PROXIES="**", X-Forwarded-* headers override this for dynamic requests.
+      # Note: APP_SUBDIRECTORY is not supported in Firefly III 6.4.14.
       APP_URL = "https://rpi5:8080";
       SITE_OWNER = "${username}@localhost";
 
@@ -108,12 +108,13 @@
     ];
   };
 
-  # Serve Firefly III on port 8080 instead of 80
+  # Override Firefly III nginx vhost to listen on loopback only (proxied from nginx-portal.nix).
+  # The nixpkgs module defaults to 0.0.0.0; restrict to 127.0.0.1 so only the portal reaches it.
   services.nginx.virtualHosts."firefly.local" = {
     listen = [
       {
-        addr = "0.0.0.0";
-        port = 8080;
+        addr = "127.0.0.1";
+        port = 8082;
       }
     ];
   };

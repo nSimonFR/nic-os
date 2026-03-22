@@ -109,6 +109,7 @@ in
     ./secrets.nix
     ./home-assistant.nix
     ./firefly-iii.nix
+    ./nginx-portal.nix
     ./blocky.nix
     ./ghostfolio.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
@@ -340,17 +341,17 @@ in
   systemd.services.tailscale-serve =
     let
       serveServices = [
-        { port = 18789; name = "openclaw"; localPort = 18789; }
+        # openclaw served through nginx portal at /openclaw/ (see firefly-iii.nix)
         { port = 13333; name = "ghostfolio"; localPort = 13333; }
-        { port = 8080; name = "firefly-iii"; localPort = 8080; }
+        { port = 8080; name = "nginx-portal"; localPort = 8080; }
         { port = 8123; name = "home-assistant"; localPort = 8123; }
       ];
-      
+
       serveCommands = lib.concatMapStringsSep "\n    " (service:
         "# ${service.name}: https://rpi5:${toString service.port}"
         + "\n    ${pkgs.tailscale}/bin/tailscale serve --bg --https=${toString service.port} http://127.0.0.1:${toString service.localPort}"
       ) serveServices;
-      
+
       serveStopCommands = lib.concatMapStringsSep "\n      " (service:
         "${pkgs.tailscale}/bin/tailscale serve --https=${toString service.port} off || true"
       ) serveServices;
@@ -378,5 +379,31 @@ in
         ${serveStopCommands}
       '';
     };
+
+  # Tailscale Funnel: exposes nginx portal publicly on the internet at https://<hostname>.ts.net
+  # Requires Funnel to be enabled in the Tailscale admin console for this node.
+  # Both /openclaw/ and /firefly/ become publicly accessible via HTTPS.
+  systemd.services.tailscale-funnel = {
+    description = "Tailscale Funnel: public HTTPS exposure of nginx portal";
+    after = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" "tailscale-serve.service" ];
+    wants = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+    requires = [ "tailscale-autoconnect.service" "tailscale-serve.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      Restart = "on-failure";
+      RestartSec = "15s";
+    };
+    script = ''
+      sleep 2
+      # Expose openclaw gateway (port 18789) publicly on HTTPS 443.
+      # Firefly (port 8080 nginx portal) remains tailnet-only via tailscale-serve.
+      ${pkgs.tailscale}/bin/tailscale funnel --bg --https=443 http://127.0.0.1:18789
+    '';
+    preStop = ''
+      ${pkgs.tailscale}/bin/tailscale funnel --https=443 off || true
+    '';
+  };
 
 }
