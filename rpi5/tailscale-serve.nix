@@ -3,7 +3,7 @@ let
   # Tailnet-only HTTPS services (tailscale serve).
   # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
   serveEntries = [
-    { port = 8080;  backend = "http://127.0.0.1:8080";  } # nginx portal (firefly + openclaw)
+    { port = 8080;  backend = "http://127.0.0.1:8080";  } # nginx portal (firefly)
     { port = 8123;  backend = "http://127.0.0.1:8123";  } # home-assistant
     { port = 13333; backend = "http://127.0.0.1:13333"; } # ghostfolio
   ];
