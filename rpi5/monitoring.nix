@@ -148,48 +148,75 @@ let
     refresh = "30s";
     time    = { from = "now-24h"; to = "now"; };
     panels  = [
-      # Sensor count stat
-      { id = 1; type = "stat"; title = "Active Sensors";
+      # Row 1: stat panels
+      { id = 1; type = "stat"; title = "WAN Connected";
         gridPos = { x=0; y=0; w=4; h=4; };
         datasource = { type = "prometheus"; uid = promUid; };
-        options.colorMode = "none";
+        options.colorMode = "background";
         options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.mappings = [
+          { type = "value"; options."0" = { text = "Down"; color = "red"; }; }
+          { type = "value"; options."1" = { text = "Up";   color = "green"; }; }
+        ];
         targets = [{ datasource = { type = "prometheus"; uid = promUid; };
-          expr = "count(homeassistant_sensor_state)";
+          expr = "homeassistant_binary_sensor_state{friendly_name=~\".*WAN.*\"}";
           refId = "A"; instant = true; }];
       }
-      # All numeric sensors over time
-      { id = 2; type = "timeseries"; title = "Numeric Sensors";
-        gridPos = { x=0; y=4; w=24; h=10; };
+      { id = 2; type = "stat"; title = "Heating Zones Active";
+        gridPos = { x=4; y=0; w=4; h=4; };
         datasource = { type = "prometheus"; uid = promUid; };
-        options.tooltip.mode = "multi";
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.thresholds = {
+          mode = "absolute";
+          steps = [ { color = "blue"; value = null; } { color = "orange"; value = 1; } ];
+        };
         targets = [{ datasource = { type = "prometheus"; uid = promUid; };
-          expr = "homeassistant_sensor_state";
-          legendFormat = "{{friendly_name}} ({{unit_of_measurement}})";
-          refId = "A"; }];
+          expr = "sum(homeassistant_switch_state)";
+          refId = "A"; instant = true; }];
       }
-      # Energy sensors (kWh) — Linky integration
-      { id = 3; type = "timeseries"; title = "Energy Consumption (kWh)";
-        gridPos = { x=0; y=14; w=24; h=10; };
+      { id = 3; type = "stat"; title = "Phone Battery";
+        gridPos = { x=8; y=0; w=4; h=4; };
         datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.unit = "percent";
+        fieldConfig.defaults.thresholds = {
+          mode = "absolute";
+          steps = [ { color = "red"; value = null; } { color = "orange"; value = 20; } { color = "green"; value = 50; } ];
+        };
         targets = [{ datasource = { type = "prometheus"; uid = promUid; };
-          expr = "homeassistant_sensor_state{unit_of_measurement=\"kWh\"}";
+          expr = "homeassistant_sensor_battery_percent";
+          refId = "A"; instant = true; }];
+      }
+      # Room temperatures over time
+      { id = 4; type = "timeseries"; title = "Room Target Temperatures (°C)";
+        gridPos = { x=0; y=4; w=24; h=8; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        fieldConfig.defaults.unit = "celsius";
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "homeassistant_climate_target_temperature_celsius";
           legendFormat = "{{friendly_name}}";
           refId = "A"; }];
       }
-      # Binary sensors table
-      { id = 4; type = "table"; title = "Binary Sensor States";
-        gridPos = { x=0; y=24; w=24; h=8; };
+      # Heating switches over time
+      { id = 5; type = "timeseries"; title = "Voltalis Heating Switches";
+        gridPos = { x=0; y=12; w=24; h=6; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        fieldConfig.defaults.custom.fillOpacity = 20;
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "homeassistant_switch_state";
+          legendFormat = "{{friendly_name}}";
+          refId = "A"; }];
+      }
+      # State change rate
+      { id = 6; type = "timeseries"; title = "State Changes (per minute)";
+        gridPos = { x=0; y=18; w=24; h=6; };
         datasource = { type = "prometheus"; uid = promUid; };
         targets = [{ datasource = { type = "prometheus"; uid = promUid; };
-          expr = "homeassistant_binary_sensor_state";
-          refId = "A"; instant = true; format = "table"; }];
-        transformations = [
-          { id = "filterFieldsByName";
-            options.include.names = [ "entity_id" "friendly_name" "Value" ]; }
-          { id = "organize";
-            options.renameByName = { entity_id = "Entity"; friendly_name = "Name"; Value = "State"; }; }
-        ];
+          expr = "rate(homeassistant_state_change_total[5m]) * 60";
+          legendFormat = "state changes/min";
+          refId = "A"; }];
       }
     ];
     schemaVersion = 38;
@@ -256,8 +283,7 @@ let
     { name = "rpi-docker.json";    path = fetchDashboard 15120 "rpi-docker";    }
     { name = "disk.json";          path = fetchDashboard 9852  "disk";          }
     { name = "systemd.json";       path = systemdDashboard;                     }
-    { name = "grafana.json";       path = fetchDashboard 3590  "grafana";       }
-    { name = "home-assistant.json"; path = haDashboard;                          }
+    { name = "home-assistant.json"; path = haDashboard;                         }
     { name = "fail2ban.json";      path = fail2banDashboard;                    }
   ];
 
