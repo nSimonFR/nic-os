@@ -257,9 +257,13 @@ in
               uid  = "telegram-primary";
               type = "telegram";
               settings = {
-                # $__env{VAR} is Grafana's env-var interpolation syntax for provisioning
+                # $__env{VAR} is Grafana's env-var interpolation syntax for provisioning.
+                # chatid is a plain integer in flake.nix; not sensitive — embed directly.
+                # Providing it as a Nix string ensures remarshal/ruamel.yaml quotes it,
+                # preventing YAML from misinterpreting the numeric value as an integer
+                # (which would cause Grafana's Go unmarshal to fail on a string field).
                 bottoken = "$__env{TELEGRAM_BOT_TOKEN}";
-                chatid   = "$__env{TELEGRAM_CHAT_ID}";
+                chatid   = toString telegramChatId;
                 message  = ''
                   {{ len .Alerts.Firing }} firing / {{ len .Alerts.Resolved }} resolved
                   {{ range .Alerts }}• [{{ .Labels.severity | upper }}] {{ .Annotations.summary }}
@@ -299,9 +303,7 @@ in
       ExecStart = "+${pkgs.writeShellScript "grafana-inject-telegram-secrets" ''
         token=$(< ${config.age.secrets.telegram-bot-token.path})
         mkdir -p /run/grafana
-        printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
-          "$token" "${toString telegramChatId}" \
-          > /run/grafana/telegram.env
+        printf 'TELEGRAM_BOT_TOKEN=%s\n' "$token" > /run/grafana/telegram.env
         chown root:grafana /run/grafana/telegram.env
         chmod 640 /run/grafana/telegram.env
       ''}";
