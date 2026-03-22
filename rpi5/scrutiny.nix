@@ -3,7 +3,7 @@
 {
   services.scrutiny = {
     enable = true;
-    influxdb.enable = true;
+    influxdb.enable = false; # v0.8.1 uses SQLite for metrics; InfluxDB is legacy
 
     settings = {
       web.listen = {
