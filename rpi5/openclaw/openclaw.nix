@@ -60,6 +60,18 @@ in
     [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
     [ -n "$ANTHROPIC_API_KEY" ] && export CLAUDE_CODE_OAUTH_TOKEN="$ANTHROPIC_API_KEY"
   '';
+  # Restore OpenAI Codex OAuth auth profile on fresh install (only if missing).
+  # openclaw manages token rotation itself; we never overwrite an existing file.
+  home.activation.restoreOpenClawCodexAuth = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    _authDir="/home/nsimon/.openclaw/agents/main/agent"
+    _authFile="$_authDir/auth-profiles.json"
+    _secretFile="/run/agenix/openclaw-codex-auth"
+    if [ ! -f "$_authFile" ] && [ -r "$_secretFile" ]; then
+      ${pkgs.coreutils}/bin/mkdir -p "$_authDir"
+      ${pkgs.coreutils}/bin/install -m 600 "$_secretFile" "$_authFile"
+    fi
+  '';
+
   home.activation.copyOpenClawBundledPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     ${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache
     ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
@@ -119,15 +131,31 @@ in
         gateway.controlUi.basePath = "/openclaw";
         gateway.controlUi.root = controlUiRoot;
 
+        gateway.port = 18789;
+        gateway.tailscale.mode = "off";
+        gateway.tailscale.resetOnExit = false;
+
         commands = {
           native = true;
           nativeSkills = true;
+          restart = true;
+          ownerDisplay = "raw";
+        };
+
+        session.dmScope = "per-channel-peer";
+
+        tools.profile = "messaging";
+
+        # openai-codex OAuth profile (populated by openclaw onboarding wizard).
+        auth.profiles."openai-codex:default" = {
+          provider = "openai-codex";
+          mode = "oauth";
         };
 
         agents.defaults = {
           skipBootstrap = true;
           model = {
-            primary = "openai-codex/gpt-5.3-codex";
+            primary = "openai-codex/gpt-5.4";
             fallbacks = [ "anthropic/claude-haiku-4-5" ];
           };
           models = {
@@ -143,7 +171,7 @@ in
             "anthropic/claude-haiku-4-5" = {
               alias = "haiku";
             };
-            "openai-codex/gpt-5.3-codex" = {
+            "openai-codex/gpt-5.4" = {
               alias = "codex";
             };
           };

@@ -28,5 +28,9 @@
     linky-prm = {
       file = ../shared/linky-prm.age;
     };
+    openclaw-codex-auth = {
+      file = ../shared/openclaw-codex-auth.age;
+      owner = "nsimon";
+    };
   };
 }
