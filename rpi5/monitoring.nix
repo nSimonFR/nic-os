@@ -137,6 +137,115 @@ let
     schemaVersion = 38;
   });
 
+  # Custom Fail2ban dashboard — uses textfile-collector metrics written by
+  # the fail2ban-metrics systemd timer defined further below.
+  # Custom Home Assistant dashboard — shows entity states from the HA Prometheus integration.
+  # Requires bearer token at /etc/home-assistant/ha-api-token (see scrape config comment).
+  haDashboard = pkgs.writeText "home-assistant.json" (builtins.toJSON {
+    title   = "Home Assistant";
+    uid     = "home-assistant-entities";
+    tags    = [ "home-assistant" "iot" ];
+    refresh = "30s";
+    time    = { from = "now-24h"; to = "now"; };
+    panels  = [
+      # Sensor count stat
+      { id = 1; type = "stat"; title = "Active Sensors";
+        gridPos = { x=0; y=0; w=4; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "none";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "count(homeassistant_sensor_state)";
+          refId = "A"; instant = true; }];
+      }
+      # All numeric sensors over time
+      { id = 2; type = "timeseries"; title = "Numeric Sensors";
+        gridPos = { x=0; y=4; w=24; h=10; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.tooltip.mode = "multi";
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "homeassistant_sensor_state";
+          legendFormat = "{{friendly_name}} ({{unit_of_measurement}})";
+          refId = "A"; }];
+      }
+      # Energy sensors (kWh) — Linky integration
+      { id = 3; type = "timeseries"; title = "Energy Consumption (kWh)";
+        gridPos = { x=0; y=14; w=24; h=10; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "homeassistant_sensor_state{unit_of_measurement=\"kWh\"}";
+          legendFormat = "{{friendly_name}}";
+          refId = "A"; }];
+      }
+      # Binary sensors table
+      { id = 4; type = "table"; title = "Binary Sensor States";
+        gridPos = { x=0; y=24; w=24; h=8; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "homeassistant_binary_sensor_state";
+          refId = "A"; instant = true; format = "table"; }];
+        transformations = [
+          { id = "filterFieldsByName";
+            options.include.names = [ "entity_id" "friendly_name" "Value" ]; }
+          { id = "organize";
+            options.renameByName = { entity_id = "Entity"; friendly_name = "Name"; Value = "State"; }; }
+        ];
+      }
+    ];
+    schemaVersion = 38;
+  });
+
+  fail2banDashboard = pkgs.writeText "fail2ban.json" (builtins.toJSON {
+    title   = "Fail2ban";
+    uid     = "fail2ban-security";
+    tags    = [ "fail2ban" "security" ];
+    refresh = "1m";
+    time    = { from = "now-24h"; to = "now"; };
+    panels  = [
+      { id = 1; type = "stat"; title = "Currently Banned";
+        gridPos = { x=0; y=0; w=6; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "background";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        fieldConfig.defaults.thresholds = {
+          mode = "absolute";
+          steps = [ { color = "green"; value = null; } { color = "orange"; value = 1; } { color = "red"; value = 5; } ];
+        };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "sum(fail2ban_banned_ips) or vector(0)"; refId = "A"; instant = true; }];
+      }
+      { id = 2; type = "stat"; title = "Total Banned (All Time)";
+        gridPos = { x=6; y=0; w=6; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "none";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "sum(fail2ban_total_banned) or vector(0)"; refId = "A"; instant = true; }];
+      }
+      { id = 3; type = "stat"; title = "Failed Attempts (Current)";
+        gridPos = { x=12; y=0; w=6; h=4; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        options.colorMode = "none";
+        options.reduceOptions.calcs = [ "lastNotNull" ];
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "sum(fail2ban_failed_current) or vector(0)"; refId = "A"; instant = true; }];
+      }
+      { id = 4; type = "timeseries"; title = "Banned IPs Over Time";
+        gridPos = { x=0; y=4; w=24; h=8; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "fail2ban_banned_ips"; legendFormat = "{{jail}}"; refId = "A"; }];
+      }
+      { id = 5; type = "timeseries"; title = "Failed Auth Rate (per 5 min)";
+        gridPos = { x=0; y=12; w=24; h=8; };
+        datasource = { type = "prometheus"; uid = promUid; };
+        targets = [{ datasource = { type = "prometheus"; uid = promUid; };
+          expr = "increase(fail2ban_total_failed[5m])"; legendFormat = "{{jail}}"; refId = "A"; }];
+      }
+    ];
+    schemaVersion = 38;
+  });
+
   dashboardsDir = pkgs.linkFarm "grafana-dashboards" [
     { name = "node-exporter.json"; path = fetchDashboard 1860  "node-exporter"; }
     { name = "postgres.json";      path = fetchDashboard 9628  "postgres";      }
@@ -147,6 +256,9 @@ let
     { name = "rpi-docker.json";    path = fetchDashboard 15120 "rpi-docker";    }
     { name = "disk.json";          path = fetchDashboard 9852  "disk";          }
     { name = "systemd.json";       path = systemdDashboard;                     }
+    { name = "grafana.json";       path = fetchDashboard 3590  "grafana";       }
+    { name = "home-assistant.json"; path = haDashboard;                          }
+    { name = "fail2ban.json";      path = fail2banDashboard;                    }
   ];
 
   alertRules = pkgs.writeText "alert-rules.yml" (builtins.toJSON {
@@ -264,6 +376,9 @@ in
     port           = prometheusPort;
     listenAddress  = "127.0.0.1";
     retentionTime  = "30d";
+    # Disable build-time config validation: bearer_token_file for Home Assistant
+    # points to a runtime secret that doesn't exist in the Nix build sandbox.
+    checkConfig    = false;
 
     globalConfig = {
       scrape_interval     = "15s";
@@ -304,11 +419,26 @@ in
         static_configs = [{ targets = [ "127.0.0.1:4000" ]; }];
         metrics_path   = "/metrics";
       }
-      # Scrutiny disk SMART
+      # Grafana self-monitoring (metrics enabled by default, no auth required on loopback)
       {
-        job_name       = "scrutiny";
-        static_configs = [{ targets = [ "127.0.0.1:9099" ]; }];
-        metrics_path   = "/api/metrics";
+        job_name       = "grafana";
+        static_configs = [{ targets = [ "127.0.0.1:${toString grafanaPort}" ]; }];
+        metrics_path   = "/metrics";
+      }
+      # Home Assistant entity states (all sensors, binary sensors, etc.)
+      # Requires a Long-Lived Access Token in bearer_token_file.
+      # To create: HA UI → Profile → Security → Long-lived access tokens → Create token
+      # Then: echo TOKEN | sudo tee /etc/home-assistant/ha-api-token && sudo chmod 640 /etc/home-assistant/ha-api-token
+      {
+        job_name          = "home_assistant";
+        static_configs    = [{ targets = [ "127.0.0.1:8123" ]; }];
+        metrics_path      = "/api/prometheus";
+        bearer_token_file = "/etc/home-assistant/ha-api-token";
+      }
+      # Docker container metrics via cAdvisor
+      {
+        job_name       = "cadvisor";
+        static_configs = [{ targets = [ "127.0.0.1:9338" ]; }];
       }
       # Blackbox HTTP probes: up/down for services without native exporters
       {
@@ -340,7 +470,8 @@ in
       enable            = true;
       port              = 9100;
       listenAddress     = "127.0.0.1";
-      enabledCollectors = [ "systemd" ]; # adds to the default set
+      enabledCollectors = [ "systemd" "textfile" ]; # adds to the default set
+      extraFlags        = [ "--collector.textfile.directory=/var/lib/node-exporter-textfile" ];
     };
 
     # Nginx via stub_status (see nginx-portal.nix for the stub_status vhost on 9080)
@@ -384,6 +515,75 @@ in
               preferred_ip_protocol: "ip4"
       '';
     };
+  };
+
+  # ── Textfile collector directory (for fail2ban and future scripts) ──────────
+  # World-readable so the node_exporter DynamicUser can read .prom files;
+  # root-owned so only privileged services can write here.
+  # Also creates the HA bearer token placeholder so prometheus config validation passes at
+  # build time (the Nix sandbox checks bearer_token_file existence).
+  # Populate with the real token to activate HA scraping (see scrape config comment).
+  systemd.tmpfiles.rules = [
+    "d /var/lib/node-exporter-textfile 0755 root root -"
+    "f /etc/home-assistant/ha-api-token 0640 root prometheus - -"
+  ];
+
+  # ── Fail2ban metrics (textfile collector) ───────────────────────────────────
+  # Runs as root to query fail2ban's unix socket, writes metrics for node_exporter.
+  systemd.services.fail2ban-metrics = {
+    description = "Export fail2ban ban statistics for node_exporter";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "fail2ban-metrics" ''
+        set -euo pipefail
+        OUTFILE=/var/lib/node-exporter-textfile/fail2ban.prom
+        TMP=$(mktemp)
+        trap 'rm -f "$TMP"' EXIT
+        {
+          printf '# HELP fail2ban_banned_ips Currently banned IPs per jail\n'
+          printf '# TYPE fail2ban_banned_ips gauge\n'
+          printf '# HELP fail2ban_total_banned Total IPs ever banned per jail (cumulative)\n'
+          printf '# TYPE fail2ban_total_banned counter\n'
+          printf '# HELP fail2ban_failed_current Current failed auth attempts per jail\n'
+          printf '# TYPE fail2ban_failed_current gauge\n'
+          printf '# HELP fail2ban_total_failed Total failed auth attempts per jail (cumulative)\n'
+          printf '# TYPE fail2ban_total_failed counter\n'
+          for jail in $(${pkgs.fail2ban}/bin/fail2ban-client status \
+                        | ${pkgs.gawk}/bin/awk -F: '/Jail list/{gsub(/[ \t]/,""); print $2}' \
+                        | tr ',' '\n'); do
+            status=$(${pkgs.fail2ban}/bin/fail2ban-client status "$jail" 2>/dev/null) || continue
+            banned=$(printf '%s' "$status"       | ${pkgs.gawk}/bin/awk '/Currently banned/{print $NF}')
+            total_banned=$(printf '%s' "$status" | ${pkgs.gawk}/bin/awk '/Total banned/{print $NF}')
+            failed=$(printf '%s' "$status"       | ${pkgs.gawk}/bin/awk '/Currently failed/{print $NF}')
+            total_failed=$(printf '%s' "$status" | ${pkgs.gawk}/bin/awk '/Total failed/{print $NF}')
+            printf 'fail2ban_banned_ips{jail="%s"} %s\n'   "$jail" "''${banned:-0}"
+            printf 'fail2ban_total_banned{jail="%s"} %s\n' "$jail" "''${total_banned:-0}"
+            printf 'fail2ban_failed_current{jail="%s"} %s\n' "$jail" "''${failed:-0}"
+            printf 'fail2ban_total_failed{jail="%s"} %s\n'   "$jail" "''${total_failed:-0}"
+          done
+        } > "$TMP"
+        mv "$TMP" "$OUTFILE"
+        chmod 644 "$OUTFILE"
+      '';
+    };
+  };
+
+  systemd.timers.fail2ban-metrics = {
+    wantedBy  = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec      = "30s";
+      OnUnitActiveSec = "1m";
+      Unit           = "fail2ban-metrics.service";
+    };
+  };
+
+  # ── cAdvisor (Docker container metrics) ────────────────────────────────────
+  # services.cadvisor is separate from prometheus.exporters.
+  # Port 8080 (default) conflicts with nginx; use 9338 instead.
+  services.cadvisor = {
+    enable        = true;
+    port          = 9338;
+    listenAddress = "127.0.0.1";
   };
 
   # ── Grafana ─────────────────────────────────────────────────────────────────
@@ -487,6 +687,9 @@ in
     description = "Prepare Grafana secret environment file";
     before      = [ "grafana.service" ];
     wantedBy    = [ "grafana.service" ];
+    # PartOf ensures this service is stopped+restarted whenever grafana is restarted,
+    # so the env file is always regenerated with a fresh token after agenix rotations.
+    partOf      = [ "grafana.service" ];
     serviceConfig = {
       Type = "oneshot";
       # (+) runs as root to read the agenix secret
