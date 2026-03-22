@@ -49,6 +49,9 @@ let
     { name = "postgres.json";      path = fetchDashboard 9628  "postgres";      }
     { name = "redis.json";         path = fetchDashboard 763   "redis";         }
     { name = "blocky.json";        path = fetchDashboard 13768 "blocky";        }
+    { name = "blackbox.json";      path = fetchDashboard 7587  "blackbox";      }
+    { name = "nginx.json";         path = fetchDashboard 12708 "nginx";         }
+    { name = "rpi-docker.json";    path = fetchDashboard 15120 "rpi-docker";    }
   ];
 
   alertRules = pkgs.writeText "alert-rules.yml" (builtins.toJSON {
