@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "WebSearch",
-      "WebFetch(domain:search.nixos.org)",
-      "WebFetch(domain:tailscale.com)"
-    ]
-  }
-}
