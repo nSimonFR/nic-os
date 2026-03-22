@@ -286,21 +286,32 @@ in
   };
 
   # Inject Telegram secrets into Grafana before it starts.
-  # The bot token comes from agenix (owned by root at this point);
-  # the chat ID is a plain integer, not sensitive.
-  # The (+) prefix runs this as root so it can read the agenix secret file.
-  systemd.services.grafana.serviceConfig.ExecStartPre = lib.mkBefore [
-    ("+${pkgs.writeShellScript "grafana-inject-telegram-secrets" ''
-      token=$(< ${config.age.secrets.telegram-bot-token.path})
-      printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
-        "$token" "${toString telegramChatId}" \
-        > /run/grafana/telegram.env
-      # Mode 640 + group grafana: root owns the file, grafana can read it.
-      chown root:grafana /run/grafana/telegram.env
-      chmod 640 /run/grafana/telegram.env
-    ''}")
-  ];
-  systemd.services.grafana.serviceConfig.EnvironmentFile = lib.mkAfter [
-    "/run/grafana/telegram.env"
-  ];
+  # systemd loads EnvironmentFile before ExecStartPre runs, so the env file
+  # must be created by a separate prerequisite oneshot service.
+  systemd.services.grafana-secrets = {
+    description = "Prepare Grafana secret environment file";
+    before      = [ "grafana.service" ];
+    wantedBy    = [ "grafana.service" ];
+    serviceConfig = {
+      Type            = "oneshot";
+      RemainAfterExit = true;
+      # (+) runs as root so we can read the agenix secret and write to /run/grafana/
+      ExecStart = "+${pkgs.writeShellScript "grafana-inject-telegram-secrets" ''
+        token=$(< ${config.age.secrets.telegram-bot-token.path})
+        mkdir -p /run/grafana
+        printf 'TELEGRAM_BOT_TOKEN=%s\nTELEGRAM_CHAT_ID=%s\n' \
+          "$token" "${toString telegramChatId}" \
+          > /run/grafana/telegram.env
+        chown root:grafana /run/grafana/telegram.env
+        chmod 640 /run/grafana/telegram.env
+      ''}";
+    };
+  };
+
+  # grafana.service reads the env file prepared by grafana-secrets.service
+  systemd.services.grafana = {
+    after   = [ "grafana-secrets.service" ];
+    requires = [ "grafana-secrets.service" ];
+    serviceConfig.EnvironmentFile = "/run/grafana/telegram.env";
+  };
 }
