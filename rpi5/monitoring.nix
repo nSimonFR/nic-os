@@ -16,8 +16,7 @@ let
     uid   = sys.argv[2]
     raw   = open(sys.argv[1]).read()
 
-    # Replace any ${DS_*} datasource placeholder with the real UID,
-    # and fix the Blocky URL variable.
+    # Replace any datasource placeholder (DS_PROM, DS_PROMETHEUS, DS_SIGNCL-PROMETHEUS, etc.)
     raw = re.sub(r'\$\{DS_[^}]+\}', uid, raw)
     raw = raw.replace("''${VAR_BLOCKY_URL}", "http://localhost:4000")
 
