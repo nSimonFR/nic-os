@@ -56,6 +56,7 @@ in
 
       environment = {
         NODE_ENV = "production";
+        HOST = "127.0.0.1";
         PORT = toString cfg.port;
         DATABASE_URL = "postgresql://ghostfolio@localhost/ghostfolio?host=/run/postgresql";
         # Ghostfolio-specific env vars
