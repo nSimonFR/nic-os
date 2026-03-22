@@ -115,6 +115,7 @@ in
     ./ghostfolio.nix
     ./scrutiny.nix
     ./monitoring
+    ./storj.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
