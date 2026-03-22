@@ -1,0 +1,50 @@
+{
+  "nodes": {
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1774106933,
+        "narHash": "sha256-byrdFSN7GTdJpRwcoLNgPZE0XK4tPmCVPJ5P4XaxQpg=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "3fb5085b76f2ecd84183d01a831bf6f0c32e0b6f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "ref": "release-25.11",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1770234344,
+        "narHash": "sha256-nfCSSyNU97XpKVPgo6mODBwrVeTOuMCl3i18QuGjpN0=",
+        "owner": "openclaw",
+        "repo": "nix-steipete-tools",
+        "rev": "6352c8247b3b889d7f17bce1f09d6c58fd34932c",
+        "type": "github"
+      },
+      "original": {
+        "narHash": "sha256-nfCSSyNU97XpKVPgo6mODBwrVeTOuMCl3i18QuGjpN0=",
+        "owner": "openclaw",
+        "repo": "nix-steipete-tools",
+        "rev": "6352c8247b3b889d7f17bce1f09d6c58fd34932c",
+        "type": "github"
+      }
+    },
+    "self": {
+      "inputs": {
+        "nixpkgs": "nixpkgs",
+        "root": "root"
+      }
+    }
+  },
+  "root": "self",
+  "version": 7
+}

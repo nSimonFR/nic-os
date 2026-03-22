@@ -13,6 +13,10 @@ let
   bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
   bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
   bundledNodeModulesSource = "${pkgs.openclaw-gateway}/lib/openclaw/node_modules";
+  # Nix store files are hard-linked (nlink>1); openclaw's openBoundaryFileSync rejects hardlinked
+  # files by default. Copy control-ui assets to writable dir (nlink=1) so the gateway can serve them.
+  controlUiSource = "${pkgs.openclaw-gateway}/lib/openclaw/dist/control-ui";
+  controlUiRoot = "${bundledRuntimeDir}/control-ui";
   customExtensionsDir = "/home/nsimon/.openclaw/custom-extensions";
   customAcpxDir = "${customExtensionsDir}/acpx";
   customAcpxSource = "${openclawSource}/extensions/acpx";
@@ -28,12 +32,15 @@ in
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
     "${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache"
     "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
+    "${pkgs.coreutils}/bin/mkdir -p ${controlUiRoot}"
     "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
     "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w \"${bundledExtensionsDir}\" 2>/dev/null || true'"
     "${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx"
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude \"acpx/\" \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${customAcpxSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \"${customAcpxSource}/\" \"${customAcpxDir}/\"; fi'"
     "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
+    # Copy control-ui to writable dir; nix store hard-links (nlink>1) are rejected by openBoundaryFileSync
+    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${controlUiSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Fu+rw \"${controlUiSource}/\" \"${controlUiRoot}/\"; fi'"
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
   home.sessionVariables = {
@@ -71,14 +78,25 @@ in
       {
         source = nClawSkillsSource;
       }
+      # nix-steipete-tools tool flakes hardcode nixpkgs@16c7794 with a narHash incompatible
+      # with Nix 2.31.2 (assertion crash in flake.cc:37). Local wrappers fix this by following
+      # our nixpkgs so the wrong inner narHash is never evaluated.
+      {
+        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/summarize";
+      }
+      {
+        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/gogcli";
+      }
+      {
+        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/goplaces";
+      }
     ];
 
     bundledPlugins = {
-      # All nix-steipete-tools bundled plugins hardcode nixpkgs@16c7794 with narHash=sha256-fFUnEYMla8b7...
-      # but Nix 2.31.2 on this system computes sha256-gmcdsc6Barl... for the same rev.
-      # Disabled until nix-steipete-tools updates its flake.lock files.
-      # Track: https://github.com/openclaw/nix-steipete-tools
+      # Disabled: bundled path uses ?dir= URL format that triggers a Nix 2.31.2 assertion crash
+      # (flake.cc:37). Re-added above as customPlugins via local narHash-compatible wrappers.
       summarize.enable = false;
+      # peekaboo/sag: macOS-only or unavailable on aarch64-linux — keep disabled.
       peekaboo.enable = false;
       sag.enable = false;
       gogcli.enable = false;
@@ -95,6 +113,11 @@ in
         gateway.bind = "loopback";
         gateway.auth.mode = "token";
         gateway.auth.token = "\${OPENCLAW_GATEWAY_TOKEN}";
+
+        # Web control UI served through nginx portal at /openclaw/ (basePath tells the gateway its prefix)
+        gateway.controlUi.enabled = true;
+        gateway.controlUi.basePath = "/openclaw";
+        gateway.controlUi.root = controlUiRoot;
 
         commands = {
           native = true;
