@@ -126,6 +126,17 @@ in
       touch /var/lib/hass/configuration.yaml
       chmod 0644 /var/lib/hass/configuration.yaml
     fi
+    # Enable the Prometheus integration (idempotent append)
+    if ! grep -q "^prometheus:" /var/lib/hass/configuration.yaml 2>/dev/null; then
+      printf '\nprometheus:\n' >> /var/lib/hass/configuration.yaml
+    fi
+    # Bind HA to localhost only — Tailscale Serve (100.x.x.x:8123) proxies external access.
+    # Using 127.0.0.1 avoids conflicting with Tailscale's port binding and is more secure.
+    if ! grep -q "server_host" /var/lib/hass/configuration.yaml 2>/dev/null; then
+      sed -i 's/^http:$/http:\n  server_host: "127.0.0.1"/' /var/lib/hass/configuration.yaml
+    fi
+    # Ensure the ha-api-token directory exists (token itself is created manually)
+    install -d -m 0755 /etc/home-assistant
     # Copy Voltalis custom component into config dir so it works inside the container
     rm -rf /var/lib/hass/custom_components/voltalis
     mkdir -p /var/lib/hass/custom_components

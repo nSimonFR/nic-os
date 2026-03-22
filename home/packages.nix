@@ -23,7 +23,7 @@
       coreutils-full
       curl
       codex
-      masterpkgs.cursor-cli
+      unstablePkgs.cursor-cli
       ctop
       direnv
       ed
