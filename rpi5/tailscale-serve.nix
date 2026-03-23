@@ -10,6 +10,7 @@ let
     { port = 3000;  backend = "http://127.0.0.1:3000";  } # grafana
     { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
     { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
+    { port = 2283;  backend = "http://127.0.0.1:2283";  } # immich photos
   ];
 
   # Publicly-accessible services (tailscale funnel).
