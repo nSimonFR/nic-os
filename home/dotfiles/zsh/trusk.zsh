@@ -1,7 +1,4 @@
-
-export HOST=fr
 export ENV=development
-export TRUSK_NPM_TOKEN=""
 
 alias dc-mongo='dc exec mongo-db mongo trusk'
 alias dc-redis='dc exec redis-server redis-cli'
