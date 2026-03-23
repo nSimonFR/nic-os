@@ -51,6 +51,11 @@ let
   '';
 in
 {
+  # Always overwrite openclaw.json on deploy rather than backing it up.
+  # The openclaw-gateway service rewrites this file at runtime, causing
+  # home-manager conflicts on every nixos-rebuild if force = false.
+  home.file.".openclaw/openclaw.json".force = true;
+
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
     "/run/agenix/openclaw-env";
   systemd.user.services.openclaw-gateway.Service.Environment = [
@@ -262,7 +267,7 @@ in
 
             # Explicit public webhook URL for Twilio signature validation
             # when OpenClaw is behind an external tunnel/proxy.
-            publicUrl = "https://${tailnetFqdn}/voice/webhook";
+            publicUrl = "https://${tailnetFqdn}:3334/voice/webhook";
 
             outbound.defaultMode = "notify";
 
