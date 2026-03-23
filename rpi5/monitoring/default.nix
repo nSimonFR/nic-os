@@ -57,10 +57,11 @@ in
 {
   imports = [
     ./prometheus.nix
-    ./alerts.nix
     ./fail2ban.nix
     ./grafana.nix
   ];
+
+  services.prometheus.ruleFiles = [ ./alert-rules.yml ];
 
   _module.args.dashboardsDir = dashboardsDir;
 }
