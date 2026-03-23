@@ -9,6 +9,7 @@ let
     { port = 9099;  backend = "http://127.0.0.1:9099";  } # scrutiny (disk health)
     { port = 3000;  backend = "http://127.0.0.1:3000";  } # grafana
     { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
+
   ];
 
   # Publicly-accessible services (tailscale funnel).
