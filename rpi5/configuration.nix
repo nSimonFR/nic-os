@@ -227,6 +227,7 @@ in
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
     hydroxide
+    immich-cli
   ];
 
   virtualisation.docker.enable = true;

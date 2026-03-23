@@ -9,4 +9,5 @@ in {
   "linky-prm.age".publicKeys          = [ nsimon-age nsimon-rsa ];
   "openclaw-codex-auth.age".publicKeys = [ nsimon-age nsimon-rsa ];
   "rclone-storj.age".publicKeys        = [ nsimon-age nsimon-rsa ];
+  "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-rsa ];
 }
