@@ -36,6 +36,15 @@ groups:
         annotations:
           summary: "Systemd unit {{ $labels.name }} is in failed state"
 
+      # ── Storj ───────────────────────────────────────────────────────────────
+      - alert: StorjSyncFailed
+        expr: node_systemd_unit_state{name="rclone-storj-sync.service", state="failed"} == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Storj sync failed — /mnt/cloud not syncing to Storj"
+
       # ── CPU / Load ──────────────────────────────────────────────────────────
       - alert: HighCpuLoad
         expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
