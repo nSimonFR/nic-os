@@ -117,7 +117,6 @@ in
     ./monitoring
     ./storj.nix
     ./filebrowser.nix
-    ./webdav.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
