@@ -157,7 +157,4 @@ in
     bearer_token_file = "/etc/home-assistant/ha-api-token";
   }];
 
-  # Home Assistant web UI
-  networking.firewall.allowedTCPPorts = [ 8123 ];
-  networking.firewall.allowedUDPPorts = [ 8123 ];
 }
