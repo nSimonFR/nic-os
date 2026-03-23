@@ -1,114 +1,6 @@
 { config, lib, pkgs, ... }:
 let
   prometheusPort = 9090;
-
-  alertRules = pkgs.writeText "alert-rules.yml" (builtins.toJSON {
-    groups = [
-      {
-        name = "system";
-        rules = [
-          # ── Availability ──────────────────────────────────────────────────
-          {
-            alert = "InstanceDown";
-            expr  = "up == 0";
-            for   = "5m";
-            labels.severity = "critical";
-            annotations.summary = "Prometheus target {{ $labels.instance }} is down";
-          }
-          {
-            alert = "ServiceDown";
-            expr  = "probe_success == 0";
-            for   = "5m";
-            labels.severity = "critical";
-            annotations.summary = "Service {{ $labels.instance }} is unreachable";
-          }
-          {
-            alert = "ServiceSlowResponse";
-            expr  = "probe_duration_seconds > 5";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "Service {{ $labels.instance }} responding slowly ({{ $value | printf \"%.1f\" }}s)";
-          }
-          # ── Systemd ───────────────────────────────────────────────────────
-          {
-            alert = "SystemdUnitFailed";
-            expr  = "node_systemd_unit_state{state=\"failed\"} == 1";
-            for   = "2m";
-            labels.severity = "critical";
-            annotations.summary = "Systemd unit {{ $labels.name }} is in failed state";
-          }
-          # ── CPU / Load ────────────────────────────────────────────────────
-          {
-            alert = "HighCpuLoad";
-            expr  = "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 85";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "High CPU on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
-          }
-          {
-            alert = "HighLoadAverage";
-            expr  = "node_load5 > 4";
-            for   = "10m";
-            labels.severity = "warning";
-            annotations.summary = "High 5m load on {{ $labels.instance }}: {{ $value | printf \"%.2f\" }}";
-          }
-          # ── Memory ───────────────────────────────────────────────────────
-          {
-            alert = "HighMemoryUsage";
-            expr  = "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "High memory on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%";
-          }
-          # ── Disk ─────────────────────────────────────────────────────────
-          {
-            alert = "DiskAlmostFull";
-            expr  = "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"})) * 100 > 85";
-            for   = "10m";
-            labels.severity = "warning";
-            annotations.summary = "Disk almost full on {{ $labels.instance }} ({{ $labels.mountpoint }}): {{ $value | printf \"%.1f\" }}%";
-          }
-          {
-            alert = "DiskCritical";
-            expr  = "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|devtmpfs|squashfs\"})) * 100 > 95";
-            for   = "5m";
-            labels.severity = "critical";
-            annotations.summary = "Disk critically full on {{ $labels.instance }} ({{ $labels.mountpoint }}): {{ $value | printf \"%.1f\" }}%";
-          }
-          {
-            alert = "FilesystemReadOnly";
-            expr  = "node_filesystem_readonly{fstype!~\"tmpfs|devtmpfs|squashfs|iso9660\"} == 1";
-            for   = "5m";
-            labels.severity = "critical";
-            annotations.summary = "Filesystem {{ $labels.mountpoint }} is read-only on {{ $labels.instance }} (possible corruption)";
-          }
-          # ── RAID ─────────────────────────────────────────────────────────
-          {
-            alert = "RAIDDegraded";
-            expr  = "node_md_disks_active < node_md_disks";
-            for   = "5m";
-            labels.severity = "critical";
-            annotations.summary = "RAID array {{ $labels.device }} is degraded: {{ $value }} of {{ printf `node_md_disks{device=\"%s\"}` $labels.device | query | first | value }} disks active";
-          }
-          # ── Temperature (RPi5) ───────────────────────────────────────────
-          {
-            alert = "HighCpuTemperature";
-            expr  = "node_hwmon_temp_celsius{chip=~\".*thermal.*\",sensor=\"temp1\"} > 75";
-            for   = "5m";
-            labels.severity = "warning";
-            annotations.summary = "RPi5 CPU temperature high: {{ $value | printf \"%.1f\" }}°C";
-          }
-          {
-            alert = "CriticalCpuTemperature";
-            expr  = "node_hwmon_temp_celsius{chip=~\".*thermal.*\",sensor=\"temp1\"} > 85";
-            for   = "2m";
-            labels.severity = "critical";
-            annotations.summary = "RPi5 CPU temperature critical: {{ $value | printf \"%.1f\" }}°C — throttling imminent";
-          }
-        ];
-      }
-    ];
-  });
 in
 {
   # ── Prometheus ──────────────────────────────────────────────────────────────
@@ -125,8 +17,6 @@ in
       scrape_interval     = "15s";
       evaluation_interval = "15s";
     };
-
-    ruleFiles = [ alertRules ];
 
     scrapeConfigs = [
       { job_name = "prometheus";
@@ -234,59 +124,10 @@ in
     listenAddress = "127.0.0.1";
   };
 
-  # ── Textfile collector ───────────────────────────────────────────────────────
+  # ── Textfile collector directory ─────────────────────────────────────────────
   # World-readable so node_exporter (DynamicUser) can read .prom files.
   # Also creates the HA bearer token placeholder (populated manually after deploy).
   systemd.tmpfiles.rules = [
-    "d /var/lib/node-exporter-textfile 0755 root root -"
     "f /etc/home-assistant/ha-api-token 0640 root prometheus - -"
   ];
-
-  # ── Fail2ban metrics (textfile collector) ───────────────────────────────────
-  # Runs as root to query fail2ban's unix socket, writes .prom for node_exporter.
-  systemd.services.fail2ban-metrics = {
-    description = "Export fail2ban ban statistics for node_exporter";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "fail2ban-metrics" ''
-        set -euo pipefail
-        OUTFILE=/var/lib/node-exporter-textfile/fail2ban.prom
-        TMP=$(mktemp)
-        trap 'rm -f "$TMP"' EXIT
-        {
-          printf '# HELP fail2ban_banned_ips Currently banned IPs per jail\n'
-          printf '# TYPE fail2ban_banned_ips gauge\n'
-          printf '# HELP fail2ban_total_banned Total IPs ever banned per jail (cumulative)\n'
-          printf '# TYPE fail2ban_total_banned counter\n'
-          printf '# HELP fail2ban_failed_current Current failed auth attempts per jail\n'
-          printf '# TYPE fail2ban_failed_current gauge\n'
-          printf '# HELP fail2ban_total_failed Total failed auth attempts per jail (cumulative)\n'
-          printf '# TYPE fail2ban_total_failed counter\n'
-          for jail in $(${pkgs.fail2ban}/bin/fail2ban-client status \
-                        | ${pkgs.gawk}/bin/awk -F: '/Jail list/{gsub(/[ \t]/,""); print $2}' \
-                        | tr ',' '\n'); do
-            status=$(${pkgs.fail2ban}/bin/fail2ban-client status "$jail" 2>/dev/null) || continue
-            banned=$(printf '%s' "$status"       | ${pkgs.gawk}/bin/awk '/Currently banned/{print $NF}')
-            total_banned=$(printf '%s' "$status" | ${pkgs.gawk}/bin/awk '/Total banned/{print $NF}')
-            failed=$(printf '%s' "$status"       | ${pkgs.gawk}/bin/awk '/Currently failed/{print $NF}')
-            total_failed=$(printf '%s' "$status" | ${pkgs.gawk}/bin/awk '/Total failed/{print $NF}')
-            printf 'fail2ban_banned_ips{jail="%s"} %s\n'     "$jail" "''${banned:-0}"
-            printf 'fail2ban_total_banned{jail="%s"} %s\n'   "$jail" "''${total_banned:-0}"
-            printf 'fail2ban_failed_current{jail="%s"} %s\n' "$jail" "''${failed:-0}"
-            printf 'fail2ban_total_failed{jail="%s"} %s\n'   "$jail" "''${total_failed:-0}"
-          done
-        } > "$TMP"
-        mv "$TMP" "$OUTFILE"
-        chmod 644 "$OUTFILE"
-      '';
-    };
-  };
-
-  systemd.timers.fail2ban-metrics = {
-    wantedBy    = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec       = "30s";
-      OnUnitActiveSec = "1m";
-    };
-  };
 }
