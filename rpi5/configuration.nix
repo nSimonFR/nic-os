@@ -116,6 +116,7 @@ in
     ./scrutiny.nix
     ./monitoring
     ./storj.nix
+    ./filebrowser.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
