@@ -289,6 +289,7 @@
               username
               nClawSkillsSource
               telegramChatId
+              tailnetFqdn
               ;
             openclawSource = inputs.openclaw-source;
             devSetup = false;

@@ -15,7 +15,8 @@ let
   # Publicly-accessible services (tailscale funnel).
   # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
   funnelEntries = [
-    { port = 443; backend = "http://127.0.0.1:18789"; } # openclaw gateway
+    { port = 443;  backend = "http://127.0.0.1:18789"; } # openclaw gateway
+    { port = 3334; backend = "http://127.0.0.1:3334";  } # voice webhook (Twilio)
   ];
 
   ts = "${pkgs.tailscale}/bin/tailscale";
