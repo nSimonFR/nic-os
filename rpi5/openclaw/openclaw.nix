@@ -232,6 +232,7 @@ in
           allowFrom = [ telegramChatId ];
           groups."*".requireMention = true;
           timeoutSeconds = 120;
+          streaming = "partial";
         };
 
         tools.sessions.visibility = "all";
