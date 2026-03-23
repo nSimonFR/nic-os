@@ -106,7 +106,7 @@ in
       { job_name       = "redis";
         static_configs = [{ targets = [ "127.0.0.1:9121" ]; }]; }
       # Blackbox HTTP probe for Ghostfolio
-      { job_name       = "blackbox";
+      { job_name       = "blackbox-ghostfolio";
         metrics_path   = "/probe";
         params         = { module = [ "http_2xx" ]; };
         static_configs = [{ targets = [ "http://127.0.0.1:${toString cfg.port}" ]; }];
