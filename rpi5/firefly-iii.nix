@@ -110,7 +110,7 @@
 
   # ── Prometheus blackbox probes ───────────────────────────────────────
   services.prometheus.scrapeConfigs = [{
-    job_name       = "blackbox";
+    job_name       = "blackbox-firefly";
     metrics_path   = "/probe";
     params         = { module = [ "http_2xx" ]; };
     static_configs = [{ targets = [
