@@ -83,8 +83,6 @@
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
       rpiconfig = "rpi5";
-      tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-      voiceWebhookPort = 3334;
       telegramChatId = 82389391;
       # Use direct working-tree path so local/untracked skill changes are visible immediately.
       nClawSkillsSource = "path:/home/nsimon/nic-os";
@@ -110,9 +108,11 @@
 
       nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
         specialArgs = {
-          inherit inputs outputs username telegramChatId tailnetFqdn voiceWebhookPort;
+          inherit inputs outputs username telegramChatId;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
+          tailnetFqdn = "rpi5.gate-mintaka.ts.net";
+          voiceWebhookPort = 3334;
         };
         modules = [
           (
@@ -215,9 +215,9 @@
                   username
                   nClawSkillsSource
                   telegramChatId
-                  tailnetFqdn
-                  voiceWebhookPort
                   ;
+                tailnetFqdn = "rpi5.gate-mintaka.ts.net";
+                voiceWebhookPort = 3334;
                 openclawSource = inputs.openclaw-source;
                 devSetup = false;
                 unstablePkgs = import nixpkgs-unstable {
@@ -291,9 +291,9 @@
               username
               nClawSkillsSource
               telegramChatId
-              tailnetFqdn
-              voiceWebhookPort
               ;
+            tailnetFqdn = "rpi5.gate-mintaka.ts.net";
+            voiceWebhookPort = 3334;
             openclawSource = inputs.openclaw-source;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
