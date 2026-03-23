@@ -114,7 +114,7 @@ in
     ./blocky.nix
     ./ghostfolio.nix
     ./scrutiny.nix
-    ./monitoring.nix
+    ./monitoring
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";

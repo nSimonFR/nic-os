@@ -506,11 +506,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1772726555,
-        "narHash": "sha256-0mSC177N8wU1CRpvdGy8KaL/kN3PvlmsMzL2RlWdXeI=",
+        "lastModified": 1773851886,
+        "narHash": "sha256-+3ygZuf5K8mtSGMMEZ/h+vxGvXCu1CmiB+531KMagH8=",
         "owner": "openclaw",
         "repo": "nix-openclaw",
-        "rev": "faa5c60c7fc304e80612dcafb9e0825d3eb02203",
+        "rev": "64d410666821866c565e048a4d07d6cf5d8e494e",
         "type": "github"
       },
       "original": {
@@ -526,11 +526,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1772109967,
-        "narHash": "sha256-0oWZtmVJcI7Mc6nAXf7XM4FHLJv+H1X/8Gh31uJCyJ0=",
+        "lastModified": 1773561580,
+        "narHash": "sha256-wT0bKTp45YnMkc4yXQvk943Zz/rksYiIjEXGdWzxnic=",
         "owner": "openclaw",
         "repo": "nix-steipete-tools",
-        "rev": "2b97c49e03657af1574aee5a34f57b38fba90035",
+        "rev": "cd4c429ff3b3aaef9f92e59812cf2baf5704b86f",
         "type": "github"
       },
       "original": {
@@ -630,22 +630,6 @@
       "original": {
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
-        "type": "github"
-      }
-    },
-    "nixpkgs-master": {
-      "locked": {
-        "lastModified": 1774217135,
-        "narHash": "sha256-AnIRwemxR1wrOlU+GhAIaT4paM3zmb4ETHLgoVEuE/c=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "0bb8cd016d9a7b61c8d362b34538763d8f55d055",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "master",
-        "repo": "nixpkgs",
         "type": "github"
       }
     },
@@ -812,7 +796,6 @@
         "nix-openclaw": "nix-openclaw",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_7",
-        "nixpkgs-master": "nixpkgs-master",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "openclaw-source": "openclaw-source",
         "ragenix": "ragenix",

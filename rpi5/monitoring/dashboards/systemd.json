@@ -1,0 +1,333 @@
+{
+    "panels": [
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "thresholds": {
+                        "mode": "absolute",
+                        "steps": [
+                            {
+                                "color": "green",
+                                "value": null
+                            },
+                            {
+                                "color": "red",
+                                "value": 1
+                            }
+                        ]
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 0,
+                "y": 0
+            },
+            "id": 1,
+            "options": {
+                "colorMode": "background",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "PBFA97CFB590B2093"
+                    },
+                    "expr": "count(node_systemd_unit_state{state=\"failed\"} == 1) or vector(0)",
+                    "instant": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Failed Services",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "green",
+                        "mode": "fixed"
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 4,
+                "y": 0
+            },
+            "id": 2,
+            "options": {
+                "colorMode": "background",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "PBFA97CFB590B2093"
+                    },
+                    "expr": "count(node_systemd_unit_state{state=\"active\"} == 1)",
+                    "instant": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Active Services",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+            },
+            "fieldConfig": {
+                "defaults": {
+                    "color": {
+                        "fixedColor": "blue",
+                        "mode": "fixed"
+                    }
+                }
+            },
+            "gridPos": {
+                "h": 4,
+                "w": 4,
+                "x": 8,
+                "y": 0
+            },
+            "id": 3,
+            "options": {
+                "colorMode": "background",
+                "reduceOptions": {
+                    "calcs": [
+                        "lastNotNull"
+                    ]
+                }
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "PBFA97CFB590B2093"
+                    },
+                    "expr": "count(node_systemd_unit_state{state=\"inactive\"} == 1)",
+                    "instant": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Inactive Services",
+            "type": "stat"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+            },
+            "fieldConfig": {
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "State"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "red",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "gridPos": {
+                "h": 6,
+                "w": 24,
+                "x": 0,
+                "y": 4
+            },
+            "id": 4,
+            "options": {
+                "sortBy": [
+                    {
+                        "desc": false,
+                        "displayName": "Unit"
+                    }
+                ]
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "PBFA97CFB590B2093"
+                    },
+                    "expr": "node_systemd_unit_state{state=\"failed\"} == 1",
+                    "format": "table",
+                    "instant": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "Failed Services",
+            "transformations": [
+                {
+                    "id": "filterFieldsByName",
+                    "options": {
+                        "include": {
+                            "names": [
+                                "name",
+                                "type",
+                                "Value"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "renameByName": {
+                            "Value": "State",
+                            "name": "Unit",
+                            "type": "Type"
+                        }
+                    }
+                }
+            ],
+            "type": "table"
+        },
+        {
+            "datasource": {
+                "type": "prometheus",
+                "uid": "PBFA97CFB590B2093"
+            },
+            "fieldConfig": {
+                "overrides": [
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "active"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "green",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    },
+                    {
+                        "matcher": {
+                            "id": "byName",
+                            "options": "failed"
+                        },
+                        "properties": [
+                            {
+                                "id": "custom.displayMode",
+                                "value": "color-background"
+                            },
+                            {
+                                "id": "color",
+                                "value": {
+                                    "fixedColor": "red",
+                                    "mode": "fixed"
+                                }
+                            }
+                        ]
+                    }
+                ]
+            },
+            "gridPos": {
+                "h": 16,
+                "w": 24,
+                "x": 0,
+                "y": 10
+            },
+            "id": 5,
+            "options": {
+                "sortBy": [
+                    {
+                        "desc": false,
+                        "displayName": "State"
+                    }
+                ]
+            },
+            "targets": [
+                {
+                    "datasource": {
+                        "type": "prometheus",
+                        "uid": "PBFA97CFB590B2093"
+                    },
+                    "expr": "node_systemd_unit_state{type=\"service\"} == 1",
+                    "format": "table",
+                    "instant": true,
+                    "refId": "A"
+                }
+            ],
+            "title": "All Service Units",
+            "transformations": [
+                {
+                    "id": "filterFieldsByName",
+                    "options": {
+                        "include": {
+                            "names": [
+                                "name",
+                                "state",
+                                "Value"
+                            ]
+                        }
+                    }
+                },
+                {
+                    "id": "organize",
+                    "options": {
+                        "renameByName": {
+                            "name": "Unit",
+                            "state": "State"
+                        }
+                    }
+                }
+            ],
+            "type": "table"
+        }
+    ],
+    "refresh": "30s",
+    "schemaVersion": 38,
+    "tags": [
+        "systemd",
+        "linux"
+    ],
+    "time": {
+        "from": "now-1h",
+        "to": "now"
+    },
+    "title": "Systemd Services",
+    "uid": "systemd-services"
+}
