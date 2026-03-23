@@ -2,7 +2,7 @@
   config,
   pkgs,
   inputs,
-  masterpkgs,
+  unstablePkgs,
   ...
 }:
 let
@@ -28,7 +28,7 @@ in
     beeper
     cliphist
     libnotify
-    masterpkgs.code-cursor
+    unstablePkgs.code-cursor
     dconf
     docker
     dualsensectl

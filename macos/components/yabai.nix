@@ -1,13 +1,13 @@
 { pkgs, inputs, ... }:
 let
-  masterpkgs = import inputs.nixpkgs-master {
+  unstablePkgs = import inputs.nixpkgs-unstable {
     inherit (pkgs) system;
     config.allowUnfree = true;
   };
 in
 {
   enable = true;
-  package = masterpkgs.yabai;
+  package = unstablePkgs.yabai;
   enableScriptingAddition = true;
   config = {
     layout = "stack";
