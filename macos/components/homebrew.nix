@@ -62,6 +62,7 @@
     "sikarugir"
     "slack"
     "steam"
+    "tailscale-app"
     "stolendata-mpv"
     "spotify"
     "telegram"
