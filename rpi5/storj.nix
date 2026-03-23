@@ -49,8 +49,23 @@ let
 
     exec ${pkgs.rclone}/bin/rclone copy ${mountPoint} storj:rpi5-cloud \
       --config /run/agenix/rclone-storj \
-      --transfers 4 \
+      --transfers 2 \
+      --checkers 4 \
       --create-empty-src-dirs \
+      --max-size 25G \
+      --exclude "lost+found/**"
+  '';
+
+  # Weekly sync to remove remote files that no longer exist locally.
+  # Runs as a separate low-frequency job so a local accident has time to be
+  # noticed before it propagates to Storj.
+  weeklySyncScript = pkgs.writeShellScript "rclone-storj-weekly-sync" ''
+    set -euo pipefail
+    exec ${pkgs.rclone}/bin/rclone sync ${mountPoint} storj:rpi5-cloud \
+      --config /run/agenix/rclone-storj \
+      --transfers 2 \
+      --checkers 4 \
+      --delete-after \
       --max-size 25G \
       --exclude "lost+found/**"
   '';
@@ -94,6 +109,28 @@ in
     timerConfig = {
       OnBootSec       = "5min";
       OnUnitActiveSec = "5min";
+    };
+  };
+
+  # Weekly reconciliation — deletes remote files removed locally.
+  systemd.services.rclone-storj-weekly-sync = {
+    description = "Sync /mnt/cloud to Storj (delete orphaned remote files)";
+    after        = [ "network-online.target" "storj-local-mount.service" ];
+    wants        = [ "network-online.target" ];
+    requires     = [ "storj-local-mount.service" ];
+
+    serviceConfig = {
+      Type      = "oneshot";
+      ExecStart = weeklySyncScript;
+    };
+  };
+
+  systemd.timers.rclone-storj-weekly-sync = {
+    description = "Sync /mnt/cloud to Storj every Wednesday at 03:00";
+    wantedBy    = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "Wed *-*-* 03:00:00";
+      Persistent = true;
     };
   };
 }
