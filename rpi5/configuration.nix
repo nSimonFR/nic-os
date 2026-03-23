@@ -274,16 +274,25 @@ in
       fsType = "ext4";
       options = [ "noatime" "nofail" "x-systemd.device-timeout=30s" ];
     };
-    # Bind /home/state/var-lib → /var/lib for Docker state
-    # neededForBoot = false: prevent NixOS from auto-adding x-initrd.mount.
-    # /home (RAID-1) is only available in stage-2, so this bind must be stage-2 only.
-    "/var/lib" = {
-      device = "/home/state/var-lib";
-      fsType = "none";
-      options = [ "bind" "nofail" ];
-      neededForBoot = false;
-    };
   };
+
+  # Bind /home/state/var-lib → /var/lib for Docker state.
+  # Deliberately NOT in fileSystems: NixOS unconditionally adds x-initrd.mount
+  # to any /var/* filesystem regardless of neededForBoot = false, which causes
+  # stage-1 to call waitDevice() on /mnt-root/home/state/var-lib (20 s timeout)
+  # and then fail → kernel panic. A systemd .mount unit is invisible to stage-1.
+  systemd.mounts = [
+    {
+      where = "/var/lib";
+      what = "/home/state/var-lib";
+      type = "none";
+      options = "bind";
+      # home.mount is the systemd unit auto-generated from fileSystems."/home"
+      after = [ "home.mount" ];
+      bindsTo = [ "home.mount" ];
+      wantedBy = [ "local-fs.target" ];
+    }
+  ];
 
   swapDevices = [
     {
