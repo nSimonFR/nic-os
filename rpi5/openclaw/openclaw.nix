@@ -13,6 +13,10 @@ let
   bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
   bundledExtensionsSource = "${pkgs.openclaw-gateway}/lib/openclaw/extensions";
   bundledNodeModulesSource = "${pkgs.openclaw-gateway}/lib/openclaw/node_modules";
+  # The bundled core skills live inside the openclaw npm package under the pnpm store.
+  # resolveBundledSkillsDir() auto-detection fails in our nix layout; use the env var override.
+  # We create a stable symlink so the path survives pkg updates without changing the env var.
+  bundledSkillsLink = "${bundledRuntimeDir}/skills";
   # Nix store files are hard-linked (nlink>1); openclaw's openBoundaryFileSync rejects hardlinked
   # files by default. Copy control-ui assets to writable dir (nlink=1) so the gateway can serve them.
   controlUiSource = "${pkgs.openclaw-gateway}/lib/openclaw/dist/control-ui";
@@ -26,6 +30,7 @@ in
     "/run/agenix/openclaw-env";
   systemd.user.services.openclaw-gateway.Service.Environment = [
     "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}"
+    "OPENCLAW_BUNDLED_SKILLS_DIR=${bundledSkillsLink}"
     "OPENCLAW_NO_RESPAWN=1"
     "NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache"
   ];
@@ -39,22 +44,26 @@ in
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude \"acpx/\" \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${customAcpxSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \"${customAcpxSource}/\" \"${customAcpxDir}/\"; fi'"
     "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
+    "${pkgs.bash}/bin/bash -eu -c '_s=$(${pkgs.coreutils}/bin/ls -d \"${bundledNodeModulesSource}/.pnpm/openclaw@\"*/node_modules/openclaw/skills 2>/dev/null | ${pkgs.coreutils}/bin/head -1); [ -n \"$_s\" ] && [ -d \"$_s\" ] && ${pkgs.coreutils}/bin/ln -sfn \"$_s\" \"${bundledSkillsLink}\"'"
     # Copy control-ui to writable dir; nix store hard-links (nlink>1) are rejected by openBoundaryFileSync
     "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${controlUiSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Fu+rw \"${controlUiSource}/\" \"${controlUiRoot}/\"; fi'"
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
   home.sessionVariables = {
     OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+    OPENCLAW_BUNDLED_SKILLS_DIR = bundledSkillsLink;
     OPENCLAW_NO_RESPAWN = "1";
     NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
   };
   programs.zsh.sessionVariables = {
     OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
+    OPENCLAW_BUNDLED_SKILLS_DIR = bundledSkillsLink;
     OPENCLAW_NO_RESPAWN = "1";
     NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
   };
   programs.zsh.envExtra = ''
     export OPENCLAW_BUNDLED_PLUGINS_DIR="${bundledExtensionsDir}"
+    export OPENCLAW_BUNDLED_SKILLS_DIR="${bundledSkillsLink}"
     export OPENCLAW_NO_RESPAWN=1
     export NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
     [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
@@ -72,6 +81,21 @@ in
     fi
   '';
 
+  # Openclaw 2026.3.14+ rejects skill SKILL.md paths whose realpath escapes the workspace root.
+  # Home-manager places these as symlinks → /nix/store/..., which fail the security check.
+  # Fix: replace each symlink with a real copy so realpath stays inside the workspace.
+  home.activation.fixOpenClawSkillSymlinks = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    _skillsDir="/home/nsimon/.openclaw/workspace/skills"
+    if [ -d "$_skillsDir" ]; then
+      while IFS= read -r _link; do
+        _target=$(${pkgs.coreutils}/bin/readlink -f "$_link")
+        if [ -f "$_target" ]; then
+          ${pkgs.coreutils}/bin/cp "$_target" "$_link.tmp" && ${pkgs.coreutils}/bin/mv "$_link.tmp" "$_link"
+        fi
+      done < <(${pkgs.findutils}/bin/find "$_skillsDir" -name "SKILL.md" -type l)
+    fi
+  '';
+
   home.activation.copyOpenClawBundledPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     ${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache
     ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
@@ -80,6 +104,8 @@ in
     if [ -d "${bundledExtensionsSource}" ]; then
       ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude "acpx/" "${bundledExtensionsSource}/" "${bundledExtensionsDir}/"
     fi
+    _s=$(${pkgs.coreutils}/bin/ls -d "${bundledNodeModulesSource}/.pnpm/openclaw@"*/node_modules/openclaw/skills 2>/dev/null | ${pkgs.coreutils}/bin/head -1)
+    [ -n "$_s" ] && [ -d "$_s" ] && ${pkgs.coreutils}/bin/ln -sfn "$_s" "${bundledSkillsLink}"
   '';
 
   programs.openclaw = {
@@ -144,7 +170,11 @@ in
 
         session.dmScope = "per-channel-peer";
 
-        tools.profile = "messaging";
+        # "coding" profile includes exec + process (messaging profile does not).
+        # tools.allow was removed: an explicit allowlist acts as a filter that would
+        # block all messaging tools while exec/process weren't in the messaging profile,
+        # resulting in zero registered function-calling tools.
+        tools.profile = "coding";
 
         # openai-codex OAuth profile (populated by openclaw onboarding wizard).
         auth.profiles."openai-codex:default" = {
