@@ -41,7 +41,7 @@ in
 
     serviceConfig = {
       Type      = "oneshot";
-      ExecStart = "${pkgs.rclone}/bin/rclone sync ${mountPoint} storj: --config /run/agenix/rclone-storj --transfers 4 --create-empty-src-dirs --max-size 25G";
+      ExecStart = "${pkgs.rclone}/bin/rclone sync ${mountPoint} storj: --config /run/agenix/rclone-storj --transfers 4 --create-empty-src-dirs --max-size 25G --exclude lost+found/**";
     };
   };
 

@@ -26,7 +26,7 @@ in
       { job_name       = "cadvisor";
         static_configs = [{ targets = [ "127.0.0.1:9338" ]; }]; }
       # Blackbox HTTP probe for openclaw (no dedicated service .nix)
-      { job_name       = "blackbox";
+      { job_name       = "blackbox-openclaw";
         metrics_path   = "/probe";
         params         = { module = [ "http_2xx" ]; };
         static_configs = [{ targets = [ "http://127.0.0.1:18789/health" ]; }];
