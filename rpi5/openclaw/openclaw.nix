@@ -24,6 +24,30 @@ let
   customExtensionsDir = "/home/nsimon/.openclaw/custom-extensions";
   customAcpxDir = "${customExtensionsDir}/acpx";
   customAcpxSource = "${openclawSource}/extensions/acpx";
+  # Single setup script shared by both ExecStartPre (service start) and the activation hook (rebuild).
+  # Nix store files are hard-linked (nlink>1); openclaw's openBoundaryFileSync rejects them, so
+  # extensions and control-ui are rsynced to writable dirs on every start/rebuild.
+  setupScript = pkgs.writeShellScript "openclaw-setup" ''
+    set -eu
+    ${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache
+    ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
+    ${pkgs.coreutils}/bin/mkdir -p ${controlUiRoot}
+    ${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}
+    ${pkgs.coreutils}/bin/chmod -R u+w ${bundledExtensionsDir} 2>/dev/null || true
+    ${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx
+    if [ -d ${bundledExtensionsSource} ]; then
+      ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude "acpx/" "${bundledExtensionsSource}/" "${bundledExtensionsDir}/"
+    fi
+    if [ -d ${customAcpxSource} ]; then
+      ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r "${customAcpxSource}/" "${customAcpxDir}/"
+    fi
+    ${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}
+    _s=$(${pkgs.coreutils}/bin/ls -d "${bundledNodeModulesSource}/.pnpm/openclaw@"*/node_modules/openclaw/skills 2>/dev/null | ${pkgs.coreutils}/bin/head -1)
+    [ -n "$_s" ] && [ -d "$_s" ] && ${pkgs.coreutils}/bin/ln -sfn "$_s" "${bundledSkillsLink}"
+    if [ -d ${controlUiSource} ]; then
+      ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Fu+rw "${controlUiSource}/" "${controlUiRoot}/"
+    fi
+  '';
 in
 {
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile =
@@ -34,33 +58,8 @@ in
     "OPENCLAW_NO_RESPAWN=1"
     "NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache"
   ];
-  systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
-    "${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache"
-    "${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}"
-    "${pkgs.coreutils}/bin/mkdir -p ${controlUiRoot}"
-    "${pkgs.coreutils}/bin/mkdir -p ${customAcpxDir}"
-    "${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w \"${bundledExtensionsDir}\" 2>/dev/null || true'"
-    "${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx"
-    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${bundledExtensionsSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude \"acpx/\" \"${bundledExtensionsSource}/\" \"${bundledExtensionsDir}/\"; fi'"
-    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${customAcpxSource}\" ]; then ${pkgs.rsync}/bin/rsync -a --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \"${customAcpxSource}/\" \"${customAcpxDir}/\"; fi'"
-    "${pkgs.coreutils}/bin/ln -sfn ${bundledNodeModulesSource} ${bundledNodeModulesLink}"
-    "${pkgs.bash}/bin/bash -eu -c '_s=$(${pkgs.coreutils}/bin/ls -d \"${bundledNodeModulesSource}/.pnpm/openclaw@\"*/node_modules/openclaw/skills 2>/dev/null | ${pkgs.coreutils}/bin/head -1); [ -n \"$_s\" ] && [ -d \"$_s\" ] && ${pkgs.coreutils}/bin/ln -sfn \"$_s\" \"${bundledSkillsLink}\"'"
-    # Copy control-ui to writable dir; nix store hard-links (nlink>1) are rejected by openBoundaryFileSync
-    "${pkgs.bash}/bin/bash -eu -c 'if [ -d \"${controlUiSource}\" ]; then ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Fu+rw \"${controlUiSource}/\" \"${controlUiRoot}/\"; fi'"
-  ];
+  systemd.user.services.openclaw-gateway.Service.ExecStartPre = [ "${setupScript}" ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
-  home.sessionVariables = {
-    OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
-    OPENCLAW_BUNDLED_SKILLS_DIR = bundledSkillsLink;
-    OPENCLAW_NO_RESPAWN = "1";
-    NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
-  };
-  programs.zsh.sessionVariables = {
-    OPENCLAW_BUNDLED_PLUGINS_DIR = bundledExtensionsDir;
-    OPENCLAW_BUNDLED_SKILLS_DIR = bundledSkillsLink;
-    OPENCLAW_NO_RESPAWN = "1";
-    NODE_COMPILE_CACHE = "/var/tmp/openclaw-compile-cache";
-  };
   programs.zsh.envExtra = ''
     export OPENCLAW_BUNDLED_PLUGINS_DIR="${bundledExtensionsDir}"
     export OPENCLAW_BUNDLED_SKILLS_DIR="${bundledSkillsLink}"
@@ -97,15 +96,7 @@ in
   '';
 
   home.activation.copyOpenClawBundledPlugins = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    ${pkgs.coreutils}/bin/mkdir -p /var/tmp/openclaw-compile-cache
-    ${pkgs.coreutils}/bin/mkdir -p ${bundledExtensionsDir}
-    ${pkgs.bash}/bin/bash -c '${pkgs.coreutils}/bin/chmod -R u+w "${bundledExtensionsDir}" 2>/dev/null || true'
-    ${pkgs.coreutils}/bin/rm -rf ${bundledExtensionsDir}/acpx || true
-    if [ -d "${bundledExtensionsSource}" ]; then
-      ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r --exclude "acpx/" "${bundledExtensionsSource}/" "${bundledExtensionsDir}/"
-    fi
-    _s=$(${pkgs.coreutils}/bin/ls -d "${bundledNodeModulesSource}/.pnpm/openclaw@"*/node_modules/openclaw/skills 2>/dev/null | ${pkgs.coreutils}/bin/head -1)
-    [ -n "$_s" ] && [ -d "$_s" ] && ${pkgs.coreutils}/bin/ln -sfn "$_s" "${bundledSkillsLink}"
+    ${setupScript}
   '';
 
   programs.openclaw = {
