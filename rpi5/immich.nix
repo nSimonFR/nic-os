@@ -1,4 +1,4 @@
-{ ... }:
+{ pkgs, ... }:
 {
   services.immich = {
     enable        = true;
@@ -13,7 +13,14 @@
   # after filebrowser.nix) so immich can read/write its mediaLocation inside /mnt/cloud.
   systemd.tmpfiles.rules = [ "z /mnt/cloud 0755 - - -" ];
 
-  # Ensure Immich starts after /mnt/cloud is loop-mounted (mediaLocation lives there)
-  systemd.services.immich-server.after = [ "storj-local-mount.service" ];
-  systemd.services.immich-server.wants = [ "storj-local-mount.service" ];
+  # Ensure Immich starts after /mnt/cloud is loop-mounted (mediaLocation lives there).
+  # ExecStartPre chowns the mediaLocation to the immich user so it can create its
+  # subdirectory structure (the directory is root:root after mkfs/storj restore).
+  systemd.services.immich-server = {
+    after = [ "storj-local-mount.service" ];
+    wants = [ "storj-local-mount.service" ];
+    serviceConfig.ExecStartPre = [
+      "+${pkgs.coreutils}/bin/chown immich:immich /mnt/cloud/Photos"
+    ];
+  };
 }
