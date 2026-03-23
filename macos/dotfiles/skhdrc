@@ -1,5 +1,5 @@
 # open terminal
-cmd + shift - 0x32 : /usr/bin/open -na /Applications/Ghostty.app
+cmd + shift - 0x32 : osascript -e 'tell application "Ghostty" to activate' -e 'tell application "System Events" to keystroke "n" using command down'
 
 # focus window
 ctrl - left  : yabai -m window --focus west
