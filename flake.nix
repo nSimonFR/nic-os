@@ -112,7 +112,7 @@
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-          voiceWebhookPort = 3334;
+          voiceWebhookPort = 8443;
         };
         modules = [
           ./rpi5/overlays.nix
@@ -132,7 +132,7 @@
                   telegramChatId
                   ;
                 tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-                voiceWebhookPort = 3334;
+                voiceWebhookPort = 8443;
                 openclawSource = inputs.openclaw-source;
                 devSetup = false;
                 unstablePkgs = import nixpkgs-unstable {
@@ -208,7 +208,7 @@
               telegramChatId
               ;
             tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-            voiceWebhookPort = 3334;
+            voiceWebhookPort = 8443;
             openclawSource = inputs.openclaw-source;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
