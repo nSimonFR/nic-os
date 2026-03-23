@@ -117,6 +117,7 @@ in
     ./monitoring
     ./storj.nix
     ./filebrowser.nix
+    ./immich.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
