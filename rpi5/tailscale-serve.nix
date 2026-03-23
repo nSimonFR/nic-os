@@ -43,10 +43,12 @@ in
       ${ts} serve reset || true
       ${serveUp}
       ${funnelUp}
+      ${ts} drive share cloud /mnt/cloud || true
     '';
     preStop = ''
       ${serveDown}
       ${funnelDown}
+      ${ts} drive unshare cloud || true
     '';
   };
 }
