@@ -108,6 +108,22 @@
     ];
   };
 
+  # ── Prometheus blackbox probes ───────────────────────────────────────
+  services.prometheus.scrapeConfigs = [{
+    job_name       = "blackbox";
+    metrics_path   = "/probe";
+    params         = { module = [ "http_2xx" ]; };
+    static_configs = [{ targets = [
+      "http://127.0.0.1:8082"   # firefly-iii
+      "http://127.0.0.1:8081"   # truelayer2firefly
+    ]; }];
+    relabel_configs = [
+      { source_labels = [ "__address__" ]; target_label = "__param_target"; }
+      { source_labels = [ "__param_target" ]; target_label = "instance"; }
+      { target_label = "__address__"; replacement = "127.0.0.1:9115"; }
+    ];
+  }];
+
   # Ensure data directories exist for Firefly III and TrueLayer
   system.activationScripts.firefly-iii-dirs = ''
     mkdir -p /var/lib/firefly-iii

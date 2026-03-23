@@ -32,6 +32,19 @@
     };
   };
 
+  # Nginx exporter reads stub_status and exposes Prometheus metrics
+  services.prometheus.exporters.nginx = {
+    enable        = true;
+    port          = 9113;
+    listenAddress = "127.0.0.1";
+    scrapeUri     = "http://127.0.0.1:9080/nginx_status";
+  };
+
+  services.prometheus.scrapeConfigs = [{
+    job_name       = "nginx";
+    static_configs = [{ targets = [ "127.0.0.1:9113" ]; }];
+  }];
+
   services.nginx.virtualHosts."portal" = {
     listen = [{ addr = "127.0.0.1"; port = 8080; }];
 

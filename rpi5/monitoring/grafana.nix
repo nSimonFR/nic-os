@@ -89,6 +89,12 @@ in
     };
   };
 
+  # ── Prometheus scrape ────────────────────────────────────────────────
+  services.prometheus.scrapeConfigs = [{
+    job_name       = "grafana";
+    static_configs = [{ targets = [ "127.0.0.1:${toString grafanaPort}" ]; }];
+  }];
+
   # Inject Telegram secrets into Grafana before it starts.
   # Without RemainAfterExit the service goes inactive after each run;
   # partOf ensures it is stopped+restarted whenever grafana (re)starts,
