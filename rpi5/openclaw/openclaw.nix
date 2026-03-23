@@ -59,10 +59,8 @@ in
 
   systemd.user.services.openclaw-gateway.Service.EnvironmentFile = [
     "/run/agenix/openclaw-env"
-    # Runtime env file containing OPENAI_API_KEY extracted from the Codex OAuth
-    # auth profile (token is rotated by openclaw; regenerated on each start).
-    # Leading '-' makes it optional so a missing file is not fatal.
-    "-%t/openclaw-openai.env"
+    "/run/agenix/elevenlabs-api-key"
+    "/run/agenix/openai-api-key"
   ];
   systemd.user.services.openclaw-gateway.Service.Environment = [
     "OPENCLAW_BUNDLED_PLUGINS_DIR=${bundledExtensionsDir}"
@@ -72,24 +70,6 @@ in
   ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [
     "${setupScript}"
-    # Extract the current Codex OAuth access token into a runtime env file so
-    # the voice-call streaming plugin can use it as OPENAI_API_KEY.
-    (pkgs.writeShellScript "openclaw-extract-openai-key" ''
-      set -eu
-      _authFile="/home/nsimon/.openclaw/agents/main/agent/auth-profiles.json"
-      _envFile="''${XDG_RUNTIME_DIR}/openclaw-openai.env"
-      if [ -r "$_authFile" ]; then
-        _token=$(${pkgs.jq}/bin/jq -r '.profiles["openai-codex:default"].access // empty' "$_authFile" 2>/dev/null || true)
-        if [ -n "$_token" ]; then
-          printf 'OPENAI_API_KEY=%s\n' "$_token" > "$_envFile"
-          ${pkgs.coreutils}/bin/chmod 600 "$_envFile"
-        else
-          ${pkgs.coreutils}/bin/touch "$_envFile"
-        fi
-      else
-        ${pkgs.coreutils}/bin/touch "$_envFile"
-      fi
-    '')
   ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
   programs.zsh.envExtra = ''
@@ -100,25 +80,6 @@ in
     [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
     [ -n "$ANTHROPIC_API_KEY" ] && export CLAUDE_CODE_OAUTH_TOKEN="$ANTHROPIC_API_KEY"
   '';
-  # Seed the OPENAI_API_KEY runtime env file from the Codex OAuth auth profile.
-  # This runs on every deploy so the token is fresh at service start.
-  # ExecStartPre keeps it updated on subsequent restarts.
-  home.activation.seedOpenAIEnv = lib.hm.dag.entryBefore [ "reloadSystemd" ] ''
-    _authFile="/home/nsimon/.openclaw/agents/main/agent/auth-profiles.json"
-    _envFile="/run/user/1001/openclaw-openai.env"
-    if [ -r "$_authFile" ]; then
-      _token=$(${pkgs.jq}/bin/jq -r '.profiles["openai-codex:default"].access // empty' "$_authFile" 2>/dev/null || true)
-      if [ -n "$_token" ]; then
-        printf 'OPENAI_API_KEY=%s\n' "$_token" > "$_envFile"
-        chmod 600 "$_envFile"
-      else
-        touch "$_envFile"
-      fi
-    else
-      touch "$_envFile"
-    fi
-  '';
-
   # Restore OpenAI Codex OAuth auth profile on fresh install (only if missing).
   # openclaw manages token rotation itself; we never overwrite an existing file.
   home.activation.restoreOpenClawCodexAuth = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -317,11 +278,20 @@ in
 
             outbound.defaultMode = "notify";
 
-            # Real-time audio streaming via OpenAI Realtime API (STT/TTS).
-            # OPENAI_API_KEY is injected at service start from the Codex OAuth profile.
+            # Real-time audio streaming via OpenAI Realtime API (STT) + ElevenLabs Flash (TTS).
+            # OPENAI_API_KEY injected at service start from the Codex OAuth profile.
+            # ELEVENLABS_API_KEY injected from /run/agenix/elevenlabs-api-key.
             streaming = {
               enabled = true;
               openaiApiKey = "\${OPENAI_API_KEY}";
+            };
+
+            tts = {
+              provider = "elevenlabs";
+              elevenlabs = {
+                apiKey = "\${ELEVENLABS_API_KEY}";
+                voiceId = "EXAVITQu4vr4xnSDxMaL"; # Sarah - Mature, Reassuring, Confident
+              };
             };
 
             # Inbound calls (secure allowlist mode)

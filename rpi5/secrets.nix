@@ -40,5 +40,13 @@
       file = ./secrets/immich-api-key.age;
       owner = "nsimon";
     };
+    elevenlabs-api-key = {
+      file = ./secrets/elevenlabs-api-key.age;
+      owner = "nsimon";
+    };
+    openai-api-key = {
+      file = ./secrets/openai-api-key.age;
+      owner = "nsimon";
+    };
   };
 }

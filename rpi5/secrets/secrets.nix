@@ -10,4 +10,6 @@ in {
   "openclaw-codex-auth.age".publicKeys = [ nsimon-age nsimon-rsa ];
   "rclone-storj.age".publicKeys        = [ nsimon-age nsimon-rsa ];
   "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-rsa ];
+  "elevenlabs-api-key.age".publicKeys  = [ nsimon-age nsimon-rsa ];
+  "openai-api-key.age".publicKeys      = [ nsimon-age nsimon-rsa ];
 }
