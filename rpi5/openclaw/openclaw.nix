@@ -6,6 +6,7 @@
   openclawSource,
   telegramChatId,
   tailnetFqdn,
+  voiceWebhookPort,
   ...
 }:
 let
@@ -261,13 +262,13 @@ in
             };
 
             serve = {
-              port = 3334;
+              port = voiceWebhookPort;
               path = "/voice/webhook";
             };
 
             # Explicit public webhook URL for Twilio signature validation
             # when OpenClaw is behind an external tunnel/proxy.
-            publicUrl = "https://${tailnetFqdn}:3334/voice/webhook";
+            publicUrl = "https://${tailnetFqdn}:${toString voiceWebhookPort}/voice/webhook";
 
             outbound.defaultMode = "notify";
 

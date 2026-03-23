@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, tailnetFqdn, voiceWebhookPort, ... }:
 let
   # Tailnet-only HTTPS services (tailscale serve).
   # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
@@ -15,7 +15,7 @@ let
   # Publicly-accessible services (tailscale funnel).
   # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
   funnelEntries = [
-    { port = 3334; backend = "http://127.0.0.1:3334"; } # voice webhook (Twilio inbound)
+    { port = voiceWebhookPort; backend = "http://127.0.0.1:${toString voiceWebhookPort}"; } # voice webhook (Twilio inbound)
   ];
 
   ts = "${pkgs.tailscale}/bin/tailscale";
