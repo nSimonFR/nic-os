@@ -109,6 +109,12 @@
     };
   };
 
+  # ── Prometheus scrape ────────────────────────────────────────────────
+  services.prometheus.scrapeConfigs = [{
+    job_name       = "blocky";
+    static_configs = [{ targets = [ "127.0.0.1:4000" ]; }];
+  }];
+
   # ── Firewall: allow DNS from the local network ─────────────────────
   networking.firewall = {
     allowedTCPPorts = [ 53 ];

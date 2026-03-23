@@ -85,6 +85,38 @@ in
       };
     };
 
+    # ── Prometheus exporters & scrapes ──────────────────────────────────────
+    services.prometheus.exporters.postgres = {
+      enable              = true;
+      port                = 9187;
+      listenAddress       = "127.0.0.1";
+      runAsLocalSuperUser = true;
+    };
+
+    services.prometheus.exporters.redis = {
+      enable        = true;
+      port          = 9121;
+      listenAddress = "127.0.0.1";
+      extraFlags    = [ "--redis.addr redis://127.0.0.1:6379" ];
+    };
+
+    services.prometheus.scrapeConfigs = [
+      { job_name       = "postgres";
+        static_configs = [{ targets = [ "127.0.0.1:9187" ]; }]; }
+      { job_name       = "redis";
+        static_configs = [{ targets = [ "127.0.0.1:9121" ]; }]; }
+      # Blackbox HTTP probe for Ghostfolio
+      { job_name       = "blackbox";
+        metrics_path   = "/probe";
+        params         = { module = [ "http_2xx" ]; };
+        static_configs = [{ targets = [ "http://127.0.0.1:${toString cfg.port}" ]; }];
+        relabel_configs = [
+          { source_labels = [ "__address__" ]; target_label = "__param_target"; }
+          { source_labels = [ "__param_target" ]; target_label = "instance"; }
+          { target_label = "__address__"; replacement = "127.0.0.1:9115"; }
+        ]; }
+    ];
+
     # Initialize database directory and set permissions
     system.activationScripts.ghostfolio-init = ''
       mkdir -p ${dataDir}

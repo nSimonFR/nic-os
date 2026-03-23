@@ -143,6 +143,20 @@ in
     cp -r ${haVoltalis}/custom_components/voltalis /var/lib/hass/custom_components/ || true
   '';
 
+  # ── Prometheus scrape ────────────────────────────────────────────────
+  # bearer_token_file is populated manually after first deploy:
+  #   echo TOKEN | sudo tee /etc/home-assistant/ha-api-token && sudo chmod 640 /etc/home-assistant/ha-api-token
+  systemd.tmpfiles.rules = [
+    "f /etc/home-assistant/ha-api-token 0640 root prometheus - -"
+  ];
+
+  services.prometheus.scrapeConfigs = [{
+    job_name          = "home_assistant";
+    static_configs    = [{ targets = [ "127.0.0.1:8123" ]; }];
+    metrics_path      = "/api/prometheus";
+    bearer_token_file = "/etc/home-assistant/ha-api-token";
+  }];
+
   # Home Assistant web UI
   networking.firewall.allowedTCPPorts = [ 8123 ];
   networking.firewall.allowedUDPPorts = [ 8123 ];
