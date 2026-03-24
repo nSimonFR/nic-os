@@ -20,7 +20,7 @@
       # Accessed via nginx portal on port 8080; APP_URL is the external base.
       # With TRUSTED_PROXIES="**", X-Forwarded-* headers override this for dynamic requests.
       # Note: APP_SUBDIRECTORY is not supported in Firefly III 6.4.14.
-      APP_URL = "https://rpi5:8080";
+      APP_URL = "https://rpi5.gate-mintaka.ts.net:8080";
       SITE_OWNER = "${username}@localhost";
 
       # APP_KEY: generate with: echo "base64:$(head -c 32 /dev/urandom | base64)"
