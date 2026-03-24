@@ -19,28 +19,33 @@ let
   };
 in
 {
-  # We run HA in a container; disable native service
-  services.home-assistant.enable = false;
+  # ── Native Home Assistant service ─────────────────────────────────────
+  # Replaces the previous ghcr.io/home-assistant/home-assistant Docker container.
+  # configDir defaults to /var/lib/hass — matches the existing Docker volume.
+  # configuration.yaml is left unmanaged (no `config` attr) so HA can edit it.
+  services.home-assistant = {
+    enable = true;
+    # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
+    config = null;
+    customComponents = [ haVoltalis ];
+    extraComponents = [
+      # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
+      "homekit"    # HomeKit bridge — uses zeroconf/mDNS
+      "prometheus" # Metrics endpoint scraped by Prometheus
+    ];
+  };
 
+  # One-shot migration: chown /var/lib/hass from the Docker-era owner to hass.
+  # Safe to leave in place — idempotent after the first rebuild.
+  system.activationScripts.hassMigrateOwnership.text = ''
+    if [ -d /var/lib/hass ]; then
+      chown -R hass:hass /var/lib/hass
+    fi
+  '';
+
+  # ── ha-linky: Linky → HA bridge (standalone, no NixOS package) ────────
   virtualisation.oci-containers = {
     backend = "docker";
-
-    containers.homeassistant = {
-      image = "ghcr.io/home-assistant/home-assistant:stable";
-      environment = {
-        TZ = "Europe/Paris";
-      };
-      volumes = [
-        "/var/lib/hass:/config"
-        "/run/dbus:/run/dbus:ro"
-        "/run/udev:/run/udev:ro"
-      ];
-      extraOptions = [
-        "--network=host"
-        "--cap-add=NET_ADMIN"
-        "--cap-add=NET_RAW"
-      ];
-    };
 
     containers.ha-linky = {
       image = "ha-linky:latest";
@@ -118,32 +123,7 @@ in
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
 
-  system.activationScripts.hassConfigDir.text = ''
-    set -eu
-    install -d -m 0755 /var/lib/hass
-    install -d -m 0755 /var/lib/hass/custom_components
-    if [ ! -f /var/lib/hass/configuration.yaml ]; then
-      touch /var/lib/hass/configuration.yaml
-      chmod 0644 /var/lib/hass/configuration.yaml
-    fi
-    # Enable the Prometheus integration (idempotent append)
-    if ! grep -q "^prometheus:" /var/lib/hass/configuration.yaml 2>/dev/null; then
-      printf '\nprometheus:\n' >> /var/lib/hass/configuration.yaml
-    fi
-    # Bind HA to localhost only — Tailscale Serve (100.x.x.x:8123) proxies external access.
-    # Using 127.0.0.1 avoids conflicting with Tailscale's port binding and is more secure.
-    if ! grep -q "server_host" /var/lib/hass/configuration.yaml 2>/dev/null; then
-      sed -i 's/^http:$/http:\n  server_host: "127.0.0.1"/' /var/lib/hass/configuration.yaml || true
-    fi
-    # Ensure the ha-api-token directory exists (token itself is created manually)
-    install -d -m 0755 /etc/home-assistant
-    # Copy Voltalis custom component into config dir so it works inside the container
-    rm -rf /var/lib/hass/custom_components/voltalis
-    mkdir -p /var/lib/hass/custom_components
-    cp -r ${haVoltalis}/custom_components/voltalis /var/lib/hass/custom_components/ || true
-  '';
-
-  # ── Prometheus scrape ────────────────────────────────────────────────
+  # ── Prometheus scrape ─────────────────────────────────────────────────
   # bearer_token_file is populated manually after first deploy:
   #   echo TOKEN | sudo tee /etc/home-assistant/ha-api-token && sudo chmod 640 /etc/home-assistant/ha-api-token
   systemd.tmpfiles.rules = [
@@ -156,5 +136,4 @@ in
     metrics_path      = "/api/prometheus";
     bearer_token_file = "/etc/home-assistant/ha-api-token";
   }];
-
 }
