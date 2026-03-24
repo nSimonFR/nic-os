@@ -44,6 +44,7 @@ in
       "nvidia-drm.fbdev=1" # Enable framebuffer device support
       "acpi_enforce_resources=lax" # Fix OpenRGB I2C/SMBus detection bug (GitLab issue #5059)
       "zswap.enabled=0" # Disable zswap when using zram (Star Citizen optimization)
+      "transparent_hugepages=madvise" # Allow large memory apps (Star Citizen) to use 2MB pages, reducing TLB pressure
     ];
 
     kernel.sysctl = {
@@ -153,6 +154,12 @@ kdePackages.kwallet
     wayland-protocols
     wget
     gamemode
+
+    # WiFi utilities (available in PATH, no auto-connect)
+    wpa_supplicant # wpa_passphrase, wpa_cli, wpa_supplicant
+    iw             # modern wireless config (iw dev, iw scan …)
+    wirelesstools  # iwconfig, iwlist, iwscan
+    dhcpcd         # dhcp client for manual wifi sessions
   ];
 
   programs.kdeconnect.enable = true; # Enables KWallet D-Bus service
@@ -385,7 +392,7 @@ kdePackages.kwallet
       };
       gpu = {
         apply_gpu_optimisations = "accept-responsibility";
-        gpu_device = 1;
+        gpu_device = 0;
         nv_powermizer_mode = 1;
       };
       custom = {

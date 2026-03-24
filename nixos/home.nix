@@ -19,10 +19,13 @@
   # - /run/current-system:ro  so Z:/run/current-system/sw/libexec/opentrack/ is reachable inside the sandbox
   # The Flatpak already has shared=ipc which covers POSIX shared memory for the TrackIR file mapping.
   home.activation.rsiLauncherFlatpakOverrides = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    $DRY_RUN_CMD mkdir -p /home/${username}/.cache/nvidia-shader-cache/star-citizen
     ${pkgs.flatpak}/bin/flatpak override --user io.github.mactan_sc.RSILauncher \
       --filesystem=/nix/store:ro \
       --filesystem=/run/current-system:ro \
       --filesystem=/home/${username}/mangohud-logs \
+      --filesystem=/home/${username}/.cache/nvidia-shader-cache/star-citizen \
+      --env=__GL_SHADER_DISK_CACHE_PATH=/home/${username}/.cache/nvidia-shader-cache/star-citizen \
       --talk-name=com.feralinteractive.GameMode
   '';
 
