@@ -1,6 +1,7 @@
 {
   pkgs,
   lib,
+  config,
   ...
 }:
 {
@@ -45,5 +46,13 @@
 
   home.file.".vimrc".source = ./dotfiles/editor/vim;
   home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
-    ./dotfiles/starcitizen-lug/launcher.cfg;
+    ./dotfiles/star-citizen/launcher.cfg;
+
+  # SC-writable files: symlinked directly to the repo via mkOutOfStoreSymlink so
+  # SC writes back to the versioned files. Just git commit after SC updates them.
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user.cfg".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/user.cfg";
+
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user/client/0/controls/mappings/layout_NICO_exported.xml".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/layout_NICO_exported.xml";
 }
