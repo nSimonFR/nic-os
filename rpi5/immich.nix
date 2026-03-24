@@ -5,7 +5,7 @@
     port          = 2283;
     host          = "127.0.0.1";  # force IPv4; Tailscale Serve proxies to 127.0.0.1
     mediaLocation = "/mnt/cloud/Photos";
-    machine-learning.enable = false;  # disable the systemd unit, not just the runtime config flag
+    machine-learning.enable = true;
   };
 
   # filebrowser's tmpfiles rule sets /mnt/cloud to 0700 on every nixos-rebuild switch.
@@ -22,5 +22,13 @@
     serviceConfig.ExecStartPre = [
       "+${pkgs.coreutils}/bin/chown immich:immich /mnt/cloud/Photos"
     ];
+  };
+
+  # Reduce ML service memory footprint on RPi5:
+  # - MODEL_TTL: unload models from RAM after 60s idle (default 300s)
+  # - REQUEST_THREADS: cap inference threads to 2 (prevents CPU spike on all 4 cores)
+  systemd.services.immich-machine-learning.environment = {
+    MACHINE_LEARNING_MODEL_TTL = "60";
+    MACHINE_LEARNING_REQUEST_THREADS = "2";
   };
 }
