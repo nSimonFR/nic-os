@@ -1,12 +1,12 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
   commonEnv = {
-    DB_HOST       = "127.0.0.1";
-    DB_PORT       = "5432";
+    DB_HOST       = pgHost;
+    DB_PORT       = toString pgPort;
     POSTGRES_USER = "sure_user";
     POSTGRES_DB   = "sure_production";
-    REDIS_URL     = "redis://127.0.0.1:6379/2";
+    REDIS_URL     = "redis://${redisHost}:${toString redisPort}/2";
     SELF_HOSTED   = "true";
     RAILS_FORCE_SSL  = "false";
     RAILS_ASSUME_SSL = "false";
@@ -17,10 +17,6 @@ in
 {
   # ── PostgreSQL: sure_production database + sure_user ──────────────────────
   services.postgresql = {
-    # Allow TCP connections from localhost so Docker --network=host containers
-    # can authenticate with a password (unix-socket peer auth doesn't work in Docker).
-    settings.listen_addresses = lib.mkDefault "127.0.0.1";
-
     ensureDatabases = [ "sure_production" ];
     ensureUsers = [{
       name = "sure_user";
@@ -29,7 +25,7 @@ in
 
     # Allow sure_user to connect via TCP with scram-sha-256 password auth
     authentication = lib.mkAfter ''
-      host  sure_production  sure_user  127.0.0.1/32  scram-sha-256
+      host  sure_production  sure_user  ${pgHost}/32  scram-sha-256
     '';
   };
 

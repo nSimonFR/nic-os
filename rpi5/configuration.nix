@@ -107,6 +107,7 @@ in
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
     ./secrets.nix
+    ./database.nix
     ./home-assistant.nix
     ./firefly-iii.nix
     ./nginx-portal.nix

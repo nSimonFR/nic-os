@@ -2,6 +2,9 @@
   config,
   lib,
   pkgs,
+  redisHost,
+  redisPort,
+  redisName,
   ...
 }:
 let
@@ -21,14 +24,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    services.redis.servers.ghostfolio = {
-      enable = true;
-      bind = "127.0.0.1";
-      port = 6379;
-    };
-
     services.postgresql = {
-      enable = true;
       ensureDatabases = [ "ghostfolio" ];
       ensureUsers = [
         {
@@ -50,8 +46,8 @@ in
     # Systemd service for Ghostfolio
     systemd.services.ghostfolio = {
       description = "Ghostfolio - Wealth Management Software";
-      after = [ "network-online.target" "postgresql.service" "redis-ghostfolio.service" ];
-      wants = [ "network-online.target" "postgresql.service" "redis-ghostfolio.service" ];
+      after = [ "network-online.target" "postgresql.service" "redis-${redisName}.service" ];
+      wants = [ "network-online.target" "postgresql.service" "redis-${redisName}.service" ];
       wantedBy = [ "multi-user.target" ];
 
       environment = {
@@ -97,7 +93,7 @@ in
       enable        = true;
       port          = 9121;
       listenAddress = "127.0.0.1";
-      extraFlags    = [ "--redis.addr redis://127.0.0.1:6379" ];
+      extraFlags    = [ "--redis.addr redis://${redisHost}:${toString redisPort}" ];
     };
 
     services.prometheus.scrapeConfigs = [
