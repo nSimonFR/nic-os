@@ -225,6 +225,27 @@
         "type": "github"
       }
     },
+    "flake-parts_4": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "sure-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1772408722,
+        "narHash": "sha256-rHuJtdcOjK7rAHpHphUb1iCvgkU3GpfvicLMwwnfMT0=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "f20dc5d9b8027381c474144ecabc9034d6a839a3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "flake-utils": {
       "inputs": {
         "systems": [
@@ -799,6 +820,7 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "openclaw-source": "openclaw-source",
         "ragenix": "ragenix",
+        "sure-nix": "sure-nix",
         "zen-browser": "zen-browser"
       }
     },
@@ -821,6 +843,24 @@
         "owner": "oxalica",
         "repo": "rust-overlay",
         "type": "github"
+      }
+    },
+    "sure-nix": {
+      "inputs": {
+        "flake-parts": "flake-parts_4",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1774454445,
+        "narHash": "sha256-YW+jUCK5stY5FqwFLM0Sg3CQoPuABm6b5nZsgFCtQNI=",
+        "path": "/home/nsimon/sure-nix",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nsimon/sure-nix",
+        "type": "path"
       }
     },
     "systems": {
