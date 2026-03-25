@@ -116,13 +116,6 @@
           inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
-          # Needed by home-assistant.nix to track the stable Docker image version.
-          # nixpkgs 25.11 ships HA 2025.11.x; the running Docker container is newer.
-          # HA refuses to start if .HA_VERSION > binary version (no downgrade).
-          unstablePkgs = import nixpkgs-unstable {
-            system = "aarch64-linux";
-            config.allowUnfree = true;
-          };
         };
         modules = [
           ./rpi5/overlays.nix

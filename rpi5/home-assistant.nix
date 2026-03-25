@@ -2,20 +2,18 @@
   config,
   lib,
   pkgs,
-  unstablePkgs,
   inputs,
   ...
 }:
 let
-  # Use unstablePkgs so HA version matches (or exceeds) the .HA_VERSION written
-  # by the previous Docker container. nixpkgs 25.11 ships 2025.11.x; the Docker
-  # stable image had already advanced to 2026.x — HA refuses to start on downgrade.
-  # Run `nix flake lock --update-input nixpkgs-unstable` to pull in the latest release.
-  haVoltalis = unstablePkgs.buildHomeAssistantComponent rec {
+  # pkgs.home-assistant and pkgs.buildHomeAssistantComponent are both overridden
+  # in overlays.nix to use nixpkgs-unstable, keeping HA current and preventing
+  # the "cannot downgrade" startup failure when .HA_VERSION > binary version.
+  haVoltalis = pkgs.buildHomeAssistantComponent rec {
     owner = "jdelahayes";
     domain = "voltalis";
     version = "master";
-    src = unstablePkgs.fetchFromGitHub {
+    src = pkgs.fetchFromGitHub {
       owner = "jdelahayes";
       repo = "ha-voltalis";
       rev = "master";
@@ -61,9 +59,6 @@ in
     enable = true;
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
-    package = unstablePkgs.home-assistant.overrideAttrs (_: {
-      doInstallCheck = false;
-    });
     customComponents = [ haVoltalis ];
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
