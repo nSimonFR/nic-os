@@ -22,6 +22,35 @@ let
       sha256 = "sha256-lCqXtVEkhwmLYosWycO2GbECglEp9wfFFaIDuSFUBBk=";
     };
   };
+
+  # ha-linky: TypeScript/Node.js Linky → Home Assistant bridge.
+  # config.ts hardcodes /data/options.json; the service uses BindReadOnlyPaths
+  # to mount /etc/home-assistant/ha-linky at /data inside the unit's namespace.
+  # ha.ts reads WS_URL + SUPERVISOR_TOKEN from environment (EnvironmentFile).
+  haLinky = pkgs.buildNpmPackage rec {
+    pname = "ha-linky";
+    version = "1.7.0";
+    src = pkgs.fetchFromGitHub {
+      owner = "bokub";
+      repo = "ha-linky";
+      rev = version;
+      hash = "sha256-x8W/kR/L3uJ317MAayv3mUlPW3yw+Tnj4iD2c6CEnOQ=";
+    };
+    npmDepsHash = "sha256-y/64htlLa5RGemCIqXp9nxDgAK8zyVOq8kdW4azhY64=";
+    # npm run build = tsc → dist/
+    # Skip the default `npm install -g` install phase; we install manually.
+    dontNpmInstall = true;
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out/{bin,lib/ha-linky}
+      # node_modules must live next to dist/ for ESM relative-path resolution
+      cp -r dist node_modules $out/lib/ha-linky/
+      makeWrapper ${lib.getExe pkgs.nodejs} $out/bin/ha-linky \
+        --add-flags "$out/lib/ha-linky/dist/index.js"
+      runHook postInstall
+    '';
+  };
 in
 {
   # ── Native Home Assistant service ─────────────────────────────────────
@@ -51,48 +80,32 @@ in
     fi
   '';
 
-  # ── ha-linky: Linky → HA bridge (standalone, no NixOS package) ────────
-  virtualisation.oci-containers = {
-    backend = "docker";
-
-    containers.ha-linky = {
-      image = "ha-linky:latest";
-      environment = {
-        TZ = "Europe/Paris";
-      };
-      environmentFiles = [ "/etc/ha-linky/ha-linky.env" ];
-      volumes = [
-        "/etc/home-assistant/ha-linky:/config"
-        "/etc/home-assistant/ha-linky:/data"
-      ];
-      extraOptions = [ "--network=host" ];
-    };
+  # ── ha-linky: native systemd service ──────────────────────────────────
+  users.users.ha-linky = {
+    isSystemUser = true;
+    group = "ha-linky";
   };
+  users.groups.ha-linky = {};
 
-  systemd.services.ha-linky-build = {
-    description = "Build ha-linky Docker image";
+  systemd.services.ha-linky = {
+    description = "ha-linky Linky → Home Assistant bridge";
     wantedBy = [ "multi-user.target" ];
     after = [
       "network-online.target"
-      "docker.service"
+      "home-assistant.service"
     ];
-    wants = [
-      "network-online.target"
-      "docker.service"
-    ];
-    path = [
-      pkgs.git
-      pkgs.docker
-    ];
+    wants = [ "network-online.target" ];
     serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "${pkgs.docker}/bin/docker build https://github.com/bokub/ha-linky.git -f standalone.Dockerfile -t ha-linky";
+      ExecStart = "${haLinky}/bin/ha-linky";
+      Restart = "on-failure";
+      RestartSec = "30";
+      User = "ha-linky";
+      Group = "ha-linky";
+      # config.ts hardcodes /data/options.json; bind our real path read-only
+      BindReadOnlyPaths = "/etc/home-assistant/ha-linky:/data";
+      EnvironmentFile = "/etc/ha-linky/ha-linky.env";
     };
   };
-
-  systemd.services."docker-ha-linky".requires = [ "ha-linky-build.service" ];
-  systemd.services."docker-ha-linky".after = [ "ha-linky-build.service" ];
 
   system.activationScripts.haLinkyBootstrap.text = ''
         set -eu
@@ -105,6 +118,7 @@ in
     SUPERVISOR_TOKEN=$SUPERVISOR_TOKEN
     WS_URL=ws://127.0.0.1:8123/api/websocket
     EOF
+        chown ha-linky:ha-linky /etc/ha-linky/ha-linky.env
         chmod 0640 /etc/ha-linky/ha-linky.env
 
         # Build options.json from agenix-managed secrets
@@ -128,6 +142,7 @@ in
       ]
     }
     EOF
+        chown ha-linky:ha-linky /etc/home-assistant/ha-linky/options.json
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
 
