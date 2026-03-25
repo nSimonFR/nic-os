@@ -33,6 +33,14 @@ in
           config.allowUnfree = true;
         };
         uv = unstablePkgs.uv;
+        # nixpkgs 25.11 ships HA 2025.11.x; HA refuses to start if .HA_VERSION
+        # in the data dir is newer than the binary (no downgrade allowed).
+        # Track unstable so the package version always meets or exceeds what was
+        # last written by the previous release.
+        home-assistant = unstablePkgs.home-assistant.overrideAttrs (_: {
+          doInstallCheck = false;
+        });
+        buildHomeAssistantComponent = unstablePkgs.buildHomeAssistantComponent;
         # Keep Ghostfolio current to pick up Yahoo upstream fixes.
         # Temporary pin to 2.247.0 until nixpkgs ships this version.
         ghostfolio = unstablePkgs.ghostfolio.overrideAttrs (old: rec {
