@@ -174,7 +174,6 @@ in
       "wheel"
       "video"
       "networkmanager"
-      "docker"
     ];
     home = "/home/${username}";
     openssh.authorizedKeys.keys = [
@@ -232,7 +231,6 @@ in
     immich-cli
   ];
 
-  virtualisation.docker.enable = true;
 
   # ── Ghostfolio: Wealth management software ──────────────────────────
   # Use internal port 13333 to avoid conflict with tailscale serve
@@ -273,7 +271,7 @@ in
       fsType = "ext4";
       options = [ "noatime" ];
     };
-    # NVMe RAID-1 array for /home (Docker data at /home/state/var-lib/docker)
+    # NVMe RAID-1 array for /home (persistent state at /home/state/var-lib)
     "/home" = {
       device = "/dev/disk/by-label/HOME_RAID";
       fsType = "ext4";
