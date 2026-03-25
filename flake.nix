@@ -53,6 +53,11 @@
     mac-app-util.url = "github:hraban/mac-app-util";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";
+
+    sure-nix = {
+      url = "path:/home/nsimon/sure-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -121,6 +126,7 @@
           ./rpi5/overlays.nix
           inputs.ragenix.nixosModules.default
           inputs.home-manager.nixosModules.home-manager
+          inputs.sure-nix.nixosModules.sure
           {
             home-manager = {
               useGlobalPkgs = true;
