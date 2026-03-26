@@ -137,6 +137,28 @@ in
   # Without this quirk the kernel uses UAS which breaks enumeration on RPi5.
   boot.kernelParams = [ "usb-storage.quirks=0bda:9210:u" ];
 
+  # ── VM / memory pressure tuning ────────────────────────────────────────────
+  # RPi5 has 4 GiB RAM and runs many services; these settings prevent hang-
+  # inducing swap storms:
+  # - swappiness 150: prefer zram (in-RAM compressed swap, near-zero I/O cost)
+  #   over evicting hot page cache. Values >100 are valid on kernel ≥5.8.
+  # - overcommit_memory 0: heuristic limit (≈ RAM + swap × ratio) instead of
+  #   unconditional "yes", so allocations that can never be satisfied are
+  #   refused early rather than causing a late-stage OOM hang.
+  # - watermark_scale_factor 50: wake kswapd at ≈0.5% free (≈20 MiB) vs the
+  #   default 0.1% (≈4 MiB), giving the reclaimer more runway before the
+  #   system stalls waiting for free pages.
+  # - vfs_cache_pressure 50: retain dentries/inodes longer under pressure,
+  #   reducing metadata I/O on the SD card.
+  boot.kernel.sysctl = {
+    "vm.swappiness"             = 150;
+    # Redis NixOS module also sets this to "1"; mkForce overrides it.
+    # overcommit=0 (heuristic) is safe for our small Redis instances.
+    "vm.overcommit_memory"      = lib.mkForce 0;
+    "vm.watermark_scale_factor" = 50;
+    "vm.vfs_cache_pressure"     = 50;
+  };
+
   # Enable software RAID (mdadm) so HOME_RAID assembles automatically at boot.
   boot.swraid.enable = true;
   boot.swraid.mdadmConf = ''
@@ -307,6 +329,7 @@ in
 
   zramSwap = {
     enable = true;
+    memoryPercent = 75; # 75% of 4 GiB = 3 GiB (was default 50% = 2 GiB)
     memoryMax = 4 * 1024 * 1024 * 1024;
   };
 

@@ -46,6 +46,14 @@
   systemd.services.firefly-iii-setup.serviceConfig.PrivateUsers = lib.mkForce false;
   systemd.services.firefly-iii-cron.serviceConfig.PrivateUsers = lib.mkForce false;
 
+  # Cap PHP-FPM worker count: nixpkgs default pm.max_children=32 risks 32×38MB=1.2GiB.
+  # With pm=dynamic and 5 max children, peak usage is ≈190MB which is reasonable.
+  # All pool settings use mkDefault so normal-priority overrides win without mkForce.
+  services.phpfpm.pools."firefly-iii".settings = {
+    "pm.max_children"    = 5;
+    "pm.max_spare_servers" = 3;
+  };
+
   # ── Prometheus blackbox probes ───────────────────────────────────────
   services.prometheus.scrapeConfigs = [{
     job_name       = "blackbox-firefly";

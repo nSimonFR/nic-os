@@ -54,6 +54,10 @@ in
         NODE_ENV = "production";
         HOST = "127.0.0.1";
         PORT = toString cfg.port;
+        # Cap V8 old-generation heap; forces GC before memory balloons.
+        # 256M caused OOM crashes at startup (fresh RSS ~332M); 384M gives headroom
+        # above startup allocation while still triggering GC well before MemoryMax=512M.
+        NODE_OPTIONS = "--max-old-space-size=384";
         DATABASE_URL = "postgresql://ghostfolio@localhost/ghostfolio?host=/run/postgresql";
         # Ghostfolio-specific env vars
         # Reduce Yahoo Finance request pressure to avoid 429 throttling.
@@ -78,6 +82,12 @@ in
         ProtectHome = true;
         ProtectSystem = "strict";
         ReadWritePaths = [ dataDir ];
+        # Memory limits: throttle before hard-killing.
+        # RSS at fresh start is ~332MiB; cgroup accounting excludes shared libs so
+        # the exclusive footprint is lower, but give generous headroom to avoid
+        # spurious OOM kills on cache warm-up.
+        MemoryHigh = "320M";
+        MemoryMax  = "512M";
       };
     };
 

@@ -119,6 +119,11 @@ in
   systemd.services.grafana = {
     after    = [ "grafana-secrets.service" ];
     requires = [ "grafana-secrets.service" ];
-    serviceConfig.EnvironmentFile = "/run/grafana-telegram.env";
+    serviceConfig = {
+      EnvironmentFile = "/run/grafana-telegram.env";
+      # Memory limits: throttle before hard-killing (currently ~138 MiB RSS)
+      MemoryHigh = "192M";
+      MemoryMax  = "256M";
+    };
   };
 }
