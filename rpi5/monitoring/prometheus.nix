@@ -68,11 +68,24 @@ in
     };
   };
 
+  # Memory limit: 30d TSDB retention can grow; throttle before hard-killing
+  # (currently ~129 MiB RSS but grows over time).
+  systemd.services.prometheus.serviceConfig = {
+    MemoryHigh = "320M";
+    MemoryMax  = "512M";
+  };
+
   # ── cAdvisor (Docker container metrics) ─────────────────────────────────────
   # Port 8080 (default) conflicts with nginx; use 9338 instead.
   services.cadvisor = {
     enable        = true;
     port          = 9338;
     listenAddress = "127.0.0.1";
+  };
+
+  # cAdvisor sits at ~100 MiB; cap it so it can't grow unbounded.
+  systemd.services.cadvisor.serviceConfig = {
+    MemoryHigh = "128M";
+    MemoryMax  = "192M";
   };
 }
