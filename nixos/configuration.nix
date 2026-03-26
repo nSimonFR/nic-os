@@ -34,6 +34,8 @@ in
       efi.efiSysMountPoint = "/boot/efi";
     };
 
+    kernelPackages = pkgs.linuxPackages_6_18; # 6.18.19 — NTSync support (6.14+), compatible with NVIDIA 580
+
     kernelParams = [
       "mem_sleep_default=s2idle"
       "nvidia.NVreg_PreserveVideoMemoryAllocations=0"
@@ -61,6 +63,7 @@ in
     kernelModules = [
       "ff_memless"
       "i2c-nvidia-gpu" # NVIDIA GPU I2C for RGB control
+      "ntsync" # NT synchronization primitives for Wine/Proton (NTSync)
     ];
 
     supportedFilesystems = [ "ntfs3" ];

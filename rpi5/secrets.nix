@@ -40,5 +40,13 @@
       file = ./secrets/immich-api-key.age;
       owner = "nsimon";
     };
+    sure-app-env = {
+      file = ./secrets/sure-app-env.age;
+      # root-readable (docker reads it as --env-file via systemd root service)
+    };
+    sure-pg-password = {
+      file = ./secrets/sure-pg-password.age;
+      owner = "postgres"; # ensurePasswordFile reads as postgres user
+    };
   };
 }

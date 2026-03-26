@@ -107,6 +107,7 @@ in
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
     ./secrets.nix
+    ./databases.nix
     ./home-assistant.nix
     ./firefly-iii.nix
     ./nginx-portal.nix
@@ -118,6 +119,7 @@ in
     ./storj.nix
     ./filebrowser.nix
     ./immich.nix
+    ./sure.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";

@@ -11,6 +11,7 @@ let
     { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
     { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
     { port = 2283;  backend = "http://127.0.0.1:2283";  } # immich photos
+    { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
   ];
 
   # Publicly-accessible services (tailscale funnel).
