@@ -23,8 +23,7 @@ in
         static_configs = [{ targets = [ "127.0.0.1:${toString prometheusPort}" ]; }]; }
       { job_name       = "node";
         static_configs = [{ targets = [ "127.0.0.1:9100" ]; }]; }
-      { job_name       = "cadvisor";
-        static_configs = [{ targets = [ "127.0.0.1:9338" ]; }]; }
+
       # Blackbox HTTP probe for openclaw (no dedicated service .nix)
       { job_name       = "blackbox-openclaw";
         metrics_path   = "/probe";
@@ -75,17 +74,4 @@ in
     MemoryMax  = "512M";
   };
 
-  # ── cAdvisor (Docker container metrics) ─────────────────────────────────────
-  # Port 8080 (default) conflicts with nginx; use 9338 instead.
-  services.cadvisor = {
-    enable        = true;
-    port          = 9338;
-    listenAddress = "127.0.0.1";
-  };
-
-  # cAdvisor sits at ~100 MiB; cap it so it can't grow unbounded.
-  systemd.services.cadvisor.serviceConfig = {
-    MemoryHigh = "128M";
-    MemoryMax  = "192M";
-  };
 }

@@ -63,9 +63,6 @@ df -h
 
 # Largest directories under home
 du -sh /home/nsimon/* 2>/dev/null | sort -h
-
-# Docker volumes / images
-docker system df
 ```
 
 ## Services
@@ -75,12 +72,8 @@ docker system df
 systemctl --user status openclaw-gateway
 journalctl --user -u openclaw-gateway -n 50
 
-# Home Assistant container
-docker ps | grep homeassistant
-docker logs homeassistant --tail 50
-
-# All user services
-systemctl --user list-units --type=service --state=running
+# Key native services
+systemctl status home-assistant ha-linky sure-web sure-worker ghostfolio
 
 # All system services (running)
 systemctl list-units --type=service --state=running
@@ -114,9 +107,6 @@ sudo nix-collect-garbage --delete-older-than 30d
 # Check disk usage by Nix store
 du -sh /nix/store
 
-# Docker cleanup
-docker system prune -f
-
 # Journal cleanup (keep 7 days)
 sudo journalctl --vacuum-time=7d
 ```
@@ -127,8 +117,8 @@ sudo journalctl --vacuum-time=7d
 # Restart OpenClaw gateway
 systemctl --user restart openclaw-gateway
 
-# Restart Home Assistant
-docker restart homeassistant
+# Restart Home Assistant (native service)
+sudo systemctl restart home-assistant
 
 # System reboot (will reconnect via Tailscale after ~60s)
 sudo systemctl reboot
@@ -141,7 +131,7 @@ sudo systemctl reboot
 journalctl --user -u openclaw-gateway -f
 
 # Home Assistant logs (live)
-docker logs homeassistant -f --tail 100
+journalctl -u home-assistant -f
 
 # System kernel messages
 sudo dmesg | tail -50
@@ -155,4 +145,4 @@ sudo journalctl -u sshd -n 20
 - Config lives in `~/nic-os/` — edit there and run `sudo nixos-rebuild switch --flake 'path:.#rpi5'`
 - Secrets live in `~/.secrets/` — plain text, not Nix-managed
 - Tailscale IP resolves as `rpi5` on the tailnet
-- Home Assistant runs in Docker on port 8123
+- All services are native systemd (no Docker): home-assistant, ha-linky, sure-web, sure-worker, ghostfolio
