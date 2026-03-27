@@ -11,6 +11,15 @@ let
   cfg = config.services.ghostfolio;
   port = 3333;
   dataDir = "/var/lib/ghostfolio";
+  # Ghostfolio's build:production includes `nx run ui:build-storybook` which
+  # consumes ~1.3 GiB peak RSS during TerserPlugin minification — too much for
+  # RPi5 (4 GiB). Storybook is a dev UI and not needed at runtime. Patch it out.
+  ghostfolioPkg = pkgs.ghostfolio.overrideAttrs (old: {
+    postPatch = (old.postPatch or "") + ''
+      substituteInPlace package.json \
+        --replace-warn "&& nx run ui:build-storybook" ""
+    '';
+  });
 in
 {
   options.services.ghostfolio = {
@@ -71,7 +80,7 @@ in
         Group = "ghostfolio";
         WorkingDirectory = dataDir;
         EnvironmentFile = [ "${dataDir}/secrets.env" ];
-        ExecStart = "${pkgs.ghostfolio}/bin/ghostfolio";
+        ExecStart = "${ghostfolioPkg}/bin/ghostfolio";
         Restart = "on-failure";
         RestartSec = "5s";
         StandardOutput = "journal";
