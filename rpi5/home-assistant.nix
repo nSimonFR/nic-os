@@ -72,6 +72,8 @@ in
       "ssdp"            # UPnP/SSDP discovery (async_upnp_client)
       "usb"             # USB device detection (aiousbwatcher)
       "google_translate" # TTS (gtts)
+      "sfr_box"         # SFR/Numericable router (sfrbox_api)
+      "radio_browser"   # Internet radio (radios)
       # Other integrations
       "homekit"         # HomeKit bridge — uses zeroconf/mDNS
       "prometheus"      # Metrics endpoint scraped by Prometheus
