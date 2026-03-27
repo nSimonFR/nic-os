@@ -68,6 +68,10 @@ in
       "go2rtc"          # go2rtc camera proxy (go2rtc_client)
       "conversation"    # Voice/NLU (hassil, home_assistant_intents)
       "assist_pipeline" # Voice pipeline (hassil)
+      "dhcp"            # DHCP discovery (aiodhcpwatcher)
+      "ssdp"            # UPnP/SSDP discovery (async_upnp_client)
+      "usb"             # USB device detection (aiousbwatcher)
+      "google_translate" # TTS (gtts)
       # Other integrations
       "homekit"         # HomeKit bridge — uses zeroconf/mDNS
       "prometheus"      # Metrics endpoint scraped by Prometheus
