@@ -2,7 +2,7 @@
 name: sure
 description: Get reports and account / transaction data from the Sure personal finance board
 homepage: https://sure.am
-metadata: {"clawdbot":{"emoji":"📈","requires":{"bins":["curl","jq"],"env":["SURE_API_KEY","SURE_BASE_URL"]}}}
+metadata: {"openclaw":{"emoji":"📈","requires":{"env":["SURE_API_KEY"]},"primaryEnv":"SURE_API_KEY"}}
 ---
 
 # Sure Skill
@@ -17,17 +17,23 @@ Use this skill when the user asks about their **Sure** personal finance board: b
 
 ```bash
 export SURE_API_KEY="YOUR_API_KEY"
-export SURE_BASE_URL="YOUR_BASE_URL"
 ```
 
 Example:
 
 ```bash
-export SURE_BASE_URL="https://sure.example.com"
+# Optional remote example:
+# export SURE_BASE_URL="https://sure.example.com"
 export SURE_API_KEY="..."
 ```
 
 ## Auth header
+
+Base URL default:
+
+```bash
+export SURE_BASE_URL="${SURE_BASE_URL:-http://127.0.0.1:3000}"
+```
 
 Reuse this in commands:
 
