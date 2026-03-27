@@ -73,7 +73,7 @@ in
       "usb"             # USB device detection (aiousbwatcher)
       "google_translate" # TTS (gtts)
       "sfr_box"         # SFR/Numericable router (sfrbox_api)
-      "radio_browser"   # Internet radio (radios)
+      # radio_browser omitted: radios-0.3.2 requires pycountry<25 but nixpkgs ships 26.x
       # Other integrations
       "homekit"         # HomeKit bridge — uses zeroconf/mDNS
       "prometheus"      # Metrics endpoint scraped by Prometheus
