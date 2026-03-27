@@ -60,11 +60,17 @@ in
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
     customComponents = [ haVoltalis ];
-    extraPackages = ps: [ ps.hassil ];
     extraComponents = [
-      # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
-      "homekit"    # HomeKit bridge — uses zeroconf/mDNS
-      "prometheus" # Metrics endpoint scraped by Prometheus
+      # default_config sub-dependencies that need Python packages
+      "met"             # Weather (metno)
+      "mobile_app"      # Companion app (home_assistant_intents)
+      "stream"          # Camera streams (av)
+      "go2rtc"          # go2rtc camera proxy (go2rtc_client)
+      "conversation"    # Voice/NLU (hassil, home_assistant_intents)
+      "assist_pipeline" # Voice pipeline (hassil)
+      # Other integrations
+      "homekit"         # HomeKit bridge — uses zeroconf/mDNS
+      "prometheus"      # Metrics endpoint scraped by Prometheus
     ];
   };
 
