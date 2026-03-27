@@ -60,6 +60,7 @@ in
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
     customComponents = [ haVoltalis ];
+    extraPackages = ps: [ ps.hassil ];
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
       "homekit"    # HomeKit bridge — uses zeroconf/mDNS
