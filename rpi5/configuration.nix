@@ -109,11 +109,11 @@ in
     ./secrets.nix
     ./databases.nix
     ./home-assistant.nix
-    ./firefly-iii.nix
+    # ./firefly-iii.nix
     ./nginx-portal.nix
     ./tailscale-serve.nix
     ./blocky.nix
-    ./ghostfolio.nix
+    # ./ghostfolio.nix
     ./scrutiny.nix
     ./monitoring
     ./storj.nix
@@ -135,7 +135,17 @@ in
 
   # Force USB mass storage mode for Realtek RTL9210 NVMe-over-USB adapter.
   # Without this quirk the kernel uses UAS which breaks enumeration on RPi5.
-  boot.kernelParams = [ "usb-storage.quirks=0bda:9210:u" ];
+  # usbcore.autosuspend=-1: disable USB autosuspend globally to prevent the
+  # RTL9210 root disk from entering suspend and hanging on resume (which causes
+  # catastrophic IO wait / system freeze).
+  boot.kernelParams = [
+    "usb-storage.quirks=0bda:9210:u"
+    "usbcore.autosuspend=-1"
+  ];
+
+  # Hardware watchdog: if the system freezes (e.g. IO wait from USB disk hang),
+  # the BCM2835 watchdog will reboot automatically after 30s of silence.
+  systemd.watchdog.runtimeTime = "30s";
 
   # ── VM / memory pressure tuning ────────────────────────────────────────────
   # RPi5 has 4 GiB RAM and runs many services; these settings prevent hang-
@@ -258,8 +268,8 @@ in
   # Use internal port 13333 to avoid conflict with tailscale serve
   # which binds the external port 3333 on the tailscale interface before
   # ghostfolio starts, causing EADDRINUSE when ghostfolio tries 0.0.0.0:3333.
-  services.ghostfolio.enable = true;
-  services.ghostfolio.port = 13333;
+  # services.ghostfolio.enable = true;
+  # services.ghostfolio.port = 13333;
 
   # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
   # (the module hardcodes these paths)
