@@ -21,11 +21,6 @@
     linky-token = {
       file = ./secrets/linky-token.age;
     };
-    firefly-app-key = {
-      file = ./secrets/firefly-app-key.age;
-      owner = "firefly-iii";
-      group = "nginx"; # firefly-iii user's primary group; no separate firefly-iii group exists
-    };
     linky-prm = {
       file = ./secrets/linky-prm.age;
     };
