@@ -64,6 +64,19 @@ in
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
       "homekit"    # HomeKit bridge — uses zeroconf/mDNS
       "prometheus" # Metrics endpoint scraped by Prometheus
+      # Components whose Python deps were absent, causing default_config cascade failure:
+      "conversation" # hassil — also required by mobile_app
+      "dhcp"         # aiodhcpwatcher
+      "ssdp"         # async_upnp_client
+      "tts"          # mutagen
+      "stream"       # av (PyAV)
+      "usb"          # aiousbwatcher (required by default_config → bluetooth)
+      # Configured integrations that also had missing deps:
+      "met"          # metno
+      "go2rtc"       # go2rtc_client
+      "sfr_box"      # sfrbox_api
+      "mobile_app"
+      "google_translate" # gtts
     ];
   };
 
