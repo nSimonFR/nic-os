@@ -12,6 +12,7 @@ let
     { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
     { port = 2283;  backend = "http://127.0.0.1:2283";  } # immich photos
     { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
+    { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
   ];
 
   # Publicly-accessible services (tailscale funnel).

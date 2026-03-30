@@ -35,10 +35,17 @@
       inputs.nix-gaming.follows = "nix-gaming";
     };
 
+    nix-steipete-tools = {
+      url = "github:openclaw/nix-steipete-tools";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     nix-openclaw = {
       url = "github:openclaw/nix-openclaw";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.nix-steipete-tools.inputs.nixpkgs.follows = "nixpkgs";
+      # Force our lock file to control nix-steipete-tools so root's timestamps
+      # are used, avoiding Nix 2.31.2 lastModified mismatch on nix-openclaw's lock.
+      inputs.nix-steipete-tools.follows = "nix-steipete-tools";
     };
     openclaw-source = {
       url = "github:openclaw/openclaw";

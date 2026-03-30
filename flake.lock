@@ -521,7 +521,9 @@
       "inputs": {
         "flake-utils": "flake-utils_2",
         "home-manager": "home-manager_2",
-        "nix-steipete-tools": "nix-steipete-tools",
+        "nix-steipete-tools": [
+          "nix-steipete-tools"
+        ],
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -547,11 +549,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1773561580,
-        "narHash": "sha256-wT0bKTp45YnMkc4yXQvk943Zz/rksYiIjEXGdWzxnic=",
+        "lastModified": 1774239543,
+        "narHash": "sha256-ZZ7V6xN0ATIHibLyaDBhmUGOqLqQzxuTx1ekOGCvLHI=",
         "owner": "openclaw",
         "repo": "nix-steipete-tools",
-        "rev": "cd4c429ff3b3aaef9f92e59812cf2baf5704b86f",
+        "rev": "5f677a283da837cad26c1ce982d85ee181085fc6",
         "type": "github"
       },
       "original": {
@@ -656,11 +658,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1774273680,
-        "narHash": "sha256-FDcP4L1NZMUpfB5HnAFlgmhui2O0jAMgmtqyHMsCQ2g=",
+        "lastModified": 1774701658,
+        "narHash": "sha256-CIS/4AMUSwUyC8X5g+5JsMRvIUL3YUfewe8K4VrbsSQ=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "fdc7b8f7b30fdbedec91b71ed82f36e1637483ed",
+        "rev": "b63fe7f000adcfa269967eeff72c64cafecbbebe",
         "type": "github"
       },
       "original": {
@@ -752,11 +754,11 @@
     },
     "nixpkgs_7": {
       "locked": {
-        "lastModified": 1774581008,
-        "narHash": "sha256-6CLBABGpmb5wGGZ5yzFuo5B3m+t5L+AKO/JQGyIIplc=",
+        "lastModified": 1774854794,
+        "narHash": "sha256-cEi4ZFOzjOutw1MyECQFgJOoYrmMJwQPd8YEVDPlVYs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "1517500ef61719613fb24d2320b8ba55bfca8f91",
+        "rev": "f571b33c0cbc74f7e6018bfc0ae4d98ac04753cc",
         "type": "github"
       },
       "original": {
@@ -815,6 +817,7 @@
         "nix-flatpak": "nix-flatpak",
         "nix-gaming": "nix-gaming",
         "nix-openclaw": "nix-openclaw",
+        "nix-steipete-tools": "nix-steipete-tools",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_7",
         "nixpkgs-unstable": "nixpkgs-unstable",
@@ -853,8 +856,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1774459165,
-        "narHash": "sha256-03NpbiyruYjqy+TkNvZ7JM2CY5uww6lICAFmyowPSXU=",
+        "lastModified": 1774473187,
+        "narHash": "sha256-x9kRIfTb38QoRGIA6D6soirMDWFZiCD3Zh9PNuohkdc=",
         "path": "/home/nsimon/sure-nix",
         "type": "path"
       },

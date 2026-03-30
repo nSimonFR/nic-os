@@ -116,6 +116,7 @@ in
     ./monitoring
     ./storj.nix
     ./filebrowser.nix
+    ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
