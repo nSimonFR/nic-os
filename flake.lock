@@ -856,8 +856,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1774473187,
-        "narHash": "sha256-x9kRIfTb38QoRGIA6D6soirMDWFZiCD3Zh9PNuohkdc=",
+        "lastModified": 1774879854,
+        "narHash": "sha256-hNjrQc+HtHUVEtAgXPbxA4nbQ3bZytoAUgxLG56uFOU=",
         "path": "/home/nsimon/sure-nix",
         "type": "path"
       },
