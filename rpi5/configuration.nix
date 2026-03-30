@@ -109,7 +109,6 @@ in
     ./secrets.nix
     ./databases.nix
     ./home-assistant.nix
-    ./nginx-portal.nix
     ./tailscale-serve.nix
     ./blocky.nix
     ./scrutiny.nix
