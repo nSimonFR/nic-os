@@ -36,44 +36,20 @@ with open('$out/package.json', 'w') as f: json.dump(d, f, indent=2)
     meta.mainProgram = "openai-oauth";
   };
 
-  port            = 4040;
-  openclawAuth    = "/home/nsimon/.openclaw/agents/main/agent/auth-profiles.json";
-  codexAuth       = "/home/nsimon/.codex/auth.json";
-  profileKey      = "openai-codex:default";
+  port         = 4040;
+  openclawAuth = "/home/nsimon/.openclaw/agents/main/agent/auth-profiles.json";
+  codexAuth    = "/home/nsimon/.codex/auth.json";
 
   # Seed ~/.codex/auth.json from openclaw's auth-profiles.json on first run.
   # openai-oauth then takes over token refresh for its own file.
-  seedScript = pkgs.writeText "seed-codex-auth.py" ''
-    import json, os, sys
-
-    OPENCLAW = "${openclawAuth}"
-    CODEX    = "${codexAuth}"
-    KEY      = "${profileKey}"
-
-    # Skip if already seeded
-    try:
-        with open(CODEX) as f:
-            if json.load(f).get("tokens", {}).get("access_token"):
-                sys.exit(0)
-    except Exception:
-        pass
-
-    try:
-        with open(OPENCLAW) as f:
-            p = json.load(f)["profiles"][KEY]
-    except Exception as e:
-        print(f"cannot read openclaw auth: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    os.makedirs(os.path.dirname(CODEX), exist_ok=True)
-    with open(CODEX, "w") as f:
-        json.dump({"tokens": {
-            "access_token":  p["access"],
-            "refresh_token": p["refresh"],
-            "account_id":    p.get("accountId", ""),
-        }}, f, indent=2)
-    os.chmod(CODEX, 0o600)
-    print(f"seeded {CODEX} from openclaw auth")
+  seedScript = pkgs.writeShellScript "seed-codex-auth" ''
+    [ -s ${codexAuth} ] && exit 0
+    mkdir -p "$(dirname ${codexAuth})"
+    ${pkgs.jq}/bin/jq -n \
+      --argjson p "$(${pkgs.jq}/bin/jq '.profiles["openai-codex:default"]' ${openclawAuth})" \
+      '{tokens:{access_token:$p.access,refresh_token:$p.refresh,account_id:($p.accountId//"")}}' \
+      > ${codexAuth}
+    chmod 600 ${codexAuth}
   '';
 in
 {
@@ -83,8 +59,8 @@ in
     wantedBy    = [ "multi-user.target" ];
     serviceConfig = {
       Type         = "simple";
-      User         = "nsimon"; # needs read access to ~/.openclaw/
-      ExecStartPre = "${pkgs.python3}/bin/python3 ${seedScript}";
+      User         = "nsimon";
+      ExecStartPre = "${seedScript}";
       ExecStart    = "${openai-oauth}/bin/openai-oauth --host 127.0.0.1 --port ${toString port} --oauth-file ${codexAuth}";
       Restart      = "on-failure";
       RestartSec   = "5s";
