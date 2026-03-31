@@ -64,6 +64,7 @@
               query2.finance.yahoo.com
               guce.yahoo.com
               consent.yahoo.com
+              api.datadoghq.com
             ''
           ];
           threats = [
@@ -74,6 +75,7 @@
               query2.finance.yahoo.com
               guce.yahoo.com
               consent.yahoo.com
+              api.datadoghq.com
             ''
           ];
         };
