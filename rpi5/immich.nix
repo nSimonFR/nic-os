@@ -1,7 +1,8 @@
-{ pkgs, ... }:
+{ pkgs, unstablePkgs, ... }:
 {
   services.immich = {
     enable        = true;
+    package       = unstablePkgs.immich;
     port          = 2283;
     host          = "127.0.0.1";  # force IPv4; Tailscale Serve proxies to 127.0.0.1
     mediaLocation = "/mnt/cloud/Photos";

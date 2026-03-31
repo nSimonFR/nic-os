@@ -128,6 +128,10 @@
           inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
+          unstablePkgs = import nixpkgs-unstable {
+            system = "aarch64-linux";
+            config.allowUnfree = true;
+          };
         };
         modules = [
           ./rpi5/overlays.nix
