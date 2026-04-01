@@ -167,6 +167,28 @@ in
     "vm.vfs_cache_pressure"     = 50;
   };
 
+  # ── OOM management ────────────────────────────────────────────────────────
+  # systemd-oomd requires PSI (pressure stall info) which needs memory cgroup
+  # accounting — disabled by RPi5 firmware (cgroup_disable=memory injected via
+  # /chosen/bootargs). Use earlyoom instead: it only needs /proc/meminfo and
+  # proactively sends SIGTERM to the highest-RSS process before free memory
+  # hits zero and the system freezes waiting for the hardware watchdog.
+  services.earlyoom = {
+    enable = true;
+    # SIGTERM at <4% free RAM (~160 MiB) or <5% free swap (~250 MiB).
+    # SIGKILL follows at <2% / <3% if SIGTERM doesn't free enough in time.
+    freeMemThreshold      = 4;
+    freeMemKillThreshold  = 2;
+    freeSwapThreshold     = 5;
+    freeSwapKillThreshold = 3;
+    extraArgs = [
+      # Prefer expendable heavy processes: immich transcoding/API and ffmpeg.
+      "--prefer" "(immich|ffmpeg)"
+      # Protect critical infrastructure from being the first killed.
+      "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
+    ];
+  };
+
   # Enable software RAID (mdadm) so HOME_RAID assembles automatically at boot.
   boot.swraid.enable = true;
   boot.swraid.mdadmConf = ''

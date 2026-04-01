@@ -57,6 +57,7 @@ in
   imports = [
     ./prometheus.nix
     ./fail2ban.nix
+    ./earlyoom.nix
     ./grafana.nix
   ];
 

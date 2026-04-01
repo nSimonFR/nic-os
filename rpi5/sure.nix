@@ -51,14 +51,4 @@ in
     requires = [ "sure-pg-setup.service" ];
   };
 
-  # Memory limits for native sure services (replaces the old Docker --memory flags).
-  # Puma web: current ~162 MiB RSS; Sidekiq worker: current ~70 MiB but can spike.
-  systemd.services.sure-web.serviceConfig = {
-    MemoryHigh = "320M";
-    MemoryMax  = "512M";
-  };
-  systemd.services.sure-worker.serviceConfig = {
-    MemoryHigh = "400M";
-    MemoryMax  = "600M";
-  };
 }

@@ -67,11 +67,5 @@ in
     };
   };
 
-  # Memory limit: 30d TSDB retention can grow; throttle before hard-killing
-  # (currently ~129 MiB RSS but grows over time).
-  systemd.services.prometheus.serviceConfig = {
-    MemoryHigh = "320M";
-    MemoryMax  = "512M";
-  };
-
 }
+

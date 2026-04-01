@@ -71,6 +71,15 @@ groups:
         annotations:
           summary: "High memory on {{ $labels.instance }}: {{ $value | printf \"%.1f\" }}%"
 
+      - alert: EarlyOOMKill
+        expr: increase(earlyoom_kills_sigterm_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "earlyoom killed a process on {{ $labels.instance }} — memory pressure"
+          description: "Run: journalctl -u earlyoom -n 20"
+
       # ── Disk ────────────────────────────────────────────────────────────────
       - alert: DiskAlmostFull
         expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|devtmpfs|squashfs"} / node_filesystem_size_bytes{fstype!~"tmpfs|devtmpfs|squashfs"})) * 100 > 85
