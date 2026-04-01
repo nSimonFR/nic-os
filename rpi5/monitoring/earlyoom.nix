@@ -13,9 +13,9 @@
         trap 'rm -f "$TMP"' EXIT
 
         sigterm=$(journalctl -b 0 -u earlyoom --no-pager -q 2>/dev/null \
-                  | grep -c "sending SIGTERM" || true)
+                  | grep -c "sending SIGTERM to process" || true)
         sigkill=$(journalctl -b 0 -u earlyoom --no-pager -q 2>/dev/null \
-                  | grep -c "sending SIGKILL" || true)
+                  | grep -c "sending SIGKILL to process" || true)
 
         {
           printf '# HELP earlyoom_kills_sigterm_total Processes sent SIGTERM by earlyoom since boot\n'
