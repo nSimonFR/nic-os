@@ -118,6 +118,7 @@ in
     ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
+    ./for-sure-swile.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
