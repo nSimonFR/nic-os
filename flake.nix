@@ -67,7 +67,7 @@
     };
 
     for-sure-swile = {
-      url = "path:/home/nsimon/for-sure/connectors/swile";
+      url = "github:nSimonFR/for-sure?dir=connectors/swile";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };

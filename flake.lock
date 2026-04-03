@@ -309,14 +309,19 @@
         ]
       },
       "locked": {
-        "lastModified": 0,
-        "narHash": "sha256-tN5S8l7pOz3+Xn6SyPZtx2HjTxOAiSf/gqB6QcOaJvs=",
-        "path": "/home/nsimon/for-sure/connectors/swile",
-        "type": "path"
+        "dir": "connectors/swile",
+        "lastModified": 1775228122,
+        "narHash": "sha256-g9rEZ4F0WDuR/50SdZa7Or1eV+Mh3QCwnJ60ru4/w3M=",
+        "owner": "nSimonFR",
+        "repo": "for-sure",
+        "rev": "2d3e9294043b163a4b0cf97e2ff6b5da0b9c00cf",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/for-sure/connectors/swile",
-        "type": "path"
+        "dir": "connectors/swile",
+        "owner": "nSimonFR",
+        "repo": "for-sure",
+        "type": "github"
       }
     },
     "git-hooks": {
