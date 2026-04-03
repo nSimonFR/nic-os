@@ -42,7 +42,7 @@ let
       ATTEMPTS=$((ATTEMPTS + 1))
       [[ $ATTEMPTS -gt 40 ]] && exit 0
     done
-    trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
+    trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT TERM INT HUP
 
     NOW=$(date +%s)
     MSG_ID=""
@@ -115,7 +115,7 @@ in
         ];
         deny = [ ];
       };
-      hooks = {
+hooks = {
         Notification = [
           {
             matcher = "";
