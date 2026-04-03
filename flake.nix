@@ -66,8 +66,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    for-sure-swile = {
-      url = "github:nSimonFR/for-sure?dir=connectors/swile";
+    for-sure = {
+      url = "path:/home/nsimon/for-sure/connectors/for-sure";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -143,7 +143,7 @@
           inputs.ragenix.nixosModules.default
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
-          inputs.for-sure-swile.nixosModules.default
+          inputs.for-sure.nixosModules.default
           {
             home-manager = {
               useGlobalPkgs = true;

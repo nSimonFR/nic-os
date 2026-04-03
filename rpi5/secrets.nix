@@ -43,9 +43,9 @@
       file = ./secrets/sure-pg-password.age;
       owner = "postgres"; # ensurePasswordFile reads as postgres user
     };
-    for-sure-swile-api-key = {
-      file = ./secrets/for-sure-swile-api-key.age;
-      owner = "for-sure-swile";
+    for-sure-api-key = {
+      file = ./secrets/for-sure-api-key.age;
+      owner = "for-sure";
     };
   };
 }
