@@ -5,7 +5,6 @@ in {
   "openclaw.env.age".publicKeys       = [ nsimon-age nsimon-rsa ];
   "supervisor-token.age".publicKeys   = [ nsimon-age nsimon-rsa ];
   "linky-token.age".publicKeys        = [ nsimon-age nsimon-rsa ];
-  "firefly-app-key.age".publicKeys    = [ nsimon-age nsimon-rsa ];
   "linky-prm.age".publicKeys          = [ nsimon-age nsimon-rsa ];
   "openclaw-codex-auth.age".publicKeys = [ nsimon-age nsimon-rsa ];
   "rclone-storj.age".publicKeys        = [ nsimon-age nsimon-rsa ];
