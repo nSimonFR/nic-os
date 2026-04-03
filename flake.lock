@@ -302,6 +302,23 @@
         "type": "github"
       }
     },
+    "for-sure-swile": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-pCerI3VfMolLNpVxlrLNI06a9GY16XRy/pSFzJMx2VE=",
+        "path": "/home/nsimon/for-sure/connectors/swile",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nsimon/for-sure/connectors/swile",
+        "type": "path"
+      }
+    },
     "git-hooks": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -811,6 +828,7 @@
     "root": {
       "inputs": {
         "darwin": "darwin",
+        "for-sure-swile": "for-sure-swile",
         "home-manager": "home-manager",
         "mac-app-util": "mac-app-util",
         "nix-citizen": "nix-citizen",

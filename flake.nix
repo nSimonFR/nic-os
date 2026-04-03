@@ -65,6 +65,11 @@
       url = "path:/home/nsimon/sure-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    for-sure-swile = {
+      url = "path:/home/nsimon/for-sure/connectors/swile";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -138,6 +143,7 @@
           inputs.ragenix.nixosModules.default
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
+          inputs.for-sure-swile.nixosModules.default
           {
             home-manager = {
               useGlobalPkgs = true;
