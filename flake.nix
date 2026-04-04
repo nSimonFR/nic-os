@@ -106,8 +106,11 @@
       };
       telegramChatId = 82389391;
       # Use the flake's own store path so openclaw's builtins.getFlake works in pure mode.
-      # Skill changes need to be committed before they appear (self.outPath is the git tree copy).
-      nClawSkillsSource = "path:${self.outPath}";
+      # unsafeDiscardStringContext strips the store-path tracking so the string can be
+      # serialized to JSON by the openclaw module. The path is still valid — store paths
+      # are content-addressed so getFlake works without --impure.
+      # Skill changes need to be committed to be visible (self.outPath is the git tree copy).
+      nClawSkillsSource = builtins.unsafeDiscardStringContext "path:${self.outPath}";
     in
     {
       # OpenClaw expects a single plugin object at flake output `openclawPlugin`.
