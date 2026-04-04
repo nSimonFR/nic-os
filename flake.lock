@@ -302,26 +302,21 @@
         "type": "github"
       }
     },
-    "for-sure-swile": {
+    "for-sure": {
       "inputs": {
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "dir": "connectors/swile",
-        "lastModified": 1775228122,
-        "narHash": "sha256-g9rEZ4F0WDuR/50SdZa7Or1eV+Mh3QCwnJ60ru4/w3M=",
-        "owner": "nSimonFR",
-        "repo": "for-sure",
-        "rev": "2d3e9294043b163a4b0cf97e2ff6b5da0b9c00cf",
-        "type": "github"
+        "lastModified": 1775254698,
+        "narHash": "sha256-+KRASr3nFSAS2UBTbiMTQllEKjO4pWfUeaCEU8Qjcp4=",
+        "path": "/home/nsimon/for-sure/connectors/for-sure",
+        "type": "path"
       },
       "original": {
-        "dir": "connectors/swile",
-        "owner": "nSimonFR",
-        "repo": "for-sure",
-        "type": "github"
+        "path": "/home/nsimon/for-sure/connectors/for-sure",
+        "type": "path"
       }
     },
     "git-hooks": {
@@ -833,7 +828,7 @@
     "root": {
       "inputs": {
         "darwin": "darwin",
-        "for-sure-swile": "for-sure-swile",
+        "for-sure": "for-sure",
         "home-manager": "home-manager",
         "mac-app-util": "mac-app-util",
         "nix-citizen": "nix-citizen",
