@@ -62,12 +62,12 @@
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
     sure-nix = {
-      url = "path:/home/nsimon/sure-nix";
+      url = "github:nSimonFR/sure-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     for-sure = {
-      url = "path:/home/nsimon/for-sure/connectors/for-sure";
+      url = "github:nSimonFR/for-sure/feat/lunchflow-shared-sumeria-connector?dir=connectors/for-sure";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
