@@ -111,6 +111,18 @@
       # can be serialized to JSON by the openclaw module.
       # Skill changes need to be committed to be visible (self.outPath is the git tree copy).
       nClawSkillsSource = builtins.unsafeDiscardStringContext "path:${self.outPath}?narHash=${self.narHash}";
+      # Locked URLs for local plugin sub-flakes. git+file: with an explicit rev is pure
+      # (the rev is the lock). On a clean tree self.rev is always set. On a dirty tree
+      # falls back to the local path (requires --impure, but dirty rebuilds need it anyway).
+      pluginSource = name:
+        if self ? rev
+        then "git+file:///home/nsimon/nic-os?rev=${self.rev}&dir=rpi5/openclaw/plugins/${name}"
+        else "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/${name}";
+      openclawPluginSources = {
+        summarize = pluginSource "summarize";
+        gogcli = pluginSource "gogcli";
+        goplaces = pluginSource "goplaces";
+      };
     in
     {
       # OpenClaw expects a single plugin object at flake output `openclawPlugin`.
@@ -159,6 +171,7 @@
                   outputs
                   username
                   nClawSkillsSource
+                  openclawPluginSources
                   telegramChatId
                   ;
                 inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
@@ -234,6 +247,7 @@
               outputs
               username
               nClawSkillsSource
+              openclawPluginSources
               telegramChatId
               ;
             inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
