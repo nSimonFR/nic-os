@@ -105,8 +105,9 @@
         voiceWebhookPort = 8443;
       };
       telegramChatId = 82389391;
-      # Use direct working-tree path so local/untracked skill changes are visible immediately.
-      nClawSkillsSource = "path:/home/nsimon/nic-os";
+      # Use the flake's own store path so openclaw's builtins.getFlake works in pure mode.
+      # Skill changes need to be committed before they appear (self.outPath is the git tree copy).
+      nClawSkillsSource = "path:${self.outPath}";
     in
     {
       # OpenClaw expects a single plugin object at flake output `openclawPlugin`.
