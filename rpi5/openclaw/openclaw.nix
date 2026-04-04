@@ -3,6 +3,7 @@
   pkgs,
   lib,
   nClawSkillsSource,
+  openclawPluginSources,
   openclawSource,
   telegramChatId,
   tailnetFqdn,
@@ -117,14 +118,16 @@ in
       # nix-steipete-tools tool flakes hardcode nixpkgs@16c7794 with a narHash incompatible
       # with Nix 2.31.2 (assertion crash in flake.cc:37). Local wrappers fix this by following
       # our nixpkgs so the wrong inner narHash is never evaluated.
+      # Sources come from openclawPluginSources (git+file: with self.rev on clean trees,
+      # local path on dirty trees — dirty trees require --impure).
       {
-        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/summarize";
+        source = openclawPluginSources.summarize;
       }
       {
-        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/gogcli";
+        source = openclawPluginSources.gogcli;
       }
       {
-        source = "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/goplaces";
+        source = openclawPluginSources.goplaces;
       }
     ];
 
