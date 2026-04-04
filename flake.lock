@@ -309,14 +309,20 @@
         ]
       },
       "locked": {
-        "lastModified": 1775254698,
-        "narHash": "sha256-+KRASr3nFSAS2UBTbiMTQllEKjO4pWfUeaCEU8Qjcp4=",
-        "path": "/home/nsimon/for-sure/connectors/for-sure",
-        "type": "path"
+        "dir": "connectors/for-sure",
+        "lastModified": 1775254702,
+        "narHash": "sha256-OudXKZ3vhKPVuR0K7NTh9HNNdwa5R86O3G5vEqesWh4=",
+        "owner": "nSimonFR",
+        "repo": "for-sure",
+        "rev": "ba60306030b110f891636f0fd44935204e9b09f6",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/for-sure/connectors/for-sure",
-        "type": "path"
+        "dir": "connectors/for-sure",
+        "owner": "nSimonFR",
+        "ref": "feat/lunchflow-shared-sumeria-connector",
+        "repo": "for-sure",
+        "type": "github"
       }
     },
     "git-hooks": {
@@ -874,14 +880,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1774879854,
-        "narHash": "sha256-hNjrQc+HtHUVEtAgXPbxA4nbQ3bZytoAUgxLG56uFOU=",
-        "path": "/home/nsimon/sure-nix",
-        "type": "path"
+        "lastModified": 1775300592,
+        "narHash": "sha256-eQNza261C6x7K+w6UAaNRnukuekv5+rz71iZneaLZdI=",
+        "owner": "nSimonFR",
+        "repo": "sure-nix",
+        "rev": "fce7487fa318520abac3c559790a926a413db085",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/sure-nix",
-        "type": "path"
+        "owner": "nSimonFR",
+        "repo": "sure-nix",
+        "type": "github"
       }
     },
     "systems": {
