@@ -14,7 +14,8 @@ let
 
     class SumeriaTokenExtractor:
         def request(self, flow: http.HTTPFlow):
-            if "api.lydia-app.com" not in flow.request.host:
+            # In transparent mode flow.request.host is the IP; use pretty_host (SNI-based)
+            if "api.lydia-app.com" not in flow.request.pretty_host:
                 return
             h = flow.request.headers
             if h.get("auth_token") and h.get("public_token") and h.get("access-token"):
@@ -83,7 +84,7 @@ in
           "${pkgs.mitmproxy}/bin/mitmdump"
           "--mode transparent"
           "-p ${toString cfg.port}"
-          "--ignore-hosts '(?!api\\.lydia-app\\.com).*'"
+          "--ignore-hosts (?!api\\.lydia-app\\.com).*"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set block_global=false"
           "-s ${tokenExtractor}"

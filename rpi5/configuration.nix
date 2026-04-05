@@ -282,6 +282,7 @@ in
     blogwatcherPkg
     hydroxide
     immich-cli
+    dnsutils  # dig, nslookup
   ];
 
 
