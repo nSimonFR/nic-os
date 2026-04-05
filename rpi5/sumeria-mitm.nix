@@ -15,9 +15,11 @@ let
     class SumeriaTokenExtractor:
         def request(self, flow: http.HTTPFlow):
             # In transparent mode flow.request.host is the IP; use pretty_host (SNI-based)
-            if "api.lydia-app.com" not in flow.request.pretty_host:
+            host = flow.request.pretty_host
+            if "api.lydia-app.com" not in host:
                 return
             h = flow.request.headers
+            print(f"[sumeria-mitm] intercepted {host}{flow.request.path} auth={bool(h.get('auth_token'))}")
             if h.get("auth_token") and h.get("public_token") and h.get("access-token"):
                 tokens = {
                     "auth_token":   h["auth_token"],
@@ -28,6 +30,7 @@ let
                 with open(tmp, "w") as f:
                     json.dump(tokens, f, indent=2)
                 os.rename(tmp, TOKEN_FILE)
+                print(f"[sumeria-mitm] tokens written to {TOKEN_FILE}")
 
     addons = [SumeriaTokenExtractor()]
   '';
@@ -84,7 +87,7 @@ in
           "${pkgs.mitmproxy}/bin/mitmdump"
           "--mode transparent"
           "-p ${toString cfg.port}"
-          "--ignore-hosts (?!api\\.lydia-app\\.com).*"
+          "--allow-hosts api\\.lydia-app\\.com"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set block_global=false"
           "-s ${tokenExtractor}"
