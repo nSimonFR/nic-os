@@ -1,19 +1,24 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
 in
 {
   # ── for-sure: combined Swile + Sumeria Lunchflow connector ────────────────
   # Single service on port 8340; Sure connects to http://127.0.0.1:8340/api/v1
+  services.sumeria-mitm = {
+    enable           = true;
+    exitNodeClients  = [ "100.112.22.60" ]; # nphone
+    tokenFileGroup   = "for-sure";
+  };
+
   services.for-sure = {
-    enable            = true;
-    port              = 8340;
-    apiKeyFile        = "/run/agenix/for-sure-api-key";
-    swile.accountName        = "Swile";
-    mitm.enable              = true;
-    mitm.exitNodeClients     = [ "100.112.22.60" ]; # nphone
-    telegram.botTokenFile    = "/run/agenix/telegram-bot-token";
-    telegram.chatId          = toString telegramChatId;
+    enable                = true;
+    port                  = 8340;
+    apiKeyFile            = "/run/agenix/for-sure-api-key";
+    swile.accountName     = "Swile";
+    sumeria.tokenFile     = config.services.sumeria-mitm.tokenFile;
+    telegram.botTokenFile = "/run/agenix/telegram-bot-token";
+    telegram.chatId       = toString telegramChatId;
   };
 
 
