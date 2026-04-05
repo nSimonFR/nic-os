@@ -11,6 +11,7 @@
           config.allowUnfree = true;
         };
         uv = unstablePkgs.uv;
+        tailscale = unstablePkgs.tailscale;
         # nixpkgs 25.11 ships HA 2025.11.x; HA refuses to start if .HA_VERSION
         # in the data dir is newer than the binary (no downgrade allowed).
         # Track unstable so the package version always meets or exceeds what was
