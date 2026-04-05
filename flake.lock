@@ -310,11 +310,11 @@
       },
       "locked": {
         "dir": "connectors/for-sure",
-        "lastModified": 1775402063,
-        "narHash": "sha256-fkesPLL+X8D4jtItKosLGYAx2NWQcAVfS0jESReNs7I=",
+        "lastModified": 1775404281,
+        "narHash": "sha256-mCrdo+kejc5plLLwx/9GRb9/4uvyHc6Xxz63smUp70c=",
         "owner": "nSimonFR",
         "repo": "for-sure",
-        "rev": "fd452eabb3679056c539f9a6dfa8d67d155db3ff",
+        "rev": "411b5b6cab3a20923be711f44732533d23283933",
         "type": "github"
       },
       "original": {
