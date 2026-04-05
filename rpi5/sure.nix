@@ -11,6 +11,7 @@ in
     apiKeyFile        = "/run/agenix/for-sure-api-key";
     swile.accountName        = "Swile";
     mitm.enable              = true;
+    mitm.exitNodeClients     = [ "100.112.22.60" ]; # nphone
     telegram.botTokenFile    = "/run/agenix/telegram-bot-token";
     telegram.chatId          = toString telegramChatId;
   };
