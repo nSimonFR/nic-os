@@ -345,59 +345,10 @@ in
   swapDevices = [
     {
       # Dedicated swap partition on SD card (mmcblk0p3) — keeps swap I/O off NVMe.
-      # Created by sd-swap-setup.service on first boot after config activation.
       device = "/dev/mmcblk0p3";
       randomEncryption.enable = false;
     }
   ];
-
-  # One-shot service: runs before /home mounts, carves mmcblk0p3 out of the SD card.
-  # Skipped automatically on every subsequent boot once /dev/mmcblk0p3 exists.
-  systemd.services.sd-swap-setup = {
-    description = "One-time: resize /home RAID to carve SD card swap partition";
-    wantedBy = [ "local-fs-pre.target" ];
-    before    = [ "home.mount" "dev-mmcblk0p3.swap" ];
-    after     = [ "dev-md127.device" "systemd-udevd.service" ];
-    unitConfig = {
-      DefaultDependencies = false;
-      ConditionPathExists = "!/dev/mmcblk0p3";
-    };
-    path = with pkgs; [ e2fsprogs mdadm parted util-linux ];
-    serviceConfig = {
-      Type            = "oneshot";
-      RemainAfterExit = true;
-      ExecStart       = pkgs.writeShellScript "sd-swap-setup" ''
-        set -euxo pipefail
-
-        # 1. Filesystem check (required before offline resize)
-        e2fsck -f -y /dev/md127 || true
-
-        # 2. Shrink /home filesystem to 48G
-        resize2fs /dev/md127 48G
-
-        # 3. Shrink RAID array to match (48G in KiB)
-        mdadm --grow /dev/md127 --array-size $((48 * 1024 * 1024))
-        sleep 2
-
-        # 4. Remove mmcblk0p2 from RAID (RAID stays alive on sda2)
-        mdadm --fail   /dev/md127 /dev/mmcblk0p2
-        sleep 2
-        mdadm --remove /dev/md127 /dev/mmcblk0p2
-
-        # 5. Repartition SD card: shrink p2 to ~49G, create p3 for swap
-        parted -s /dev/mmcblk0 resizepart 2 50GiB
-        parted -s /dev/mmcblk0 mkpart primary linux-swap 50GiB 100%
-        partprobe /dev/mmcblk0
-        sleep 1
-
-        # 6. Re-add resized mmcblk0p2 to RAID (resyncs in background)
-        mdadm --add /dev/md127 /dev/mmcblk0p2
-
-        # 7. Format the new swap partition
-        mkswap /dev/mmcblk0p3
-      '';
-    };
-  };
 
   zramSwap = {
     enable = true;
