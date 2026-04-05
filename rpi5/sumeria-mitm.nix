@@ -105,15 +105,18 @@ in
     };
 
     # Redirect HTTPS from exit-node clients → mitmproxy. Scoped to specific IPs only.
+    # Also drop UDP 443 (QUIC/HTTP3) so apps fall back to TCP (HTTP2) which mitmproxy can intercept.
     networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
-      lib.concatMapStringsSep "\n" (ip:
-        "iptables -t nat -A PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port}"
-      ) cfg.exitNodeClients
+      lib.concatMapStringsSep "\n" (ip: ''
+        iptables -t nat -A PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port}
+        iptables -I FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
+      '') cfg.exitNodeClients
     );
     networking.firewall.extraStopCommands = lib.mkIf (cfg.exitNodeClients != []) (
-      lib.concatMapStringsSep "\n" (ip:
-        "iptables -t nat -D PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port} || true"
-      ) cfg.exitNodeClients
+      lib.concatMapStringsSep "\n" (ip: ''
+        iptables -t nat -D PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port} || true
+        iptables -D FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
+      '') cfg.exitNodeClients
     );
   };
 }
