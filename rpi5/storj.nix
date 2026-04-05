@@ -53,7 +53,9 @@ let
       --checkers 4 \
       --create-empty-src-dirs \
       --max-size 25G \
-      --exclude "lost+found/**"
+      --exclude "lost+found/**" \
+      --exclude "Photos/thumbs/**" \
+      --exclude "Photos/encoded-video/**"
   '';
 
   cleanupCli = pkgs.writeShellScriptBin "storj-cleanup" ''
@@ -130,7 +132,9 @@ let
       --checkers 4 \
       --delete-after \
       --max-size 25G \
-      --exclude "lost+found/**"
+      --exclude "lost+found/**" \
+      --exclude "Photos/thumbs/**" \
+      --exclude "Photos/encoded-video/**"
   '';
 in
 {
