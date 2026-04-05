@@ -1,4 +1,4 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
 in
@@ -9,8 +9,10 @@ in
     enable            = true;
     port              = 8340;
     apiKeyFile        = "/run/agenix/for-sure-api-key";
-    swile.accountName = "Swile";
-    mitm.enable       = true;
+    swile.accountName        = "Swile";
+    mitm.enable              = true;
+    telegram.botTokenFile    = "/run/agenix/telegram-bot-token";
+    telegram.chatId          = toString telegramChatId;
   };
 
 

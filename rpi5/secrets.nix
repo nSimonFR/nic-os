@@ -12,8 +12,10 @@
       owner = "nsimon";
     };
     telegram-bot-token = {
-      file = ../shared/telegram-bot-token.age;
+      file  = ../shared/telegram-bot-token.age;
       owner = "nsimon";
+      group = "for-sure";
+      mode  = "0440";
     };
     supervisor-token = {
       file = ./secrets/supervisor-token.age;
