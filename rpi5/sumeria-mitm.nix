@@ -85,12 +85,12 @@ in
       serviceConfig = {
         ExecStart = lib.concatStringsSep " " [
           "${pkgs.mitmproxy}/bin/mitmdump"
-          "--mode transparent"
+          "--mode reverse:https://api.lydia-app.com"
           "-p ${toString cfg.port}"
           "--allow-hosts api\\.lydia-app\\.com"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
-          "--set block_global=false"
           "--set dns_name_servers=8.8.8.8"
+          "--set keep_host_header=true"
           "-s ${tokenExtractor}"
         ];
         User                = "sumeria-mitm";
