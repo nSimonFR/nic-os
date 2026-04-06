@@ -99,6 +99,19 @@
         };
       };
 
+      # ── Split DNS: redirect Sumeria API to mitmproxy on this host ───
+      # Tailscale Split DNS routes lydia-app.com queries to this Blocky instance.
+      # Returning RPi5's Tailscale IP causes the iPhone to connect here on port 443,
+      # which iptables redirects to mitmproxy (transparent, port 8889).
+      # mitmproxy uses --set dns_name_servers=8.8.8.8 to resolve the real upstream IP.
+      customDNS = {
+        customTTL = "1m";
+        filterUnmappedTypes = true;
+        mapping = {
+          "api.lydia-app.com" = "100.122.54.2";
+        };
+      };
+
       # ── Caching ─────────────────────────────────────────────────────
       caching = {
         minTime = "5m";

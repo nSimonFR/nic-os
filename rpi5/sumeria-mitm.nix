@@ -90,6 +90,7 @@ in
           "--allow-hosts api\\.lydia-app\\.com"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set block_global=false"
+          "--set dns_name_servers=8.8.8.8"
           "-s ${tokenExtractor}"
         ];
         User                = "sumeria-mitm";
