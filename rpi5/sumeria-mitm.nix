@@ -91,6 +91,7 @@ in
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set dns_name_servers=8.8.8.8"
           "--set keep_host_header=true"
+          "--set connection_strategy=lazy"
           "-s ${tokenExtractor}"
         ];
         User                = "sumeria-mitm";
