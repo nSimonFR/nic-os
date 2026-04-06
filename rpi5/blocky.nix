@@ -99,18 +99,6 @@
         };
       };
 
-      # ── Split DNS: redirect Sumeria API to mitmproxy ─────────────────
-      # All Tailscale clients resolve api.lydia-app.com to 100.122.54.2 (this host).
-      # RPi5 itself is exempted via /etc/hosts (files beats dns in nsswitch), so
-      # mitmproxy's upstream DNS resolution gets the real IP (34.117.84.152).
-      customDNS = {
-        customTTL = "1m";
-        filterUnmappedTypes = true;
-        mapping = {
-          "api.lydia-app.com" = "100.122.54.2";
-        };
-      };
-
       # ── Caching ─────────────────────────────────────────────────────
       caching = {
         minTime = "5m";
