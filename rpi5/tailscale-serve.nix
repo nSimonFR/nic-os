@@ -7,7 +7,7 @@ let
     { port = 9099;  backend = "http://127.0.0.1:9099";  } # scrutiny (disk health)
     { port = 3000;  backend = "http://127.0.0.1:3000";  } # grafana
     { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
-    { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
+    { port = 8443;  backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
     { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
     { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
   ];
