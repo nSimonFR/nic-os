@@ -106,15 +106,17 @@ in
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
     };
 
-    # Drop UDP 443 (QUIC/HTTP3) from exit-node clients so the app falls back to TCP (HTTP2),
-    # which mitmproxy can intercept. No REDIRECT needed: mitmproxy owns port 443 directly.
+    # Drop UDP 443 (QUIC/HTTP3) from clients so the app falls back to TCP (HTTP2).
+    # Traffic to RPi5's own IP lands in INPUT (not FORWARD), so drop in both chains.
     networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
       lib.concatMapStringsSep "\n" (ip: ''
+        iptables -I INPUT   -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
         iptables -I FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
       '') cfg.exitNodeClients
     );
     networking.firewall.extraStopCommands = lib.mkIf (cfg.exitNodeClients != []) (
       lib.concatMapStringsSep "\n" (ip: ''
+        iptables -D INPUT   -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
         iptables -D FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
       '') cfg.exitNodeClients
     );
