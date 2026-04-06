@@ -208,12 +208,6 @@ in
     wireless.iwd = {
       enable = false;
     };
-    # Exempt api.lydia-app.com from Blocky's customDNS on this host.
-    # /etc/hosts (files) is checked before dns in nsswitch, so mitmproxy's
-    # upstream resolution gets the real IP instead of looping back to itself.
-    extraHosts = ''
-      34.117.84.152 api.lydia-app.com
-    '';
   };
 
   services.resolved.enable = true;

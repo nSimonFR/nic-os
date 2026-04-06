@@ -41,8 +41,8 @@ in
 
     port = lib.mkOption {
       type        = lib.types.port;
-      default     = 443;
-      description = "Port mitmproxy listens on (reverse mode, owns the Tailscale IP:443 directly)";
+      default     = 8889;
+      description = "Port for the mitmproxy regular proxy";
     };
 
     tokenFile = lib.mkOption {
@@ -85,13 +85,10 @@ in
       serviceConfig = {
         ExecStart = lib.concatStringsSep " " [
           "${pkgs.mitmproxy}/bin/mitmdump"
-          "--mode reverse:https://api.lydia-app.com"
+          "--mode regular"
           "-p ${toString cfg.port}"
           "--allow-hosts api\\.lydia-app\\.com"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
-          "--set dns_name_servers=8.8.8.8"
-          "--set keep_host_header=true"
-          "--set connection_strategy=lazy"
           "-s ${tokenExtractor}"
         ];
         User                = "sumeria-mitm";
@@ -106,19 +103,5 @@ in
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
     };
 
-    # Drop UDP 443 (QUIC/HTTP3) from clients so the app falls back to TCP (HTTP2).
-    # Traffic to RPi5's own IP lands in INPUT (not FORWARD), so drop in both chains.
-    networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
-      lib.concatMapStringsSep "\n" (ip: ''
-        iptables -I INPUT   -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
-        iptables -I FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
-      '') cfg.exitNodeClients
-    );
-    networking.firewall.extraStopCommands = lib.mkIf (cfg.exitNodeClients != []) (
-      lib.concatMapStringsSep "\n" (ip: ''
-        iptables -D INPUT   -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
-        iptables -D FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
-      '') cfg.exitNodeClients
-    );
   };
 }
