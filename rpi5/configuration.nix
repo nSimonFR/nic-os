@@ -124,6 +124,7 @@ in
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
+      extraUpFlags = [ "--advertise-connector" ];
     })
   ];
 
