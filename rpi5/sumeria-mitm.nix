@@ -41,8 +41,8 @@ in
 
     port = lib.mkOption {
       type        = lib.types.port;
-      default     = 8889;
-      description = "Port for the mitmproxy transparent proxy";
+      default     = 443;
+      description = "Port mitmproxy listens on (reverse mode, owns the Tailscale IP:443 directly)";
     };
 
     tokenFile = lib.mkOption {
@@ -105,17 +105,15 @@ in
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
     };
 
-    # Redirect HTTPS from exit-node clients → mitmproxy. Scoped to specific IPs only.
-    # Also drop UDP 443 (QUIC/HTTP3) so apps fall back to TCP (HTTP2) which mitmproxy can intercept.
+    # Drop UDP 443 (QUIC/HTTP3) from exit-node clients so the app falls back to TCP (HTTP2),
+    # which mitmproxy can intercept. No REDIRECT needed: mitmproxy owns port 443 directly.
     networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
       lib.concatMapStringsSep "\n" (ip: ''
-        iptables -t nat -A PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port}
         iptables -I FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
       '') cfg.exitNodeClients
     );
     networking.firewall.extraStopCommands = lib.mkIf (cfg.exitNodeClients != []) (
       lib.concatMapStringsSep "\n" (ip: ''
-        iptables -t nat -D PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port} || true
         iptables -D FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
       '') cfg.exitNodeClients
     );
