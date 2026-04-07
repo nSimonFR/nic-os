@@ -119,18 +119,5 @@ in
       '') cfg.exitNodeClients
     );
 
-    # Serve the mitmproxy CA cert at a stable path so it can be installed on clients.
-    # Access via Tailscale: https://<tailnet-hostname>/mitmproxy-ca.pem
-    services.nginx.virtualHosts."_mitm-ca" = {
-      serverName = "_";
-      listen = [{ addr = "127.0.0.1"; port = 17891; }];
-      locations."/mitmproxy-ca.pem" = {
-        alias = "/var/lib/sumeria-mitm/mitmproxy/mitmproxy-ca-cert.pem";
-        extraConfig = ''
-          default_type application/x-pem-file;
-          add_header Content-Disposition 'attachment; filename="mitmproxy-ca.pem"';
-        '';
-      };
-    };
   };
 }
