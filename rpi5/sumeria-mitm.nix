@@ -42,7 +42,7 @@ in
     port = lib.mkOption {
       type        = lib.types.port;
       default     = 8889;
-      description = "Port for the mitmproxy regular proxy";
+      description = "Port for the mitmproxy transparent proxy";
     };
 
     tokenFile = lib.mkOption {
@@ -85,10 +85,11 @@ in
       serviceConfig = {
         ExecStart = lib.concatStringsSep " " [
           "${pkgs.mitmproxy}/bin/mitmdump"
-          "--mode regular"
+          "--mode transparent"
           "-p ${toString cfg.port}"
           "--allow-hosts api\\.lydia-app\\.com"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
+          "--set block_global=false"
           "-s ${tokenExtractor}"
         ];
         User                = "sumeria-mitm";
@@ -103,5 +104,33 @@ in
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
     };
 
+    # Redirect HTTPS from exit-node clients → mitmproxy. Scoped to specific IPs only.
+    # Also drop UDP 443 (QUIC/HTTP3) so apps fall back to TCP (HTTP2) which mitmproxy can intercept.
+    networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
+      lib.concatMapStringsSep "\n" (ip: ''
+        iptables -t nat -A PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port}
+        iptables -I FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
+      '') cfg.exitNodeClients
+    );
+    networking.firewall.extraStopCommands = lib.mkIf (cfg.exitNodeClients != []) (
+      lib.concatMapStringsSep "\n" (ip: ''
+        iptables -t nat -D PREROUTING -i tailscale0 -s ${ip} -p tcp --dport 443 -j REDIRECT --to-port ${toString cfg.port} || true
+        iptables -D FORWARD -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
+      '') cfg.exitNodeClients
+    );
+
+    # Serve the mitmproxy CA cert at a stable path so it can be installed on clients.
+    # Access via Tailscale: https://<tailnet-hostname>/mitmproxy-ca.pem
+    services.nginx.virtualHosts."_mitm-ca" = {
+      serverName = "_";
+      listen = [{ addr = "127.0.0.1"; port = 17891; }];
+      locations."/mitmproxy-ca.pem" = {
+        alias = "/var/lib/sumeria-mitm/mitmproxy/mitmproxy-ca-cert.pem";
+        extraConfig = ''
+          default_type application/x-pem-file;
+          add_header Content-Disposition 'attachment; filename="mitmproxy-ca.pem"';
+        '';
+      };
+    };
   };
 }
