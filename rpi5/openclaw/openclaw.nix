@@ -183,27 +183,24 @@ in
           mode = "oauth";
         };
 
+        models.providers.ollama = {
+          baseUrl = "http://beast:11434";
+          apiKey = "unused"; # Ollama doesn't require auth
+          api = "ollama";
+        };
+
         agents.defaults = {
           skipBootstrap = true;
           model = {
             primary = "openai-codex/gpt-5.4";
-            fallbacks = [ "anthropic/claude-haiku-4-5" ];
+            fallbacks = [ "ollama/qwen3:30b-a3b" ];
           };
           models = {
-            "anthropic/claude-sonnet-4-6" = {
-              alias = "sonnet";
-            };
-            "anthropic/claude-opus-4-6" = {
-              alias = "opus";
-            };
-            # "google/gemini-2.5-flash-lite" = {
-            #   alias = "flash";
-            # };
-            "anthropic/claude-haiku-4-5" = {
-              alias = "haiku";
-            };
             "openai-codex/gpt-5.4" = {
               alias = "codex";
+            };
+            "ollama/qwen3:30b-a3b" = {
+              alias = "qwen";
             };
           };
           heartbeat = {
