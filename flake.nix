@@ -70,6 +70,11 @@
       url = "github:nSimonFR/for-sure?dir=connectors/for-sure";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    llmfit = {
+      url = "github:AlexsJones/llmfit";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
