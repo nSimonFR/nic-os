@@ -310,17 +310,16 @@
       },
       "locked": {
         "dir": "connectors/for-sure",
-        "lastModified": 1775408334,
-        "narHash": "sha256-yUbASSjz6uMnWPsvEtRthLuza0n6qYyXWiOxYlFKu6E=",
+        "lastModified": 1775675476,
+        "narHash": "sha256-IVxWxu/ngt4GmafAaUUaPcsWqn6GXTgWfl+/GKdThX4=",
         "owner": "nSimonFR",
         "repo": "for-sure",
-        "rev": "3dd4cf7fc9c3a883220837e9f8c9cc41755c4951",
+        "rev": "8a5781ae2feb98c85c96c1a74f768068b427b80b",
         "type": "github"
       },
       "original": {
         "dir": "connectors/for-sure",
         "owner": "nSimonFR",
-        "ref": "feat/lunchflow-shared-sumeria-connector",
         "repo": "for-sure",
         "type": "github"
       }
