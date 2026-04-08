@@ -26,6 +26,7 @@ in
   home.packages = with pkgs; [
     _1password-gui
     beeper
+    bemoji
     cliphist
     libnotify
     unstablePkgs.code-cursor
