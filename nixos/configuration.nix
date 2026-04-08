@@ -587,26 +587,8 @@ kdePackages.kwallet
   services.ollama = {
     enable = true;
     acceleration = "cuda";
+    host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
     loadModels = [ "qwen3:30b-a3b" ];
-  };
-
-  # Expose ollama to Tailnet via Tailscale Serve (HTTPS, tailnet-only)
-  systemd.services.tailscale-serve-ollama = {
-    description = "Tailscale Serve for Ollama";
-    after = [ "network-online.target" "tailscaled.service" "ollama.service" ];
-    wants = [ "network-online.target" "tailscaled.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-    };
-    script = ''
-      sleep 2
-      ${pkgs.tailscale}/bin/tailscale serve --bg --https=11434 http://127.0.0.1:11434
-    '';
-    preStop = ''
-      ${pkgs.tailscale}/bin/tailscale serve --https=11434 off || true
-    '';
   };
 
   services.hardware.openrgb = {
