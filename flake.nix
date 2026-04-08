@@ -67,7 +67,7 @@
     };
 
     for-sure = {
-      url = "github:nSimonFR/for-sure/feat/lunchflow-shared-sumeria-connector?dir=connectors/for-sure";
+      url = "github:nSimonFR/for-sure?dir=connectors/for-sure";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
