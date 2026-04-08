@@ -11,6 +11,26 @@ let
   # Toggle between LightDM (true) and ReGreet (false)
   useLightdm = false;
 
+  # Minimal Hyprland config for greeter session — DPMS off after 5 min idle (WOL power saving)
+  greeterHypridleConfig = pkgs.writeText "greetd-hypridle.conf" ''
+    listener {
+      timeout = 300
+      on-timeout = hyprctl dispatch dpms off
+      on-resume = hyprctl dispatch dpms on
+    }
+  '';
+  greeterHyprlandConfig = pkgs.writeText "greetd-hyprland.conf" ''
+    misc {
+      disable_hyprland_logo = true
+      disable_splash_rendering = true
+    }
+    animations {
+      enabled = false
+    }
+    exec-once = ${pkgs.hypridle}/bin/hypridle -c ${greeterHypridleConfig}
+    exec-once = ${pkgs.greetd.regreet}/bin/regreet; hyprctl dispatch exit
+  '';
+
 in
 {
   imports = [
@@ -221,6 +241,13 @@ kdePackages.kwallet
         return polkit.Result.YES;
       }
     });
+    polkit.addRule(function(action, subject) {
+      if (action.id === "org.freedesktop.systemd1.manage-units" &&
+          action.lookup("unit") === "ollama.service" &&
+          subject.isInGroup("users")) {
+        return polkit.Result.YES;
+      }
+    });
   '';
 
   # 1Password GUI with proper polkit integration
@@ -270,6 +297,10 @@ kdePackages.kwallet
       };
     };
   };
+
+  # Use Hyprland instead of cage for greeter — enables hypridle DPMS (power saving after WOL)
+  services.greetd.settings.default_session.command = lib.mkForce
+    "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
 
   users.users.greeter = {
     isSystemUser = true;
@@ -399,14 +430,14 @@ kdePackages.kwallet
         nv_powermizer_mode = 1;
       };
       custom = {
-        start = builtins.concatStringsSep " && " [
-          "${pkgs.libnotify}/bin/notify-send 'GameMode started'"
-          "systemctl stop ollama || true"
-        ];
-        end = builtins.concatStringsSep " && " [
-          "${pkgs.libnotify}/bin/notify-send 'GameMode ended'"
-          "systemctl start ollama"
-        ];
+        start = toString (pkgs.writeShellScript "gamemode-start" ''
+          ${pkgs.libnotify}/bin/notify-send 'GameMode started'
+          ${pkgs.systemd}/bin/systemctl stop ollama || true
+        '');
+        end = toString (pkgs.writeShellScript "gamemode-end" ''
+          ${pkgs.libnotify}/bin/notify-send 'GameMode ended'
+          ${pkgs.systemd}/bin/systemctl start ollama
+        '');
       };
     };
   };
