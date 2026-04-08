@@ -1,6 +1,7 @@
 {
   pkgs,
   unstablePkgs,
+  inputs,
   lib,
   devSetup ? false,
   ...
@@ -77,6 +78,9 @@
       yq
       zoxide
       zsh
+
+      # LLM-to-hardware matching CLI
+      inputs.llmfit.packages.${pkgs.system}.default
     ]
     ++ lib.optionals devSetup [
       # Dev tools (heavy packages, only on dev machines)
