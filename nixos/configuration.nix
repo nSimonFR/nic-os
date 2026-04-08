@@ -399,8 +399,14 @@ kdePackages.kwallet
         nv_powermizer_mode = 1;
       };
       custom = {
-        start = "${pkgs.libnotify}/bin/notify-send 'GameMode started'";
-        end = "${pkgs.libnotify}/bin/notify-send 'GameMode ended'";
+        start = builtins.concatStringsSep " && " [
+          "${pkgs.libnotify}/bin/notify-send 'GameMode started'"
+          "systemctl stop ollama || true"
+        ];
+        end = builtins.concatStringsSep " && " [
+          "${pkgs.libnotify}/bin/notify-send 'GameMode ended'"
+          "systemctl start ollama"
+        ];
       };
     };
   };
@@ -546,11 +552,31 @@ kdePackages.kwallet
   programs.virt-manager.enable = true;
 
   # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
-  # services.ollama = {
-  #   enable = true;
-  #   package = pkgs.ollama-cuda;
-  #   loadModels = [ "qwen2.5:14b" ];
-  # };
+  # Qwen3-30B-A3B: MoE with 3B active params, ~19% of 12GB VRAM, ~240 tok/s
+  services.ollama = {
+    enable = true;
+    acceleration = "cuda";
+    loadModels = [ "qwen3:30b-a3b" ];
+  };
+
+  # Expose ollama to Tailnet via Tailscale Serve (HTTPS, tailnet-only)
+  systemd.services.tailscale-serve-ollama = {
+    description = "Tailscale Serve for Ollama";
+    after = [ "network-online.target" "tailscaled.service" "ollama.service" ];
+    wants = [ "network-online.target" "tailscaled.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      sleep 2
+      ${pkgs.tailscale}/bin/tailscale serve --bg --https=11434 http://127.0.0.1:11434
+    '';
+    preStop = ''
+      ${pkgs.tailscale}/bin/tailscale serve --https=11434 off || true
+    '';
+  };
 
   services.hardware.openrgb = {
     enable = true;
