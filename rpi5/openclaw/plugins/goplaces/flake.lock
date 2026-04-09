@@ -18,12 +18,18 @@
     },
     "root": {
       "inputs": {
+        "nixpkgs": "nixpkgs",
+        "root": "root_2"
+      }
+    },
+    "root_2": {
+      "inputs": {
         "nixpkgs": [
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1770234344,
+        "lastModified": 1770237944,
         "narHash": "sha256-nfCSSyNU97XpKVPgo6mODBwrVeTOuMCl3i18QuGjpN0=",
         "owner": "openclaw",
         "repo": "nix-steipete-tools",
@@ -37,14 +43,8 @@
         "rev": "6352c8247b3b889d7f17bce1f09d6c58fd34932c",
         "type": "github"
       }
-    },
-    "self": {
-      "inputs": {
-        "nixpkgs": "nixpkgs",
-        "root": "root"
-      }
     }
   },
-  "root": "self",
+  "root": "root",
   "version": 7
 }
