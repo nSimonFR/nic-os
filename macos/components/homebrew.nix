@@ -35,6 +35,7 @@
     "1password"
     "android-studio"
     "arc"
+    "beekeeper-studio"
     "beeper"
     "cursor"
     "cyberduck"
