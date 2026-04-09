@@ -193,14 +193,17 @@ in
           skipBootstrap = true;
           model = {
             primary = "openai-codex/gpt-5.4";
-            fallbacks = [ "ollama/qwen3:30b-a3b" ];
+            fallbacks = [ "ollama/gemma4:26b" "ollama/qwen3.5:35b-a3b" ];
           };
           models = {
             "openai-codex/gpt-5.4" = {
               alias = "codex";
             };
-            "ollama/qwen3:30b-a3b" = {
+            "ollama/qwen3.5:35b-a3b" = {
               alias = "qwen";
+            };
+            "ollama/gemma4:26b" = {
+              alias = "gemma";
             };
           };
           heartbeat = {

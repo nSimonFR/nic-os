@@ -583,12 +583,17 @@ kdePackages.kwallet
   programs.virt-manager.enable = true;
 
   # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
-  # Qwen3-30B-A3B: MoE with 3B active params, ~19% of 12GB VRAM, ~240 tok/s
+  # Gemma 4 26B-A4B: MoE with 3.8B active params, fits in 12GB VRAM at Q4, Arena ELO 1441
+  # Qwen3.5-35B-A3B: MoE with 3B active params, highest benchmarks (85.3 MMLU-Pro), RAM offload
   services.ollama = {
     enable = true;
+    package = (import inputs.nixpkgs-unstable {
+      system = "x86_64-linux";
+      config.allowUnfree = true;
+    }).ollama;
     acceleration = "cuda";
     host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
-    loadModels = [ "qwen3:30b-a3b" ];
+    loadModels = [ "gemma4:26b" "qwen3.5:35b-a3b" ];
   };
 
   services.hardware.openrgb = {
