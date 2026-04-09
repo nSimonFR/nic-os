@@ -18,7 +18,16 @@ alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node 
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
 # Claude Code: AI identity (nSimonFR-ai), clear personal GITHUB_TOKEN
-_claude_env=(GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" GH_TOKEN="$(gh auth token --user nSimonFR-ai)" GITHUB_TOKEN="" PATH="$HOME/.claude/bin:$PATH")
-alias claude='${_claude_env[@]} claude --dangerously-skip-permissions --remote-control'
-alias cc='${_claude_env[@]} claude --continue'
-alias cr='${_claude_env[@]} claude --resume'
+# Uses functions + `env` so env var assignments work correctly in zsh
+# (zsh does not treat dynamically-expanded array words as env var prefixes)
+_claude_with_env() {
+  env \
+    GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
+    GH_TOKEN="$(gh auth token --user nSimonFR-ai)" \
+    GITHUB_TOKEN="" \
+    PATH="$HOME/.claude/bin:$PATH" \
+    command claude "$@"
+}
+claude() { _claude_with_env --dangerously-skip-permissions --remote-control "$@"; }
+cc()     { _claude_with_env --continue "$@"; }
+cr()     { _claude_with_env --resume "$@"; }
