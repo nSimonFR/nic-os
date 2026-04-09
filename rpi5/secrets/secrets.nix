@@ -11,5 +11,6 @@ in {
   "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-rsa ];
   "sure-app-env.age".publicKeys        = [ nsimon-age nsimon-rsa ];
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-rsa ];
-  "for-sure-swile-api-key.age".publicKeys = [ nsimon-age nsimon-rsa ];
+  "for-sure-swile-api-key.age".publicKeys   = [ nsimon-age nsimon-rsa ];
+  "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-rsa ];
 }

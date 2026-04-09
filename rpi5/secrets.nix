@@ -49,5 +49,9 @@
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";
     };
+    vaultwarden-admin-token = {
+      file  = ./secrets/vaultwarden-admin-token.age;
+      owner = "vaultwarden";
+    };
   };
 }
