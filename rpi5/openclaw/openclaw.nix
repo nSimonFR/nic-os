@@ -144,6 +144,8 @@ in
 
     instances.default = {
       enable = true;
+      # openclaw bundles node/python/etc.; lower priority avoids conflicts with nixpkgs versions.
+      package = pkgs.openclaw.overrideAttrs (_: { meta.priority = 20; });
 
       config = {
         gateway.mode = "local";
