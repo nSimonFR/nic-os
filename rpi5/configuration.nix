@@ -119,6 +119,7 @@ in
     ./immich.nix
     ./sure.nix
     ./sumeria-mitm.nix
+    ./vaultwarden.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
