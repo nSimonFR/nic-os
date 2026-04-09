@@ -33,7 +33,7 @@
       WEBSOCKET_ENABLED = true; # real-time sync across Bitwarden clients
 
       # SSH key vault + SSH agent feature (desktop ≥ 2024.12.0).
-      EXPERIMENTAL_CLIENT_FEATURE_FLAGS = "ssh-key-vault,ssh-agent";
+      EXPERIMENTAL_CLIENT_FEATURE_FLAGS = "ssh-key-vault-item,ssh-agent";
     };
 
     # ADMIN_TOKEN is injected at runtime from agenix.
