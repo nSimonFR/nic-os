@@ -189,6 +189,10 @@ in
           baseUrl = "http://beast:11434";
           apiKey = "unused"; # Ollama doesn't require auth
           api = "ollama";
+          models = [
+            { id = "gemma4:26b";        name = "Gemma 4 26B"; }
+            { id = "qwen3.5:35b-a3b";   name = "Qwen3.5 35B A3B"; }
+          ];
         };
 
         agents.defaults = {
