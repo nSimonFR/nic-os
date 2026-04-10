@@ -25,6 +25,7 @@ in
 {
   home.packages = with pkgs; [
     _1password-gui
+    bitwarden-desktop
     beeper
     bemoji
     cliphist
