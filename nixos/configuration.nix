@@ -20,6 +20,9 @@ let
     }
   '';
   greeterHyprlandConfig = pkgs.writeText "greetd-hyprland.conf" ''
+    monitor = desc:LG Electronics 38GN950 008NTKFBE741, 3840x1600@160, 1080x0, 1
+    monitor = desc:Acer Technologies GN246HL LW3EE0058532, 1920x1080@60, 0x0, 1, transform, 3
+    monitor = , preferred, auto, 1
     misc {
       disable_hyprland_logo = true
       disable_splash_rendering = true
