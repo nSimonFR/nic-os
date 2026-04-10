@@ -1,9 +1,8 @@
 [include]
   path = ~/.config/git/config-shared
 [user]
-  email = 13413730+nSimonFR@users.noreply.github.com
-  name = nSimonFR-ai
-[core]
-  sshCommand = ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none
+  email = nsimon@pm.me
+  name = Nicolas Simon
+  signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
 [commit]
-  gpgsign = false
+  gpgsign = true
