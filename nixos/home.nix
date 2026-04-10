@@ -58,8 +58,8 @@
       ELECTRON_OZONE_PLATFORM_HINT = "auto";
       NIXOS_OZONE_WL = "1";
 
-      # 1Password SSH agent
-      SSH_AUTH_SOCK = "$HOME/.1password/agent.sock";
+      # Bitwarden/Vaultwarden SSH agent (desktop app)
+      SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
 
       # Vulkan shader cache size (increase from default ~1GB to 10GB)
       "MESA_SHADER_CACHE_MAX_SIZE" = "10G";
