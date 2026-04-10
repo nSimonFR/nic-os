@@ -1,8 +1,0 @@
-[include]
-  path = ~/.config/git/config-shared
-[user]
-  email = nsimon@pm.me
-  name = Nicolas Simon
-  signingkey = DA790614A5E94643A86333BBFDA7E6C61C9EA664
-[commit]
-  gpgsign = true

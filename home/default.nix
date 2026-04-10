@@ -23,9 +23,8 @@
   ];
 
   xdg.enable = true;
-  xdg.configFile."git/config".source = ./dotfiles/git/gitconfig-personal;
+  xdg.configFile."git/config".source = ./dotfiles/git/gitconfig;
   xdg.configFile."git/config-shared".source = ./dotfiles/git/gitconfig-shared;
-  xdg.configFile."git/config-personal".source = ./dotfiles/git/gitconfig-personal;
   xdg.configFile."git/ignore".source = ./dotfiles/git/gitignore;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
   xdg.configFile."atuin/config.toml".source = ./dotfiles/atuin.toml;
