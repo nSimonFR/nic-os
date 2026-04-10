@@ -26,7 +26,7 @@ _claude_with_env() {
     GH_TOKEN="$(gh auth token --user nSimonFR-ai)" \
     GITHUB_TOKEN="" \
     PATH="$HOME/.claude/bin:$PATH" \
-    command claude "$@"
+    claude "$@"
 }
 claude() { _claude_with_env --dangerously-skip-permissions --remote-control "$@"; }
 cc()     { _claude_with_env --continue "$@"; }
