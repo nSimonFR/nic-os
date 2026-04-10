@@ -15,6 +15,7 @@ in
     description = "SiYuan Notes";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
+    environment.RUN_IN_CONTAINER = "true";
     serviceConfig = {
       Type = "simple";
       User = "siyuan";
@@ -22,12 +23,14 @@ in
       StateDirectory = "siyuan";
       WorkingDirectory = dataDir;
       ExecStart = pkgs.writeShellScript "siyuan-start" ''
+        export RUN_IN_CONTAINER=true
         AUTH_CODE=$(cat /run/agenix/siyuan-auth-code)
         exec ${pkgs.siyuan.kernel}/bin/kernel \
           -port ${toString port} \
           -workspace ${dataDir} \
           -wd ${pkgs.siyuan}/share/siyuan/resources \
-          -accessAuthCode "$AUTH_CODE"
+          -accessAuthCode "$AUTH_CODE" \
+          -resident true
       '';
       Restart = "on-failure";
       RestartSec = "5s";
