@@ -65,6 +65,12 @@ in
     "OPENCLAW_BUNDLED_SKILLS_DIR=${bundledSkillsLink}"
     "OPENCLAW_NO_RESPAWN=1"
     "NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache"
+    # AI git identity for agents dispatched by openclaw (Claude Code, codex, etc.)
+    "GIT_SSH_COMMAND=ssh -i /home/nsimon/.ssh/ai_id_ed25519 -o IdentityAgent=none"
+    "GIT_AUTHOR_NAME=nSimonFR-ai"
+    "GIT_AUTHOR_EMAIL=265587706+nSimonFR-ai@users.noreply.github.com"
+    "GIT_COMMITTER_NAME=nSimonFR-ai"
+    "GIT_COMMITTER_EMAIL=265587706+nSimonFR-ai@users.noreply.github.com"
   ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [ "${setupScript}" ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
