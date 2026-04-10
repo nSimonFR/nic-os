@@ -33,6 +33,7 @@
 
   casks = [
     "1password"
+    "bitwarden"
     "android-studio"
     "arc"
     "beekeeper-studio"
