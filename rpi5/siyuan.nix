@@ -29,8 +29,7 @@ in
           -port ${toString port} \
           -workspace ${dataDir} \
           -wd ${pkgs.siyuan}/share/siyuan/resources \
-          -accessAuthCode "$AUTH_CODE" \
-          -resident true
+          -accessAuthCode "$AUTH_CODE"
       '';
       Restart = "on-failure";
       RestartSec = "5s";
