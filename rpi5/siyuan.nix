@@ -1,6 +1,6 @@
 { pkgs, ... }:
 let
-  port = 6806;
+  port = 16806; # internal port (6806 conflicts with Tailscale Serve on 0.0.0.0)
   dataDir = "/var/lib/siyuan";
 in
 {
