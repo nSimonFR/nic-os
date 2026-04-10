@@ -13,4 +13,5 @@ in {
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-rsa ];
   "for-sure-swile-api-key.age".publicKeys   = [ nsimon-age nsimon-rsa ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-rsa ];
+  "siyuan-auth-code.age".publicKeys        = [ nsimon-age nsimon-rsa ];
 }

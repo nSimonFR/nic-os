@@ -11,6 +11,7 @@ let
     { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
     { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
     { port = 8222;  backend = "http://127.0.0.1:8222";  } # vaultwarden (bitwarden)
+    { port = 6806;  backend = "http://127.0.0.1:6806";  } # siyuan (notes/wiki)
   ];
 
   # Publicly-accessible services (tailscale funnel).
