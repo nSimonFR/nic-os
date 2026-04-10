@@ -188,7 +188,7 @@ function age-edit() {
   local tmp=$(mktemp)
   age -d -i ~/.ssh/age "$file" > "$tmp" \
     && vim "$tmp" \
-    && age -R ~/.ssh/age.pub -R ~/.ssh/id_rsa.pub -o "$file" "$tmp"
+    && age -R ~/.ssh/age.pub -o "$file" "$tmp"
   rm -f "$tmp"
 }
 
