@@ -23,9 +23,12 @@ alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit no
 _claude_with_env() {
   env \
     GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
+    GIT_AUTHOR_NAME="nSimonFR-ai" \
+    GIT_AUTHOR_EMAIL="265587706+nSimonFR-ai@users.noreply.github.com" \
+    GIT_COMMITTER_NAME="nSimonFR-ai" \
+    GIT_COMMITTER_EMAIL="265587706+nSimonFR-ai@users.noreply.github.com" \
     GH_TOKEN="$(gh auth token --user nSimonFR-ai)" \
     GITHUB_TOKEN="" \
-    PATH="$HOME/.claude/bin:$PATH" \
     claude "$@"
 }
 claude() { _claude_with_env --dangerously-skip-permissions --remote-control "$@"; }

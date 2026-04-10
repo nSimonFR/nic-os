@@ -23,7 +23,7 @@
   ];
 
   xdg.enable = true;
-  xdg.configFile."git/config".source = ./dotfiles/git/gitconfig;
+  xdg.configFile."git/config".source = ./dotfiles/git/gitconfig-personal;
   xdg.configFile."git/config-shared".source = ./dotfiles/git/gitconfig-shared;
   xdg.configFile."git/config-personal".source = ./dotfiles/git/gitconfig-personal;
   xdg.configFile."git/ignore".source = ./dotfiles/git/gitignore;
