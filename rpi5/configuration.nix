@@ -214,6 +214,12 @@ in
 
   services.resolved.enable = true;
 
+  # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
+  services.journald.extraConfig = ''
+    SystemMaxUse=500M
+    RuntimeMaxUse=20M
+  '';
+
   time.timeZone = "Europe/Paris";
 
   i18n.defaultLocale = "en_US.UTF-8";
