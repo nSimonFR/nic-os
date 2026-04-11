@@ -80,7 +80,6 @@ in
     export OPENCLAW_NO_RESPAWN=1
     export NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
     [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
-    [ -n "$ANTHROPIC_API_KEY" ] && export CLAUDE_CODE_OAUTH_TOKEN="$ANTHROPIC_API_KEY"
   '';
   # Restore OpenAI Codex OAuth auth profile on fresh install (only if missing).
   # openclaw manages token rotation itself; we never overwrite an existing file.
