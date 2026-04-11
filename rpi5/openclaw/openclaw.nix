@@ -11,6 +11,16 @@
   ...
 }:
 let
+  openclawWrapped = pkgs.runCommand "openclaw-wrapped" { nativeBuildInputs = [ pkgs.makeWrapper ]; } ''
+    mkdir -p $out/bin
+    makeWrapper ${pkgs.openclaw}/bin/openclaw $out/bin/openclaw \
+      --set OPENCLAW_BUNDLED_PLUGINS_DIR "${bundledRuntimeDir}/extensions" \
+      --set OPENCLAW_BUNDLED_SKILLS_DIR "${bundledRuntimeDir}/skills" \
+      --set OPENCLAW_NO_RESPAWN 1 \
+      --set NODE_COMPILE_CACHE /var/tmp/openclaw-compile-cache \
+      --run '[ -r /run/agenix/openclaw-env ] && set -a && . /run/agenix/openclaw-env && set +a && unset ANTHROPIC_API_KEY'
+  '';
+
   bundledRuntimeDir = "/home/nsimon/.openclaw/bundled-runtime";
   bundledExtensionsDir = "${bundledRuntimeDir}/extensions";
   bundledNodeModulesLink = "${bundledRuntimeDir}/node_modules";
@@ -74,13 +84,8 @@ in
   ];
   systemd.user.services.openclaw-gateway.Service.ExecStartPre = [ "${setupScript}" ];
   systemd.user.services.openclaw-gateway.Install.WantedBy = [ "default.target" ];
-  programs.zsh.envExtra = ''
-    export OPENCLAW_BUNDLED_PLUGINS_DIR="${bundledExtensionsDir}"
-    export OPENCLAW_BUNDLED_SKILLS_DIR="${bundledSkillsLink}"
-    export OPENCLAW_NO_RESPAWN=1
-    export NODE_COMPILE_CACHE=/var/tmp/openclaw-compile-cache
-    [ -r /run/agenix/openclaw-env ] && source /run/agenix/openclaw-env
-  '';
+  # Env vars are passed to the systemd service via EnvironmentFile + Environment.
+  # For CLI usage, the openclaw package is wrapped below (openclawWrapped).
   # Restore OpenAI Codex OAuth auth profile on fresh install (only if missing).
   # openclaw manages token rotation itself; we never overwrite an existing file.
   home.activation.restoreOpenClawCodexAuth = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
@@ -150,7 +155,7 @@ in
     instances.default = {
       enable = true;
       # openclaw bundles node/python/etc.; lower priority avoids conflicts with nixpkgs versions.
-      package = pkgs.openclaw.overrideAttrs (_: { meta.priority = 20; });
+      package = openclawWrapped;
 
       config = {
         gateway.mode = "local";
