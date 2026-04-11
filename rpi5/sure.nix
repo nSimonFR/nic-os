@@ -64,6 +64,15 @@ in
     redisUrl        = "redis://${redisHost}:${toString redisPort}/2";
   };
 
+  # ── Sure memory optimizations ──────────────────────────────────────────────
+  # Reduce Sidekiq concurrency (personal app, no need for 3 threads) and limit
+  # glibc malloc arenas to curb RSS on a 4 GB RPi5.
+  systemd.services.sure-worker.environment = {
+    RAILS_MAX_THREADS = "1";
+    MALLOC_ARENA_MAX  = "2";
+  };
+  systemd.services.sure-web.environment.MALLOC_ARENA_MAX = "2";
+
   # sure-setup (migrations) must run after the password is set
   systemd.services.sure-setup = {
     after    = [ "sure-pg-setup.service" ];
