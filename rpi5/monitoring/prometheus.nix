@@ -8,14 +8,14 @@ in
     enable         = true;
     port           = prometheusPort;
     listenAddress  = "127.0.0.1";
-    retentionTime  = "30d";
+    retentionTime  = "15d";
     # Disable build-time config validation: bearer_token_file for Home Assistant
     # points to a runtime secret that doesn't exist in the Nix build sandbox.
     checkConfig    = false;
 
     globalConfig = {
-      scrape_interval     = "15s";
-      evaluation_interval = "15s";
+      scrape_interval     = "60s";
+      evaluation_interval = "60s";
     };
 
     scrapeConfigs = [
@@ -36,6 +36,9 @@ in
         ]; }
     ];
   };
+
+  # Limit Go runtime threads to reduce GC overhead on 4 GB RPi5
+  systemd.services.prometheus.environment.GOMAXPROCS = "2";
 
   # ── Exporters ───────────────────────────────────────────────────────────────
   services.prometheus.exporters = {
