@@ -592,8 +592,8 @@ kdePackages.kwallet
     package = (import inputs.nixpkgs-unstable {
       system = "x86_64-linux";
       config.allowUnfree = true;
-    }).ollama;
-    acceleration = "cuda";
+      config.cudaSupport = true;
+    }).ollama-cuda;
     host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
     loadModels = [ "gemma4:26b" "qwen3.5:35b-a3b" ];
   };
