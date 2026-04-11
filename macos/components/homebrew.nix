@@ -38,6 +38,7 @@
     "arc"
     "beekeeper-studio"
     "beeper"
+    "claude"
     "cursor"
     "cyberduck"
     "disk-inventory-x"
