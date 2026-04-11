@@ -12,13 +12,16 @@ let
   useLightdm = false;
 
   # Minimal Hyprland config for greeter session — DPMS off after 5 min idle (WOL power saving)
-  greeterHypridleConfig = pkgs.writeText "greetd-hypridle.conf" ''
-    listener {
-      timeout = 300
-      on-timeout = hyprctl dispatch dpms off
-      on-resume = hyprctl dispatch dpms on
-    }
-  '';
+  greeterHypridleConfig = pkgs.linkFarm "greeter-hypridle-config" [{
+    name = "hypr/hypridle.conf";
+    path = pkgs.writeText "hypridle.conf" ''
+      listener {
+        timeout = 300
+        on-timeout = hyprctl dispatch dpms off
+        on-resume = hyprctl dispatch dpms on
+      }
+    '';
+  }];
   greeterHyprlandConfig = pkgs.writeText "greetd-hyprland.conf" ''
     monitor = desc:LG Electronics 38GN950 008NTKFBE741, 3840x1600@160, 0x0, 1
     monitor = desc:Acer Technologies GN246HL LW3EE0058532, disable
@@ -31,7 +34,7 @@ let
     animations {
       enabled = false
     }
-    exec-once = ${pkgs.hypridle}/bin/hypridle -c ${greeterHypridleConfig}
+    exec-once = XDG_CONFIG_HOME=${greeterHypridleConfig} ${pkgs.hypridle}/bin/hypridle
     exec-once = ${pkgs.greetd.regreet}/bin/regreet; hyprctl dispatch exit
   '';
 
