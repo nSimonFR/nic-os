@@ -113,7 +113,6 @@ in
     ./blocky.nix
     ./scrutiny.nix
     ./monitoring
-    ./storj.nix
     ./filebrowser.nix
     ./openai-codex-proxy.nix
     ./immich.nix
@@ -191,13 +190,6 @@ in
       "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
     ];
   };
-
-  # Enable software RAID (mdadm) so HOME_RAID assembles automatically at boot.
-  boot.swraid.enable = true;
-  boot.swraid.mdadmConf = ''
-    MAILADDR root
-    ARRAY /dev/md/rpi5:home metadata=1.2 UUID=a058cca3:f96a9b00:11735dda:85b80a0c
-  '';
 
   # Headless server — blacklist vc4 GPU driver to prevent silent CPU stall
   # when accessing uninitialized HDMI registers (firmware doesn't init HSM clock
@@ -291,6 +283,7 @@ in
     hydroxide
     immich-cli
     dnsutils  # dig, nslookup
+    smartmontools
   ];
 
 
@@ -326,39 +319,19 @@ in
       fsType = "ext4";
       options = [ "noatime" ];
     };
-    # NVMe RAID-1 array for /home (persistent state at /home/state/var-lib)
     "/home" = {
-      device = "/dev/disk/by-label/HOME_RAID";
+      device = "/dev/disk/by-label/HOME_SSD";
       fsType = "ext4";
-      options = [ "noatime" "nofail" "x-systemd.device-timeout=30s" ];
+      options = [ "noatime" "nofail" ];
+    };
+    "/mnt/data" = {
+      device = "/dev/disk/by-label/DATA_HDD";
+      fsType = "ext4";
+      options = [ "noatime" "nofail" ];
     };
   };
 
-  # Bind /home/state/var-lib → /var/lib for Docker state.
-  # Deliberately NOT in fileSystems: NixOS unconditionally adds x-initrd.mount
-  # to any /var/* filesystem regardless of neededForBoot = false, which causes
-  # stage-1 to call waitDevice() on /mnt-root/home/state/var-lib (20 s timeout)
-  # and then fail → kernel panic. A systemd .mount unit is invisible to stage-1.
-  systemd.mounts = [
-    {
-      where = "/var/lib";
-      what = "/home/state/var-lib";
-      type = "none";
-      options = "bind";
-      # home.mount is the systemd unit auto-generated from fileSystems."/home"
-      after = [ "home.mount" ];
-      bindsTo = [ "home.mount" ];
-      wantedBy = [ "local-fs.target" ];
-    }
-  ];
 
-  swapDevices = [
-    {
-      # Dedicated swap partition on SD card (mmcblk0p3) — keeps swap I/O off NVMe.
-      device = "/dev/mmcblk0p3";
-      randomEncryption.enable = false;
-    }
-  ];
 
   zramSwap = {
     enable = true;

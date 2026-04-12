@@ -30,9 +30,6 @@
       file = ./secrets/openclaw-codex-auth.age;
       owner = "nsimon";
     };
-    rclone-storj = {
-      file = ./secrets/rclone-storj.age;
-    };
     immich-api-key = {
       file = ./secrets/immich-api-key.age;
       owner = "nsimon";
