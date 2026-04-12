@@ -1,6 +1,6 @@
 { pkgs, ... }:
 let
-  port = 6806; # RUN_IN_CONTAINER overrides this to 6806 on 0.0.0.0 regardless
+  port = 6806;
   dataDir = "/var/lib/siyuan";
 in
 {
@@ -11,11 +11,27 @@ in
   };
   users.groups.siyuan = { };
 
+  # Siyuan notes (data/) live on HDD for cloud backup replication.
+  # Config, history, and temp stay on SSD for speed.
+  systemd.mounts = [{
+    where = "${dataDir}/data";
+    what = "/mnt/data/services/siyuan-data";
+    type = "none";
+    options = "bind";
+    after = [ "mnt-data.mount" ];
+    requires = [ "mnt-data.mount" ];
+    wantedBy = [ "local-fs.target" ];
+  }];
+
+  systemd.tmpfiles.rules = [
+    "d /mnt/data/services/siyuan-data 0750 siyuan siyuan -"
+  ];
+
   systemd.services.siyuan = {
     description = "SiYuan Notes";
-    after = [ "network.target" ];
+    after = [ "network.target" "var-lib-siyuan-data.mount" ];
+    requires = [ "var-lib-siyuan-data.mount" ];
     wantedBy = [ "multi-user.target" ];
-    environment.RUN_IN_CONTAINER = "true";
     serviceConfig = {
       Type = "simple";
       User = "siyuan";
