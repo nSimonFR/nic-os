@@ -94,7 +94,19 @@ in
 
   programs.claude-code = {
     enable = true;
-    package = unstablePkgs.claude-code;
+    package = unstablePkgs.claude-code.overrideAttrs (old: {
+      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+      postFixup = (old.postFixup or "") + ''
+        wrapProgram $out/bin/claude \
+          --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
+          --set GIT_AUTHOR_NAME "nSimonFR-ai" \
+          --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
+          --set GIT_COMMITTER_NAME "nSimonFR-ai" \
+          --set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
+          --run 'export GH_TOKEN="$(gh auth token --user nSimonFR-ai 2>/dev/null || true)"' \
+          --set GITHUB_TOKEN ""
+      '';
+    });
 
     settings = {
       effortLevel = "medium";
