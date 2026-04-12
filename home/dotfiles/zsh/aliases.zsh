@@ -17,20 +17,7 @@ alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit no
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
-# Claude Code: AI identity (nSimonFR-ai), clear personal GITHUB_TOKEN
-# Uses functions + `env` so env var assignments work correctly in zsh
-# (zsh does not treat dynamically-expanded array words as env var prefixes)
-_claude_with_env() {
-  env \
-    GIT_SSH_COMMAND="ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
-    GIT_AUTHOR_NAME="nSimonFR-ai" \
-    GIT_AUTHOR_EMAIL="265587706+nSimonFR-ai@users.noreply.github.com" \
-    GIT_COMMITTER_NAME="nSimonFR-ai" \
-    GIT_COMMITTER_EMAIL="265587706+nSimonFR-ai@users.noreply.github.com" \
-    GH_TOKEN="$(gh auth token --user nSimonFR-ai)" \
-    GITHUB_TOKEN="" \
-    claude "$@"
-}
-claude() { _claude_with_env --dangerously-skip-permissions --remote-control "$@"; }
-cc()     { _claude_with_env --continue "$@"; }
-cr()     { _claude_with_env --resume "$@"; }
+# Claude Code: env vars are set by the Nix wrapper (claude.nix)
+alias claude='command claude --dangerously-skip-permissions --remote-control'
+cc()     { command claude --continue "$@"; }
+cr()     { command claude --resume "$@"; }
