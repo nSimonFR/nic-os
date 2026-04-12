@@ -27,6 +27,26 @@
       --filesystem=/home/${username}/.cache/nvidia-shader-cache/star-citizen \
       --env=__GL_SHADER_DISK_CACHE_PATH=/home/${username}/.cache/nvidia-shader-cache/star-citizen \
       --talk-name=com.feralinteractive.GameMode
+
+    # Pin GNOME Platform 49 runtime: the RSI Launcher Flatpak ships GNOME 48 (EOL)
+    # which bundles libwayland-client 1.23.1. The host runs wayland 1.24.0 and the
+    # mismatch causes the Wayland client to segfault — wine creates surfaces but
+    # no window appears in the compositor. GNOME 49 ships wayland 1.24.0.
+    # `flatpak override` doesn't support [Application] section, so write it directly.
+    $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -Dm644 /dev/stdin \
+      /home/${username}/.local/share/flatpak/overrides/io.github.mactan_sc.RSILauncher <<FLATPAK_OVERRIDE
+    [Application]
+    runtime=org.gnome.Platform/x86_64/49
+
+    [Context]
+    filesystems=/nix/store:ro;/run/current-system:ro;/home/${username}/mangohud-logs;/home/${username}/.cache/nvidia-shader-cache/star-citizen;xdg-config/MangoHud:ro;!/run/opengl-driver;
+
+    [Session Bus Policy]
+    com.feralinteractive.GameMode=talk
+
+    [Environment]
+    __GL_SHADER_DISK_CACHE_PATH=/home/${username}/.cache/nvidia-shader-cache/star-citizen
+    FLATPAK_OVERRIDE
   '';
 
   services.flatpak.remotes = [
