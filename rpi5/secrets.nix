@@ -50,9 +50,5 @@
       file  = ./secrets/vaultwarden-admin-token.age;
       owner = "vaultwarden";
     };
-    siyuan-auth-code = {
-      file  = ./secrets/siyuan-auth-code.age;
-      owner = "siyuan";
-    };
   };
 }

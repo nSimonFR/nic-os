@@ -119,7 +119,7 @@ in
     ./sure.nix
     ./sumeria-mitm.nix
     ./vaultwarden.nix
-    ./siyuan.nix
+    ./affine.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     (import ../shared/tailscale.nix {
       role = "server";
@@ -335,8 +335,8 @@ in
 
   zramSwap = {
     enable = true;
-    memoryPercent = 75; # 75% of 4 GiB = 3 GiB (was default 50% = 2 GiB)
-    memoryMax = 4 * 1024 * 1024 * 1024;
+    memoryPercent = 200; # 200% of 4 GiB ≈ 8 GiB virtual; actual RAM bounded by zstd compression (~3-4x)
+    memoryMax = 10 * 1024 * 1024 * 1024;
   };
 
   system.stateVersion = "25.11";
