@@ -11,7 +11,7 @@ let
     { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
     { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
     { port = 8222;  backend = "http://127.0.0.1:8222";  } # vaultwarden (bitwarden)
-    { port = 6806;  backend = "http://127.0.0.1:6806";  } # siyuan (notes/wiki)
+    { port = 3010;  backend = "http://127.0.0.1:3010";  } # affine
   ];
 
   # Publicly-accessible services (tailscale funnel).
@@ -31,7 +31,7 @@ in
 {
   systemd.services.tailscale-serve = {
     description = "Tailscale Serve + Funnel";
-    after    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" "siyuan.service" ];
+    after    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
     wants    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
     requires = [ "tailscale-autoconnect.service" ];
     wantedBy = [ "multi-user.target" ];
