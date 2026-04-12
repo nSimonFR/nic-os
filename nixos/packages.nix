@@ -26,6 +26,10 @@ in
   home.packages = with pkgs; [
     _1password-gui
     bitwarden-desktop
+    rbw
+    pinentry-gnome3
+    pinentry-rofi
+    rofi-rbw-wayland
     beeper
     bemoji
     cliphist
