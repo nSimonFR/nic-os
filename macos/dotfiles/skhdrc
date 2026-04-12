@@ -12,14 +12,15 @@ alt - tab : yabai -m window --focus stack.next || yabai -m window --focus stack.
 shift + alt - tab : yabai -m window --focus stack.prev || yabai -m window --focus stack.last
 
 # move window
-shift + alt - h : yabai -m window —warp west
-shift + alt - j : yabai -m window —warp south
-shift + alt - k : yabai -m window —warp north
-shift + alt - l : yabai -m window —warp east
+shift + alt - left  : yabai -m window --warp west
+shift + alt - down  : yabai -m window --warp south
+shift + alt - up    : yabai -m window --warp north
+shift + alt - right : yabai -m window --warp east
 
 # Music player
 ctrl + shift - left  : osascript -e 'tell application "Spotify" to previous track'
 ctrl + shift - right : osascript -e 'tell application "Spotify" to next track'
+ctrl + shift - up    : osascript -e 'tell application "Spotify" to playpause'
 
 # balance size of windows - Not working ?
 shift + alt - 0 : yabai -m space —balance
@@ -60,11 +61,11 @@ ctrl + shift + alt - 8 : yabai -m window --space  8; yabai -m space --focus  8
 ctrl + shift + alt - 9 : yabai -m window --space  9; yabai -m space --focus  9
 ctrl + shift + alt - 0 : yabai -m window --space 10; yabai -m space --focus 10
 
-# resize region like i3
-ctrl + shift - left  : yabai -m window --resize left:  -20:  0; yabai -m window --resize right:-20:0
-ctrl + shift - down  : yabai -m window --resize bottom:  0: 20; yabai -m window --resize top:0:20
-ctrl + shift - up    : yabai -m window --resize top:     0:-20; yabai -m window --resize bottom:0:-20
-ctrl + shift - right : yabai -m window --resize right:  20:  0; yabai -m window --resize left:20:0
+# split ratio
+ctrl + alt - left  : yabai -m window --ratio rel:-0.1
+ctrl + alt - right : yabai -m window --ratio rel:0.1
+ctrl + alt - up    : yabai -m window --ratio rel:-0.1
+ctrl + alt - down  : yabai -m window --ratio rel:0.1
 
 # Move windows around
 alt - r : yabai -m space --rotate 90
