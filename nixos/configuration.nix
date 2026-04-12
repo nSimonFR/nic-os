@@ -16,7 +16,7 @@ let
     name = "hypr/hypridle.conf";
     path = pkgs.writeText "hypridle.conf" ''
       listener {
-        timeout = 300
+        timeout = 180
         on-timeout = hyprctl dispatch dpms off
         on-resume = hyprctl dispatch dpms on
       }
