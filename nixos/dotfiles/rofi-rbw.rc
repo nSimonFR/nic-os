@@ -1,0 +1,5 @@
+action = copy
+target = menu
+prompt = Bitwarden
+selector-args = -theme ~/.config/rofi/spotlight/theme.rasi
+clipboarder = wl-copy

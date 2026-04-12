@@ -177,6 +177,8 @@
     X-Flatpak-Tags=proprietary;
   '';
 
+  xdg.configFile."rofi-rbw.rc".source = ./dotfiles/rofi-rbw.rc;
+
   xdg.configFile."rofi" = {
     source = ./dotfiles/rofi;
     recursive = true;
