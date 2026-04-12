@@ -1,5 +1,5 @@
 { username, ... }:
-# Filebrowser — lightweight web UI for /mnt/cloud (Storj-backed).
+# Filebrowser — lightweight web UI for /mnt/data/cloud.
 # Served directly via Tailscale Serve on port 8085.
 #
 # Runs as the primary user so it shares ownership with the storj loop mount.
@@ -16,7 +16,7 @@
     settings = {
       address = "127.0.0.1";
       port    = 8085;
-      root    = "/mnt/cloud";
+      root    = "/mnt/data/cloud";
     };
   };
 }
