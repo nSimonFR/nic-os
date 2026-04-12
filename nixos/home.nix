@@ -138,9 +138,9 @@
 
   # XDG portal is enabled at the system level in configuration.nix
 
-  # Cache GPG passphrase for ~400 days so git commit signing doesn't prompt every time
   home.file."wallpaper.png".source = ./dotfiles/wallpaper.png;
 
+  # Cache GPG passphrase for ~400 days so git commit signing doesn't prompt every time
   home.file.".gnupg/gpg-agent.conf".text = ''
     default-cache-ttl 2592000
     max-cache-ttl 2592000
