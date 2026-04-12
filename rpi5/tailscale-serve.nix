@@ -31,7 +31,7 @@ in
 {
   systemd.services.tailscale-serve = {
     description = "Tailscale Serve + Funnel";
-    after    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+    after    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" "siyuan.service" ];
     wants    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
     requires = [ "tailscale-autoconnect.service" ];
     wantedBy = [ "multi-user.target" ];
@@ -46,7 +46,7 @@ in
       ${ts} serve reset || true
       ${serveUp}
       ${funnelUp}
-      ${ts} drive share cloud /mnt/cloud || true
+      ${ts} drive share cloud /mnt/data/cloud || true
     '';
     preStop = ''
       ${serveDown}
