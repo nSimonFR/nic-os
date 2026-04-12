@@ -198,6 +198,7 @@
             };
           }
           ./rpi5/configuration.nix
+          ./rpi5/ollama.nix
         ];
       };
 
