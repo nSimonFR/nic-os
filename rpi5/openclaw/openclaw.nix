@@ -201,6 +201,7 @@ in
           api = "ollama";
           models = [
             { id = "gemma4:26b";        name = "Gemma 4 26B"; }
+            { id = "gemma4:e4b";        name = "Gemma 4 E4B"; }
             { id = "qwen3.5:35b-a3b";   name = "Qwen3.5 35B A3B"; }
           ];
         };
@@ -209,7 +210,7 @@ in
           skipBootstrap = true;
           model = {
             primary = "openai-codex/gpt-5.4";
-            fallbacks = [ "ollama/gemma4:26b" "ollama/qwen3.5:35b-a3b" ];
+            fallbacks = [ "ollama/gemma4:e4b" "ollama/gemma4:26b" "ollama/qwen3.5:35b-a3b" ];
           };
           models = {
             "openai-codex/gpt-5.4" = {
@@ -218,8 +219,11 @@ in
             "ollama/qwen3.5:35b-a3b" = {
               alias = "qwen";
             };
+            "ollama/gemma4:e4b" = {
+              alias = "gemma-small";
+            };
             "ollama/gemma4:26b" = {
-              alias = "gemma";
+              alias = "gemma-large";
             };
           };
           heartbeat = {
