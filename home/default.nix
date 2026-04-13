@@ -12,6 +12,7 @@
     ./claude.nix
     ./mcp.nix
     ./llm-aliases.nix
+    ./ssh.nix
   ];
 
   fonts.fontconfig.enable = true;
