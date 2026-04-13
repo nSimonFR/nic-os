@@ -1,4 +1,4 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
   version = "0.26.6";
   port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
@@ -146,6 +146,7 @@ in
       NODE_ENV = "production";
       AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
+      AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}:3010";
       DATABASE_URL = dbUrl;
       REDIS_SERVER_HOST = redisHost;
       REDIS_SERVER_PORT = toString redisPort;
