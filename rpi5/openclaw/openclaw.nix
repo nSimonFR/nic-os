@@ -220,7 +220,7 @@ in
               alias = "qwen";
             };
             "ollama/gemma4:e4b" = {
-              alias = "gemma-small";
+              alias = "gemma-medium";
             };
             "ollama/gemma4:26b" = {
               alias = "gemma-large";
