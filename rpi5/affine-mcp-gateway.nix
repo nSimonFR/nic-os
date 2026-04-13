@@ -22,6 +22,20 @@ let
   # supergateway can't do streamableHttp→sse directly;
   # chain: streamableHttp→stdio (inner) | stdio→sse (outer)
   sg = "${supergateway}/bin/supergateway";
+  tokenPath = config.age.secrets.affine-token.path;
+
+  startScript = pkgs.writeShellScript "affine-mcp-gateway" ''
+    TOKEN=$(cat ${tokenPath} 2>/dev/null || true)
+    BEARER_ARGS=""
+    if [ -n "$TOKEN" ]; then
+      BEARER_ARGS="--oauth2Bearer $TOKEN"
+    fi
+    exec ${sg} \
+      --stdio "${sg} --streamableHttp ${affineUrl} $BEARER_ARGS" \
+      --port ${toString port} \
+      --ssePath /sse \
+      --messagePath /message
+  '';
 in
 {
   systemd.services.affine-mcp-gateway = {
@@ -31,10 +45,9 @@ in
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "simple";
-      DynamicUser = true;
       Restart = "on-failure";
       RestartSec = "5s";
-      ExecStart = "${sg} --stdio '${sg} --streamableHttp ${affineUrl}' --port ${toString port} --ssePath /sse --messagePath /message";
+      ExecStart = startScript;
     };
   };
 }
