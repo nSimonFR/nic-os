@@ -253,23 +253,6 @@ in
     settings.PermitRootLogin = "prohibit-password";
   };
 
-  # ── Fail2ban: ban IPs after repeated failed auth attempts ──────────
-  services.fail2ban = {
-    enable = true;
-    maxretry = 5;
-    bantime = "1h";
-    bantime-increment = {
-      enable = true; # double ban time on repeat offenders
-      maxtime = "48h";
-    };
-    jails.sshd = {
-      settings = {
-        enabled = true;
-        filter = "sshd";
-        maxretry = 3;
-      };
-    };
-  };
 
   environment.systemPackages = with pkgs; [
     vim
