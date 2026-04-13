@@ -25,6 +25,7 @@
     ];
 
     extraBackupArgs = [
+      "--one-file-system"  # don't cross bind mounts (e.g. SSD-backed immich dirs)
       "--pack-size 60"     # 60 MiB packs — reduces Storj segment fees
       "--exclude-caches"
     ];
