@@ -82,17 +82,11 @@
     };
   };
 
-  # tun2proxy: transparent routing for work Tailscale subnets
-  # Creates a TUN that routes work K8s subnets through the SOCKS5 proxy
+  # tun2proxy: starts TUN, sets up routes and /etc/hosts from work tailscaled
+  # Manual refresh: sudo launchctl kickstart -k system/org.nixos.tun2proxy-work
   launchd.daemons."tun2proxy-work" = {
     serviceConfig = {
-      ProgramArguments = [
-        "/opt/homebrew/opt/tun2proxy/bin/tun2proxy-bin"
-        "--proxy" "socks5://127.0.0.1:1055"
-        "--dns" "over-tcp"
-        "--dns-addr" "192.168.64.10"
-        "--bypass" "127.0.0.1"
-      ];
+      ProgramArguments = [ "/bin/bash" "${./scripts/tun2proxy-work.sh}" ];
       RunAtLoad = true;
       KeepAlive = true;
       StandardErrorPath = "/var/log/tun2proxy-work.log";
@@ -100,15 +94,11 @@
     };
   };
 
-  # Dynamic routes and /etc/hosts for work Tailscale peers
-  # Queries work tailscaled for peer IPs, subnets, and MagicDNS names at boot
-  # Re-trigger: sudo launchctl kickstart system/org.nixos.tun2proxy-work-routes
-  launchd.daemons."tun2proxy-work-routes" = {
+  # Daily restart of tun2proxy to re-discover peers/subnets
+  launchd.daemons."tun2proxy-work-refresh" = {
     serviceConfig = {
-      ProgramArguments = [ "/bin/bash" "${./scripts/tun2proxy-work-routes.sh}" ];
-      RunAtLoad = true;
-      StandardErrorPath = "/var/log/tun2proxy-work-routes.log";
-      StandardOutPath = "/var/log/tun2proxy-work-routes.log";
+      ProgramArguments = [ "/bin/launchctl" "kickstart" "-k" "system/org.nixos.tun2proxy-work" ];
+      StartCalendarInterval = [{ Hour = 6; Minute = 0; }];
     };
   };
 
