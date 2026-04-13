@@ -16,6 +16,16 @@
         # proxyJump = "beast";
         forwardAgent = true;
       };
+      rpi5 = {
+        hostname = "192.168.1.68";
+        user = "nsimon";
+      };
+      "github.com" = {
+        hostname = "github.com";
+        user = "git";
+        identityFile = "~/.ssh/id_ed25519";
+        identitiesOnly = true;
+      };
       trusk-sftp = {
         hostname = "sftp.trusk.com";
         user = "nicolas_simon";
