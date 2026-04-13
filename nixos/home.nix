@@ -65,6 +65,10 @@
     { name = "MichaelAquilina/zsh-auto-notify"; }
   ];
 
+  home.packages = [
+    (pkgs.btop.override { cudaSupport = true; })
+  ];
+
   home = {
     username = username;
     homeDirectory = "/home/${username}";
