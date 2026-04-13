@@ -15,4 +15,5 @@ in {
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "siyuan-auth-code.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
+  "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
 }

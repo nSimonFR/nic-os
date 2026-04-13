@@ -56,5 +56,8 @@
     restic-password = {
       file = ./secrets/restic-password.age;
     };
+    affine-token = {
+      file = ./secrets/affine-token.age;
+    };
   };
 }
