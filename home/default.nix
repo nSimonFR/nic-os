@@ -11,6 +11,7 @@
     ./zsh.nix
     ./claude.nix
     ./mcp.nix
+    ./ssh.nix
   ];
 
   fonts.fontconfig.enable = true;
