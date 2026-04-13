@@ -166,34 +166,6 @@ in
     };
   };
 
-  # ── Daily PostgreSQL backup ────────────────────────────────────────────
-  systemd.services.affine-backup = {
-    description = "AFFiNE database backup";
-    after = [ "postgresql.service" ];
-    requires = [ "postgresql.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = "postgres";
-    };
-    script = ''
-      set -euo pipefail
-      BACKUP_DIR="/mnt/data/backups/affine"
-      STAMP=$(${pkgs.coreutils}/bin/date +%F)
-      ${pkgs.postgresql}/bin/pg_dump ${dbName} | ${pkgs.gzip}/bin/gzip > "$BACKUP_DIR/affine-$STAMP.sql.gz"
-      # Remove backups older than 7 days
-      ${pkgs.findutils}/bin/find "$BACKUP_DIR" -name "affine-*.sql.gz" -mtime +7 -delete
-    '';
-  };
-
-  systemd.timers.affine-backup = {
-    description = "Daily AFFiNE backup timer";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 03:00:00";
-      Persistent = true;
-    };
-  };
-
   # Make update script available system-wide
   environment.systemPackages = [ (pkgs.writeShellScriptBin "affine-update" (builtins.readFile updateScript)) ];
 }
