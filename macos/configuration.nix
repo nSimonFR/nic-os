@@ -100,30 +100,19 @@
     };
   };
 
-  # Route work subnets through tun2proxy after it starts
-  # Subnets from work Tailscale subnet routers:
-  #   staging:    10.10.10.0/24, 10.106.0.0/16, 192.168.64.0/18
-  #   production: 10.206.0.0/16
+  # Dynamic routes and /etc/hosts for work Tailscale peers
+  # Queries work tailscaled for peer IPs, subnets, and MagicDNS names at boot
+  # Re-trigger: sudo launchctl kickstart system/org.nixos.tun2proxy-work-routes
   launchd.daemons."tun2proxy-work-routes" = {
     serviceConfig = {
-      ProgramArguments = [
-        "/bin/bash" "-c"
-        ''
-          sleep 5
-          /sbin/route delete -net 10.0.0.0/24 2>/dev/null
-          /sbin/route add -net 10.10.10.0/24 10.0.0.1
-          /sbin/route add -net 10.106.0.0/16 10.0.0.1
-          /sbin/route add -net 10.206.0.0/16 10.0.0.1
-          /sbin/route add -net 192.168.64.0/18 10.0.0.1
-        ''
-      ];
+      ProgramArguments = [ "/bin/bash" "${./scripts/tun2proxy-work-routes.sh}" ];
       RunAtLoad = true;
       StandardErrorPath = "/var/log/tun2proxy-work-routes.log";
       StandardOutPath = "/var/log/tun2proxy-work-routes.log";
     };
   };
 
-  # DNS resolver for cluster.local -> work K8s CoreDNS via tun2proxy
+  # DNS resolver for cluster.local -> work K8s CoreDNS (routed via tun2proxy)
   environment.etc."resolver/cluster.local".text = "nameserver 192.168.64.10\n";
 
   system = import ./components/system.nix { inherit pkgs username; };
