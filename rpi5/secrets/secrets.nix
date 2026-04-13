@@ -14,4 +14,5 @@ in {
   "for-sure-swile-api-key.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "siyuan-auth-code.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
+  "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
 }

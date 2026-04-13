@@ -50,5 +50,11 @@
       file  = ./secrets/vaultwarden-admin-token.age;
       owner = "vaultwarden";
     };
+    rclone-storj = {
+      file = ./secrets/rclone-storj.age;
+    };
+    restic-password = {
+      file = ./secrets/restic-password.age;
+    };
   };
 }
