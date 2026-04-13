@@ -229,6 +229,7 @@
               username
               telegramChatId
               ;
+            inherit (rpi5Params) tailnetFqdn;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "x86_64-linux";
@@ -301,6 +302,7 @@
               username
               telegramChatId
               ;
+            inherit (rpi5Params) tailnetFqdn;
             devSetup = true;
             unstablePkgs = import nixpkgs-unstable {
               system = "aarch64-darwin";
