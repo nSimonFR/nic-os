@@ -57,39 +57,27 @@ in
     SECRETS_FILE="${secretsPath}"
     if [ -f "$SECRETS_FILE" ]; then
       . "$SECRETS_FILE"
-      MCP=$(echo "$MCP" | ${jq} --arg token "$AFFINE_TOKEN" '
-        .mcpServers += {
-          "affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621": {
-            type: "streamable-http",
-            url: "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
-            note: "Read docs from AFFiNE workspace \"Nico\"",
-            headers: { Authorization: ("Bearer " + $token) }
-          }
-        }')
+      AFFINE=$(${jq} -n --arg token "$AFFINE_TOKEN" '{
+        "affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621": {
+          type: "streamable-http",
+          url: "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
+          note: "Read docs from AFFiNE workspace \"Nico\"",
+          headers: { Authorization: ("Bearer " + $token) }
+        }
+      }')
+      MCP=$(echo "$MCP" | ${jq} --argjson a "$AFFINE" '.mcpServers += $a')
+
+      # Also inject AFFiNE into Claude's user-level config (~/.claude.json)
+      CLAUDE_USER="$HOME/.claude.json"
+      if [ -f "$CLAUDE_USER" ]; then
+        ${jq} --argjson a "$AFFINE" '.mcpServers += $a' "$CLAUDE_USER" > "$CLAUDE_USER.tmp" \
+          && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
+      else
+        ${jq} -n --argjson a "$AFFINE" '{mcpServers: $a}' > "$CLAUDE_USER"
+      fi
     fi
 
     mkdir -p "$HOME/.cursor"
     echo "$MCP" > "$HOME/.cursor/mcp.json"
-
-    # Also inject AFFiNE into Claude's user-level config (~/.claude.json)
-    if [ -n "''${AFFINE_TOKEN:-}" ]; then
-      AFFINE_JSON=$(${jq} -n --arg token "$AFFINE_TOKEN" '{
-        mcpServers: {
-          "affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621": {
-            type: "streamable-http",
-            url: "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
-            note: "Read docs from AFFiNE workspace \"Nico\"",
-            headers: { Authorization: ("Bearer " + $token) }
-          }
-        }
-      }')
-      CLAUDE_USER="$HOME/.claude.json"
-      if [ -f "$CLAUDE_USER" ]; then
-        ${jq} -s '.[0] * .[1]' "$CLAUDE_USER" <(echo "$AFFINE_JSON") > "$CLAUDE_USER.tmp" \
-          && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
-      else
-        echo "$AFFINE_JSON" > "$CLAUDE_USER"
-      fi
-    fi
   '';
 }
