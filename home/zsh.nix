@@ -29,6 +29,7 @@
       # Prefer adding shell config to ./dotfiles/zsh/ instead of using initContent/initExtra
       # Source agenix-managed secrets (env vars, tokens)
       [ -f "${config.age.secrets.secrets-zsh.path}" ] && source "${config.age.secrets.secrets-zsh.path}"
+      unset CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY
     '';
   };
 }
