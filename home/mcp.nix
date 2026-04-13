@@ -22,6 +22,13 @@ let
     exec npx -y datadog-mcp
   '';
 
+  affineMcp = pkgs.writeShellScript "affine-mcp" ''
+    [ -f "${secretsPath}" ] && . "${secretsPath}"
+    exec npx -y supergateway \
+      --streamableHttp "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp" \
+      --oauth2Bearer "$AFFINE_TOKEN"
+  '';
+
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
     # Public — no secrets
@@ -34,12 +41,12 @@ let
     "trusk-context7"    = { type = "sse";  url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/sse"; };
     "trusk-steampipe"   = { type = "sse";  url = "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/sse"; };
     "trusk-searxncrawl" = { type = "sse";  url = "http://searxncrawl-mcp.dev-tools.svc.cluster.local:7010/sse"; };
-    "affine"            = { type = "sse";  url = "https://rpi5.gate-mintaka.ts.net:7020/sse"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
     datadog = { command = "${datadogLocalMcp}"; };
+    affine  = { command = "${affineMcp}"; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
