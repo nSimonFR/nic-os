@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, tailnetFqdn, ... }:
 let
   secretsPath = config.age.secrets.mcp-secrets.path;
   jq = "${pkgs.jq}/bin/jq";
@@ -25,7 +25,7 @@ let
   affineMcp = pkgs.writeShellScript "affine-mcp" ''
     [ -f "${secretsPath}" ] && . "${secretsPath}"
     exec npx -y supergateway \
-      --streamableHttp "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp" \
+      --streamableHttp "https://${tailnetFqdn}:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp" \
       --oauth2Bearer "$AFFINE_TOKEN"
   '';
 
@@ -68,7 +68,7 @@ in
       AFFINE=$(${jq} -n --arg token "$AFFINE_TOKEN" '{
         "affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621": {
           type: "streamable-http",
-          url: "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
+          url: "https://${tailnetFqdn}:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
           note: "Read docs from AFFiNE workspace \"Nico\"",
           headers: { Authorization: ("Bearer " + $token) }
         }
