@@ -4,4 +4,5 @@ let
 in {
   "secrets.zsh.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "telegram-bot-token.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "mcp-secrets.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
 }

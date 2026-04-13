@@ -10,6 +10,7 @@
     ./packages.nix
     ./zsh.nix
     ./claude.nix
+    ./mcp.nix
   ];
 
   fonts.fontconfig.enable = true;
