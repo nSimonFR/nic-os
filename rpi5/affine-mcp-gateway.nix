@@ -14,7 +14,7 @@ let
     sourceRoot = "package";
     npmDepsHash = "sha256-j/EBbh+0pTmx7nRLh1svV2Rj97sRU7SsZf95ZTbyiM8=";
     postPatch = ''
-      cp ${../npm-locks/supergateway-package-lock.json} package-lock.json
+      cp ${./npm-locks/supergateway-package-lock.json} package-lock.json
     '';
     dontNpmBuild = true;
   };
