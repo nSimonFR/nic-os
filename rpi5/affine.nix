@@ -1,7 +1,7 @@
 { pkgs, lib, pgHost, pgPort, redisHost, redisPort, ... }:
 let
   version = "0.26.6";
-  port = 3010;
+  port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
   dataDir = "/var/lib/affine";
   appDir = "${dataDir}/app";
 
@@ -133,6 +133,7 @@ in
   systemd.tmpfiles.rules = [
     "d ${dataDir} 0750 ${dbUser} ${dbUser} -"
     "d ${dataDir}/storage 0750 ${dbUser} ${dbUser} -"
+    "Z ${dataDir}/app 0755 ${dbUser} ${dbUser} -"
   ];
 
   systemd.services.affine = {
@@ -143,7 +144,7 @@ in
     wantedBy = [ "multi-user.target" ];
     environment = {
       NODE_ENV = "production";
-      AFFINE_SERVER_HOST = "0.0.0.0";
+      AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
       DATABASE_URL = dbUrl;
       REDIS_SERVER_HOST = redisHost;
@@ -151,6 +152,7 @@ in
       AFFINE_STORAGE_PATH = "${dataDir}/storage";
       PRISMA_QUERY_ENGINE_LIBRARY = "${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node";
       PRISMA_SCHEMA_ENGINE_BINARY = "${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x";
+      LD_LIBRARY_PATH = rpath;
     };
     serviceConfig = {
       Type = "simple";
