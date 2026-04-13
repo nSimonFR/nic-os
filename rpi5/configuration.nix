@@ -121,6 +121,7 @@ in
     ./llm-interceptor.nix
     ./vaultwarden.nix
     ./affine.nix
+    ./affine-mcp-gateway.nix
     ./backups.nix
     ./storj-backup.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
