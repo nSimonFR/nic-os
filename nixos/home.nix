@@ -66,7 +66,7 @@
   ];
 
   home.packages = [
-    (pkgs.btop.override { cudaSupport = true; })
+    (lib.hiPrio (pkgs.btop.override { cudaSupport = true; }))
   ];
 
   home = {
