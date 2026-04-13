@@ -122,7 +122,11 @@
       pluginSource = name:
         if self ? rev
         then "git+file:///home/nsimon/nic-os?rev=${self.rev}&dir=rpi5/openclaw/plugins/${name}"
-        else "path:/home/nsimon/nic-os/rpi5/openclaw/plugins/${name}";
+        else
+          # On dirty trees self.outPath is a store-copied snapshot with a known
+          # narHash, so using it as the flake root + dir keeps the ref locked
+          # (pure-eval safe, no --impure needed).
+          "path:${builtins.unsafeDiscardStringContext self.outPath}?narHash=${self.narHash}&dir=rpi5/openclaw/plugins/${name}";
       openclawPluginSources = {
         summarize = pluginSource "summarize";
         gogcli = pluginSource "gogcli";
