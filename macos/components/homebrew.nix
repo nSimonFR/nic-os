@@ -28,6 +28,8 @@
     "helm"
     "pinentry-touchid"
     "RhetTbull/osxphotos/osxphotos"
+    "tailscale"
+    "tun2proxy"
     "wakeonlan"
   ];
 

@@ -61,6 +61,71 @@
     StandardOutPath = "/var/log/start-programs.log";
   };
 
+  # Work Tailscale: runs alongside the macOS app (personal) in userspace mode
+  # tun2proxy creates a TUN interface that transparently routes work subnets
+  # through the SOCKS5 proxy, so MCP clients and other apps need no proxy config
+  launchd.daemons."tailscale-work" = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/opt/tailscale/bin/tailscaled"
+        "--tun=userspace-networking"
+        "--socks5-server=localhost:1055"
+        "--outbound-http-proxy-listen=localhost:1056"
+        "--statedir=/var/lib/tailscale-work"
+        "--socket=/var/run/tailscale-work/tailscaled.sock"
+        "--port=41642"
+      ];
+      RunAtLoad = true;
+      KeepAlive = true;
+      StandardErrorPath = "/var/log/tailscale-work.log";
+      StandardOutPath = "/var/log/tailscale-work.log";
+    };
+  };
+
+  # tun2proxy: transparent routing for work Tailscale subnets
+  # Creates a TUN that routes work K8s subnets through the SOCKS5 proxy
+  launchd.daemons."tun2proxy-work" = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/opt/homebrew/opt/tun2proxy/bin/tun2proxy-bin"
+        "--proxy" "socks5://127.0.0.1:1055"
+        "--dns" "over-tcp"
+        "--dns-addr" "192.168.64.10"
+        "--bypass" "127.0.0.1"
+      ];
+      RunAtLoad = true;
+      KeepAlive = true;
+      StandardErrorPath = "/var/log/tun2proxy-work.log";
+      StandardOutPath = "/var/log/tun2proxy-work.log";
+    };
+  };
+
+  # Route work subnets through tun2proxy after it starts
+  # Subnets from work Tailscale subnet routers:
+  #   staging:    10.10.10.0/24, 10.106.0.0/16, 192.168.64.0/18
+  #   production: 10.206.0.0/16
+  launchd.daemons."tun2proxy-work-routes" = {
+    serviceConfig = {
+      ProgramArguments = [
+        "/bin/bash" "-c"
+        ''
+          sleep 5
+          /sbin/route delete -net 10.0.0.0/24 2>/dev/null
+          /sbin/route add -net 10.10.10.0/24 10.0.0.1
+          /sbin/route add -net 10.106.0.0/16 10.0.0.1
+          /sbin/route add -net 10.206.0.0/16 10.0.0.1
+          /sbin/route add -net 192.168.64.0/18 10.0.0.1
+        ''
+      ];
+      RunAtLoad = true;
+      StandardErrorPath = "/var/log/tun2proxy-work-routes.log";
+      StandardOutPath = "/var/log/tun2proxy-work-routes.log";
+    };
+  };
+
+  # DNS resolver for cluster.local -> work K8s CoreDNS via tun2proxy
+  environment.etc."resolver/cluster.local".text = "nameserver 192.168.64.10\n";
+
   system = import ./components/system.nix { inherit pkgs username; };
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs inputs; };
