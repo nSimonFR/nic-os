@@ -25,6 +25,7 @@ in
 {
   home.packages = with pkgs; [
     _1password-gui
+    affine
     bitwarden-desktop
     rbw
     pinentry-gnome3
