@@ -41,7 +41,15 @@ let
             url: "https://rpi5.gate-mintaka.ts.net:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
             note: "Read docs from AFFiNE workspace \"Nico\"",
             headers: { Authorization: ("Bearer " + $affine) }
-          }
+          },
+          "trusk-k8s":       { type: "http", url: "http://gateway-mcp.dev-tools.svc.cluster.local:8080/mcp" },
+          "trusk-argocd":    { type: "http", url: "http://gateway-mcp.dev-tools.svc.cluster.local:3000/mcp" },
+          "trusk-grafana":   { type: "http", url: "http://gateway-mcp.dev-tools.svc.cluster.local:8000/mcp" },
+          "trusk-datadog":   { type: "http", url: "http://gateway-mcp.dev-tools.svc.cluster.local:9000/mcp" },
+          "trusk-github":    { type: "sse",  url: "http://supergateway-mcp.dev-tools.svc.cluster.local:7001/sse" },
+          "trusk-context7":  { type: "sse",  url: "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/sse" },
+          "trusk-steampipe": { type: "sse",  url: "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/sse" },
+          "trusk-searxncrawl": { type: "sse", url: "http://searxncrawl-mcp.dev-tools.svc.cluster.local:7010/sse" }
         }
       }')
 
