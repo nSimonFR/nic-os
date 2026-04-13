@@ -44,13 +44,11 @@ let
     { name = "disk.json";           path = patchDashboard "disk";          }
     { name = "systemd.json";        path = ./dashboards/systemd.json;            }
     { name = "home-assistant.json"; path = ./dashboards/home-assistant.json;     }
-    { name = "fail2ban.json";       path = ./dashboards/fail2ban.json;           }
   ];
 in
 {
   imports = [
     ./prometheus.nix
-    ./fail2ban.nix
     ./earlyoom.nix
     ./grafana.nix
   ];
