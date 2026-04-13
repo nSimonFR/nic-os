@@ -16,7 +16,7 @@ let
         url = "https://registry.npmjs.org/openai-oauth/-/openai-oauth-${version}.tgz";
         hash = "sha512-5wSwwR76Mc+1ePjwEIzM34qk2Kaw8Ng2zgBCo5eLscOLfciC0N8Z1jCgTCcqeHtyRvywB1kcb0BsHxFHIVJ2Vg==";
       };
-      packageLock = ./openai-oauth/package-lock.json;
+      packageLock = ./npm-locks/openai-oauth-package-lock.json;
     } ''
       mkdir -p $out
       tar xzf $tarball --strip-components=1 -C $out
