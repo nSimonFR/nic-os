@@ -4,9 +4,10 @@
 
   stateVersion = 5;
 
-  # Reload yabai scripting addition on every darwin-rebuild switch
+  # Post-rebuild: reload yabai scripting addition + restart tun2proxy
   activationScripts.postActivation.text = ''
     sudo yabai --load-sa 2>/dev/null || true
+    launchctl kickstart -k system/org.nixos.tun2proxy-work 2>/dev/null || true
   '';
   
   keyboard = {
