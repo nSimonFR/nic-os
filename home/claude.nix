@@ -108,39 +108,20 @@ in
       '';
     });
 
-    settings = {
-      effortLevel = "medium";
-      skipDangerousModePermissionPrompt = true;
-      trustAll = true;
-      permissions = {
-        allow = [
-          "Bash(*)"
-          "Read(*)"
-          "Write(*)"
-          "Edit(*)"
-          "Glob(*)"
-          "Grep(*)"
-          "WebFetch(*)"
-          "WebSearch(*)"
-          "NotebookEdit(*)"
-          "Task(*)"
-        ];
-        deny = [ ];
-      };
-hooks = {
-        Notification = [
-          {
-            matcher = "";
-            hooks = [
-              {
-                type = "command";
-                command = "${notifyScript}";
-                timeout = 10;
-              }
-            ];
-          }
-        ];
-      };
-    };
+    # Settings delivered as a writable file via mkOutOfStoreSymlink
+    # (points to the repo checkout, not the Nix store) so Claude Code
+    # can update them at runtime (e.g. /voice toggle).
+    # Baseline: home/dotfiles/claude-settings.json
+  };
+
+  # Writable settings.json — symlinked to the repo checkout
+  home.file.".claude/settings.json".source =
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+
+  # Stable path for the Telegram notify hook so the settings JSON
+  # doesn't need to embed a Nix store path that changes on rebuild.
+  home.file.".claude/hooks/telegram-notify" = {
+    source = notifyScript;
+    executable = true;
   };
 }
