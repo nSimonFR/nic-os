@@ -25,7 +25,7 @@ let
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
     # Public — no secrets
-    Linear              = { url = "https://mcp.linear.app/sse"; };
+    Linear              = { type = "sse"; url = "https://mcp.linear.app/sse"; };
     "trusk-k8s"         = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:8080/mcp"; };
     "trusk-argocd"      = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:3000/mcp"; };
     "trusk-grafana"     = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:8000/mcp"; };
