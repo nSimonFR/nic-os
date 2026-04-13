@@ -1,8 +1,13 @@
 { username, ... }:
 {
   primaryUser = username;
-  
+
   stateVersion = 5;
+
+  # Reload yabai scripting addition on every darwin-rebuild switch
+  activationScripts.postActivation.text = ''
+    sudo yabai --load-sa 2>/dev/null || true
+  '';
   
   keyboard = {
     enableKeyMapping = true;
