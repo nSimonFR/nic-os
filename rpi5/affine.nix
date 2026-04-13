@@ -152,7 +152,6 @@ in
       AFFINE_STORAGE_PATH = "${dataDir}/storage";
       PRISMA_QUERY_ENGINE_LIBRARY = "${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node";
       PRISMA_SCHEMA_ENGINE_BINARY = "${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x";
-      LD_LIBRARY_PATH = rpath;
     };
     serviceConfig = {
       Type = "simple";
