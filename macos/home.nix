@@ -9,8 +9,8 @@
     homeDirectory = "/Users/${username}";
 
     sessionVariables = {
-      # Bitwarden/Vaultwarden SSH agent (desktop app)
-      SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
+      # 1Password SSH agent
+      SSH_AUTH_SOCK = "$HOME/.1password/agent.sock";
     };
   };
 }
