@@ -13,9 +13,28 @@ let
     logSuffix = "beast";
   };
 
+  # Config-file approach: one proxy, two models, aliases pick via ANTHROPIC_MODEL
+  localConfig = pkgs.writeText "litellm-local-config.yaml" ''
+    model_list:
+      - model_name: gemma4-a4b
+        litellm_params:
+          model: openai/gemma4:26b-a4b-it-q4_K_M
+          api_base: http://localhost:11434/v1
+          api_key: ollama
+          drop_params: true
+      - model_name: gemma4-e4b
+        litellm_params:
+          model: openai/gemma4:e4b
+          api_base: http://localhost:11434/v1
+          api_key: ollama
+          drop_params: true
+  '';
+
   localProxy = {
-    description = "litellm Anthropic→Ollama proxy (local gemma4:e4b, port 4000)";
-    args = [ litellmBin "--model" "openai/gemma4:e4b" "--port" "4000" "--api_base" "http://localhost:11434/v1" "--drop_params" ];
+    # gemma4-a4b: 26.5B MoE, 4B active (score 67.8, 3.1 tok/s, 80% mem)
+    # gemma4-e4b: 8B dense (score 63.9, 10.3 tok/s, 25% mem)
+    description = "litellm Anthropic→Ollama proxy (local models, port 4000)";
+    args = [ litellmBin "--config" "${localConfig}" "--port" "4000" ];
     env = { OPENAI_API_KEY = "ollama"; };
     logSuffix = "ollama";
   };
