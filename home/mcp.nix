@@ -24,7 +24,7 @@ let
   affineMcp = pkgs.writeShellScript "affine-mcp" ''
     [ -f "${secretsPath}" ] && . "${secretsPath}"
     export AFFINE_BASE_URL="https://${tailnetFqdn}:3010"
-    export AFFINE_TOKEN
+    export AFFINE_EMAIL AFFINE_PASSWORD
     exec npx -y affine-mcp-server
   '';
 
