@@ -30,3 +30,8 @@ export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:$PATH"
 
 # Mac-OS specific so path will be ignored on other systems
 export PATH=/opt/homebrew/bin:$PATH
+
+# LLM traffic interceptor (mitmproxy on rpi5, port 9092)
+# Captures Claude Code + other LLM calls to web UI at https://rpi5.gate-mintaka.ts.net:8001
+export HTTPS_PROXY="http://rpi5:9092"
+export NODE_EXTRA_CA_CERTS="$HOME/.local/share/llm-interceptor/mitmproxy-ca-cert.pem"
