@@ -12,6 +12,7 @@
       };
       rpi5 = {
         hostname = "rpi5";
+        forwardAgent = true;
       };
       "github.com" = {
         hostname = "github.com";
