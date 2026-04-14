@@ -21,3 +21,9 @@ alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit no
 alias claude='command claude --dangerously-skip-permissions --remote-control'
 cc()     { command claude --continue "$@"; }
 cr()     { command claude --resume "$@"; }
+
+# claude-local: Claude Code routed through local gemma4:26b via litellm proxy (port 4000)
+alias claude-local='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_KEY=litellm-local command claude --dangerously-skip-permissions --remote-control'
+
+# claude-beast: Claude Code routed through Beast's gemma4:26b (RTX 3080 Ti, CUDA) via litellm proxy (port 4001)
+alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local command claude --dangerously-skip-permissions --remote-control'

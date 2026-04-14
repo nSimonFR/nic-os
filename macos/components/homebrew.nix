@@ -26,6 +26,7 @@
     "cookcli"
     "dbt-postgres"
     "helm"
+    "ollama"
     "pinentry-touchid"
     "RhetTbull/osxphotos/osxphotos"
     "tailscale"
