@@ -37,7 +37,18 @@ let
   # Pipe `sleep infinity` into it so stdin stays open (never EOF)
   # and input() blocks forever, keeping proxy + web UI threads alive.
   lliWrapper = pkgs.writeShellScript "lli-watch-headless" ''
-    { sleep 3; printf "\n"; tail -f /dev/null; } | ${llmInterceptorPkg}/bin/lli watch --lan
+    FIFO=/tmp/lli-stdin
+    rm -f "$FIFO" && mkfifo "$FIFO"
+    exec 3>"$FIFO"
+    ${llmInterceptorPkg}/bin/lli watch --lan <"$FIFO" &
+    LLI_PID=$!
+    sleep 3
+    while kill -0 "$LLI_PID" 2>/dev/null; do
+      printf "\n" >&3
+      sleep 900
+      printf "\n" >&3
+      sleep 10
+    done
   '';
 
   lliToml = pkgs.writeText "lli.toml" ''
