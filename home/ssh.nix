@@ -1,10 +1,10 @@
-{ pkgs, ... }:
+{ pkgs, sshIdentityAgent ? "~/.bitwarden-ssh-agent.sock", ... }:
 {
   programs.ssh = {
     enable = true;
     matchBlocks = {
       "*" = {
-        extraOptions.IdentityAgent = "~/.bitwarden-ssh-agent.sock";
+        extraOptions.IdentityAgent = sshIdentityAgent;
       };
       beast = {
         hostname = "beast";
