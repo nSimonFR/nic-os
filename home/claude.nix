@@ -104,7 +104,9 @@ in
           --set GIT_COMMITTER_NAME "nSimonFR-ai" \
           --set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
           --run 'export GH_TOKEN="$(gh auth token --user nSimonFR-ai 2>/dev/null || true)"' \
-          --set GITHUB_TOKEN ""
+          --set GITHUB_TOKEN "" \
+          --set HTTPS_PROXY "http://rpi5:9092" \
+          --set NODE_EXTRA_CA_CERTS "${config.home.homeDirectory}/.local/share/llm-interceptor/mitmproxy-ca-cert.pem"
       '';
     });
 
