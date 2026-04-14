@@ -230,6 +230,7 @@
               telegramChatId
               ;
             inherit (rpi5Params) tailnetFqdn;
+            sshIdentityAgent = "~/.bitwarden-ssh-agent.sock";
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "x86_64-linux";
@@ -275,6 +276,7 @@
               telegramChatId
               ;
             inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
+            sshIdentityAgent = "~/.bitwarden-ssh-agent.sock";
             openclawSource = inputs.openclaw-source;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
