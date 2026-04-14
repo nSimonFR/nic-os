@@ -15,7 +15,6 @@
       nerd-fonts.fira-code
 
       # CLI
-      _1password-cli
       age
       atuin
       bash
