@@ -23,7 +23,7 @@ cc()     { command claude --continue "$@"; }
 cr()     { command claude --resume "$@"; }
 
 # claude-local: Claude Code → local gemma4:26b (M3 Pro) via litellm proxy (port 4000)
-alias claude-local='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=ollama_chat/gemma4:26b command claude --dangerously-skip-permissions --remote-control'
+alias claude-local='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=ollama/gemma4:26b command claude --dangerously-skip-permissions --remote-control'
 
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
-alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=ollama_chat/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
+alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=ollama/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
