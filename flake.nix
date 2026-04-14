@@ -230,6 +230,7 @@
               telegramChatId
               ;
             inherit (rpi5Params) tailnetFqdn;
+            sshIdentityAgent = "~/.1password/agent.sock";
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "x86_64-linux";
