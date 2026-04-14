@@ -12,6 +12,7 @@ let
     { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
     { port = 8222;  backend = "http://127.0.0.1:8222";  } # vaultwarden (bitwarden)
     { port = 3010;  backend = "http://127.0.0.1:13010"; } # affine
+    { port = 8001;  backend = "http://127.0.0.1:8000";  } # llm-interceptor web UI
   ];
 
   # Publicly-accessible services (tailscale funnel).

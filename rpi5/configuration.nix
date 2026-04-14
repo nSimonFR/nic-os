@@ -118,6 +118,7 @@ in
     ./immich.nix
     ./sure.nix
     ./sumeria-mitm.nix
+    ./llm-interceptor.nix
     ./vaultwarden.nix
     ./affine.nix
     ./backups.nix
@@ -207,6 +208,8 @@ in
   };
 
   services.resolved.enable = true;
+
+  services.llm-interceptor.enable = true;
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
   services.journald.extraConfig = ''
