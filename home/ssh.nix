@@ -16,7 +16,6 @@
       };
       "github.com" = {
         hostname = "github.com";
-        user = "git";
       };
     };
   };
