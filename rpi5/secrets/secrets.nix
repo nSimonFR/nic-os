@@ -16,4 +16,5 @@ in {
   "siyuan-auth-code.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
 }
