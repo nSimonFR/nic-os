@@ -153,6 +153,11 @@
       };
 
       nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
+        # Use our nixpkgs as the base so non-kernel packages hit cache.nixos.org.
+        # Kernel/firmware still come from nixos-raspberrypi's overlays (cached on cachix/garnix).
+        # This is NOT the same as inputs.nixos-raspberrypi.inputs.nixpkgs.follows (which would
+        # break the kernel cache).
+        nixpkgs = inputs.nixpkgs;
         specialArgs = {
           inherit inputs outputs username telegramChatId;
           inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
