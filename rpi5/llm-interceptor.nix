@@ -6,15 +6,15 @@ let
     pname   = "llm-interceptor";
     version = "2.8.0";
 
-    src = pkgs.fetchPypi {
-      inherit pname version;
+    src = pkgs.fetchurl {
+      url = "https://files.pythonhosted.org/packages/f3/29/9ee2931a980e51a0f43e3df47e777b3ee341739abefd2806e83b6c251160/llm_interceptor-2.8.0.tar.gz";
       sha256 = "sha256-Y3+q7028RvfRnmiZ74mJm3bF1biyhwLLfeYoXkikdAQ=";
     };
 
     pyproject = true;
 
     nativeBuildInputs = with pkgs.python3Packages; [
-      setuptools
+      hatchling
     ];
 
     propagatedBuildInputs = with pkgs.python3Packages; [
@@ -32,6 +32,13 @@ let
     # No test suite in the PyPI sdist; skip checks to avoid network access
     doCheck = false;
   };
+
+  # lli watch is a TUI that exits on EOF when there's no TTY.
+  # Pipe `sleep infinity` into it so stdin stays open (never EOF)
+  # and input() blocks forever, keeping proxy + web UI threads alive.
+  lliWrapper = pkgs.writeShellScript "lli-watch-headless" ''
+    sleep infinity | ${llmInterceptorPkg}/bin/lli watch --lan
+  '';
 
   lliToml = pkgs.writeText "lli.toml" ''
     [proxy]
@@ -55,7 +62,7 @@ in
 
     port = lib.mkOption {
       type        = lib.types.port;
-      default     = 9090;
+      default     = 9092;
       description = "Proxy port (clients set HTTPS_PROXY=http://rpi5:<port>)";
     };
 
@@ -93,10 +100,9 @@ in
       '';
 
       serviceConfig = {
-        # lli watch starts both the proxy daemon and the web UI.
-        # StandardInput=null prevents it from blocking on missing TTY.
-        ExecStart      = "${llmInterceptorPkg}/bin/lli watch";
+        ExecStart      = "${lliWrapper}";
         WorkingDirectory = cfg.dataDir;
+        Environment = [ "HOME=${cfg.dataDir}" ];
         User           = "llm-interceptor";
         Group          = "llm-interceptor";
         Restart        = "on-failure";
