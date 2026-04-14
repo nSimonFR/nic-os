@@ -15,12 +15,6 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
-  datadogLocalMcp = pkgs.writeShellScript "datadog-local-mcp" ''
-    [ -f "${secretsPath}" ] && . "${secretsPath}"
-    export DD_API_KEY DD_APP_KEY DD_SITE="datadoghq.com"
-    exec npx -y datadog-mcp
-  '';
-
   affineMcp = pkgs.writeShellScript "affine-mcp" ''
     [ -f "${secretsPath}" ] && . "${secretsPath}"
     export AFFINE_BASE_URL="https://${tailnetFqdn}:3010"
@@ -44,7 +38,6 @@ let
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
-    datadog = { command = "${datadogLocalMcp}"; };
     affine  = { command = "${affineMcp}"; };
   };
 
