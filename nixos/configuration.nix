@@ -235,13 +235,7 @@ kdePackages.kwallet
 
   security.polkit.enable = true;
 
-  # Cache polkit auth for 1Password (~5 min), similar to sudo behavior
   security.polkit.extraConfig = ''
-    polkit.addRule(function(action, subject) {
-      if (action.id === "com.1password.1Password.unlock" && subject.isInGroup("users")) {
-        return polkit.Result.AUTH_SELF_KEEP;
-      }
-    });
     polkit.addRule(function(action, subject) {
       if (action.id.indexOf("com.feralinteractive.GameMode") === 0 && subject.isInGroup("users")) {
         return polkit.Result.YES;
@@ -255,12 +249,6 @@ kdePackages.kwallet
       }
     });
   '';
-
-  # 1Password GUI with proper polkit integration
-  programs._1password-gui = {
-    enable = true;
-    polkitPolicyOwners = [ username ];
-  };
 
   hardware.graphics = {
     enable = true;
@@ -376,16 +364,6 @@ kdePackages.kwallet
   ];
 
   environment.etc = {
-    "1password/custom_allowed_browsers" = {
-      # FIXME
-      text = ''
-        zen
-        .zen-wrapped
-        zen-twilight
-        .zen-twilight-wrapped
-      '';
-      mode = "0755";
-    };
     "dbus-1/system.conf".source = "${pkgs.dbus}/etc/dbus-1/system.conf";
     "dbus-1/session.conf".source = "${pkgs.dbus}/etc/dbus-1/session.conf";
   };
