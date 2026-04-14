@@ -2,16 +2,13 @@
 let
   cfg = config.services.llm-interceptor;
 
-  # Build llm-interceptor from PyPI.
-  # TODO: update the hash by running:
-  #   nix-prefetch-pypi llm-interceptor 2.8.0
   llmInterceptorPkg = pkgs.python3Packages.buildPythonApplication rec {
     pname   = "llm-interceptor";
     version = "2.8.0";
 
     src = pkgs.fetchPypi {
       inherit pname version;
-      sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+      sha256 = "sha256-Y3+q7028RvfRnmiZ74mJm3bF1biyhwLLfeYoXkikdAQ=";
     };
 
     pyproject = true;
