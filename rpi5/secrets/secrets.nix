@@ -17,4 +17,5 @@ in {
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "langfuse-keys.age".publicKeys           = [ nsimon-age nsimon-ed25519 ];
 }

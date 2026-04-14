@@ -63,5 +63,10 @@
       file = ./secrets/affine-gcal-oauth.age;
       owner = "affine";
     };
+    langfuse-keys = {
+      file  = ./secrets/langfuse-keys.age;
+      owner = "llm-interceptor";
+      mode  = "0400";
+    };
   };
 }

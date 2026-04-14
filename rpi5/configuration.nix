@@ -118,6 +118,7 @@ in
     ./immich.nix
     ./sure.nix
     ./sumeria-mitm.nix
+    ./llm-interceptor.nix
     ./vaultwarden.nix
     ./affine.nix
     ./affine-mcp-gateway.nix
@@ -323,6 +324,12 @@ in
     enable = true;
     memoryPercent = 200; # 200% of 4 GiB ≈ 8 GiB virtual; actual RAM bounded by zstd compression (~3-4x)
     memoryMax = 10 * 1024 * 1024 * 1024;
+  };
+
+  services.llm-interceptor = {
+    enable = true;
+    # Add OpenAI-compat hosts here as needed, e.g.:
+    # openaiCompatHosts = [ "api.groq.com" "api.together.xyz" ];
   };
 
   system.stateVersion = "25.11";
