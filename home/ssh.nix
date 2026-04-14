@@ -8,17 +8,10 @@
       };
       beast = {
         hostname = "beast";
-        user = "nsimon";
-        forwardAgent = true;
-      };
-      "192.168.1.100" = {
-        user = "nsimon";
-        # proxyJump = "beast";
         forwardAgent = true;
       };
       rpi5 = {
-        hostname = "192.168.1.68";
-        user = "nsimon";
+        hostname = "rpi5";
       };
       "github.com" = {
         hostname = "github.com";
