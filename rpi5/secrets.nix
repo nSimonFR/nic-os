@@ -59,5 +59,9 @@
     affine-token = {
       file = ./secrets/affine-token.age;
     };
+    affine-gcal-oauth = {
+      file = ./secrets/affine-gcal-oauth.age;
+      owner = "affine";
+    };
   };
 }

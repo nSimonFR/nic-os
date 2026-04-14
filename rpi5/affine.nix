@@ -10,6 +10,21 @@ let
   rpath = lib.makeLibraryPath [ openssl3 pkgs.glibc pkgs.stdenv.cc.cc.lib ];
   interpreter = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
 
+  # AFFiNE config.json — enables Google Calendar integration.
+  # OAuth credentials are injected at runtime from agenix secret (affine-gcal-oauth).
+  # Redirect URI: https://<tailnetFqdn>:3010/api/calendar/oauth/callback
+  affineConfigTemplate = builtins.toJSON {
+    "$schema" = "https://github.com/toeverything/affine/releases/latest/download/config.schema.json";
+    server.name = "NicOS AFFiNE";
+    calendar.google = {
+      enabled = true;
+      clientId = "@GCAL_CLIENT_ID@";
+      clientSecret = "@GCAL_CLIENT_SECRET@";
+      externalWebhookUrl = "";
+      webhookVerificationToken = "";
+    };
+  };
+
   dbName = "affine";
   dbUser = "affine";
   dbUrl = "postgresql://${dbUser}@localhost:${toString pgPort}/${dbName}?host=/run/postgresql";
@@ -134,6 +149,8 @@ in
     "d ${dataDir} 0750 ${dbUser} ${dbUser} -"
     "d ${dataDir}/storage 0750 ${dbUser} ${dbUser} -"
     "Z ${dataDir}/app 0755 ${dbUser} ${dbUser} -"
+    "d ${dataDir}/.affine 0750 ${dbUser} ${dbUser} -"
+    "d ${dataDir}/.affine/config 0750 ${dbUser} ${dbUser} -"
   ];
 
   systemd.services.affine = {
@@ -144,6 +161,7 @@ in
     wantedBy = [ "multi-user.target" ];
     environment = {
       NODE_ENV = "production";
+      HOME = dataDir;
       AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
       AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}:3010";
@@ -154,12 +172,23 @@ in
       PRISMA_QUERY_ENGINE_LIBRARY = "${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node";
       PRISMA_SCHEMA_ENGINE_BINARY = "${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x";
     };
+    # Inject Google Calendar OAuth credentials from agenix into config.json
+    script = ''
+      CONF="${dataDir}/.affine/config/config.json"
+      OAUTH=$(cat /run/agenix/affine-gcal-oauth)
+      CID=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientId)
+      CSE=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientSecret)
+      TEMPLATE='${affineConfigTemplate}'
+      echo "$TEMPLATE" | ${pkgs.gnused}/bin/sed \
+        -e "s|@GCAL_CLIENT_ID@|$CID|" \
+        -e "s|@GCAL_CLIENT_SECRET@|$CSE|" > "$CONF"
+      exec ${nodejs}/bin/node ${appDir}/dist/main.js
+    '';
     serviceConfig = {
       Type = "simple";
       User = dbUser;
       Group = dbUser;
       WorkingDirectory = appDir;
-      ExecStart = "${nodejs}/bin/node ${appDir}/dist/main.js";
       Restart = "on-failure";
       RestartSec = "5s";
       PrivateUsers = lib.mkForce false;
