@@ -11,6 +11,7 @@
     ./zsh.nix
     ./claude.nix
     ./mcp.nix
+    ./llm-aliases.nix
   ];
 
   fonts.fontconfig.enable = true;
