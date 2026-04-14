@@ -39,15 +39,19 @@ let
   lliWrapper = pkgs.writeShellScript "lli-watch-headless" ''
     FIFO=/tmp/lli-stdin
     rm -f "$FIFO" && mkfifo "$FIFO"
-    exec 3>"$FIFO"
-    ${llmInterceptorPkg}/bin/lli watch --lan <"$FIFO" &
+    # Open FIFO read+write (non-blocking) so exec doesn't deadlock
+    exec 3<>"$FIFO"
+    ${llmInterceptorPkg}/bin/lli watch --lan <&3 &
     LLI_PID=$!
     sleep 3
+    # Keep lli in RECORDING state almost continuously:
+    #   - 1-hour sessions so requests rarely land in IDLE gaps
+    #   - 2-second IDLE window between sessions (just enough for processing)
     while kill -0 "$LLI_PID" 2>/dev/null; do
-      printf "\n" >&3
-      sleep 900
-      printf "\n" >&3
-      sleep 10
+      printf "\n" >&3   # IDLE → RECORDING
+      sleep 3600
+      printf "\n" >&3   # RECORDING → PROCESSING → IDLE
+      sleep 2
     done
   '';
 
