@@ -35,7 +35,6 @@
   ];
 
   casks = [
-    "1password"
     "affine"
     "bitwarden"
     "android-studio"

@@ -153,7 +153,6 @@
 
   programs.zen-browser = {
     enable = true;
-    # nativeMessagingHosts = [ pkgs."1password" ];
     policies = {
       DisableAppUpdate = true;
       DisableTelemetry = true;
