@@ -14,8 +14,8 @@ let
   };
 
   localProxy = {
-    description = "litellm Anthropic→Ollama proxy (local gemma4:26b, port 4000)";
-    args = [ litellmBin "--model" "openai/gemma4:26b" "--port" "4000" "--api_base" "http://localhost:11434/v1" "--drop_params" ];
+    description = "litellm Anthropic→Ollama proxy (local gemma4:e4b, port 4000)";
+    args = [ litellmBin "--model" "openai/gemma4:e4b" "--port" "4000" "--api_base" "http://localhost:11434/v1" "--drop_params" ];
     env = { OPENAI_API_KEY = "ollama"; };
     logSuffix = "ollama";
   };
