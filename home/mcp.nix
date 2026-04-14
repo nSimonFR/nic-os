@@ -1,7 +1,6 @@
 { config, pkgs, tailnetFqdn, ... }:
 let
   secretsPath = config.age.secrets.mcp-secrets.path;
-  jq = "${pkgs.jq}/bin/jq";
 
   # Wrapper scripts: read secrets from agenix at runtime, then exec the MCP server
   githubMcp = pkgs.writeShellScript "github-mcp" ''
@@ -24,9 +23,9 @@ let
 
   affineMcp = pkgs.writeShellScript "affine-mcp" ''
     [ -f "${secretsPath}" ] && . "${secretsPath}"
-    exec npx -y supergateway \
-      --streamableHttp "https://${tailnetFqdn}:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp" \
-      --oauth2Bearer "$AFFINE_TOKEN"
+    export AFFINE_BASE_URL="https://${tailnetFqdn}:3010"
+    export AFFINE_TOKEN
+    exec npx -y affine-mcp-server
   '';
 
   # Shared MCP server definitions (no plaintext secrets)
@@ -57,35 +56,21 @@ in
   # Claude Code: declarative MCP via home-manager plugin mechanism
   programs.claude-code.mcpServers = mcpServers;
 
-  # Cursor: write ~/.cursor/mcp.json as a real file (Cursor can't follow symlinks),
-  # injecting AFFiNE's auth header from agenix at activation time
+  # Cursor: write ~/.cursor/mcp.json as a real file (Cursor can't follow symlinks)
+  # Also sync the affine command entry into ~/.claude.json (user-level Claude Code config)
   home.activation.cursor-mcp = config.lib.dag.entryAfter [ "writeBoundary" ] ''
-    MCP=$(cat ${cursorMcpBase})
-
-    SECRETS_FILE="${secretsPath}"
-    if [ -f "$SECRETS_FILE" ]; then
-      . "$SECRETS_FILE"
-      AFFINE=$(${jq} -n --arg token "$AFFINE_TOKEN" '{
-        "affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621": {
-          type: "streamable-http",
-          url: "https://${tailnetFqdn}:3010/api/workspaces/35d244cd-e6d5-4b3d-b1c2-fa50cab50621/mcp",
-          note: "Read docs from AFFiNE workspace \"Nico\"",
-          headers: { Authorization: ("Bearer " + $token) }
-        }
-      }')
-      MCP=$(echo "$MCP" | ${jq} --argjson a "$AFFINE" '.mcpServers += $a')
-
-      # Also inject AFFiNE into Claude's user-level config (~/.claude.json)
-      CLAUDE_USER="$HOME/.claude.json"
-      if [ -f "$CLAUDE_USER" ]; then
-        ${jq} --argjson a "$AFFINE" '.mcpServers += $a' "$CLAUDE_USER" > "$CLAUDE_USER.tmp" \
-          && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
-      else
-        ${jq} -n --argjson a "$AFFINE" '{mcpServers: $a}' > "$CLAUDE_USER"
-      fi
-    fi
-
     mkdir -p "$HOME/.cursor"
-    echo "$MCP" > "$HOME/.cursor/mcp.json"
+    cat ${cursorMcpBase} > "$HOME/.cursor/mcp.json"
+
+    # Keep ~/.claude.json affine entry pointing to the current Nix store script
+    CLAUDE_USER="$HOME/.claude.json"
+    AFFINE_CMD="${affineMcp}"
+    if [ -f "$CLAUDE_USER" ]; then
+      ${pkgs.jq}/bin/jq \
+        --arg cmd "$AFFINE_CMD" \
+        'del(.mcpServers["affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621"])
+         | .mcpServers.affine = {type:"stdio", command:$cmd}' \
+        "$CLAUDE_USER" > "$CLAUDE_USER.tmp" && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
+    fi
   '';
 }
