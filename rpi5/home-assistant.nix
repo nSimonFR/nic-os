@@ -88,6 +88,29 @@ in
     fi
   '';
 
+  # Ensure editor-created automations saved to automations.yaml are actually
+  # loaded by Home Assistant. Existing user configuration is preserved; we only
+  # append the include if it is missing.
+  system.activationScripts.hassEnsureAutomationInclude.text = ''
+    if [ ! -d /var/lib/hass ]; then
+      exit 0
+    fi
+
+    if [ ! -e /var/lib/hass/configuration.yaml ]; then
+      cat > /var/lib/hass/configuration.yaml <<'EOF'
+    automation: !include automations.yaml
+    EOF
+    elif ! grep -Eq '^[[:space:]]*automation:[[:space:]]*!include[[:space:]]+automations\.yaml([[:space:]]|$)' /var/lib/hass/configuration.yaml; then
+      printf '\nautomation: !include automations.yaml\n' >> /var/lib/hass/configuration.yaml
+    fi
+
+    if [ ! -e /var/lib/hass/automations.yaml ]; then
+      : > /var/lib/hass/automations.yaml
+    fi
+
+    chown hass:hass /var/lib/hass/configuration.yaml /var/lib/hass/automations.yaml
+  '';
+
   # Remove real directories under custom_components left by Docker-era HA.
   # The nixpkgs home-assistant pre-start uses `ln -fns` which cannot overwrite
   # real directories — only symlinks. This runs before the service starts.
