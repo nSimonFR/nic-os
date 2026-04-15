@@ -10,9 +10,128 @@ let
   rpath = lib.makeLibraryPath [ openssl3 pkgs.glibc pkgs.stdenv.cc.cc.lib ];
   interpreter = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
 
-  # AFFiNE config.json — enables Google Calendar integration.
+  # AFFiNE embedding proxy for Ollama on beast.
+  #
+  # AFFiNE's getEmbeddings() hardcodes "gemini-embedding-001" as the model and
+  # calls the Gemini provider (createGoogleGenerativeAI) which uses Google's API
+  # format (/v1beta/models/MODEL:embedContent). We proxy that format to Ollama's
+  # OpenAI-compatible /v1/embeddings, forwarding to qwen3-embedding:8b with
+  # dimensions=1024 (AFFiNE's pgvector column is vector(1024)).
+  #
+  # Also handles /v1/embeddings passthrough (with dimensions injection) for any
+  # future OpenAI-provider embedding calls.
+  ollamaHost = "beast";
+  ollamaPort = 11434;
+  embedProxyPort = 11435;
+  embeddingModel = "qwen3-embedding:8b";
+
+  embedProxyScript = pkgs.writeText "affine-embed-proxy.js" ''
+    'use strict';
+    const http = require('http');
+
+    const UPSTREAM = { hostname: '${ollamaHost}', port: ${toString ollamaPort} };
+    const DIMS = 1024;
+    const OLLAMA_MODEL = '${embeddingModel}';
+
+    // Gemini embedContent path pattern: /v1beta/models/MODEL:embedContent
+    // or just /models/MODEL:embedContent depending on baseURL config
+    const GEMINI_SINGLE = /\/models\/[^/:]+:embedContent$/;
+    const GEMINI_BATCH  = /\/models\/[^/:]+:batchEmbedContents$/;
+
+    function ollamaEmbed(inputs) {
+      return new Promise((resolve, reject) => {
+        const body = Buffer.from(JSON.stringify({
+          model: OLLAMA_MODEL, input: inputs, dimensions: DIMS
+        }));
+        const req = http.request({
+          ...UPSTREAM,
+          path: '/v1/embeddings',
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'content-length': body.length },
+        }, res => {
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => {
+            try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+            catch(e) { reject(e); }
+          });
+        });
+        req.on('error', reject);
+        req.end(body);
+      });
+    }
+
+    function forward(req, res, body) {
+      const headers = Object.assign({}, req.headers);
+      headers['host'] = '${ollamaHost}:${toString ollamaPort}';
+      headers['content-length'] = String(body.length);
+      const up = http.request({ ...UPSTREAM, path: req.url, method: req.method, headers },
+        upRes => { res.writeHead(upRes.statusCode, upRes.headers); upRes.pipe(res); });
+      up.on('error', e => { res.writeHead(502); res.end(e.message); });
+      up.end(body);
+    }
+
+    const server = http.createServer((req, res) => {
+      const chunks = [];
+      req.on('data', c => chunks.push(c));
+      req.on('end', async () => {
+        const raw = Buffer.concat(chunks);
+
+        // ── Gemini single embed ───────────────────────────────────────────
+        if (req.method === 'POST' && GEMINI_SINGLE.test(req.url)) {
+          try {
+            const g = JSON.parse(raw.toString());
+            // g.content.parts[0].text  OR  g.content.parts = [{text}]
+            const text = g?.content?.parts?.[0]?.text ?? "";
+            const data = await ollamaEmbed([text]);
+            const values = data?.data?.[0]?.embedding ?? [];
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ embedding: { values } }));
+          } catch(e) {
+            res.writeHead(500); res.end(e.message);
+          }
+          return;
+        }
+
+        // ── Gemini batch embed ────────────────────────────────────────────
+        if (req.method === 'POST' && GEMINI_BATCH.test(req.url)) {
+          try {
+            const g = JSON.parse(raw.toString());
+            const texts = (g?.requests ?? []).map(r => r?.content?.parts?.[0]?.text ?? "");
+            const data = await ollamaEmbed(texts);
+            const embeddings = (data?.data ?? []).map(d => ({ values: d.embedding }));
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.end(JSON.stringify({ embeddings }));
+          } catch(e) {
+            res.writeHead(500); res.end(e.message);
+          }
+          return;
+        }
+
+        // ── OpenAI /v1/embeddings: inject dimensions if missing ───────────
+        if (req.method === 'POST' && req.url === '/v1/embeddings') {
+          try {
+            const obj = JSON.parse(raw.toString());
+            if (!obj.dimensions) {
+              obj.dimensions = DIMS;
+              forward(req, res, Buffer.from(JSON.stringify(obj)));
+              return;
+            }
+          } catch (_) {}
+        }
+
+        // ── Pass through ─────────────────────────────────────────────────
+        forward(req, res, raw);
+      });
+    });
+
+    server.listen(${toString embedProxyPort}, '127.0.0.1', () => {
+      process.stderr.write('affine-embed-proxy listening on 127.0.0.1:${toString embedProxyPort} -> ${ollamaHost}:${toString ollamaPort}\n');
+    });
+  '';
+
+  # AFFiNE config.json — enables Google Calendar + Copilot (embeddings via Ollama on beast).
   # OAuth credentials are injected at runtime from agenix secret (affine-gcal-oauth).
-  # Redirect URI: https://<tailnetFqdn>:3010/api/calendar/oauth/callback
   affineConfigTemplate = builtins.toJSON {
     "$schema" = "https://github.com/toeverything/affine/releases/latest/download/config.schema.json";
     server.name = "NicOS AFFiNE";
@@ -22,6 +141,16 @@ let
       clientSecret = "@GCAL_CLIENT_SECRET@";
       externalWebhookUrl = "";
       webhookVerificationToken = "";
+    };
+    copilot = {
+      enabled = true;
+      # AFFiNE's getEmbeddings() always uses "gemini-embedding-001" via the Gemini
+      # provider. The proxy translates Gemini's embedContent API format to Ollama's
+      # OpenAI-compatible format, forwarding to qwen3-embedding:8b at 1024 dims.
+      "providers.gemini" = {
+        apiKey = "ollama";
+        baseURL = "http://127.0.0.1:${toString embedProxyPort}";
+      };
     };
   };
 
@@ -137,6 +266,20 @@ in
     '';
   };
 
+  # ── Ollama embedding proxy ────────────────────────────────────────────
+  systemd.services.affine-embed-proxy = {
+    description = "AFFiNE embedding proxy (Gemini API -> Ollama qwen3-embedding:8b)";
+    after = [ "network.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${nodejs}/bin/node ${embedProxyScript}";
+      Restart = "on-failure";
+      RestartSec = "3s";
+      DynamicUser = true;
+    };
+  };
+
   # ── AFFiNE server ─────────────────────────────────────────────────────
   users.users.${dbUser} = {
     isSystemUser = true;
@@ -155,7 +298,7 @@ in
 
   systemd.services.affine = {
     description = "AFFiNE";
-    after = [ "network.target" "affine-migrate.service" "redis-shared.service" ];
+    after = [ "network.target" "affine-migrate.service" "redis-shared.service" "affine-embed-proxy.service" ];
     requires = [ "affine-migrate.service" ];
     wants = [ "redis-shared.service" ];
     wantedBy = [ "multi-user.target" ];

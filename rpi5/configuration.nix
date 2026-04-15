@@ -120,6 +120,7 @@ in
     ./sumeria-mitm.nix
     ./vaultwarden.nix
     ./affine.nix
+    # ./manticoresearch.nix  # TODO: broken in nixpkgs (missing boost/asio dep)
     ./affine-mcp-gateway.nix
     ./backups.nix
     ./storj-backup.nix
