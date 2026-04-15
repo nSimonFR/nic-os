@@ -202,6 +202,6 @@ function get-version() {
 
 # Use personal identity only in real terminal sessions (agents have no TTY)
 if [[ -t 0 ]]; then
-  git() { GIT_CONFIG_GLOBAL=~/.config/git/config-personal command git "$@" }
+  git() { GIT_CONFIG_GLOBAL=~/.config/git/config command git "$@" }
   gh() { GH_TOKEN=$(command gh auth token --user nSimonFR 2>/dev/null) command gh "$@" }
 fi
