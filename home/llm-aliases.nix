@@ -1,15 +1,38 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 let
   litellmBin = "${pkgs.litellm}/bin/litellm";
+  phoenixKeyPath = config.age.secrets.phoenix-api-key.path;
+
+  # Wrapper: reads Phoenix JWT from agenix at runtime, sets OTEL env vars, execs litellm
+  mkLitellmWrapper = { configFile, port, logSuffix }: pkgs.writeShellScript "litellm-${logSuffix}" ''
+    PHOENIX_JWT=$(cat "${phoenixKeyPath}" 2>/dev/null || echo "")
+    export OPENAI_API_KEY=ollama
+    export OTEL_EXPORTER_OTLP_ENDPOINT="https://app.phoenix.arize.com/s/nsimon/v1/traces"
+    export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer $PHOENIX_JWT"
+    exec ${litellmBin} --config ${configFile} --port ${toString port}
+  '';
 
   # Use openai/ prefix pointing at Ollama's /v1 endpoint — avoids litellm bugs
   # with both ollama/ ('str' has no .get) and ollama_chat/ (array content unmarshal).
-  # OPENAI_API_KEY is required by litellm but ignored by Ollama.
+  beastConfig = pkgs.writeText "litellm-beast-config.yaml" ''
+    model_list:
+      - model_name: "openai/gemma4:e4b"
+        litellm_params:
+          model: openai/gemma4:e4b
+          api_base: http://beast:11434/v1
+          api_key: ollama
+          drop_params: true
+
+    litellm_settings:
+      success_callback: ["otel"]
+  '';
+
+  beastWrapper = mkLitellmWrapper { configFile = beastConfig; port = 4001; logSuffix = "beast"; };
+
   beastProxy = {
     # gemma4:e4b: best fit for RTX 3080 Ti 12GB (llmfit score 89.2, Perfect, 62.7 tok/s, 78.5% VRAM)
     description = "litellm Anthropic→Ollama proxy (Beast RTX 3080 Ti via Tailscale, port 4001)";
-    args = [ litellmBin "--model" "openai/gemma4:e4b" "--port" "4001" "--api_base" "http://beast:11434/v1" "--drop_params" ];
-    env = { OPENAI_API_KEY = "ollama"; };
+    args = [ "${beastWrapper}" ];
     logSuffix = "beast";
   };
 
@@ -28,14 +51,18 @@ let
           api_base: http://localhost:11434/v1
           api_key: ollama
           drop_params: true
+
+    litellm_settings:
+      success_callback: ["otel"]
   '';
+
+  localWrapper = mkLitellmWrapper { configFile = localConfig; port = 4000; logSuffix = "ollama"; };
 
   localProxy = {
     # gemma4-a4b: 26.5B MoE, 4B active (score 67.8, 3.1 tok/s, 80% mem)
     # gemma4-e4b: 8B dense (score 63.9, 10.3 tok/s, 25% mem)
     description = "litellm Anthropic→Ollama proxy (local models, port 4000)";
-    args = [ litellmBin "--config" "${localConfig}" "--port" "4000" ];
-    env = { OPENAI_API_KEY = "ollama"; };
+    args = [ "${localWrapper}" ];
     logSuffix = "ollama";
   };
 
@@ -43,7 +70,6 @@ let
     enable = true;
     config = {
       ProgramArguments = p.args;
-      EnvironmentVariables = p.env;
       RunAtLoad = true;
       KeepAlive = true;
       StandardOutPath = "/tmp/litellm-${p.logSuffix}.log";
@@ -55,7 +81,6 @@ let
     Unit.Description = p.description;
     Service = {
       ExecStart = lib.escapeShellArgs p.args;
-      Environment = lib.mapAttrsToList (k: v: "${k}=${v}") p.env;
       Restart = "always";
       RestartSec = "5s";
     };
