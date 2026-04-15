@@ -34,6 +34,7 @@ let
     "trusk-context7"    = { type = "sse";  url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/sse"; };
     "trusk-steampipe"   = { type = "sse";  url = "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/sse"; };
     "trusk-searxncrawl" = { type = "sse";  url = "http://searxncrawl-mcp.dev-tools.svc.cluster.local:7010/sse"; };
+    firecrawl           = { type = "http"; url = "https://mcp.firecrawl.dev/fc-c6a062b4ff1849d3991eeb116c0632a4/v2/mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
