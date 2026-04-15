@@ -1,9 +1,5 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "effortLevel": "medium",
-  "voiceEnabled": true,
-  "skipDangerousModePermissionPrompt": true,
-  "trustAll": true,
   "permissions": {
     "allow": [
       "Bash(*)",
@@ -22,15 +18,19 @@
   "hooks": {
     "Notification": [
       {
+        "matcher": "",
         "hooks": [
           {
+            "type": "command",
             "command": "$HOME/.claude/hooks/telegram-notify",
-            "timeout": 10,
-            "type": "command"
+            "timeout": 10
           }
-        ],
-        "matcher": ""
+        ]
       }
     ]
-  }
+  },
+  "effortLevel": "medium",
+  "voiceEnabled": true,
+  "skipDangerousModePermissionPrompt": true,
+  "trustAll": true
 }
