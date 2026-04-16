@@ -9,21 +9,21 @@ let
       - model_name: "openai/gemma4:e4b"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://beast:11434/v1
+          api_base: http://100.125.240.34:11434/v1
           api_key: ollama
           drop_params: true
 
       - model_name: "openai/gemma4:26b"
         litellm_params:
           model: openai/gemma4:26b
-          api_base: http://beast:11434/v1
+          api_base: http://100.125.240.34:11434/v1
           api_key: ollama
           drop_params: true
 
       - model_name: "openai/qwen3.5:35b-a3b"
         litellm_params:
           model: openai/qwen3.5:35b-a3b
-          api_base: http://beast:11434/v1
+          api_base: http://100.125.240.34:11434/v1
           api_key: ollama
           drop_params: true
 
@@ -31,7 +31,7 @@ let
       - model_name: "openai/qwen3-embedding:8b"
         litellm_params:
           model: openai/qwen3-embedding:8b
-          api_base: http://beast:11434/v1
+          api_base: http://100.125.240.34:11434/v1
           api_key: ollama
           drop_params: true
 
@@ -44,16 +44,12 @@ let
           drop_params: true
 
     litellm_settings:
-      success_callback: ["otel"]
       drop_params: true
   '';
 
   # Wrapper: reads Phoenix JWT from agenix at runtime, sets OTEL env vars, execs litellm
   litellmWrapper = pkgs.writeShellScript "litellm-gateway" ''
-    PHOENIX_JWT=$(cat /run/agenix/phoenix-api-key 2>/dev/null || echo "")
     export OPENAI_API_KEY=ollama
-    export OTEL_EXPORTER_OTLP_ENDPOINT="https://app.phoenix.arize.com/s/nsimon/v1/traces"
-    export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer $PHOENIX_JWT"
     exec ${litellmBin} --config ${litellmConfig} --host 127.0.0.1 --port ${toString port}
   '';
 in
