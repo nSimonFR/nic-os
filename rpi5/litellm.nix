@@ -54,7 +54,7 @@ let
     export OPENAI_API_KEY=ollama
     export OTEL_EXPORTER_OTLP_ENDPOINT="https://app.phoenix.arize.com/s/nsimon/v1/traces"
     export OTEL_EXPORTER_OTLP_HEADERS="authorization=Bearer $PHOENIX_JWT"
-    exec ${litellmBin} --config ${litellmConfig} --port ${toString port}
+    exec ${litellmBin} --config ${litellmConfig} --host 127.0.0.1 --port ${toString port}
   '';
 in
 {
