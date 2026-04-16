@@ -89,6 +89,18 @@ let
 
     litellm_settings:
       drop_params: true
+
+    # Gemini model name → LiteLLM model group mapping.
+    # AFFiNE's Gemini provider sends /v1beta/models/MODEL:generateContent;
+    # LiteLLM's native router translates and routes via these aliases.
+    router_settings:
+      model_group_alias:
+        "gemini-2.5-flash": "openai/gemma4:e4b"
+        "gemini-2.5-pro": "openai/gemma4:e4b"
+        "gemini-2.0-flash": "openai/gemma4:e4b"
+        "gemini-2.0-flash-001": "openai/gemma4:e4b"
+        "gemini-embedding-001": "openai/qwen3-embedding:8b"
+        "text-embedding-004": "openai/qwen3-embedding:8b"
   '';
 
   # Wrapper: reads Phoenix JWT from agenix at runtime, sets OTEL env vars, execs litellm
