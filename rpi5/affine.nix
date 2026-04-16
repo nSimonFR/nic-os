@@ -152,22 +152,22 @@ in
     '';
   };
 
-  # ── Gemini→OpenAI translation proxy (AFFiNE v0.26 requires Gemini provider) ──
+  # ── Embedding proxy (Gemini embedContent → LiteLLM /v1/embeddings) ────
+  # LiteLLM handles generateContent natively via model_group_alias, but
+  # embedContent/batchEmbedContents routes don't exist in v1.75.5.
+  # This thin proxy translates only those two endpoints; everything else
+  # passes through to LiteLLM.
   systemd.services.affine-embed-proxy = {
-    description = "AFFiNE Gemini-to-OpenAI translation proxy → LiteLLM";
+    description = "AFFiNE Gemini embedding proxy → LiteLLM";
     after = [ "network.target" "litellm-gateway.service" ];
     wants = [ "litellm-gateway.service" ];
     wantedBy = [ "multi-user.target" ];
     environment = {
-      OLLAMA_HOST    = "127.0.0.1";
-      OLLAMA_PORT    = "4001";
-      FALLBACK_HOST  = "127.0.0.1";
-      FALLBACK_PORT  = "4040";
-      CHAT_MODEL     = "openai/gemma4:e4b";
-      FALLBACK_MODEL = "openai/gpt-5.4-mini";
-      LISTEN_PORT    = "11435";
-      EMBED_MODEL    = "openai/qwen3-embedding:8b";
-      EMBED_DIMS     = "1024";
+      LITELLM_HOST = "127.0.0.1";
+      LITELLM_PORT = "4001";
+      LISTEN_PORT  = "11435";
+      EMBED_MODEL  = "openai/qwen3-embedding:8b";
+      EMBED_DIMS   = "1024";
     };
     serviceConfig = {
       Type = "simple";
