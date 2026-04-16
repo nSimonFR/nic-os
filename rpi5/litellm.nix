@@ -35,6 +35,14 @@ let
           api_key: ollama
           drop_params: true
 
+      # -- OpenAI model aliases (AFFiNE hardcodes these for some tasks) --
+      - model_name: "gpt-4.1-2025-04-14"
+        litellm_params:
+          model: openai/gemma4:e4b
+          api_base: http://100.125.240.34:11434/v1
+          api_key: ollama
+          drop_params: true
+
       # -- Codex-proxy models (chat fallback) --
       - model_name: "openai/gpt-5.4-mini"
         litellm_params:

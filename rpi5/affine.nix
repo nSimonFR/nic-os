@@ -36,8 +36,12 @@ let
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:${toString embedProxyPort}";
       };
-      # Chat also goes through Gemini provider → proxy → Ollama/codex-proxy.
-      # No OpenAI provider needed — AFFiNE UI only shows Gemini models.
+      # OpenAI provider → LiteLLM gateway for title generation etc.
+      # (AFFiNE hardcodes gpt-4.1-2025-04-14 for some tasks like generateSessionTitle)
+      "providers.openai" = {
+        apiKey = "ollama";
+        baseURL = "http://127.0.0.1:4001/v1";
+      };
     };
   };
 
