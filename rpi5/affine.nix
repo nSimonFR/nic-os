@@ -24,29 +24,18 @@ let
     };
     copilot = {
       enabled = true;
-      # Single OpenAI provider via LiteLLM — handles all AI tasks.
-      # providers.profiles + providers.defaults route every output type here,
-      # bypassing Gemini provider entirely. LiteLLM aliases map OpenAI model
-      # names (gpt-4.1, text-embedding-3-large) to local Ollama models.
-      "providers.profiles" = [
-        {
-          id = "litellm";
-          type = "openai";
-          priority = 100;
-          config = {
-            apiKey = "ollama";
-            baseURL = "http://127.0.0.1:4001/v1";
-            oldApiStyle = true;
-          };
-        }
-      ];
-      "providers.defaults" = {
-        text = "litellm";
-        object = "litellm";
-        embedding = "litellm";
-        structured = "litellm";
-        image = "litellm";
-        fallback = "litellm";
+      # Gemini provider → embed proxy → LiteLLM for chat/embeddings.
+      # v0.26.6 hardcodes Gemini for structured output; providers.profiles
+      # not supported until a newer version.
+      "providers.gemini" = {
+        apiKey = "ollama";
+        baseURL = "http://127.0.0.1:11435";
+      };
+      # OpenAI provider → LiteLLM for title generation etc.
+      "providers.openai" = {
+        apiKey = "ollama";
+        baseURL = "http://127.0.0.1:4001/v1";
+        oldApiStyle = "true";
       };
     };
   };
@@ -161,6 +150,32 @@ in
       export PRISMA_SCHEMA_ENGINE_BINARY="${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x"
       exec ${nodejs}/bin/node ${appDir}/node_modules/.bin/prisma migrate deploy --schema ${appDir}/schema.prisma
     '';
+  };
+
+  # ── Gemini→OpenAI translation proxy (AFFiNE v0.26 requires Gemini provider) ──
+  systemd.services.affine-embed-proxy = {
+    description = "AFFiNE Gemini-to-OpenAI translation proxy → LiteLLM";
+    after = [ "network.target" "litellm-gateway.service" ];
+    wants = [ "litellm-gateway.service" ];
+    wantedBy = [ "multi-user.target" ];
+    environment = {
+      OLLAMA_HOST    = "127.0.0.1";
+      OLLAMA_PORT    = "4001";
+      FALLBACK_HOST  = "127.0.0.1";
+      FALLBACK_PORT  = "4040";
+      CHAT_MODEL     = "openai/gemma4:e4b";
+      FALLBACK_MODEL = "openai/gpt-5.4-mini";
+      LISTEN_PORT    = "11435";
+      EMBED_MODEL    = "openai/qwen3-embedding:8b";
+      EMBED_DIMS     = "1024";
+    };
+    serviceConfig = {
+      Type = "simple";
+      ExecStart = "${nodejs}/bin/node ${./affine-embed-proxy.js}";
+      Restart = "on-failure";
+      RestartSec = "3s";
+      DynamicUser = true;
+    };
   };
 
   # ── AFFiNE server ─────────────────────────────────────────────────────
