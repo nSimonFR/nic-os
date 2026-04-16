@@ -35,7 +35,22 @@ let
           api_key: ollama
           drop_params: true
 
-      # -- OpenAI model aliases (AFFiNE hardcodes these for title generation etc.) --
+      # -- Embedding aliases (AFFiNE OpenAI provider requests these) --
+      - model_name: "text-embedding-3-small"
+        litellm_params:
+          model: openai/qwen3-embedding:8b
+          api_base: http://100.125.240.34:11434/v1
+          api_key: ollama
+          drop_params: true
+
+      - model_name: "text-embedding-3-large"
+        litellm_params:
+          model: openai/qwen3-embedding:8b
+          api_base: http://100.125.240.34:11434/v1
+          api_key: ollama
+          drop_params: true
+
+      # -- Chat aliases (AFFiNE hardcodes various GPT model names) --
       - model_name: "gpt-4.1-2025-04-14"
         litellm_params:
           model: openai/gemma4:e4b
@@ -44,6 +59,20 @@ let
           drop_params: true
 
       - model_name: "gpt-4.1-mini"
+        litellm_params:
+          model: openai/gemma4:e4b
+          api_base: http://100.125.240.34:11434/v1
+          api_key: ollama
+          drop_params: true
+
+      - model_name: "gpt-4o"
+        litellm_params:
+          model: openai/gemma4:e4b
+          api_base: http://100.125.240.34:11434/v1
+          api_key: ollama
+          drop_params: true
+
+      - model_name: "gpt-4o-mini"
         litellm_params:
           model: openai/gemma4:e4b
           api_base: http://100.125.240.34:11434/v1
