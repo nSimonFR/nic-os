@@ -13,6 +13,7 @@ let
     { port = 8222;  backend = "http://127.0.0.1:8222";  } # vaultwarden (bitwarden)
     { port = 3010;  backend = "http://127.0.0.1:13010"; } # affine
     { port = 7020;  backend = "http://127.0.0.1:17020"; } # affine MCP gateway (SSE)
+    { port = 4001;  backend = "http://127.0.0.1:4001";  } # litellm gateway
   ];
 
   # Publicly-accessible services (tailscale funnel).

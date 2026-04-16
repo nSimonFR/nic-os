@@ -63,5 +63,8 @@
       file = ./secrets/affine-gcal-oauth.age;
       owner = "affine";
     };
+    phoenix-api-key = {
+      file = ../shared/phoenix-api-key.age;
+    };
   };
 }
