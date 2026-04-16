@@ -10,16 +10,16 @@
 const http = require('http');
 
 const OLLAMA = {
-  hostname: process.env.OLLAMA_HOST || 'beast',
-  port: parseInt(process.env.OLLAMA_PORT || '11434'),
+  hostname: process.env.OLLAMA_HOST || '127.0.0.1',
+  port: parseInt(process.env.OLLAMA_PORT || '4001'),
 };
 const FALLBACK = {
   hostname: process.env.FALLBACK_HOST || '127.0.0.1',
   port: parseInt(process.env.FALLBACK_PORT || '4040'),
 };
-const CHAT_MODEL     = process.env.CHAT_MODEL || 'gemma4:e4b';
-const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'gpt-5.4-mini';
-const EMBED_MODEL    = process.env.EMBED_MODEL || 'qwen3-embedding:8b';
+const CHAT_MODEL     = process.env.CHAT_MODEL || 'openai/gemma4:e4b';
+const FALLBACK_MODEL = process.env.FALLBACK_MODEL || 'openai/gpt-5.4-mini';
+const EMBED_MODEL    = process.env.EMBED_MODEL || 'openai/qwen3-embedding:8b';
 const DIMS           = parseInt(process.env.EMBED_DIMS || '1024');
 const PORT           = parseInt(process.env.LISTEN_PORT || '11435');
 

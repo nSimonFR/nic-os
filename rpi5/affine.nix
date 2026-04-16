@@ -12,8 +12,8 @@ let
 
   # AI proxy: translates Gemini API → Ollama on beast (codex-proxy failover).
   # Handles embeddings (embedContent) and chat (generateContent/streamGenerateContent).
-  ollamaHost = "beast";
-  ollamaPort = 11434;
+  ollamaHost = "127.0.0.1";  # routes through litellm gateway
+  ollamaPort = 4001;
   embedProxyPort = 11435;
 
   # AFFiNE config.json — enables Google Calendar + Copilot (embeddings via Ollama on beast).
@@ -155,18 +155,19 @@ in
 
   # ── Embedding proxy (Gemini API → Ollama) ──────────────────────────────
   systemd.services.affine-embed-proxy = {
-    description = "AFFiNE AI proxy (embeddings + chat with Ollama/codex failover)";
-    after = [ "network.target" ];
+    description = "AFFiNE AI proxy (embeddings + chat via LiteLLM/codex failover)";
+    after = [ "network.target" "litellm-gateway.service" ];
+    wants = [ "litellm-gateway.service" ];
     wantedBy = [ "multi-user.target" ];
     environment = {
       OLLAMA_HOST    = ollamaHost;
       OLLAMA_PORT    = toString ollamaPort;
       FALLBACK_HOST  = "127.0.0.1";
       FALLBACK_PORT  = "4040";  # openai-codex-proxy
-      CHAT_MODEL     = "gemma4:e4b";
-      FALLBACK_MODEL = "gpt-5.4-mini";
+      CHAT_MODEL     = "openai/gemma4:e4b";
+      FALLBACK_MODEL = "openai/gpt-5.4-mini";
       LISTEN_PORT    = toString embedProxyPort;
-      EMBED_MODEL    = "qwen3-embedding:8b";
+      EMBED_MODEL    = "openai/qwen3-embedding:8b";
       EMBED_DIMS     = "1024";
     };
     serviceConfig = {
