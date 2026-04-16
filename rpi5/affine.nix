@@ -10,13 +10,7 @@ let
   rpath = lib.makeLibraryPath [ openssl3 pkgs.glibc pkgs.stdenv.cc.cc.lib ];
   interpreter = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
 
-  # AI proxy: translates Gemini API → Ollama on beast (codex-proxy failover).
-  # Handles embeddings (embedContent) and chat (generateContent/streamGenerateContent).
-  ollamaHost = "127.0.0.1";  # routes through litellm gateway
-  ollamaPort = 4001;
-  embedProxyPort = 11435;
-
-  # AFFiNE config.json — enables Google Calendar + Copilot (embeddings via Ollama on beast).
+  # AFFiNE config.json — enables Google Calendar + Copilot (via LiteLLM gateway).
   # OAuth credentials are injected at runtime from agenix secret (affine-gcal-oauth).
   affineConfigTemplate = builtins.toJSON {
     "$schema" = "https://github.com/toeverything/affine/releases/latest/download/config.schema.json";
@@ -30,14 +24,8 @@ let
     };
     copilot = {
       enabled = true;
-      # Embeddings: Gemini provider → local proxy → Ollama qwen3-embedding:8b
-      # (getEmbeddings() hardcodes gemini-embedding-001, must use Gemini provider)
-      "providers.gemini" = {
-        apiKey = "ollama";
-        baseURL = "http://127.0.0.1:${toString embedProxyPort}";
-      };
-      # OpenAI provider → LiteLLM gateway for title generation etc.
-      # (AFFiNE hardcodes gpt-4.1-2025-04-14 for some tasks like generateSessionTitle)
+      # All AI goes through OpenAI provider → LiteLLM gateway → Ollama.
+      # LiteLLM aliases map OpenAI model names to local Ollama models.
       "providers.openai" = {
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:4001/v1";
@@ -156,32 +144,6 @@ in
       export PRISMA_SCHEMA_ENGINE_BINARY="${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x"
       exec ${nodejs}/bin/node ${appDir}/node_modules/.bin/prisma migrate deploy --schema ${appDir}/schema.prisma
     '';
-  };
-
-  # ── Embedding proxy (Gemini API → Ollama) ──────────────────────────────
-  systemd.services.affine-embed-proxy = {
-    description = "AFFiNE AI proxy (embeddings + chat via LiteLLM/codex failover)";
-    after = [ "network.target" "litellm-gateway.service" ];
-    wants = [ "litellm-gateway.service" ];
-    wantedBy = [ "multi-user.target" ];
-    environment = {
-      OLLAMA_HOST    = ollamaHost;
-      OLLAMA_PORT    = toString ollamaPort;
-      FALLBACK_HOST  = "127.0.0.1";
-      FALLBACK_PORT  = "4040";  # openai-codex-proxy
-      CHAT_MODEL     = "openai/gemma4:e4b";
-      FALLBACK_MODEL = "openai/gpt-5.4-mini";
-      LISTEN_PORT    = toString embedProxyPort;
-      EMBED_MODEL    = "openai/qwen3-embedding:8b";
-      EMBED_DIMS     = "1024";
-    };
-    serviceConfig = {
-      Type = "simple";
-      ExecStart = "${nodejs}/bin/node ${./affine-embed-proxy.js}";
-      Restart = "on-failure";
-      RestartSec = "3s";
-      DynamicUser = true;
-    };
   };
 
   # ── AFFiNE server ─────────────────────────────────────────────────────
