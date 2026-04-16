@@ -35,12 +35,21 @@ let
           api_key: ollama
           drop_params: true
 
-      # -- OpenAI model aliases (AFFiNE hardcodes these for some tasks) --
+      # -- OpenAI model aliases (AFFiNE hardcodes gpt-4.1 for title generation) --
+      # Route through codex-proxy — OpenAI SDK v5 uses /v1/responses API which
+      # LiteLLM can't translate for Ollama backends, but works with real OpenAI.
       - model_name: "gpt-4.1-2025-04-14"
         litellm_params:
-          model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
-          api_key: ollama
+          model: openai/gpt-4.1-2025-04-14
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
+          drop_params: true
+
+      - model_name: "gpt-4.1-mini"
+        litellm_params:
+          model: openai/gpt-4.1-mini
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
           drop_params: true
 
       # -- Codex-proxy models (chat fallback) --
