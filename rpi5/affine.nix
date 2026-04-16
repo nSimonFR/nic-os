@@ -41,6 +41,7 @@ let
       "providers.openai" = {
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:4001/v1";
+        oldApiStyle = "true";  # force /v1/chat/completions instead of /v1/responses
       };
     };
   };
