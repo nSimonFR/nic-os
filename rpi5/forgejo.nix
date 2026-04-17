@@ -34,7 +34,7 @@ in
         DEFAULT_INTERVAL = "8h";
       };
 
-      cron."update_mirrors" = {
+      "cron.update_mirrors" = {
         SCHEDULE = "0 */4 * * *";
       };
 
