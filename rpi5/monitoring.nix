@@ -46,7 +46,7 @@ in
       ConditionPathExists = "/var/lib/beszel-hub/agent.env";
       Environment = [
         "PORT=${toString beszelAgentPort}"
-        "FILESYSTEM=/dev/disk/by-label/NIXOS_SSD,/dev/md/rpi5:home"
+        "FILESYSTEM=/dev/sdb1,/dev/sdb2,/dev/sda1"
         "BESZEL_AGENT_PRIMARY_SENSOR=cpu_thermal"
       ];
       ProtectProc = "default";
