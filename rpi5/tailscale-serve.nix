@@ -15,6 +15,7 @@ let
     { port = 7020;  backend = "http://127.0.0.1:17020"; } # affine MCP gateway (SSE)
     { port = 4001;  backend = "http://127.0.0.1:4001";  } # litellm gateway
     { port = 3100;  backend = "http://127.0.0.1:3100";  } # forgejo (git)
+    { port = 8181;  backend = "http://127.0.0.1:8181";  } # open-webui
   ];
 
   # Publicly-accessible services (tailscale funnel).
