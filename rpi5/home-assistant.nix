@@ -63,7 +63,6 @@ in
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
       "homekit"    # HomeKit bridge — uses zeroconf/mDNS
-      "prometheus" # Metrics endpoint scraped by Prometheus
       # Components whose Python deps were absent, causing default_config cascade failure:
       "conversation" # hassil — also required by mobile_app
       "dhcp"         # aiodhcpwatcher
@@ -187,17 +186,4 @@ in
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
 
-  # ── Prometheus scrape ─────────────────────────────────────────────────
-  # bearer_token_file is populated manually after first deploy:
-  #   echo TOKEN | sudo tee /etc/home-assistant/ha-api-token && sudo chmod 640 /etc/home-assistant/ha-api-token
-  systemd.tmpfiles.rules = [
-    "f /etc/home-assistant/ha-api-token 0640 root prometheus - -"
-  ];
-
-  services.prometheus.scrapeConfigs = [{
-    job_name          = "home_assistant";
-    static_configs    = [{ targets = [ "127.0.0.1:8123" ]; }];
-    metrics_path      = "/api/prometheus";
-    bearer_token_file = "/etc/home-assistant/ha-api-token";
-  }];
 }
