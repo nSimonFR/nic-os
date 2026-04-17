@@ -7,7 +7,6 @@
 }:
 let
   tokenPath = config.age.secrets.telegram-bot-token.path;
-  phoenixKeyPath = config.age.secrets.phoenix-api-key.path;
 
   notifyScript = pkgs.writeShellScript "claude-telegram-notify" ''
     CHAT_ID="${builtins.toString telegramChatId}"
@@ -124,12 +123,4 @@ in
     executable = true;
   };
 
-  # Generate ~/.claude/settings.local.json with the Phoenix API key from agenix.
-  # This file is gitignored by Claude Code and takes precedence over settings.json.
-  home.activation.claude-phoenix-settings = config.lib.dag.entryAfter [ "writeBoundary" ] ''
-    PHOENIX_JWT=$(cat "${phoenixKeyPath}" 2>/dev/null || echo "")
-    mkdir -p "$HOME/.claude"
-    printf '{\n  "env": {\n    "PHOENIX_API_KEY": "%s"\n  }\n}\n' "$PHOENIX_JWT" \
-      > "$HOME/.claude/settings.local.json"
-  '';
 }
