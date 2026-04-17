@@ -21,7 +21,7 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     serviceConfig = {
-      ExecStart = "${pkgs.beszel}/bin/beszel serve --http 127.0.0.1:${toString beszelHubPort}";
+      ExecStart = "${pkgs.beszel}/bin/beszel-hub serve --http 127.0.0.1:${toString beszelHubPort}";
       DynamicUser = true;
       StateDirectory = "beszel-hub";
       WorkingDirectory = "/var/lib/beszel-hub";
