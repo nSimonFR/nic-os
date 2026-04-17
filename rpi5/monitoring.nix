@@ -131,6 +131,7 @@ Check <code>journalctl -u earlyoom</code> for details."
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "filesystem-ro-alert" ''
         RO_FS=$(${pkgs.gnugrep}/bin/grep -E 'ext4|xfs|btrfs' /proc/mounts \
+                | ${pkgs.gnugrep}/bin/grep -v '/nix/store' \
                 | ${pkgs.gnugrep}/bin/grep ' ro[, ]' || true)
         if [ -n "$RO_FS" ]; then
           ${telegramNotify} "<b>Read-only filesystem on rpi5</b>
