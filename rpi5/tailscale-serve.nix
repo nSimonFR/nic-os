@@ -5,7 +5,7 @@ let
   serveEntries = [
     { port = 8123;  backend = "http://127.0.0.1:8123";  } # home-assistant
     { port = 9099;  backend = "http://127.0.0.1:9099";  } # scrutiny (disk health)
-    { port = 3000;  backend = "http://127.0.0.1:3000";  } # grafana
+    { port = 3000;  backend = "http://127.0.0.1:8090";  } # beszel hub
     { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
     { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
     { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)

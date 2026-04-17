@@ -112,7 +112,7 @@ in
     ./tailscale-serve.nix
     ./blocky.nix
     ./scrutiny.nix
-    ./monitoring
+    ./monitoring.nix
     ./filebrowser.nix
     ./openai-codex-proxy.nix
     ./immich.nix
