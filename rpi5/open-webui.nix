@@ -19,6 +19,8 @@ in
       OPENAI_API_KEYS = "ollama;unused";
       # Disable Ollama API (all models served via OpenAI-compatible endpoints)
       ENABLE_OLLAMA_API = "false";
+      # Reset DB config to env var values on start (remove after first boot)
+      RESET_CONFIG_ON_START = "true";
       # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
