@@ -18,6 +18,8 @@ in
       createDatabase = true;
     };
 
+    repositoryRoot = "/mnt/data/repositories";
+
     settings = {
       server = {
         HTTP_ADDR          = "127.0.0.1";
