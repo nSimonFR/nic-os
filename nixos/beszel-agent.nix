@@ -17,7 +17,7 @@ in
       ConditionPathExists = "/etc/beszel/agent.env";
       Environment = [
         "PORT=${toString beszelAgentPort}"
-        "FILESYSTEM=/dev/nvme0n1p2,/dev/nvme1n1p3"
+        "FILESYSTEM=/dev/nvme0n1p2,/dev/nvme1n1p3,/dev/sda2,/dev/sdc2"
       ];
       ProtectProc = "default";
     };

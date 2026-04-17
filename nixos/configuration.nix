@@ -49,6 +49,7 @@ in
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
+    ./beszel-agent.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
