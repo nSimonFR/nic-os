@@ -2,6 +2,11 @@
 let
   httpPort = 3100;
   sshPort  = 2222;
+
+  earl-grey-theme = pkgs.fetchurl {
+    url = "https://raw.githubusercontent.com/Troplo/earl-grey/master/theme-earl-grey.css";
+    hash = "sha256-UNc+idYpmCcNXxf7IRnsTzeWT2nB4HQOStnQxUsC0n8=";
+  };
 in
 {
   # ── Forgejo service ───────────────────────────────────────────────────
@@ -43,7 +48,8 @@ in
       };
 
       ui = {
-        DEFAULT_THEME = "forgejo-auto";
+        THEMES = "forgejo-auto,forgejo-light,forgejo-dark,earl-grey";
+        DEFAULT_THEME = "earl-grey";
       };
     };
 
@@ -52,6 +58,12 @@ in
       interval = "daily";
     };
   };
+
+  # ── Earl Grey dark theme ──────────────────────────────────────────────
+  systemd.services.forgejo.preStart = lib.mkAfter ''
+    mkdir -p ${config.services.forgejo.customDir}/public/assets/css
+    ln -sf ${earl-grey-theme} ${config.services.forgejo.customDir}/public/assets/css/theme-earl-grey.css
+  '';
 
   # ── Memory limits (4 GiB RPi5) ───────────────────────────────────────
   systemd.services.forgejo.serviceConfig.MemoryMax = "384M";
