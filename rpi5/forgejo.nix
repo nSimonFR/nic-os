@@ -82,11 +82,14 @@ in
       GITHUB_TOKEN=$(${pkgs.gh}/bin/gh auth token)
 
       # Forgejo API token (created once after first login)
-      FORGEJO_TOKEN_FILE="/var/lib/forgejo/api-token"
+      # Stored in /etc/forgejo/ because /var/lib/forgejo is 750 forgejo:forgejo
+      FORGEJO_TOKEN_FILE="/etc/forgejo/api-token"
       if [ ! -f "$FORGEJO_TOKEN_FILE" ]; then
         echo "No Forgejo API token found at $FORGEJO_TOKEN_FILE"
-        echo "Create one via Forgejo UI: Settings > Applications > Generate Token"
-        echo "Then: echo '<token>' | sudo tee $FORGEJO_TOKEN_FILE && sudo chown forgejo:forgejo $FORGEJO_TOKEN_FILE && sudo chmod 600 $FORGEJO_TOKEN_FILE"
+        echo "Generate one via CLI or UI, then:"
+        echo "  sudo mkdir -p /etc/forgejo"
+        echo "  echo '<token>' | sudo tee $FORGEJO_TOKEN_FILE"
+        echo "  sudo chown root:users $FORGEJO_TOKEN_FILE && sudo chmod 640 $FORGEJO_TOKEN_FILE"
         exit 0
       fi
       FORGEJO_TOKEN=$(cat "$FORGEJO_TOKEN_FILE")
