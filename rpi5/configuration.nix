@@ -119,6 +119,7 @@ in
     ./sure.nix
     ./sumeria-mitm.nix
     ./vaultwarden.nix
+    ./forgejo.nix
     ./affine.nix
     ./affine-mcp-gateway.nix
     ./litellm.nix
