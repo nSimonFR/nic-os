@@ -149,6 +149,7 @@
         };
         modules = [
           ./nixos/configuration.nix
+          ./nixos/beszel-agent.nix
         ];
       };
 
