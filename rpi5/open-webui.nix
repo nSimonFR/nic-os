@@ -37,8 +37,15 @@ in
     };
   };
 
-  # Fix corrupt torchgen on aarch64: shadow it via PYTHONPATH
-  systemd.services.open-webui.environment.PYTHONPATH = lib.mkForce "${torchgenFix}";
+  # Fix corrupt torchgen/__init__.py on aarch64: prepend patched module to PYTHONPATH
+  # Must use lib.mkBefore so it runs before the NixOS module's ExecStart sets PYTHONPATH
+  systemd.services.open-webui.serviceConfig.ExecStart = lib.mkForce
+    (let cfg = { port = 8181; host = "127.0.0.1"; package = pkgs.open-webui; }; in
+     "${pkgs.writeShellScript "open-webui-wrapper" ''
+       export PYTHONPATH="${torchgenFix}:''${PYTHONPATH:-}"
+       exec ${lib.getExe cfg.package} serve --host "${cfg.host}" --port ${toString cfg.port}
+     ''}");
+
   # RPi5: no user namespace support
   systemd.services.open-webui.serviceConfig.PrivateUsers = lib.mkForce false;
   # Tight memory cap for 4 GiB RPi5
