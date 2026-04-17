@@ -1,4 +1,13 @@
 { pkgs, lib, ... }:
+let
+  # Torch 2.9.1 on aarch64 has a corrupt torchgen/__init__.py (all null bytes),
+  # causing "source code string cannot contain null bytes" on import.
+  # Fix: create a writable overlay with the corrected file, prepend to PYTHONPATH.
+  torchgenFix = pkgs.runCommand "torchgen-fix" { } ''
+    mkdir -p $out/torchgen
+    echo "# patched: original was null bytes" > $out/torchgen/__init__.py
+  '';
+in
 {
   services.open-webui = {
     enable = true;
@@ -28,6 +37,8 @@
     };
   };
 
+  # Fix corrupt torchgen on aarch64: shadow it via PYTHONPATH
+  systemd.services.open-webui.environment.PYTHONPATH = lib.mkForce "${torchgenFix}";
   # RPi5: no user namespace support
   systemd.services.open-webui.serviceConfig.PrivateUsers = lib.mkForce false;
   # Tight memory cap for 4 GiB RPi5
