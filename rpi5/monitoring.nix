@@ -108,10 +108,27 @@ $FAILURES"
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "earlyoom-alert" ''
-        if ${pkgs.systemd}/bin/journalctl -u earlyoom --since=-3min --no-pager -q 2>/dev/null \
-           | ${pkgs.gnugrep}/bin/grep -q "sending SIG"; then
-          ${telegramNotify} "<b>earlyoom killed a process on rpi5</b>
-Check <code>journalctl -u earlyoom</code> for details."
+        KILL_LINE=$(${pkgs.systemd}/bin/journalctl -u earlyoom --since=-3min --no-pager -q 2>/dev/null \
+          | ${pkgs.gnugrep}/bin/grep "sending SIG" \
+          | ${pkgs.coreutils}/bin/tail -n 1 || true)
+
+        if [ -n "$KILL_LINE" ]; then
+          PROC=$(${pkgs.gnused}/bin/sed -n 's/.*process \([0-9]\+\).*"\([^"]\+\)".*/\2/p' <<< "$KILL_LINE")
+          PID=$(${pkgs.gnused}/bin/sed -n 's/.*process \([0-9]\+\).*/\1/p' <<< "$KILL_LINE")
+          RSS=$(${pkgs.gnused}/bin/sed -n 's/.*VmRSS \([0-9]\+ MiB\).*/\1/p' <<< "$KILL_LINE")
+          CMD=$(${pkgs.gnused}/bin/sed -n 's/.*cmdline "\([^"]*\)".*/\1/p' <<< "$KILL_LINE" | ${pkgs.coreutils}/bin/cut -c1-160)
+
+          MSG="<b>earlyoom killed a process on rpi5</b>"
+          [ -n "$PROC" ] && MSG="$MSG
+- process: <code>$PROC</code>"
+          [ -n "$PID" ] && MSG="$MSG
+- pid: <code>$PID</code>"
+          [ -n "$RSS" ] && MSG="$MSG
+- rss: <code>$RSS</code>"
+          [ -n "$CMD" ] && MSG="$MSG
+- cmd: <code>$CMD</code>"
+
+          ${telegramNotify} "$MSG"
         fi
       '';
     };
