@@ -1,29 +1,7 @@
 { pkgs, lib, tailnetFqdn, voiceWebhookPort, ... }:
 let
-  # Tailnet-only HTTPS services (tailscale serve).
-  # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
-  serveEntries = [
-    { port = 8123;  backend = "http://127.0.0.1:8123";  } # home-assistant
-    { port = 9099;  backend = "http://127.0.0.1:9099";  } # scrutiny (disk health)
-    { port = 3000;  backend = "http://127.0.0.1:8090";  } # beszel hub
-    { port = 8085;  backend = "http://127.0.0.1:8085";  } # filebrowser
-    { port = 443;   backend = "http://127.0.0.1:18789"; } # openclaw gateway (tailnet only)
-    { port = 3333;  backend = "http://127.0.0.1:13334"; } # sure (personal finance)
-    { port = 4040;  backend = "http://127.0.0.1:4040";  } # openai-codex proxy
-    { port = 8222;  backend = "http://127.0.0.1:8222";  } # vaultwarden (bitwarden)
-    { port = 3010;  backend = "http://127.0.0.1:13010"; } # affine
-    { port = 7020;  backend = "http://127.0.0.1:17020"; } # affine MCP gateway (SSE)
-    { port = 4001;  backend = "http://127.0.0.1:4001";  } # litellm gateway
-    { port = 3100;  backend = "http://127.0.0.1:3100";  } # forgejo (git)
-    { port = 8181;  backend = "http://127.0.0.1:8181";  } # open-webui
-  ];
-
-  # Publicly-accessible services (tailscale funnel).
-  # Each entry: { port = external HTTPS port; backend = local HTTP URL; }
-  funnelEntries = [
-    { port = voiceWebhookPort; backend = "http://127.0.0.1:${toString voiceWebhookPort}"; } # voice webhook (Twilio inbound)
-    { port = 10000; backend = "http://127.0.0.1:2283"; } # immich photos (public)
-  ];
+  registry = import ./services-registry.nix { inherit voiceWebhookPort; };
+  inherit (registry) serveEntries funnelEntries;
 
   ts = "${pkgs.tailscale}/bin/tailscale";
 
