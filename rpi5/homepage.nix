@@ -53,13 +53,14 @@ in
       title = "nic-os";
       favicon = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/svg/nixos.svg";
       headerStyle = "clean";
-      layout = builtins.listToAttrs (map (cat: {
-        name = cat;
-        value = {
-          style = "row";
-          columns = 4;
-        };
-      }) categoryOrder);
+      # Display order: Quick Links → Apps → Services → Monitoring → Backend
+      layout = {
+        "Quick Links" = { style = "row"; columns = 3; header = false; };
+        "Apps"        = { style = "row"; columns = 4; };
+        "Services"    = { style = "row"; columns = 4; };
+        "Monitoring"  = { style = "row"; columns = 4; };
+        "Backend"     = { style = "row"; columns = 4; };
+      };
     };
 
     bookmarks = [
