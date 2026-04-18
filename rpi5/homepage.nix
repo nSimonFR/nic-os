@@ -28,7 +28,7 @@ let
             icon = e.icon;
             href = "https://${tailnetFqdn}:${toString e.port}";
             inherit (e) description;
-            ping = "https://${tailnetFqdn}:${toString e.port}";
+            siteMonitor = "https://${tailnetFqdn}:${toString e.port}";
           };
         }) entries;
       }
