@@ -5,6 +5,9 @@
 #   "name.svg" / "name.png"  → dashboard-icons (walkxcode CDN)
 #   "mdi-name"               → Material Design Icons (no extension)
 #   "si-name"                → Simple Icons (no extension)
+#
+# Widget: optional homepage widget config (type + extra fields).
+#   Secrets use {{HOMEPAGE_VAR_NAME}} syntax resolved from environmentFile.
 { voiceWebhookPort }:
 {
   # Tailnet-only HTTPS services (tailscale serve).
@@ -22,7 +25,8 @@
 
     # Monitoring
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring"; }
-    { port = 9099;  backend = "http://127.0.0.1:9099";  name = "Scrutiny";       icon = "scrutiny.svg";       category = "Monitoring"; description = "Disk SMART health"; }
+    { port = 9099;  backend = "http://127.0.0.1:9099";  name = "Scrutiny";       icon = "scrutiny.svg";       category = "Monitoring"; description = "Disk SMART health";
+      widget = { type = "scrutiny"; url = "http://127.0.0.1:9099"; }; }
 
     # Backend — API services
     { port = 443;   backend = "http://127.0.0.1:18789"; name = "Openclaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
@@ -37,6 +41,7 @@
   # Publicly-accessible services (tailscale funnel).
   funnelEntries = [
     { port = voiceWebhookPort; backend = "http://127.0.0.1:${toString voiceWebhookPort}"; name = "Voice Webhook"; icon = "mdi-phone"; category = "Backend";  description = "Twilio inbound"; }
-    { port = 10000;            backend = "http://127.0.0.1:2283";                          name = "Immich";        icon = "immich.svg"; category = "Apps";    description = "Photo management"; }
+    { port = 10000;            backend = "http://127.0.0.1:2283";                          name = "Immich";        icon = "immich.svg"; category = "Apps";    description = "Photo management";
+      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; }; }
   ];
 }
