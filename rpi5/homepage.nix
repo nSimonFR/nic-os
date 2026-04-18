@@ -36,6 +36,10 @@ let
   );
 in
 {
+  # Bind to localhost only — Tailscale Serve proxies from the tailnet interface
+  # and would conflict on 0.0.0.0:8082.
+  systemd.services.homepage-dashboard.environment.HOSTNAME = "127.0.0.1";
+
   services.homepage-dashboard = {
     enable = true;
     listenPort = 8082;
