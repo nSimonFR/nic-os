@@ -124,6 +124,7 @@ in
     ./affine-mcp-gateway.nix
     ./litellm.nix
     ./open-webui.nix
+    ./homepage.nix
     ./backups.nix
     ./storj-backup.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
