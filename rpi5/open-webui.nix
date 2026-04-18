@@ -20,7 +20,11 @@ in
       ENABLE_OLLAMA_API = "false";
       # Reset DB config on next start (remove after first boot)
       RESET_CONFIG_ON_START = "true";
-# Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
+      # Web search via DuckDuckGo (built-in, no API key needed)
+      ENABLE_RAG_WEB_SEARCH = "true";
+      RAG_WEB_SEARCH_ENGINE = "duckduckgo";
+      RAG_WEB_SEARCH_RESULT_COUNT = "5";
+      # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
       RAG_OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
