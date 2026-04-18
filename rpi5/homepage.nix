@@ -8,6 +8,7 @@ let
 
   # Ordered category list (controls display order on the dashboard)
   categoryOrder = [
+    "Apps"
     "Services"
     "Monitoring"
     "Backend"
@@ -24,7 +25,7 @@ let
       else {
         "${cat}" = map (e: {
           "${e.name}" = {
-            icon = "${e.icon}.svg";
+            icon = e.icon;
             href = "https://${tailnetFqdn}:${toString e.port}";
             inherit (e) description;
             ping = "https://${tailnetFqdn}:${toString e.port}";
@@ -60,7 +61,7 @@ in
     bookmarks = [
       {
         "Quick Links" = [
-          { "IT Tools" = [{ icon = "mdi-toolbox.svg"; href = "https://it-tools.tech/"; }]; }
+          { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
           { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
           { "YouTube" = [{ icon = "youtube.svg"; href = "https://www.youtube.com/"; }]; }
         ];
