@@ -14,11 +14,12 @@ in
     port = 8181;
     host = "127.0.0.1";
     environment = {
-      # OpenAI connections: LiteLLM (beast models) + codex proxy (OpenAI subscription)
-      OPENAI_API_BASE_URLS = "http://127.0.0.1:4001/v1;http://127.0.0.1:4040/v1";
-      OPENAI_API_KEYS = "ollama;unused";
-      # Disable Ollama API (all models served via OpenAI-compatible endpoints)
+      # All models via LiteLLM (beast + codex proxy routed through one gateway)
+      OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
+      OPENAI_API_KEY = "ollama";
       ENABLE_OLLAMA_API = "false";
+      # Reset DB config on next start (remove after first boot)
+      RESET_CONFIG_ON_START = "true";
 # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";

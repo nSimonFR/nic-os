@@ -79,10 +79,38 @@ let
           api_key: ollama
           drop_params: true
 
-      # -- Codex-proxy models (chat fallback) --
+      # -- Codex-proxy models (OpenAI subscription via oauth proxy) --
       - model_name: "openai/gpt-5.4-mini"
         litellm_params:
           model: openai/gpt-5.4-mini
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
+          drop_params: true
+
+      - model_name: "openai/gpt-5.4"
+        litellm_params:
+          model: openai/gpt-5.4
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
+          drop_params: true
+
+      - model_name: "openai/gpt-5.2"
+        litellm_params:
+          model: openai/gpt-5.2
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
+          drop_params: true
+
+      - model_name: "openai/gpt-5.3-codex"
+        litellm_params:
+          model: openai/gpt-5.3-codex
+          api_base: http://127.0.0.1:4040/v1
+          api_key: unused
+          drop_params: true
+
+      - model_name: "openai/codex-auto-review"
+        litellm_params:
+          model: openai/codex-auto-review
           api_base: http://127.0.0.1:4040/v1
           api_key: unused
           drop_params: true
