@@ -66,9 +66,9 @@ in
     bookmarks = [
       {
         "Quick Links" = [
-          { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
-          { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
           { "YouTube" = [{ icon = "youtube.svg"; href = "https://www.youtube.com/"; }]; }
+          { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
+          { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
         ];
       }
     ];
