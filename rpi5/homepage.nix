@@ -3,18 +3,14 @@ let
   registry = import ./services-registry.nix { inherit voiceWebhookPort; };
   allEntries = registry.serveEntries ++ registry.funnelEntries;
 
-  # Exclude Homepage itself from its own dashboard
-  visibleEntries = builtins.filter (e: e.name != "Homepage") allEntries;
+  # Hide Homepage and Infrastructure from the dashboard
+  visibleEntries = builtins.filter (e: e.name != "Homepage" && e.category != "Infrastructure") allEntries;
 
   # Ordered category list (controls display order on the dashboard)
   categoryOrder = [
-    "Home"
-    "Media"
-    "AI / LLM"
-    "Dev Tools"
-    "Finance"
+    "Services"
     "Monitoring"
-    "Infrastructure"
+    "Backend"
   ];
 
   entriesForCategory = cat:
@@ -52,7 +48,7 @@ in
       title = "nic-os";
       favicon = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/svg/nixos.svg";
       headerStyle = "clean";
-      layout = builtins.listToAttrs (lib.imap0 (i: cat: {
+      layout = builtins.listToAttrs (map (cat: {
         name = cat;
         value = {
           style = "row";
@@ -60,6 +56,16 @@ in
         };
       }) categoryOrder);
     };
+
+    bookmarks = [
+      {
+        "Quick Links" = [
+          { "IT Tools" = [{ icon = "mdi-toolbox.svg"; href = "https://it-tools.tech/"; }]; }
+          { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
+          { "YouTube" = [{ icon = "youtube.svg"; href = "https://www.youtube.com/"; }]; }
+        ];
+      }
+    ];
 
     services = servicesByCategory;
 
