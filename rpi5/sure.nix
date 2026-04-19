@@ -50,7 +50,9 @@ in
     };
     script = ''
       password=$(cat /run/agenix/sure-pg-password)
-      ${pkgs.postgresql}/bin/psql -v pw="$password" -c "ALTER USER sure_user WITH PASSWORD :'pw';"
+      # psql variable interpolation (:'pw') requires stdin/-f input; it is silently
+      # skipped with -c, producing "syntax error at or near :". Pipe via stdin.
+      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER sure_user WITH PASSWORD :'pw';"
       ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE sure_production OWNER TO sure_user;"
     '';
   };
