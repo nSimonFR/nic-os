@@ -38,6 +38,7 @@
         type = "customapi";
         url = "http://127.0.0.1:8087/sure";
         mappings = [
+          { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
           { field = "accounts"; label = "Accounts"; format = "number"; }
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
@@ -48,7 +49,8 @@
         url = "http://127.0.0.1:8087/openwebui";
         mappings = [
           { field = "models"; label = "Models"; format = "number"; }
-          { field = "version"; label = "Version"; format = "text"; }
+          { field = "chats"; label = "Chats"; format = "number"; }
+          { field = "messages"; label = "Messages"; format = "number"; }
         ];
       }; }
 

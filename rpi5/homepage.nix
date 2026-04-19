@@ -90,13 +90,14 @@ in
     description = "Homepage stats aggregation (JSON on :8087)";
     wantedBy = [ "multi-user.target" ];
     after = [ "homepage-dashboard-env.service" ];
-    path = [ pkgs.curl pkgs.python3 ];
+    path = [ pkgs.curl pkgs.python3 pkgs.sqlite ];
     serviceConfig = {
       Type = "simple";
       Restart = "on-failure";
       RestartSec = "10s";
     };
     script = let
+      owuiDb = "/var/lib/private/open-webui/data/webui.db";
       statsScript = pkgs.writeScript "homepage-stats-server" ''
         #!${pkgs.python3}/bin/python3
         import http.server, json, subprocess, threading, time
@@ -104,12 +105,13 @@ in
         stats = {"sure": {}, "openwebui": {}}
 
         def fetch_sure():
+            import re
             try:
                 key = open("/run/homepage-dashboard/env").read()
                 key = [l.split("=",1)[1].strip() for l in key.strip().split("\n") if "SURE_KEY" in l][0]
                 accts = json.loads(subprocess.check_output([
                     "${pkgs.curl}/bin/curl", "-sf",
-                    "http://127.0.0.1:13334/api/v1/accounts?per_page=1",
+                    "http://127.0.0.1:13334/api/v1/accounts",
                     "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
                 ]))
                 txns = json.loads(subprocess.check_output([
@@ -117,9 +119,16 @@ in
                     "http://127.0.0.1:13334/api/v1/transactions?per_page=1",
                     "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
                 ]))
+                accounts = accts.get("accounts", [])
+                def parse_bal(s):
+                    num = re.sub(r"[^\d.\-]", "", s.replace(",", ""))
+                    return float(num) if num else 0
+                assets = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "asset")
+                liabilities = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "liability")
                 stats["sure"] = {
                     "accounts": accts.get("pagination", {}).get("total_count", 0),
                     "transactions": txns.get("pagination", {}).get("total_count", 0),
+                    "net_worth": round(assets - liabilities),
                 }
             except Exception as e:
                 stats["sure"]["error"] = str(e)
@@ -129,12 +138,13 @@ in
                 models = json.loads(subprocess.check_output([
                     "${pkgs.curl}/bin/curl", "-sf", "http://127.0.0.1:4001/v1/models"
                 ]))
-                config = json.loads(subprocess.check_output([
-                    "${pkgs.curl}/bin/curl", "-sf", "http://127.0.0.1:8181/api/config"
-                ]))
+                db = "${owuiDb}"
+                chats = subprocess.check_output(["${pkgs.sqlite}/bin/sqlite3", db, "SELECT COUNT(*) FROM chat;"]).decode().strip()
+                messages = subprocess.check_output(["${pkgs.sqlite}/bin/sqlite3", db, "SELECT COUNT(*) FROM chat_message;"]).decode().strip()
                 stats["openwebui"] = {
                     "models": len(models.get("data", [])),
-                    "version": config.get("version", "?"),
+                    "chats": int(chats),
+                    "messages": int(messages),
                 }
             except Exception as e:
                 stats["openwebui"]["error"] = str(e)
