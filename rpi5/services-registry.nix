@@ -28,9 +28,9 @@
         requestBody = { query = "{ workspaces { memberCount blobsSize docs(pagination: {first: 0}) { totalCount } } }"; };
         display = "block";
         mappings = [
+          { field = "data.workspaces.0.memberCount"; label = "Members"; format = "number"; }
           { field = "data.workspaces.0.docs.totalCount"; label = "Docs"; format = "number"; }
           { field = "data.workspaces.0.blobsSize"; label = "Storage"; format = "bytes"; }
-          { field = "data.workspaces.0.memberCount"; label = "Members"; format = "number"; }
         ];
       }; }
     { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; }
