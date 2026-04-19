@@ -18,11 +18,16 @@ let
         --spawn worktree \
         --no-create-session-in-dir \
         --capacity 8 \
-        --permission-mode bypassPermissions"
+        --permission-mode bypassPermissions \
+        --name rpi5 \
+        --verbose \
+        --debug-file /tmp/claude-rc-debug.log"
   '';
 
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
-    if ! su -l ${username} -c '${pkgs.tmux}/bin/tmux has-session -t ${sessionName} 2>/dev/null'; then
+    # tmux server is per-user; point to the user's socket
+    TMUX_SOCKET="/tmp/tmux-$(id -u ${username})/default"
+    if ! ${pkgs.tmux}/bin/tmux -S "$TMUX_SOCKET" has-session -t ${sessionName} 2>/dev/null; then
       echo "tmux session ${sessionName} missing, restarting service"
       systemctl restart claude-remote-control.service
     fi
