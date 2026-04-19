@@ -133,6 +133,7 @@ in
           { "Tailscale Admin" = [{ icon = "tailscale.svg"; href = "https://login.tailscale.com/admin/machines"; }]; }
           { "nic-os PRs" = [{ icon = "github.svg"; href = "https://github.com/nSimonFR/nic-os/pulls"; }]; }
           { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
+          { "BentoPDF" = [{ icon = "mdi-file-pdf-box"; href = "https://bentopdf.com/"; }]; }
         ];
       }
     ];
