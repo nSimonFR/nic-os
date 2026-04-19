@@ -16,6 +16,7 @@ let
     ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
       "${claudeRc} \
         --spawn worktree \
+        --no-create-session-in-dir \
         --capacity 8 \
         --permission-mode bypassPermissions"
   '';
