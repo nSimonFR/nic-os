@@ -88,23 +88,24 @@ let
 
     exit 0
   '';
+  claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+    postFixup = (old.postFixup or "") + ''
+      wrapProgram $out/bin/claude \
+        --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
+        --set GIT_AUTHOR_NAME "nSimonFR-ai" \
+        --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
+        --set GIT_COMMITTER_NAME "nSimonFR-ai" \
+        --set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
+        --run 'export GH_TOKEN="$(gh auth token --user nSimonFR-ai 2>/dev/null || true)"' \
+        --set GITHUB_TOKEN ""
+    '';
+  });
 in
 {
   programs.claude-code = {
     enable = true;
-    package = unstablePkgs.claude-code.overrideAttrs (old: {
-      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
-      postFixup = (old.postFixup or "") + ''
-        wrapProgram $out/bin/claude \
-          --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
-          --set GIT_AUTHOR_NAME "nSimonFR-ai" \
-          --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
-          --set GIT_COMMITTER_NAME "nSimonFR-ai" \
-          --set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
-          --run 'export GH_TOKEN="$(gh auth token --user nSimonFR-ai 2>/dev/null || true)"' \
-          --set GITHUB_TOKEN ""
-      '';
-    });
+    package = claudeCodePkg;
 
     # Settings delivered as a writable file via mkOutOfStoreSymlink
     # (points to the repo checkout, not the Nix store) so Claude Code
@@ -121,6 +122,16 @@ in
   home.file.".claude/hooks/telegram-notify" = {
     source = notifyScript;
     executable = true;
+  };
+
+  # Wrapper for `claude remote-control` that bypasses the HM-generated
+  # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
+  # Uses the overrideAttrs package directly (has env vars, no --mcp-config).
+  home.file.".claude/bin/claude-rc" = {
+    executable = true;
+    source = pkgs.writeShellScript "claude-rc" ''
+      exec "${claudeCodePkg}/bin/claude" remote-control "$@"
+    '';
   };
 
 }
