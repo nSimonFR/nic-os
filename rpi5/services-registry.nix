@@ -42,6 +42,6 @@
   funnelEntries = [
     { port = voiceWebhookPort; backend = "http://127.0.0.1:${toString voiceWebhookPort}"; name = "Voice Webhook"; icon = "mdi-phone"; category = "Backend";  description = "Twilio inbound"; }
     { port = 10000;            backend = "http://127.0.0.1:2283";                          name = "Immich";        icon = "immich.svg"; category = "Apps";    description = "Photo management";
-      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; }; }
+      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; version = 2; }; }
   ];
 }
