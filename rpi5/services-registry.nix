@@ -19,12 +19,17 @@
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
 
     # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
-    { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; }
+    { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
+      widget = { type = "customapi"; url = "http://127.0.0.1:13010/info"; mappings = [
+        { field = "compatibility"; label = "Version"; format = "text"; }
+        { field = "flavor"; label = "Flavor"; format = "text"; }
+      ]; }; }
     { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface"; }
 
     # Monitoring
-    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring"; }
+    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring";
+      widget = { type = "beszel"; url = "http://127.0.0.1:8090"; username = "homepage@nic-os.local"; password = "{{HOMEPAGE_VAR_BESZEL_PASS}}"; version = 2; }; }
     { port = 9099;  backend = "http://127.0.0.1:9099";  name = "Scrutiny";       icon = "scrutiny.svg";       category = "Monitoring"; description = "Disk SMART health";
       widget = { type = "scrutiny"; url = "http://127.0.0.1:9099"; }; }
 
