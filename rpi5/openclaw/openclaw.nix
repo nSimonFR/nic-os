@@ -8,6 +8,7 @@
   telegramChatId,
   tailnetFqdn,
   voiceWebhookPort,
+  beastOllamaUrl,
   ...
 }:
 let
@@ -196,7 +197,7 @@ in
         };
 
         models.providers.ollama = {
-          baseUrl = "http://beast:11434";
+          baseUrl = beastOllamaUrl;
           apiKey = "unused"; # Ollama doesn't require auth
           api = "ollama";
           models = [

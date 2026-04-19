@@ -108,6 +108,7 @@
       rpi5Params = {
         tailnetFqdn = "rpi5.gate-mintaka.ts.net";
         voiceWebhookPort = 8443;
+        beastOllamaUrl = "http://100.125.240.34:11434";
       };
       telegramChatId = 82389391;
       # Use the flake's own store path (locked by narHash) so openclaw's builtins.getFlake
@@ -160,7 +161,7 @@
         nixpkgs = inputs.nixpkgs;
         specialArgs = {
           inherit inputs outputs username telegramChatId;
-          inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
+          inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           unstablePkgs = import nixpkgs-unstable {
@@ -188,7 +189,7 @@
                   openclawPluginSources
                   telegramChatId
                   ;
-                inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
+                inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
                 openclawSource = inputs.openclaw-source;
                 devSetup = false;
                 unstablePkgs = import nixpkgs-unstable {
@@ -279,7 +280,7 @@
               openclawPluginSources
               telegramChatId
               ;
-            inherit (rpi5Params) tailnetFqdn voiceWebhookPort;
+            inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
             openclawSource = inputs.openclaw-source;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {

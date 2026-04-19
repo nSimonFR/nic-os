@@ -1,7 +1,8 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, beastOllamaUrl, ... }:
 let
   litellmBin = "${pkgs.litellm}/bin/litellm";
   port = 4001;
+  beastApi = "${beastOllamaUrl}/v1";
 
   litellmConfig = pkgs.writeText "litellm-gateway-config.yaml" ''
     model_list:
@@ -9,21 +10,21 @@ let
       - model_name: "openai/gemma4:e4b"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "openai/gemma4:26b"
         litellm_params:
           model: openai/gemma4:26b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "openai/qwen3.5:35b-a3b"
         litellm_params:
           model: openai/qwen3.5:35b-a3b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
@@ -31,7 +32,7 @@ let
       - model_name: "openai/qwen3-embedding:8b"
         litellm_params:
           model: openai/qwen3-embedding:8b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
@@ -39,14 +40,14 @@ let
       - model_name: "text-embedding-3-small"
         litellm_params:
           model: openai/qwen3-embedding:8b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "text-embedding-3-large"
         litellm_params:
           model: openai/qwen3-embedding:8b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
@@ -54,28 +55,28 @@ let
       - model_name: "gpt-4.1-2025-04-14"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "gpt-4.1-mini"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "gpt-4o"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
       - model_name: "gpt-4o-mini"
         litellm_params:
           model: openai/gemma4:e4b
-          api_base: http://100.125.240.34:11434/v1
+          api_base: ${beastApi}
           api_key: ollama
           drop_params: true
 
