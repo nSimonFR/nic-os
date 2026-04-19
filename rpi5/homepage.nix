@@ -79,6 +79,7 @@ in
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
       HOMEPAGE_VAR_BESZEL_PASS=homepage-widget-pass
+      HOMEPAGE_VAR_AFFINE_TOKEN=$(cat ${config.age.secrets.affine-token.path})
       ENVEOF
     '';
   };
