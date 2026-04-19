@@ -24,6 +24,8 @@ in
       ENABLE_RAG_WEB_SEARCH = "true";
       RAG_WEB_SEARCH_ENGINE = "tavily";
       RAG_WEB_SEARCH_RESULT_COUNT = "5";
+      # LLM generates optimized search queries from conversation context
+      ENABLE_SEARCH_QUERY = "true";
       # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
