@@ -19,7 +19,8 @@ in
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
-      Type = "forking";
+      Type = "oneshot";
+      RemainAfterExit = true;
       User = "nsimon";
       Group = "users";
       WorkingDirectory = "/home/nsimon";
