@@ -33,7 +33,15 @@
           { field = "data.workspaces.0.blobsSize"; label = "Storage"; format = "bytes"; }
         ];
       }; }
-    { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; }
+    { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:13334/api/v1/accounts";
+        headers = { "X-Api-Key" = "{{HOMEPAGE_VAR_SURE_KEY}}"; };
+        mappings = [
+          { field = "pagination.total_count"; label = "Accounts"; format = "number"; }
+        ];
+      }; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
