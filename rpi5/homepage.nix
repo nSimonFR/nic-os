@@ -90,91 +90,16 @@ in
     description = "Homepage stats aggregation (JSON on :8087)";
     wantedBy = [ "multi-user.target" ];
     after = [ "homepage-dashboard-env.service" ];
-    path = [ pkgs.curl pkgs.python3 pkgs.sqlite ];
     serviceConfig = {
       Type = "simple";
       Restart = "on-failure";
       RestartSec = "10s";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./homepage-stats.py}";
+      Environment = [
+        "CURL_BIN=${pkgs.curl}/bin/curl"
+        "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"
+      ];
     };
-    script = let
-      owuiDb = "/var/lib/private/open-webui/data/webui.db";
-      statsScript = pkgs.writeScript "homepage-stats-server" ''
-        #!${pkgs.python3}/bin/python3
-        import http.server, json, subprocess, threading, time
-
-        stats = {"sure": {}, "openwebui": {}}
-
-        def fetch_sure():
-            import re
-            try:
-                key = open("/run/homepage-dashboard/env").read()
-                key = [l.split("=",1)[1].strip() for l in key.strip().split("\n") if "SURE_KEY" in l][0]
-                accts = json.loads(subprocess.check_output([
-                    "${pkgs.curl}/bin/curl", "-sf",
-                    "http://127.0.0.1:13334/api/v1/accounts",
-                    "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
-                ]))
-                txns = json.loads(subprocess.check_output([
-                    "${pkgs.curl}/bin/curl", "-sf",
-                    "http://127.0.0.1:13334/api/v1/transactions?per_page=1",
-                    "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
-                ]))
-                accounts = accts.get("accounts", [])
-                def parse_bal(s):
-                    num = re.sub(r"[^\d.\-]", "", s.replace(",", ""))
-                    return float(num) if num else 0
-                assets = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "asset")
-                liabilities = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "liability")
-                stats["sure"] = {
-                    "accounts": accts.get("pagination", {}).get("total_count", 0),
-                    "transactions": txns.get("pagination", {}).get("total_count", 0),
-                    "net_worth": round(assets - liabilities),
-                }
-            except Exception as e:
-                stats["sure"]["error"] = str(e)
-
-        def fetch_openwebui():
-            try:
-                models = json.loads(subprocess.check_output([
-                    "${pkgs.curl}/bin/curl", "-sf", "http://127.0.0.1:4001/v1/models"
-                ]))
-                db = "${owuiDb}"
-                chats = subprocess.check_output(["${pkgs.sqlite}/bin/sqlite3", db, "SELECT COUNT(*) FROM chat;"]).decode().strip()
-                messages = subprocess.check_output(["${pkgs.sqlite}/bin/sqlite3", db, "SELECT COUNT(*) FROM chat_message;"]).decode().strip()
-                stats["openwebui"] = {
-                    "models": len(models.get("data", [])),
-                    "chats": int(chats),
-                    "messages": int(messages),
-                }
-            except Exception as e:
-                stats["openwebui"]["error"] = str(e)
-
-        def refresh():
-            while True:
-                fetch_sure()
-                fetch_openwebui()
-                time.sleep(300)  # refresh every 5 min
-
-        threading.Thread(target=refresh, daemon=True).start()
-        time.sleep(2)  # initial fetch
-
-        class H(http.server.BaseHTTPRequestHandler):
-            def do_GET(self):
-                if self.path == "/sure":
-                    data = stats["sure"]
-                elif self.path == "/openwebui":
-                    data = stats["openwebui"]
-                else:
-                    data = stats
-                self.send_response(200)
-                self.send_header("Content-Type", "application/json")
-                self.end_headers()
-                self.wfile.write(json.dumps(data).encode())
-            def log_message(self, *a): pass
-
-        http.server.HTTPServer(("127.0.0.1", 8087), H).serve_forever()
-      '';
-    in "${statsScript}";
   };
 
   services.homepage-dashboard = {
