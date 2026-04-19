@@ -20,6 +20,10 @@ in
       ENABLE_OLLAMA_API = "false";
       # Reset DB config on next start (remove after first boot)
       RESET_CONFIG_ON_START = "true";
+      # Web search via Tavily (API key injected at runtime from agenix)
+      ENABLE_RAG_WEB_SEARCH = "true";
+      RAG_WEB_SEARCH_ENGINE = "tavily";
+      RAG_WEB_SEARCH_RESULT_COUNT = "5";
       # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
@@ -44,6 +48,11 @@ in
     (let cfg = { port = 8181; host = "127.0.0.1"; package = pkgs.open-webui; }; in
      "${pkgs.writeShellScript "open-webui-wrapper" ''
        export PYTHONPATH="${torchgenFix}:''${PYTHONPATH:-}"
+       # Inject Tavily API key from agenix secret
+       if [ -f /run/agenix/openclaw-env ]; then
+         TAVILY_API_KEY=$(grep '^TAVILY_API_KEY=' /run/agenix/openclaw-env | cut -d= -f2- | tr -d '"')
+         export TAVILY_API_KEY
+       fi
        exec ${lib.getExe cfg.package} serve --host "${cfg.host}" --port ${toString cfg.port}
      ''}");
 
