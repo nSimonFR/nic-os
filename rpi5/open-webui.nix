@@ -50,6 +50,8 @@ in
     (let cfg = { port = 8181; host = "127.0.0.1"; package = pkgs.open-webui; }; in
      "${pkgs.writeShellScript "open-webui-wrapper" ''
        export PYTHONPATH="${torchgenFix}:''${PYTHONPATH:-}"
+       # NLTK needs a resolvable HOME for its download directory
+       export HOME=/var/lib/open-webui
        # Inject Tavily API key from dedicated agenix secret
        if [ -f /run/agenix/tavily-api-key ]; then
          export TAVILY_API_KEY=$(cat /run/agenix/tavily-api-key)
