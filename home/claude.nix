@@ -123,4 +123,14 @@ in
     executable = true;
   };
 
+  # Wrapper for `claude remote-control` that bypasses the HM-generated
+  # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
+  # Uses the overrideAttrs package directly (has env vars, no --mcp-config).
+  home.file.".claude/bin/claude-rc" = {
+    executable = true;
+    source = pkgs.writeShellScript "claude-rc" ''
+      exec "${unstablePkgs.claude-code}/bin/claude" remote-control "$@"
+    '';
+  };
+
 }
