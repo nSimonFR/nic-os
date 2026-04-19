@@ -63,5 +63,9 @@
       file = ./secrets/affine-gcal-oauth.age;
       owner = "affine";
     };
+    tavily-api-key = {
+      file = ./secrets/tavily-api-key.age;
+      mode = "0444"; # DynamicUser (open-webui) needs to read it
+    };
 };
 }
