@@ -49,6 +49,19 @@ in
         REPO_INDEXER_ENABLED = false;
       };
 
+      # ── Memory optimization for 4 GiB RPi5 ──────────────────────────────
+      # Default cache keeps up to 50k items for 16h — overkill for a personal instance.
+      # TwoQueue LRU with 100 items caps memory growth.
+      cache = {
+        ADAPTER = "twoqueue";
+        HOST = ''{"size":100,"recent_ratio":0.25,"ghost_ratio":0.5}'';
+        ITEM_TTL = "4h";
+      };
+
+      session = {
+        GC_INTERVAL_TIME = 3600;
+      };
+
       ui = {
         THEMES = "forgejo-auto,forgejo-light,forgejo-dark,earl-grey";
         DEFAULT_THEME = "earl-grey";
@@ -68,7 +81,8 @@ in
   '';
 
   # ── Memory limits (4 GiB RPi5) ───────────────────────────────────────
-  systemd.services.forgejo.serviceConfig.MemoryMax = "384M";
+  systemd.services.forgejo.serviceConfig.MemoryMax = "256M";
+  systemd.services.forgejo.environment.GOMEMLIMIT = "200MiB";
 
   # ── PostgreSQL backup (appends to list in backups.nix) ─────────────────
   services.postgresqlBackup.databases = [ "forgejo" ];
