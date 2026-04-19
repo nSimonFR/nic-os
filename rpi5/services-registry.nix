@@ -20,10 +20,19 @@
 
     # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
     { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
-      widget = { type = "customapi"; url = "http://127.0.0.1:13010/info"; mappings = [
-        { field = "compatibility"; label = "Version"; format = "text"; }
-        { field = "flavor"; label = "Flavor"; format = "text"; }
-      ]; }; }
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:13010/graphql";
+        method = "POST";
+        headers = { "Content-Type" = "application/json"; "Authorization" = "Bearer {{HOMEPAGE_VAR_AFFINE_TOKEN}}"; };
+        requestBody = { query = "{ workspaces { memberCount blobsSize docs(pagination: {first: 0}) { totalCount } } }"; };
+        display = "block";
+        mappings = [
+          { field = "data.workspaces.0.docs.totalCount"; label = "Docs"; format = "number"; }
+          { field = "data.workspaces.0.blobsSize"; label = "Storage"; format = "bytes"; }
+          { field = "data.workspaces.0.memberCount"; label = "Members"; format = "number"; }
+        ];
+      }; }
     { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface"; }
 
