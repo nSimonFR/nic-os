@@ -34,7 +34,15 @@
         ];
       }; }
     { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; }
-    { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface"; }
+    { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:4001/health";
+        mappings = [
+          { field = "healthy_count"; label = "Healthy"; format = "number"; }
+          { field = "unhealthy_count"; label = "Unhealthy"; format = "number"; }
+        ];
+      }; }
 
     # Monitoring
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring";
