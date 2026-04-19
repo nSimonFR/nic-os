@@ -9,8 +9,11 @@ let
     # Kill any stale session
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
     # Start claude with remote-control in a detached tmux session
-    exec ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
+    ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
       "${claudeBin} --dangerously-skip-permissions --remote-control"
+    # Auto-accept the workspace trust dialog
+    sleep 5
+    ${pkgs.tmux}/bin/tmux send-keys -t ${sessionName} Enter
   '';
 in
 {
