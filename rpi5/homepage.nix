@@ -194,8 +194,8 @@ in
       layout = [
         { "Quick Links" = { style = "row"; columns = 3; header = false; }; }
         { "Apps"        = { style = "row"; columns = 4; }; }
-        { "Services"    = { style = "row"; columns = 4; }; }
         { "Monitoring"  = { style = "row"; columns = 4; }; }
+        { "Services"    = { style = "row"; columns = 4; }; }
         { "Backend"     = { style = "row"; columns = 4; }; }
       ];
     };
