@@ -19,13 +19,13 @@ in
       OPENAI_API_KEY = "ollama";
       ENABLE_OLLAMA_API = "false";
       # Reset DB config on next start (remove after first boot)
-      RESET_CONFIG_ON_START = "true";
+      RESET_CONFIG_ON_START = "True";
       # Web search via Tavily (API key injected at runtime from agenix)
-      ENABLE_RAG_WEB_SEARCH = "true";
+      ENABLE_RAG_WEB_SEARCH = "True";
       RAG_WEB_SEARCH_ENGINE = "tavily";
       RAG_WEB_SEARCH_RESULT_COUNT = "5";
       # LLM generates optimized search queries from conversation context
-      ENABLE_SEARCH_QUERY = "true";
+      ENABLE_SEARCH_QUERY = "True";
       # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
