@@ -78,6 +78,7 @@ in
       mkdir -p /run/homepage-dashboard
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
+      HOMEPAGE_VAR_BESZEL_PASS=homepage-widget-pass
       ENVEOF
     '';
   };
