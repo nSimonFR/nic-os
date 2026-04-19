@@ -65,19 +65,14 @@ in
   };
 
   # ── Sure memory optimizations ──────────────────────────────────────────────
-  # jemalloc dramatically reduces Ruby RSS bloat (30-50% typical savings).
-  # LD_PRELOAD must go in serviceConfig.Environment because the sure-nix module
-  # overwrites the environment attr with commonEnv //.
-  # Also reduce Sidekiq concurrency and glibc malloc arenas as belt-and-suspenders.
+  # Reduce Sidekiq concurrency (personal app, no need for 3 threads) and limit
+  # glibc malloc arenas to curb RSS on a 4 GB RPi5.
+  # Note: jemalloc was tested but increases RSS on aarch64 + Ruby YJIT.
   systemd.services.sure-worker.environment = {
-    LD_PRELOAD        = "${pkgs.jemalloc}/lib/libjemalloc.so";
     RAILS_MAX_THREADS = "1";
     MALLOC_ARENA_MAX  = "2";
   };
-  systemd.services.sure-web.environment = {
-    LD_PRELOAD       = "${pkgs.jemalloc}/lib/libjemalloc.so";
-    MALLOC_ARENA_MAX = "2";
-  };
+  systemd.services.sure-web.environment.MALLOC_ARENA_MAX = "2";
 
   # sure-setup (migrations) must run after the password is set
   systemd.services.sure-setup = {
