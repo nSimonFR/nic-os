@@ -36,7 +36,7 @@
     };
     sure-app-env = {
       file = ./secrets/sure-app-env.age;
-      # root-readable (docker reads it as --env-file via systemd root service)
+      # root-readable; sure-nix reads via EnvironmentFile
     };
     sure-pg-password = {
       file = ./secrets/sure-pg-password.age;
@@ -66,6 +66,10 @@
     tavily-api-key = {
       file = ./secrets/tavily-api-key.age;
       mode = "0444"; # DynamicUser (open-webui) needs to read it
+    };
+    siyuan-auth-code = {
+      file = ./secrets/siyuan-auth-code.age;
+      owner = "siyuan";
     };
 };
 }

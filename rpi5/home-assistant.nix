@@ -161,27 +161,14 @@ in
         chown ha-linky:ha-linky /etc/ha-linky/ha-linky.env
         chmod 0640 /etc/ha-linky/ha-linky.env
 
-        # Build options.json from agenix-managed secrets
+        # Build options.json from agenix-managed secrets (use jq for safe JSON encoding)
         LINKY_TOKEN=$(cat /run/agenix/linky-token)
         LINKY_PRM=$(cat /run/agenix/linky-prm)
-        cat > /etc/home-assistant/ha-linky/options.json <<EOF
-    {
-      "meters": [
-        {
-          "prm": "$LINKY_PRM",
-          "token": "$LINKY_TOKEN",
-          "name": "Linky consumption",
-          "action": "sync",
-          "production": false
-        }
-      ],
-      "costs": [
-        {
-          "price": 0.1261
-        }
-      ]
-    }
-    EOF
+        ${pkgs.jq}/bin/jq -n \
+          --arg token "$LINKY_TOKEN" \
+          --arg prm "$LINKY_PRM" \
+          '{meters:[{prm:$prm,token:$token,name:"Linky consumption",action:"sync",production:false}],costs:[{price:0.1261}]}' \
+          > /etc/home-assistant/ha-linky/options.json
         chown ha-linky:ha-linky /etc/home-assistant/ha-linky/options.json
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
