@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, username, ... }:
 let
   version = "1.0.2";
 
@@ -37,8 +37,8 @@ with open('$out/package.json', 'w') as f: json.dump(d, f, indent=2)
   };
 
   port         = 4040;
-  openclawAuth = "/home/nsimon/.openclaw/agents/main/agent/auth-profiles.json";
-  codexAuth    = "/home/nsimon/.codex/auth.json";
+  openclawAuth = "/home/${username}/.openclaw/agents/main/agent/auth-profiles.json";
+  codexAuth    = "/home/${username}/.codex/auth.json";
 
   # Seed ~/.codex/auth.json from openclaw's auth-profiles.json on first run.
   # openai-oauth then takes over token refresh for its own file.
@@ -59,7 +59,7 @@ in
     wantedBy    = [ "multi-user.target" ];
     serviceConfig = {
       Type         = "simple";
-      User         = "nsimon";
+      User         = username;
       ExecStartPre = "${seedScript}";
       ExecStart    = "${openai-oauth}/bin/openai-oauth --host 127.0.0.1 --port ${toString port} --oauth-file ${codexAuth}";
       Restart      = "on-failure";

@@ -167,14 +167,13 @@ in
     gamescope
     regreet
     i2c-tools
-kdePackages.kwallet
+    kdePackages.kwallet
     kdePackages.kwalletmanager
     libvirt # virsh CLI for VM management
     ntfs3g
     piper # GUI for Logitech G502 configuration (DPI, buttons, RGB)
     input-remapper # Remap keys/mouse buttons for games
     usbutils
-    ethtool # verify WoL status: ethtool eno1 | grep Wake
     vim
     vulkan-tools
     vulkan-loader

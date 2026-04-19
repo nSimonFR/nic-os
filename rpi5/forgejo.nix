@@ -27,7 +27,7 @@ in
         DOMAIN             = tailnetFqdn;
         ROOT_URL           = "https://${tailnetFqdn}:${toString httpPort}/";
         START_SSH_SERVER   = true;
-        SSH_SERVER_HOST    = "0.0.0.0";
+        SSH_SERVER_HOST    = "127.0.0.1";
         BUILTIN_SSH_SERVER_USER = "git";
         SSH_PORT           = sshPort;
       };

@@ -43,12 +43,14 @@ function passthrough(req, res, body) {
     res.writeHead(upRes.statusCode, upRes.headers);
     upRes.pipe(res);
   });
-  up.on('error', e => { res.writeHead(502); res.end(e.message); });
+  up.setTimeout(30000, () => { up.destroy(); res.writeHead(504); res.end('Gateway timeout'); });
+  up.on('error', e => { if (!res.headersSent) { res.writeHead(502); res.end(e.message); } });
   up.end(body);
 }
 
 const server = http.createServer((req, res) => {
   const chunks = [];
+  req.on('error', () => { /* client connection already closed */ });
   req.on('data', c => chunks.push(c));
   req.on('end', async () => {
     const raw = Buffer.concat(chunks);

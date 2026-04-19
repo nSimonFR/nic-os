@@ -18,8 +18,6 @@ in
       OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
       OPENAI_API_KEY = "ollama";
       ENABLE_OLLAMA_API = "false";
-      # Reset DB config on next start (remove after first boot)
-      RESET_CONFIG_ON_START = "True";
       # Web search via Tavily (API key injected at runtime from agenix)
       ENABLE_RAG_WEB_SEARCH = "True";
       RAG_WEB_SEARCH_ENGINE = "tavily";

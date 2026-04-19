@@ -220,9 +220,11 @@ in
       CID=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientId)
       CSE=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientSecret)
       TEMPLATE='${affineConfigTemplate}'
-      echo "$TEMPLATE" | ${pkgs.gnused}/bin/sed \
-        -e "s|@GCAL_CLIENT_ID@|$CID|" \
-        -e "s|@GCAL_CLIENT_SECRET@|$CSE|" > "$CONF"
+      # Use bash parameter substitution for safe literal replacement
+      # (sed breaks if CID/CSE contain | & / or other regex metacharacters)
+      RESULT="''${TEMPLATE//@GCAL_CLIENT_ID@/$CID}"
+      RESULT="''${RESULT//@GCAL_CLIENT_SECRET@/$CSE}"
+      echo "$RESULT" > "$CONF"
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';
     serviceConfig = {

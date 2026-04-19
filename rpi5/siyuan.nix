@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 let
   port = 6806;
   dataDir = "/var/lib/siyuan";
@@ -40,7 +40,7 @@ in
       WorkingDirectory = dataDir;
       ExecStart = pkgs.writeShellScript "siyuan-start" ''
         export RUN_IN_CONTAINER=true
-        AUTH_CODE=$(cat /run/agenix/siyuan-auth-code)
+        AUTH_CODE=$(cat ${config.age.secrets.siyuan-auth-code.path})
         exec ${pkgs.siyuan.kernel}/bin/kernel \
           -port ${toString port} \
           -workspace ${dataDir} \

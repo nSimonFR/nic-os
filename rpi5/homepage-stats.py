@@ -15,6 +15,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import threading
 import time
 
@@ -25,6 +26,7 @@ OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
 REFRESH_INTERVAL = 300  # seconds
 
 stats = {"sure": {}, "openwebui": {}}
+stats_lock = threading.Lock()
 
 
 def fetch_sure():
@@ -49,13 +51,15 @@ def fetch_sure():
 
         assets = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "asset")
         liabilities = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "liability")
-        stats["sure"] = {
-            "accounts": accts.get("pagination", {}).get("total_count", 0),
-            "transactions": txns.get("pagination", {}).get("total_count", 0),
-            "net_worth": round(assets - liabilities),
-        }
+        with stats_lock:
+            stats["sure"] = {
+                "accounts": accts.get("pagination", {}).get("total_count", 0),
+                "transactions": txns.get("pagination", {}).get("total_count", 0),
+                "net_worth": round(assets - liabilities),
+            }
     except Exception as e:
-        stats["sure"]["error"] = str(e)
+        with stats_lock:
+            stats["sure"]["error"] = str(e)
 
 
 def fetch_openwebui():
@@ -69,30 +73,36 @@ def fetch_openwebui():
         messages = subprocess.check_output([
             SQLITE, OWUI_DB, "SELECT COUNT(*) FROM chat_message;"
         ]).decode().strip()
-        stats["openwebui"] = {
-            "models": len(models.get("data", [])),
-            "chats": int(chats),
-            "messages": int(messages),
-        }
+        with stats_lock:
+            stats["openwebui"] = {
+                "models": len(models.get("data", [])),
+                "chats": int(chats),
+                "messages": int(messages),
+            }
     except Exception as e:
-        stats["openwebui"]["error"] = str(e)
+        with stats_lock:
+            stats["openwebui"]["error"] = str(e)
 
 
 def refresh():
     while True:
-        fetch_sure()
-        fetch_openwebui()
+        try:
+            fetch_sure()
+            fetch_openwebui()
+        except Exception as e:
+            print(f"refresh error: {e}", file=sys.stderr)
         time.sleep(REFRESH_INTERVAL)
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
-        if self.path == "/sure":
-            data = stats["sure"]
-        elif self.path == "/openwebui":
-            data = stats["openwebui"]
-        else:
-            data = stats
+        with stats_lock:
+            if self.path == "/sure":
+                data = dict(stats["sure"])
+            elif self.path == "/openwebui":
+                data = dict(stats["openwebui"])
+            else:
+                data = {"sure": dict(stats["sure"]), "openwebui": dict(stats["openwebui"])}
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
