@@ -50,10 +50,9 @@ in
     (let cfg = { port = 8181; host = "127.0.0.1"; package = pkgs.open-webui; }; in
      "${pkgs.writeShellScript "open-webui-wrapper" ''
        export PYTHONPATH="${torchgenFix}:''${PYTHONPATH:-}"
-       # Inject Tavily API key from agenix secret
-       if [ -f /run/agenix/openclaw-env ]; then
-         TAVILY_API_KEY=$(grep '^TAVILY_API_KEY=' /run/agenix/openclaw-env | cut -d= -f2- | tr -d '"')
-         export TAVILY_API_KEY
+       # Inject Tavily API key from dedicated agenix secret
+       if [ -f /run/agenix/tavily-api-key ]; then
+         export TAVILY_API_KEY=$(cat /run/agenix/tavily-api-key)
        fi
        exec ${lib.getExe cfg.package} serve --host "${cfg.host}" --port ${toString cfg.port}
      ''}");

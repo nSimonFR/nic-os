@@ -18,4 +18,6 @@ in {
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "phoenix-api-key.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
+  "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
+  "for-sure-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
 }
