@@ -1,19 +1,28 @@
 { pkgs, ... }:
 let
-  claudeBin = "/etc/profiles/per-user/nsimon/bin/claude";
   sessionName = "claude-rc";
 
-  # Claude Code --remote-control requires a TTY (interactive session).
-  # We use tmux to provide a virtual terminal that systemd can manage.
+  # The Nix wrapper prepends `--mcp-config <configs...>` which swallows
+  # the `remote-control` subcommand (parsed as a second config path).
+  # Work around: resolve the unwrapped binary at runtime and call it
+  # directly with the subcommand.
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
-    # Kill any stale session
+    CLAUDE_BIN="/etc/profiles/per-user/nsimon/bin/claude"
+
+    # Extract the real binary from the Nix wrapper
+    REAL_BIN=$(${pkgs.gnused}/bin/sed -n 's/^exec -a "\$0" "\(.*\)"\s\+--mcp-config .*/\1/p' "$CLAUDE_BIN")
+
+    if [ -z "$REAL_BIN" ] || [ ! -x "$REAL_BIN" ]; then
+      echo "Failed to resolve claude binary from wrapper" >&2
+      exit 1
+    fi
+
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
-    # Start claude with remote-control in a detached tmux session
     ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
-      "${claudeBin} --dangerously-skip-permissions --remote-control"
-    # Auto-accept the workspace trust dialog
-    sleep 5
-    ${pkgs.tmux}/bin/tmux send-keys -t ${sessionName} Enter
+      "$REAL_BIN remote-control \
+        --spawn worktree \
+        --capacity 8 \
+        --permission-mode bypassPermissions"
   '';
 in
 {
