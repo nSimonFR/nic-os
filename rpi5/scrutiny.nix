@@ -29,6 +29,11 @@
   # and an inline chat ID (not sensitive). This privileged ExecStartPre (+) runs as root
   # before the module's own preStart (which processes _secret substitutions), so the
   # telegram-url file is ready when genJqSecretsReplacementSnippet reads it.
+  # ── InfluxDB memory optimization ───────────────────────────────────────────
+  # InfluxDB defaults are tuned for large servers; GOMEMLIMIT makes Go GC
+  # reclaim earlier. Only stores daily SMART data — minimal working set.
+  systemd.services.influxdb2.environment.GOMEMLIMIT = "80MiB";
+
   systemd.services.scrutiny.serviceConfig.ExecStartPre = lib.mkBefore [
     ("+${pkgs.writeShellScript "scrutiny-compose-telegram-url" ''
       token=$(< ${config.age.secrets.telegram-bot-token.path})

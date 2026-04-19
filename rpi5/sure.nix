@@ -71,8 +71,12 @@ in
   systemd.services.sure-worker.environment = {
     RAILS_MAX_THREADS = "1";
     MALLOC_ARENA_MAX  = "2";
+    RUBY_YJIT_ENABLE  = "0";  # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
   };
-  systemd.services.sure-web.environment.MALLOC_ARENA_MAX = "2";
+  systemd.services.sure-web.environment = {
+    MALLOC_ARENA_MAX = "2";
+    RUBY_YJIT_ENABLE = "0";
+  };
 
   # sure-setup (migrations) must run after the password is set
   systemd.services.sure-setup = {
