@@ -16,7 +16,8 @@ let
   # systemd only tracks the tmux launcher (Type=oneshot), not the
   # claude process inside the pane — this timer catches silent failures.
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
-    if ! ${pkgs.tmux}/bin/tmux has-session -t ${sessionName} 2>/dev/null; then
+    # tmux sessions are per-user; check as the service user via su
+    if ! su -l ${username} -c '${pkgs.tmux}/bin/tmux has-session -t ${sessionName} 2>/dev/null'; then
       echo "tmux session ${sessionName} missing, restarting service"
       systemctl restart claude-remote-control.service
     fi
@@ -47,11 +48,7 @@ in
     description = "Claude Code Remote Control watchdog";
     serviceConfig = {
       Type = "oneshot";
-      User = username;
       ExecStart = watchdogScript;
-      Environment = [
-        "HOME=/home/${username}"
-      ];
     };
   };
 
