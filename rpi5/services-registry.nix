@@ -36,19 +36,19 @@
     { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance";
       widget = {
         type = "customapi";
-        url = "http://127.0.0.1:13334/api/v1/transactions?per_page=1";
-        headers = { "X-Api-Key" = "{{HOMEPAGE_VAR_SURE_KEY}}"; "Accept" = "application/json"; };
+        url = "http://127.0.0.1:8087/sure";
         mappings = [
-          { field = "pagination.total_count"; label = "Transactions"; format = "number"; }
+          { field = "accounts"; label = "Accounts"; format = "number"; }
+          { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
-        url = "http://127.0.0.1:8181/api/config";
+        url = "http://127.0.0.1:8087/openwebui";
         mappings = [
+          { field = "models"; label = "Models"; format = "number"; }
           { field = "version"; label = "Version"; format = "text"; }
-          { field = "name"; label = "Name"; format = "text"; }
         ];
       }; }
 
