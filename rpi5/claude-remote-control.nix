@@ -18,7 +18,10 @@ let
         --spawn worktree \
         --no-create-session-in-dir \
         --capacity 8 \
-        --permission-mode bypassPermissions"
+        --permission-mode bypassPermissions \
+        --name rpi5 \
+        --verbose \
+        --debug-file /tmp/claude-rc-debug.log"
   '';
 
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
