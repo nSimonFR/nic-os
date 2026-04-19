@@ -3,6 +3,14 @@ let
   sessionName = "claude-rc";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
 
+  stopScript = pkgs.writeShellScript "claude-remote-control-stop" ''
+    # Send SIGTERM to the claude process inside tmux, giving it time
+    # to deregister from Anthropic's API before we kill the session.
+    ${pkgs.tmux}/bin/tmux send-keys -t ${sessionName} C-c 2>/dev/null || true
+    sleep 3
+    ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
+  '';
+
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
     ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
@@ -12,11 +20,7 @@ let
         --permission-mode bypassPermissions"
   '';
 
-  # Watchdog: restart the tmux session if claude died inside it.
-  # systemd only tracks the tmux launcher (Type=oneshot), not the
-  # claude process inside the pane — this timer catches silent failures.
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
-    # tmux sessions are per-user; check as the service user via su
     if ! su -l ${username} -c '${pkgs.tmux}/bin/tmux has-session -t ${sessionName} 2>/dev/null'; then
       echo "tmux session ${sessionName} missing, restarting service"
       systemctl restart claude-remote-control.service
@@ -28,6 +32,8 @@ in
     description = "Claude Code Remote Control server (tmux)";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
+    # Stop cleanly before rebuilds: nixos-rebuild triggers stop→start
+    stopIfChanged = true;
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -35,7 +41,8 @@ in
       Group = "users";
       WorkingDirectory = "/home/${username}/nic-os";
       ExecStart = startScript;
-      ExecStop = "${pkgs.tmux}/bin/tmux kill-session -t ${sessionName}";
+      ExecStop = stopScript;
+      TimeoutStopSec = "10s";
       Environment = [
         "HOME=/home/${username}"
         "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
@@ -43,7 +50,6 @@ in
     };
   };
 
-  # Timer-based watchdog: check every 5 minutes, restart if tmux session died
   systemd.services.claude-remote-control-watchdog = {
     description = "Claude Code Remote Control watchdog";
     serviceConfig = {
