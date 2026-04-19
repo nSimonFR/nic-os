@@ -67,9 +67,5 @@
       file = ./secrets/tavily-api-key.age;
       mode = "0444"; # DynamicUser (open-webui) needs to read it
     };
-    siyuan-auth-code = {
-      file = ./secrets/siyuan-auth-code.age;
-      owner = "siyuan";
-    };
 };
 }
