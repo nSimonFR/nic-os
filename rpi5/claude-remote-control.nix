@@ -26,7 +26,7 @@ in
       RemainAfterExit = true;
       User = "nsimon";
       Group = "users";
-      WorkingDirectory = "/home/nsimon";
+      WorkingDirectory = "/home/nsimon/nic-os";
       ExecStart = startScript;
       ExecStop = "${pkgs.tmux}/bin/tmux kill-session -t ${sessionName}";
       Restart = "on-failure";
