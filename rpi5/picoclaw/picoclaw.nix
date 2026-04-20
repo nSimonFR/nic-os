@@ -184,9 +184,10 @@ let
     # systemd --user starts services with a minimal PATH (just systemd/bin).
     # Picoclaw's exec tool invokes `sh -c <command>` and inherits our env, so
     # without a real PATH every shell-out fails with "sh: not found".
-    # Match what an interactive nsimon shell sees: user profile, NixOS system
-    # profile, and the default nix-profile locations.
-    export PATH="/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
+    # Match what an interactive nsimon shell sees: home-manager's own bin
+    # (gog/goplaces/summarize live *only* there, not in ~/.nix-profile/bin),
+    # user profile, system profile, wrappers, and nix-profile.
+    export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
     exec ${picoclaw}/bin/picoclaw gateway
   '';
 in
