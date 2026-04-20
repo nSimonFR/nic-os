@@ -35,23 +35,6 @@
       inputs.nix-gaming.follows = "nix-gaming";
     };
 
-    nix-steipete-tools = {
-      url = "github:openclaw/nix-steipete-tools";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
-    nix-openclaw = {
-      url = "github:openclaw/nix-openclaw";
-      inputs.nixpkgs.follows = "nixpkgs";
-      # Force our lock file to control nix-steipete-tools so root's timestamps
-      # are used, avoiding Nix 2.31.2 lastModified mismatch on nix-openclaw's lock.
-      inputs.nix-steipete-tools.follows = "nix-steipete-tools";
-    };
-    openclaw-source = {
-      url = "github:openclaw/openclaw";
-      flake = false;
-    };
-
     ragenix = {
       url = "github:yaxitech/ragenix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -107,41 +90,11 @@
       rpiconfig = "rpi5";
       rpi5Params = {
         tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-        voiceWebhookPort = 8443;
         beastOllamaUrl = "http://100.125.240.34:11434";
       };
       telegramChatId = 82389391;
-      # Use the flake's own store path (locked by narHash) so openclaw's builtins.getFlake
-      # works in pure mode without --impure. narHash makes the path: URL "locked" (content-
-      # addressed). unsafeDiscardStringContext strips Nix's store-path tracking so the string
-      # can be serialized to JSON by the openclaw module.
-      # Skill changes need to be committed to be visible (self.outPath is the git tree copy).
-      nClawSkillsSource = builtins.unsafeDiscardStringContext "path:${self.outPath}?narHash=${self.narHash}";
-      # Locked URLs for local plugin sub-flakes. git+file: with an explicit rev is pure
-      # (the rev is the lock). On a clean tree self.rev is always set. On a dirty tree
-      # falls back to the local path (requires --impure, but dirty rebuilds need it anyway).
-      pluginSource = name:
-        if self ? rev
-        then "git+file:///home/nsimon/nic-os?rev=${self.rev}&dir=rpi5/openclaw/plugins/${name}"
-        else
-          # On dirty trees self.outPath is a store-copied snapshot with a known
-          # narHash, so using it as the flake root + dir keeps the ref locked
-          # (pure-eval safe, no --impure needed).
-          "path:${builtins.unsafeDiscardStringContext self.outPath}?narHash=${self.narHash}&dir=rpi5/openclaw/plugins/${name}";
-      openclawPluginSources = {
-        summarize = pluginSource "summarize";
-        gogcli = pluginSource "gogcli";
-        goplaces = pluginSource "goplaces";
-      };
     in
     {
-      # OpenClaw expects a single plugin object at flake output `openclawPlugin`.
-      # Keep this pure by pinning an explicit target system instead of currentSystem.
-      openclawPlugin = import ./rpi5/openclaw/nclaw-skills.nix {
-        inherit nixpkgs;
-        system = "aarch64-linux";
-      };
-
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
         specialArgs = {
@@ -161,7 +114,7 @@
         nixpkgs = inputs.nixpkgs;
         specialArgs = {
           inherit inputs outputs username telegramChatId;
-          inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
+          inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           unstablePkgs = import nixpkgs-unstable {
@@ -185,12 +138,9 @@
                   inputs
                   outputs
                   username
-                  nClawSkillsSource
-                  openclawPluginSources
                   telegramChatId
                   ;
-                inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
-                openclawSource = inputs.openclaw-source;
+                inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
                 devSetup = false;
                 unstablePkgs = import nixpkgs-unstable {
                   system = "aarch64-linux";
@@ -200,7 +150,6 @@
               users.${username} = {
                 imports = [
                   inputs.ragenix.homeManagerModules.default
-                  inputs.nix-openclaw.homeManagerModules.openclaw
                   ./home
                   ./rpi5/home.nix
                 ];
@@ -267,21 +216,15 @@
           pkgs = import nixpkgs {
             system = "aarch64-linux";
             config.allowUnfree = true;
-            overlays = [
-              inputs.nix-openclaw.overlays.default
-            ];
           };
           extraSpecialArgs = {
             inherit
               inputs
               outputs
               username
-              nClawSkillsSource
-              openclawPluginSources
               telegramChatId
               ;
-            inherit (rpi5Params) tailnetFqdn voiceWebhookPort beastOllamaUrl;
-            openclawSource = inputs.openclaw-source;
+            inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "aarch64-linux";
@@ -290,7 +233,6 @@
           };
           modules = [
             inputs.ragenix.homeManagerModules.default
-            inputs.nix-openclaw.homeManagerModules.openclaw
             ./home
             ./rpi5/home.nix
           ];

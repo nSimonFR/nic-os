@@ -26,8 +26,6 @@
       }
     )
 
-    inputs.nix-openclaw.overlays.default
-
     # nixos-raspberrypi's page-size-16k.nix overrides jemalloc to --with-lg-page=14
     # (matching the RPi5's 16KB kernel pages). But nixpkgs already defaults to lg-page=16
     # for aarch64, and 16 >= 14, so the cached version works fine. Undo the override so

@@ -68,9 +68,9 @@ du -sh /home/nsimon/* 2>/dev/null | sort -h
 ## Services
 
 ```bash
-# OpenClaw gateway status
-systemctl --user status openclaw-gateway
-journalctl --user -u openclaw-gateway -n 50
+# PicoClaw gateway status
+systemctl --user status picoclaw
+journalctl --user -u picoclaw -n 50
 
 # Key native services
 systemctl status home-assistant ha-linky sure-web sure-worker ghostfolio
@@ -114,8 +114,8 @@ sudo journalctl --vacuum-time=7d
 ## Reboot / Restart
 
 ```bash
-# Restart OpenClaw gateway
-systemctl --user restart openclaw-gateway
+# Restart PicoClaw gateway
+systemctl --user restart picoclaw
 
 # Restart Home Assistant (native service)
 sudo systemctl restart home-assistant
@@ -127,8 +127,8 @@ sudo systemctl reboot
 ## Logs
 
 ```bash
-# OpenClaw gateway logs (live)
-journalctl --user -u openclaw-gateway -f
+# PicoClaw gateway logs (live)
+journalctl --user -u picoclaw -f
 
 # Home Assistant logs (live)
 journalctl -u home-assistant -f

@@ -7,8 +7,8 @@
   age.identityPaths = [ "/root/.ssh/age" ];
 
   age.secrets = {
-    openclaw-env = {
-      file = ./secrets/openclaw.env.age;
+    picoclaw-env = {
+      file = ./secrets/picoclaw-env.age;
       owner = "nsimon";
     };
     telegram-bot-token = {
@@ -25,10 +25,6 @@
     };
     linky-prm = {
       file = ./secrets/linky-prm.age;
-    };
-    openclaw-codex-auth = {
-      file = ./secrets/openclaw-codex-auth.age;
-      owner = "nsimon";
     };
     immich-api-key = {
       file = ./secrets/immich-api-key.age;

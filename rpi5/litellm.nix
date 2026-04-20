@@ -118,6 +118,13 @@ let
 
     litellm_settings:
       drop_params: true
+      # Fallback chain for PicoClaw's `primary` model. If Codex proxy (gpt-5.4)
+      # fails or times out, LiteLLM transparently retries against the local
+      # Ollama model on beast. Keeps the Telegram bot responsive when OpenAI
+      # is unreachable.
+      fallbacks:
+        - "openai/gpt-5.4": ["openai/gemma4:e4b"]
+        - "openai/gpt-5.4-mini": ["openai/gemma4:e4b"]
 
     # Gemini model name → LiteLLM model group mapping.
     # AFFiNE's Gemini provider sends /v1beta/models/MODEL:generateContent;

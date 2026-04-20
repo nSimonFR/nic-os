@@ -100,7 +100,7 @@ $FAILED"
         CURL="${pkgs.curl}/bin/curl"
         FAILURES=""
         $CURL -sf --max-time 10 http://127.0.0.1:18789/health > /dev/null 2>&1 || FAILURES="$FAILURES
-- openclaw (18789/health)"
+- picoclaw (18789/health)"
         $CURL -sf --max-time 10 http://127.0.0.1:${toString beszelHubPort}/api/health > /dev/null 2>&1 || FAILURES="$FAILURES
 - beszel (${toString beszelHubPort}/api/health)"
         $CURL -sf --max-time 10 http://127.0.0.1:13900/api/v1/health > /dev/null 2>&1 || FAILURES="$FAILURES

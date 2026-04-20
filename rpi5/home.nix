@@ -6,7 +6,7 @@
 }:
 {
   imports = [
-    ./openclaw/openclaw.nix
+    ./picoclaw/picoclaw.nix
   ];
 
   home.packages = with pkgs; [
