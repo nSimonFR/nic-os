@@ -40,14 +40,19 @@ let
     BLOGWATCHER_BIN=$(command -v blogwatcher || true)
     GH_BIN=$(command -v gh || true)
     GOG_BIN=$(command -v gog || true)
-    [[ -n "$GH_BIN" && -n "$GOG_BIN" ]] || exit 1
 
-    # Calendar
-    FROM="$(date -Iseconds)"
-    TO="$(date -d 'tomorrow 00:00:00' -Iseconds)"
-    "$GOG_BIN" calendar events primary --from "$FROM" --to "$TO" --json --no-input > "$TMPDIR/calendar.json"
+    # Calendar — optional (gog is not yet re-packaged after the picoclaw
+    # migration dropped openclaw/nix-steipete-tools).
+    if [[ -n "$GOG_BIN" ]]; then
+      FROM="$(date -Iseconds)"
+      TO="$(date -d 'tomorrow 00:00:00' -Iseconds)"
+      "$GOG_BIN" calendar events primary --from "$FROM" --to "$TO" --json --no-input > "$TMPDIR/calendar.json" \
+        || printf '{"events":[]}\n' > "$TMPDIR/calendar.json"
+    else
+      printf '{"events":[]}\n' > "$TMPDIR/calendar.json"
+    fi
 
-    # Blogwatcher
+    # Blogwatcher — optional
     if [[ -n "$BLOGWATCHER_BIN" ]]; then
       "$BLOGWATCHER_BIN" scan >/dev/null 2>&1 || true
       "$BLOGWATCHER_BIN" articles > "$TMPDIR/blogwatcher.txt" || true
@@ -55,8 +60,13 @@ let
       : > "$TMPDIR/blogwatcher.txt"
     fi
 
-    # GitHub notifications
-    "$GH_BIN" api notifications > "$TMPDIR/gh_notifications.json" || printf '[]\n' > "$TMPDIR/gh_notifications.json"
+    # GitHub notifications — optional
+    if [[ -n "$GH_BIN" ]]; then
+      "$GH_BIN" api notifications > "$TMPDIR/gh_notifications.json" \
+        || printf '[]\n' > "$TMPDIR/gh_notifications.json"
+    else
+      printf '[]\n' > "$TMPDIR/gh_notifications.json"
+    fi
 
     MESSAGE=$(
       TODAY="$TODAY" NOW_HUMAN="$NOW_HUMAN" jq -rn \
