@@ -1,6 +1,6 @@
-{ config, lib, pkgs, tailnetFqdn, voiceWebhookPort, ... }:
+{ config, lib, pkgs, tailnetFqdn, ... }:
 let
-  registry = import ./services-registry.nix { inherit voiceWebhookPort; };
+  registry = import ./services-registry.nix { };
   allEntries = registry.serveEntries ++ registry.funnelEntries;
 
   # Hide Homepage and Infrastructure from the dashboard

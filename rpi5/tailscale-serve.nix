@@ -1,6 +1,6 @@
-{ pkgs, lib, tailnetFqdn, voiceWebhookPort, ... }:
+{ pkgs, lib, tailnetFqdn, ... }:
 let
-  registry = import ./services-registry.nix { inherit voiceWebhookPort; };
+  registry = import ./services-registry.nix { };
   inherit (registry) serveEntries funnelEntries;
 
   ts = "${pkgs.tailscale}/bin/tailscale";
