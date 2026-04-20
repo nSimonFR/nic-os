@@ -182,4 +182,59 @@ $FAILURES"
       OnUnitActiveSec = "5m";
     };
   };
+
+  # ── Beszel SMART refresh (workaround for henrygd/beszel#1800) ───────────────
+  # TODO(beszel#1800): DELETE THIS WHOLE BLOCK (service + timer) once Beszel
+  #   0.19.0+ with a verified fix lands in nixpkgs and a natural background
+  #   SMART fetch is observed in the hub _logs. Issue:
+  #   https://github.com/henrygd/beszel/issues/1800
+  #
+  # Beszel 0.18.6's background SMART fetcher in update() doesn't reliably fire
+  # on SMART_INTERVAL — data.Details.SmartInterval isn't transmitted over SSH
+  # correctly, the hub falls back to a 1h default + cooldown that effectively
+  # blocks subsequent fetches. The manual refresh endpoint bypasses the
+  # cooldown and always works.
+  #
+  # The homepage superuser (created for the Beszel homepage widget) is reused
+  # here for the API login; password is plain in homepage.nix:81.
+  systemd.services.beszel-smart-refresh = {
+    description = "Refresh Beszel SMART data for all systems (workaround for beszel#1800)";
+    after = [ "beszel-hub.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "beszel-smart-refresh" ''
+        set -eu
+        CURL="${pkgs.curl}/bin/curl"
+        JQ="${pkgs.jq}/bin/jq"
+        HUB=http://127.0.0.1:${toString beszelHubPort}
+
+        TOKEN=$($CURL -sf -X POST "$HUB/api/collections/_superusers/auth-with-password" \
+          -H 'Content-Type: application/json' \
+          -d '{"identity":"homepage@nic-os.local","password":"homepage-widget-pass"}' \
+          | $JQ -r .token)
+
+        # Iterate over every registered system and kick its manual SMART refresh.
+        SYSTEMS=$($CURL -sf -H "Authorization: $TOKEN" \
+          "$HUB/api/collections/systems/records?perPage=100&fields=id,name,status" \
+          | $JQ -r '.items[] | select(.status=="up") | .id')
+
+        for id in $SYSTEMS; do
+          $CURL -sf -X POST -H "Authorization: $TOKEN" \
+            "$HUB/api/beszel/smart/refresh?system=$id" > /dev/null \
+            && echo "refreshed SMART for system=$id" \
+            || echo "WARN: refresh failed for system=$id" >&2
+        done
+      '';
+    };
+  };
+  systemd.timers.beszel-smart-refresh = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Wait 3m after boot so beszel-hub has time to accept the initial SSH
+      # handshake from beszel-agent and populate the systems list.
+      OnBootSec = "3m";
+      OnUnitActiveSec = "1h";
+      Persistent = true;
+    };
+  };
 }
