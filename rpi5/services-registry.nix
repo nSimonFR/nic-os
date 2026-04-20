@@ -58,8 +58,6 @@
     # Monitoring
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring";
       widget = { type = "beszel"; url = "http://127.0.0.1:8090"; username = "homepage@nic-os.local"; password = "{{HOMEPAGE_VAR_BESZEL_PASS}}"; version = 2; }; }
-    { port = 9099;  backend = "http://127.0.0.1:9099";  name = "Scrutiny";       icon = "scrutiny.svg";       category = "Monitoring"; description = "Disk SMART health";
-      widget = { type = "scrutiny"; url = "http://127.0.0.1:9099"; }; }
 
     # Backend — API services
     { port = 443;   backend = "http://127.0.0.1:18789"; name = "Openclaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
