@@ -40,6 +40,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # PicoClaw source pinned to a tag. Bumping is a 2-step edit:
+    #   1. change the tag in the URL below (e.g. v0.2.6 → v0.3.0)
+    #   2. bump `version` default in rpi5/picoclaw/package.nix to match
+    # then `sudo nix flake lock --update-input picoclaw-src` + rebuild.
+    # Nix TOFUs the new narHash; `vendorHash` only needs refreshing if
+    # upstream's go.sum changed between tags (the rebuild will tell you).
+    picoclaw-src = {
+      url = "github:sipeed/picoclaw/v0.2.6";
+      flake = false;
+    };
+
     mac-app-util.url = "github:hraban/mac-app-util";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";

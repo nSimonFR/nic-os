@@ -1,5 +1,6 @@
 {
   pkgs,
+  inputs,
   telegramChatId,
   ...
 }:
@@ -25,7 +26,9 @@
 #   ~/.picoclaw/workspace/          — skills, documents, memory (rsync'd from Nix)
 #   ~/.picoclaw/workspace/skills/   — SKILL.md-formatted skills (migrated from OpenClaw)
 let
-  picoclaw = pkgs.callPackage ./package.nix { };
+  picoclaw = pkgs.callPackage ./package.nix {
+    picoclaw-src = inputs.picoclaw-src;
+  };
 
   configDir = "/home/nsimon/.picoclaw";
   workspaceDir = "${configDir}/workspace";
