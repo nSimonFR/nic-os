@@ -39,13 +39,13 @@ in
     wants = [ "network-online.target" ];
     # smartctl on PATH so Beszel can collect SMART data from /dev/sda + /dev/sdb.
     path = [ pkgs.smartmontools ];
+    unitConfig.ConditionPathExists = "/var/lib/beszel-hub/agent.env";
     serviceConfig = {
       ExecStart = "${pkgs.beszel}/bin/beszel-agent";
       DynamicUser = true;
       EnvironmentFile = "/var/lib/beszel-hub/agent.env";
       Restart = "on-failure";
       RestartSec = "10s";
-      ConditionPathExists = "/var/lib/beszel-hub/agent.env";
       Environment = [
         "PORT=${toString beszelAgentPort}"
         "FILESYSTEM=/dev/sdb1,/dev/sdb2,/dev/sda1"
@@ -212,6 +212,16 @@ $FAILURES"
           -H 'Content-Type: application/json' \
           -d '{"identity":"homepage@nic-os.local","password":"homepage-widget-pass"}' \
           | $JQ -r .token)
+
+        # Disable PocketBase's built-in "new login location" email alert on the
+        # _superusers collection. Otherwise our hourly login triggers a sendmail
+        # call that fails (no MTA configured) and logs a recordAuthResponse
+        # error each run. Idempotent — safe to run every tick.
+        $CURL -sf -X PATCH "$HUB/api/collections/_superusers" \
+          -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
+          -d '{"authAlert":{"enabled":false}}' > /dev/null \
+          && echo "authAlert disabled on _superusers" \
+          || echo "WARN: failed to disable authAlert" >&2
 
         # Iterate over every registered system and kick its manual SMART refresh.
         SYSTEMS=$($CURL -sf -H "Authorization: $TOKEN" \
