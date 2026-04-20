@@ -129,6 +129,11 @@ let
     # Gemini model name → LiteLLM model group mapping.
     # AFFiNE's Gemini provider sends /v1beta/models/MODEL:generateContent;
     # LiteLLM's native router translates and routes via these aliases.
+    #
+    # Bare-name aliases (no "openai/" prefix) are consumed by picoclaw: its
+    # provider factory strips the "openai/" prefix before making the request
+    # (factory_provider.go ParseModel), so the proxy sees e.g. "gpt-5.4".
+    # These aliases make those bare names resolve to the real entries.
     router_settings:
       model_group_alias:
         "gemini-2.5-flash": "openai/gemma4:e4b"
@@ -137,6 +142,11 @@ let
         "gemini-2.0-flash-001": "openai/gemma4:e4b"
         "gemini-embedding-001": "openai/qwen3-embedding:8b"
         "text-embedding-004": "openai/qwen3-embedding:8b"
+        "gpt-5.4": "openai/gpt-5.4"
+        "gpt-5.4-mini": "openai/gpt-5.4-mini"
+        "gemma4:e4b": "openai/gemma4:e4b"
+        "gemma4:26b": "openai/gemma4:26b"
+        "qwen3.5:35b-a3b": "openai/qwen3.5:35b-a3b"
   '';
 
   # Wrapper: reads Phoenix JWT from agenix at runtime, sets OTEL env vars, execs litellm
