@@ -138,10 +138,21 @@ let
   # Setup script (ExecStartPre): materialise config.json + skills/documents into
   # the workspace. Runs on every restart, keeping the workspace in sync with
   # the Nix store without home-manager file-conflict headaches.
+  #
+  # PicoClaw does NOT interpolate ${VAR} references inside config.json, so we
+  # envsubst the template here after sourcing the agenix env file. The resulting
+  # config.json is 0600 (tokens on disk) — acceptable since the file already lives
+  # inside the user's home and the secrets are readable as nsimon anyway.
   setupScript = pkgs.writeShellScript "picoclaw-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${configDir} ${workspaceDir} ${workspaceDir}/skills
-    ${pkgs.coreutils}/bin/install -m 0644 ${configFile} ${configDir}/config.json
+
+    set -a
+    . /run/agenix/picoclaw-env
+    TELEGRAM_BOT_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
+    set +a
+    ${pkgs.envsubst}/bin/envsubst < ${configFile} > ${configDir}/config.json
+    ${pkgs.coreutils}/bin/chmod 0600 ${configDir}/config.json
 
     # Skills: copy (not symlink) so realpath stays inside the workspace.
     ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
@@ -161,7 +172,10 @@ let
     . /run/agenix/picoclaw-env
     TELEGRAM_BOT_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     set +a
-    exec ${picoclaw}/bin/picoclaw --config ${configDir}/config.json
+    # PicoClaw reads config from ~/.picoclaw/config.json by default (no flag).
+    # Use HOME to anchor the lookup even though systemd --user should set it.
+    export HOME="/home/nsimon"
+    exec ${picoclaw}/bin/picoclaw gateway
   '';
 in
 {
