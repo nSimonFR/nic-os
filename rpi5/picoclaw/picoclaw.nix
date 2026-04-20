@@ -46,7 +46,12 @@ let
   picoclawConfig = {
     agents.defaults = {
       workspace = workspaceDir;
-      restrict_to_workspace = true;
+      # Skills routinely shell out to tools installed system-wide (firefly CLI,
+      # gh, curl, custom scripts in /home/nsimon) and read paths outside
+      # ~/.picoclaw/workspace/. Sandboxing the agent to the workspace would
+      # break most skills. Trust model here is the single-chat-ID allowlist
+      # on the Telegram channel, not workspace isolation.
+      restrict_to_workspace = false;
       model_name = "primary";
       max_tokens = 8192;
       context_window = 131072;
@@ -176,6 +181,12 @@ let
     PICOCLAW_TOOLS_WEB_TAVILY_API_KEYS="''${TAVILY_API_KEY:-}"
     set +a
     export HOME="/home/nsimon"
+    # systemd --user starts services with a minimal PATH (just systemd/bin).
+    # Picoclaw's exec tool invokes `sh -c <command>` and inherits our env, so
+    # without a real PATH every shell-out fails with "sh: not found".
+    # Match what an interactive nsimon shell sees: user profile, NixOS system
+    # profile, and the default nix-profile locations.
+    export PATH="/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
     exec ${picoclaw}/bin/picoclaw gateway
   '';
 in
