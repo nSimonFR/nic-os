@@ -89,7 +89,10 @@ let
 
     channels.telegram = {
       enabled = true;
-      token = "\${TELEGRAM_BOT_TOKEN}";
+      # Token is injected via PICOCLAW_CHANNELS_TELEGRAM_TOKEN env var — picoclaw's
+      # struct tags support env overlays natively, so we keep secrets out of
+      # config.json entirely (which would otherwise get rewritten by the config
+      # migrator on every boot).
       # `allow_from` accepts stringified IDs; numeric-only ID avoids the
       # username/ID mismatch bug reported in sipeed/picoclaw#62/#310.
       allow_from = [ (toString telegramChatId) ];
@@ -110,10 +113,9 @@ let
         enabled = true;
         prefer_native = true;
         duckduckgo.enabled = true;
-        tavily = {
-          enabled = true;
-          api_key = "\${TAVILY_API_KEY}";
-        };
+        # API keys come from PICOCLAW_TOOLS_WEB_TAVILY_API_KEYS (SecureStrings) —
+        # see channels.telegram.token for the rationale.
+        tavily.enabled = true;
       };
 
       # MCP servers can be added here to replace specific OpenClaw skills
@@ -138,21 +140,10 @@ let
   # Setup script (ExecStartPre): materialise config.json + skills/documents into
   # the workspace. Runs on every restart, keeping the workspace in sync with
   # the Nix store without home-manager file-conflict headaches.
-  #
-  # PicoClaw does NOT interpolate ${VAR} references inside config.json, so we
-  # envsubst the template here after sourcing the agenix env file. The resulting
-  # config.json is 0600 (tokens on disk) — acceptable since the file already lives
-  # inside the user's home and the secrets are readable as nsimon anyway.
   setupScript = pkgs.writeShellScript "picoclaw-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${configDir} ${workspaceDir} ${workspaceDir}/skills
-
-    set -a
-    . /run/agenix/picoclaw-env
-    TELEGRAM_BOT_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
-    set +a
-    ${pkgs.envsubst}/bin/envsubst < ${configFile} > ${configDir}/config.json
-    ${pkgs.coreutils}/bin/chmod 0600 ${configDir}/config.json
+    ${pkgs.coreutils}/bin/install -m 0644 ${configFile} ${configDir}/config.json
 
     # Skills: copy (not symlink) so realpath stays inside the workspace.
     ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
@@ -163,17 +154,18 @@ let
       "${documentsSource}/" "${workspaceDir}/"
   '';
 
-  # ExecStart wrapper: sources picoclaw-env (KEY=VAL agenix file) and injects
-  # TELEGRAM_BOT_TOKEN from the single-value telegram-bot-token file, then execs
-  # the real binary. Using a wrapper avoids the systemd EnvironmentFile first-boot
-  # ordering caveat (the file must exist *before* systemd loads the unit).
+  # ExecStart wrapper: sources picoclaw-env (KEY=VAL agenix file, holding skill
+  # credentials consumed by the `exec` tool: HA_TOKEN, FIREFLY_TOKEN, …) and
+  # maps the separate single-value secrets (telegram-bot-token, tavily-api-key)
+  # onto the PICOCLAW_* env names that picoclaw's config struct tags recognise.
+  # Using env vars rather than JSON placeholders means config.json never holds
+  # secrets and survives picoclaw's schema migrations unchanged.
   execWrapper = pkgs.writeShellScript "picoclaw-exec" ''
     set -a
     . /run/agenix/picoclaw-env
-    TELEGRAM_BOT_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
+    PICOCLAW_CHANNELS_TELEGRAM_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
+    PICOCLAW_TOOLS_WEB_TAVILY_API_KEYS="''${TAVILY_API_KEY:-}"
     set +a
-    # PicoClaw reads config from ~/.picoclaw/config.json by default (no flag).
-    # Use HOME to anchor the lookup even though systemd --user should set it.
     export HOME="/home/nsimon"
     exec ${picoclaw}/bin/picoclaw gateway
   '';
