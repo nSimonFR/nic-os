@@ -1,27 +1,25 @@
 {
   lib,
   buildGoModule,
-  fetchFromGitHub,
+  picoclaw-src,
   version ? "0.2.6",
-  rev ? "d946d8f7610b1b2b87afd1e16d442b1c271cb1eb",
-  hash ? "", # fill via first build; TOFU
-  vendorHash ? null, # fill via first build
+  vendorHash ? null, # TOFU on first build; bump when upstream go.sum changes
 }:
 
 # PicoClaw: ultra-lightweight Go-based AI agent.
 #
-# Upstream go.mod requires Go 1.25.9; nixpkgs 25.11 ships 1.25.8. The patch-level
-# mismatch is usually benign at build time; if Go rejects the toolchain, bump the
-# nixpkgs pin or set GOTOOLCHAIN=local via env.
+# Source is taken from the `picoclaw-src` flake input (pinned to a tag in
+# flake.nix). Upgrading requires bumping the tag there AND `version` here;
+# the commit rev + narHash come from flake.lock automatically.
+#
+# Upstream go.mod requires Go 1.25.9; nixpkgs 25.11 ships 1.25.8. The patch-
+# level mismatch is usually benign at build time; if Go rejects the toolchain,
+# bump the nixpkgs pin or keep GOTOOLCHAIN=local (set below).
 buildGoModule {
   pname = "picoclaw";
   inherit version vendorHash;
 
-  src = fetchFromGitHub {
-    owner = "sipeed";
-    repo = "picoclaw";
-    inherit rev hash;
-  };
+  src = picoclaw-src;
 
   # Upstream Makefile build tags; `goolm` selects the Go-native OLM crypto,
   # `stdjson` uses encoding/json instead of any faster third-party lib.
@@ -36,7 +34,7 @@ buildGoModule {
     "-s"
     "-w"
     "-X github.com/sipeed/picoclaw/pkg/config.Version=${version}"
-    "-X github.com/sipeed/picoclaw/pkg/config.GitCommit=${builtins.substring 0 8 rev}"
+    "-X github.com/sipeed/picoclaw/pkg/config.GitCommit=${picoclaw-src.shortRev or "dirty"}"
     "-X github.com/sipeed/picoclaw/pkg/config.GoVersion=nix"
   ];
 
