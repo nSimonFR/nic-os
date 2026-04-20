@@ -111,7 +111,6 @@ in
     ./home-assistant.nix
     ./tailscale-serve.nix
     ./blocky.nix
-    ./scrutiny.nix
     ./monitoring.nix
     ./filebrowser.nix
     ./openai-codex-proxy.nix
