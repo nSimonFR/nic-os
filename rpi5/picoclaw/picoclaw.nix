@@ -111,9 +111,8 @@ let
     };
 
     tools = {
-      # Core: filesystem, exec, skills — the minimum to replicate OpenClaw's
-      # "coding" profile behaviour. Cron disabled (heartbeat replaced by
-      # Prometheus/Beszel alerting).
+      # Core: filesystem, exec, skills, cron — the minimum to replicate
+      # OpenClaw's "coding" profile behaviour.
       #
       # allow_remote = true opts out of GHSA-pv8c-p6jf-3fpp's default block on
       # exec from non-internal channels (cli/system/subagent). We rely on
@@ -125,6 +124,17 @@ let
         allow_remote = true;
       };
       skills.enabled = true;
+
+      # Scheduled agent turns (e.g. daily digest at 08:30). Jobs persist in
+      # ~/.picoclaw/workspace/cron/jobs.json — the setup rsyncs don't touch
+      # that path so jobs survive restarts.
+      # allow_command = true lets cron jobs invoke shell commands directly
+      # in addition to "send a message to the agent" jobs; GHSA still
+      # restricts *scheduling* a command job to internal channels only.
+      cron = {
+        enabled = true;
+        allow_command = true;
+      };
 
       web = {
         enabled = true;
