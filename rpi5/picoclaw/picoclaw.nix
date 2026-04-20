@@ -26,7 +26,10 @@
 #   ~/.picoclaw/workspace/          — skills, documents, memory (rsync'd from Nix)
 #   ~/.picoclaw/workspace/skills/   — SKILL.md-formatted skills (migrated from OpenClaw)
 let
+  # Use unstablePkgs.buildGoModule (Go 1.26.x) — nixpkgs 25.11 ships Go 1.25.8
+  # which is too old for picoclaw's go.mod (requires ≥1.25.9).
   picoclaw = pkgs.callPackage ./package.nix {
+    inherit (pkgs.unstablePkgs) buildGoModule;
     picoclaw-src = inputs.picoclaw-src;
   };
 
