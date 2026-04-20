@@ -10,6 +10,9 @@ let
   digestScript = pkgs.writeShellScript "daily-telegram-digest" ''
     set -euo pipefail
 
+    # Pure nix-path bins (always available) + home-manager's bin dir so the
+    # gh/gog/blogwatcher binaries (installed by home-manager, not nixpkgs)
+    # resolve via `command -v`. Same pattern as picoclaw's exec wrapper.
     export PATH=${pkgs.lib.makeBinPath [
       pkgs.bash
       pkgs.coreutils
@@ -20,7 +23,7 @@ let
       pkgs.curl
       pkgs.jq
       pkgs.git
-    ]}
+    ]}:$HOME/.local/state/nix/profiles/home-manager/home-path/bin
 
     CHAT_ID="${builtins.toString telegramChatId}"
     TOKEN_FILE="${tokenPath}"
