@@ -120,6 +120,7 @@ in
     ./sumeria-mitm.nix
     ./vaultwarden.nix
     ./forgejo.nix
+    ./dawarich.nix
     ./affine.nix
     ./affine-mcp-gateway.nix
     ./litellm.nix
