@@ -125,6 +125,12 @@ let
       fallbacks:
         - "openai/gpt-5.4": ["openai/gemma4:e4b"]
         - "openai/gpt-5.4-mini": ["openai/gemma4:e4b"]
+        # Picoclaw strips the "openai/" prefix (factory_provider.go ParseModel),
+        # so LiteLLM sees bare "gpt-5.4" as the model_group — fallbacks must be
+        # keyed on that bare name too, otherwise LiteLLM errors out with
+        # "No fallback model group found" instead of routing to gemma.
+        - "gpt-5.4": ["openai/gemma4:e4b"]
+        - "gpt-5.4-mini": ["openai/gemma4:e4b"]
 
     # Gemini model name → LiteLLM model group mapping.
     # AFFiNE's Gemini provider sends /v1beta/models/MODEL:generateContent;

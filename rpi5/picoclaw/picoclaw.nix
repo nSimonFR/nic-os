@@ -106,7 +106,16 @@ let
       # Core: filesystem, exec, skills — the minimum to replicate OpenClaw's
       # "coding" profile behaviour. Cron disabled (heartbeat replaced by
       # Prometheus/Beszel alerting).
-      exec.enabled = true;
+      #
+      # allow_remote = true opts out of GHSA-pv8c-p6jf-3fpp's default block on
+      # exec from non-internal channels (cli/system/subagent). We rely on
+      # Telegram for skill execution, and channels.telegram.allow_from already
+      # restricts incoming messages to a single chat ID — so the GHSA threat
+      # model (untrusted webhook senders) doesn't apply here.
+      exec = {
+        enabled = true;
+        allow_remote = true;
+      };
       skills.enabled = true;
 
       web = {
