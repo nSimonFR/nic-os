@@ -60,7 +60,7 @@
       widget = { type = "beszel"; url = "http://127.0.0.1:8090"; username = "homepage@nic-os.local"; password = "{{HOMEPAGE_VAR_BESZEL_PASS}}"; version = 2; }; }
 
     # Backend — API services
-    { port = 443;   backend = "http://127.0.0.1:18789"; name = "Openclaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
+    { port = 443;   backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "LiteLLM";        icon = "mdi-brain";          category = "Backend"; description = "LLM gateway"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "OpenAI codex proxy"; }
     { port = 7020;  backend = "http://127.0.0.1:17020"; name = "AFFiNE MCP";     icon = "mdi-api";            category = "Backend"; description = "AFFiNE MCP gateway"; }

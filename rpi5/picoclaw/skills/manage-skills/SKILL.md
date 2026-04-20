@@ -16,13 +16,13 @@ Flow (minimal):
 - Return top 1-3 results only: `<slug>` + one-line purpose.
 - Ask once: `Install one now?`
 - If user picks one, install directly into Nico-managed, versioned repo path:
-  - `npx --yes clawhub install <slug> --workdir ~/nic-os/rpi5/openclaw --dir skills --no-input`
+  - `npx --yes clawhub install <slug> --workdir ~/nic-os/rpi5/picoclaw --dir skills --no-input`
 - Immediately clean non-versioned ClawHub metadata files after install:
-  - `find ~/nic-os/rpi5/openclaw -type f \( -path "*/.clawhub/*.json" -o -name "_meta.json" \) -delete`
+  - `find ~/nic-os/rpi5/picoclaw -type f \( -path "*/.clawhub/*.json" -o -name "_meta.json" \) -delete`
 - If no good match, say no strong hit and continue without installing.
 
 Rules:
-- Skills must be persisted in `~/nic-os/rpi5/openclaw/skills` (git-versioned source of truth).
+- Skills must be persisted in `~/nic-os/rpi5/picoclaw/skills` (git-versioned source of truth).
 - Do not keep `.clawhub/*.json` or `_meta.json` files in git commits.
 - After install/cleanup, check `git status` and keep only meaningful skill content tracked.
 - Prefer specific search terms; retry once with alternate wording if empty.

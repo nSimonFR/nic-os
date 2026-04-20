@@ -36,23 +36,13 @@ with open('$out/package.json', 'w') as f: json.dump(d, f, indent=2)
     meta.mainProgram = "openai-oauth";
   };
 
-  port         = 4040;
-  openclawAuth = "/home/${username}/.openclaw/agents/main/agent/auth-profiles.json";
-  codexAuth    = "/home/${username}/.codex/auth.json";
-
-  # Seed ~/.codex/auth.json from openclaw's auth-profiles.json on first run.
-  # openai-oauth then takes over token refresh for its own file.
-  seedScript = pkgs.writeShellScript "seed-codex-auth" ''
-    [ -s ${codexAuth} ] && exit 0
-    mkdir -p "$(dirname ${codexAuth})"
-    ${pkgs.jq}/bin/jq -n \
-      --argjson p "$(${pkgs.jq}/bin/jq '.profiles["openai-codex:default"]' ${openclawAuth})" \
-      '{tokens:{access_token:$p.access,refresh_token:$p.refresh,account_id:($p.accountId//"")}}' \
-      > ${codexAuth}
-    chmod 600 ${codexAuth}
-  '';
+  port      = 4040;
+  codexAuth = "/home/${username}/.codex/auth.json";
 in
 {
+  # openai-oauth manages token refresh in-place. On a fresh system, log in once
+  # with `openai-oauth login` (or the ChatGPT CLI) to populate ~/.codex/auth.json;
+  # after that this service keeps the proxy running.
   systemd.services.openai-codex-proxy = {
     description = "OpenAI-compatible proxy via openai-codex OAuth (openai-oauth)";
     after       = [ "network.target" ];
@@ -60,7 +50,6 @@ in
     serviceConfig = {
       Type         = "simple";
       User         = username;
-      ExecStartPre = "${seedScript}";
       ExecStart    = "${openai-oauth}/bin/openai-oauth --host 127.0.0.1 --port ${toString port} --oauth-file ${codexAuth}";
       Restart      = "on-failure";
       RestartSec   = "5s";

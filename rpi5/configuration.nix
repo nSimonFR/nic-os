@@ -278,13 +278,6 @@ in
   ];
 
 
-  # Create /bin/mkdir and /bin/ln for nix-openclaw compatibility
-  # (the module hardcodes these paths)
-  system.activationScripts.binCompat = ''
-    mkdir -p /bin
-    ln -sf ${pkgs.coreutils}/bin/mkdir /bin/mkdir
-    ln -sf ${pkgs.coreutils}/bin/ln /bin/ln
-  '';
 
   programs.gnupg.agent = {
     enable = true;
