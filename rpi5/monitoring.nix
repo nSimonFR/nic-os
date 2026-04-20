@@ -37,6 +37,8 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "network-online.target" "beszel-hub.service" ];
     wants = [ "network-online.target" ];
+    # smartctl on PATH so Beszel can collect SMART data from /dev/sda + /dev/sdb.
+    path = [ pkgs.smartmontools ];
     serviceConfig = {
       ExecStart = "${pkgs.beszel}/bin/beszel-agent";
       DynamicUser = true;
@@ -48,8 +50,22 @@ in
         "PORT=${toString beszelAgentPort}"
         "FILESYSTEM=/dev/sdb1,/dev/sdb2,/dev/sda1"
         "BESZEL_AGENT_PRIMARY_SENSOR=cpu_thermal"
+        # Pin SMART devices (smartctl --scan confirms these types):
+        #   /dev/sda — Hitachi HDD over USB-SATA bridge → SAT translation
+        #   /dev/sdb — HP SSD EX900 (NVMe) in Realtek USB-NVMe enclosure → sntrealtek
+        "SMART_DEVICES=/dev/sda:sat,/dev/sdb:sntrealtek"
+        "SMART_INTERVAL=1h"
       ];
       ProtectProc = "default";
+      # SMART access: CAP_SYS_RAWIO for SG_IO ioctls (SATA), CAP_SYS_ADMIN for
+      # NVMe admin passthrough (none present today but cheap to have).
+      # Ambient caps required because DynamicUser=true means beszel-agent runs
+      # as an unprivileged user; bounding-set alone would be insufficient.
+      AmbientCapabilities    = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
+      CapabilityBoundingSet  = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
+      # Allow read access to the raw block devices.
+      DeviceAllow            = [ "/dev/sda r" "/dev/sdb r" ];
+      SupplementaryGroups    = [ "disk" ];
     };
   };
 
