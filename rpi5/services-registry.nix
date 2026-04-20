@@ -43,6 +43,7 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
+    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Apps"; description = "Location history"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
