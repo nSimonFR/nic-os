@@ -17,6 +17,7 @@
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Services"; description = "Home automation"; }
     { port = 8085;  backend = "http://127.0.0.1:8085";  name = "Filebrowser";    icon = "filebrowser.svg";    category = "Services"; description = "File management"; }
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
+    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
 
     # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
     { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
@@ -43,7 +44,6 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
-    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Apps"; description = "Location history"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
