@@ -12,6 +12,9 @@
         };
         uv = unstablePkgs.uv;
         tailscale = unstablePkgs.tailscale;
+        # Vaultwarden 1.35.5+ adds AccountKeys to API key login response,
+        # required for Bitwarden CLI 2026.x compatibility (vaultwarden#6912).
+        vaultwarden = unstablePkgs.vaultwarden;
         # nixpkgs 25.11 ships HA 2025.11.x; HA refuses to start if .HA_VERSION
         # in the data dir is newer than the binary (no downgrade allowed).
         # Track unstable so the package version always meets or exceeds what was
