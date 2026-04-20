@@ -21,7 +21,7 @@ in
       effective_cache_size = "512MB";
       work_mem             = "2MB";
       maintenance_work_mem = "32MB";
-      max_connections      = 30;   # only ~20 in use across all services
+      max_connections      = 60;   # Immich alone holds ~19 idle (per-worker Prisma pools); 30 was saturating the pool
     };
   };
 
