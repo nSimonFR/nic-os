@@ -2,6 +2,7 @@
   pkgs,
   inputs,
   telegramChatId,
+  unstablePkgs,
   ...
 }:
 # PicoClaw home-manager module.
@@ -27,9 +28,11 @@
 #   ~/.picoclaw/workspace/skills/   — SKILL.md-formatted skills (migrated from OpenClaw)
 let
   # Use unstablePkgs.buildGoModule (Go 1.26.x) — nixpkgs 25.11 ships Go 1.25.8
-  # which is too old for picoclaw's go.mod (requires ≥1.25.9).
+  # which is too old for picoclaw's go.mod (requires ≥1.25.9). `unstablePkgs`
+  # is passed in via extraSpecialArgs (standalone HM) or pkgs.unstablePkgs
+  # overlay (NixOS HM); destructuring the arg covers both with one source.
   picoclaw = pkgs.callPackage ./package.nix {
-    inherit (pkgs.unstablePkgs) buildGoModule;
+    inherit (unstablePkgs) buildGoModule;
     picoclaw-src = inputs.picoclaw-src;
   };
 
