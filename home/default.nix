@@ -13,7 +13,6 @@
     ./mcp.nix
     ./llm-aliases.nix
     ./ssh.nix
-    ./daily-digest.nix
   ];
 
   fonts.fontconfig.enable = true;
