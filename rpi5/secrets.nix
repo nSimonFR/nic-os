@@ -68,5 +68,9 @@
       owner = "dawarich";
       mode  = "0440";
     };
+    gramps-web-secret = {
+      file  = ./secrets/gramps-web-secret.age;
+      owner = "gramps-web";
+    };
 };
 }
