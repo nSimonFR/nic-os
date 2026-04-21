@@ -55,6 +55,8 @@
         ];
       }; }
 
+    { port = 5050;  backend = "http://127.0.0.1:15050"; name = "Gramps Web";     icon = "gramps.svg";         category = "Apps"; description = "Genealogy"; }
+
     # Monitoring
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring";
       widget = { type = "beszel"; url = "http://127.0.0.1:8090"; username = "homepage@nic-os.local"; password = "{{HOMEPAGE_VAR_BESZEL_PASS}}"; version = 2; }; }

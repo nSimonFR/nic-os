@@ -125,6 +125,7 @@ in
     ./tiny-llm-gate.nix
     ./claude-remote-control.nix
     ./open-webui.nix
+    ./gramps-web.nix
     ./homepage.nix
     ./backups.nix
     ./storj-backup.nix

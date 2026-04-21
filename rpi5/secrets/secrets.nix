@@ -17,4 +17,5 @@ in {
   "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
   "for-sure-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "dawarich-geoapify.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
 }
