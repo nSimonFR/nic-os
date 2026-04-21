@@ -4,11 +4,10 @@
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
 # protocols, and authenticates directly against ChatGPT's Codex backend via
 # OAuth — no separate codex-proxy hop. Target RSS: < 15 MiB.
-{ pkgs, lib, inputs, username, beastOllamaUrl, ... }:
+{ pkgs, lib, inputs, beastOllamaUrl, ... }:
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
-  codexAuth = "/home/${username}/.codex/auth.json";
 in
 {
   imports = [ inputs.tiny-llm-gate.nixosModules.default ];
@@ -31,16 +30,15 @@ in
           api_key = "ollama";
         };
 
-        # ChatGPT Codex backend — in-process OAuth token refresh, replaces
-        # the openai-codex-proxy sidecar entirely.
+        # Codex: direct-to-ChatGPT OAuth was attempted and reverted — the
+        # Codex backend's native API is `/responses`, not `/chat/completions`,
+        # and translating between them requires porting the Vercel `ai` SDK
+        # chat-to-responses transform. Until that lands in tiny-llm-gate, we
+        # keep openai-codex-proxy (Node, ~60 MB) as the intermediary.
         codex = {
           type = "openai";
-          base_url = "https://chatgpt.com/backend-api/codex";
-          auth = {
-            type = "oauth_chatgpt";
-            file = codexAuth;
-            # issuer + client_id default to the published ChatGPT values
-          };
+          base_url = "http://127.0.0.1:4040/v1";
+          api_key = "unused";
         };
       };
 
@@ -101,16 +99,10 @@ in
     };
   };
 
-  # Override the module's default DynamicUser: we need to read (and update,
-  # after a refresh) ~/.codex/auth.json which lives under /home. Run as the
-  # real user that owns that file.
-  systemd.services.tiny-llm-gate.serviceConfig = {
-    DynamicUser = lib.mkForce false;
-    User        = lib.mkForce username;
-    Group       = lib.mkForce "users";
-    # The default ProtectHome=true would block /home/<user>/.codex.
-    ProtectHome = lib.mkForce false;
-    # ProtectSystem=strict from the module still applies — tiny-llm-gate
-    # writes only to auth.json (atomic replace) which is under /home.
+  # Starts after codex-proxy so upstream is available when first requests
+  # land.
+  systemd.services.tiny-llm-gate = {
+    after = [ "network.target" "openai-codex-proxy.service" ];
+    wants = [ "openai-codex-proxy.service" ];
   };
 }
