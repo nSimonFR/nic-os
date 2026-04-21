@@ -4,10 +4,11 @@
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
 # protocols, and authenticates directly against ChatGPT's Codex backend via
 # OAuth — no separate codex-proxy hop. Target RSS: < 15 MiB.
-{ pkgs, lib, inputs, beastOllamaUrl, ... }:
+{ config, pkgs, lib, inputs, beastOllamaUrl, ... }:
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
+  affineWorkspaceId = "35d244cd-e6d5-4b3d-b1c2-fa50cab50621";
 in
 {
   imports = [ inputs.tiny-llm-gate.nixosModules.default ];
@@ -16,8 +17,9 @@ in
     enable = true;
     package = inputs.tiny-llm-gate.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-    memoryMax = "50M";
-    goMemLimit = "30MiB";
+    memoryMax = "60M";
+    goMemLimit = "40MiB";
+    secretPaths = [ "/run/agenix/affine-token" ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
@@ -117,13 +119,27 @@ in
         "gemini-embedding-001" = "qwen3-embedding:8b";
         "text-embedding-004"   = "qwen3-embedding:8b";
       };
+
+      # MCP transport bridges — replaces the 2-process supergateway chain
+      # (~187 MB) with a native Go bridge (~1 MB overhead).
+      mcp_bridges = {
+        affine = {
+          frontend = "sse";
+          backend = "streamable_http";
+          upstream_url = "http://127.0.0.1:13010/api/workspaces/${affineWorkspaceId}/mcp";
+          path_prefix = "/mcp/affine";
+          auth = {
+            type = "bearer";
+            token_file = "/run/agenix/affine-token";
+          };
+        };
+      };
     };
   };
 
-  # Starts after codex-proxy so upstream is available when first requests
-  # land.
+  # Starts after codex-proxy and affine so upstreams are available.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" ];
+    after = [ "network.target" "openai-codex-proxy.service" "affine.service" ];
     wants = [ "openai-codex-proxy.service" ];
   };
 }
