@@ -217,6 +217,19 @@ in
       RESULT="''${TEMPLATE//@GCAL_CLIENT_ID@/$CID}"
       RESULT="''${RESULT//@GCAL_CLIENT_SECRET@/$CSE}"
       echo "$RESULT" > "$CONF"
+
+      # Patch hardcoded cloud worker URLs in client JS bundle.
+      # The desktop app (Electron) does not override these fallback
+      # endpoints via DI, so link-preview/image-proxy requests go to
+      # the cloud worker instead of our local server.
+      CLOUD="https://affine-worker.toeverything.workers.dev"
+      SELF="https://${tailnetFqdn}:3010"
+      for f in ${appDir}/static/js/*.js; do
+        if grep -q "$CLOUD" "$f" 2>/dev/null; then
+          ${pkgs.gnused}/bin/sed -i "s|$CLOUD|$SELF|g" "$f"
+        fi
+      done
+
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';
     serviceConfig = {
