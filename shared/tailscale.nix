@@ -16,6 +16,7 @@
   enableSSH ? false,
   advertiseRoutes ? [],
   advertiseExitNode ? false,
+  advertiseConnector ? false,
   acceptRoutes ? true,
   acceptDNS ? true,
   extraUpFlags ? []
@@ -38,6 +39,7 @@ let
     ++ (lib.optionals acceptDNS [ "--accept-dns" ])
     ++ (lib.optionals (advertiseRoutes != []) [ "--advertise-routes=${lib.concatStringsSep "," advertiseRoutes}" ])
     ++ (lib.optionals advertiseExitNode [ "--advertise-exit-node" ])
+    ++ (lib.optionals advertiseConnector [ "--advertise-connector" ])
     ++ extraUpFlags
   );
   

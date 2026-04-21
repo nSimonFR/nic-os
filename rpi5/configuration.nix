@@ -133,6 +133,7 @@ in
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
+      advertiseConnector = true;
     })
   ];
 
