@@ -113,7 +113,6 @@ in
     ./blocky.nix
     ./monitoring.nix
     ./filebrowser.nix
-    ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
     ./sumeria-mitm.nix
@@ -122,7 +121,6 @@ in
     ./dawarich.nix
     ./affine.nix
     ./affine-mcp-gateway.nix
-    ./litellm.nix
     ./tiny-llm-gate.nix
     ./claude-remote-control.nix
     ./open-webui.nix
