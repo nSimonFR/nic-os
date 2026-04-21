@@ -1,4 +1,4 @@
-(( $+commands[atuin] )) && eval "$(atuin init zsh)"
+(( $+commands[atuin] )) && eval "$(atuin init zsh)" && eval "$(atuin ai init zsh)"
 # Initialize zoxide but only alias cd in truly interactive shells
 # This prevents errors in Claude Code and other non-interactive contexts
 if (( $+commands[zoxide] )); then
