@@ -9,7 +9,10 @@ let
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
     OPENAI_URI_BASE     = "http://127.0.0.1:4001/v1/";
-    OPENAI_MODEL        = "gpt-5.4";
+    # "auto" is a tiny-llm-gate virtual model that tries beast (Ollama
+    # gemma4:e4b) first and falls back to codex gpt-5.4 if beast is
+    # unreachable. See rpi5/tiny-llm-gate.nix `models."auto"`.
+    OPENAI_MODEL        = "auto";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
   };
 in

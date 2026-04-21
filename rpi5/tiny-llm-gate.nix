@@ -63,6 +63,18 @@ in
         "gpt-5.2"            = { provider = "codex"; upstream_model = "gpt-5.2"; };
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
+
+        # "auto" — local-first model: try gemma4:e4b on beast, fall back to
+        # codex gpt-5.4 if beast is unreachable (TCP refused / timeout) or
+        # returns 5xx. Used by Sure (via OPENAI_MODEL) to prefer free local
+        # inference when beast is awake while keeping the assistant working
+        # when it's asleep. tiny-llm-gate's fallback chain triggers on both
+        # transport errors and 5xx — see internal/server/openai.go.
+        "auto" = {
+          provider       = "ollama";
+          upstream_model = "gemma4:e4b";
+          fallback       = [ "gpt-5.4" ];
+        };
       };
 
       aliases = {
