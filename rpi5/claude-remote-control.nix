@@ -80,7 +80,7 @@ let
       session_id="$(jq -r '.sessionId // ""' "$f")"
       [ -z "$session_id" ] && continue
 
-      conv_file="$(find "$PROJECTS_DIR" -name "${session_id}.jsonl" -print -quit 2>/dev/null)"
+      conv_file="$(find "$PROJECTS_DIR" -name "''${session_id}.jsonl" -print -quit 2>/dev/null)"
       if [ -n "$conv_file" ] && [ -f "$conv_file" ]; then
         last_mod="$(stat -c %Y "$conv_file")"
         idle_sec=$(( now - last_mod ))
