@@ -23,10 +23,11 @@ let
   # Some packages (pango, glib) default to the -bin output which has no
   # typelibs — use .out explicitly to get the girepository-1.0 directory.
   typelibPkgs = with pkgs; [
-    gobject-introspection
+    gobject-introspection  # cairo, DBus, fontconfig, freetype2
+    at-spi2-core           # Atk, Atspi (required by GTK3)
     gtk3
-    glib.out
-    pango.out
+    glib.out               # GLib, GObject, Gio, GModule
+    pango.out              # Pango, PangoCairo, PangoFT2
     gdk-pixbuf
     gexiv2
     osm-gps-map
