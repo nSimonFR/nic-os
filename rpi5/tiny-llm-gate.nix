@@ -47,7 +47,14 @@ in
         "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
         "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
         "qwen3.5:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.5:35b-a3b"; };
-        "qwen3-embedding:8b" = { provider = "ollama"; upstream_model = "qwen3-embedding:8b"; };
+        "qwen3-embedding:8b" = {
+          provider = "ollama";
+          upstream_model = "qwen3-embedding:8b";
+          # AFFiNE's pgvector column is vector(1024). The @ai-sdk/google
+          # SDK doesn't reliably forward outputDimensionality, so
+          # tiny-llm-gate injects this default when the client omits it.
+          default_embed_dimensions = 1024;
+        };
 
         # -- Codex-proxy models (OpenAI subscription via OAuth) --
         "gpt-5.4" = {
