@@ -152,11 +152,11 @@ in
       };
     };
     systemd.timers.sumeria-route-update = {
-      description = "Periodic DNS check for api.lydia-app.com IP changes";
+      description = "Daily DNS check for api.lydia-app.com IP changes";
       wantedBy    = [ "timers.target" ];
       timerConfig = {
-        OnBootSec       = "1min";
-        OnUnitActiveSec = "30min";
+        OnCalendar = "*-*-* 04:00:00";
+        Persistent = true;
       };
     };
 
