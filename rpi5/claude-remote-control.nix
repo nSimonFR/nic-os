@@ -92,7 +92,7 @@ let
 
       if [ "$idle_sec" -gt "$MAX_INACTIVITY" ]; then
         idle_min=$(( idle_sec / 60 ))
-        echo "killing stale bridge session PID=$pid sid=$session_id (inactive ${idle_min}min > $((MAX_INACTIVITY/60))min)"
+        echo "killing stale bridge session PID=$pid sid=$session_id (inactive ''${idle_min}min > $((MAX_INACTIVITY/60))min)"
         kill "$pid" 2>/dev/null
         sleep 2
         kill -9 "$pid" 2>/dev/null || true
