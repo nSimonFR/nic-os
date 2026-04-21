@@ -3,6 +3,7 @@ workspace = true
 filter_mode = "host"
 filter_mode_shell_up_key_binding = "host"
 enter_accept = false
+daemon.enabled = true
 
 [sync]
 records = true

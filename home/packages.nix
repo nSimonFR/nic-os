@@ -16,7 +16,7 @@
 
       # CLI
       age
-      atuin
+      unstablePkgs.atuin
       bash
       btop
       coreutils-full
