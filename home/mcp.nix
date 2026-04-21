@@ -1,4 +1,4 @@
-{ config, pkgs, tailnetFqdn, ... }:
+{ config, pkgs, ... }:
 let
   secretsPath = config.age.secrets.mcp-secrets.path;
 
@@ -15,12 +15,9 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
-  affineMcp = pkgs.writeShellScript "affine-mcp" ''
-    [ -f "${secretsPath}" ] && . "${secretsPath}"
-    export AFFINE_BASE_URL="https://${tailnetFqdn}:3010"
-    export AFFINE_EMAIL AFFINE_PASSWORD
-    exec npx -y affine-mcp-server
-  '';
+  # AFFiNE MCP now uses the shared supergateway (affine-mcp-gateway.service)
+  # instead of spawning a per-session npx process.
+  # The gateway runs on 127.0.0.1:17020 (SSE) — see rpi5/affine-mcp-gateway.nix
 
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
@@ -39,7 +36,7 @@ let
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
-    affine  = { command = "${affineMcp}"; };
+    affine  = { type = "sse"; url = "http://127.0.0.1:17020/sse"; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
@@ -56,14 +53,12 @@ in
     mkdir -p "$HOME/.cursor"
     cat ${cursorMcpBase} > "$HOME/.cursor/mcp.json"
 
-    # Keep ~/.claude.json affine entry pointing to the current Nix store script
+    # Keep ~/.claude.json affine entry pointing to shared SSE gateway
     CLAUDE_USER="$HOME/.claude.json"
-    AFFINE_CMD="${affineMcp}"
     if [ -f "$CLAUDE_USER" ]; then
       ${pkgs.jq}/bin/jq \
-        --arg cmd "$AFFINE_CMD" \
         'del(.mcpServers["affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621"])
-         | .mcpServers.affine = {type:"stdio", command:$cmd}' \
+         | .mcpServers.affine = {type:"sse", url:"http://127.0.0.1:17020/sse"}' \
         "$CLAUDE_USER" > "$CLAUDE_USER.tmp" && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
     fi
   '';
