@@ -217,20 +217,6 @@ in
       RESULT="''${TEMPLATE//@GCAL_CLIENT_ID@/$CID}"
       RESULT="''${RESULT//@GCAL_CLIENT_SECRET@/$CSE}"
       echo "$RESULT" > "$CONF"
-
-      # Patch hardcoded cloud worker URLs in client JS bundle.
-      # The AFFiNE client has fallback endpoints pointing at
-      # affine-worker.toeverything.workers.dev which the desktop app's
-      # DI does not override, causing link-preview and image-proxy
-      # requests to hit the cloud instead of our local server.
-      EXTERNAL="https://${tailnetFqdn}:3010"
-      CLOUD="https://affine-worker.toeverything.workers.dev"
-      for f in ${appDir}/static/js/*.js; do
-        if grep -q "$CLOUD" "$f" 2>/dev/null; then
-          ${pkgs.gnused}/bin/sed -i "s|$CLOUD|$EXTERNAL|g" "$f"
-        fi
-      done
-
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';
     serviceConfig = {
