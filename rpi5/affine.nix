@@ -24,30 +24,20 @@ let
     };
     copilot = {
       enabled = true;
-      # Gemini-only copilot provider — points at tiny-llm-gate on :4001
-      # which serves the native /v1beta/models/{m}:{generate,stream,embed}Content
-      # endpoints and translates them to OpenAI wire format for Ollama.
-      #
-      # Why no OpenAI provider: AFFiNE v0.26.6's `OpenAIProvider` class has a
-      # hardcoded model list (GPT-4o, input [Text, Image], output [Text, Object])
-      # with no embedding-capable model. When both providers are registered,
-      # `ProductionEmbeddingClient` picks OpenAI first and fails with
-      #   `copilot_provider_not_supported: Copilot provider openai does not
-      #    support output type embedding`
-      # before any network call. Removing the OpenAI provider forces the
-      # factory to use Gemini, which does advertise embedding capability.
-      # Chat, structured output (session title generation), AND embeddings
-      # all route through the same Gemini provider.
+      # Both providers point at tiny-llm-gate on :4001. Gemini handles
+      # embeddings (its model list advertises embedding capability); OpenAI
+      # handles chat/title generation (AFFiNE resolves GPT model names via
+      # the OpenAI provider). tiny-llm-gate aliases both sets of model names
+      # to local Ollama models.
       "providers.gemini" = {
         apiKey = "ollama";
-        # baseURL MUST include /v1beta. AFFiNE's Gemini provider uses the
-        # Vercel `@ai-sdk/google` library which appends `/models/{id}:action`
-        # directly to the configured baseURL. Google's public default is
-        # `https://generativelanguage.googleapis.com/v1beta`, so our override
-        # must end in `/v1beta` too — otherwise AFFiNE hits
-        # http://127.0.0.1:4001/models/... which tiny-llm-gate's router
-        # returns 404 for.
+        # baseURL MUST include /v1beta — @ai-sdk/google appends
+        # `/models/{id}:action` directly to it.
         baseURL = "http://127.0.0.1:4001/v1beta";
+      };
+      "providers.openai" = {
+        apiKey = "ollama";
+        baseURL = "http://127.0.0.1:4001/v1";
       };
     };
   };
