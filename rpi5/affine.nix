@@ -40,7 +40,14 @@ let
       # all route through the same Gemini provider.
       "providers.gemini" = {
         apiKey = "ollama";
-        baseURL = "http://127.0.0.1:4001";
+        # baseURL MUST include /v1beta. AFFiNE's Gemini provider uses the
+        # Vercel `@ai-sdk/google` library which appends `/models/{id}:action`
+        # directly to the configured baseURL. Google's public default is
+        # `https://generativelanguage.googleapis.com/v1beta`, so our override
+        # must end in `/v1beta` too — otherwise AFFiNE hits
+        # http://127.0.0.1:4001/models/... which tiny-llm-gate's router
+        # returns 404 for.
+        baseURL = "http://127.0.0.1:4001/v1beta";
       };
     };
   };
