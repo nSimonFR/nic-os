@@ -1,6 +1,6 @@
 # dawarich.nix — self-hosted location history (Google Timeline alternative)
 # Uses the native NixOS module (services.dawarich) — Rails + Sidekiq + PostGIS + Redis
-{ config, pkgs, lib, tailnetFqdn, ... }:
+{ config, pkgs, lib, tailnetFqdn, redisHost, redisPort, ... }:
 let
   internalPort = 13900;
 in
@@ -14,8 +14,13 @@ in
     # Reuses existing PostgreSQL cluster; auto-adds "dawarich" DB + PostGIS extension
     database.createLocally = true;
 
-    # Dedicated Redis instance via Unix socket (no port conflict with shared redis)
-    redis.createLocally = true;
+    # Use the shared Redis (databases.nix) on DB 3 via TCP instead of a
+    # dedicated redis-dawarich instance. Saves ~7 MB RAM + one systemd unit.
+    redis = {
+      createLocally = false;
+      host          = redisHost;
+      port          = redisPort;
+    };
 
     # Auto-generate SECRET_KEY_BASE (stored at /var/lib/dawarich/secrets/secret-key-base)
     secretKeyBaseFile = null;
@@ -31,6 +36,9 @@ in
       RAILS_MAX_THREADS = "2";
       # Limit jemalloc memory arenas
       MALLOC_ARENA_MAX = "2";
+      # Override upstream's REDIS_URL (which has no DB index) to isolate
+      # Dawarich's keyspace on DB 3 of the shared Redis.
+      REDIS_URL = "redis://${redisHost}:${toString redisPort}/3";
     };
   };
 

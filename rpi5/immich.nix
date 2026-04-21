@@ -1,4 +1,4 @@
-{ pkgs, unstablePkgs, ... }:
+{ pkgs, unstablePkgs, redisHost, redisPort, ... }:
 {
   services.immich = {
     enable        = true;
@@ -7,6 +7,15 @@
     host          = "127.0.0.1";
     mediaLocation = "/mnt/data/immich";
     machine-learning.enable = true;
+
+    # Use the shared Redis (databases.nix) on DB 1 via TCP instead of a
+    # dedicated redis-immich instance. Saves ~7 MB RAM + one systemd unit.
+    redis = {
+      enable = false;
+      host   = redisHost;
+      port   = redisPort;
+    };
+    environment.REDIS_DBINDEX = "1";
   };
 
   # Ensure Immich starts after HDD is mounted.
