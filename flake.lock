@@ -403,6 +403,40 @@
         "type": "github"
       }
     },
+    "gogcli-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1776722970,
+        "narHash": "sha256-UN1dW3VX7N3fymn8y40Xd0sIznihjeeLtb1nHOEMDcY=",
+        "owner": "steipete",
+        "repo": "gogcli",
+        "rev": "5cd913e28780d330f27aaaabc7bfb6413491850a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "steipete",
+        "ref": "v0.13.0",
+        "repo": "gogcli",
+        "type": "github"
+      }
+    },
+    "goplaces-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1771044968,
+        "narHash": "sha256-D54ybZznbc0EXNh/SqyIvfn5x3krI3G9fbXTTj1BaEs=",
+        "owner": "steipete",
+        "repo": "goplaces",
+        "rev": "46fa4a132305d3e942573ef6813ef05ff4a3e5da",
+        "type": "github"
+      },
+      "original": {
+        "owner": "steipete",
+        "ref": "v0.3.0",
+        "repo": "goplaces",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -825,6 +859,8 @@
       "inputs": {
         "darwin": "darwin",
         "for-sure": "for-sure",
+        "gogcli-src": "gogcli-src",
+        "goplaces-src": "goplaces-src",
         "home-manager": "home-manager",
         "llmfit": "llmfit",
         "mac-app-util": "mac-app-util",

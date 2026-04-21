@@ -70,6 +70,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # steipete CLI tools: bump with
+    #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
+    gogcli-src = {
+      url = "github:steipete/gogcli/v0.13.0";
+      flake = false;
+    };
+    goplaces-src = {
+      url = "github:steipete/goplaces/v0.3.0";
+      flake = false;
+    };
+
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
     # Pinned to a tag; bump the ref to roll forward.
     tiny-llm-gate = {
