@@ -145,7 +145,8 @@ in
         resources = {
           cpu = true;
           memory = true;
-          disk = "/";
+          disk = [ "/" "/home" "/mnt/data" ];
+          expanded = true;
         };
       }
       {
