@@ -98,20 +98,22 @@ in
         "openai/codex-auto-review"   = "codex-auto-review";
 
         # AFFiNE hardcodes OpenAI GPT model names for its OpenAI provider.
-        "gpt-4.1-2025-04-14" = "gemma4:e4b";
-        "gpt-4.1-mini"       = "gemma4:e4b";
-        "gpt-4o"             = "gemma4:e4b";
-        "gpt-4o-mini"        = "gemma4:e4b";
+        # Route through "auto" so beast-down falls back to codex.
+        "gpt-4.1-2025-04-14" = "auto";
+        "gpt-4.1-mini"       = "auto";
+        "gpt-4o"             = "auto";
+        "gpt-4o-mini"        = "auto";
 
         # AFFiNE hardcodes OpenAI embedding model names.
         "text-embedding-3-small" = "qwen3-embedding:8b";
         "text-embedding-3-large" = "qwen3-embedding:8b";
 
         # AFFiNE Gemini provider model names (served by Gemini frontend).
-        "gemini-2.5-flash"     = "gemma4:e4b";
-        "gemini-2.5-pro"       = "gemma4:e4b";
-        "gemini-2.0-flash"     = "gemma4:e4b";
-        "gemini-2.0-flash-001" = "gemma4:e4b";
+        # Route through "auto" so beast-down falls back to codex.
+        "gemini-2.5-flash"     = "auto";
+        "gemini-2.5-pro"       = "auto";
+        "gemini-2.0-flash"     = "auto";
+        "gemini-2.0-flash-001" = "auto";
         "gemini-embedding-001" = "qwen3-embedding:8b";
         "text-embedding-004"   = "qwen3-embedding:8b";
       };
