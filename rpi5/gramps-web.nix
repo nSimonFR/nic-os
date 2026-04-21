@@ -114,9 +114,7 @@ in
     description = "Gramps Web venv setup";
     wantedBy = [ "multi-user.target" ];
     path = [ pythonEnv pkgs.coreutils ];
-    environment = {
-      GI_TYPELIB_PATH = giTypelibPath;
-      HOME = dataDir;
+    environment = serviceEnv // {
       TMPDIR = "${dataDir}/tmp";
     };
     serviceConfig = {
