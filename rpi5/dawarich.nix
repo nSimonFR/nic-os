@@ -51,4 +51,12 @@ in
   # Memory limits — tightened for single-process mode
   systemd.services.dawarich-web.serviceConfig.MemoryMax = "256M";
   systemd.services.dawarich-sidekiq-all.serviceConfig.MemoryMax = "256M";
+
+  # Geoapify reverse geocoding — drives visit suggestions (nightly sidekiq job)
+  # and on-demand address lookups in the web UI.
+  # Key is injected via EnvironmentFile to keep it out of the nix store.
+  systemd.services.dawarich-web.serviceConfig.EnvironmentFile =
+    "/run/agenix/dawarich-geoapify";
+  systemd.services.dawarich-sidekiq-all.serviceConfig.EnvironmentFile =
+    "/run/agenix/dawarich-geoapify";
 }
