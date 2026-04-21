@@ -123,6 +123,7 @@ in
     ./affine.nix
     ./affine-mcp-gateway.nix
     ./litellm.nix
+    ./tiny-llm-gate.nix
     ./claude-remote-control.nix
     ./open-webui.nix
     ./homepage.nix
