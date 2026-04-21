@@ -24,21 +24,23 @@ let
     };
     copilot = {
       enabled = true;
-      # Both providers point at tiny-llm-gate on :4001:
-      #   - OpenAI provider uses /v1/chat/completions + /v1/embeddings.
-      #   - Gemini provider uses /v1beta/models/{m}:generateContent etc.,
-      #     which tiny-llm-gate translates natively to OpenAI wire format
-      #     before forwarding to Ollama (absorbs the old affine-embed-proxy).
-      # v0.26.6 hardcodes Gemini for structured output; providers.profiles
-      # not supported until a newer version.
+      # Gemini-only copilot provider — points at tiny-llm-gate on :4001
+      # which serves the native /v1beta/models/{m}:{generate,stream,embed}Content
+      # endpoints and translates them to OpenAI wire format for Ollama.
+      #
+      # Why no OpenAI provider: AFFiNE v0.26.6's `OpenAIProvider` class has a
+      # hardcoded model list (GPT-4o, input [Text, Image], output [Text, Object])
+      # with no embedding-capable model. When both providers are registered,
+      # `ProductionEmbeddingClient` picks OpenAI first and fails with
+      #   `copilot_provider_not_supported: Copilot provider openai does not
+      #    support output type embedding`
+      # before any network call. Removing the OpenAI provider forces the
+      # factory to use Gemini, which does advertise embedding capability.
+      # Chat, structured output (session title generation), AND embeddings
+      # all route through the same Gemini provider.
       "providers.gemini" = {
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:4001";
-      };
-      "providers.openai" = {
-        apiKey = "ollama";
-        baseURL = "http://127.0.0.1:4001/v1";
-        oldApiStyle = "true";
       };
     };
   };
