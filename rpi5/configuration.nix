@@ -128,10 +128,13 @@ in
     ./backups.nix
     ./storj-backup.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
+    # Subnet route for api.lydia-app.com — routes Sumeria traffic through RPi5
+    # for transparent MITM token extraction without enabling exit node.
     (import ../shared/tailscale.nix {
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
+      advertiseRoutes = [ "34.117.84.152/32" ];
     })
   ];
 
