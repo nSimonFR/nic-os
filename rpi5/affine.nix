@@ -24,24 +24,16 @@ let
     };
     copilot = {
       enabled = true;
-      # Both providers point at tiny-llm-gate on :4001. Gemini handles
-      # embeddings (its model list advertises embedding capability); OpenAI
-      # handles chat/title generation (AFFiNE resolves GPT model names via
-      # the OpenAI provider). tiny-llm-gate aliases both sets of model names
-      # to local Ollama models.
+      # Gemini-only: tiny-llm-gate v0.3.4 serves GET /v1beta/models so
+      # the Gemini provider's onlineModelList includes all model names
+      # (including GPT aliases). This lets one provider handle chat,
+      # title generation, AND embeddings without the OpenAI provider
+      # (whose hardcoded model list doesn't support embedding output).
       "providers.gemini" = {
         apiKey = "ollama";
         # baseURL MUST include /v1beta — @ai-sdk/google appends
         # `/models/{id}:action` directly to it.
         baseURL = "http://127.0.0.1:4001/v1beta";
-      };
-      "providers.openai" = {
-        apiKey = "ollama";
-        baseURL = "http://127.0.0.1:4001/v1";
-        # oldApiStyle forces @ai-sdk/openai to use createOpenAICompatible
-        # (chat completions API) instead of the Responses API (/responses),
-        # which tiny-llm-gate doesn't implement.
-        oldApiStyle = true;
       };
     };
   };
