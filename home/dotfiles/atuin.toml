@@ -5,5 +5,8 @@ filter_mode_shell_up_key_binding = "host"
 enter_accept = false
 daemon.enabled = true
 
+[ai]
+enabled = true
+
 [sync]
 records = true
