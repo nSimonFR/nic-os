@@ -230,6 +230,13 @@ in
         fi
       done
 
+      # Allow image-proxy requests with no Origin/Referer header.
+      # Electron <img> tags don't send either header, causing the
+      # server to reject with "Invalid header". Change the check
+      # from "reject if neither matches" to "reject only if a
+      # header is present but doesn't match".
+      ${pkgs.gnused}/bin/sed -i 's#if(!n&&!a)throw this.logger.error("Invalid Origin","ERROR"#if(!n\&\&!a\&\&(o||i))throw this.logger.error("Invalid Origin","ERROR"#' ${appDir}/dist/main.js
+
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';
     serviceConfig = {
