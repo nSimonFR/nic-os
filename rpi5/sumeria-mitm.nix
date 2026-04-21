@@ -2,6 +2,25 @@
 let
   cfg = config.services.sumeria-mitm;
 
+  # Periodically resolve api.lydia-app.com and update the Tailscale subnet
+  # route if the IP changed. Keeps the MITM interception working even if
+  # Lydia migrates their API to a different IP.
+  routeUpdateScript = pkgs.writeShellScript "sumeria-route-update" ''
+    set -euo pipefail
+    STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
+    CURRENT_IP=$(cat "$STATE_FILE" 2>/dev/null || echo "")
+    NEW_IP=$(${pkgs.dig}/bin/dig +short api.lydia-app.com | head -1)
+    if [ -z "$NEW_IP" ]; then
+      echo "[sumeria-route] DNS lookup failed, keeping current route"
+      exit 0
+    fi
+    if [ "$NEW_IP" != "$CURRENT_IP" ]; then
+      echo "[sumeria-route] IP changed: $CURRENT_IP -> $NEW_IP, updating route"
+      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IP/32"
+      echo "$NEW_IP" > "$STATE_FILE"
+    fi
+  '';
+
   # Intercepts requests to api.lydia-app.com and extracts the three static session
   # headers (auth_token / public_token / access-token) that Sumeria uses instead of OAuth.
   # Tokens are written atomically so the consumer picks them up without a restart.
@@ -104,7 +123,9 @@ in
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
     };
 
-    # Redirect HTTPS from exit-node clients → mitmproxy. Scoped to specific IPs only.
+    # Redirect HTTPS from subnet-routed / exit-node clients → mitmproxy.
+    # With subnet routing for api.lydia-app.com's IP, traffic arrives on tailscale0
+    # with a public destination (not RPi5's own Tailscale IP), so no conflict with Serve.
     # Also drop UDP 443 (QUIC/HTTP3) so apps fall back to TCP (HTTP2) which mitmproxy can intercept.
     networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
       lib.concatMapStringsSep "\n" (ip: ''
@@ -120,6 +141,24 @@ in
         iptables -t mangle -D PREROUTING -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP || true
       '') cfg.exitNodeClients
     );
+
+    # Monitor api.lydia-app.com DNS and update subnet route if IP changes
+    systemd.services.sumeria-route-update = {
+      description = "Update Tailscale subnet route for api.lydia-app.com";
+      serviceConfig = {
+        Type      = "oneshot";
+        ExecStart = routeUpdateScript;
+        ReadWritePaths = [ "/var/lib/sumeria-mitm" ];
+      };
+    };
+    systemd.timers.sumeria-route-update = {
+      description = "Periodic DNS check for api.lydia-app.com IP changes";
+      wantedBy    = [ "timers.target" ];
+      timerConfig = {
+        OnBootSec       = "1min";
+        OnUnitActiveSec = "30min";
+      };
+    };
 
   };
 }
