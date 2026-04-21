@@ -6,19 +6,8 @@ let
   # Hide Homepage and Infrastructure from the dashboard
   visibleEntries = builtins.filter (e: e.name != "Homepage" && e.category != "Infrastructure") allEntries;
 
-  # Explicit tile ordering per category (entries not listed here appear at the end)
-  tileOrder = {
-    "Apps" = [ "AFFiNE" "Immich" "Sure" "Open WebUI" ];
-    "Services" = [ "Vaultwarden" "Home Assistant" "Filebrowser" "Forgejo" "Beszel" "Dawarich" ];
-  };
-
-  sortEntries = cat: entries:
-    let
-      order = tileOrder.${cat} or [];
-      indexOf = name: let idx = lib.lists.findFirstIndex (n: n == name) (builtins.length order) order; in idx;
-    in builtins.sort (a: b: indexOf a.name < indexOf b.name) entries;
-
   # Ordered category list (controls display order on the dashboard)
+  # Tile order within each category is determined by list order in services-registry.nix.
   categoryOrder = [
     "Apps"
     "Services"
@@ -43,7 +32,7 @@ let
   # Build the services list: one attrset per category, each containing service tiles
   servicesByCategory = builtins.filter (group: group != null) (
     map (cat:
-      let entries = sortEntries cat (entriesForCategory cat);
+      let entries = entriesForCategory cat;
       in if entries == [] then null
       else {
         "${cat}" = map (e: {
