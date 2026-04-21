@@ -9,7 +9,7 @@ let
   # Explicit tile ordering per category (entries not listed here appear at the end)
   tileOrder = {
     "Apps" = [ "AFFiNE" "Immich" "Sure" "Open WebUI" ];
-    "Services" = [ "Vaultwarden" "Home Assistant" "Filebrowser" "Forgejo" ];
+    "Services" = [ "Vaultwarden" "Home Assistant" "Filebrowser" "Forgejo" "Beszel" "Dawarich" ];
   };
 
   sortEntries = cat: entries:
@@ -22,7 +22,6 @@ let
   categoryOrder = [
     "Apps"
     "Services"
-    "Monitoring"
     "Backend"
   ];
 
@@ -58,6 +57,8 @@ in
 {
   # Bind to localhost only — Tailscale Serve proxies from the tailnet interface
   # and would conflict on 0.0.0.0:8082.
+  # Allow statfs on /home so the resources widget can report disk usage
+  systemd.services.homepage-dashboard.serviceConfig.ProtectHome = lib.mkForce "read-only";
   systemd.services.homepage-dashboard.environment.HOSTNAME = "127.0.0.1";
   # Cap V8 heap — Next.js idles at ~61 MB; 128 MB gives headroom for widget rendering
   systemd.services.homepage-dashboard.environment.NODE_OPTIONS = "--max-old-space-size=128";
@@ -80,7 +81,6 @@ in
       mkdir -p /run/homepage-dashboard
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
-      HOMEPAGE_VAR_BESZEL_PASS=homepage-widget-pass
       HOMEPAGE_VAR_AFFINE_TOKEN=$(cat ${config.age.secrets.affine-token.path})
       HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.picoclaw-env.path} | cut -d= -f2)
       ENVEOF
@@ -121,7 +121,6 @@ in
       layout = [
         { "Quick Links" = { style = "row"; columns = 3; header = false; }; }
         { "Apps"        = { style = "row"; columns = 4; }; }
-        { "Monitoring"  = { style = "row"; columns = 4; }; }
         { "Services"    = { style = "row"; columns = 4; }; }
         { "Backend"     = { style = "row"; columns = 4; }; }
       ];
