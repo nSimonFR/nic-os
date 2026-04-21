@@ -1,6 +1,17 @@
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
+
+  # Route Sure's assistant/merchant-detection LLM calls through tiny-llm-gate
+  # on :4001 (which then fans out to codex-proxy or Ollama). These ENVs take
+  # precedence over any DB `Setting.openai_*` — see Provider::Registry#openai.
+  # Setting them here also avoids the hosting-settings UI accidentally
+  # overwriting the route when the admin page is saved.
+  sureLlmEnv = {
+    OPENAI_URI_BASE     = "http://127.0.0.1:4001/v1/";
+    OPENAI_MODEL        = "gpt-5.4";
+    OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
+  };
 in
 {
   # ── for-sure: combined Swile + Sumeria Lunchflow connector ────────────────
@@ -74,11 +85,11 @@ in
     RAILS_MAX_THREADS = "1";
     MALLOC_ARENA_MAX  = "2";
     RUBY_YJIT_ENABLE  = "0";  # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
-  };
+  } // sureLlmEnv;
   systemd.services.sure-web.environment = {
     MALLOC_ARENA_MAX = "2";
     RUBY_YJIT_ENABLE = "0";
-  };
+  } // sureLlmEnv;
 
   # sure-setup (migrations) must run after the password is set
   systemd.services.sure-setup = {
