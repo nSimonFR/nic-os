@@ -578,6 +578,11 @@ in
     }).ollama-cuda;
     host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
     loadModels = [ "gemma4:26b" "gemma4:e4b" "qwen3.5:35b-a3b" ];
+    environmentVariables = {
+      OLLAMA_GPU_OVERHEAD = "1073741824"; # Reserve 1GB VRAM for Hyprland/Ghostty (prevents VRAM OOM → terminal crash)
+      OLLAMA_FLASH_ATTENTION = "1"; # Reduce VRAM usage during inference via flash attention
+      OLLAMA_KV_CACHE_TYPE = "q8_0"; # Quantize KV cache to further reduce VRAM (vs default f16)
+    };
   };
 
   services.hardware.openrgb = {
