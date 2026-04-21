@@ -24,14 +24,17 @@ let
     };
     copilot = {
       enabled = true;
-      # Gemini provider → embed proxy → LiteLLM for chat/embeddings.
+      # Both providers point at tiny-llm-gate on :4001:
+      #   - OpenAI provider uses /v1/chat/completions + /v1/embeddings.
+      #   - Gemini provider uses /v1beta/models/{m}:generateContent etc.,
+      #     which tiny-llm-gate translates natively to OpenAI wire format
+      #     before forwarding to Ollama (absorbs the old affine-embed-proxy).
       # v0.26.6 hardcodes Gemini for structured output; providers.profiles
       # not supported until a newer version.
       "providers.gemini" = {
         apiKey = "ollama";
-        baseURL = "http://127.0.0.1:11435";
+        baseURL = "http://127.0.0.1:4001";
       };
-      # OpenAI provider → LiteLLM for title generation etc.
       "providers.openai" = {
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:4001/v1";
@@ -152,33 +155,9 @@ in
     '';
   };
 
-  # ── Embedding proxy (Gemini embedContent → LiteLLM /v1/embeddings) ────
-  # LiteLLM handles generateContent natively via model_group_alias, but
-  # embedContent/batchEmbedContents routes don't exist in v1.75.5.
-  # This thin proxy translates only those two endpoints; everything else
-  # passes through to LiteLLM.
-  systemd.services.affine-embed-proxy = {
-    description = "AFFiNE Gemini embedding proxy → LiteLLM";
-    after = [ "network.target" "litellm-gateway.service" ];
-    wants = [ "litellm-gateway.service" ];
-    wantedBy = [ "multi-user.target" ];
-    environment = {
-      LITELLM_HOST = "127.0.0.1";
-      LITELLM_PORT = "4001";
-      LISTEN_PORT  = "11435";
-      EMBED_MODEL  = "openai/qwen3-embedding:8b";
-      EMBED_DIMS   = "1024";
-    };
-    serviceConfig = {
-      Type = "simple";
-      ExecStart = "${nodejs}/bin/node ${./affine-embed-proxy.js}";
-      Restart = "on-failure";
-      RestartSec = "3s";
-      DynamicUser = true;
-    };
-  };
-
   # ── AFFiNE server ─────────────────────────────────────────────────────
+  # (Previous `affine-embed-proxy` Node.js service was absorbed by
+  # tiny-llm-gate's Gemini frontend in v0.3.0.)
   users.users.${dbUser} = {
     isSystemUser = true;
     group = dbUser;
@@ -196,7 +175,7 @@ in
 
   systemd.services.affine = {
     description = "AFFiNE";
-    after = [ "network.target" "affine-migrate.service" "redis-shared.service" "affine-embed-proxy.service" ];
+    after = [ "network.target" "affine-migrate.service" "redis-shared.service" "tiny-llm-gate.service" ];
     requires = [ "affine-migrate.service" ];
     wants = [ "redis-shared.service" ];
     wantedBy = [ "multi-user.target" ];
