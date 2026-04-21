@@ -121,7 +121,6 @@ in
     ./forgejo.nix
     ./dawarich.nix
     ./affine.nix
-    ./affine-mcp-gateway.nix
     ./tiny-llm-gate.nix
     ./claude-remote-control.nix
     ./open-webui.nix
