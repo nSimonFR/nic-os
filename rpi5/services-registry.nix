@@ -17,6 +17,7 @@
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Services"; description = "Home automation"; }
     { port = 8085;  backend = "http://127.0.0.1:8085";  name = "Filebrowser";    icon = "filebrowser.svg";    category = "Services"; description = "File management"; }
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
+    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Services"; description = "System monitoring"; }
     { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
 
     # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
@@ -54,10 +55,6 @@
           { field = "messages"; label = "Messages"; format = "number"; }
         ];
       }; }
-
-    # Monitoring
-    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Monitoring"; description = "System monitoring";
-      widget = { type = "beszel"; url = "http://127.0.0.1:8090"; username = "homepage@nic-os.local"; password = "{{HOMEPAGE_VAR_BESZEL_PASS}}"; version = 2; }; }
 
     # Backend — API services
     { port = 443;   backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
