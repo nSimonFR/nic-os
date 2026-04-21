@@ -69,6 +69,13 @@
       url = "github:AlexsJones/llmfit";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # tiny-llm-gate: memory-conscious replacement for LiteLLM.
+    # Pinned to a tag; bump the ref to roll forward.
+    tiny-llm-gate = {
+      url = "github:nSimonFR/tiny-llm-gate/v0.1.1";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
