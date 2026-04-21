@@ -63,5 +63,10 @@
       file = ./secrets/tavily-api-key.age;
       mode = "0444"; # DynamicUser (open-webui) needs to read it
     };
+    dawarich-geoapify = {
+      file  = ./secrets/dawarich-geoapify.age;
+      owner = "dawarich";
+      mode  = "0440";
+    };
 };
 }
