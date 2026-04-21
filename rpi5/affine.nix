@@ -38,6 +38,10 @@ let
       "providers.openai" = {
         apiKey = "ollama";
         baseURL = "http://127.0.0.1:4001/v1";
+        # oldApiStyle forces @ai-sdk/openai to use createOpenAICompatible
+        # (chat completions API) instead of the Responses API (/responses),
+        # which tiny-llm-gate doesn't implement.
+        oldApiStyle = true;
       };
     };
   };
