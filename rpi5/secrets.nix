@@ -54,6 +54,7 @@
     };
     affine-token = {
       file = ./secrets/affine-token.age;
+      mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge) needs to read it
     };
     affine-gcal-oauth = {
       file = ./secrets/affine-gcal-oauth.age;
