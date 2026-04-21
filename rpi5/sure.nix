@@ -85,11 +85,14 @@ in
   # glibc malloc arenas to curb RSS on a 4 GB RPi5.
   # Note: jemalloc was tested but increases RSS on aarch64 + Ruby YJIT.
   systemd.services.sure-worker.environment = {
-    RAILS_MAX_THREADS = "1";
-    MALLOC_ARENA_MAX  = "2";
-    RUBY_YJIT_ENABLE  = "0";  # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
+    RAILS_MAX_THREADS    = "1";
+    SIDEKIQ_CONCURRENCY  = "1";  # default 5 — personal app only needs 1 worker thread
+    MALLOC_ARENA_MAX     = "2";
+    RUBY_YJIT_ENABLE     = "0";  # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
   } // sureLlmEnv;
   systemd.services.sure-web.environment = {
+    WEB_CONCURRENCY  = "0";  # single-process Puma (no forked workers) — saves ~80 MB on RPi5
+    RAILS_MAX_THREADS = "3";  # default 5; 3 is plenty for single-user
     MALLOC_ARENA_MAX = "2";
     RUBY_YJIT_ENABLE = "0";
   } // sureLlmEnv;
