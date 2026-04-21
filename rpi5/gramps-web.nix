@@ -20,15 +20,17 @@ let
 
   # GObject Introspection typelibs — Gramps core needs GTK3, GExiv2,
   # OsmGpsMap, Pango, etc. to import via `gi.require_version()`.
+  # Some packages (pango, glib) default to the -bin output which has no
+  # typelibs — use .out explicitly to get the girepository-1.0 directory.
   typelibPkgs = with pkgs; [
     gobject-introspection
     gtk3
-    glib
-    pango
+    glib.out
+    pango.out
     gdk-pixbuf
     gexiv2
     osm-gps-map
-    # harfbuzz and others pulled transitively
+    harfbuzz
   ];
 
   giTypelibPath = lib.concatMapStringsSep ":" (p:
