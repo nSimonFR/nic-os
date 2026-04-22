@@ -82,5 +82,9 @@
       owner = "paperless"; # EnvironmentFile for all paperless-* services
       mode  = "0400";
     };
+    paperless-api-token = {
+      file  = ./secrets/paperless-api-token.age;
+      owner = "nsimon"; # homepage-dashboard-env reads this
+    };
 };
 }
