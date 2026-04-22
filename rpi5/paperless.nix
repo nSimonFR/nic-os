@@ -1,8 +1,11 @@
-{ config, pkgs, lib, pgHost, pgPort, tailnetFqdn, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
   # Internal port; Tailscale Serve exposes this as HTTPS :3400 on the tailnet.
   # See rpi5/services-registry.nix.
   port = 8200;
+
+  # Reuse the shared Redis on DB 4 (0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich).
+  redisUrl = "redis://${redisHost}:${toString redisPort}/4";
 
   # Bills / invoices drop-zone. Lives on the data HDD (/mnt/data = 687 G) in
   # the cloud tree alongside ADMINISTRATIVE and DOCUMENTS so it's reachable
@@ -52,10 +55,8 @@ in
   };
 
   # ── Paperless-ngx ──────────────────────────────────────────────────────────
-  # Native nixpkgs 25.11 module. We point it at the shared PostgreSQL instead
-  # of letting it spin up a local one (database.createLocally stays false).
-  # Redis is module-managed: a dedicated redis-paperless instance on a Unix
-  # socket, separate from the shared redis on :6379.
+  # Native nixpkgs 25.11 module. We point it at the shared PostgreSQL and
+  # shared Redis (DB 4) instead of spinning up dedicated instances.
   services.paperless = {
     enable          = true;
     address         = "127.0.0.1";
@@ -74,6 +75,11 @@ in
       PAPERLESS_DBPORT   = toString pgPort;
       PAPERLESS_DBNAME   = "paperless_production";
       PAPERLESS_DBUSER   = "paperless_user";
+
+      # Reuse the shared Redis instance (DB 4) instead of spawning a dedicated
+      # redis-paperless process (~12 MB saved). Setting PAPERLESS_REDIS disables
+      # the module's automatic redis-paperless instance.
+      PAPERLESS_REDIS = redisUrl;
 
       # Superuser auto-provisioned on first boot (see passwordFile above).
       PAPERLESS_ADMIN_USER = "nsimon";
@@ -100,8 +106,11 @@ in
     };
   };
 
-  # The paperless module enables its own redis-paperless automatically because
-  # PAPERLESS_REDIS is not set in settings — nothing else to configure there.
+  # ── Celery solo pool: merge main + worker into one process (~70-100 MB saved)
+  # With TASK_WORKERS=1 we already run serially; solo pool just avoids the
+  # separate ForkPoolWorker process. Override the module's hardcoded ExecStart.
+  systemd.services.paperless-task-queue.serviceConfig.ExecStart = lib.mkForce
+    "${config.services.paperless.package}/bin/celery --app paperless worker --pool=solo --loglevel INFO";
 
   # ── Systemd hardening: disable PrivateUsers on RPi5 ────────────────────────
   # Memory entry "PrivateUsers RPi5": the raspberry-pi-5 firmware/kernel boots
