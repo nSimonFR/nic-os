@@ -69,5 +69,18 @@
       owner = "dawarich";
       mode  = "0440";
     };
+    paperless-pg-password = {
+      file  = ./secrets/paperless-pg-password.age;
+      owner = "postgres"; # paperless-pg-setup runs as postgres and reads this
+    };
+    paperless-admin-password = {
+      file  = ./secrets/paperless-admin-password.age;
+      owner = "paperless"; # services.paperless.passwordFile -> LoadCredential
+    };
+    paperless-env = {
+      file  = ./secrets/paperless-env.age;
+      owner = "paperless"; # EnvironmentFile for all paperless-* services
+      mode  = "0400";
+    };
 };
 }
