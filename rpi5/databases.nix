@@ -29,6 +29,15 @@ in
     enable = true;
     bind   = redisHost;
     port   = redisPort;
+
+    # ── Memory tuning for 4 GiB RPi5 ──────────────────────────────────
+    # Shared by AFFiNE (DB 0), Immich (DB 1), Dawarich (DB 3).
+    # Cap memory to prevent unbounded growth; LRU evicts least-recently-used
+    # keys across all DBs when the limit is hit.
+    settings = {
+      maxmemory          = "128mb";
+      maxmemory-policy   = "allkeys-lru";
+    };
   };
 
   # Export shared connection values so other modules reference them instead of hardcoding.

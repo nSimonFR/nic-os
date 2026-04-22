@@ -204,6 +204,9 @@ in
       AFFINE_STORAGE_PATH = "${dataDir}/storage";
       PRISMA_QUERY_ENGINE_LIBRARY = "${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node";
       PRISMA_SCHEMA_ENGINE_BINARY = "${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x";
+      # RAM optimizations for single-user instance on 4GB RPi5
+      NODE_OPTIONS = "--max-old-space-size=192";
+      MALLOC_ARENA_MAX = "2";
     };
     # Inject Google Calendar OAuth credentials from agenix into config.json
     script = ''
@@ -247,6 +250,7 @@ in
       Restart = "on-failure";
       RestartSec = "5s";
       PrivateUsers = lib.mkForce false;
+      MemoryMax = "384M";
     };
   };
 
