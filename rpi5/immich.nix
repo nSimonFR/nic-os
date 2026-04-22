@@ -22,9 +22,13 @@
   systemd.services.immich-server = {
     after = [ "mnt-data.mount" ];
     wants = [ "mnt-data.mount" ];
-    serviceConfig.ExecStartPre = [
-      "+${pkgs.coreutils}/bin/chown immich:immich /mnt/data/immich"
-    ];
+    environment.MALLOC_ARENA_MAX = "2";
+    serviceConfig = {
+      ExecStartPre = [
+        "+${pkgs.coreutils}/bin/chown immich:immich /mnt/data/immich"
+      ];
+      MemoryMax = "512M";
+    };
   };
 
   systemd.tmpfiles.rules = [
@@ -46,8 +50,12 @@
     wantedBy = [ "local-fs.target" ];
   }) [ "thumbs" "encoded-video" "profile" "backups" ];
 
-  systemd.services.immich-machine-learning.environment = {
-    MACHINE_LEARNING_MODEL_TTL = "60";
-    MACHINE_LEARNING_REQUEST_THREADS = "2";
+  systemd.services.immich-machine-learning = {
+    environment = {
+      MACHINE_LEARNING_MODEL_TTL = "60";
+      MACHINE_LEARNING_REQUEST_THREADS = "1";
+      MALLOC_ARENA_MAX = "2";
+    };
+    serviceConfig.MemoryMax = "1G";
   };
 }

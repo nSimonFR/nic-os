@@ -124,6 +124,14 @@ in
     fi
   '';
 
+  # ── Home Assistant RAM optimizations (RPi5 4 GB) ──────────────────────
+  # Python/glibc creates one malloc arena per core by default; on a 4-core
+  # RPi5 that wastes ~64 MB of virtual address space.  Cap at 2 arenas.
+  systemd.services.home-assistant = {
+    environment.MALLOC_ARENA_MAX = "2";
+    serviceConfig.MemoryMax = "256M";
+  };
+
   # ── ha-linky: native systemd service ──────────────────────────────────
   users.users.ha-linky = {
     isSystemUser = true;

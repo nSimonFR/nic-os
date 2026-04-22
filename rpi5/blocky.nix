@@ -103,13 +103,16 @@
       caching = {
         minTime = "5m";
         maxTime = "30m";
-        maxItemsCount = 0; # unlimited
+        maxItemsCount = 10000; # bound cache memory (~4 KB/entry ≈ 40 MB cap)
         prefetching = true;
         prefetchExpires = "2h";
         prefetchThreshold = 5;
       };
     };
   };
+
+  # ── Systemd hardening ───────────────────────────────────────────────
+  systemd.services.blocky.serviceConfig.MemoryMax = "128M";
 
   # ── Firewall: allow DNS from the local network ─────────────────────
   networking.firewall = {
