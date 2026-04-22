@@ -72,6 +72,7 @@ in
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
       HOMEPAGE_VAR_AFFINE_TOKEN=$(cat ${config.age.secrets.affine-token.path})
       HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.picoclaw-env.path} | cut -d= -f2)
+      HOMEPAGE_VAR_PAPERLESS_KEY=$(cat ${config.age.secrets.paperless-api-token.path})
       ENVEOF
     '';
   };

@@ -20,4 +20,5 @@ in {
   "paperless-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "paperless-admin-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "paperless-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "paperless-api-token.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
 }
