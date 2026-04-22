@@ -131,7 +131,19 @@ in
   # sure the directory exists with the right ownership before the consumer
   # starts. The module's tmpfiles entry creates the dir too, but tmpfiles runs
   # before /mnt/data may be mounted; re-assert via a BindPath-free oneshot.
+  # Parent dirs (/mnt/data/cloud, .../ADMINISTRATIVE) are owned by nsimon/root
+  # with mode 700 — paperless needs o+x to traverse them.
   systemd.tmpfiles.settings."10-paperless-consume" = {
+    "/mnt/data/cloud".d = {
+      user  = "nsimon";
+      group = "users";
+      mode  = "0711";
+    };
+    "/mnt/data/cloud/ADMINISTRATIVE".d = {
+      user  = "root";
+      group = "root";
+      mode  = "0711";
+    };
     "${consumeDir}".d = {
       user  = "paperless";
       group = "paperless";
