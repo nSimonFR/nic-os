@@ -116,6 +116,7 @@ in
     ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
+    ./paperless.nix
     ./sumeria-mitm.nix
     ./vaultwarden.nix
     ./forgejo.nix

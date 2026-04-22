@@ -45,6 +45,7 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
+    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
