@@ -54,5 +54,6 @@ in
       Restart      = "on-failure";
       RestartSec   = "5s";
     };
+    environment.CODEX_OPENAI_SERVER_LOG_REQUESTS = "1";
   };
 }
