@@ -45,11 +45,21 @@ let
                     "public_token": h["public_token"],
                     "access_token": h["access-token"],
                 }
+                # Only write if tokens actually changed — avoids spamming the
+                # PathModified watcher (and downstream Sure sync) on every request
+                try:
+                    with open(TOKEN_FILE, "r") as f:
+                        existing = json.load(f)
+                    if existing == tokens:
+                        print(f"[sumeria-mitm] tokens unchanged, skipping write")
+                        return
+                except (FileNotFoundError, json.JSONDecodeError):
+                    pass  # first run or corrupt file — write anyway
                 tmp = TOKEN_FILE + ".tmp"
                 with open(tmp, "w") as f:
                     json.dump(tokens, f, indent=2)
                 os.rename(tmp, TOKEN_FILE)
-                print(f"[sumeria-mitm] tokens written to {TOKEN_FILE}")
+                print(f"[sumeria-mitm] NEW tokens written to {TOKEN_FILE}")
 
     addons = [SumeriaTokenExtractor()]
   '';
