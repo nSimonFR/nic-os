@@ -4,6 +4,11 @@
 # so there is a single source of truth. The JSON config is baked into the Nix
 # store at eval time and PUT to Aperture's /api/config endpoint at boot.
 #
+# Aperture API format:
+#   GET  /api/config → {"config": "<jsonc-string>", "exists": bool, "hash": "<hex>"}
+#   PUT  /api/config ← {"config": "<json-string>", "hash": "<current-hash>"}
+# The hash field provides optimistic concurrency (must match current value).
+#
 # Aperture is a Tailscale-managed proxy on the tailnet — it is NOT self-hosted.
 # Auth comes from Tailscale identity (the RPi5 node is an admin via grants).
 { config, pkgs, lib, apertureUrl, tailnetFqdn, ... }:
@@ -15,6 +20,8 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
+  # The inner config that Aperture manages — this gets JSON-encoded into a
+  # string value inside the PUT envelope.
   apertureConfig = builtins.toJSON {
     providers = {
       rpi5-gate = {
@@ -31,14 +38,22 @@ let
         app = {
           "tailscale.com/cap/aperture" = [
             { role = "admin"; }
-            { models = "**"; }
+          ];
+        };
+      }
+      {
+        src = [ "*" ];
+        app = {
+          "tailscale.com/cap/aperture" = [
+            { role = "user"; models = "**"; }
           ];
         };
       }
     ];
   };
 
-  configFile = pkgs.writeText "aperture-config.json" apertureConfig;
+  # Write the inner config JSON to a file for the script to read.
+  configFile = pkgs.writeText "aperture-inner-config.json" apertureConfig;
 
   isEnabled = apertureUrl != "http://127.0.0.1:4001";
 in
@@ -54,18 +69,43 @@ in
       ExecStart = pkgs.writeShellScript "aperture-sync" ''
         set -eu
         CURL="${pkgs.curl}/bin/curl"
+        JQ="${pkgs.jq}/bin/jq"
+        API="${apertureUrl}/api/config"
 
         # Aperture may take a moment to become reachable after tailscaled starts.
         # Retry up to 5 times with 5s delay.
         for i in 1 2 3 4 5; do
-          if $CURL -sf -X PUT \
-            "${apertureUrl}/api/config" \
+          # 1. Get current hash (optimistic concurrency)
+          CURRENT=$($CURL -sf "$API" 2>/dev/null) || {
+            echo "Aperture unreachable, retrying in 5s (attempt $i/5)..." >&2
+            sleep 5
+            continue
+          }
+          HASH=$(echo "$CURRENT" | $JQ -r .hash)
+
+          # 2. Build the PUT envelope: {"config": "<json-string>", "hash": "<hash>"}
+          INNER_CONFIG=$(cat ${configFile})
+          PAYLOAD=$($JQ -n --arg config "$INNER_CONFIG" --arg hash "$HASH" \
+            '{config: $config, hash: $hash}')
+
+          # 3. PUT the config
+          RESULT=$($CURL -sf -X PUT "$API" \
             -H "Content-Type: application/json" \
-            -d @${configFile} > /dev/null; then
-            echo "Aperture config synced successfully (attempt $i)"
+            -d "$PAYLOAD" 2>/dev/null) || {
+            echo "PUT failed, retrying in 5s (attempt $i/5)..." >&2
+            sleep 5
+            continue
+          }
+
+          SUCCESS=$(echo "$RESULT" | $JQ -r '.success // false')
+          if [ "$SUCCESS" = "true" ]; then
+            NEW_HASH=$(echo "$RESULT" | $JQ -r .hash)
+            echo "Aperture config synced successfully (hash $HASH → $NEW_HASH)"
             exit 0
           fi
-          echo "Aperture unreachable, retrying in 5s (attempt $i/5)..." >&2
+
+          MSG=$(echo "$RESULT" | $JQ -r '.error.message // .message // "unknown error"')
+          echo "Aperture rejected config: $MSG, retrying in 5s (attempt $i/5)..." >&2
           sleep 5
         done
 
