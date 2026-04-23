@@ -66,13 +66,14 @@ let
     };
 
     # Flat model list keyed by `model_name`. Routing and fallback are done by
-    # LiteLLM, not PicoClaw. `primary` goes to LiteLLM's `openai/gpt-5.4` route
-    # (which falls back to Ollama via litellm_settings.fallbacks — see litellm.nix).
-    # Additional named entries expose specific Ollama models for manual override.
+    # tiny-llm-gate, not PicoClaw. `primary` uses the "auto" virtual model
+    # which tries Ollama (gemma4:e4b) first and falls back to codex (gpt-5.4)
+    # when beast is unreachable. This gives proper Aperture observability
+    # (token counts, tool calls) when Ollama handles the request.
     model_list = [
       {
         model_name = "primary";
-        model = "openai/gpt-5.4";
+        model = "openai/auto";
         api_base = litellmBase;
         api_key = "unused";
       }
