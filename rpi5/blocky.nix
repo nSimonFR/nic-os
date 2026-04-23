@@ -24,6 +24,15 @@
         strategy = "parallel_best"; # query all upstreams, use fastest answer
       };
 
+      # Forward Tailscale MagicDNS names to Tailscale's resolver.
+      # Without this, *.ts.net lookups fail because the DoH upstreams
+      # don't know about tailnet-internal names (e.g. Aperture).
+      conditional = {
+        mapping = {
+          "gate-mintaka.ts.net" = "100.100.100.100";
+        };
+      };
+
       # Bootstrap DNS — plain IPs to resolve the DoH hostnames above
       bootstrapDns = {
         upstream = "https://one.one.one.one/dns-query";
