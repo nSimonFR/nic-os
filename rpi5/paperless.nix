@@ -90,6 +90,15 @@ in
       # PAPERLESS_OCR_LANGUAGE).
       PAPERLESS_OCR_LANGUAGE = "eng+fra";
 
+      # Consumer: use subfolder names as tags (e.g. Payfit/, Ameli/) and
+      # ignore macOS resource forks littered throughout the cloud mount.
+      PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS = true;
+      PAPERLESS_CONSUMER_IGNORE_PATTERN = [
+        ".DS_STORE/*"
+        "._*"
+        "desktop.ini"
+      ];
+
       # ── RAM-conservative tuning for 4 GiB RPi5 ─────────────────────────────
       # Host already runs Immich, HA, AFFiNE, Sure, etc.  Targeting ≤500 MB
       # idle, ≤1 GiB during OCR bursts. earlyoom's --avoid list protects
