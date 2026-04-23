@@ -123,7 +123,7 @@
         # Tailscale Aperture AI gateway — observability layer in front of tiny-llm-gate.
         # Set to the Aperture hostname after provisioning at aperture.tailscale.com.
         # Until then, points at tiny-llm-gate directly (no-op passthrough).
-        apertureUrl = "http://127.0.0.1:4001";  # TODO: replace with http://<aperture-hostname> after provisioning
+        apertureUrl = "http://ai.gate-mintaka.ts.net";
         tinyLlmGateUrl = "http://127.0.0.1:4001";
       };
       telegramChatId = 82389391;
