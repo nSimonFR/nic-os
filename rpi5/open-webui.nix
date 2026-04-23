@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, apertureUrl, tinyLlmGateUrl, ... }:
 let
   # Torch 2.9.1 on aarch64 has a corrupt torchgen/__init__.py (all null bytes),
   # causing "source code string cannot contain null bytes" on import.
@@ -14,8 +14,9 @@ in
     port = 8181;
     host = "127.0.0.1";
     environment = {
-      # All models via LiteLLM (beast + codex proxy routed through one gateway)
-      OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
+      # Chat completions via Aperture (observability) → tiny-llm-gate → providers.
+      # Embeddings and STT stay direct — Aperture doesn't support /v1/embeddings.
+      OPENAI_API_BASE_URL = "${apertureUrl}/v1";
       OPENAI_API_KEY = "ollama";
       ENABLE_OLLAMA_API = "false";
       # Web search via Tavily (API key injected at runtime from agenix)
@@ -27,12 +28,12 @@ in
       # Offload embeddings to LiteLLM → beast (saves ~500 MiB RAM)
       RAG_EMBEDDING_ENGINE = "openai";
       RAG_EMBEDDING_MODEL = "text-embedding-3-small";
-      RAG_OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
+      RAG_OPENAI_API_BASE_URL = "${tinyLlmGateUrl}/v1";  # direct — Aperture doesn't proxy /v1/embeddings
       RAG_OPENAI_API_KEY = "ollama";
       RAG_RERANKING_MODEL = "";
       # Disable local Whisper STT (saves ~300 MiB RAM)
       AUDIO_STT_ENGINE = "openai";
-      AUDIO_STT_OPENAI_API_BASE_URL = "http://127.0.0.1:4001/v1";
+      AUDIO_STT_OPENAI_API_BASE_URL = "${tinyLlmGateUrl}/v1";  # direct — Aperture doesn't proxy STT
       AUDIO_STT_OPENAI_API_KEY = "ollama";
       # Auth & telemetry
       WEBUI_AUTH = "true";
@@ -61,7 +62,7 @@ in
   systemd.services.open-webui.serviceConfig.PrivateUsers = lib.mkForce false;
   # Tight memory cap for 4 GiB RPi5
   systemd.services.open-webui.serviceConfig.MemoryMax = "384M";
-  # Start after LiteLLM
-  systemd.services.open-webui.after = [ "litellm-gateway.service" ];
-  systemd.services.open-webui.wants = [ "litellm-gateway.service" ];
+  # Start after tiny-llm-gate (embeddings/STT still go direct)
+  systemd.services.open-webui.after = [ "tiny-llm-gate.service" ];
+  systemd.services.open-webui.wants = [ "tiny-llm-gate.service" ];
 }

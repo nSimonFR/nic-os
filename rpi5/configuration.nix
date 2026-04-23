@@ -122,6 +122,7 @@ in
     ./dawarich.nix
     ./affine.nix
     ./tiny-llm-gate.nix
+    ./aperture-sync.nix
     ./claude-remote-control.nix
     ./open-webui.nix
     ./homepage.nix

@@ -3,6 +3,7 @@
   inputs,
   telegramChatId,
   unstablePkgs,
+  apertureUrl,
   ...
 }:
 # PicoClaw home-manager module.
@@ -44,7 +45,7 @@ let
   # LiteLLM runs on localhost:4001 (see rpi5/litellm.nix). It exposes an
   # OpenAI-compatible API and handles model routing + fallback. PicoClaw sees
   # a single "primary" model here; LiteLLM decides where the request actually goes.
-  litellmBase = "http://127.0.0.1:4001/v1";
+  litellmBase = "${apertureUrl}/v1";
 
   picoclawConfig = {
     agents.defaults = {
