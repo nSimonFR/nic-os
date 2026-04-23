@@ -90,8 +90,9 @@ in
       # PAPERLESS_OCR_LANGUAGE).
       PAPERLESS_OCR_LANGUAGE = "eng+fra";
 
-      # Consumer: use subfolder names as tags (e.g. Payfit/, Ameli/) and
-      # ignore macOS resource forks littered throughout the cloud mount.
+      # Consumer: recurse into subdirectories and use their names as tags
+      # (e.g. Payfit/, Ameli/). Ignore macOS resource forks.
+      PAPERLESS_CONSUMER_RECURSIVE       = true;
       PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS = true;
       PAPERLESS_CONSUMER_IGNORE_PATTERN = [
         ".DS_STORE/*"
