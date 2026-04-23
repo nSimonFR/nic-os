@@ -73,7 +73,7 @@ let
     model_list = [
       {
         model_name = "primary";
-        model = "openai/auto";
+        model = "openai/gpt-5.4";
         api_base = litellmBase;
         api_key = "unused";
       }
