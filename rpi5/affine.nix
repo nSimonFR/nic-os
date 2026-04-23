@@ -1,4 +1,4 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, apertureUrl, ... }:
 let
   version = "0.26.6";
   port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
@@ -51,7 +51,7 @@ let
         # must end in `/v1beta` too — otherwise AFFiNE hits
         # http://127.0.0.1:4001/models/... which tiny-llm-gate's router
         # returns 404 for.
-        baseURL = "http://127.0.0.1:4001/v1beta";
+        baseURL = "${apertureUrl}/v1beta";
       };
     };
   };
