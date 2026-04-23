@@ -103,4 +103,41 @@ in
     requires = [ "sure-pg-setup.service" ];
   };
 
+  # ── Sumeria token → Sure sync trigger ──────────────────────────────────────
+  # When the MITM captures new Sumeria tokens (file changes), automatically
+  # trigger a Sure sync so balances/transactions update without manual action.
+  # The MITM addon only writes on actual token change (not every request),
+  # so this fires at most once per ~3h token rotation.
+  systemd.paths.sumeria-sync-trigger = {
+    description = "Watch Sumeria token file for changes";
+    wantedBy    = [ "multi-user.target" ];
+    pathConfig.PathModified = config.services.sumeria-mitm.tokenFile;
+  };
+
+  systemd.services.sumeria-sync-trigger = {
+    description = "Trigger Sure sync after Sumeria token refresh";
+    after       = [ "sure-web.service" "sure-worker.service" ];
+    requires    = [ "sure-worker.service" ];
+    serviceConfig = {
+      Type             = "oneshot";
+      User             = config.services.sure.user;
+      Group            = config.services.sure.group;
+      WorkingDirectory = "${config.services.sure.package}/share/sure";
+      EnvironmentFile  = config.services.sure.environmentFile;
+    };
+    environment = {
+      RAILS_ENV          = "production";
+      DATABASE_URL       = config.services.sure.databaseUrl;
+      REDIS_URL          = config.services.sure.redisUrl;
+      BUNDLE_FORCE_RUBY_PLATFORM = "1";
+      HOME               = config.services.sure.dataDir;
+    };
+    script = ''
+      echo "[sumeria-sync] Sumeria tokens changed, triggering Sure sync..."
+      ${config.services.sure.package}/bin/sure-rails runner \
+        'LunchflowItem.find_each { |item| item.sync_later }'
+      echo "[sumeria-sync] Sync jobs queued"
+    '';
+  };
+
 }
