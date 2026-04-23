@@ -120,6 +120,11 @@
       rpi5Params = {
         tailnetFqdn = "rpi5.gate-mintaka.ts.net";
         beastOllamaUrl = "http://100.125.240.34:11434";
+        # Tailscale Aperture AI gateway — observability layer in front of tiny-llm-gate.
+        # Set to the Aperture hostname after provisioning at aperture.tailscale.com.
+        # Until then, points at tiny-llm-gate directly (no-op passthrough).
+        apertureUrl = "http://127.0.0.1:4001";  # TODO: replace with http://<aperture-hostname> after provisioning
+        tinyLlmGateUrl = "http://127.0.0.1:4001";
       };
       telegramChatId = 82389391;
     in
@@ -143,7 +148,7 @@
         nixpkgs = inputs.nixpkgs;
         specialArgs = {
           inherit inputs outputs username telegramChatId;
-          inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
+          inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           unstablePkgs = import nixpkgs-unstable {
@@ -169,7 +174,7 @@
                   username
                   telegramChatId
                   ;
-                inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
+                inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
                 devSetup = false;
                 unstablePkgs = import nixpkgs-unstable {
                   system = "aarch64-linux";

@@ -1,4 +1,4 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, apertureUrl, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
 
@@ -8,7 +8,7 @@ let
   # Setting them here also avoids the hosting-settings UI accidentally
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
-    OPENAI_URI_BASE     = "http://127.0.0.1:4001/v1/";
+    OPENAI_URI_BASE     = "${apertureUrl}/v1/";
     # "auto" is a tiny-llm-gate virtual model that tries beast (Ollama
     # gemma4:e4b) first and falls back to codex gpt-5.4 if beast is
     # unreachable. See rpi5/tiny-llm-gate.nix `models."auto"`.

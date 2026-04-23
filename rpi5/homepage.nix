@@ -1,4 +1,4 @@
-{ config, lib, pkgs, tailnetFqdn, ... }:
+{ config, lib, pkgs, tailnetFqdn, apertureUrl, ... }:
 let
   registry = import ./services-registry.nix { };
   allEntries = registry.serveEntries ++ registry.funnelEntries;
@@ -122,6 +122,7 @@ in
           { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
           { "Tailscale Admin" = [{ icon = "tailscale.svg"; href = "https://login.tailscale.com/admin/machines"; }]; }
           { "nic-os PRs" = [{ icon = "github.svg"; href = "https://github.com/nSimonFR/nic-os/pulls"; }]; }
+          { "Aperture" = [{ icon = "tailscale.svg"; href = "${apertureUrl}/ui"; description = "LLM usage & cost dashboard"; }]; }
           { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
           { "BentoPDF" = [{ icon = "mdi-file-pdf-box"; href = "https://bentopdf.com/"; }]; }
         ];
