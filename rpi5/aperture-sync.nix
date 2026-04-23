@@ -28,7 +28,7 @@ let
         baseurl = "https://${tailnetFqdn}:4001";
         apikey = "unused";
         models = allModels;
-        compatibility = { openai_chat = true; };
+        compatibility = { openai_chat = true; gemini_generate_content = true; };
         name = "tiny-llm-gate (RPi5)";
       };
     };
