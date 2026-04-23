@@ -1,59 +1,71 @@
+# codex-proxy (icebear0828/codex-proxy v2.0.64) — OpenAI-compatible proxy
+# using ChatGPT/Codex OAuth tokens with proper token counts and tool_calls.
+#
+# Replaces openai-oauth (EvanZhouDev/openai-oauth v1.0.2) which had:
+#   - Zero token counts (Vercel AI SDK v6 specificationVersion mismatch)
+#   - Broken tool_calls (unmerged PRs #6, #8, #11)
+#
+# Pre-built at /opt/codex-proxy/ (includes native Rust TLS addon for aarch64).
+# Runtime data (accounts, cookies) persisted in the service working directory.
+# Login via web UI at http://127.0.0.1:4040 or import existing tokens.
 { pkgs, lib, username, ... }:
 let
-  version = "1.0.2";
-
-  # openai-oauth: OpenAI-compatible proxy using ChatGPT/Codex OAuth tokens.
-  # https://github.com/EvanZhouDev/openai-oauth
-  #
-  # The dist bundles the entire 'ai' SDK into chunk-2AENSHRT.js; only yargs
-  # is needed at runtime, so the lock file tracks yargs deps only.
-  openai-oauth = pkgs.buildNpmPackage {
-    pname = "openai-oauth";
-    inherit version;
-
-    src = pkgs.runCommand "openai-oauth-${version}-src" {
-      tarball = pkgs.fetchurl {
-        url = "https://registry.npmjs.org/openai-oauth/-/openai-oauth-${version}.tgz";
-        hash = "sha512-5wSwwR76Mc+1ePjwEIzM34qk2Kaw8Ng2zgBCo5eLscOLfciC0N8Z1jCgTCcqeHtyRvywB1kcb0BsHxFHIVJ2Vg==";
-      };
-      packageLock = ./npm-locks/openai-oauth-package-lock.json;
-    } ''
-      mkdir -p $out
-      tar xzf $tarball --strip-components=1 -C $out
-      cp $packageLock $out/package-lock.json
-      # Strip workspace:* devDeps only (ai and yargs are real runtime externals)
-      ${pkgs.python3}/bin/python3 -c "
-import json
-with open('$out/package.json') as f: d = json.load(f)
-d['devDependencies'] = {}
-with open('$out/package.json', 'w') as f: json.dump(d, f, indent=2)
-"
-    '';
-
-    npmDepsHash = "sha256-NAvnKyuOmhpHoaJzjkJmBaaXxHMACcmdayDyWIAuBBQ=";
-    dontNpmBuild = true;
-
-    meta.mainProgram = "openai-oauth";
-  };
-
   port      = 4040;
-  codexAuth = "/home/${username}/.codex/auth.json";
+  installDir = "/opt/codex-proxy";
+  stateDir   = "/var/lib/codex-proxy";
 in
 {
-  # openai-oauth manages token refresh in-place. On a fresh system, log in once
-  # with `openai-oauth login` (or the ChatGPT CLI) to populate ~/.codex/auth.json;
-  # after that this service keeps the proxy running.
   systemd.services.openai-codex-proxy = {
-    description = "OpenAI-compatible proxy via openai-codex OAuth (openai-oauth)";
+    description = "OpenAI-compatible proxy via ChatGPT OAuth (codex-proxy)";
     after       = [ "network.target" ];
     wantedBy    = [ "multi-user.target" ];
+
+    # Set up symlink-based working directory: immutable code from /opt,
+    # mutable data/ for account persistence and config overrides.
+    preStart = ''
+      mkdir -p ${stateDir}/data
+
+      # Symlink immutable assets from the install directory
+      for item in dist native node_modules config public package.json bin; do
+        ln -sfn ${installDir}/$item ${stateDir}/$item
+      done
+
+      # Create local config if missing (host/port/disable auto-update)
+      if [ ! -f ${stateDir}/data/local.yaml ]; then
+        cat > ${stateDir}/data/local.yaml << 'YAML'
+      server:
+        host: "127.0.0.1"
+        port: ${toString port}
+      update:
+        auto_update: false
+      YAML
+      fi
+    '';
+
     serviceConfig = {
-      Type         = "simple";
-      User         = username;
-      ExecStart    = "${openai-oauth}/bin/openai-oauth --host 127.0.0.1 --port ${toString port} --oauth-file ${codexAuth}";
-      Restart      = "on-failure";
-      RestartSec   = "5s";
+      Type             = "simple";
+      User             = username;
+      WorkingDirectory = stateDir;
+      ExecStart        = "${pkgs.nodejs_22}/bin/node ${stateDir}/dist/index.js";
+      Restart          = "on-failure";
+      RestartSec       = "5s";
+
+      # Hardening
+      NoNewPrivileges  = true;
+      ProtectSystem    = "strict";
+      ReadWritePaths   = [ stateDir ];
+      ProtectHome      = "read-only";
     };
-    environment.CODEX_OPENAI_SERVER_LOG_REQUESTS = "1";
+
+    environment = {
+      NODE_ENV = "production";
+      PORT     = toString port;
+    };
   };
+
+  # Ensure the state directory exists with correct ownership
+  systemd.tmpfiles.rules = [
+    "d ${stateDir} 0755 ${username} users -"
+    "d ${stateDir}/data 0755 ${username} users -"
+  ];
 }
