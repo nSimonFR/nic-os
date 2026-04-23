@@ -32,11 +32,9 @@ in
           api_key = "ollama";
         };
 
-        # Codex: direct-to-ChatGPT OAuth was attempted and reverted — the
-        # Codex backend's native API is `/responses`, not `/chat/completions`,
-        # and translating between them requires porting the Vercel `ai` SDK
-        # chat-to-responses transform. Until that lands in tiny-llm-gate, we
-        # keep openai-codex-proxy (Node, ~60 MB) as the intermediary.
+        # Codex: codex-proxy (icebear0828/codex-proxy) translates
+        # /v1/chat/completions → ChatGPT's /responses API with proper
+        # token counts and tool_calls support.
         codex = {
           type = "openai";
           base_url = "http://127.0.0.1:4040/v1";
