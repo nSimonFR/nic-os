@@ -8,7 +8,7 @@
 # Pre-built at /opt/codex-proxy/ (includes native Rust TLS addon for aarch64).
 # Runtime data (accounts, cookies) persisted in the service working directory.
 # Login via web UI at http://127.0.0.1:4040 or import existing tokens.
-{ pkgs, lib, username, ... }:
+{ pkgs, username, ... }:
 let
   port      = 4040;
   installDir = "/opt/codex-proxy";
@@ -27,7 +27,7 @@ in
 
       # Symlink immutable assets from the install directory
       for item in dist native node_modules config public package.json bin; do
-        ln -sfn ${installDir}/$item ${stateDir}/$item
+        [ -e ${installDir}/$item ] && ln -sfn ${installDir}/$item ${stateDir}/$item
       done
 
       # Create local config if missing (host/port/disable auto-update)
@@ -54,7 +54,7 @@ in
       NoNewPrivileges  = true;
       ProtectSystem    = "strict";
       ReadWritePaths   = [ stateDir ];
-      ProtectHome      = "read-only";
+      ProtectHome      = true;
     };
 
     environment = {
@@ -65,7 +65,7 @@ in
 
   # Ensure the state directory exists with correct ownership
   systemd.tmpfiles.rules = [
-    "d ${stateDir} 0755 ${username} users -"
-    "d ${stateDir}/data 0755 ${username} users -"
+    "d ${stateDir} 0750 ${username} users -"
+    "d ${stateDir}/data 0750 ${username} users -"
   ];
 }

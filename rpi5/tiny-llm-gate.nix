@@ -1,9 +1,8 @@
-# tiny-llm-gate — single Go binary replacing LiteLLM, openai-codex-proxy,
-# and affine-embed-proxy.
+# tiny-llm-gate — single Go binary replacing LiteLLM and affine-embed-proxy.
 #
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
-# protocols, and authenticates directly against ChatGPT's Codex backend via
-# OAuth — no separate codex-proxy hop. Target RSS: < 15 MiB.
+# protocols, and routes ChatGPT traffic through codex-proxy (:4040) for
+# proper token counts and tool_calls support. Target RSS: < 15 MiB.
 { config, pkgs, lib, inputs, beastOllamaUrl, ... }:
 let
   port = 4001;
