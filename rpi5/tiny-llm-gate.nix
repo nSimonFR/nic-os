@@ -45,7 +45,7 @@ in
         # -- Ollama chat models --
         "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
         "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
-        "qwen3.5:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.5:35b-a3b"; };
+        "qwen3.6:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.6:35b-a3b"; };
         "qwen3-embedding:8b" = {
           provider = "ollama";
           upstream_model = "qwen3-embedding:8b";
@@ -56,14 +56,14 @@ in
         };
 
         # -- Codex-proxy models (OpenAI subscription via OAuth) --
-        "gpt-5.4" = {
+        "gpt-5.5" = {
           provider = "codex";
-          upstream_model = "gpt-5.4";
+          upstream_model = "gpt-5.5";
           fallback = [ "gemma4:e4b" ];
         };
-        "gpt-5.4-mini" = {
+        "gpt-5.5-mini" = {
           provider = "codex";
-          upstream_model = "gpt-5.4-mini";
+          upstream_model = "gpt-5.5-mini";
           fallback = [ "gemma4:e4b" ];
         };
         "gpt-5.2"            = { provider = "codex"; upstream_model = "gpt-5.2"; };
@@ -71,7 +71,7 @@ in
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
 
         # "auto" — local-first model: try gemma4:e4b on beast, fall back to
-        # codex gpt-5.4 if beast is unreachable (TCP refused / timeout) or
+        # codex gpt-5.5 if beast is unreachable (TCP refused / timeout) or
         # returns 5xx. Used by Sure (via OPENAI_MODEL) to prefer free local
         # inference when beast is awake while keeping the assistant working
         # when it's asleep. tiny-llm-gate's fallback chain triggers on both
@@ -79,7 +79,7 @@ in
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.4" ];
+          fallback       = [ "gpt-5.5" ];
         };
       };
 
@@ -88,10 +88,10 @@ in
         # it — handle both.
         "openai/gemma4:e4b"          = "gemma4:e4b";
         "openai/gemma4:26b"          = "gemma4:26b";
-        "openai/qwen3.5:35b-a3b"     = "qwen3.5:35b-a3b";
+        "openai/qwen3.6:35b-a3b"     = "qwen3.6:35b-a3b";
         "openai/qwen3-embedding:8b"  = "qwen3-embedding:8b";
-        "openai/gpt-5.4"             = "gpt-5.4";
-        "openai/gpt-5.4-mini"        = "gpt-5.4-mini";
+        "openai/gpt-5.5"             = "gpt-5.5";
+        "openai/gpt-5.5-mini"        = "gpt-5.5-mini";
         "openai/gpt-5.2"             = "gpt-5.2";
         "openai/gpt-5.3-codex"       = "gpt-5.3-codex";
         "openai/codex-auto-review"   = "codex-auto-review";

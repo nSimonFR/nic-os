@@ -67,13 +67,13 @@ let
 
     # Flat model list keyed by `model_name`. Routing and fallback are done by
     # tiny-llm-gate, not PicoClaw. `primary` uses the "auto" virtual model
-    # which tries Ollama (gemma4:e4b) first and falls back to codex (gpt-5.4)
+    # which tries Ollama (gemma4:e4b) first and falls back to codex (gpt-5.5)
     # when beast is unreachable. This gives proper Aperture observability
     # (token counts, tool calls) when Ollama handles the request.
     model_list = [
       {
         model_name = "primary";
-        model = "openai/gpt-5.4";
+        model = "openai/gpt-5.5";
         api_base = litellmBase;
         api_key = "unused";
       }
@@ -91,7 +91,7 @@ let
       }
       {
         model_name = "qwen";
-        model = "openai/qwen3.5:35b-a3b";
+        model = "openai/qwen3.6:35b-a3b";
         api_base = litellmBase;
         api_key = "unused";
       }
