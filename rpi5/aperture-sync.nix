@@ -20,6 +20,18 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
+  # Claude models served by the Anthropic passthrough provider. When Claude
+  # Code hits Aperture (ANTHROPIC_BASE_URL), Aperture routes /v1/messages
+  # requests to tiny-llm-gate which then forwards to api.anthropic.com with
+  # a long-lived token from agenix. Aperture sees the full real request and
+  # response for observability.
+  anthropicModels = [
+    "claude-opus-4-6"
+    "claude-sonnet-4-20250514"
+    "claude-sonnet-4-5-20250929"
+    "claude-haiku-4-5-20251001"
+  ];
+
   # The inner config that Aperture manages — this gets JSON-encoded into a
   # string value inside the PUT envelope.
   apertureConfig = builtins.toJSON {
@@ -30,6 +42,13 @@ let
         models = allModels;
         compatibility = { openai_chat = true; gemini_generate_content = true; };
         name = "tiny-llm-gate (RPi5)";
+      };
+      rpi5-gate-anthropic = {
+        baseurl = "https://${tailnetFqdn}:4001";
+        apikey = "unused";
+        models = anthropicModels;
+        compatibility = { anthropic_messages = true; };
+        name = "Claude Code (Anthropic passthrough)";
       };
     };
     grants = [
