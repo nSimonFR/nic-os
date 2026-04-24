@@ -2,9 +2,35 @@
 let
   sessionName = "claude-rc";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
+  credentialsFile = "/home/${username}/.claude/.credentials.json";
+  # RuntimeDirectory places the file under /run (owned by the service user);
+  # tiny-llm-gate reads from the full path.
+  claudeOauthDir = "claude-oauth";                  # relative to /run
+  claudeOauthPath = "/run/${claudeOauthDir}/token";
   sessionsDir = "/home/${username}/.claude/sessions";
   projectsDir = "/home/${username}/.claude/projects";
   worktreesDir = "/home/${username}/nic-os/.claude/worktrees";
+
+  # Extracts the current OAuth access token from ~/.claude/.credentials.json
+  # and writes it atomically to /run/claude-oauth/token. The long-running
+  # claude-remote-control process keeps credentials.json fresh by refreshing
+  # the token during normal session activity; this extractor is re-triggered
+  # on file changes via a path unit so the /run file tracks the refreshes.
+  # tiny-llm-gate reads the resulting file on every request (FileBearer auth).
+  extractScript = pkgs.writeShellScript "claude-oauth-extract" ''
+    set -eu
+    umask 0333  # -r--r--r-- so tiny-llm-gate (DynamicUser) can read it
+    # $RUNTIME_DIRECTORY is set by systemd via RuntimeDirectory=
+    dest="$RUNTIME_DIRECTORY/token"
+    token=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.accessToken // empty' ${credentialsFile})
+    if [ -z "$token" ]; then
+      echo "no accessToken in credentials file" >&2
+      exit 1
+    fi
+    tmp="$dest.new"
+    printf '%s' "$token" > "$tmp"
+    mv "$tmp" "$dest"
+  '';
 
   # Seconds of conversation inactivity before a bridge session is reaped.
   # Uses the conversation JSONL file mtime (updated on every user/assistant
@@ -189,6 +215,44 @@ in
     timerConfig = {
       OnBootSec = "10min";
       OnUnitActiveSec = "30min";
+    };
+  };
+
+  # OAuth token extractor: keeps /run/claude-oauth in sync with the current
+  # access token in ~/.claude/.credentials.json. Runs as the owning user
+  # because the credentials file is mode 0600. Output is world-readable so
+  # tiny-llm-gate (DynamicUser) can consume it.
+  systemd.services.claude-oauth-extract = {
+    description = "Extract Claude Code OAuth access token to ${claudeOauthPath}";
+    # Run once at boot after the remote-control service has started (which
+    # ensures the credentials file is populated), then re-run on file changes
+    # via the path unit below.
+    after = [ "claude-remote-control.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = username;
+      Group = "users";
+      # RuntimeDirectory creates /run/claude-oauth owned by the service user
+      # with mode 0755, allowing tiny-llm-gate's DynamicUser to traverse it.
+      # RuntimeDirectoryPreserve keeps the dir alive after the oneshot exits.
+      RuntimeDirectory = claudeOauthDir;
+      RuntimeDirectoryMode = "0755";
+      RuntimeDirectoryPreserve = "yes";
+      ExecStart = extractScript;
+    };
+  };
+
+  systemd.paths.claude-oauth-extract = {
+    description = "Watch Claude credentials.json for OAuth token changes";
+    wantedBy = [ "multi-user.target" ];
+    pathConfig = {
+      PathChanged = credentialsFile;
+      # Default Unit= is <name>.service — explicit for clarity.
+      Unit = "claude-oauth-extract.service";
+      # Allow rapid re-triggering (default is 2s debounce which is fine,
+      # but make it explicit that we don't want triggers dropped).
+      TriggerLimitIntervalSec = 0;
     };
   };
 }

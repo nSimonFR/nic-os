@@ -86,9 +86,5 @@
       file  = ./secrets/paperless-api-token.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
-    claude-oauth = {
-      file = ./secrets/claude-oauth.age;
-      mode = "0444"; # DynamicUser (tiny-llm-gate Anthropic passthrough) needs to read it
-    };
 };
 }

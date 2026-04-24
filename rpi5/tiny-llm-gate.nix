@@ -18,7 +18,7 @@ in
 
     memoryMax = "60M";
     goMemLimit = "40MiB";
-    secretPaths = [ "/run/agenix/affine-token" "/run/agenix/claude-oauth" ];
+    secretPaths = [ "/run/agenix/affine-token" ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
@@ -135,22 +135,27 @@ in
       # Anthropic passthrough proxy — Aperture sits in front (Claude Code's
       # ANTHROPIC_BASE_URL points at Aperture), and forwards /v1/messages
       # here with its own apikey. We strip that apikey and replace it with
-      # the configured long-lived token from agenix, then forward to
-      # api.anthropic.com. Aperture sees the full real request and response
-      # bodies for observability (session tracking + content visibility).
+      # the current Claude Code access token from /run/claude-oauth/token, which
+      # a sidecar (claude-oauth-extract.service) keeps in sync with the
+      # token stored in ~/.claude/.credentials.json. tiny-llm-gate re-reads
+      # the file on every request (FileBearer auth), so rotation is
+      # transparent. Aperture sees the full real request and response bodies
+      # for observability.
       anthropic = {
         upstream = "https://api.anthropic.com";
         auth = {
           type = "bearer";
-          token_file = "/run/agenix/claude-oauth";
+          token_file = "/run/claude-oauth/token";
         };
       };
     };
   };
 
-  # Starts after codex-proxy and affine so upstreams are available.
+  # Starts after codex-proxy and affine so upstreams are available, and
+  # after claude-oauth-extract so /run/claude-oauth/token exists before the
+  # Anthropic handler validates the token file at startup.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "affine.service" ];
-    wants = [ "openai-codex-proxy.service" ];
+    after = [ "network.target" "openai-codex-proxy.service" "affine.service" "claude-oauth-extract.service" ];
+    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" ];
   };
 }
