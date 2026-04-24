@@ -29,6 +29,9 @@
       }
     ]
   },
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://ai.gate-mintaka.ts.net"
+  },
   "effortLevel": "medium",
   "voiceEnabled": true,
   "skipDangerousModePermissionPrompt": true,
