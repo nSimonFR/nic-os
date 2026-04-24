@@ -4,7 +4,7 @@
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
 # protocols, and authenticates directly against ChatGPT's Codex backend via
 # OAuth — no separate codex-proxy hop. Target RSS: < 15 MiB.
-{ config, pkgs, lib, inputs, beastOllamaUrl, ... }:
+{ config, pkgs, lib, inputs, beastOllamaUrl, apertureUrl, ... }:
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
@@ -133,6 +133,15 @@ in
             token_file = "/run/agenix/affine-token";
           };
         };
+      };
+
+      # Anthropic passthrough proxy — Claude Code routes through tiny-llm-gate
+      # via ANTHROPIC_BASE_URL. Requests are forwarded to api.anthropic.com with
+      # the client's own OAuth token. After each response, an async shadow
+      # request is sent through Aperture for observability logging.
+      anthropic = {
+        upstream = "https://api.anthropic.com";
+        shadow_url = "${apertureUrl}/v1/chat/completions";
       };
     };
   };

@@ -18,7 +18,18 @@ let
   # Collect every model name a client might send: canonical models + aliases.
   modelNames = builtins.attrNames (gateCfg.models or { });
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
-  allModels = lib.unique (modelNames ++ aliasNames);
+
+  # Claude Code shadow models — logged through Aperture for observability.
+  # These cc/ prefixed names are used by tiny-llm-gate's shadow request
+  # system: after proxying a real Anthropic request, it sends an async
+  # shadow in OpenAI format with model="cc/<real-model>" to Aperture.
+  ccModels = [
+    "cc/claude-opus-4-6"
+    "cc/claude-sonnet-4-20250514"
+    "cc/claude-haiku-4-5-20251001"
+  ];
+
+  allModels = lib.unique (modelNames ++ aliasNames ++ ccModels);
 
   # The inner config that Aperture manages — this gets JSON-encoded into a
   # string value inside the PUT envelope.
