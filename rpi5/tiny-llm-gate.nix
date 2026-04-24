@@ -18,7 +18,7 @@ in
 
     memoryMax = "60M";
     goMemLimit = "40MiB";
-    secretPaths = [ "/run/agenix/affine-token" ];
+    secretPaths = [ "/run/agenix/affine-token" "/run/agenix/claude-oauth" ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
@@ -129,6 +129,20 @@ in
             type = "bearer";
             token_file = "/run/agenix/affine-token";
           };
+        };
+      };
+
+      # Anthropic passthrough proxy — Aperture sits in front (Claude Code's
+      # ANTHROPIC_BASE_URL points at Aperture), and forwards /v1/messages
+      # here with its own apikey. We strip that apikey and replace it with
+      # the configured long-lived token from agenix, then forward to
+      # api.anthropic.com. Aperture sees the full real request and response
+      # bodies for observability (session tracking + content visibility).
+      anthropic = {
+        upstream = "https://api.anthropic.com";
+        auth = {
+          type = "bearer";
+          token_file = "/run/agenix/claude-oauth";
         };
       };
     };
