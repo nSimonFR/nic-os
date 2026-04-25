@@ -258,7 +258,7 @@
               username
               telegramChatId
               ;
-            inherit (rpi5Params) tailnetFqdn beastOllamaUrl;
+            inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "aarch64-linux";
