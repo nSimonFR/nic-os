@@ -20,57 +20,18 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
-  # Claude models served by the Anthropic passthrough provider.
-  #
-  # OAuth tokens can't query Anthropic /v1/models ("OAuth authentication is
-  # currently not supported"), so we extract the model list from claude-code's
-  # bundled cli.js at build time. This auto-updates whenever claude-code is
-  # bumped, and breaks the rebuild loudly if Anthropic minifies cli.js
-  # differently — better than silently shipping a stale list.
-  #
-  # If this extraction breaks, fall back to a hardcoded list (see git log
-  # 555a11e for the last known-good list).
-  anthropicModelsFile = pkgs.runCommand "claude-anthropic-models.json" {
-    nativeBuildInputs = [ pkgs.gnugrep pkgs.gnused pkgs.coreutils pkgs.jq ];
-  } ''
-    CLI_JS="${unstablePkgs.claude-code}/lib/node_modules/@anthropic-ai/claude-code/cli.js"
-    if [ ! -f "$CLI_JS" ]; then
-      echo "ERROR: claude-code cli.js not found at $CLI_JS" >&2
-      echo "       The package layout may have changed — update aperture-sync.nix" >&2
-      exit 1
-    fi
-
-    # Extract every Claude model ID literal in cli.js. Drop trailing-dash
-    # stubs ("claude-sonnet-4-") that show up as prefixes in detection logic.
-    grep -oE '"claude-(opus|sonnet|haiku)-[a-z0-9-]+"' "$CLI_JS" \
-      | sed 's/"//g' \
-      | sed '/-$/d' \
-      | sort -u > models.txt
-
-    COUNT=$(wc -l < models.txt)
-    echo "Extracted $COUNT Claude model IDs from claude-code cli.js" >&2
-    cat models.txt >&2
-
-    # Sanity checks — fail the rebuild if extraction is obviously broken.
-    if [ "$COUNT" -lt 5 ]; then
-      echo "ERROR: extracted only $COUNT models, expected >=5" >&2
-      echo "       claude-code cli.js format likely changed — fix the regex" >&2
-      exit 1
-    fi
-    for family in opus sonnet haiku; do
-      if ! grep -q "^claude-$family-" models.txt; then
-        echo "ERROR: no claude-$family-* models extracted" >&2
-        exit 1
-      fi
-    done
-    # Belt-and-braces: ensure the model that broke us in 2026-04 is present.
-    # Any rebuild after Sonnet 4.6 is retired should remove this guard.
-    if ! grep -q "^claude-sonnet-4-6$" models.txt; then
-      echo "ERROR: claude-sonnet-4-6 missing from extracted list" >&2
-      exit 1
-    fi
-
-    jq -R . < models.txt | jq -s . > $out
+  # Claude models for the Anthropic passthrough — extracted from claude-code's
+  # cli.js at build time (Anthropic's /v1/models rejects OAuth tokens). Bumping
+  # claude-code auto-updates the list; if extraction breaks, the count guard
+  # in jq fails the rebuild.
+  anthropicModelsFile = pkgs.runCommand "claude-anthropic-models.json" { } ''
+    ${pkgs.gnugrep}/bin/grep -oE '"claude-(opus|sonnet|haiku)-[a-z0-9-]+"' \
+      ${unstablePkgs.claude-code}/lib/node_modules/@anthropic-ai/claude-code/cli.js \
+      | ${pkgs.gnused}/bin/sed 's/"//g; /-$/d' \
+      | sort -u \
+      | ${pkgs.jq}/bin/jq -R . \
+      | ${pkgs.jq}/bin/jq -s 'if length < 5 then error("aperture-sync: only \(length) claude models extracted, expected >=5") else . end' \
+      > $out
   '';
 
   anthropicModels = builtins.fromJSON (builtins.readFile anthropicModelsFile);
