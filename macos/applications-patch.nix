@@ -5,7 +5,7 @@ let
     paths = config.home.packages;
     pathsToLink = [ "/Applications" ];
   };
-  mac-app-util = inputs.mac-app-util.packages.${pkgs.stdenv.system}.default;
+  mac-app-util = inputs.mac-app-util.packages.${pkgs.stdenv.hostPlatform.system}.default;
 in
 {
   # Home-manager does not link installed applications to the user environment. This means apps will not show up

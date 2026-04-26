@@ -79,7 +79,7 @@
       zsh
 
       # LLM-to-hardware matching CLI
-      inputs.llmfit.packages.${pkgs.system}.default
+      inputs.llmfit.packages.${pkgs.stdenv.hostPlatform.system}.default
 
       # Anthropic→Ollama proxy (used by the claude-local alias)
       pkgs.litellm
