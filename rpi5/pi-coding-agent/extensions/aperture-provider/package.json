@@ -1,0 +1,9 @@
+{
+  "name": "pi-aperture-provider",
+  "version": "0.1.0",
+  "description": "Registers an `aperture` provider that routes all requests through the Tailscale Aperture AI gateway (https://ai.gate-mintaka.ts.net) → tiny-llm-gate → codex-proxy/Ollama. All pi traffic is observable in Aperture.",
+  "type": "module",
+  "pi": {
+    "extensions": ["./index.ts"]
+  }
+}
