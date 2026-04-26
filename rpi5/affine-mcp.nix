@@ -43,10 +43,19 @@ in
   # Oneshot generates the EnvironmentFile holding the AFFiNE token + the bearer
   # secret tiny-llm-gate uses to authenticate to this server. Same pattern as
   # rpi5/homepage.nix:60-78 (homepage-dashboard-env.service).
+  #
+  # restartTriggers reference the encrypted .age store paths (NOT the runtime
+  # /run/agenix/* paths, which are stable symlinks). When a secret is rotated
+  # and re-encrypted, the .age store path changes → systemd activation re-runs
+  # this oneshot → /run/affine-mcp/env is regenerated with the fresh tokens.
   systemd.services.affine-mcp-env = {
     description = "Generate affine-mcp environment file with secrets";
     wantedBy = [ "multi-user.target" ];
     before = [ "affine-mcp.service" ];
+    restartTriggers = [
+      config.age.secrets.affine-token.file
+      config.age.secrets.affine-mcp-http-token.file
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
@@ -72,6 +81,13 @@ in
     after = [ "network.target" "affine.service" "affine-mcp-env.service" ];
     wants = [ "affine.service" ];
     requires = [ "affine-mcp-env.service" ];
+    # Pick up rotated tokens on rebuild — restart triggers fire on .age
+    # store-path change, identical set as affine-mcp-env so both restart in
+    # lockstep and the consumer reads the freshly-regenerated env file.
+    restartTriggers = [
+      config.age.secrets.affine-token.file
+      config.age.secrets.affine-mcp-http-token.file
+    ];
 
     serviceConfig = {
       DynamicUser = true;
