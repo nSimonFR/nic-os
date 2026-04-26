@@ -84,8 +84,16 @@
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
     # Pinned to a tag; bump the ref to roll forward.
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/81d8cd5";
+      url = "github:nSimonFR/tiny-llm-gate/v0.7.1";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # llm-agents.nix: numtide's daily-updated flake of AI coding agent
+    # packages. We pull `pi` (pi-coding-agent) from here instead of pinning
+    # an upstream tarball ourselves — auto-tracks new releases.
+    llm-agents = {
+      url = "github:numtide/llm-agents.nix";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
   };
 

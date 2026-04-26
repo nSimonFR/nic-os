@@ -1,9 +1,0 @@
-{
-  "name": "pi-telegram-notify",
-  "version": "0.1.0",
-  "description": "Telegram notify extension for pi-coding-agent — mirrors the Claude Code Notification hook",
-  "type": "module",
-  "pi": {
-    "extensions": ["./index.ts"]
-  }
-}

@@ -7,7 +7,6 @@
 {
   imports = [
     ./picoclaw/picoclaw.nix
-    ./pi-coding-agent/pi-coding-agent.nix
   ];
 
   home.packages = with pkgs; [
