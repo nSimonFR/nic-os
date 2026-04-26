@@ -179,6 +179,12 @@ in
     "vm.overcommit_memory"      = lib.mkForce 0;
     "vm.watermark_scale_factor" = 50;
     "vm.vfs_cache_pressure"     = 50;
+    # nixpkgs sets 33 because its `isYes "ARM64_16K_PAGES"` check returns
+    # false against the nixos-raspberrypi kernel (its config isn't exposed
+    # the standard way). The RPi5 kernel actually has 16K pages + 47-bit VA
+    # → ARCH_MMAP_RND_BITS_MAX=30, so writing 33 fails with EINVAL and
+    # crashes systemd-sysctl. Force the kernel's true max.
+    "vm.mmap_rnd_bits"          = lib.mkForce 30;
   };
 
   # ── OOM management ────────────────────────────────────────────────────────
