@@ -7,7 +7,6 @@
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
-  affineWorkspaceId = "35d244cd-e6d5-4b3d-b1c2-fa50cab50621";
 in
 {
   imports = [ inputs.tiny-llm-gate.nixosModules.default ];
@@ -18,7 +17,7 @@ in
 
     memoryMax = "60M";
     goMemLimit = "40MiB";
-    secretPaths = [ "/run/agenix/affine-token" ];
+    secretPaths = [ "/run/agenix/affine-mcp-http-token" ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
@@ -119,15 +118,18 @@ in
 
       # MCP transport bridges — replaces the 2-process supergateway chain
       # (~187 MB) with a native Go bridge (~1 MB overhead).
+      #
+      # AFFiNE bridge points at affine-mcp.service (DAWNCR0W) on :7021, NOT
+      # AFFiNE's native MCP — the latter only exposes 3 read tools.
       mcp_bridges = {
         affine = {
           frontend = "sse";
           backend = "streamable_http";
-          upstream_url = "http://127.0.0.1:13010/api/workspaces/${affineWorkspaceId}/mcp";
+          upstream_url = "http://127.0.0.1:7021/mcp";
           path_prefix = "/mcp/affine";
           auth = {
             type = "bearer";
-            token_file = "/run/agenix/affine-token";
+            token_file = "/run/agenix/affine-mcp-http-token";
           };
         };
       };
@@ -155,7 +157,7 @@ in
   # after claude-oauth-extract so /run/claude-oauth/token exists before the
   # Anthropic handler validates the token file at startup.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "affine.service" "claude-oauth-extract.service" ];
-    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" ];
+    after = [ "network.target" "openai-codex-proxy.service" "affine.service" "affine-mcp.service" "claude-oauth-extract.service" ];
+    wants = [ "openai-codex-proxy.service" "affine-mcp.service" "claude-oauth-extract.service" ];
   };
 }

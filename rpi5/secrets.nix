@@ -54,11 +54,15 @@
     };
     affine-token = {
       file = ./secrets/affine-token.age;
-      mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge) needs to read it
+      mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge, affine-mcp) needs to read it
     };
     affine-gcal-oauth = {
       file = ./secrets/affine-gcal-oauth.age;
       owner = "affine";
+    };
+    affine-mcp-http-token = {
+      file = ./secrets/affine-mcp-http-token.age;
+      mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
     };
     tavily-api-key = {
       file = ./secrets/tavily-api-key.age;

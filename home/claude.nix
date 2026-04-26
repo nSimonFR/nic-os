@@ -134,4 +134,15 @@ in
     '';
   };
 
+  # LLM Wiki slash commands — single source of truth in
+  # rpi5/picoclaw/skills/wiki-*/SKILL.md so PicoClaw and Claude Code use the
+  # same prompts. PicoClaw frontmatter (name/description/metadata) is benign
+  # for Claude Code, which only reads `description`.
+  home.file.".claude/commands/wiki-ingest.md".source =
+    ../rpi5/picoclaw/skills/wiki-ingest/SKILL.md;
+  home.file.".claude/commands/wiki-process.md".source =
+    ../rpi5/picoclaw/skills/wiki-process/SKILL.md;
+  home.file.".claude/commands/wiki-lint.md".source =
+    ../rpi5/picoclaw/skills/wiki-lint/SKILL.md;
+
 }

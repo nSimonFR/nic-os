@@ -15,9 +15,10 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
-  # AFFiNE MCP now uses the shared supergateway (affine-mcp-gateway.service)
-  # instead of spawning a per-session npx process.
-  # The gateway runs on 127.0.0.1:17020 (SSE) — see rpi5/affine-mcp-gateway.nix
+  # AFFiNE MCP — write-capable. tiny-llm-gate exposes an SSE bridge at
+  # tailnet :7020 that proxies to affine-mcp.service (DAWNCR0W) on the rpi5.
+  # See rpi5/affine-mcp.nix and rpi5/tiny-llm-gate.nix.
+  affineMcpUrl = "https://rpi5.gate-mintaka.ts.net:7020/sse";
 
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
@@ -36,7 +37,7 @@ let
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
-    affine  = { type = "sse"; url = "http://127.0.0.1:17020/sse"; };
+    affine  = { type = "sse"; url = affineMcpUrl; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
@@ -57,8 +58,9 @@ in
     CLAUDE_USER="$HOME/.claude.json"
     if [ -f "$CLAUDE_USER" ]; then
       ${pkgs.jq}/bin/jq \
+        --arg url "${affineMcpUrl}" \
         'del(.mcpServers["affine_workspace_35d244cd-e6d5-4b3d-b1c2-fa50cab50621"])
-         | .mcpServers.affine = {type:"sse", url:"http://127.0.0.1:17020/sse"}' \
+         | .mcpServers.affine = {type:"sse", url:$url}' \
         "$CLAUDE_USER" > "$CLAUDE_USER.tmp" && mv "$CLAUDE_USER.tmp" "$CLAUDE_USER"
     fi
   '';
