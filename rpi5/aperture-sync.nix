@@ -20,17 +20,17 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
-  # Claude models served by the Anthropic passthrough provider. When Claude
-  # Code hits Aperture (ANTHROPIC_BASE_URL), Aperture routes /v1/messages
-  # requests to tiny-llm-gate which then forwards to api.anthropic.com with
-  # a long-lived token from agenix. Aperture sees the full real request and
-  # response for observability.
+  # Claude models served by the Anthropic passthrough provider.
+  # OAuth tokens can't query /v1/models (returns "OAuth authentication is
+  # currently not supported"), so we hardcode the current model list here.
+  # Update when Anthropic releases new models.
   anthropicModels = [
     "claude-opus-4-7"
     "claude-opus-4-6"
     "claude-sonnet-4-6"
     "claude-sonnet-4-5-20250929"
     "claude-haiku-4-5-20251001"
+    "claude-haiku-4-5"
   ];
 
   # The inner config that Aperture manages — this gets JSON-encoded into a
