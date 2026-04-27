@@ -153,11 +153,18 @@ in
     };
   };
 
-  # Starts after codex-proxy and affine so upstreams are available, and
-  # after claude-oauth-extract so /run/claude-oauth/token exists before the
-  # Anthropic handler validates the token file at startup.
+  # Starts after codex-proxy and claude-oauth-extract so /run/claude-oauth/token
+  # exists before the Anthropic handler validates the token file at startup.
+  #
+  # Do NOT order after affine.service / affine-mcp.service: affine.service is
+  # itself ordered after tiny-llm-gate.service (AFFiNE's copilot calls into
+  # this gateway), and affine-mcp.service is ordered after affine.service —
+  # adding the reverse edges here forms an unbreakable systemd ordering cycle
+  # that leaves all three services dead at boot. The MCP bridge routes are
+  # static config: tiny-llm-gate registers them at startup and proxies
+  # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "affine.service" "affine-mcp.service" "claude-oauth-extract.service" ];
-    wants = [ "openai-codex-proxy.service" "affine-mcp.service" "claude-oauth-extract.service" ];
+    after = [ "network.target" "openai-codex-proxy.service" "claude-oauth-extract.service" ];
+    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" ];
   };
 }
