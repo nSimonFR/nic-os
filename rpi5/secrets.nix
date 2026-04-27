@@ -97,5 +97,11 @@
     # No nextcloud-admin-password agenix entry: install is done; the admin
     # password lives hashed in postgres oc_users and is rotated via
     # `occ user:resetpassword`. See nextcloud.nix for the placeholder.
+    protonmail-bridge-password = {
+      file  = ./secrets/protonmail-bridge-password.age;
+      owner = "hydroxide";
+      group = "hydroxide";
+      mode  = "0440";
+    };
 };
 }
