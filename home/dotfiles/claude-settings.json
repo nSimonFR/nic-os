@@ -27,6 +27,18 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/memory-sync",
+            "timeout": 30
+          }
+        ]
+      }
     ]
   },
   "env": {
