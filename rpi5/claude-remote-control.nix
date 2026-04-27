@@ -35,9 +35,17 @@ let
   # Seconds of conversation inactivity before a bridge session is reaped.
   # Uses the conversation JSONL file mtime (updated on every user/assistant
   # message) — much more accurate than process age since a session can be
-  # idle but resumable. 2 hours means: if nobody has talked to this session
-  # for 2h, it's safe to reclaim.
-  maxInactivitySec = "7200"; # 2h
+  # idle but resumable.
+  #
+  # Tuning: JSONL mtime conflates "user is thinking / away for a while" with
+  # "session was orphaned by the mobile app and will never come back". With no
+  # cheap way to distinguish the two (heartbeat API still returns state=active
+  # for orphaned sessions — see anthropics/claude-code#28914 closed
+  # NOT_PLANNED), err on the side of preserving real work: 24h survives
+  # overnight pauses, lunch breaks, and weekend handoffs. Worst case for
+  # orphans: each holds ~70MB RSS + a worktree dir for up to a day. Bounded
+  # by maxSessions=8 in startScript, so ~560MB ceiling — fine on the rpi5.
+  maxInactivitySec = "86400"; # 24h
 
   stopScript = pkgs.writeShellScript "claude-remote-control-stop" ''
     # Send SIGTERM to the claude process inside tmux, giving it time
