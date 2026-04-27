@@ -54,6 +54,9 @@ let
     "calendar"
     "contacts"
     "tasks"
+    # ── AI assistant (chat, suggestions) routed through tiny-llm-gate :4001 ─
+    "assistant"
+    "integration_openai"
     # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
     "cloud_federation_api"
     "federatedfilesharing"
@@ -104,6 +107,10 @@ in
     package  = pkgs.nextcloud33;
     hostName = tailnetFqdn;
     https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
+
+    # Allow `occ app:install` to fetch from the Nextcloud app store. Used to
+    # install assistant + integration_openai (not bundled with the package).
+    appstoreEnable = true;
 
     # Storage path on the data HDD (was filebrowser's root). The nixpkgs
     # module treats datadir as Nextcloud's *home*: it creates
