@@ -70,8 +70,10 @@ in
 
   systemd.services.nextcloud-pg-setup = {
     description = "Set nextcloud_user PostgreSQL password + DB ownership";
-    after    = [ "postgresql.service" ];
-    requires = [ "postgresql.service" ];
+    # postgresql-setup.service is the unit that runs ensureUsers/ensureDatabases;
+    # ordering only after postgresql.service races it and finds no role.
+    after    = [ "postgresql.service" "postgresql-setup.service" ];
+    requires = [ "postgresql.service" "postgresql-setup.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
