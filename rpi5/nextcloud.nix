@@ -61,8 +61,6 @@ let
     # ── Custom CSS (edit via Theming admin → Custom CSS) ──────────────────
     "theming_customcss"
     # ── Productivity / collaboration ──────────────────────────────────────
-    "forms"             # Google Forms equivalent
-    "polls"             # When2meet / scheduling votes
     "cospend"           # Group expenses split (trips, colocs)
     "cookbook"          # Recipe manager with schema.org URL import
     # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
