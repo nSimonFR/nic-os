@@ -19,6 +19,7 @@
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Services"; description = "System monitoring"; }
     { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
+    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Services"; description = "Document archive (bills, invoices)"; }
 
     # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
     { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
@@ -45,8 +46,6 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
-    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)";
-      widget = { type = "paperlessngx"; url = "http://127.0.0.1:8200"; key = "{{HOMEPAGE_VAR_PAPERLESS_KEY}}"; }; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
