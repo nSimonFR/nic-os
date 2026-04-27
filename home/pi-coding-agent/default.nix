@@ -21,7 +21,7 @@ let
     '';
   };
 
-  notifyScript = (import ../lib/telegram-notify.nix { inherit pkgs telegramChatId; }) {
+  notifyScript = (import ../../shared/telegram-notify.nix { inherit pkgs telegramChatId; }) {
     name = "pi";
     header = "🤖 *Pi Coding Agent*";
     stateDir = "/tmp/pi-notify-state";
@@ -52,10 +52,10 @@ in
     PI_TELEGRAM_NOTIFY_SCRIPT = "${notifyScript}";
   };
 
-  home.file.".pi/agent/extensions/telegram-notify".source =
-    ./extensions/telegram-notify;
-  home.file.".pi/agent/extensions/aperture-provider".source =
-    ./extensions/aperture-provider;
+  home.file.".pi/agent/extensions/telegram-notify.ts".source =
+    ./extensions/telegram-notify.ts;
+  home.file.".pi/agent/extensions/aperture-provider.ts".source =
+    ./extensions/aperture-provider.ts;
 
   # NOTE: ~/.pi/agent/auth.json is intentionally NOT Nix-managed — pi
   # writes/refreshes it on OAuth rotation; a read-only store symlink
