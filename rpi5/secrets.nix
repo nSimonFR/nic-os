@@ -94,9 +94,8 @@
       file  = ./secrets/nextcloud-pg-password.age;
       owner = "postgres"; # nextcloud-pg-setup runs as postgres; nextcloud-setup reads via LoadCredential as PID 1
     };
-    nextcloud-admin-password = {
-      file  = ./secrets/nextcloud-admin-password.age;
-      owner = "nextcloud"; # services.nextcloud.config.adminpassFile
-    };
+    # No nextcloud-admin-password agenix entry: install is done; the admin
+    # password lives hashed in postgres oc_users and is rotated via
+    # `occ user:resetpassword`. See nextcloud.nix for the placeholder.
 };
 }
