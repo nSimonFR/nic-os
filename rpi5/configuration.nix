@@ -118,6 +118,7 @@ in
     ./paperless.nix
     ./nextcloud.nix
     ./sumeria-mitm.nix
+    ./hydroxide.nix
     ./vaultwarden.nix
     ./forgejo.nix
     ./dawarich.nix
