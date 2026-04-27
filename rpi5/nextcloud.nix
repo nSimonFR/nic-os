@@ -67,6 +67,8 @@ let
     # ── Productivity / collaboration ──────────────────────────────────────
     "cospend"           # Group expenses split (trips, colocs)
     "cookbook"          # Recipe manager with schema.org URL import
+    # ── Mail (IMAP/SMTP through hydroxide bridge) ─────────────────────────
+    "mail"
     # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
     "cloud_federation_api"
     "federatedfilesharing"
@@ -160,7 +162,7 @@ in
     # first boot. The tasks app provides a web UI for VTODOs that already flow
     # through CalDAV; disabling the UI later is one `occ app:disable`.
     extraApps = {
-      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks;
+      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks mail;
     };
     extraAppsEnable = true;
 
@@ -292,4 +294,32 @@ in
     options = "bind";
     wantedBy = [ "local-fs.target" ];
   }];
+
+  # ── Pre-seed Nextcloud Mail with a hydroxide-backed ProtonMail account ────
+  # Runs once on first activation (sentinel-gated). Reads the bridge password
+  # from agenix and registers it with the Mail app via occ. Idempotent.
+  systemd.services.nextcloud-mail-account-setup = {
+    description = "Pre-seed Nextcloud Mail account against hydroxide bridge";
+    after    = [ "nextcloud-disable-defaults.service" "hydroxide.service" ];
+    requires = [ "nextcloud-disable-defaults.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      sentinel=${datadir}/.mail-account-seeded
+      if [ -f "$sentinel" ]; then
+        echo "[mail-setup] account already seeded, skipping"
+        exit 0
+      fi
+      password=$(cat /run/agenix/protonmail-bridge-password)
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ mail:account:create \
+        nsimon "ProtonMail" "nsimon@protonmail.com" \
+        127.0.0.1 1143 none "nsimon@protonmail.com" "$password" \
+        127.0.0.1 1025 none "nsimon@protonmail.com" "$password"
+      touch "$sentinel"
+      echo "[mail-setup] account seeded"
+    '';
+  };
 }
