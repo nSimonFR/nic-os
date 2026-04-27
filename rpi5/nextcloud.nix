@@ -1,28 +1,31 @@
-# nextcloud.nix — minimal Nextcloud focused on Contacts + Calendar + Tasks (DAV).
-#
-# Files/Photos/Talk/Mail/Activity etc. are disabled. Calendars and addressbooks
-# are stored in PostgreSQL; the data dir on disk stays essentially empty.
+# nextcloud.nix — Nextcloud serving Files (replaces filebrowser) + Contacts +
+# Calendar + Tasks via DAV. Files live on /mnt/data/cloud (the HDD) and the
+# user-visible tree is /mnt/data/cloud/nsimon/files/{ADMINISTRATIVE,BACKUPS,
+# DOCUMENTS,...}. Calendars/addressbooks stay in PostgreSQL.
 #
 # Same shape as paperless.nix: shared system PostgreSQL + shared Redis,
 # password set via a oneshot ALTER USER service, secrets via agenix.
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
-  # Internal nginx port; Tailscale Serve exposes this as HTTPS :3500 on the
-  # tailnet (see services-registry.nix).
-  port = 8091;
+  # Internal nginx port; Tailscale Serve exposes this as HTTPS :8085 on the
+  # tailnet (the slot freed by filebrowser — see services-registry.nix).
+  port = 8085;
+  servePort = 8085; # external tailnet port
+
+  # Datadir on the data HDD (was filebrowser's root). Nextcloud manages this
+  # tree exclusively: per-user files at /mnt/data/cloud/<user>/files/, plus
+  # internal markers (.htaccess, .ocdata, appdata_*).
+  datadir = "/mnt/data/cloud";
 
   # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=Paperless.
   redisDb = 5;
 
   # Whitelist of apps to keep enabled. Anything currently-enabled and not on
   # this list is disabled by nextcloud-disable-defaults below.
-  #
-  # Two groups: core (Nextcloud breaks if these are off) and PIM (the features
-  # we actually want — Contacts/Calendar/Tasks via DAV).
   appsToKeep = [
     # ── Core: required for the server itself ──────────────────────────────
-    "dav"                  # CalDAV/CardDAV — the whole point
-    "files"                # core files app; disabling breaks the web UI
+    "dav"                  # CalDAV/CardDAV
+    "files"                # core files app
     "settings"             # admin/personal settings UI
     "theming"              # branding/colors
     "provisioning_api"     # users/groups REST API (DAVx⁵ / clients use it)
@@ -30,19 +33,26 @@ let
     "twofactor_backupcodes"
     "twofactor_totp"
     "notifications"        # client-sync notifications
-    "comments"             # core dependency of files
+    "comments"
     "contactsinteraction"  # "recently contacted" sidebar feed for Contacts
     "serverinfo"           # /ocs/v2.php/apps/serverinfo (homepage widget hook)
     "bruteforcesettings"   # rate-limit failed logins
     "app_api"              # ExApps framework (required by core in v33+)
     "profile"              # user profile pages
-    # ── PIM: the apps this deployment exists to serve ─────────────────────
+    # ── Files (filebrowser replacement) ────────────────────────────────────
+    "files_sharing"        # internal share links + public links
+    "files_versions"       # automatic file version history
+    "files_trashbin"       # safety net before permanent delete
+    "files_pdfviewer"      # in-browser PDF preview
+    "files_downloadlimit"  # let admin cap download counts on shares
+    "text"                 # collaborative text editor (md, txt)
+    "systemtags"           # tag files for organisation
+    "activity"             # change feed (file events) — useful as a log
+    # ── PIM ───────────────────────────────────────────────────────────────
     "calendar"
     "contacts"
     "tasks"
     # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
-    # Listing them here keeps the boot log quiet and makes appsToKeep the
-    # canonical "what's actually running" reference.
     "cloud_federation_api"
     "federatedfilesharing"
     "lookup_server_connector"
@@ -93,6 +103,12 @@ in
     hostName = tailnetFqdn;
     https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
 
+    # User files live on the data HDD (was filebrowser's root). Nextcloud
+    # creates /mnt/data/cloud/{.htaccess,.ocdata,nsimon/files/,appdata_*}
+    # under here. See MIGRATION-nextcloud-datadir.md for the one-time data
+    # move from filebrowser's flat layout.
+    inherit datadir;
+
     # First-boot install creates the admin and writes config.php.
     config = {
       adminuser     = "nsimon";
@@ -126,10 +142,10 @@ in
 
     # Default settings; the module merges these into config.php.
     settings = {
-      trusted_domains   = [ tailnetFqdn "${tailnetFqdn}:3500" ];
+      trusted_domains   = [ tailnetFqdn "${tailnetFqdn}:${toString servePort}" ];
       trusted_proxies   = [ "127.0.0.1" ];
       overwriteprotocol = "https";
-      overwritehost     = "${tailnetFqdn}:3500";
+      overwritehost     = "${tailnetFqdn}:${toString servePort}";
       overwritecondaddr = "^127\\.0\\.0\\.1$";
 
       # Default phone region for unparsed numbers in addressbooks (Contacts app
