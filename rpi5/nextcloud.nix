@@ -90,7 +90,7 @@ in
   # ── Nextcloud (native nixpkgs module) ──────────────────────────────────────
   services.nextcloud = {
     enable   = true;
-    package  = pkgs.nextcloud31;
+    package  = pkgs.nextcloud33;
     hostName = tailnetFqdn;
     https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
 
@@ -121,7 +121,7 @@ in
     # first boot. The tasks app provides a web UI for VTODOs that already flow
     # through CalDAV; disabling the UI later is one `occ app:disable`.
     extraApps = {
-      inherit (pkgs.nextcloud31Packages.apps) contacts calendar tasks;
+      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks;
     };
     extraAppsEnable = true;
 
