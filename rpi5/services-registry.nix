@@ -12,10 +12,10 @@
 {
   # Tailnet-only HTTPS services (tailscale serve).
   serveEntries = [
-    # Services: Vaultwarden → Home Assistant → Filebrowser → Forgejo
+    # Services: Vaultwarden → Home Assistant → Nextcloud (Files+DAV) → Forgejo
     { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Services"; description = "Home automation"; }
-    { port = 8085;  backend = "http://127.0.0.1:8085";  name = "Filebrowser";    icon = "filebrowser.svg";    category = "Services"; description = "File management"; }
+    { port = 8085;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Services"; description = "Files + Contacts + Calendar (DAV)"; }
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Services"; description = "System monitoring"; }
     { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
@@ -46,7 +46,6 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
-    { port = 3500;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Contacts + Calendar (DAV)"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
