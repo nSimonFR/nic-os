@@ -1,30 +1,31 @@
 // Registers an `aperture` provider routing all openai-completions traffic
 // through the Tailscale Aperture observability gateway → tiny-llm-gate
-// (:4001) → codex-proxy (:4040) or beast Ollama. Model list is fetched
-// from the gateway's /v1/models so new tlg routes show up automatically;
-// per-model context/maxTokens come from MODEL_META below.
+// (:4001) → codex-proxy (:4040) or beast Ollama. Model id list is fetched
+// from the gateway's /v1/models; per-model metadata (context window, max
+// tokens, reasoning, modalities) is read from pi-ai's bundled MODELS table
+// — same source of truth pi's built-in providers use, no duplication.
 //
 // pi rejects custom names on --provider; extensions are the only path.
 //
-// Costs are zeroed: gpt-5.x is paid via the ChatGPT/Codex subscription,
+// Costs are zeroed unconditionally: gpt-5.x is paid via the ChatGPT/Codex
+// subscription (per-token pricing in pi-ai is wrong for that route),
 // gemma4/qwen3.6 are free local on beast.
+
+import { getModel } from "@mariozechner/pi-ai";
 
 const BASE_URL = "https://ai.gate-mintaka.ts.net/v1";
 const FETCH_TIMEOUT_MS = 2000;
+const ZERO_COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 
-type Meta = { name: string; contextWindow: number; maxTokens: number };
+// tlg-internal aliases that point at specific Ollama tags on beast.
+// Not in any public registry by design; conservative defaults are fine.
+const OLLAMA_FALLBACK = { contextWindow: 32768, maxTokens: 8192 };
 
-// Known ids → display name + window. Unknown ids fall through with defaults.
-const MODEL_META: Record<string, Meta> = {
-  "gpt-5.5":      { name: "GPT-5.5 (Codex subscription)",       contextWindow: 272000, maxTokens: 128000 },
-  "gpt-5.2":      { name: "GPT-5.2 (Codex subscription)",       contextWindow: 400000, maxTokens: 128000 },
-  "gpt-5.3-codex":{ name: "GPT-5.3 codex (Codex subscription)", contextWindow: 400000, maxTokens: 128000 },
-  "gemma4:e4b":   { name: "Gemma 4 e4b (beast Ollama)",         contextWindow:  32768, maxTokens:   8192 },
-  "gemma4:26b":   { name: "Gemma 4 26b (beast Ollama)",         contextWindow:  32768, maxTokens:   8192 },
-  "qwen3.6:35b-a3b": { name: "Qwen 3.6 35b-a3b (beast Ollama)", contextWindow:  32768, maxTokens:   8192 },
-  "auto":         { name: "Auto (beast → codex fallback)",      contextWindow:  32768, maxTokens:   8192 },
-};
-const DEFAULTS: Meta = { name: "", contextWindow: 32768, maxTokens: 8192 };
+type Meta = { contextWindow: number; maxTokens: number; reasoning?: boolean; input?: string[] };
+
+function lookupMeta(id: string): Meta {
+  return getModel("openai-codex", id) ?? getModel("openai", id) ?? OLLAMA_FALLBACK;
+}
 
 // Filter out embeddings, openai/* aliases, and Anthropic passthrough
 // (handled via pi's models.json baseUrl override, not this provider).
@@ -53,17 +54,19 @@ export default async function (pi: any) {
   try {
     ids = await fetchModelIds();
   } catch {
-    ids = Object.keys(MODEL_META);
+    // /v1/models unreachable — register an empty list; user will see no
+    // aperture models until the gate is back. Better than guessing.
+    ids = [];
   }
 
   const models = ids.map((id) => {
-    const meta = MODEL_META[id] ?? DEFAULTS;
+    const meta = lookupMeta(id);
     return {
       id,
-      name: meta.name || id,
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      name: id,
+      reasoning: meta.reasoning ?? false,
+      input: meta.input ?? ["text"],
+      cost: ZERO_COST,
       contextWindow: meta.contextWindow,
       maxTokens: meta.maxTokens,
     };
