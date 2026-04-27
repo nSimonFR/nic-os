@@ -5,17 +5,18 @@ Wired as a PostToolUse hook on Write|Edit (see claude-settings.json).
 Reads the hook payload from stdin:
     {"tool_name": "Write|Edit", "tool_input": {"file_path": ..., ...}, ...}
 
-If file_path is under ~/.claude/projects/-home-nsimon-nic-os/memory/*.md,
-upserts a child doc under the AFFiNE "Claude Memory" parent page.
+Matches any file under ~/.claude/projects/<project-slug>/memory/*.md and
+upserts a child doc under the AFFiNE "Claude Memory" parent page. The
+project slug is namespaced into the cache key so two projects with the
+same memory filename (e.g. both have MEMORY.md) cannot stomp on each
+other; cross-project title collisions also get a fresh doc rather than
+reusing one already bound to another project.
 
-No IDs are baked into this script. On first run we resolve:
-  - workspace_id  = list_workspaces()[0].id
-  - parent_doc_id = exact-title match of "Claude Memory" via search_docs;
-                    created top-level if absent.
-…then cache both, plus a per-file (filename → docId) map, in
-~/.claude/state/memory-sync-map.json. Per-file misses trigger an
-exact-title search before falling back to create — so a fresh map
-re-binds to existing docs without duplicating them.
+No IDs are baked in: workspace_id and parent_doc_id are resolved on
+first run via list_workspaces + search_docs and cached in
+~/.claude/state/memory-sync-map.json alongside (project/file → docId).
+Per-file misses fall back to a title search before creating, so a
+fresh map re-binds to existing docs without duplicating them.
 
 Always exits 0; never blocks Claude Code. Errors land in
 ~/.claude/logs/memory-sync.log.
@@ -26,7 +27,7 @@ import time
 import urllib.request
 from pathlib import Path
 
-MEM_DIR = Path("/home/nsimon/.claude/projects/-home-nsimon-nic-os/memory")
+PROJECTS_DIR = Path.home() / ".claude" / "projects"
 MCP_URL = "http://127.0.0.1:7021/mcp"
 TOKEN_PATH = Path("/run/agenix/affine-mcp-http-token")
 PARENT_TITLE = "Claude Memory"
@@ -60,6 +61,17 @@ def save_map(m):
     tmp = MAP_PATH.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(m, indent=2, sort_keys=True))
     tmp.replace(MAP_PATH)
+
+
+def project_and_file(path):
+    """Return (project_slug, filename) if path is <PROJECTS>/<slug>/memory/<file>.md, else None."""
+    try:
+        parts = path.relative_to(PROJECTS_DIR).parts
+    except ValueError:
+        return None
+    if len(parts) < 3 or parts[1] != "memory" or not parts[-1].endswith(".md"):
+        return None
+    return parts[0], parts[-1]
 
 
 def title_for(path, content):
@@ -151,10 +163,7 @@ def ensure_parent(client, ws_id):
     res = client.call("create_doc_from_markdown", {
         "workspaceId": ws_id,
         "title": PARENT_TITLE,
-        "markdown": (
-            f"# {PARENT_TITLE}\n\n"
-            "Auto-mirrored from `~/.claude/projects/-home-nsimon-nic-os/memory/`.\n"
-        ),
+        "markdown": f"# {PARENT_TITLE}\n\nAuto-mirrored from `~/.claude/projects/*/memory/`.\n",
     })
     if not res.get("docId"):
         raise RuntimeError(f"could not create '{PARENT_TITLE}' page: {res}")
@@ -169,7 +178,7 @@ def resolve_workspace_and_parent(client, mapping):
     return mapping["workspace_id"], mapping["parent_doc_id"]
 
 
-def sync(path):
+def sync(path, project_slug, file_name):
     content = path.read_text()
     title = title_for(path, content)
     token = TOKEN_PATH.read_text().strip()
@@ -179,28 +188,32 @@ def sync(path):
     client.init()
     ws_id, parent_id = resolve_workspace_and_parent(client, mapping)
 
-    existing_id = mapping["files"].get(path.name)
+    map_key = f"{project_slug}/{file_name}"
+    # Migrate legacy single-file keys (pre-multi-project) to namespaced keys.
+    existing_id = mapping["files"].get(map_key) or mapping["files"].pop(file_name, None)
+
     if not existing_id:
-        # Map miss: try to bind to an existing doc with the same title
-        # (covers the case where the map was deleted but docs already exist).
-        existing_id = find_doc_by_exact_title(client, ws_id, title)
-        if existing_id:
-            log(f"REBIND  {path.name} title='{title}' docId={existing_id}")
+        # Map miss — try to rebind to an existing doc with this title, but
+        # only if no other project already claims it (otherwise we'd overwrite).
+        candidate = find_doc_by_exact_title(client, ws_id, title)
+        if candidate and candidate not in mapping["files"].values():
+            existing_id = candidate
+            log(f"REBIND  {map_key} title='{title}' docId={existing_id}")
 
     if existing_id:
         result = client.call("replace_doc_with_markdown", {
             "workspaceId": ws_id, "docId": existing_id, "markdown": content,
         })
-        log(f"REPLACE {path.name} title='{title}' docId={existing_id} ok={result.get('ok')}")
-        mapping["files"][path.name] = existing_id
+        log(f"REPLACE {map_key} title='{title}' docId={existing_id} ok={result.get('ok')}")
+        mapping["files"][map_key] = existing_id
     else:
         result = client.call("create_doc_from_markdown", {
             "workspaceId": ws_id, "title": title, "markdown": content, "parentDocId": parent_id,
         })
         new_id = result.get("docId")
-        log(f"CREATE  {path.name} title='{title}' docId={new_id}")
+        log(f"CREATE  {map_key} title='{title}' docId={new_id}")
         if new_id:
-            mapping["files"][path.name] = new_id
+            mapping["files"][map_key] = new_id
 
     save_map(mapping)
 
@@ -220,16 +233,13 @@ def main():
         return
 
     path = Path(file_path).resolve()
-    try:
-        path.relative_to(MEM_DIR)
-    except ValueError:
-        return  # not in the memory dir
-
-    if path.suffix != ".md" or not path.exists():
+    pf = project_and_file(path)
+    if not pf or not path.exists():
         return
 
+    project_slug, file_name = pf
     try:
-        sync(path)
+        sync(path, project_slug, file_name)
     except Exception as e:
         log(f"FAIL {path.name}: {type(e).__name__}: {e}")
 
