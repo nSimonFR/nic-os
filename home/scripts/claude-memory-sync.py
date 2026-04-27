@@ -62,10 +62,9 @@ def save_map(m):
     tmp.replace(MAP_PATH)
 
 
-def title_for(path):
-    text = path.read_text()
-    if text.startswith("---"):
-        for line in text.split("\n", 12)[:12]:
+def title_for(path, content):
+    if content.startswith("---"):
+        for line in content.splitlines()[:10]:
             if line.startswith("name:"):
                 return line.split(":", 1)[1].strip()
     if path.name == "MEMORY.md":
@@ -79,9 +78,10 @@ class MCP:
         self.session = None
         self.req = 0
 
-    def _post(self, body):
-        self.req += 1
-        body["id"] = self.req
+    def _post(self, body, notify=False):
+        if not notify:
+            self.req += 1
+            body["id"] = self.req
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
@@ -90,16 +90,15 @@ class MCP:
         if self.session:
             headers["Mcp-Session-Id"] = self.session
         req = urllib.request.Request(
-            MCP_URL,
-            data=json.dumps(body).encode(),
-            headers=headers,
-            method="POST",
+            MCP_URL, data=json.dumps(body).encode(), headers=headers, method="POST"
         )
         with urllib.request.urlopen(req, timeout=30) as resp:
             sid = resp.headers.get("Mcp-Session-Id")
             if sid and not self.session:
                 self.session = sid
             raw = resp.read().decode()
+        if notify:
+            return None
         for line in raw.splitlines():
             if line.startswith("data: "):
                 payload = json.loads(line[6:])
@@ -118,22 +117,7 @@ class MCP:
                 "clientInfo": {"name": "claude-memory-sync", "version": "1.0"},
             },
         })
-        body = {"jsonrpc": "2.0", "method": "notifications/initialized"}
-        headers = {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json, text/event-stream",
-            "Mcp-Session-Id": self.session,
-        }
-        urllib.request.urlopen(
-            urllib.request.Request(
-                MCP_URL,
-                data=json.dumps(body).encode(),
-                headers=headers,
-                method="POST",
-            ),
-            timeout=10,
-        ).read()
+        self._post({"jsonrpc": "2.0", "method": "notifications/initialized"}, notify=True)
 
     def call(self, name, args):
         res = self._post({
@@ -141,31 +125,22 @@ class MCP:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         })
-        text = res["content"][0]["text"]
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            return text
+        return json.loads(res["content"][0]["text"])
 
 
 def first_workspace_id(client):
     res = client.call("list_workspaces", {})
-    if isinstance(res, list) and res:
-        return res[0].get("id")
-    raise RuntimeError(f"no workspaces: {res}")
+    if res:
+        return res[0]["id"]
+    raise RuntimeError("no workspaces")
 
 
 def find_doc_by_exact_title(client, ws_id, title):
     """Return docId of a doc whose title matches `title` exactly, or None."""
-    res = client.call("search_docs", {
-        "workspaceId": ws_id,
-        "query": title,
-        "limit": 20,
-    })
-    if isinstance(res, dict):
-        for r in res.get("results", []):
-            if r.get("title") == title:
-                return r.get("id") or r.get("docId")
+    res = client.call("search_docs", {"workspaceId": ws_id, "query": title, "limit": 20})
+    for r in res.get("results", []):
+        if r.get("title") == title:
+            return r.get("id") or r.get("docId")
     return None
 
 
@@ -173,7 +148,6 @@ def ensure_parent(client, ws_id):
     parent_id = find_doc_by_exact_title(client, ws_id, PARENT_TITLE)
     if parent_id:
         return parent_id
-    # Not found — create as a top-level page.
     res = client.call("create_doc_from_markdown", {
         "workspaceId": ws_id,
         "title": PARENT_TITLE,
@@ -182,26 +156,22 @@ def ensure_parent(client, ws_id):
             "Auto-mirrored from `~/.claude/projects/-home-nsimon-nic-os/memory/`.\n"
         ),
     })
-    if isinstance(res, dict) and res.get("docId"):
-        return res["docId"]
-    raise RuntimeError(f"could not create '{PARENT_TITLE}' page: {res}")
+    if not res.get("docId"):
+        raise RuntimeError(f"could not create '{PARENT_TITLE}' page: {res}")
+    return res["docId"]
 
 
 def resolve_workspace_and_parent(client, mapping):
-    ws_id = mapping.get("workspace_id")
-    if not ws_id:
-        ws_id = first_workspace_id(client)
-        mapping["workspace_id"] = ws_id
-    parent_id = mapping.get("parent_doc_id")
-    if not parent_id:
-        parent_id = ensure_parent(client, ws_id)
-        mapping["parent_doc_id"] = parent_id
-    return ws_id, parent_id
+    if not mapping.get("workspace_id"):
+        mapping["workspace_id"] = first_workspace_id(client)
+    if not mapping.get("parent_doc_id"):
+        mapping["parent_doc_id"] = ensure_parent(client, mapping["workspace_id"])
+    return mapping["workspace_id"], mapping["parent_doc_id"]
 
 
 def sync(path):
-    title = title_for(path)
     content = path.read_text()
+    title = title_for(path, content)
     token = TOKEN_PATH.read_text().strip()
     mapping = load_map()
 
@@ -219,21 +189,15 @@ def sync(path):
 
     if existing_id:
         result = client.call("replace_doc_with_markdown", {
-            "workspaceId": ws_id,
-            "docId": existing_id,
-            "markdown": content,
+            "workspaceId": ws_id, "docId": existing_id, "markdown": content,
         })
-        ok = result.get("ok") if isinstance(result, dict) else None
-        log(f"REPLACE {path.name} title='{title}' docId={existing_id} ok={ok}")
+        log(f"REPLACE {path.name} title='{title}' docId={existing_id} ok={result.get('ok')}")
         mapping["files"][path.name] = existing_id
     else:
         result = client.call("create_doc_from_markdown", {
-            "workspaceId": ws_id,
-            "title": title,
-            "markdown": content,
-            "parentDocId": parent_id,
+            "workspaceId": ws_id, "title": title, "markdown": content, "parentDocId": parent_id,
         })
-        new_id = result.get("docId") if isinstance(result, dict) else None
+        new_id = result.get("docId")
         log(f"CREATE  {path.name} title='{title}' docId={new_id}")
         if new_id:
             mapping["files"][path.name] = new_id
@@ -255,15 +219,11 @@ def main():
     if not file_path:
         return
 
-    try:
-        path = Path(file_path).resolve()
-    except Exception:
-        return
-
+    path = Path(file_path).resolve()
     try:
         path.relative_to(MEM_DIR)
     except ValueError:
-        return  # not in the memory dir, ignore silently
+        return  # not in the memory dir
 
     if path.suffix != ".md" or not path.exists():
         return
