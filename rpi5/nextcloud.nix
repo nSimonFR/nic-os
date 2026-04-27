@@ -40,6 +40,14 @@ let
     "calendar"
     "contacts"
     "tasks"
+    # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
+    # Listing them here keeps the boot log quiet and makes appsToKeep the
+    # canonical "what's actually running" reference.
+    "cloud_federation_api"
+    "federatedfilesharing"
+    "lookup_server_connector"
+    "viewer"
+    "workflowengine"
   ];
 in
 {
