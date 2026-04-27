@@ -7,11 +7,11 @@ let
   # Reuse the shared Redis on DB 4 (0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich).
   redisUrl = "redis://${redisHost}:${toString redisPort}/4";
 
-  # Bills / invoices drop-zone. Sits inside the user's Nextcloud files tree
-  # (/mnt/data/cloud is now Nextcloud's datadir; per-user files live under
-  # <datadir>/<user>/files/), so anything dropped here also shows up in the
-  # Nextcloud Files UI. See rpi5/nextcloud.nix.
-  consumeDir = "/mnt/data/cloud/nsimon/files/ADMINISTRATIVE/paperless-consume";
+  # Bills / invoices drop-zone. Top-level folder inside the user's Nextcloud
+  # files tree (/mnt/data/cloud is now Nextcloud's datadir; per-user files
+  # live under <datadir>/<user>/files/), so anything dropped here also shows
+  # up in the Nextcloud Files UI. See rpi5/nextcloud.nix.
+  consumeDir = "/mnt/data/cloud/nsimon/files/PAPERLESS";
 in
 {
   # ── PostgreSQL: paperless_production database + paperless_user ────────────
@@ -140,13 +140,10 @@ in
   systemd.services.paperless-consumer.serviceConfig.PrivateUsers    = lib.mkForce false;
   systemd.services.paperless-web.serviceConfig.PrivateUsers         = lib.mkForce false;
 
-  # Consume dir lives inside Nextcloud's per-user files tree. Parents are
-  # nextcloud-owned so paperless can traverse (mode 0755). The leaf itself
-  # is paperless-owned so the consumer can write/delete.
-  #
-  # tmpfiles entries are idempotent — if a path already exists with different
-  # ownership/mode, tmpfiles leaves it alone, so the migration script's
-  # ownership choices win over these defaults.
+  # Consume dir lives inside Nextcloud's per-user files tree as a top-level
+  # folder. Parents (nsimon, nsimon/files) are nextcloud-owned so paperless
+  # can traverse (mode 0755). The leaf itself is paperless-owned so the
+  # consumer can write/delete. tmpfiles is a no-op if the path already exists.
   systemd.tmpfiles.settings."10-paperless-consume" = {
     "/mnt/data/cloud/nsimon".d = {
       user  = "nextcloud";
@@ -154,11 +151,6 @@ in
       mode  = "0755";
     };
     "/mnt/data/cloud/nsimon/files".d = {
-      user  = "nextcloud";
-      group = "nextcloud";
-      mode  = "0755";
-    };
-    "/mnt/data/cloud/nsimon/files/ADMINISTRATIVE".d = {
       user  = "nextcloud";
       group = "nextcloud";
       mode  = "0755";
