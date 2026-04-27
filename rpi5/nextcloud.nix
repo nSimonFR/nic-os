@@ -14,43 +14,32 @@ let
   # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=Paperless.
   redisDb = 5;
 
-  # Defaults to disable post-install. core deps (`dav`, `files`, `settings`,
-  # `theming`, `provisioning_api`, `comments`, `contactsinteraction`,
-  # `notifications`, `oauth2`, `twofactor_backupcodes`, `serverinfo`) stay on —
-  # `dav` is what powers Card/CalDAV.
-  appsToDisable = [
-    "activity"
-    "circles"
-    "cloud_federation_api"
-    "dashboard"
-    "federatedfilesharing"
-    "federation"
-    "files_external"
-    "files_pdfviewer"
-    "files_reminders"
-    "files_sharing"
-    "files_trashbin"
-    "files_versions"
-    "firstrunwizard"
-    "logreader"
-    "lookup_server_connector"
-    "nextcloud_announcements"
-    "password_policy"
-    "photos"
-    "privacy"
-    "recommendations"
-    "related_resources"
-    "sharebymail"
-    "support"
-    "survey_client"
-    "systemtags"
-    "text"
-    "updatenotification"
-    "user_status"
-    "viewer"
-    "weather_status"
-    "webhook_listeners"
-    "workflowengine"
+  # Whitelist of apps to keep enabled. Anything currently-enabled and not on
+  # this list is disabled by nextcloud-disable-defaults below.
+  #
+  # Two groups: core (Nextcloud breaks if these are off) and PIM (the features
+  # we actually want — Contacts/Calendar/Tasks via DAV).
+  appsToKeep = [
+    # ── Core: required for the server itself ──────────────────────────────
+    "dav"                  # CalDAV/CardDAV — the whole point
+    "files"                # core files app; disabling breaks the web UI
+    "settings"             # admin/personal settings UI
+    "theming"              # branding/colors
+    "provisioning_api"     # users/groups REST API (DAVx⁵ / clients use it)
+    "oauth2"               # OAuth provider — needed for app passwords
+    "twofactor_backupcodes"
+    "twofactor_totp"
+    "notifications"        # client-sync notifications
+    "comments"             # core dependency of files
+    "contactsinteraction"  # "recently contacted" sidebar feed for Contacts
+    "serverinfo"           # /ocs/v2.php/apps/serverinfo (homepage widget hook)
+    "bruteforcesettings"   # rate-limit failed logins
+    "app_api"              # ExApps framework (required by core in v33+)
+    "profile"              # user profile pages
+    # ── PIM: the apps this deployment exists to serve ─────────────────────
+    "calendar"
+    "contacts"
+    "tasks"
   ];
 in
 {
@@ -187,12 +176,16 @@ in
     requires = [ "nextcloud-pg-setup.service" ];
   };
 
-  # ── Disable default apps after install ──────────────────────────────────────
-  # `occ app:disable` is idempotent on already-disabled apps but may exit
-  # nonzero on unknown app IDs (e.g. removed in a future version) — wrap with
-  # `|| true` to keep the unit green.
+  # ── Whitelist enforcement: disable anything not on appsToKeep ──────────────
+  # Reads the currently-enabled set from occ at runtime and disables anything
+  # not on the keep-list. Robust against:
+  #   • new default apps in future Nextcloud majors
+  #   • apps the package metadata re-enables after upgrades (e.g. `viewer`,
+  #     `workflowengine` came back even after the previous blacklist run)
+  #   • app IDs we've never heard of
+  # Idempotent — `app:disable` on an already-disabled app is a no-op.
   systemd.services.nextcloud-disable-defaults = {
-    description = "Disable Nextcloud default apps not needed for Contacts/Calendar/Tasks";
+    description = "Enforce Nextcloud app whitelist (disable anything not in appsToKeep)";
     after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
     requires = [ "nextcloud-setup.service" ];
     wantedBy = [ "multi-user.target" ];
@@ -201,9 +194,15 @@ in
       RemainAfterExit = true;
     };
     script = ''
-      ${lib.concatMapStringsSep "\n" (app: ''
-        ${config.services.nextcloud.occ}/bin/nextcloud-occ app:disable ${app} || true
-      '') appsToDisable}
+      keep=" ${lib.concatStringsSep " " appsToKeep} "
+      enabled=$(${config.services.nextcloud.occ}/bin/nextcloud-occ app:list --output=json \
+        | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+      for app in $enabled; do
+        case "$keep" in
+          *" $app "*) ;;
+          *) ${config.services.nextcloud.occ}/bin/nextcloud-occ app:disable "$app" || true ;;
+        esac
+      done
     '';
   };
 }
