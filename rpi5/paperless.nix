@@ -8,10 +8,9 @@ let
   redisUrl = "redis://${redisHost}:${toString redisPort}/4";
 
   # Bills / invoices drop-zone. Top-level folder inside the user's Nextcloud
-  # files tree (/mnt/data/cloud is now Nextcloud's datadir; per-user files
-  # live under <datadir>/<user>/files/), so anything dropped here also shows
-  # up in the Nextcloud Files UI. See rpi5/nextcloud.nix.
-  consumeDir = "/mnt/data/cloud/nsimon/files/PAPERLESS";
+  # files tree. The nixpkgs nextcloud module nests data inside the home as
+  # `<home>/data/<user>/files/...`, hence the `/data/` segment.
+  consumeDir = "/mnt/data/cloud/data/nsimon/files/PAPERLESS";
 in
 {
   # ── PostgreSQL: paperless_production database + paperless_user ────────────
@@ -145,12 +144,12 @@ in
   # can traverse (mode 0755). The leaf itself is paperless-owned so the
   # consumer can write/delete. tmpfiles is a no-op if the path already exists.
   systemd.tmpfiles.settings."10-paperless-consume" = {
-    "/mnt/data/cloud/nsimon".d = {
+    "/mnt/data/cloud/data/nsimon".d = {
       user  = "nextcloud";
       group = "nextcloud";
       mode  = "0755";
     };
-    "/mnt/data/cloud/nsimon/files".d = {
+    "/mnt/data/cloud/data/nsimon/files".d = {
       user  = "nextcloud";
       group = "nextcloud";
       mode  = "0755";

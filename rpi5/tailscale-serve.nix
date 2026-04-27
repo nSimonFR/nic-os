@@ -28,10 +28,10 @@ in
       ${ts} serve reset || true
       ${serveUp}
       ${funnelUp}
-      # /mnt/data/cloud is now Nextcloud's datadir (markers + appdata + per-user
-      # subdirs); share the user's actual files tree so clients see something
-      # sensible.
-      ${ts} drive share cloud /mnt/data/cloud/nsimon/files || true
+      # /mnt/data/cloud is now Nextcloud's home (config/ + data/); user files
+      # live at <home>/data/<user>/files/. Share that path so clients see the
+      # user's actual files, not Nextcloud markers/appdata.
+      ${ts} drive share cloud /mnt/data/cloud/data/nsimon/files || true
     '';
     preStop = ''
       ${serveDown}

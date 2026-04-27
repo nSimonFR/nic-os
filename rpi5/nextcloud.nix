@@ -1,16 +1,18 @@
 # nextcloud.nix — Nextcloud serving Files (replaces filebrowser) + Contacts +
-# Calendar + Tasks via DAV. Files live on /mnt/data/cloud (the HDD) and the
-# user-visible tree is /mnt/data/cloud/nsimon/files/{ADMINISTRATIVE,BACKUPS,
-# DOCUMENTS,...}. Calendars/addressbooks stay in PostgreSQL.
+# Calendar + Tasks via DAV. Nextcloud's home is /mnt/data/cloud (the HDD); the
+# nixpkgs module places config at <home>/config/ and data at <home>/data/, so
+# user files live at /mnt/data/cloud/data/nsimon/files/{ADMINISTRATIVE,...}.
+# Calendars/addressbooks stay in PostgreSQL.
 #
 # Same shape as paperless.nix: shared system PostgreSQL + shared Redis,
 # password set via a oneshot ALTER USER service, secrets via agenix.
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
-  # Internal nginx port; Tailscale Serve exposes this as HTTPS :8085 on the
-  # tailnet (the slot freed by filebrowser — see services-registry.nix).
-  port = 8085;
-  servePort = 8085; # external tailnet port
+  # Internal nginx port. Tailscale Serve exposes Nextcloud at :8085 on the
+  # tailnet (the slot freed by filebrowser — see services-registry.nix) and
+  # forwards to this port on 127.0.0.1.
+  port = 8091;
+  servePort = 8085; # external tailnet port (used in trusted_domains)
 
   # Datadir on the data HDD (was filebrowser's root). Nextcloud manages this
   # tree exclusively: per-user files at /mnt/data/cloud/<user>/files/, plus
@@ -103,10 +105,10 @@ in
     hostName = tailnetFqdn;
     https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
 
-    # User files live on the data HDD (was filebrowser's root). Nextcloud
-    # creates /mnt/data/cloud/{.htaccess,.ocdata,nsimon/files/,appdata_*}
-    # under here. See MIGRATION-nextcloud-datadir.md for the one-time data
-    # move from filebrowser's flat layout.
+    # Storage path on the data HDD (was filebrowser's root). The nixpkgs
+    # module treats datadir as Nextcloud's *home*: it creates
+    # /mnt/data/cloud/config/ (config.php) and /mnt/data/cloud/data/
+    # (.htaccess, .ncdata, appdata_*, per-user files at data/<user>/files/).
     inherit datadir;
 
     # First-boot install creates the admin and writes config.php.
