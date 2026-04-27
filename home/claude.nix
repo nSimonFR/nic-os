@@ -145,4 +145,14 @@ in
   home.file.".claude/commands/wiki-lint.md".source =
     ../rpi5/picoclaw/skills/wiki-lint/SKILL.md;
 
+  # PostToolUse hook: mirror writes under
+  # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
+  # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge. Hook entry
+  # is in home/dotfiles/claude-settings.json. Script never blocks Claude
+  # Code (always exits 0; logs to ~/.claude/logs/memory-sync.log).
+  home.file.".claude/hooks/memory-sync" = {
+    source = ./scripts/claude-memory-sync.py;
+    executable = true;
+  };
+
 }
