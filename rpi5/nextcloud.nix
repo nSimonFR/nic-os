@@ -30,6 +30,7 @@ let
     "files"                # core files app
     "settings"             # admin/personal settings UI
     "theming"              # branding/colors
+    "theming_customcss"    # admin custom CSS (nic-cloud 2026 glass theme; CSS lives in DB)
     "provisioning_api"     # users/groups REST API (DAVx⁵ / clients use it)
     "oauth2"               # OAuth provider — needed for app passwords
     "twofactor_backupcodes"
