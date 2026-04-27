@@ -31,11 +31,10 @@ alias claude-local-fast='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
 alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=openai/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
 
-# pi: pi-coding-agent → ChatGPT (Codex subscription) via Aperture → tiny-llm-gate → codex-proxy
-# `aperture` provider is registered by the aperture-provider extension; all traffic flows through
-# https://ai.gate-mintaka.ts.net for observability.
-alias pi='command pi --provider aperture --model gpt-5.5'
-# pi-beast: pi → Beast gemma4:e4b (RTX 3080 Ti) via Aperture → tiny-llm-gate → beast Ollama
-alias pi-beast='command pi --provider aperture --model gemma4:e4b'
-# pi-local: pi → "auto" route (beast-first with codex fallback) via Aperture
-alias pi-local='command pi --provider aperture --model auto'
+# pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
+# All routes go through https://ai.gate-mintaka.ts.net for observability.
+# Defaults to gpt-5.5 (Codex subscription); pass any tlg model id as $1, e.g.
+#   pi                  → gpt-5.5
+#   pi gemma4:e4b       → beast Ollama
+#   pi auto             → beast-first with codex fallback
+pi() { command pi --provider aperture --model "${1:-gpt-5.5}" "${@:2}"; }
