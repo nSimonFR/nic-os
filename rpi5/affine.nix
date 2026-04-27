@@ -150,10 +150,35 @@ in
   };
 
   # ── Prisma migrations ─────────────────────────────────────────────────
-  systemd.services.affine-migrate = {
-    description = "AFFiNE database migrations";
+  # Re-patch the Prisma binaries' rpaths to the current openssl_3 / glibc /
+  # cc.cc.lib store paths. The AFFiNE Docker image's prisma binaries are
+  # patched once at install time by the `affine-update` script, but those
+  # store paths get garbage-collected, leaving runtime lookups failing with
+  # `libssl.so.3 not found` / `Schema engine error`. Re-patching on every
+  # rebuild makes the binaries GC-safe without re-fetching the image.
+  systemd.services.affine-prisma-patch = {
+    description = "Re-patch AFFiNE Prisma binaries with current nixpkgs rpath";
     after = [ "affine-pg-setup.service" ];
     requires = [ "affine-pg-setup.service" ];
+    before = [ "affine-migrate.service" ];
+    wantedBy = [ "affine-migrate.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      set -eu
+      QE="${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node"
+      SE="${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x"
+      ${pkgs.patchelf}/bin/patchelf --set-rpath "${rpath}" "$QE"
+      ${pkgs.patchelf}/bin/patchelf --set-interpreter "${interpreter}" --set-rpath "${rpath}" "$SE"
+    '';
+  };
+
+  systemd.services.affine-migrate = {
+    description = "AFFiNE database migrations";
+    after = [ "affine-pg-setup.service" "affine-prisma-patch.service" ];
+    requires = [ "affine-pg-setup.service" "affine-prisma-patch.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
@@ -188,8 +213,8 @@ in
 
   systemd.services.affine = {
     description = "AFFiNE";
-    after = [ "network.target" "affine-migrate.service" "redis-shared.service" "tiny-llm-gate.service" ];
-    requires = [ "affine-migrate.service" ];
+    after = [ "network.target" "affine-migrate.service" "affine-prisma-patch.service" "redis-shared.service" "tiny-llm-gate.service" ];
+    requires = [ "affine-migrate.service" "affine-prisma-patch.service" ];
     wants = [ "redis-shared.service" ];
     wantedBy = [ "multi-user.target" ];
     environment = {
