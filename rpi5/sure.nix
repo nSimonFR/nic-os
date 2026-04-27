@@ -54,8 +54,10 @@ in
   # available in NixOS 25.11; use a oneshot service instead).
   systemd.services.sure-pg-setup = {
     description = "Set sure_user PostgreSQL password";
-    after    = [ "postgresql.service" ];
-    requires = [ "postgresql.service" ];
+    # Wait for postgresql-setup.service so ensureUsers has created sure_user
+    # before we ALTER it (otherwise: race; "role does not exist" on first boot).
+    after    = [ "postgresql.service" "postgresql-setup.service" ];
+    requires = [ "postgresql.service" "postgresql-setup.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
