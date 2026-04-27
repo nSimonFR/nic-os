@@ -90,5 +90,13 @@
       file  = ./secrets/paperless-api-token.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
+    nextcloud-pg-password = {
+      file  = ./secrets/nextcloud-pg-password.age;
+      owner = "postgres"; # nextcloud-pg-setup runs as postgres; nextcloud-setup reads via LoadCredential as PID 1
+    };
+    nextcloud-admin-password = {
+      file  = ./secrets/nextcloud-admin-password.age;
+      owner = "nextcloud"; # services.nextcloud.config.adminpassFile
+    };
 };
 }
