@@ -111,10 +111,15 @@ in
     # (.htaccess, .ncdata, appdata_*, per-user files at data/<user>/files/).
     inherit datadir;
 
-    # First-boot install creates the admin and writes config.php.
+    # First-boot install creates the admin and writes config.php. After that,
+    # the admin password lives hashed in postgres oc_users and is rotated via
+    # `occ user:resetpassword nsimon`. The placeholder file below is only read
+    # if maintenance:install is run (i.e. on a fresh datadir); it never needs
+    # to be a real secret and can sit world-readable in the nix store.
     config = {
       adminuser     = "nsimon";
-      adminpassFile = "/run/agenix/nextcloud-admin-password";
+      adminpassFile = builtins.toString (pkgs.writeText "nextcloud-admin-bootstrap-placeholder"
+        "ChangeMeOnFreshInstallViaOccUserResetpassword");
 
       dbtype     = "pgsql";
       # `dbhost` accepts a `host:port` suffix; the module has no `dbport` option.
@@ -202,16 +207,15 @@ in
     requires = [ "nextcloud-pg-setup.service" ];
   };
 
-  # ── Whitelist enforcement: disable anything not on appsToKeep ──────────────
-  # Reads the currently-enabled set from occ at runtime and disables anything
-  # not on the keep-list. Robust against:
+  # ── Whitelist enforcement: enable everything on appsToKeep, disable anything
+  # else. Self-healing on every boot/rebuild. Robust against:
   #   • new default apps in future Nextcloud majors
-  #   • apps the package metadata re-enables after upgrades (e.g. `viewer`,
-  #     `workflowengine` came back even after the previous blacklist run)
-  #   • app IDs we've never heard of
-  # Idempotent — `app:disable` on an already-disabled app is a no-op.
+  #   • apps the package re-enables on upgrade (viewer, workflowengine, etc.)
+  #   • apps shipped-but-not-auto-enabled (files_pdfviewer was in the keep-list
+  #     but stayed off because Nextcloud didn't auto-enable it on install)
+  # Idempotent — `app:enable`/`app:disable` are no-ops on the current state.
   systemd.services.nextcloud-disable-defaults = {
-    description = "Enforce Nextcloud app whitelist (disable anything not in appsToKeep)";
+    description = "Enforce Nextcloud app whitelist (enable keep-list, disable rest)";
     after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
     requires = [ "nextcloud-setup.service" ];
     wantedBy = [ "multi-user.target" ];
@@ -220,13 +224,29 @@ in
       RemainAfterExit = true;
     };
     script = ''
+      OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
+      JQ=${pkgs.jq}/bin/jq
       keep=" ${lib.concatStringsSep " " appsToKeep} "
-      enabled=$(${config.services.nextcloud.occ}/bin/nextcloud-occ app:list --output=json \
-        | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+
+      enabled=$($OCC app:list --output=json | $JQ -r '.enabled | keys[]')
+      enabled_padded=" $(echo $enabled | tr '\n' ' ') "
+
+      # Pass 1: enable any keep-list app that isn't already enabled.
+      for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
+        case "$enabled_padded" in
+          *" $app "*) ;;
+          *) $OCC app:enable "$app" || true ;;
+        esac
+      done
+
+      # Pass 2: disable anything currently enabled and not on the keep-list.
+      # Re-fetch in case pass 1 changed state (it should not bring in extras
+      # but be defensive).
+      enabled=$($OCC app:list --output=json | $JQ -r '.enabled | keys[]')
       for app in $enabled; do
         case "$keep" in
           *" $app "*) ;;
-          *) ${config.services.nextcloud.occ}/bin/nextcloud-occ app:disable "$app" || true ;;
+          *) $OCC app:disable "$app" || true ;;
         esac
       done
     '';
