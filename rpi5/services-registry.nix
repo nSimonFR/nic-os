@@ -46,6 +46,7 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
+    { port = 3500;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Contacts + Calendar (DAV)"; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";

@@ -6,7 +6,7 @@
   services.postgresqlBackup = {
     enable = true;
     location = "/mnt/data/backups/postgresql";
-    databases = [ "affine" "dawarich" "sure_production" ];
+    databases = [ "affine" "dawarich" "sure_production" "nextcloud_production" ];
     compression = "gzip";
     startAt = "*-*-* 03:00:00";
   };

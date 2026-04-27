@@ -117,6 +117,7 @@ in
     ./immich.nix
     ./sure.nix
     ./paperless.nix
+    ./nextcloud.nix
     ./sumeria-mitm.nix
     ./vaultwarden.nix
     ./forgejo.nix
