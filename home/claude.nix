@@ -6,7 +6,7 @@
   ...
 }:
 let
-  notifyScript = (import ./lib/telegram-notify.nix { inherit pkgs telegramChatId; }) {
+  notifyScript = (import ../shared/telegram-notify.nix { inherit pkgs telegramChatId; }) {
     name = "claude";
     header = "🤖 *Claude Code*";
     stateDir = "/tmp/claude-notify-state";
