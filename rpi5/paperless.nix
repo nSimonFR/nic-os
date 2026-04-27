@@ -139,6 +139,12 @@ in
   systemd.services.paperless-consumer.serviceConfig.PrivateUsers    = lib.mkForce false;
   systemd.services.paperless-web.serviceConfig.PrivateUsers         = lib.mkForce false;
 
+  # The Nextcloud module creates /mnt/data/cloud and /mnt/data/cloud/data with
+  # mode 0750 (nextcloud:nextcloud), so the paperless user can't traverse them
+  # to reach the consume dir under <datadir>/data/nsimon/files/PAPERLESS.
+  # Group membership grants the missing x bit without loosening perms.
+  users.users.paperless.extraGroups = [ "nextcloud" ];
+
   # Consume dir lives inside Nextcloud's per-user files tree as a top-level
   # folder. Parents (nsimon, nsimon/files) are nextcloud-owned so paperless
   # can traverse (mode 0755). The leaf itself is paperless-owned so the
