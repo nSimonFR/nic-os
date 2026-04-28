@@ -1,4 +1,4 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, telegramChatId, apertureUrl, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, ... }:
 let
   port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
 
@@ -31,8 +31,6 @@ in
     apiKeyFile            = "/run/agenix/for-sure-api-key";
     swile.accountName     = "Swile";
     sumeria.tokenFile     = config.services.sumeria-mitm.tokenFile;
-    telegram.botTokenFile = "/run/agenix/telegram-bot-token";
-    telegram.chatId       = toString telegramChatId;
   };
 
 
