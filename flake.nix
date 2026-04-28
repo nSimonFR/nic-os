@@ -65,11 +65,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Local checkout — switch to `github:nSimonFR/pi-mobile` after first push.
     # NOTE: do NOT `inputs.nixpkgs.follows = "nixpkgs"` here — pi-mobile's
     # llm-agents.nix sibling packages (notably `apm`) need nixpkgs-unstable's
     # buildPythonApplication API and break on release-25.11.
-    pi-mobile.url = "path:/home/nsimon/pi-mobile";
+    pi-mobile.url = "github:nSimonFR/pi-mobile";
 
     llmfit = {
       url = "github:AlexsJones/llmfit";
