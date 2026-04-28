@@ -10,7 +10,7 @@ let
   # Bills / invoices drop-zone. Top-level folder inside the user's Nextcloud
   # files tree. The nixpkgs nextcloud module nests data inside the home as
   # `<home>/data/<user>/files/...`, hence the `/data/` segment.
-  consumeDir = "/mnt/data/cloud/data/nsimon/files/PAPERLESS";
+  consumeDir = "/mnt/data/nextcloud/data/nsimon/files/PAPERLESS";
 in
 {
   # ── PostgreSQL: paperless_production database + paperless_user ────────────
@@ -139,9 +139,9 @@ in
   systemd.services.paperless-consumer.serviceConfig.PrivateUsers    = lib.mkForce false;
   systemd.services.paperless-web.serviceConfig.PrivateUsers         = lib.mkForce false;
 
-  # The Nextcloud module creates /mnt/data/cloud and /mnt/data/cloud/data with
-  # mode 0750 (nextcloud:nextcloud), so the paperless user can't traverse them
-  # to reach the consume dir under <datadir>/data/nsimon/files/PAPERLESS.
+  # The Nextcloud module creates /mnt/data/nextcloud and /mnt/data/nextcloud/data
+  # with mode 0750 (nextcloud:nextcloud), so the paperless user can't traverse
+  # them to reach the consume dir under <datadir>/data/nsimon/files/PAPERLESS.
   # Group membership grants the missing x bit without loosening perms.
   users.users.paperless.extraGroups = [ "nextcloud" ];
 
@@ -150,12 +150,12 @@ in
   # can traverse (mode 0755). The leaf itself is paperless-owned so the
   # consumer can write/delete. tmpfiles is a no-op if the path already exists.
   systemd.tmpfiles.settings."10-paperless-consume" = {
-    "/mnt/data/cloud/data/nsimon".d = {
+    "/mnt/data/nextcloud/data/nsimon".d = {
       user  = "nextcloud";
       group = "nextcloud";
       mode  = "0755";
     };
-    "/mnt/data/cloud/data/nsimon/files".d = {
+    "/mnt/data/nextcloud/data/nsimon/files".d = {
       user  = "nextcloud";
       group = "nextcloud";
       mode  = "0755";

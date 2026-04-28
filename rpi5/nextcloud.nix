@@ -1,7 +1,10 @@
 # nextcloud.nix — Nextcloud serving Files (replaces filebrowser) + Contacts +
-# Calendar + Tasks via DAV. Nextcloud's home is /mnt/data/cloud (the HDD); the
-# nixpkgs module places config at <home>/config/ and data at <home>/data/, so
-# user files live at /mnt/data/cloud/data/nsimon/files/{ADMINISTRATIVE,...}.
+# Calendar + Tasks via DAV. Nextcloud's home is /mnt/data/nextcloud (the HDD);
+# the nixpkgs module places config at <home>/config/ and data at <home>/data/,
+# so user files live at /mnt/data/nextcloud/data/nsimon/files/{ADMINISTRATIVE,
+# ...}. /mnt/data/cloud is a bind-mount of that user-files dir, exposing a
+# clean view (no Nextcloud config/, data/, appdata_* internals) to the
+# Tailscale Drive share defined in tailscale-serve.nix.
 # Calendars/addressbooks stay in PostgreSQL.
 #
 # Same shape as paperless.nix: shared system PostgreSQL + shared Redis,
@@ -14,10 +17,11 @@ let
   port = 8091;
   servePort = 8085; # external tailnet port (used in trusted_domains)
 
-  # Datadir on the data HDD (was filebrowser's root). Nextcloud manages this
-  # tree exclusively: per-user files at /mnt/data/cloud/<user>/files/, plus
-  # internal markers (.htaccess, .ocdata, appdata_*).
-  datadir = "/mnt/data/cloud";
+  # Datadir on the data HDD. Nextcloud manages this tree exclusively:
+  # per-user files at /mnt/data/nextcloud/data/<user>/files/, plus internal
+  # markers (.htaccess, .ocdata, appdata_*). /mnt/data/cloud is bind-mounted
+  # to this user's files dir below — see the systemd.mounts block.
+  datadir = "/mnt/data/nextcloud";
 
   # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=Paperless.
   redisDb = 5;
@@ -118,10 +122,10 @@ in
     # install assistant + integration_openai (not bundled with the package).
     appstoreEnable = true;
 
-    # Storage path on the data HDD (was filebrowser's root). The nixpkgs
-    # module treats datadir as Nextcloud's *home*: it creates
-    # /mnt/data/cloud/config/ (config.php) and /mnt/data/cloud/data/
-    # (.htaccess, .ncdata, appdata_*, per-user files at data/<user>/files/).
+    # Storage path on the data HDD. The nixpkgs module treats datadir as
+    # Nextcloud's *home*: it creates /mnt/data/nextcloud/config/ (config.php)
+    # and /mnt/data/nextcloud/data/ (.htaccess, .ncdata, appdata_*, per-user
+    # files at data/<user>/files/).
     inherit datadir;
 
     # First-boot install creates the admin and writes config.php. After that,
@@ -264,4 +268,28 @@ in
       done
     '';
   };
+
+  # ── Bind-mount /mnt/data/cloud → user-files dir ────────────────────────────
+  # Tailscale Drive shares /mnt/data/cloud (see tailscale-serve.nix). Bind-
+  # mounting the user-files dir there gives Drive clients a clean view of
+  # just the user's files — no config/, data/, appdata_* leaking out.
+  # Same shape as the SSD overlay in immich.nix: tmpfiles pre-creates the
+  # mountpoint, systemd.mounts wires the bind into local-fs.target.
+  systemd.tmpfiles.rules = [
+    # The datadir parent must be root-owned. The Nextcloud module's tmpfiles
+    # only manage <datadir>/config and <datadir>/data — when the parent is
+    # owned by a non-privileged user, systemd-tmpfiles refuses to apply the
+    # `L+ override.config.php` rule with "unsafe path transition", which
+    # silently leaves the symlink stale and breaks `occ` boot ("data dir
+    # invalid"). Owning the parent root:root removes the escalation.
+    "d /mnt/data/nextcloud 0755 root root -"
+    "d /mnt/data/cloud 0755 root root -"
+  ];
+  systemd.mounts = [{
+    where = "/mnt/data/cloud";
+    what  = "${datadir}/data/nsimon/files";
+    type  = "none";
+    options = "bind";
+    wantedBy = [ "local-fs.target" ];
+  }];
 }
