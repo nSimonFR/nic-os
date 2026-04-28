@@ -28,10 +28,15 @@ in
       ${ts} serve reset || true
       ${serveUp}
       ${funnelUp}
-      # /mnt/data/cloud is now Nextcloud's home (config/ + data/); user files
-      # live at <home>/data/<user>/files/. Share that path so clients see the
-      # user's actual files, not Nextcloud markers/appdata.
-      ${ts} drive share cloud /mnt/data/cloud/data/nsimon/files || true
+      # /mnt/data/cloud is a bind-mount of Nextcloud's user-files dir
+      # (see rpi5/nextcloud.nix systemd.mounts) — share that so clients see
+      # a clean view of the user's files, not Nextcloud's config/, data/,
+      # appdata_* internals.
+      # `drive share <name> <path>` silently no-ops if a share with the
+      # same name already exists at a different path — unshare first so
+      # path changes always take effect on rebuild.
+      ${ts} drive unshare cloud || true
+      ${ts} drive share cloud /mnt/data/cloud || true
     '';
     preStop = ''
       ${serveDown}
