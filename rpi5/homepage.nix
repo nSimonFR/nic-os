@@ -121,7 +121,6 @@ in
     bookmarks = [
       {
         "Quick Links" = [
-          { "YouTube" = [{ icon = "youtube.svg"; href = "https://www.youtube.com/"; }]; }
           { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
           { "Tailscale Admin" = [{ icon = "tailscale.svg"; href = "https://login.tailscale.com/admin/machines"; }]; }
           { "nic-os PRs" = [{ icon = "github.svg"; href = "https://github.com/nSimonFR/nic-os/pulls"; }]; }
