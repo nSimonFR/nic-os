@@ -13,6 +13,7 @@
     ./mcp.nix
     ./llm-aliases.nix
     ./ssh.nix
+    ./beast-power.nix
   ];
 
   fonts.fontconfig.enable = true;
