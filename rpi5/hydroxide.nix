@@ -1,5 +1,11 @@
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, unstablePkgs, ... }:
 # Hydroxide — third-party ProtonMail bridge exposing IMAP / SMTP / CardDAV.
+#
+# Pulled from nixpkgs-unstable for v0.2.31, which includes the
+# "protonmail: fix 'invalid or missing message signature' errors" series
+# (commits 8f4049b…759f6d1c). nixos-25.11 still ships 0.2.30 (pre-fix), and
+# without these patches sending to non-Proton recipients fails with Proton
+# API code [2001]. Drop the unstable pin once nixos-25.11 catches up.
 # IMAP/SMTP exposed only on tailscale0; CardDAV stays on 127.0.0.1 and is
 # proxied via Tailscale Serve (see services-registry.nix).
 #
@@ -20,6 +26,8 @@ let
   smtpPort    = 1025;
   imapPort    = 1143;
   carddavPort = 8083;  # default 8080 collides with nginx/firefly
+
+  hydroxide = unstablePkgs.hydroxide;
 in
 {
   users.users.hydroxide  = {
@@ -44,7 +52,7 @@ in
 
     serviceConfig = {
       ExecStart = lib.concatStringsSep " " [
-        "${pkgs.hydroxide}/bin/hydroxide"
+        "${hydroxide}/bin/hydroxide"
         "-smtp-host"    "0.0.0.0"
         "-smtp-port"    (toString smtpPort)
         "-imap-host"    "0.0.0.0"
