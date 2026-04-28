@@ -65,10 +65,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # NOTE: do NOT `inputs.nixpkgs.follows = "nixpkgs"` here — pi-mobile's
+    # NOTE: do NOT `inputs.nixpkgs.follows = "nixpkgs"` here — amarre's
     # llm-agents.nix sibling packages (notably `apm`) need nixpkgs-unstable's
     # buildPythonApplication API and break on release-25.11.
-    pi-mobile.url = "github:nSimonFR/pi-mobile";
+    amarre.url = "github:nSimonFR/amarre/feat/restructure-rename-protocol";
 
     llmfit = {
       url = "github:AlexsJones/llmfit";
@@ -175,7 +175,7 @@
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
-          inputs.pi-mobile.nixosModules.pi-mobile
+          inputs.amarre.nixosModules.amarre
           {
             home-manager = {
               useGlobalPkgs = true;
