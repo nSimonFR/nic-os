@@ -193,6 +193,20 @@ in
       # Calendars don't need server-side encryption; explicitly off.
       "encryption.enabled" = false;
       maintenance_window_start = 1; # 01:00 UTC daily window for occ background jobs
+
+      # ── System SMTP via hydroxide ProtonMail bridge ──────────────────────
+      # Used for calendar invites, share notifications, password resets.
+      # mail_smtppassword is set at runtime by nextcloud-mail-account-setup
+      # (it's a secret, can't go in nix store). All other keys go here so
+      # they aren't overridden by the nextcloud module's defaults JSON.
+      mail_smtphost     = "127.0.0.1";
+      mail_smtpport     = 1025;
+      mail_smtpsecure   = "";          # plaintext on localhost, no TLS
+      mail_smtpauth     = true;
+      mail_smtpname     = "nsimon@protonmail.com";
+      mail_smtpmode     = "smtp";
+      mail_from_address = "nsimon";
+      mail_domain       = "protonmail.com";
     };
 
     # PHP-FPM tuning for a 4-GiB RPi5 sharing with Immich/HA/AFFiNE/Sure.
@@ -308,18 +322,26 @@ in
       RemainAfterExit = true;
     };
     script = ''
+      OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
+      password=$(cat /run/agenix/protonmail-bridge-password)
+
+      # mail_smtppassword can't live in services.nextcloud.settings (world-
+      # readable nix store). Set it every boot so it's always in sync with
+      # the agenix-stored bridge password — the other mail_smtp* keys are
+      # in settings and don't need re-application.
+      $OCC config:system:set mail_smtppassword --value="$password"
+
       sentinel=${datadir}/.mail-account-seeded
       if [ -f "$sentinel" ]; then
-        echo "[mail-setup] account already seeded, skipping"
+        echo "[mail-setup] account already seeded, smtppassword refreshed"
         exit 0
       fi
-      password=$(cat /run/agenix/protonmail-bridge-password)
-      ${config.services.nextcloud.occ}/bin/nextcloud-occ mail:account:create \
+      $OCC mail:account:create \
         nsimon "ProtonMail" "nsimon@protonmail.com" \
         127.0.0.1 1143 none "nsimon@protonmail.com" "$password" \
         127.0.0.1 1025 none "nsimon@protonmail.com" "$password"
       touch "$sentinel"
-      echo "[mail-setup] account seeded"
+      echo "[mail-setup] Mail-app account seeded"
     '';
   };
 }
