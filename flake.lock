@@ -1086,14 +1086,17 @@
         "nixpkgs": "nixpkgs_8"
       },
       "locked": {
-        "lastModified": 1777373992,
-        "narHash": "sha256-QelzGngStvbz+gtWQInVKQ01LT1zXa5NBeTQ+rpOwfc=",
-        "path": "/home/nsimon/pi-mobile",
-        "type": "path"
+        "lastModified": 1777375531,
+        "narHash": "sha256-pt76ZEon4CFs6h58o2j2pSsxaFrmd9me6bG2uGBmxWM=",
+        "owner": "nSimonFR",
+        "repo": "pi-mobile",
+        "rev": "9b83d37d9032961e1435676ea2ab633be59a9409",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/pi-mobile",
-        "type": "path"
+        "owner": "nSimonFR",
+        "repo": "pi-mobile",
+        "type": "github"
       }
     },
     "picoclaw-src": {
