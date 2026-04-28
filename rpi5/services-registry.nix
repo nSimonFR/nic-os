@@ -6,23 +6,24 @@
 #   "mdi-name"               → Material Design Icons (no extension)
 #   "si-name"                → Simple Icons (no extension)
 #
+# `funnel = true` marks an entry for `tailscale funnel` (publicly accessible)
+# instead of `tailscale serve` (tailnet-only). Display order in homepage
+# follows list order regardless of funnel flag.
+#
 # Widget: optional homepage widget config (type + extra fields).
 #   Secrets use {{HOMEPAGE_VAR_NAME}} syntax resolved from environmentFile.
 { }:
 {
-  # Tailnet-only HTTPS services (tailscale serve).
-  serveEntries = [
-    # Services: Nextcloud → Vaultwarden → Home Assistant → Forgejo
-    { port = 8085;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Services"; description = "Files + Contacts + Calendar (DAV)"; }
-    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; }
-    { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Services"; description = "Home automation"; }
-    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
-    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Services"; description = "System monitoring"; }
-    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
-    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Services"; description = "Document archive (bills, invoices)"; }
-    { port = 8443;  backend = "http://127.0.0.1:8083";  name = "Hydroxide";      icon = "proton-mail.svg";    category = "Services"; description = "ProtonMail bridge (CardDAV)"; }
-
-    # Apps: AFFiNE → Immich (in funnelEntries) → Sure → Open WebUI
+  entries = [
+    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Home Assistant
+    { port = 8085;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)";
+      widget = {
+        type = "nextcloud";
+        url = "http://127.0.0.1:8091";
+        username = "nsimon";
+        password = "{{HOMEPAGE_VAR_NEXTCLOUD_PASSWORD}}";
+        fields = [ "freespace" "activeusers" "numfiles" "numshares" ];
+      }; }
     { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
       widget = {
         type = "customapi";
@@ -47,6 +48,8 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
+    { port = 10000; backend = "http://127.0.0.1:2283";  name = "Immich";         icon = "immich.svg";         category = "Apps"; description = "Photo management"; funnel = true;
+      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; version = 2; }; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface";
       widget = {
         type = "customapi";
@@ -57,21 +60,34 @@
           { field = "messages"; label = "Messages"; format = "number"; }
         ];
       }; }
+    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)";
+      widget = {
+        type = "paperlessngx";
+        url = "http://127.0.0.1:8200";
+        key = "{{HOMEPAGE_VAR_PAPERLESS_KEY}}";
+      }; }
+    { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
+      widget = {
+        type = "homeassistant";
+        url = "http://127.0.0.1:8123";
+        key = "{{HOMEPAGE_VAR_HA_TOKEN}}";
+      }; }
+
+    # Services: Vaultwarden → Forgejo → Beszel → Dawarich → Hydroxide
+    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; }
+    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
+    { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Services"; description = "System monitoring"; }
+    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
+    { port = 8443;  backend = "http://127.0.0.1:8083";  name = "Hydroxide";      icon = "proton-mail.svg";    category = "Services"; description = "ProtonMail bridge (CardDAV)"; }
 
     # Backend — API services
     { port = 443;   backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini)"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
-    { port = 4344;  backend = "http://127.0.0.1:8341"; name = "Pi Mobile";   icon = "mdi-cellphone-link"; category = "Backend"; description = "pi-coding-agent remote control bridge"; }
+    { port = 4344;  backend = "http://127.0.0.1:8341";  name = "Pi Mobile";      icon = "mdi-cellphone-link"; category = "Backend"; description = "pi-coding-agent remote control bridge"; }
 
     # Infrastructure — not shown on dashboard
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
-  ];
-
-  # Publicly-accessible services (tailscale funnel).
-  funnelEntries = [
-    { port = 10000;            backend = "http://127.0.0.1:2283";                          name = "Immich";        icon = "immich.svg"; category = "Apps";    description = "Photo management";
-      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; version = 2; }; }
   ];
 }

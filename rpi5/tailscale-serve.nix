@@ -1,9 +1,12 @@
 { pkgs, lib, tailnetFqdn, ... }:
 let
   registry = import ./services-registry.nix { };
-  inherit (registry) serveEntries funnelEntries;
 
   ts = "${pkgs.tailscale}/bin/tailscale";
+
+  isFunnel  = e: e ? funnel && e.funnel;
+  serveEntries  = builtins.filter (e: !(isFunnel e)) registry.entries;
+  funnelEntries = builtins.filter isFunnel registry.entries;
 
   serveUp   = lib.concatMapStringsSep "\n  " (e: "${ts} serve   --bg --https=${toString e.port} ${e.backend}") serveEntries;
   funnelUp  = lib.concatMapStringsSep "\n  " (e: "${ts} funnel  --bg --https=${toString e.port} ${e.backend}") funnelEntries;
