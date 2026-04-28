@@ -31,6 +31,10 @@ in
       # /mnt/data/cloud is now Nextcloud's home (config/ + data/); user files
       # live at <home>/data/<user>/files/. Share that path so clients see the
       # user's actual files, not Nextcloud markers/appdata.
+      # `drive share <name> <path>` silently no-ops if a share with the same
+      # name already exists at a different path — unshare first so path
+      # changes always take effect on rebuild.
+      ${ts} drive unshare cloud || true
       ${ts} drive share cloud /mnt/data/cloud/data/nsimon/files || true
     '';
     preStop = ''
