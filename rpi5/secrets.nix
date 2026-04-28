@@ -103,5 +103,9 @@
       group = "hydroxide";
       mode  = "0440";
     };
+    nextcloud-homepage-password = {
+      file  = ./secrets/nextcloud-homepage-password.age;
+      owner = "nsimon"; # homepage-dashboard-env reads this
+    };
 };
 }
