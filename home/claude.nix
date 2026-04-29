@@ -14,8 +14,14 @@ let
   };
   claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+    # The vendored vendor/ripgrep/arm64-linux/rg in claude-code's npm package
+    # ships a jemalloc compiled for 4K pages and SIGABRTs on the rpi5's 16K-page
+    # kernel ("<jemalloc>: Unsupported system page size"). Force cli.js onto the
+    # system rg via USE_BUILTIN_RIPGREP=0 + PATH prefix.
     postFixup = (old.postFixup or "") + ''
       wrapProgram $out/bin/claude \
+        --prefix PATH : ${pkgs.ripgrep}/bin \
+        --set USE_BUILTIN_RIPGREP 0 \
         --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
         --set GIT_AUTHOR_NAME "nSimonFR-ai" \
         --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
