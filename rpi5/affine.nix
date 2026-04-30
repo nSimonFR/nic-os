@@ -205,7 +205,9 @@ in
       PRISMA_QUERY_ENGINE_LIBRARY = "${appDir}/node_modules/@prisma/engines/libquery_engine-linux-arm64-openssl-3.0.x.so.node";
       PRISMA_SCHEMA_ENGINE_BINARY = "${appDir}/node_modules/@prisma/engines/schema-engine-linux-arm64-openssl-3.0.x";
       # RAM optimizations for single-user instance on 4GB RPi5
-      NODE_OPTIONS = "--max-old-space-size=192";
+      # 384MB: bulk doc-creation + parallel copilot.embedding.docs jobs OOM'd
+      # 11× at 192MB during slite import; 1× at 384MB. RSS settles ~580MB.
+      NODE_OPTIONS = "--max-old-space-size=384";
       MALLOC_ARENA_MAX = "2";
     };
     # Inject Google Calendar OAuth credentials from agenix into config.json
