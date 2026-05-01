@@ -366,4 +366,19 @@ in
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
   # See tailscale-serve.nix.
 
+  # OOM cascade on 2026-05-01 09:36-09:39 killed user@1001 (no Restart= in the
+  # nixpkgs template), leaving every --user service (picoclaw / Telegram bot,
+  # gpg-agent, user dbus) dead until manually restarted. Auto-recover instead.
+  # StartLimitBurst caps respawns so a real memory leak doesn't loop forever.
+  systemd.services."user@" = {
+    serviceConfig = {
+      Restart = "on-failure";
+      RestartSec = "5s";
+    };
+    unitConfig = {
+      StartLimitIntervalSec = "5min";
+      StartLimitBurst = 3;
+    };
+  };
+
 }
