@@ -136,9 +136,11 @@ $FAILURES"
           RSS=$(${pkgs.gnused}/bin/sed -n 's/.*VmRSS \([0-9]\+ MiB\).*/\1/p' <<< "$KILL_LINE")
           CMD=$(${pkgs.gnused}/bin/sed -n 's/.*cmdline "\([^"]*\)".*/\1/p' <<< "$KILL_LINE" | ${pkgs.coreutils}/bin/cut -c1-160)
 
-          MSG="<b>earlyoom killed a process on rpi5</b>"
-          [ -n "$PROC" ] && MSG="$MSG
-- process: <code>$PROC</code>"
+          if [ -n "$PROC" ]; then
+            MSG="<b>earlyoom killed <code>$PROC</code> on rpi5</b>"
+          else
+            MSG="<b>earlyoom killed a process on rpi5</b>"
+          fi
           [ -n "$PID" ] && MSG="$MSG
 - pid: <code>$PID</code>"
           [ -n "$RSS" ] && MSG="$MSG
