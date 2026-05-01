@@ -1,4 +1,6 @@
 {
+  config,
+  lib,
   pkgs,
   inputs,
   telegramChatId,
@@ -46,6 +48,44 @@ let
   # OpenAI-compatible API and handles model routing + fallback. PicoClaw sees
   # a single "primary" model here; LiteLLM decides where the request actually goes.
   litellmBase = "${apertureUrl}/v1";
+
+  # Personal MCP servers — reuse the shared set declared in home/mcp.nix
+  # (consumed by Claude Code + Cursor). Drop trusk-* (work tools sit behind
+  # corp VPN and use OAuth flows picoclaw cannot perform). The remaining
+  # entries cover affine, firecrawl, GitHub, Linear, Miro.
+  personalMcpServers = lib.filterAttrs
+    (n: _: !(lib.hasPrefix "trusk-" n))
+    config.programs.claude-code.mcpServers;
+
+  # Translate Claude Code mcpServer schema → PicoClaw MCPServerConfig.
+  # Claude Code uses { command } for stdio and { type, url[, headers] } for
+  # SSE/HTTP; picoclaw needs an explicit `enabled` + `type` on each entry.
+  toPicoclawMcp = lib.mapAttrs (_: srv:
+    let
+      base =
+        if srv ? command then {
+          enabled = true;
+          type = "stdio";
+          command = toString srv.command;
+        } else {
+          enabled = true;
+          type = srv.type or "sse";
+          url = srv.url;
+        };
+      extras = lib.optionalAttrs (srv ? headers) { inherit (srv) headers; };
+    in
+    base // extras
+  );
+
+  # Override affine to the local tiny-llm-gate bridge — picoclaw runs on the
+  # rpi5 itself, no need to round-trip through Tailscale Serve :7020.
+  picoclawMcpServers = (toPicoclawMcp personalMcpServers) // {
+    affine = {
+      enabled = true;
+      type = "sse";
+      url = "http://127.0.0.1:4001/mcp/affine/sse";
+    };
+  };
 
   picoclawConfig = {
     agents.defaults = {
@@ -147,11 +187,12 @@ let
         tavily.enabled = true;
       };
 
-      # MCP servers can be added here to replace specific OpenClaw skills
-      # (e.g. GitHub MCP for the `github` skill). Keep disabled until needed.
+      # Personal MCPs (affine, firecrawl, GitHub, Linear, Miro) — see
+      # `picoclawMcpServers` above. trusk-* work MCPs are excluded.
       mcp = {
-        enabled = false;
-        servers = { };
+        enabled = true;
+        discovery.enabled = false;
+        servers = picoclawMcpServers;
       };
     };
 
