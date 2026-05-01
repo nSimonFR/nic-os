@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   inputs,
   telegramChatId,
@@ -147,18 +148,27 @@ let
         tavily.enabled = true;
       };
 
-      # Only AFFiNE for now — local tiny-llm-gate bridge, no detour through
-      # Tailscale Serve :7020. Other personal MCPs (firecrawl, Miro, GitHub,
-      # Linear) are intentionally left out until their failure modes are
-      # resolved (docker dep, OAuth, SSE protocol mismatch).
+      # Only AFFiNE for now — URL sourced from home/mcp.nix so picoclaw,
+      # Claude Code and Cursor stay aligned on the bridge endpoint. Other
+      # personal MCPs (firecrawl, Miro, GitHub, Linear) are intentionally
+      # left out until their failure modes are resolved (docker dep, OAuth,
+      # SSE protocol mismatch).
+      #
+      # discovery.enabled = true puts MCP tools behind a search_tools call
+      # rather than dumping every tool description into the system prompt
+      # — keeps the agent's upfront context small as we bring back the
+      # high-tool-count servers (Miro alone exposes 97 tools).
       mcp = {
         enabled = true;
-        discovery.enabled = false;
+        discovery = {
+          enabled = true;
+          use_bm25 = true;
+          max_search_results = 20;
+        };
         servers = {
           affine = {
             enabled = true;
-            type = "sse";
-            url = "http://127.0.0.1:4001/mcp/affine/sse";
+            inherit (config.programs.claude-code.mcpServers.affine) type url;
           };
         };
       };
