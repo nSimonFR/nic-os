@@ -1,4 +1,4 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, apertureUrl, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, tinyLlmGateUrl, ... }:
 let
   version = "0.26.6";
   port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
@@ -42,6 +42,17 @@ let
       # factory to use Gemini, which does advertise embedding capability.
       # Chat, structured output (session title generation), AND embeddings
       # all route through the same Gemini provider.
+      #
+      # Why bypass Aperture: Aperture's compatibility flags only cover the
+      # chat-shaped actions (`gemini_generate_content` → :generateContent /
+      # :streamGenerateContent). It rejects `:embedContent` with HTTP 400
+      # `unsupported Gemini action: embedContent`, which @ai-sdk/google
+      # silently parses into an empty embedding array → AFFiNE's
+      # `CopilotEmbeddingJob` reports `Expected 1 embeddings, got 0` for
+      # every doc and the workspace embedding queue stalls. Until Aperture
+      # ships an embedding-shaped compatibility flag, we hit tiny-llm-gate
+      # directly. Trade-off: AFFiNE AI traffic (chat + embeddings) bypasses
+      # Aperture's observability layer.
       "providers.gemini" = {
         apiKey = "ollama";
         # baseURL MUST include /v1beta. AFFiNE's Gemini provider uses the
@@ -51,7 +62,7 @@ let
         # must end in `/v1beta` too — otherwise AFFiNE hits
         # http://127.0.0.1:4001/models/... which tiny-llm-gate's router
         # returns 404 for.
-        baseURL = "${apertureUrl}/v1beta";
+        baseURL = "${tinyLlmGateUrl}/v1beta";
       };
     };
   };
