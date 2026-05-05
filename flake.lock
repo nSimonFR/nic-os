@@ -675,11 +675,11 @@
         "treefmt-nix": "treefmt-nix"
       },
       "locked": {
-        "lastModified": 1777958046,
-        "narHash": "sha256-ake1nqFgKstRazw4OwxeOLMjTsN3sF+3IwWs9RrsS3A=",
+        "lastModified": 1777991201,
+        "narHash": "sha256-e7cffCVgTHTXWdkLtyxcnHpiBejrWSG8vXI+D9jsn+Y=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "8e1a8e0fde8d660cf18e042d6daf7cea3f8f8e86",
+        "rev": "7248dc4854589bd0a39af9ac4b9f2dadfc893b81",
         "type": "github"
       },
       "original": {
@@ -1034,11 +1034,11 @@
     },
     "nixpkgs_7": {
       "locked": {
-        "lastModified": 1777982861,
-        "narHash": "sha256-mPJKoiaP/jiO7U5cKFNmYUIKMf8crlWXur5/F5zN2oE=",
+        "lastModified": 1777990949,
+        "narHash": "sha256-4Y39hV7uO8Vt43yGKF9gQyGcNlW/ZQXGnFhAyXbSJP8=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "210bc56ece950663415c9560636afeddf168928b",
+        "rev": "142a7081d493f8ccebece1f8ffc62d2736b1de0e",
         "type": "github"
       },
       "original": {
@@ -1070,11 +1070,11 @@
         "nixpkgs": "nixpkgs_8"
       },
       "locked": {
-        "lastModified": 1777375531,
-        "narHash": "sha256-pt76ZEon4CFs6h58o2j2pSsxaFrmd9me6bG2uGBmxWM=",
+        "lastModified": 1777790245,
+        "narHash": "sha256-y7/ho6kHczy0rd9R7slITadBrYDWy/EWx9mKo1KVdoY=",
         "owner": "nSimonFR",
         "repo": "pi-mobile",
-        "rev": "9b83d37d9032961e1435676ea2ab633be59a9409",
+        "rev": "4146a38559544cee5a9ffdb636b0f8612a4d4d7f",
         "type": "github"
       },
       "original": {
