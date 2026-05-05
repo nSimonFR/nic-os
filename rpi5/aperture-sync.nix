@@ -21,12 +21,14 @@ let
   allModels = lib.unique (modelNames ++ aliasNames);
 
   # Claude models for the Anthropic passthrough — extracted from claude-code's
-  # cli.js at build time (Anthropic's /v1/models rejects OAuth tokens). Bumping
+  # bundled binary at build time (Anthropic's /v1/models rejects OAuth tokens).
+  # claude-code 2.1.x ships as a single wrapped binary at bin/.claude-wrapped;
+  # earlier versions exposed the JS as lib/node_modules/.../cli.js. Bumping
   # claude-code auto-updates the list; if extraction breaks, the count guard
   # in jq fails the rebuild.
   anthropicModelsFile = pkgs.runCommand "claude-anthropic-models.json" { } ''
-    ${pkgs.gnugrep}/bin/grep -oE '"claude-(opus|sonnet|haiku)-[a-z0-9-]+"' \
-      ${unstablePkgs.claude-code}/lib/node_modules/@anthropic-ai/claude-code/cli.js \
+    ${pkgs.gnugrep}/bin/grep -aoE '"claude-(opus|sonnet|haiku)-[a-z0-9-]+"' \
+      ${unstablePkgs.claude-code}/bin/.claude-wrapped \
       | ${pkgs.gnused}/bin/sed 's/"//g; /-$/d' \
       | sort -u \
       | ${pkgs.jq}/bin/jq -R . \
