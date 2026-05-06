@@ -25,4 +25,5 @@ in {
   "nextcloud-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "protonmail-bridge-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "nextcloud-homepage-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "altserver-pairing-plist.age".publicKeys     = [ nsimon-age nsimon-ed25519 ];
 }

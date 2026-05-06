@@ -107,5 +107,9 @@
       file  = ./secrets/nextcloud-homepage-password.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
+    altserver-pairing-plist = {
+      file = ./secrets/altserver-pairing-plist.age;
+      # Read by the altserverPairing activation script (root) — no service user.
+    };
 };
 }

@@ -128,6 +128,7 @@ in
     ./aperture-sync.nix
     ./claude-remote-control.nix
     ./pi-mobile.nix
+    ./altserver.nix
     ./open-webui.nix
     ./homepage.nix
     ./backups.nix
