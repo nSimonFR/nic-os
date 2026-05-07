@@ -22,7 +22,7 @@ let
   # the first rebuild that actually intends to talk to the iPhone — the activation
   # script no-ops cleanly while it's still REPLACE_ME (the agenix file may also
   # be absent until you've encrypted it).
-  iPhoneUdid = "REPLACE_ME";
+  iPhoneUdid = "00008030-0004452601FA802E";
 in {
   systemd.tmpfiles.rules = [
     "d /var/lib/lockdown 0700 root root -"
