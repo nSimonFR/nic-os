@@ -52,6 +52,11 @@ in {
   systemd.tmpfiles.rules = [
     "d /var/lib/lockdown 0700 root root -"
     "d /var/lib/anisette 0750 anisette anisette -"
+    # SZanko's anisette fork (rev 3f96c999, 2026-01-15) doesn't auto-create
+    # the per-client-machine provisioning dir — upstream Dadoum fixed this
+    # in commit b76cd013 (2026-04-04) but our pinned rev predates it. Without
+    # this dir, /v3/get_headers errors out and SideStore refresh fails.
+    "d /var/lib/anisette/provisioning 0750 anisette anisette -"
   ];
 
   users.users.anisette = {
