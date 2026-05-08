@@ -93,6 +93,7 @@
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
     { port = 4344;  backend = "http://127.0.0.1:8341";  name = "Pi Mobile";      icon = "mdi-cellphone-link"; category = "Backend"; description = "pi-coding-agent remote control bridge"; }
     { port = 8443;  backend = "http://127.0.0.1:8083";  name = "Hydroxide";      icon = "mdi-email-outline";  category = "Backend";  description = "ProtonMail bridge (SMTP + CardDAV)"; }
+    { port = 6969;  backend = "http://127.0.0.1:6969";  name = "Anisette";       icon = "mdi-apple";          category = "Backend"; description = "Apple ID anisette tokens for SideStore"; }
 
     # Infrastructure — not shown on dashboard
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }

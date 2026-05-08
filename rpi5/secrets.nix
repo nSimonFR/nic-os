@@ -109,7 +109,9 @@
     };
     altserver-pairing-plist = {
       file = ./secrets/altserver-pairing-plist.age;
-      # Read by the altserverPairing activation script (root) — no service user.
+      # Read by sidestore.nix's sidestorePairing activation script (root).
+      # Name kept from the original AltServer iteration to avoid re-encrypting
+      # the plist; the file content is just the Mac lockdownd pair record.
     };
 };
 }
