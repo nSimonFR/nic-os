@@ -53,6 +53,49 @@ in {
   # runs with Tailscale OFF) and never on WAN.
   networking.firewall.interfaces.end0.allowedTCPPorts = [ 6969 6970 ];
 
+  # SideStore VPN packet swap — replaces LocalDevVPN/StosVPN on the iPhone.
+  # SideStore's minimuxer expects to talk to a "developer computer" at
+  # 10.7.0.1; the conventional answer is an on-device VPN that intercepts
+  # traffic to that IP and swaps src/dst so it loops back to the phone.
+  # iOS one-VPN limit means LocalDevVPN can't coexist with Tailscale —
+  # so we move the swap off-device:
+  #
+  #   1. rpi5 advertises 10.7.0.1/32 as a Tailscale subnet route
+  #      (configured in rpi5/configuration.nix; rpi5/sumeria-mitm.nix
+  #      preserves it through dynamic updates).
+  #   2. The phone's Tailscale routes 10.7.0.1 through the tunnel to rpi5.
+  #   3. The nftables rule below (xddxdd/sidestore-vpn's pure-firewall
+  #      variant, May 2026) rewrites packet src/dst on arrival, so the
+  #      reply goes back to the phone with src=10.7.0.1.
+  #   4. minimuxer is none the wiser. Tailscale stays the only iOS VPN.
+  #
+  # Reliability on iOS 26.4.x is reportedly flaky per
+  # github.com/xddxdd/sidestore-vpn/issues/12 — works on 26.4.1, occasional
+  # reconnects needed. README priority value (-350) is invalid on modern
+  # kernels; dstnat (-100) is the canonical DST-NAT priority.
+  systemd.services.sidestore-vpn-nft = {
+    description = "Load nftables packet-swap rule for SideStore VPN (10.7.0.1)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "tailscaled.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = pkgs.writeShellScript "sidestore-vpn-nft-load" ''
+        set -eu
+        ${pkgs.nftables}/bin/nft -f - <<'NFT'
+        table ip sidestore_vpn {
+          chain prerouting {
+            type nat hook prerouting priority dstnat; policy accept;
+            ip daddr 10.7.0.1 ip daddr set ip saddr ip saddr set 10.7.0.1 notrack
+          }
+        }
+        NFT
+      '';
+      ExecStop = "${pkgs.nftables}/bin/nft delete table ip sidestore_vpn";
+    };
+  };
+
   systemd.tmpfiles.rules = [
     "d /var/lib/lockdown 0700 root root -"
     "d /var/lib/anisette 0750 anisette anisette -"

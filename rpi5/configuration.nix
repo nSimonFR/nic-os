@@ -140,7 +140,12 @@ in
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
-      advertiseRoutes = [ "34.117.84.152/32" ];
+      # 34.117.84.152/32 = Sumeria/Lydia API IP (overwritten dynamically
+      #   by rpi5/sumeria-mitm.nix as the upstream IP changes).
+      # 10.7.0.1/32     = SideStore-VPN packet-swap target (rpi5/sidestore.nix
+      #   nftables rule answers on this IP). sumeria-mitm.nix preserves
+      #   this entry when it rewrites the route list.
+      advertiseRoutes = [ "34.117.84.152/32" "10.7.0.1/32" ];
     })
   ];
 

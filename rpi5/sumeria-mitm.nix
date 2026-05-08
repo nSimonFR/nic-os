@@ -16,7 +16,10 @@ let
     fi
     if [ "$NEW_IP" != "$CURRENT_IP" ]; then
       echo "[sumeria-route] IP changed: $CURRENT_IP -> $NEW_IP, updating route"
-      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IP/32"
+      # Preserve 10.7.0.1/32 (the SideStore-VPN packet-swap target advertised
+      # by rpi5/sidestore.nix). `tailscale set --advertise-routes` overwrites
+      # the full list, so every sumeria IP refresh has to re-include it.
+      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IP/32,10.7.0.1/32"
       echo "$NEW_IP" > "$STATE_FILE"
     fi
   '';
