@@ -52,11 +52,6 @@ in {
   systemd.tmpfiles.rules = [
     "d /var/lib/lockdown 0700 root root -"
     "d /var/lib/anisette 0750 anisette anisette -"
-    # SZanko's anisette fork (rev 3f96c999, 2026-01-15) doesn't auto-create
-    # the per-client-machine provisioning dir — upstream Dadoum fixed this
-    # in commit b76cd013 (2026-04-04) but our pinned rev predates it. Without
-    # this dir, /v3/get_headers errors out and SideStore refresh fails.
-    "d /var/lib/anisette/provisioning 0750 anisette anisette -"
   ];
 
   users.users.anisette = {
@@ -122,6 +117,14 @@ in {
       User = "anisette";
       Group = "anisette";
       StateDirectory = "anisette";
+      # /v3/get_headers + /v3/provisioning_session derive their working
+      # directory from $RUNTIME_DIRECTORY (falling back to $XDG_RUNTIME_DIR
+      # then getcwd()). Without RuntimeDirectory= the service's PWD is /,
+      # the server tries to mkdir /anisette-v3, and every v3 request
+      # returns "std.file.FileException: /anisette-v3: Permission denied"
+      # (SideStore surfaces this as OperationError 1412). --adi-path is
+      # only consulted for the v1 backward-compat endpoint; v3 ignores it.
+      RuntimeDirectory = "anisette";
       Restart = "on-failure";
       RestartSec = "30s";
       MemoryMax = "256M";
