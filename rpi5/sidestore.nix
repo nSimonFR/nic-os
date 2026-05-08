@@ -70,6 +70,17 @@ in {
     fi
   '';
 
+  # SideStore takes an anisette *server-list* URL (returning JSON), not a
+  # direct anisette URL. Mirror the schema of https://servers.sidestore.io/servers.json
+  # and serve it as a static file at /etc/sidestore/servers.json. Tailscale
+  # Serve picks up the directory (registry entry on port 6970) and exposes
+  # https://rpi5.<tailnet>:6970/servers.json with a Let's Encrypt cert.
+  environment.etc."sidestore/servers.json".text = builtins.toJSON {
+    servers = [
+      { name = "rpi5 self-host"; address = "https://rpi5.gate-mintaka.ts.net:6969"; }
+    ];
+  };
+
   # mDNS for two directions: discovering the iPhone via _apple-mobdev2._tcp
   # (consumer, used by netmuxd) AND publishing the spoofed tailnet record
   # via avahi-publish (producer, the bridge service below).

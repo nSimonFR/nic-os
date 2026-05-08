@@ -97,5 +97,6 @@
 
     # Infrastructure — not shown on dashboard
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
+    { port = 6970;  backend = "/etc/sidestore";         name = "SideStore servers.json"; icon = "mdi-apple"; category = "Infrastructure"; description = "Static anisette server-list JSON for SideStore on iPhone"; }
   ];
 }
