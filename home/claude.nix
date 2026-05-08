@@ -85,4 +85,11 @@ in
     executable = true;
   };
 
+  # PostToolUse hook on Bash: append each command to ~/.claude/bash_history.log
+  # (zsh EXTENDED_HISTORY format) so it stays out of ~/.zsh_history and atuin.
+  home.file.".claude/hooks/bash-history" = {
+    source = ./scripts/claude-bash-history.sh;
+    executable = true;
+  };
+
 }
