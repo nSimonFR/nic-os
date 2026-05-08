@@ -49,6 +49,10 @@ let
   # from this TXT record.
   spoofIdentifier = "00008030-0004452601FA802E";
 in {
+  # Open anisette + servers.json on LAN only — never on tailnet (refresh
+  # runs with Tailscale OFF) and never on WAN.
+  networking.firewall.interfaces.end0.allowedTCPPorts = [ 6969 6970 ];
+
   systemd.tmpfiles.rules = [
     "d /var/lib/lockdown 0700 root root -"
     "d /var/lib/anisette 0750 anisette anisette -"
