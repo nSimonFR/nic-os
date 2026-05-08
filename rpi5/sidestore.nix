@@ -49,9 +49,12 @@ let
   # from this TXT record.
   spoofIdentifier = "00008030-0004452601FA802E";
 in {
-  # Open anisette + servers.json on LAN only — never on tailnet (refresh
-  # runs with Tailscale OFF) and never on WAN.
+  # Open anisette + servers.json on LAN AND tailnet. Refresh runs over
+  # tailnet now (the nftables swap below replaces LocalDevVPN), so the
+  # phone reaches anisette through tailscale0. LAN access stays as a
+  # fallback. Never opens to WAN — both interfaces are local-trust.
   networking.firewall.interfaces.end0.allowedTCPPorts = [ 6969 6970 ];
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [ 6969 6970 ];
 
   # SideStore VPN packet swap — replaces LocalDevVPN/StosVPN on the iPhone.
   # SideStore's minimuxer expects to talk to a "developer computer" at
@@ -119,14 +122,13 @@ in {
 
   # SideStore takes an anisette *server-list* URL (returning JSON), not a
   # direct anisette URL. Mirror the schema of https://servers.sidestore.io/servers.json.
-  # Refresh runs with Tailscale OFF on the phone (StosVPN takes the iOS
-  # one-VPN slot, so Tailscale can't be active during refresh) — meaning
-  # the phone reaches anisette via rpi5's LAN IP, not its tailnet name.
-  # Both anisette (:6969) and the static servers.json server (:6970) bind
-  # 0.0.0.0 so they're reachable on LAN; HTTPS isn't needed (the public
-  # SideStore picker also lists plain-HTTP entries).
+  # Refresh now runs Tailscale-only (the nftables packet swap below replaces
+  # LocalDevVPN), so the phone reaches anisette via rpi5's tailnet name —
+  # works from cellular and foreign Wi-Fi too. The LAN URL is kept as a
+  # second entry as a fallback when Tailscale is misbehaving.
   environment.etc."sidestore/servers.json".text = builtins.toJSON {
     servers = [
+      { name = "rpi5 self-host (tailnet)"; address = "http://rpi5.gate-mintaka.ts.net:6969"; }
       { name = "rpi5 self-host (LAN)"; address = "http://192.168.1.68:6969"; }
     ];
   };
