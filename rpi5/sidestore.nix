@@ -71,13 +71,16 @@ in {
   '';
 
   # SideStore takes an anisette *server-list* URL (returning JSON), not a
-  # direct anisette URL. Mirror the schema of https://servers.sidestore.io/servers.json
-  # and serve it as a static file at /etc/sidestore/servers.json. Tailscale
-  # Serve picks up the directory (registry entry on port 6970) and exposes
-  # https://rpi5.<tailnet>:6970/servers.json with a Let's Encrypt cert.
+  # direct anisette URL. Mirror the schema of https://servers.sidestore.io/servers.json.
+  # Refresh runs with Tailscale OFF on the phone (StosVPN takes the iOS
+  # one-VPN slot, so Tailscale can't be active during refresh) — meaning
+  # the phone reaches anisette via rpi5's LAN IP, not its tailnet name.
+  # Both anisette (:6969) and the static servers.json server (:6970) bind
+  # 0.0.0.0 so they're reachable on LAN; HTTPS isn't needed (the public
+  # SideStore picker also lists plain-HTTP entries).
   environment.etc."sidestore/servers.json".text = builtins.toJSON {
     servers = [
-      { name = "rpi5 self-host"; address = "https://rpi5.gate-mintaka.ts.net:6969"; }
+      { name = "rpi5 self-host (LAN)"; address = "http://192.168.1.68:6969"; }
     ];
   };
 
@@ -113,7 +116,7 @@ in {
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     serviceConfig = {
-      ExecStart = "${anisettePkg}/bin/anisette-v3-server --host 127.0.0.1 --port 6969 --adi-path /var/lib/anisette";
+      ExecStart = "${anisettePkg}/bin/anisette-v3-server --host 0.0.0.0 --port 6969 --adi-path /var/lib/anisette";
       User = "anisette";
       Group = "anisette";
       StateDirectory = "anisette";
@@ -128,6 +131,25 @@ in {
       Restart = "on-failure";
       RestartSec = "30s";
       MemoryMax = "256M";
+    };
+  };
+
+  # Static HTTP server for /etc/sidestore/servers.json on LAN. Tailscale
+  # Serve isn't an option for this because anisette is now bound to
+  # 0.0.0.0 (subsuming the tailnet interface), and Tailscale Serve's
+  # tailnet-IP binding conflicts with that. Plain HTTP on LAN is what
+  # the phone needs anyway during refresh (Tailscale off, StosVPN on).
+  systemd.services.sidestore-static = {
+    description = "Static HTTP server for SideStore servers.json (LAN)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.python3}/bin/python3 -m http.server 6970 --bind 0.0.0.0 --directory /etc/sidestore";
+      DynamicUser = true;
+      Restart = "on-failure";
+      RestartSec = "30s";
+      MemoryMax = "32M";
     };
   };
 
