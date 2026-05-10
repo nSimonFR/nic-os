@@ -3,10 +3,10 @@ name: Sync Tailscale ACL
 on:
   push:
     branches: [main]
-    paths: [shared/tailscale-acl.hujson]
+    paths: [shared/tailscale-acl.json5]
   pull_request:
     branches: [main]
-    paths: [shared/tailscale-acl.hujson]
+    paths: [shared/tailscale-acl.json5]
 
 jobs:
   acls:
@@ -19,4 +19,4 @@ jobs:
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tailnet:         nsimonfr.github
           action:          ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
-          path:            shared/tailscale-acl.hujson
+          path:            shared/tailscale-acl.json5

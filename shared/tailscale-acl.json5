@@ -1,4 +1,6 @@
-// Tailscale tailnet policy file (HuJSON).
+// Tailscale tailnet policy file (HuJSON syntax, named .json5 for
+// github native highlighting; the gitops-acl action reads it via
+// the explicit `path:` input regardless of extension).
 // Synced to https://login.tailscale.com/admin/acls/file by
 // .github/workflows/tailscale-acl.yml on push to main.
 {
