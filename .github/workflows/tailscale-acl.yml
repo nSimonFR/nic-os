@@ -1,0 +1,22 @@
+name: Sync Tailscale ACL
+
+on:
+  push:
+    branches: [main]
+    paths: [shared/tailscale-acl.hujson]
+  pull_request:
+    branches: [main]
+    paths: [shared/tailscale-acl.hujson]
+
+jobs:
+  acls:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: tailscale/gitops-acl-action@v1
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
+          tailnet:         nsimonfr.github
+          action:          ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
+          path:            shared/tailscale-acl.hujson

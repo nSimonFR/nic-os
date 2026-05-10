@@ -1,0 +1,51 @@
+// Tailscale tailnet policy file (HuJSON).
+// Synced to https://login.tailscale.com/admin/acls/file by
+// .github/workflows/tailscale-acl.yml on push to main.
+{
+	"acls": [
+		{
+			"action": "accept",
+			"src":    ["autogroup:member"],
+			"dst":    ["autogroup:member:*"],
+		},
+		{
+			"action": "accept",
+			"src":    ["autogroup:member"],
+			"dst":    ["10.7.0.1/32:*", "34.117.84.152/32:*"],
+		},
+	],
+	"grants": [
+		{
+			"src": ["*"],
+			"dst": ["*"],
+			"app": {
+				"tailscale.com/cap/drive": [
+					{"shares": ["*"], "access": "rw"},
+				],
+			},
+		},
+		{
+			"src": ["autogroup:member"],
+			"dst": ["autogroup:internet"],
+			"ip":  ["*"],
+		},
+	],
+	"ssh": [
+		{
+			"action":      "check",
+			"src":         ["autogroup:member"],
+			"dst":         ["autogroup:self"],
+			"users":       ["autogroup:nonroot", "root"],
+			"checkPeriod": "168h",
+		},
+	],
+	"nodeAttrs": [
+		{
+			"target": ["autogroup:member"],
+			"attr":   ["funnel", "drive:share", "drive:access", "exit-node"],
+		},
+	],
+	"autoApprovers": {
+		"exitNode": ["autogroup:member"],
+	},
+}
