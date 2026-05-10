@@ -19,4 +19,4 @@ jobs:
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tailnet:         nsimonfr.github
           action:          ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
-          path:            shared/tailscale-acl.json5
+          policy-file:     shared/tailscale-acl.json5
