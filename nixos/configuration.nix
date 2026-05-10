@@ -189,6 +189,8 @@ in
     iw             # modern wireless config (iw dev, iw scan …)
     wirelesstools  # iwconfig, iwlist, iwscan
     dhcpcd         # dhcp client for manual wifi sessions
+
+    smartmontools  # smartctl for ad-hoc disk inspection
   ];
 
   programs.kdeconnect.enable = true; # Enables KWallet D-Bus service
