@@ -1,1 +1,1 @@
-*.hujson linguist-language=JSON5
+*.hujson linguist-language=JSON5 linguist-detectable=true
