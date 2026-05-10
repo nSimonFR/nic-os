@@ -9,6 +9,7 @@
     ../shared/agenix.nix
     ./packages.nix
     ./zsh.nix
+    ./atuin.nix
     ./claude.nix
     ./mcp.nix
     ./llm-aliases.nix
