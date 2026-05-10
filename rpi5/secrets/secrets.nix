@@ -7,6 +7,7 @@ in {
   "linky-token.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "linky-prm.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
   "rclone-storj.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
+  "aperture-s3-export.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
   "sure-app-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
