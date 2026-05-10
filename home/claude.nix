@@ -85,8 +85,10 @@ in
     executable = true;
   };
 
-  # PostToolUse hook on Bash: append each command to ~/.claude/bash_history.log
-  # (zsh EXTENDED_HISTORY format) so it stays out of ~/.zsh_history and atuin.
+  # PostToolUse hook on Bash: register each command with atuin under a
+  # sentinel cwd (~/.claude/bash) so it syncs across devices and can be
+  # filtered (or excluded) with `atuin search --cwd ~/.claude/bash`.
+  # Requires the atuin daemon to be running — see ./atuin.nix.
   home.file.".claude/hooks/bash-history" = {
     source = ./scripts/claude-bash-history.sh;
     executable = true;
