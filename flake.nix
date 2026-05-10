@@ -183,7 +183,6 @@
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
           inputs.pi-mobile.nixosModules.pi-mobile
-          inputs.gleaner.nixosModules.gleaner
           {
             home-manager = {
               useGlobalPkgs = true;
