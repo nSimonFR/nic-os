@@ -191,14 +191,19 @@ $FAILURES"
   #   SMART fetch is observed in the hub _logs. Issue:
   #   https://github.com/henrygd/beszel/issues/1800
   #
-  # Beszel 0.18.6's background SMART fetcher in update() doesn't reliably fire
+  # Beszel 0.18.x's background SMART fetcher in update() doesn't reliably fire
   # on SMART_INTERVAL — data.Details.SmartInterval isn't transmitted over SSH
   # correctly, the hub falls back to a 1h default + cooldown that effectively
   # blocks subsequent fetches. The manual refresh endpoint bypasses the
-  # cooldown and always works.
+  # cooldown and reliably populates `smart_devices`.
   #
-  # The homepage superuser (created for the Beszel homepage widget) is reused
-  # here for the API login; password is plain in homepage.nix:81.
+  # IMPORTANT: `POST /api/beszel/smart/refresh` requires a regular `users`
+  # token, not a `_superusers` token — the handler calls `system.HasUser(auth.Id)`
+  # against the system's `users` field, which contains user IDs from the `users`
+  # collection. A superuser ID is not in that field, so the handler returns 404
+  # ("The requested resource wasn't found"). Workaround: auth as superuser, then
+  # use PocketBase's impersonate endpoint to mint a token for the first regular
+  # user that actually owns the systems.
   systemd.services.beszel-smart-refresh = {
     description = "Refresh Beszel SMART data for all systems (workaround for beszel#1800)";
     after = [ "beszel-hub.service" ];
@@ -210,7 +215,7 @@ $FAILURES"
         JQ="${pkgs.jq}/bin/jq"
         HUB=http://127.0.0.1:${toString beszelHubPort}
 
-        TOKEN=$($CURL -sf -X POST "$HUB/api/collections/_superusers/auth-with-password" \
+        SU_TOKEN=$($CURL -sf -X POST "$HUB/api/collections/_superusers/auth-with-password" \
           -H 'Content-Type: application/json' \
           -d '{"identity":"homepage@nic-os.local","password":"homepage-widget-pass"}' \
           | $JQ -r .token)
@@ -220,18 +225,32 @@ $FAILURES"
         # call that fails (no MTA configured) and logs a recordAuthResponse
         # error each run. Idempotent — safe to run every tick.
         $CURL -sf -X PATCH "$HUB/api/collections/_superusers" \
-          -H "Authorization: $TOKEN" -H 'Content-Type: application/json' \
+          -H "Authorization: $SU_TOKEN" -H 'Content-Type: application/json' \
           -d '{"authAlert":{"enabled":false}}' > /dev/null \
           && echo "authAlert disabled on _superusers" \
           || echo "WARN: failed to disable authAlert" >&2
 
+        # Pick the first regular user and impersonate them so the refresh
+        # handler's HasUser check passes (see comment block above).
+        USER_ID=$($CURL -sf -H "Authorization: $SU_TOKEN" \
+          "$HUB/api/collections/users/records?perPage=1&fields=id" \
+          | $JQ -r '.items[0].id // empty')
+        if [ -z "$USER_ID" ]; then
+          echo "ERROR: no regular user found in users collection — cannot refresh SMART" >&2
+          exit 1
+        fi
+        USER_TOKEN=$($CURL -sf -X POST -H "Authorization: $SU_TOKEN" \
+          -H 'Content-Type: application/json' -d '{"duration":3600}' \
+          "$HUB/api/collections/users/impersonate/$USER_ID" \
+          | $JQ -r .token)
+
         # Iterate over every registered system and kick its manual SMART refresh.
-        SYSTEMS=$($CURL -sf -H "Authorization: $TOKEN" \
+        SYSTEMS=$($CURL -sf -H "Authorization: $SU_TOKEN" \
           "$HUB/api/collections/systems/records?perPage=100&fields=id,name,status" \
           | $JQ -r '.items[] | select(.status=="up") | .id')
 
         for id in $SYSTEMS; do
-          $CURL -sf -X POST -H "Authorization: $TOKEN" \
+          $CURL -sf -X POST -H "Authorization: $USER_TOKEN" \
             "$HUB/api/beszel/smart/refresh?system=$id" > /dev/null \
             && echo "refreshed SMART for system=$id" \
             || echo "WARN: refresh failed for system=$id" >&2
