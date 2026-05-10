@@ -75,6 +75,19 @@ let
         };
       }
     ];
+    # Periodic export of usage logs to Storj's S3-compatible gateway.
+    # access_key_id / access_secret are placeholders here; the sync script
+    # rewrites them from /run/agenix/aperture-s3-export before PUTing so the
+    # real credentials never enter /nix/store.
+    exporters = {
+      s3 = {
+        bucket_name = "aperture-exports";
+        region = "us-east-1";
+        endpoint = "https://gateway.storjshare.io";
+        access_key_id = "__FROM_AGENIX__";
+        access_secret = "__FROM_AGENIX__";
+      };
+    };
   };
 
   # Write the inner config JSON to a file for the script to read.
@@ -97,6 +110,9 @@ in
         JQ="${pkgs.jq}/bin/jq"
         API="${apertureUrl}/api/config"
 
+        # Load Storj S3 creds for exporters.s3 (KEY=VALUE lines).
+        set -a; . /run/agenix/aperture-s3-export; set +a
+
         # Aperture may take a moment to become reachable after tailscaled starts.
         # Retry up to 5 times with 5s delay.
         for i in 1 2 3 4 5; do
@@ -109,7 +125,13 @@ in
           HASH=$(echo "$CURRENT" | $JQ -r .hash)
 
           # 2. Build the PUT envelope: {"config": "<json-string>", "hash": "<hash>"}
-          INNER_CONFIG=$(cat ${configFile})
+          #    The static configFile holds placeholder S3 creds; we inject the
+          #    real values from agenix here so they never enter /nix/store.
+          INNER_CONFIG=$(cat ${configFile} | $JQ -c \
+            --arg key "$STORJ_S3_ACCESS_KEY" \
+            --arg sec "$STORJ_S3_ACCESS_SECRET" \
+            '.exporters.s3.access_key_id = $key
+             | .exporters.s3.access_secret = $sec')
           PAYLOAD=$($JQ -n --arg config "$INNER_CONFIG" --arg hash "$HASH" \
             '{config: $config, hash: $hash}')
 

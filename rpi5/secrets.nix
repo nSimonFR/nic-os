@@ -49,6 +49,11 @@
     rclone-storj = {
       file = ./secrets/rclone-storj.age;
     };
+    aperture-s3-export = {
+      file = ./secrets/aperture-s3-export.age;
+      # Storj S3-gateway creds for Aperture's exporters.s3 block.
+      # Sourced as KEY=VALUE by aperture-config-sync.service (runs as root).
+    };
     restic-password = {
       file = ./secrets/restic-password.age;
     };
