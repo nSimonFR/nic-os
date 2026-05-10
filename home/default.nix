@@ -12,7 +12,6 @@
     ./atuin.nix
     ./claude.nix
     ./mcp.nix
-    ./llm-aliases.nix
     ./ssh.nix
     ./pi-coding-agent
   ];

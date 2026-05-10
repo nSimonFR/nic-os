@@ -19,6 +19,10 @@
     "auth0/auth0-cli"
     "Sikarugir-App/sikarugir"
     "RhetTbull/osxphotos"
+    {
+      name = "jundot/omlx";
+      clone_target = "https://github.com/jundot/omlx";
+    }
   ];
 
   brews = [
@@ -26,7 +30,7 @@
     "cookcli"
     "dbt-postgres"
     "helm"
-    "ollama"
+    "omlx"
     "pinentry-touchid"
     "RhetTbull/osxphotos/osxphotos"
     "tailscale"
