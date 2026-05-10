@@ -28,6 +28,7 @@ in
         "/dev/nvme0n1 r"
         "/dev/nvme1n1 r"
         "/dev/sda r"
+        "/dev/sdb r"
         "/dev/sdc r"
       ];
       SupplementaryGroups    = [ "disk" ];
