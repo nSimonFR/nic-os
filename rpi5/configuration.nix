@@ -126,6 +126,7 @@ in
     ./affine-mcp.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
+    ./gleaner.nix
     ./claude-remote-control.nix
     ./pi-mobile.nix
     ./open-webui.nix

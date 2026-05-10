@@ -93,6 +93,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # gleaner: quota-aware coding-agent dispatcher. Path input until the
+    # github:nSimonFR/gleaner repo is pushed; flip the URL when ready.
+    gleaner = {
+      url = "path:/home/nsimon/gleaner";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # llm-agents.nix: numtide's daily-updated flake of AI coding agent
     # packages. We pull `pi` (pi-coding-agent) from here instead of pinning
     # an upstream tarball ourselves — auto-tracks new releases.
@@ -176,6 +183,7 @@
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
           inputs.pi-mobile.nixosModules.pi-mobile
+          inputs.gleaner.nixosModules.gleaner
           {
             home-manager = {
               useGlobalPkgs = true;

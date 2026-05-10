@@ -1,0 +1,22 @@
+# gleaner.config.yaml — single user, rpi5/Europe-Paris
+#
+# Plan-agnostic shape: providers + their plans are auto-detected from
+# ~/.claude/.credentials.json + ~/.codex/auth.json. Package defaults
+# absorb timezone, hours (09-19 active / 22-07 drain), poll (10m),
+# require/block labels, guards (5h<0.75 idle, 7d<0.92), and safety caps.
+
+account: nSimonfr-ai
+repos:
+  - nSimonFR-ai/nic-os
+  - nSimonFR-ai/for-sure
+  - nSimonFR-ai/sure-nix
+  - nSimonFR-ai/pi-mobile
+
+profiles:
+  - { match: ["lang:python", "provider:codex"], run: ["codex", "exec", "{prompt}"] }
+  - { match: "*",                                run: ["claude", "-p", "{prompt}"] }
+
+# Single dispatcher hook script — gleaner calls it with the event name as $1
+# and the event JSON on stdin. The script in environment.etc routes each
+# event to the existing telegramNotify helper from monitoring.nix.
+hook: /etc/gleaner/hooks/dispatch.sh
