@@ -81,8 +81,6 @@
       # LLM-to-hardware matching CLI
       inputs.llmfit.packages.${pkgs.stdenv.hostPlatform.system}.default
 
-      # Anthropic→Ollama proxy (used by the claude-local alias)
-      pkgs.litellm
     ]
     ++ lib.optionals devSetup [
       # Dev tools (heavy packages, only on dev machines)

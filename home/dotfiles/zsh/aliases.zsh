@@ -22,11 +22,11 @@ alias claude='command claude --dangerously-skip-permissions --remote-control'
 cc()     { command claude --continue "$@"; }
 cr()     { command claude --resume "$@"; }
 
-# claude-local: Claude Code → local gemma4:26b (M3 Pro) via litellm proxy (port 4000)
-# claude-local: gemma4-a4b (26.5B MoE, 4B active — quality, 3 tok/s, 80% mem)
-alias claude-local='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=gemma4-a4b command claude --dangerously-skip-permissions --remote-control'
-# claude-local-fast: gemma4-e4b (8B dense — speed, 10 tok/s, 25% mem)
-alias claude-local-fast='ANTHROPIC_BASE_URL=http://localhost:4000 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=gemma4-e4b command claude --dangerously-skip-permissions --remote-control'
+# claude-local: Claude Code → oMLX on localhost:8000 (M3 Pro, MLX backend, Anthropic-native)
+# Qwen3.6-27B-4bit (~15 GB resident, reasoning model — replies via reasoning_content).
+# oMLX has its own admin auth; localhost verification is disabled (skip_api_key_verification=true),
+# so ANTHROPIC_API_KEY is a placeholder.
+alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=omlx-local ANTHROPIC_MODEL=Qwen3.6-27B-4bit command claude --dangerously-skip-permissions --remote-control'
 
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
 alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=openai/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
