@@ -228,6 +228,54 @@ in
 {
   home.packages = [ picoclaw ];
 
+  # vdirsyncer + khal configs for the `caldav-calendar` skill. Colocated here
+  # (not in home.nix) because the skill is picoclaw's consumer. Both tools come
+  # from home.packages in rpi5/home.nix; the configs live in $HOME/.config/.
+  #
+  # vdirsyncer reads the Nextcloud password lazily via `password.fetch` — the
+  # `cat` command runs at sync time as the nsimon user, which can read the
+  # 0400-mode agenix file. No env var, no NEXTCLOUD_PASSWORD plumbing in the
+  # exec wrapper.
+  home.file.".config/vdirsyncer/config".text = ''
+    [general]
+    status_path = "~/.local/share/vdirsyncer/status/"
+
+    [pair nextcloud]
+    a = "nc_remote"
+    b = "nc_local"
+    collections = ["from a"]
+    conflict_resolution = "a wins"
+    metadata = ["color", "displayname"]
+
+    [storage nc_remote]
+    type = "caldav"
+    url = "https://rpi5.gate-mintaka.ts.net:8085/remote.php/dav/"
+    username = "nsimon"
+    password.fetch = ["command", "cat", "/run/agenix/nextcloud-homepage-password"]
+
+    [storage nc_local]
+    type = "filesystem"
+    path = "~/.local/share/vdirsyncer/calendars/"
+    fileext = ".ics"
+  '';
+
+  home.file.".config/khal/config".text = ''
+    [calendars]
+    [[nextcloud]]
+    path = ~/.local/share/vdirsyncer/calendars/*
+    type = discover
+
+    [locale]
+    timeformat = %H:%M
+    dateformat = %Y-%m-%d
+    longdateformat = %Y-%m-%d %a
+    datetimeformat = %Y-%m-%d %H:%M
+    longdatetimeformat = %Y-%m-%d %a %H:%M
+
+    [default]
+    highlight_event_days = True
+  '';
+
   systemd.user.services.picoclaw = {
     Unit = {
       Description = "PicoClaw AI agent gateway";

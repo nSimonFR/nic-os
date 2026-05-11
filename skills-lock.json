@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "caldav-calendar": {
+      "source": "sundial-org/awesome-openclaw-skills",
+      "sourceType": "github",
+      "skillPath": "skills/caldav-calendar/SKILL.md",
+      "computedHash": "36ace0cce7e150decaa12fa713ff23edce40f86eb6cc8cb1572a87aa4e93c94a"
+    }
+  }
+}
