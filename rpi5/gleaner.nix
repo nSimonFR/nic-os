@@ -51,6 +51,8 @@ in {
     timer.persistent = true;
   };
 
+  environment.systemPackages = [ inputs.gleaner.packages.${pkgs.system}.default ];
+
   # nsimon-owned worktree root; gleaner.service creates it via
   # StateDirectory but ownership defaults to root if pre-existing.
   systemd.tmpfiles.rules = [
