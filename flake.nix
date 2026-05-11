@@ -95,7 +95,7 @@
 
     # gleaner: quota-aware coding-agent dispatcher.
     gleaner = {
-      url = "github:nSimonFR-ai/gleaner";
+      url = "github:nSimonFR/gleaner";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

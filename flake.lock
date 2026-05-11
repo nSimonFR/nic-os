@@ -602,13 +602,13 @@
       "locked": {
         "lastModified": 1778489409,
         "narHash": "sha256-8+UklYiIGLCgkUAZy7+gb2OymTMlOdmIOEcrNxBnDu4=",
-        "owner": "nSimonFR-ai",
+        "owner": "nSimonFR",
         "repo": "gleaner",
         "rev": "55d0e3a2da2518b98950aab9273a06e0c62f7c5a",
         "type": "github"
       },
       "original": {
-        "owner": "nSimonFR-ai",
+        "owner": "nSimonFR",
         "repo": "gleaner",
         "type": "github"
       }
