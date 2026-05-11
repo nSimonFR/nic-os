@@ -601,13 +601,16 @@
       },
       "locked": {
         "lastModified": 1778489409,
-        "narHash": "sha256-kemBB+zzg3Jfi0QA97HnGa4hiK3Y685iKFT7846SLbk=",
-        "path": "/home/nsimon/gleaner",
-        "type": "path"
+        "narHash": "sha256-8+UklYiIGLCgkUAZy7+gb2OymTMlOdmIOEcrNxBnDu4=",
+        "owner": "nSimonFR-ai",
+        "repo": "gleaner",
+        "rev": "55d0e3a2da2518b98950aab9273a06e0c62f7c5a",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/gleaner",
-        "type": "path"
+        "owner": "nSimonFR-ai",
+        "repo": "gleaner",
+        "type": "github"
       }
     },
     "gogcli-src": {

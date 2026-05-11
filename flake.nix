@@ -93,10 +93,9 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # gleaner: quota-aware coding-agent dispatcher. Path input until the
-    # github:nSimonFR/gleaner repo is pushed; flip the URL when ready.
+    # gleaner: quota-aware coding-agent dispatcher.
     gleaner = {
-      url = "path:/home/nsimon/gleaner";
+      url = "github:nSimonFR-ai/gleaner";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
