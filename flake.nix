@@ -65,10 +65,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # NOTE: do NOT `inputs.nixpkgs.follows = "nixpkgs"` here — pi-mobile's
+    # NOTE: do NOT `inputs.nixpkgs.follows = "nixpkgs"` here — amarre's
     # llm-agents.nix sibling packages (notably `apm`) need nixpkgs-unstable's
     # buildPythonApplication API and break on release-25.11.
-    pi-mobile.url = "github:nSimonFR/pi-mobile";
+    # Pinned to feat/remote-claude (nSimonFR/amarre#15) until merge — adds
+    # the optional claude.ai/code dual-control layer (PROTOCOL §14).
+    amarre.url = "github:nSimonFR/amarre/feat/remote-claude";
 
     llmfit = {
       url = "github:AlexsJones/llmfit";
@@ -175,7 +177,7 @@
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
-          inputs.pi-mobile.nixosModules.pi-mobile
+          inputs.amarre.nixosModules.amarre
           {
             home-manager = {
               useGlobalPkgs = true;
