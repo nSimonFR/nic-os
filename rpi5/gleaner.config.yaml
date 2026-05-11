@@ -4,13 +4,17 @@
 # ~/.claude/.credentials.json + ~/.codex/auth.json. Package defaults
 # absorb timezone, hours (09-19 active / 22-07 drain), poll (10m),
 # require/block labels, guards (5h<0.75 idle, 7d<0.92), and safety caps.
+#
+# Account is the bot that authenticates gh; repos are owned by the
+# personal account `nSimonFR` but the bot has push rights on them.
 
 account: nSimonfr-ai
 repos:
-  - nSimonFR-ai/nic-os
-  - nSimonFR-ai/for-sure
-  - nSimonFR-ai/sure-nix
-  - nSimonFR-ai/pi-mobile
+  - nSimonFR/nic-os
+  - nSimonFR/for-sure
+  - nSimonFR/sure-nix
+  # pi-mobile is excluded until cloned locally at $HOME/pi-mobile —
+  # gleaner's worktree creator needs the source repo on disk.
 
 profiles:
   - { match: ["lang:python", "provider:codex"], run: ["codex", "exec", "{prompt}"] }
