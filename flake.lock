@@ -600,8 +600,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1778489152,
-        "narHash": "sha256-Arya72enLR6QM4yVI1zaIDEqV8I4o57i1FFWui3NsRY=",
+        "lastModified": 1778489409,
+        "narHash": "sha256-kemBB+zzg3Jfi0QA97HnGa4hiK3Y685iKFT7846SLbk=",
         "path": "/home/nsimon/gleaner",
         "type": "path"
       },
