@@ -7,6 +7,9 @@
 // custom settings, run the `open default settings` command
 // from the command palette or from `Zed` application menu.
 {
+  "auto_install_extensions": {
+    "wakatime": true
+  },
   "base_keymap": "VSCode",
   "vim_mode": true,
   "theme": "The Dark Side",

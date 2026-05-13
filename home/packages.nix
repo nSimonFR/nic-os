@@ -70,7 +70,7 @@
       tmux
       tree
       unzip
-      vim
+      # vim installed by programs.vim (./wakatime.nix), bundles vim-wakatime
       watchman
       wget
       yarn

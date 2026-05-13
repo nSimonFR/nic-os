@@ -94,4 +94,11 @@ in
     executable = true;
   };
 
+  # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
+  # Code time-on-task lands in WakaTime stats alongside editor activity.
+  home.file.".claude/hooks/wakatime" = {
+    source = ./scripts/claude-wakatime.sh;
+    executable = true;
+  };
+
 }
