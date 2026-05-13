@@ -1,4 +1,4 @@
-{ config, lib, pkgs, unstablePkgs, ... }:
+{ config, lib, pkgs, unstablePkgs, username, ... }:
 # Hydroxide — third-party ProtonMail bridge exposing IMAP / SMTP / CardDAV.
 #
 # Pulled from nixpkgs-unstable for v0.2.31, which includes the
@@ -37,10 +37,10 @@ in
   };
   users.groups.hydroxide = {};
 
-  # Picoclaw runs as nsimon and shells out to himalaya, which reads the bridge
+  # Picoclaw runs as ${username} and shells out to himalaya, which reads the bridge
   # password at invocation time. Group membership grants read on the 0440 agenix
   # file without changing its owner. See rpi5/picoclaw/skills/protonmail/.
-  users.users.nsimon.extraGroups = [ "hydroxide" ];
+  users.users.${username}.extraGroups = [ "hydroxide" ];
 
   systemd.tmpfiles.rules = [
     "d /var/lib/hydroxide          0700 hydroxide hydroxide - -"
