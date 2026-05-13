@@ -24,6 +24,7 @@ wakatime-cli \
   --plugin "claude-code-wrapper/1.0" \
   --project "$project" \
   --language "Claude" \
+  --category "ai coding" \
   >/dev/null 2>&1
 
 exit 0
