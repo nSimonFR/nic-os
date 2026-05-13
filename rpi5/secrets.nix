@@ -112,5 +112,9 @@
       file  = ./secrets/nextcloud-homepage-password.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
+    wakapi-password-salt = {
+      file = ./secrets/wakapi-password-salt.age;
+      mode = "0444"; # DynamicUser (wakapi) needs to read via EnvironmentFile
+    };
 };
 }
