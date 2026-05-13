@@ -152,6 +152,11 @@ in
         cp -r ${cyrusSrc} /var/lib/cyrus/src
         chmod -R u+w /var/lib/cyrus/src
         cd /var/lib/cyrus/src
+        # Strip the workspace-root `prepare` script (husky). Both `pnpm install`
+        # and `pnpm rebuild` run it; husky's pnpm-shim spawn fails with exit
+        # code -2 in this systemd context (no .git, no interactive TTY), and
+        # we don't want git hooks at service-build time anyway.
+        ${pkgs.gnused}/bin/sed -i '/"prepare":/d' package.json
         # --child-concurrency=1 is critical: default 5 spawns parallel
         # postinstall scripts (sqlite3 prebuild-install, esbuild, etc.)
         # that thrash swap on rpi5 and get killed mid-flight.
