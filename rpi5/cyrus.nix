@@ -119,7 +119,7 @@ in
         pkgs.git
         pkgs.gcc
         pkgs.gnumake
-        pkgs.python3
+        pkgs.python311
         pkgs.coreutils
         pkgs.findutils
       ];
