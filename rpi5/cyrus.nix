@@ -148,8 +148,11 @@ in
         cp -r ${cyrusSrc} /var/lib/cyrus/src
         chmod -R u+w /var/lib/cyrus/src
         cd /var/lib/cyrus/src
-        pnpm install --frozen-lockfile
-        pnpm -r --filter='!@cyrus/electron' build
+        # --child-concurrency=1 is critical: default 5 spawns parallel
+        # postinstall scripts (sqlite3 prebuild-install, esbuild, etc.)
+        # that thrash swap on rpi5 and get killed mid-flight.
+        pnpm install --frozen-lockfile --child-concurrency=1
+        pnpm -r --filter='!@cyrus/electron' --workspace-concurrency=1 build
         echo "$WANT" > $MARKER
         echo "Build complete."
       '';
