@@ -156,7 +156,8 @@ in
         # and `pnpm rebuild` run it; husky's pnpm-shim spawn fails with exit
         # code -2 in this systemd context (no .git, no interactive TTY), and
         # we don't want git hooks at service-build time anyway.
-        ${pkgs.gnused}/bin/sed -i '/"prepare":/d' package.json
+        ${pkgs.jq}/bin/jq 'del(.scripts.prepare)' package.json > package.json.new \
+          && mv package.json.new package.json
         # --child-concurrency=1 is critical: default 5 spawns parallel
         # postinstall scripts (sqlite3 prebuild-install, esbuild, etc.)
         # that thrash swap on rpi5 and get killed mid-flight.
