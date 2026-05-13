@@ -129,10 +129,10 @@ in
     ./claude-remote-control.nix
     ./pi-mobile.nix
     ./open-webui.nix
-    ./wakapi.nix
     ./homepage.nix
     ./backups.nix
     ./storj-backup.nix
+    ./wakapi.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     # Subnet route for api.lydia-app.com — routes Sumeria traffic through RPi5
     # for transparent MITM token extraction without enabling exit node.
