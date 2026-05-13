@@ -33,15 +33,20 @@ alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=l
 
 # pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
 # All routes go through https://ai.gate-mintaka.ts.net for observability.
-# Defaults to gpt-5.5 (Codex subscription); pass any tlg model id as $1, e.g.
-#   pi                  → gpt-5.5
+# Pass any tlg model id as $1 to override the default, e.g.
+#   pi                  → default (Qwen3.6-27B-4bit on Mac, gpt-5.5 elsewhere)
 #   pi gemma4:e4b       → beast Ollama
+#   pi gpt-5.5          → Codex subscription
 #   pi auto             → beast-first with codex fallback
-pi() { command pi --provider aperture --model "${1:-gpt-5.5}" "${@:2}"; }
-
-# oMLX (Mac local MLX inference) is reached through Aperture like every other
-# provider — registered in rpi5/tiny-llm-gate.nix as provider=omlx. Invoke with
-#   pi Qwen3.6-27B-4bit
-# Requires `tailscale serve --bg --https=8443 http://127.0.0.1:8000` to be set
-# up once on this Mac so the RPi5 can reach oMLX. The serve config persists
-# across reboots; check with `tailscale serve status`.
+#
+# On Mac the default is Qwen3.6-27B-4bit — local MLX inference on this host,
+# reached through Aperture (registered in rpi5/tiny-llm-gate.nix as
+# provider=omlx). Requires `tailscale serve --bg --https=8443
+# http://127.0.0.1:8000` to be set up once on this Mac so the RPi5 can reach
+# oMLX. The serve config persists across reboots; check with
+# `tailscale serve status`.
+if [[ "$OSTYPE" == darwin* ]]; then
+  pi() { command pi --provider aperture --model "${1:-Qwen3.6-27B-4bit}" "${@:2}"; }
+else
+  pi() { command pi --provider aperture --model "${1:-gpt-5.5}" "${@:2}"; }
+fi
