@@ -24,7 +24,9 @@
 #
 # Manual: linear.app → Settings → API → OAuth Applications → New
 #   Callback URL:  https://rpi5.gate-mintaka.ts.net:8443/callback
+#                  (must be exact — cyrus hardcodes /callback, not /oauth/callback)
 #   Webhook URL:   https://rpi5.gate-mintaka.ts.net:8443/linear-webhook
+#                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
 { config, lib, pkgs, ... }:
@@ -194,6 +196,11 @@ in
         LINEAR_CLIENT_ID=$(cat ${config.age.secrets.cyrus-linear-client-id.path})
         LINEAR_CLIENT_SECRET=$(cat ${config.age.secrets.cyrus-linear-client-secret.path})
         LINEAR_WEBHOOK_SECRET=$(cat ${config.age.secrets.cyrus-linear-webhook-secret.path})
+        # We self-host the OAuth/webhook endpoint (Tailscale Funnel), so Linear
+        # POSTs directly. Without this flag cyrus defaults to "proxy mode" and
+        # verifies signatures against CYRUS_API_KEY (the hosted proxy.atcyrus.com
+        # path), which we don't use — every webhook would 401.
+        LINEAR_DIRECT_WEBHOOKS=true
         CYRUS_BASE_URL=${cfg.baseUrl}
         CYRUS_SERVER_PORT=${toString cfg.port}
         CYRUS_HOME=/var/lib/cyrus/.cyrus
