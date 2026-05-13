@@ -13,6 +13,7 @@
     ./claude.nix
     ./mcp.nix
     ./ssh.nix
+    ./wakatime.nix
     ./pi-coding-agent
   ];
 

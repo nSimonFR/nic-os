@@ -4,4 +4,5 @@
   age.secrets.secrets-zsh.file = ./secrets.zsh.age;
   age.secrets.telegram-bot-token.file = ./telegram-bot-token.age;
   age.secrets.mcp-secrets.file = ./mcp-secrets.age;
+  age.secrets.wakatime-cfg.file = ./wakatime.cfg.age;
 }
