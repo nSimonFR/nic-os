@@ -229,6 +229,13 @@ in
 
   services.resolved.enable = true;
 
+  # Cyrus — Linear coding-agent. Placeholder secrets are committed (cyrus
+  # itself will reject Linear OAuth until they're replaced), but the build +
+  # service + funnel pipeline is exercised end-to-end. Replace the three
+  # cyrus-linear-*.age files with real values from the Linear OAuth app and
+  # `systemctl restart cyrus`.
+  services.cyrus.enable = true;
+
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
   services.journald.extraConfig = ''
     SystemMaxUse=500M

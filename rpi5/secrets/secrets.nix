@@ -29,4 +29,7 @@ in {
   "wakapi-password-salt.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wakapi-smtp-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
   "wakapi-api-key.age".publicKeys              = [ nsimon-age nsimon-ed25519 ];
+  "cyrus-linear-client-id.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
+  "cyrus-linear-client-secret.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
+  "cyrus-linear-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }

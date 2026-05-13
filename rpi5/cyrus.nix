@@ -4,10 +4,18 @@
 # against issues, opens PRs as the configured GitHub user. Public URL via
 # Tailscale Funnel on :8443 → 127.0.0.1:3456.
 #
-# Aperture path: Claude SDK is pointed at tiny-llm-gate (127.0.0.1:4001) which
-# proxies to api.anthropic.com using the rotated OAuth token at
-# /run/claude-oauth/token. Cyrus itself does not see the real token; any value
-# in ANTHROPIC_API_KEY works as long as the env var is set.
+# Packaging: source is vendored as a fixed-output derivation (fetchFromGitHub).
+# A one-shot `cyrus-build.service` copies the source into /var/lib/cyrus/src and
+# runs `pnpm install --frozen-lockfile && pnpm -r build` on first start (or when
+# the pinned rev changes). Pure-Nix packaging via `pnpm.fetchDeps` was tried and
+# OOM'd downloading platform-binary deps (win32/musl/etc.) on the rpi5 sandbox.
+# The activation approach trades reproducibility for working software — the
+# build runs once per source rev, marker file at /var/lib/cyrus/.built-rev
+# prevents redundant rebuilds.
+#
+# Aperture path: ANTHROPIC_BASE_URL points at tiny-llm-gate (127.0.0.1:4001).
+# Cyrus's ANTHROPIC_API_KEY is a placeholder; tiny-llm-gate injects the real
+# rotated OAuth token from /run/claude-oauth/token per request.
 #
 # Flip `services.cyrus.enable = true` in configuration.nix AFTER:
 #   1. Creating the Linear OAuth app (see manual steps below).
@@ -23,82 +31,18 @@
 let
   cfg = config.services.cyrus;
 
+  cyrusRev = "5f3ed02a9590318fac4ea36188a41d397a917a0b";
+
   cyrusSrc = pkgs.fetchFromGitHub {
     owner = "cyrusagents";
     repo  = "cyrus";
-    rev   = "5f3ed02a9590318fac4ea36188a41d397a917a0b";
+    rev   = cyrusRev;
     hash  = "sha256-j5+DjuTbjX5nUwS5D60IoLo6WcIUJUy8x+OTUrygX8E=";
   };
-
-  cyrusPkg = pkgs.stdenv.mkDerivation (finalAttrs: {
-    pname = "cyrus";
-    version = "0.2.51-unstable-2026-05-11";
-    src = cyrusSrc;
-
-    # pnpm.fetchDeps materialises a fixed-output store path of the entire
-    # node_modules closure (deterministic). When this hash mismatches, the
-    # build prints the expected value; replace and rebuild.
-    pnpmDeps = pkgs.pnpm_10.fetchDeps {
-      inherit (finalAttrs) pname version src;
-      # Initial value — replace with the hash Nix reports on first build.
-      hash = lib.fakeHash;
-    };
-
-    nativeBuildInputs = [
-      pkgs.nodejs_22
-      pkgs.pnpm_10
-      pkgs.pnpm_10.configHook
-      pkgs.makeWrapper
-      # Native compile toolchain for sqlite3, node-pty, tree-sitter-bash:
-      pkgs.python3
-      pkgs.gcc
-      pkgs.gnumake
-    ];
-
-    buildPhase = ''
-      runHook preBuild
-      # The repo's build script excludes @cyrus/electron (desktop app we don't need).
-      pnpm -r --filter='!@cyrus/electron' build
-      runHook postBuild
-    '';
-
-    installPhase = ''
-      runHook preInstall
-      mkdir -p $out/lib/cyrus $out/bin
-
-      # Ship the whole repo (source + node_modules + dist) — Cyrus's runtime
-      # paths resolve relative to the monorepo root (label prompt templates,
-      # cyrus-skills-plugin assets, etc.).
-      cp -r . $out/lib/cyrus/
-      # Drop the build-time-only .git if it leaked in (fetchFromGitHub strips it
-      # already, but be defensive).
-      rm -rf $out/lib/cyrus/.git
-
-      # The CLI entrypoint lives at apps/cli/dist/src/app.js.
-      makeWrapper ${lib.getExe pkgs.nodejs_22} $out/bin/cyrus \
-        --add-flags "$out/lib/cyrus/apps/cli/dist/src/app.js"
-
-      runHook postInstall
-    '';
-
-    meta = with lib; {
-      description = "Linear coding-agent dispatcher (Claude / Codex / Cursor / Gemini)";
-      homepage = "https://github.com/cyrusagents/cyrus";
-      license = licenses.asl20;
-      mainProgram = "cyrus";
-      platforms = platforms.linux;
-    };
-  });
 in
 {
   options.services.cyrus = {
     enable = lib.mkEnableOption "cyrus — Linear coding-agent dispatcher";
-
-    package = lib.mkOption {
-      type = lib.types.package;
-      default = cyrusPkg;
-      description = "Cyrus package to use.";
-    };
 
     user = lib.mkOption {
       type = lib.types.str;
@@ -127,18 +71,7 @@ in
       description = ''
         Where the Claude Agent SDK sends /v1/messages. Default points at
         tiny-llm-gate (which injects the rotated OAuth token from
-        /run/claude-oauth/token). Set to "" / unset to talk to Anthropic
-        directly (requires real ANTHROPIC_API_KEY).
-      '';
-    };
-
-    repos = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
-      default = [ "https://github.com/nSimonFR/nic-os" "https://github.com/nSimonFR/for-sure" ];
-      description = ''
-        Repos Cyrus will consider. Added at first run via `cyrus self-add-repo`
-        — this list is for documentation only; the canonical state lives in
-        ~/.cyrus/config.json (Cyrus writes it).
+        /run/claude-oauth/token).
       '';
     };
   };
@@ -170,8 +103,59 @@ in
       mode  = "0400";
     };
 
-    # Pre-service oneshot writes /run/cyrus/env from agenix-backed values plus
-    # the rotated Claude OAuth token. Same pattern as affine-mcp-env.
+    # ── One-shot source build ──────────────────────────────────────────────
+    # Copies the pinned Cyrus source to /var/lib/cyrus/src, runs pnpm install
+    # + build. Skips work if the marker file matches the pinned rev. Native
+    # toolchain (gcc/make/python3) is on PATH for sqlite3 / node-pty.
+    systemd.services.cyrus-build = {
+      description = "Vendor + build Cyrus source on first run / rev change";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "cyrus.service" ];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      path = [
+        pkgs.nodejs_22
+        pkgs.pnpm_10
+        pkgs.git
+        pkgs.gcc
+        pkgs.gnumake
+        pkgs.python3
+        pkgs.coreutils
+        pkgs.findutils
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = cfg.user;
+        Group = cfg.user;
+        WorkingDirectory = "/var/lib/cyrus";
+        Environment = [
+          "HOME=/var/lib/cyrus"
+          "PNPM_HOME=/var/lib/cyrus/.pnpm"
+        ];
+        TimeoutStartSec = "20min";
+      };
+      script = ''
+        set -e
+        MARKER=/var/lib/cyrus/.built-rev
+        WANT=${cyrusRev}
+        if [ -f "$MARKER" ] && [ "$(cat $MARKER)" = "$WANT" ] && [ -f /var/lib/cyrus/src/apps/cli/dist/src/app.js ]; then
+          echo "Cyrus already built for rev $WANT — skipping"
+          exit 0
+        fi
+        echo "Building Cyrus rev $WANT"
+        rm -rf /var/lib/cyrus/src
+        cp -r ${cyrusSrc} /var/lib/cyrus/src
+        chmod -R u+w /var/lib/cyrus/src
+        cd /var/lib/cyrus/src
+        pnpm install --frozen-lockfile
+        pnpm -r --filter='!@cyrus/electron' build
+        echo "$WANT" > $MARKER
+        echo "Build complete."
+      '';
+    };
+
+    # ── Env file generator ─────────────────────────────────────────────────
     systemd.services.cyrus-env = {
       description = "Generate cyrus environment file with secrets";
       wantedBy = [ "multi-user.target" ];
@@ -208,17 +192,19 @@ in
     systemd.services.cyrus = {
       description = "Cyrus — Linear coding-agent dispatcher";
       wantedBy = [ "multi-user.target" ];
-      after = [ "network-online.target" "cyrus-env.service" "tiny-llm-gate.service" ];
+      after = [
+        "network-online.target"
+        "cyrus-env.service"
+        "cyrus-build.service"
+        "tiny-llm-gate.service"
+      ];
       wants = [ "network-online.target" ];
-      requires = [ "cyrus-env.service" ];
+      requires = [ "cyrus-env.service" "cyrus-build.service" ];
       restartTriggers = [
         config.age.secrets.cyrus-linear-client-id.file
         config.age.secrets.cyrus-linear-client-secret.file
         config.age.secrets.cyrus-linear-webhook-secret.file
       ];
-      # gh / git / claude / codex are shelled out by Cyrus's executor.
-      # claude-code is what the agent SDK invokes for the "claude" runner;
-      # codex-cli only needed if a repo configures the codex runner.
       path = [
         pkgs.git
         pkgs.gh
@@ -231,13 +217,11 @@ in
         Group = cfg.user;
         WorkingDirectory = "/var/lib/cyrus";
         EnvironmentFile = "/run/cyrus/env";
-        ExecStart = "${cfg.package}/bin/cyrus start";
+        ExecStart = "${pkgs.nodejs_22}/bin/node /var/lib/cyrus/src/apps/cli/dist/src/app.js start";
         Restart = "on-failure";
         RestartSec = 10;
-        MemoryMax = "768M";  # claude-agent-sdk holds prompts; bump if OOM
+        MemoryMax = "768M";
 
-        # Cyrus needs to write worktrees + state in $HOME. No ProtectHome,
-        # but ProtectSystem=strict keeps it from touching the rest of the FS.
         ProtectSystem = "strict";
         ReadWritePaths = [ "/var/lib/cyrus" ];
         NoNewPrivileges = true;
