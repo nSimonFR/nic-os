@@ -155,7 +155,10 @@ in
         # --child-concurrency=1 is critical: default 5 spawns parallel
         # postinstall scripts (sqlite3 prebuild-install, esbuild, etc.)
         # that thrash swap on rpi5 and get killed mid-flight.
-        pnpm install --frozen-lockfile --child-concurrency=1
+        # --ignore-scripts skips the root `prepare` script (husky), then
+        # `pnpm rebuild` rebuilds only the native dependency hooks.
+        pnpm install --frozen-lockfile --child-concurrency=1 --ignore-scripts
+        pnpm rebuild --child-concurrency=1
         pnpm -r --filter='!@cyrus/electron' --workspace-concurrency=1 build
         echo "$WANT" > $MARKER
         echo "Build complete."
