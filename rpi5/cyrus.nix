@@ -114,6 +114,11 @@ in
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
       path = [
+        # CRITICAL: pnpm spawns `sh` to run install-script shell pipelines
+        # (e.g. `prebuild-install -r napi || node-gyp rebuild`). Without
+        # bash on PATH every child install fails with `spawn sh ENOENT`,
+        # surfacing through pnpm as the opaque `exit code -2`.
+        pkgs.bash
         pkgs.nodejs_22
         pkgs.pnpm_10
         pkgs.git
@@ -158,13 +163,9 @@ in
         # we don't want git hooks at service-build time anyway.
         ${pkgs.jq}/bin/jq 'del(.scripts.prepare)' package.json > package.json.new \
           && mv package.json.new package.json
-        # --child-concurrency=1 is critical: default 5 spawns parallel
-        # postinstall scripts (sqlite3 prebuild-install, esbuild, etc.)
-        # that thrash swap on rpi5 and get killed mid-flight.
-        # --ignore-scripts skips the root `prepare` script (husky), then
-        # `pnpm rebuild` rebuilds only the native dependency hooks.
-        pnpm install --frozen-lockfile --child-concurrency=1 --ignore-scripts
-        pnpm rebuild
+        # --child-concurrency=1 is defensive against rpi5 memory pressure:
+        # default 5 spawns parallel postinstall scripts that thrash swap.
+        pnpm install --frozen-lockfile --child-concurrency=1
         pnpm -r --filter='!@cyrus/electron' --workspace-concurrency=1 build
         echo "$WANT" > $MARKER
         echo "Build complete."
