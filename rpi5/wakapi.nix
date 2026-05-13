@@ -22,7 +22,7 @@ in {
         name = "wakapi.db";
       };
       security = {
-        allow_signup = true;
+        allow_signup = false;
         insecure_cookies = false;
       };
     };
