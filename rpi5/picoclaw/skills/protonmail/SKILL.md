@@ -9,7 +9,7 @@ metadata: {"openclaw":{"emoji":"📧","os":["linux"],"requires":{"bins":["himala
 # ProtonMail (himalaya + hydroxide)
 
 > **PERSONAL mail only.** This skill is wired to the user's personal ProtonMail
-> (`nicolas.simon@protonmail.com`) via the local hydroxide bridge. Work mail is out of scope.
+> (`nsimon@protonmail.com`) via the local hydroxide bridge. Work mail is out of scope.
 
 `himalaya` is a CLI email client. On the rpi5 it talks to **hydroxide**, a third-party
 ProtonMail bridge running as a system service that exposes IMAP on `127.0.0.1:1143` and SMTP
@@ -28,14 +28,14 @@ member of). The himalaya config at `~/.config/himalaya/config.toml` is Nix-manag
 ```toml
 [accounts.proton]
 default = true
-email = "nicolas.simon@protonmail.com"
+email = "nsimon@protonmail.com"
 display-name = "Nicolas Simon"
 
 backend.type = "imap"
 backend.host = "127.0.0.1"
 backend.port = 1143
 backend.encryption.type = "none"
-backend.login = "nicolas.simon@protonmail.com"
+backend.login = "nsimon@protonmail.com"
 backend.auth.type = "password"
 backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 
@@ -43,7 +43,7 @@ message.send.backend.type = "smtp"
 message.send.backend.host = "127.0.0.1"
 message.send.backend.port = 1025
 message.send.backend.encryption.type = "none"
-message.send.backend.login = "nicolas.simon@protonmail.com"
+message.send.backend.login = "nsimon@protonmail.com"
 message.send.backend.auth.type = "password"
 message.send.backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 ```

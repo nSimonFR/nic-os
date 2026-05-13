@@ -267,14 +267,14 @@ in
   home.file.".config/himalaya/config.toml".text = ''
     [accounts.proton]
     default = true
-    email = "nicolas.simon@protonmail.com"
+    email = "nsimon@protonmail.com"
     display-name = "Nicolas Simon"
 
     backend.type = "imap"
     backend.host = "127.0.0.1"
     backend.port = 1143
     backend.encryption.type = "none"
-    backend.login = "nicolas.simon@protonmail.com"
+    backend.login = "nsimon@protonmail.com"
     backend.auth.type = "password"
     backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 
@@ -282,7 +282,7 @@ in
     message.send.backend.host = "127.0.0.1"
     message.send.backend.port = 1025
     message.send.backend.encryption.type = "none"
-    message.send.backend.login = "nicolas.simon@protonmail.com"
+    message.send.backend.login = "nsimon@protonmail.com"
     message.send.backend.auth.type = "password"
     message.send.backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 
