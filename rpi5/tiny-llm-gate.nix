@@ -38,6 +38,16 @@ in
           base_url = "http://127.0.0.1:4040/v1";
           api_key = "unused";
         };
+
+        # oMLX on the Mac (M3 Pro, MLX backend). Reached via the Mac's
+        # `tailscale serve` HTTPS endpoint so the cert is auto-issued by
+        # Tailscale. Mac may be offline (laptop); requests fail in that case,
+        # same posture as codex when its OAuth token is stale.
+        omlx = {
+          type = "openai";
+          base_url = "https://macbook-pro-appleosx-15.gate-mintaka.ts.net:8443/v1";
+          api_key = "unused";
+        };
       };
 
       models = {
@@ -68,6 +78,12 @@ in
         "gpt-5.2"            = { provider = "codex"; upstream_model = "gpt-5.2"; };
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
+
+        # -- oMLX models (Mac local inference via tailscale serve) --
+        # No fallback: Mac-asleep should surface as an error rather than
+        # silently consume the codex budget.
+        "Qwen3.6-27B-4bit"         = { provider = "omlx"; upstream_model = "Qwen3.6-27B-4bit"; };
+        "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
         # "auto" — local-first model: try gemma4:e4b on beast, fall back to
         # codex gpt-5.5 if beast is unreachable (TCP refused / timeout) or

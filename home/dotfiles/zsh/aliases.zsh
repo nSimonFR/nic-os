@@ -38,3 +38,10 @@ alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=l
 #   pi gemma4:e4b       → beast Ollama
 #   pi auto             → beast-first with codex fallback
 pi() { command pi --provider aperture --model "${1:-gpt-5.5}" "${@:2}"; }
+
+# oMLX (Mac local MLX inference) is reached through Aperture like every other
+# provider — registered in rpi5/tiny-llm-gate.nix as provider=omlx. Invoke with
+#   pi Qwen3.6-27B-4bit
+# Requires `tailscale serve --bg --https=8443 http://127.0.0.1:8000` to be set
+# up once on this Mac so the RPi5 can reach oMLX. The serve config persists
+# across reboots; check with `tailscale serve status`.
