@@ -129,6 +129,7 @@ in
     ./claude-remote-control.nix
     ./pi-mobile.nix
     ./open-webui.nix
+    ./wakapi.nix
     ./homepage.nix
     ./backups.nix
     ./storj-backup.nix
