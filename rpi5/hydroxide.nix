@@ -37,6 +37,11 @@ in
   };
   users.groups.hydroxide = {};
 
+  # Picoclaw runs as nsimon and shells out to himalaya, which reads the bridge
+  # password at invocation time. Group membership grants read on the 0440 agenix
+  # file without changing its owner. See rpi5/picoclaw/skills/protonmail/.
+  users.users.nsimon.extraGroups = [ "hydroxide" ];
+
   systemd.tmpfiles.rules = [
     "d /var/lib/hydroxide          0700 hydroxide hydroxide - -"
     "d /var/lib/hydroxide/.config  0700 hydroxide hydroxide - -"
