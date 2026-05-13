@@ -14,6 +14,7 @@
     ./mcp.nix
     ./ssh.nix
     ./wakatime.nix
+    ./editors.nix
     ./pi-coding-agent
   ];
 
@@ -36,19 +37,9 @@
   xdg.configFile."mpv/mpv.conf".source = ./dotfiles/mpv.conf;
   xdg.configFile."btop/btop.conf".source = ./dotfiles/btop.conf;
   xdg.configFile."ghostty/config".source = ./dotfiles/ghostty;
-  xdg.configFile."zed/settings.json".source = ./dotfiles/editor/zed-settings.json;
 
-  # Cursor: macOS uses ~/Library/Application Support/, Linux uses ~/.config/
-  home.file."${
-    if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"
-  }/Cursor/User/settings.json".source =
-    ./dotfiles/editor/cursor-settings.json;
-  home.file."${
-    if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config"
-  }/Cursor/User/keybindings.json".source =
-    ./dotfiles/editor/cursor-keybindings.json;
+  # Editors (VS Code, Cursor, Zed, Vim) live in ./editors.nix.
 
-  # ~/.vimrc managed by programs.vim in ./wakatime.nix (vim-wakatime plugin).
   home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
     ./dotfiles/star-citizen/launcher.cfg;
 
