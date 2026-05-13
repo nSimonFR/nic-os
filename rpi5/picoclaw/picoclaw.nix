@@ -275,16 +275,16 @@ in
     backend.port = 1143
     backend.encryption.type = "none"
     backend.login = "nicolas.simon@protonmail.com"
-    backend.auth.type = "raw"
-    backend.auth.raw.cmd = "cat /run/agenix/protonmail-bridge-password"
+    backend.auth.type = "password"
+    backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 
     message.send.backend.type = "smtp"
     message.send.backend.host = "127.0.0.1"
     message.send.backend.port = 1025
     message.send.backend.encryption.type = "none"
     message.send.backend.login = "nicolas.simon@protonmail.com"
-    message.send.backend.auth.type = "raw"
-    message.send.backend.auth.raw.cmd = "cat /run/agenix/protonmail-bridge-password"
+    message.send.backend.auth.type = "password"
+    message.send.backend.auth.cmd = "cat /run/agenix/protonmail-bridge-password"
 
     folder.aliases.inbox = "INBOX"
     folder.aliases.sent = "Sent"
