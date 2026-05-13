@@ -48,7 +48,7 @@
   }/Cursor/User/keybindings.json".source =
     ./dotfiles/editor/cursor-keybindings.json;
 
-  home.file.".vimrc".source = ./dotfiles/editor/vim;
+  # ~/.vimrc managed by programs.vim in ./wakatime.nix (vim-wakatime plugin).
   home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
     ./dotfiles/star-citizen/launcher.cfg;
 
