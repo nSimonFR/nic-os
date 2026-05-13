@@ -11,6 +11,9 @@ in {
   services.wakapi = {
     enable = true;
     passwordSaltFile = "/run/agenix/wakapi-password-salt";
+    # SMTP password (Proton Bridge token) supplied via EnvironmentFile as
+    # WAKAPI_MAIL_SMTP_PASS, see secrets.nix → wakapi-smtp-env.
+    smtpPasswordFile = "/run/agenix/wakapi-smtp-env";
     settings = {
       server = {
         listen_ipv4 = "127.0.0.1";
@@ -25,7 +28,25 @@ in {
         allow_signup = false;
         insecure_cookies = false;
       };
+      mail = {
+        enabled = true;
+        provider = "smtp";
+        sender = "Wakapi <nsimon@protonmail.com>";
+        smtp = {
+          host = "127.0.0.1";
+          port = 1025;
+          username = "nsimon@protonmail.com";
+          # password injected via EnvironmentFile (WAKAPI_MAIL_SMTP_PASS).
+          tls = false; # hydroxide bridge is plaintext on localhost
+        };
+      };
     };
+  };
+
+  # Wait for hydroxide before starting wakapi so SMTP is reachable.
+  systemd.services.wakapi = {
+    after = [ "hydroxide.service" ];
+    wants = [ "hydroxide.service" ];
   };
 
   # PrivateUsers (nixpkgs default) needs user namespaces — unsupported on RPi5.

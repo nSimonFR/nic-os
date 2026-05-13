@@ -116,5 +116,9 @@
       file = ./secrets/wakapi-password-salt.age;
       mode = "0444"; # DynamicUser (wakapi) needs to read via EnvironmentFile
     };
+    wakapi-smtp-env = {
+      file = ./secrets/wakapi-smtp-env.age;
+      mode = "0444"; # DynamicUser (wakapi) reads via EnvironmentFile
+    };
 };
 }
