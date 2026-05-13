@@ -7,6 +7,7 @@
 {
   imports = [
     ./picoclaw/picoclaw.nix
+    ./mail.nix
   ];
 
   home.packages = with pkgs; [
@@ -14,7 +15,6 @@
     pnpm
     vdirsyncer
     khal
-    himalaya
     (callPackage ./gogcli.nix { gogcli-src = inputs.gogcli-src; })
     (callPackage ./goplaces.nix { goplaces-src = inputs.goplaces-src; })
   ];
