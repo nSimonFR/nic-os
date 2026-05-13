@@ -75,4 +75,40 @@ in {
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
   };
+
+  # ── Daily auto-import from wakatime.com ──
+  # Wakapi's import endpoint accepts Authorization: Bearer base64(api_key),
+  # so no password / session cookie is required. Fires at 04:15 (after the
+  # backup) to bring in the previous day's heartbeats.
+  systemd.services.wakapi-autoimport = {
+    description = "Trigger daily Wakapi import from wakatime.com";
+    after = [ "wakapi.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      LoadCredential = "api-key:/run/agenix/wakapi-api-key";
+    };
+    path = with pkgs; [ curl coreutils ];
+    script = ''
+      set -euo pipefail
+      KEY=$(tr -d '\n' < "$CREDENTIALS_DIRECTORY/api-key")
+      B64=$(printf '%s' "$KEY" | base64 -w0)
+      code=$(curl -sk -o /dev/null -w '%{http_code}' \
+        -X POST \
+        -H "Authorization: Bearer $B64" \
+        -d 'action=import_wakatime' \
+        "http://127.0.0.1:${toString port}/settings")
+      echo "wakapi-autoimport: HTTP $code"
+      case "$code" in
+        2*|3*) exit 0 ;;
+        429)   echo "wakapi-autoimport: rate-limited (24h cooldown still active)"; exit 0 ;;
+        *)     exit 1 ;;
+      esac
+    '';
+  };
+
+  systemd.timers.wakapi-autoimport = {
+    description = "Daily Wakapi import-from-wakatime.com timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+  };
 }

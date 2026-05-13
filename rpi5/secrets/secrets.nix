@@ -28,4 +28,5 @@ in {
   "nextcloud-homepage-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "wakapi-password-salt.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wakapi-smtp-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
+  "wakapi-api-key.age".publicKeys              = [ nsimon-age nsimon-ed25519 ];
 }
