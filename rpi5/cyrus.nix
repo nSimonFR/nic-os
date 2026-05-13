@@ -132,6 +132,10 @@ in
         Environment = [
           "HOME=/var/lib/cyrus"
           "PNPM_HOME=/var/lib/cyrus/.pnpm"
+          # Cyrus's package.json has a `prepare` lifecycle script that runs
+          # husky. We don't want git hooks installed at service-build time
+          # (no .git here), and husky's exit code is non-deterministic.
+          "HUSKY=0"
         ];
         TimeoutStartSec = "20min";
       };
