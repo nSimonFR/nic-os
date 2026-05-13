@@ -33,7 +33,9 @@ in
 
   # Anthropic baseUrl override is Aperture-routed; the
   # `anthropic-beta: oauth-2025-04-20` header tells Anthropic to honour the
-  # OAuth Bearer that tiny-llm-gate injects.
+  # OAuth Bearer that tiny-llm-gate injects. oMLX is reached through Aperture
+  # too (registered in rpi5/tiny-llm-gate.nix as provider=omlx), so no
+  # per-host provider entry is needed here.
   home.file.".pi/agent/models.json".text = builtins.toJSON {
     providers.anthropic = {
       baseUrl = "https://ai.gate-mintaka.ts.net";
