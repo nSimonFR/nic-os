@@ -124,6 +124,7 @@ in
     ./dawarich.nix
     ./affine.nix
     ./affine-mcp.nix
+    ./cyrus.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
     ./claude-remote-control.nix
