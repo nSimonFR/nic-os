@@ -120,5 +120,12 @@
       file = ./secrets/wakapi-smtp-env.age;
       mode = "0444"; # DynamicUser (wakapi) reads via EnvironmentFile
     };
+    wakapi-api-key = {
+      file = ./secrets/wakapi-api-key.age;
+      mode = "0440";
+      # group "wheel" so the daily-import oneshot can read it without
+      # owning the file outright.
+      group = "wheel";
+    };
 };
 }
