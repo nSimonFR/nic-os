@@ -69,6 +69,18 @@ in
       description = "Public URL Linear webhooks reach (Tailscale Funnel).";
     };
 
+    claudeDefaultModel = lib.mkOption {
+      type = lib.types.str;
+      default = "sonnet";
+      description = ''
+        Top-level `claudeDefaultModel` written to /var/lib/cyrus/.cyrus/config.json
+        on each rebuild. Used by edge-worker when neither the session metadata
+        nor the repo entry specifies a model. Accepts the same values the CLI
+        does — "opus", "sonnet", "haiku", or a full model id like
+        "claude-sonnet-4-6".
+      '';
+    };
+
     anthropicBaseUrl = lib.mkOption {
       type = lib.types.str;
       default = apertureUrl;
@@ -323,6 +335,7 @@ in
         config.age.secrets.cyrus-linear-client-id.file
         config.age.secrets.cyrus-linear-client-secret.file
         config.age.secrets.cyrus-linear-webhook-secret.file
+        cfg.claudeDefaultModel
       ];
       path = [
         pkgs.git
@@ -361,6 +374,37 @@ in
         ProtectControlGroups = true;
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
       };
+    };
+
+    # ── Default model sync ─────────────────────────────────────────────────
+    # Writes `claudeDefaultModel` to config.json on each rebuild. config.json
+    # is the runtime source of truth for the edge-worker; without this step
+    # the default ("opus") sticks even after changing the Nix option.
+    systemd.services.cyrus-set-model = {
+      description = "Sync cyrus claudeDefaultModel into config.json";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "cyrus-build.service" ];
+      requires = [ "cyrus-build.service" ];
+      before = [ "cyrus.service" ];
+      path = [ pkgs.jq pkgs.coreutils ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = cfg.user;
+        Group = cfg.user;
+      };
+      script = ''
+        set -e
+        CONFIG=/var/lib/cyrus/.cyrus/config.json
+        if [ ! -f "$CONFIG" ]; then
+          echo "config.json not present — run 'cyrus self-auth-linear' first"
+          exit 0
+        fi
+        tmp=$(mktemp)
+        jq --arg m '${cfg.claudeDefaultModel}' '.claudeDefaultModel = $m' "$CONFIG" > "$tmp"
+        mv "$tmp" "$CONFIG"
+        echo "Set claudeDefaultModel = ${cfg.claudeDefaultModel}"
+      '';
     };
 
     # ── Declarative repo sync ──────────────────────────────────────────────
