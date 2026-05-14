@@ -235,6 +235,17 @@ in
   # cyrus-linear-*.age files with real values from the Linear OAuth app and
   # `systemctl restart cyrus`.
   services.cyrus.enable = true;
+  services.cyrus.repositories = let
+    mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
+  in map mkRepo [
+    "nic-os"
+    "amarre"
+    "for-sure"
+    "gleaner"
+    "sure-nix"
+    "terradex"
+    "tiny-llm-gate"
+  ];
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
   services.journald.extraConfig = ''

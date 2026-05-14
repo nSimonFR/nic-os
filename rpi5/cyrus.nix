@@ -81,6 +81,40 @@ in
         management. See memory: project_claude_code_aperture.md.
       '';
     };
+
+    repositories = lib.mkOption {
+      type = lib.types.listOf (lib.types.submodule {
+        options = {
+          name = lib.mkOption {
+            type = lib.types.str;
+            description = "Local repo name (also the default routing label).";
+          };
+          url = lib.mkOption {
+            type = lib.types.str;
+            description = "HTTPS clone URL; cyrus user uses gh credential helper.";
+          };
+          workspace = lib.mkOption {
+            type = lib.types.str;
+            default = "nSimon";
+            description = "Linear workspace display name. Must match the workspace OAuth'd via `cyrus self-auth-linear`.";
+          };
+        };
+      });
+      default = [];
+      description = ''
+        Repositories cyrus manages. Synced declaratively on activation:
+        `cyrus-sync-repos.service` clones + calls `self-add-repo` for any
+        repo in this list not already in /var/lib/cyrus/.cyrus/config.json.
+
+        Bootstrap order (one-time): create Linear OAuth app → encrypt
+        cyrus-linear-*.age → `nixos-rebuild switch` → `sudo -u cyrus -H
+        cyrus self-auth-linear` (interactive browser flow) → `nixos-rebuild
+        switch` again (sync-repos picks up the workspace token).
+
+        Removing a repo from the list does NOT remove it from cyrus's
+        runtime config — that's a destructive op left to the operator.
+      '';
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -283,6 +317,64 @@ in
         ProtectControlGroups = true;
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
       };
+    };
+
+    # ── Declarative repo sync ──────────────────────────────────────────────
+    # Reads services.cyrus.repositories, ensures each is in config.json by
+    # invoking `cyrus self-add-repo` for any missing entry. No-op if Linear
+    # OAuth hasn't been bootstrapped yet (linearWorkspaces empty).
+    systemd.services.cyrus-sync-repos = lib.mkIf (cfg.repositories != []) {
+      description = "Sync declared cyrus repositories with runtime config.json";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "cyrus-build.service" "cyrus-env.service" ];
+      requires = [ "cyrus-build.service" "cyrus-env.service" ];
+      path = [
+        pkgs.nodejs_22
+        pkgs.git
+        pkgs.gh
+        pkgs.openssh
+        pkgs.jq
+      ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = cfg.user;
+        Group = cfg.user;
+        EnvironmentFile = "/run/cyrus/env";
+        Environment = [ "HOME=/var/lib/cyrus" ];
+      };
+      script =
+        let
+          reposJson = builtins.toJSON cfg.repositories;
+        in ''
+          set -e
+          CONFIG=/var/lib/cyrus/.cyrus/config.json
+          if [ ! -f "$CONFIG" ]; then
+            echo "config.json not present — run 'cyrus self-auth-linear' first to bootstrap"
+            exit 0
+          fi
+          # Skip if no Linear workspace OAuth'd yet (self-add-repo would fail).
+          if [ "$(jq '.linearWorkspaces | length' "$CONFIG")" = "0" ]; then
+            echo "linearWorkspaces empty — run 'cyrus self-auth-linear' first"
+            exit 0
+          fi
+          declared='${reposJson}'
+          existing=$(jq -r '.repositories[].name' "$CONFIG")
+          echo "$declared" | jq -c '.[]' | while read -r entry; do
+            name=$(echo "$entry" | jq -r '.name')
+            url=$(echo "$entry" | jq -r '.url')
+            workspace=$(echo "$entry" | jq -r '.workspace')
+            if echo "$existing" | grep -qFx "$name"; then
+              echo "✓ $name already in config"
+              continue
+            fi
+            echo "+ adding $name ($url)"
+            node /var/lib/cyrus/src/apps/cli/dist/src/app.js \
+              --env-file /run/cyrus/env \
+              self-add-repo "$url" "$workspace" || \
+              echo "! failed to add $name (continuing)"
+          done
+        '';
     };
   };
 }
