@@ -342,6 +342,9 @@ in
         pkgs.gh
         pkgs.openssh
         pkgs.nodejs_22
+        # Many cyrus-managed repos use pnpm workspaces; agent shells need it
+        # on PATH (corepack can't write into the read-only nix-store node).
+        pkgs.pnpm_10
         # @anthropic-ai/claude-agent-sdk spawns the `claude` CLI as a child.
         # Without it the SDK exits 127 ("command not found") on every session.
         unstablePkgs.claude-code
