@@ -42,6 +42,13 @@ let
     };
   };
 
+  reaperNoStartupErrors = pkgs.writeShellApplication {
+    name = "reaper";
+    text = ''
+      exec ${pkgs.reaper}/bin/reaper -ignoreerrors "$@"
+    '';
+  };
+
   graillonFree = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "graillon-free";
     version = "3.2";
@@ -97,6 +104,7 @@ in
   services.pipewire.jack.enable = true;
 
   environment.systemPackages = with pkgs; [
+    (lib.hiPrio reaperNoStartupErrors)
     reaper
     reaper-sws-extension
     reaper-reapack-extension
