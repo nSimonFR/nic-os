@@ -83,11 +83,11 @@ in
     };
 
     repositories = lib.mkOption {
-      type = lib.types.listOf (lib.types.submodule {
+      type = lib.types.listOf (lib.types.submodule ({ config, ... }: {
         options = {
           name = lib.mkOption {
             type = lib.types.str;
-            description = "Local repo name (also the default routing label).";
+            description = "Local repo name.";
           };
           url = lib.mkOption {
             type = lib.types.str;
@@ -98,13 +98,38 @@ in
             default = "nSimon";
             description = "Linear workspace display name. Must match the workspace OAuth'd via `cyrus self-auth-linear`.";
           };
+          routingLabels = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [ config.name ];
+            defaultText = lib.literalExpression "[ name ]";
+            description = ''
+              Linear labels that route issues to this repo. Default is the
+              repo name (matches cyrus `self-add-repo` default).
+
+              Set to `[]` to make this repo a **catch-all**: any issue with
+              no matching routing label / projectKey / teamKey / `[repo=...]`
+              tag lands here instead of triggering cyrus's "Which repository
+              should I work in?" comment. Only one repo can be catch-all
+              (first one wins in RepositoryRouter).
+            '';
+          };
+          catchAll = lib.mkOption {
+            type = lib.types.bool;
+            default = false;
+            description = ''
+              Convenience flag — sets `routingLabels = []` so cyrus's
+              RepositoryRouter treats this repo as the fallback for issues
+              that don't match any other route.
+            '';
+          };
         };
-      });
+      }));
       default = [];
       description = ''
-        Repositories cyrus manages. Synced declaratively on activation:
-        `cyrus-sync-repos.service` clones + calls `self-add-repo` for any
-        repo in this list not already in /var/lib/cyrus/.cyrus/config.json.
+        Repositories cyrus manages. Synced declaratively on activation by
+        `cyrus-sync-repos.service`:
+          - missing repos → `cyrus self-add-repo <url> <workspace> -l <labels>`
+          - existing repos → routingLabels reconciled in place via jq
 
         Bootstrap order (one-time): create Linear OAuth app → encrypt
         cyrus-linear-*.age → `nixos-rebuild switch` → `sudo -u cyrus -H
@@ -361,13 +386,23 @@ in
         Group = cfg.user;
         EnvironmentFile = "/run/cyrus/env";
         Environment = [ "HOME=/var/lib/cyrus" ];
+        # Restart cyrus.service iff sync actually mutated config.json. The
+        # `+` prefix elevates to root so systemctl works; the script writes a
+        # /run flag we check here. Without this, cyrus keeps stale routing
+        # labels in memory after a rebuild that changed them.
+        ExecStartPost = "+${pkgs.bash}/bin/bash -c '[ -f /run/cyrus/sync-changed ] && { rm /run/cyrus/sync-changed; ${pkgs.systemd}/bin/systemctl try-restart cyrus.service; } || true'";
       };
       script =
         let
-          reposJson = builtins.toJSON cfg.repositories;
+          normalized = map (r: {
+            inherit (r) name url workspace;
+            routingLabels = if r.catchAll then [] else r.routingLabels;
+          }) cfg.repositories;
+          reposJson = builtins.toJSON normalized;
         in ''
           set -e
           CONFIG=/var/lib/cyrus/.cyrus/config.json
+          CHANGED=0
           if [ ! -f "$CONFIG" ]; then
             echo "config.json not present — run 'cyrus self-auth-linear' first to bootstrap"
             exit 0
@@ -379,20 +414,45 @@ in
           fi
           declared='${reposJson}'
           existing=$(jq -r '.repositories[].name' "$CONFIG")
-          echo "$declared" | jq -c '.[]' | while read -r entry; do
+          # Process-substitution (not pipe) so CHANGED survives the loop:
+          # piped while-loops run in a subshell and lose parent-scope vars.
+          while read -r entry; do
             name=$(echo "$entry" | jq -r '.name')
             url=$(echo "$entry" | jq -r '.url')
             workspace=$(echo "$entry" | jq -r '.workspace')
+            labels_csv=$(echo "$entry" | jq -r '.routingLabels | join(",")')
             if echo "$existing" | grep -qFx "$name"; then
-              echo "✓ $name already in config"
+              # Reconcile routingLabels in place — `self-add-repo` only fires
+              # for new entries, so existing repos would otherwise keep their
+              # initial label set forever. Idempotent: jq writes only if the
+              # array differs.
+              current=$(jq -c --arg n "$name" '.repositories[] | select(.name == $n) | (.routingLabels // [])' "$CONFIG")
+              want=$(echo "$entry" | jq -c '.routingLabels')
+              if [ "$current" != "$want" ]; then
+                echo "~ $name routingLabels: $current → $want"
+                tmp=$(mktemp)
+                jq --arg n "$name" --argjson labels "$want" \
+                  '(.repositories[] | select(.name == $n) | .routingLabels) = $labels' \
+                  "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+                CHANGED=1
+              else
+                echo "✓ $name already in config"
+              fi
               continue
             fi
-            echo "+ adding $name ($url)"
-            node /var/lib/cyrus/src/apps/cli/dist/src/app.js \
-              --env-file /run/cyrus/env \
-              self-add-repo "$url" "$workspace" || \
+            echo "+ adding $name ($url) labels=[$labels_csv]"
+            if node /var/lib/cyrus/src/apps/cli/dist/src/app.js \
+                --env-file /run/cyrus/env \
+                self-add-repo "$url" "$workspace" -l "$labels_csv"; then
+              CHANGED=1
+            else
               echo "! failed to add $name (continuing)"
-          done
+            fi
+          done < <(echo "$declared" | jq -c '.[]')
+          if [ "$CHANGED" = "1" ]; then
+            touch /run/cyrus/sync-changed
+            echo "config.json mutated — cyrus will be restarted"
+          fi
         '';
     };
   };
