@@ -13,9 +13,11 @@
 # build runs once per source rev, marker file at /var/lib/cyrus/.built-rev
 # prevents redundant rebuilds.
 #
-# Aperture path: ANTHROPIC_BASE_URL points at tiny-llm-gate (127.0.0.1:4001).
-# Cyrus's ANTHROPIC_API_KEY is a placeholder; tiny-llm-gate injects the real
-# rotated OAuth token from /run/claude-oauth/token per request.
+# Aperture path: ANTHROPIC_BASE_URL points at Aperture (ai.gate-mintaka.ts.net).
+# Aperture forwards to tiny-llm-gate (127.0.0.1:4001) which injects the rotated
+# OAuth token from /run/claude-oauth/token. Aperture logs every request +
+# response for observability (/api/sessions). Cyrus's ANTHROPIC_API_KEY is a
+# placeholder; tiny-llm-gate replaces the header before hitting Anthropic.
 #
 # Flip `services.cyrus.enable = true` in configuration.nix AFTER:
 #   1. Creating the Linear OAuth app (see manual steps below).
@@ -29,7 +31,7 @@
 #                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
-{ config, lib, pkgs, unstablePkgs, ... }:
+{ config, lib, pkgs, unstablePkgs, apertureUrl, ... }:
 let
   cfg = config.services.cyrus;
 
@@ -69,11 +71,14 @@ in
 
     anthropicBaseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "http://127.0.0.1:4001";
+      default = apertureUrl;
       description = ''
         Where the Claude Agent SDK sends /v1/messages. Default points at
-        tiny-llm-gate (which injects the rotated OAuth token from
-        /run/claude-oauth/token).
+        Aperture (Tailscale-managed proxy with full session observability):
+          cyrus → Aperture → tiny-llm-gate → api.anthropic.com
+        tiny-llm-gate's Anthropic handler injects the rotated OAuth token
+        from /run/claude-oauth/token, so Aperture stays out of credential
+        management. See memory: project_claude_code_aperture.md.
       '';
     };
   };
