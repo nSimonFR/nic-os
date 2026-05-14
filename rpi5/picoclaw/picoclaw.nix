@@ -40,14 +40,14 @@ let
 
   configDir = "/home/nsimon/.picoclaw";
   workspaceDir = "${configDir}/workspace";
-  # Picoclaw-local skills + the shared `linear` skill (single source of
-  # truth under shared/skills/linear, also wired into claude/codex/pi via
-  # home/claude.nix). runCommand merges the two trees into one derivation
-  # so the rsync below stays a single source.
+  # Merge picoclaw-local skills (./skills) with the shared cross-agent
+  # skills under shared/skills/ (wired into claude/codex/pi by
+  # home/claude.nix). Local entries win on name collisions, so an
+  # override at rpi5/picoclaw/skills/<name>/ trumps the shared version.
   skillsSource = pkgs.runCommand "picoclaw-skills" { } ''
     mkdir -p $out
-    cp -r ${./skills}/. $out/
-    cp -r ${../../shared/skills/linear} $out/linear
+    cp -r ${../../shared/skills}/. $out/
+    cp -rf ${./skills}/. $out/
   '';
   documentsSource = ./documents;
 
