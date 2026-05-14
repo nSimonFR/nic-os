@@ -47,6 +47,7 @@ in
     ./rgb/hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
     ./piper-autoprofile.nix
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
+    ./music-production.nix # REAPER + audio plugins/bridges
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
     ./beszel-agent.nix
