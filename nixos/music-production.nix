@@ -90,13 +90,11 @@ let
   };
 in
 {
-  # Low-latency / pro-audio basics for REAPER on PipeWire.
+  # Pro-audio basics for REAPER on PipeWire.
+  # Keep global PipeWire timing in nixos/audio.nix untouched; REAPER can opt into
+  # JACK/PipeWire with `pw-jack reaper` without changing the desktop audio graph.
   security.rtkit.enable = true;
-  services.pipewire = {
-    alsa.enable = true;
-    alsa.support32Bit = true;
-    jack.enable = true;
-  };
+  services.pipewire.jack.enable = true;
 
   environment.systemPackages = with pkgs; [
     reaper
