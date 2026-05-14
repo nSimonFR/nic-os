@@ -8,6 +8,7 @@ alias pipupdate="su -c \"pip freeze --local | grep -v '^\-e' | cut -d = -f 1	| x
 alias gc="git checkout"
 alias gcam="git commit --amend --no-edit"
 alias grb="git rebase -i --autosquash"
+alias j="jj"
 alias repo="gh repo view --web"
 alias prs="gh pr list --web"
 alias cpr="createpr"

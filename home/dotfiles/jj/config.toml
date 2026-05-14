@@ -1,0 +1,22 @@
+[user]
+name = "Nicolas Simon"
+email = "nsimon@pm.me"
+
+[ui]
+default-command = "status"
+pager = "less -FRX"
+
+[signing]
+behavior = "own"
+backend = "gpg"
+key = "DA790614A5E94643A86333BBFDA7E6C61C9EA664"
+
+[git]
+auto-local-bookmark = true
+
+[aliases]
+l = ["log"]
+s = ["status"]
+d = ["diff"]
+n = ["new"]
+e = ["edit"]
