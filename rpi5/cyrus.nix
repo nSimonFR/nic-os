@@ -125,13 +125,31 @@ in
               (first one wins in RepositoryRouter).
             '';
           };
+          projectKeys = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = ''
+              Linear **project names** (not IDs/slugs) that route to this
+              repo. Matched against `issue.project.name` by RepositoryRouter.
+              Lower priority than `routingLabels`, higher than `teamKeys`.
+            '';
+          };
+          teamKeys = lib.mkOption {
+            type = lib.types.listOf lib.types.str;
+            default = [];
+            description = ''
+              Linear **team keys** (e.g. `ENG`, `FRONT`) that route to this
+              repo. Matched against `issue.team.key` by RepositoryRouter.
+              Lowest routing priority before catch-all.
+            '';
+          };
           catchAll = lib.mkOption {
             type = lib.types.bool;
             default = false;
             description = ''
-              Convenience flag — sets `routingLabels = []` so cyrus's
-              RepositoryRouter treats this repo as the fallback for issues
-              that don't match any other route.
+              Convenience flag — clears `routingLabels`/`projectKeys`/
+              `teamKeys` so RepositoryRouter treats this repo as the
+              fallback for issues that don't match any other route.
             '';
           };
         };
@@ -441,6 +459,8 @@ in
           normalized = map (r: {
             inherit (r) name url workspace;
             routingLabels = if r.catchAll then [] else r.routingLabels;
+            projectKeys   = if r.catchAll then [] else r.projectKeys;
+            teamKeys      = if r.catchAll then [] else r.teamKeys;
           }) cfg.repositories;
           reposJson = builtins.toJSON normalized;
         in ''
@@ -466,18 +486,24 @@ in
             workspace=$(echo "$entry" | jq -r '.workspace')
             labels_csv=$(echo "$entry" | jq -r '.routingLabels | join(",")')
             if echo "$existing" | grep -qFx "$name"; then
-              # Reconcile routingLabels in place — `self-add-repo` only fires
-              # for new entries, so existing repos would otherwise keep their
-              # initial label set forever. Idempotent: jq writes only if the
-              # array differs.
-              current=$(jq -c --arg n "$name" '.repositories[] | select(.name == $n) | (.routingLabels // [])' "$CONFIG")
-              want=$(echo "$entry" | jq -c '.routingLabels')
-              if [ "$current" != "$want" ]; then
-                echo "~ $name routingLabels: $current → $want"
-                tmp=$(mktemp)
-                jq --arg n "$name" --argjson labels "$want" \
-                  '(.repositories[] | select(.name == $n) | .routingLabels) = $labels' \
-                  "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+              # Reconcile routingLabels / projectKeys / teamKeys in place —
+              # `self-add-repo` only fires for new entries, so existing repos
+              # would otherwise keep their initial routing config forever.
+              # Idempotent: jq writes only if the want-set differs from current.
+              repo_changed=0
+              for field in routingLabels projectKeys teamKeys; do
+                current=$(jq -c --arg n "$name" --arg f "$field" '.repositories[] | select(.name == $n) | (.[$f] // [])' "$CONFIG")
+                want=$(echo "$entry" | jq -c --arg f "$field" '.[$f]')
+                if [ "$current" != "$want" ]; then
+                  echo "~ $name $field: $current → $want"
+                  tmp=$(mktemp)
+                  jq --arg n "$name" --arg f "$field" --argjson v "$want" \
+                    '(.repositories[] | select(.name == $n) | .[$f]) = $v' \
+                    "$CONFIG" > "$tmp" && mv "$tmp" "$CONFIG"
+                  repo_changed=1
+                fi
+              done
+              if [ "$repo_changed" = "1" ]; then
                 CHANGED=1
               else
                 echo "✓ $name already in config"
