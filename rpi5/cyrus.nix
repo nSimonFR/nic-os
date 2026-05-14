@@ -403,7 +403,12 @@ in
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+        # AF_NETLINK is needed for getifaddrs() — Fastify calls it on listen()
+        # to log the bound addresses. Without it Node errors out with
+        # `uv_interface_addresses returned Unknown system error 97`
+        # (EAFNOSUPPORT) immediately after binding. AF_PACKET would also work
+        # via SIOCGIFCONF, but AF_NETLINK is the modern path libuv prefers.
+        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
       };
     };
 
