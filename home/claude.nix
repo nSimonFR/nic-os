@@ -68,6 +68,17 @@ in
   # rpi5/picoclaw/skills/wiki-*/SKILL.md so PicoClaw and Claude Code use the
   # same prompts. PicoClaw frontmatter (name/description/metadata) is benign
   # for Claude Code, which only reads `description`.
+  # Linear skill — shared source at shared/skills/linear/ so the same
+  # SKILL.md is read by claude, codex, pi, and picoclaw. Auth via
+  # $LINEAR_KEY exported from shared/secrets.zsh.age. Picoclaw gets the
+  # skill via its skills/ rsync (see rpi5/picoclaw/picoclaw.nix).
+  home.file.".claude/skills/linear/SKILL.md".source =
+    ../shared/skills/linear/SKILL.md;
+  home.file.".codex/skills/linear/SKILL.md".source =
+    ../shared/skills/linear/SKILL.md;
+  home.file.".pi/agent/skills/linear/SKILL.md".source =
+    ../shared/skills/linear/SKILL.md;
+
   home.file.".claude/commands/wiki-ingest.md".source =
     ../rpi5/picoclaw/skills/wiki-ingest/SKILL.md;
   home.file.".claude/commands/wiki-process.md".source =
