@@ -272,6 +272,11 @@ in
 
         ProtectSystem = "strict";
         ReadWritePaths = [ "/var/lib/cyrus" ];
+        # Claude Code uses /tmp/claude-<uid>/ as a working/sandbox dir for
+        # Bash tool execution. Without a private writable /tmp under
+        # ProtectSystem=strict, every Bash tool call fails with EROFS and
+        # the agent reports "read-only filesystem at the harness level".
+        PrivateTmp = true;
         NoNewPrivileges = true;
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
