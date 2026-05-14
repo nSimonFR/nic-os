@@ -32,4 +32,5 @@ in {
   "cyrus-linear-client-id.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
   "cyrus-linear-client-secret.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "cyrus-linear-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "cyrus-github-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }
