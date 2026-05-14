@@ -235,10 +235,15 @@ in
   # cyrus-linear-*.age files with real values from the Linear OAuth app and
   # `systemctl restart cyrus`.
   services.cyrus.enable = true;
+  # nic-os is the catch-all: any Linear issue assigned to cyrus without a
+  # matching routing label / projectKey / teamKey / [repo=...] description tag
+  # lands here instead of triggering cyrus's "Which repository should I work
+  # in?" prompt. Other repos still match via their name as the routing label.
   services.cyrus.repositories = let
     mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
-  in map mkRepo [
-    "nic-os"
+  in [
+    (mkRepo "nic-os" // { catchAll = true; })
+  ] ++ map mkRepo [
     "amarre"
     "for-sure"
     "gleaner"
