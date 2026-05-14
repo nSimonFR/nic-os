@@ -150,6 +150,19 @@ in
 
         Removing a repo from the list does NOT remove it from cyrus's
         runtime config — that's a destructive op left to the operator.
+
+        GitHub webhook install: cyrus-sync-github-webhooks.service attempts
+        to register a webhook on each github.com repo at
+        /github-webhook with the cyrus-github-webhook-secret. nSimonFR-ai
+        (the bot account whose PAT cyrus uses) is a collaborator-with-push
+        but NOT admin on the nSimonFR org repos, so the GitHub API returns
+        404 on /hooks calls. To install a webhook for a new repo, switch
+        gh to the owner account and POST it manually:
+          gh auth switch --user nSimonFR
+          SECRET=$(sudo cat /run/agenix/cyrus-github-webhook-secret)
+          jq -nc --arg s "$SECRET" '{name:"web",active:true,events:["issue_comment","pull_request_review","pull_request_review_comment"],config:{url:"https://rpi5.gate-mintaka.ts.net:8443/github-webhook",content_type:"json",secret:$s,insecure_ssl:"0"}}' \
+            | gh api -X POST /repos/nSimonFR/<repo>/hooks --input -
+          gh auth switch --user nSimonfr-ai
       '';
     };
   };
@@ -573,12 +586,28 @@ in
               echo "↷ skipping non-github URL: $url"
               continue
             fi
-            existing=$(curl -fsSL \
+            # GitHub returns 404 on /hooks for non-admin tokens (collaborators
+            # without admin scope, which is the normal state for nSimonFR-ai:
+            # bot account, push but not admin per memory feedback_github_account.md).
+            # Webhooks must be created once by the owning nSimonFR account
+            # manually — see scripts/install-cyrus-webhooks.sh. Detect that
+            # case here and skip silently instead of erroring on each rebuild.
+            list_status=$(curl -sS -o /tmp/cyrus-hooks-$$.json -w '%{http_code}' \
               -H "Authorization: Bearer $GITHUB_TOKEN" \
               -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/$slug/hooks" \
-              | jq -r --arg url "${hookUrl}" '.[] | select(.config.url == $url) | .id' \
-              || true)
+              "https://api.github.com/repos/$slug/hooks" || echo "000")
+            if [ "$list_status" = "404" ] || [ "$list_status" = "403" ]; then
+              echo "↷ $slug: bot lacks admin (HTTP $list_status) — webhook must be installed by repo owner"
+              rm -f /tmp/cyrus-hooks-$$.json
+              continue
+            fi
+            if [ "$list_status" != "200" ]; then
+              echo "! $slug: unexpected HTTP $list_status listing hooks — skipping"
+              rm -f /tmp/cyrus-hooks-$$.json
+              continue
+            fi
+            existing=$(jq -r --arg url "${hookUrl}" '.[] | select(.config.url == $url) | .id' /tmp/cyrus-hooks-$$.json)
+            rm -f /tmp/cyrus-hooks-$$.json
             if [ -n "$existing" ]; then
               echo "✓ $slug already has webhook (id $existing)"
               continue
