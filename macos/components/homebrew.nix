@@ -67,6 +67,7 @@
     "plex"
     "postman"
     "qbittorrent"
+    "raycast"
     "rewind"
     "rocket"
     "sikarugir"
