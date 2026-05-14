@@ -84,6 +84,25 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Cyrus's agent clones user repos and runs whatever lint/test/build the
+    # repo declares. Many npm packages ship per-platform prebuilt ELFs (biome,
+    # esbuild, swc, prisma, sharp, ...) dynamically linked against
+    # /lib/ld-linux-aarch64.so.1 + stock glibc. On NixOS those paths don't
+    # exist and execve fails before the program starts. nix-ld provides the
+    # loader shim at /lib/ld-linux-* and stages a library set under
+    # LD_LIBRARY_PATH so generic-Linux binaries Just Work.
+    programs.nix-ld = {
+      enable = true;
+      libraries = with pkgs; [
+        stdenv.cc.cc.lib  # libstdc++, libgcc_s
+        zlib
+        openssl
+        curl
+        glib
+        libgcc
+      ];
+    };
+
     users.users.${cfg.user} = {
       isSystemUser = true;
       group = cfg.user;
