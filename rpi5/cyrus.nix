@@ -29,7 +29,7 @@
 #                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, unstablePkgs, ... }:
 let
   cfg = config.services.cyrus;
 
@@ -234,6 +234,13 @@ in
         pkgs.gh
         pkgs.openssh
         pkgs.nodejs_22
+        # @anthropic-ai/claude-agent-sdk spawns the `claude` CLI as a child.
+        # Without it the SDK exits 127 ("command not found") on every session.
+        unstablePkgs.claude-code
+        # Claude Code's sandbox uses these; missing them only emits warnings
+        # (no fatal) but skipping them disables write-isolation.
+        pkgs.socat
+        pkgs.bubblewrap
       ];
       serviceConfig = {
         Type = "simple";
