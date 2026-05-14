@@ -125,6 +125,7 @@ in
     ./affine.nix
     ./affine-mcp.nix
     ./cyrus.nix
+    ./gleaner.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
     ./claude-remote-control.nix
