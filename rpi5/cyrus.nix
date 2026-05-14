@@ -169,6 +169,18 @@ in
         # default 5 spawns parallel postinstall scripts that thrash swap.
         pnpm install --frozen-lockfile --child-concurrency=1
         pnpm -r --filter='!@cyrus/electron' --workspace-concurrency=1 build
+        # The @anthropic-ai/claude-agent-sdk pulls a per-platform optional dep
+        # (`@anthropic-ai/claude-agent-sdk-linux-arm64`) that bundles a generic
+        # dynamically-linked claude ELF — unrunnable on NixOS (no /lib64). The
+        # SDK has no env override to point at the nixpkgs-patched binary, so we
+        # overwrite the bundled file with a symlink to pkgs.claude-code/bin/claude
+        # (cyrus's edge-worker doesn't surface pathToClaudeCodeExecutable).
+        for bundled in node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-*/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude; do
+          if [ -e "$bundled" ]; then
+            ln -sf ${unstablePkgs.claude-code}/bin/claude "$bundled"
+            echo "Replaced bundled SDK claude with nixpkgs build: $bundled"
+          fi
+        done
         echo "$WANT" > $MARKER
         echo "Build complete."
       '';
