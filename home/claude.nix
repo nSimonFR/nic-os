@@ -1,11 +1,47 @@
 {
   config,
   pkgs,
+  lib,
   unstablePkgs,
   telegramChatId,
   ...
 }:
 let
+  # Shared skills live under ../shared/skills/ and are auto-discovered so
+  # adding a new one is just a directory. Each skill is wired into all
+  # four agents' skill loaders: Claude Code (~/.claude/skills/), Codex
+  # (~/.codex/skills/), pi-coding-agent (~/.pi/agent/skills/), and
+  # picoclaw (rpi5/picoclaw/picoclaw.nix merges them into its workspace).
+  sharedSkillsDir = ../shared/skills;
+  sharedSkillNames = lib.attrNames (
+    lib.filterAttrs (_: t: t == "directory") (builtins.readDir sharedSkillsDir)
+  );
+
+  # Skills that should ALSO be exposed as Claude Code slash commands
+  # (`/wiki-ingest`, etc.). The SKILL.md frontmatter is benign for
+  # Claude Code, which only reads the `description` field.
+  claudeSlashCommandSkills = [ "wiki-ingest" "wiki-process" "wiki-lint" ];
+
+  sharedSkillFiles = lib.listToAttrs (lib.concatMap (name: [
+    {
+      name = ".claude/skills/${name}/SKILL.md";
+      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+    }
+    {
+      name = ".codex/skills/${name}/SKILL.md";
+      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+    }
+    {
+      name = ".pi/agent/skills/${name}/SKILL.md";
+      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+    }
+  ]) sharedSkillNames);
+
+  claudeCommandFiles = lib.listToAttrs (map (name: {
+    name = ".claude/commands/${name}.md";
+    value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+  }) claudeSlashCommandSkills);
+
   notifyScript = (import ../shared/telegram-notify.nix { inherit pkgs telegramChatId; }) {
     name = "claude";
     header = "🤖 *Claude Code*";
@@ -43,73 +79,53 @@ in
     # Baseline: home/dotfiles/claude-settings.json
   };
 
-  # Writable settings.json — symlinked to the repo checkout
-  home.file.".claude/settings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+  # All home-managed files are merged into one set: shared skills (auto-
+  # discovered from shared/skills/), Claude slash commands (curated
+  # subset), and Claude Code's own settings/hooks. Picoclaw picks up the
+  # same shared skills via rpi5/picoclaw/picoclaw.nix.
+  home.file = sharedSkillFiles // claudeCommandFiles // {
+    # Writable settings.json — symlinked to the repo checkout so /voice etc.
+    # can update it at runtime.
+    ".claude/settings.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
-  # Stable path for the Telegram notify hook so the settings JSON
-  # doesn't need to embed a Nix store path that changes on rebuild.
-  home.file.".claude/hooks/telegram-notify" = {
-    source = notifyScript;
-    executable = true;
-  };
+    # Stable path for the Telegram notify hook so settings.json doesn't
+    # need to embed a Nix store path that changes on rebuild.
+    ".claude/hooks/telegram-notify" = {
+      source = notifyScript;
+      executable = true;
+    };
 
-  # Wrapper for `claude remote-control` that bypasses the HM-generated
-  # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
-  # Uses the overrideAttrs package directly (has env vars, no --mcp-config).
-  home.file.".claude/bin/claude-rc" = {
-    executable = true;
-    source = pkgs.writeShellScript "claude-rc" ''
-      exec "${claudeCodePkg}/bin/claude" remote-control "$@"
-    '';
-  };
+    # Wrapper for `claude remote-control` that bypasses the HM-generated
+    # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
+    ".claude/bin/claude-rc" = {
+      executable = true;
+      source = pkgs.writeShellScript "claude-rc" ''
+        exec "${claudeCodePkg}/bin/claude" remote-control "$@"
+      '';
+    };
 
-  # LLM Wiki slash commands — single source of truth in
-  # rpi5/picoclaw/skills/wiki-*/SKILL.md so PicoClaw and Claude Code use the
-  # same prompts. PicoClaw frontmatter (name/description/metadata) is benign
-  # for Claude Code, which only reads `description`.
-  # Linear skill — shared source at shared/skills/linear/ so the same
-  # SKILL.md is read by claude, codex, pi, and picoclaw. Auth via
-  # $LINEAR_KEY exported from shared/secrets.zsh.age. Picoclaw gets the
-  # skill via its skills/ rsync (see rpi5/picoclaw/picoclaw.nix).
-  home.file.".claude/skills/linear/SKILL.md".source =
-    ../shared/skills/linear/SKILL.md;
-  home.file.".codex/skills/linear/SKILL.md".source =
-    ../shared/skills/linear/SKILL.md;
-  home.file.".pi/agent/skills/linear/SKILL.md".source =
-    ../shared/skills/linear/SKILL.md;
+    # PostToolUse hook: mirror writes under
+    # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
+    # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge.
+    ".claude/hooks/memory-sync" = {
+      source = ./scripts/claude-memory-sync.py;
+      executable = true;
+    };
 
-  home.file.".claude/commands/wiki-ingest.md".source =
-    ../rpi5/picoclaw/skills/wiki-ingest/SKILL.md;
-  home.file.".claude/commands/wiki-process.md".source =
-    ../rpi5/picoclaw/skills/wiki-process/SKILL.md;
-  home.file.".claude/commands/wiki-lint.md".source =
-    ../rpi5/picoclaw/skills/wiki-lint/SKILL.md;
+    # PostToolUse hook on Bash: register each command with atuin under a
+    # sentinel cwd (~/.claude/bash) so it syncs across devices.
+    ".claude/hooks/bash-history" = {
+      source = ./scripts/claude-bash-history.sh;
+      executable = true;
+    };
 
-  # PostToolUse hook: mirror writes under
-  # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
-  # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge. Hook entry
-  # is in home/dotfiles/claude-settings.json. Script never blocks Claude
-  # Code (always exits 0; logs to ~/.claude/logs/memory-sync.log).
-  home.file.".claude/hooks/memory-sync" = {
-    source = ./scripts/claude-memory-sync.py;
-    executable = true;
-  };
-
-  # PostToolUse hook on Bash: register each command with atuin under a
-  # sentinel cwd (~/.claude/bash) so it syncs across devices and can be
-  # filtered (or excluded) with `atuin search --cwd ~/.claude/bash`.
-  # Requires the atuin daemon to be running — see ./atuin.nix.
-  home.file.".claude/hooks/bash-history" = {
-    source = ./scripts/claude-bash-history.sh;
-    executable = true;
-  };
-
-  # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
-  # Code time-on-task lands in WakaTime stats alongside editor activity.
-  home.file.".claude/hooks/wakatime" = {
-    source = ./scripts/claude-wakatime.sh;
-    executable = true;
+    # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
+    # Code time-on-task lands in WakaTime stats alongside editor activity.
+    ".claude/hooks/wakatime" = {
+      source = ./scripts/claude-wakatime.sh;
+      executable = true;
+    };
   };
 
 }
