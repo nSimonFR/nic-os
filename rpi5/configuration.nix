@@ -242,13 +242,17 @@ in
   services.cyrus.repositories = let
     mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
   in [
-    (mkRepo "nic-os" // { catchAll = true; })
+    (mkRepo "nic-os"    // { catchAll = true; })
+    # Linear projects in the nSimon workspace (discovered via Linear GraphQL,
+    # 2026-05-14). Issues filed inside these projects auto-route without any
+    # tag/label. Repos without a Linear project (for-sure, sure-nix,
+    # tiny-llm-gate) keep their name-as-routingLabel default.
+    (mkRepo "amarre"    // { projectKeys = [ "amarre" ]; })
+    (mkRepo "gleaner"   // { projectKeys = [ "Gleaner" ]; })
+    (mkRepo "terradex"  // { projectKeys = [ "TerraDex" ]; })
   ] ++ map mkRepo [
-    "amarre"
     "for-sure"
-    "gleaner"
     "sure-nix"
-    "terradex"
     "tiny-llm-gate"
   ];
 
