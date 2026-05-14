@@ -199,6 +199,11 @@ in
       owner = cfg.user;
       mode  = "0400";
     };
+    age.secrets.cyrus-github-webhook-secret = {
+      file  = ./secrets/cyrus-github-webhook-secret.age;
+      owner = cfg.user;
+      mode  = "0400";
+    };
 
     # ── One-shot source build ──────────────────────────────────────────────
     # Copies the pinned Cyrus source to /var/lib/cyrus/src, runs pnpm install
@@ -288,10 +293,15 @@ in
       before = [ "cyrus.service" ];
       after = [ "claude-oauth-extract.service" ];
       wants = [ "claude-oauth-extract.service" ];
+      # Reads the GitHub PAT from cyrus's gh CLI keychain — same pattern as
+      # forgejo.nix. No agenix entry needed; refresh by re-running
+      # `sudo -u cyrus gh auth login`.
+      path = [ pkgs.gh ];
       restartTriggers = [
         config.age.secrets.cyrus-linear-client-id.file
         config.age.secrets.cyrus-linear-client-secret.file
         config.age.secrets.cyrus-linear-webhook-secret.file
+        config.age.secrets.cyrus-github-webhook-secret.file
       ];
       serviceConfig = {
         Type = "oneshot";
@@ -299,6 +309,9 @@ in
       };
       script = ''
         mkdir -p /run/cyrus
+        # gh stores its token under cyrus's HOME; without HOME set, gh looks
+        # at /root/.config/gh and errors out with "not logged in".
+        GH_TOKEN=$(HOME=/var/lib/cyrus ${pkgs.gh}/bin/gh auth token)
         cat > /run/cyrus/env <<ENVEOF
         LINEAR_CLIENT_ID=$(cat ${config.age.secrets.cyrus-linear-client-id.path})
         LINEAR_CLIENT_SECRET=$(cat ${config.age.secrets.cyrus-linear-client-secret.path})
@@ -314,6 +327,20 @@ in
         ANTHROPIC_BASE_URL=${cfg.anthropicBaseUrl}
         ANTHROPIC_API_KEY=injected-by-tiny-llm-gate
         NODE_ENV=production
+        # ── GitHub bot identity ──
+        # GITHUB_BOT_USERNAME drives two behaviours in EdgeWorker.ts:
+        #   1. Filters incoming PR comments to those that @mention the bot.
+        #   2. Skips comments authored by the bot itself (loop prevention).
+        # When unset, cyrus's tip text defaults to the literal "@cyrusagent"
+        # (its hosted SaaS bot, irrelevant here), so the tip becomes a lie.
+        GITHUB_BOT_USERNAME=nSimonFR-ai
+        GITHUB_TOKEN=$GH_TOKEN
+        # CYRUS_HOST_EXTERNAL=true + GITHUB_WEBHOOK_SECRET puts cyrus into
+        # "signature verification" mode (verifies X-Hub-Signature-256 against
+        # this secret directly). Without these, cyrus expects forwarded
+        # webhooks via cyrus's hosted proxy and rejects ours.
+        CYRUS_HOST_EXTERNAL=true
+        GITHUB_WEBHOOK_SECRET=$(cat ${config.age.secrets.cyrus-github-webhook-secret.path})
         ENVEOF
         chown ${cfg.user}:${cfg.user} /run/cyrus/env
         chmod 0400 /run/cyrus/env
@@ -335,6 +362,7 @@ in
         config.age.secrets.cyrus-linear-client-id.file
         config.age.secrets.cyrus-linear-client-secret.file
         config.age.secrets.cyrus-linear-webhook-secret.file
+        config.age.secrets.cyrus-github-webhook-secret.file
         cfg.claudeDefaultModel
       ];
       path = [
@@ -500,6 +528,74 @@ in
             touch /var/lib/cyrus/.sync-changed
             echo "config.json mutated — cyrus will be restarted"
           fi
+        '';
+    };
+
+    # ── Declarative GitHub webhook sync ───────────────────────────────────
+    # For each declared repository whose URL points at github.com, ensure a
+    # webhook exists pointing at our /github-webhook endpoint. Idempotent:
+    # POSTs a new hook only if no existing one targets the same URL.
+    # Uses the GITHUB_TOKEN already in /run/cyrus/env (sourced from gh CLI).
+    systemd.services.cyrus-sync-github-webhooks = lib.mkIf (cfg.repositories != []) {
+      description = "Sync declared cyrus repositories with GitHub webhooks";
+      wantedBy = [ "multi-user.target" ];
+      after = [ "cyrus-env.service" "network-online.target" ];
+      requires = [ "cyrus-env.service" ];
+      wants = [ "network-online.target" ];
+      path = [ pkgs.curl pkgs.jq pkgs.gnused ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = cfg.user;
+        Group = cfg.user;
+        EnvironmentFile = "/run/cyrus/env";
+      };
+      script =
+        let
+          reposJson = builtins.toJSON cfg.repositories;
+          # cyrus's /github-webhook endpoint
+          hookUrl = "${cfg.baseUrl}/github-webhook";
+        in ''
+          set -eu
+          declared='${reposJson}'
+          echo "$declared" | jq -c '.[]' | while read -r entry; do
+            url=$(echo "$entry" | jq -r '.url')
+            # Extract owner/repo from github.com URLs only; skip others
+            # (forgejo, gitlab, ssh-form, etc. — cyrus doesn't manage those
+            # webhooks here).
+            slug=$(echo "$url" | sed -nE 's|^https?://github\.com/([^/]+/[^/.]+)(\.git)?/?$|\1|p')
+            if [ -z "$slug" ]; then
+              echo "↷ skipping non-github URL: $url"
+              continue
+            fi
+            existing=$(curl -fsSL \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/$slug/hooks" \
+              | jq -r --arg url "${hookUrl}" '.[] | select(.config.url == $url) | .id' \
+              || true)
+            if [ -n "$existing" ]; then
+              echo "✓ $slug already has webhook (id $existing)"
+              continue
+            fi
+            echo "+ creating webhook on $slug → ${hookUrl}"
+            body=$(jq -nc \
+              --arg url "${hookUrl}" \
+              --arg secret "$GITHUB_WEBHOOK_SECRET" \
+              '{
+                name: "web",
+                active: true,
+                events: ["issue_comment","pull_request_review","pull_request_review_comment"],
+                config: { url: $url, content_type: "json", secret: $secret, insecure_ssl: "0" }
+              }')
+            curl -fsSL -X POST \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -d "$body" \
+              "https://api.github.com/repos/$slug/hooks" >/dev/null \
+              && echo "  → ok" \
+              || echo "  ! failed to create webhook for $slug (continuing)"
+          done
         '';
     };
   };
