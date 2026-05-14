@@ -390,7 +390,7 @@ in
         # `+` prefix elevates to root so systemctl works; the script writes a
         # /run flag we check here. Without this, cyrus keeps stale routing
         # labels in memory after a rebuild that changed them.
-        ExecStartPost = "+${pkgs.bash}/bin/bash -c '[ -f /run/cyrus/sync-changed ] && { rm /run/cyrus/sync-changed; ${pkgs.systemd}/bin/systemctl try-restart cyrus.service; } || true'";
+        ExecStartPost = "+${pkgs.bash}/bin/bash -c '[ -f /var/lib/cyrus/.sync-changed ] && { rm /var/lib/cyrus/.sync-changed; ${pkgs.systemd}/bin/systemctl try-restart cyrus.service; } || true'";
       };
       script =
         let
@@ -450,7 +450,7 @@ in
             fi
           done < <(echo "$declared" | jq -c '.[]')
           if [ "$CHANGED" = "1" ]; then
-            touch /run/cyrus/sync-changed
+            touch /var/lib/cyrus/.sync-changed
             echo "config.json mutated — cyrus will be restarted"
           fi
         '';
