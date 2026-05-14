@@ -32,6 +32,7 @@
   xdg.configFile."git/config".source = ./dotfiles/git/gitconfig;
   xdg.configFile."git/config-shared".source = ./dotfiles/git/gitconfig-shared;
   xdg.configFile."git/ignore".source = ./dotfiles/git/gitignore;
+  xdg.configFile."jj/config.toml".source = ./dotfiles/jj/config.toml;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
   xdg.configFile."atuin/config.toml".source = ./dotfiles/atuin.toml;
   xdg.configFile."mpv/mpv.conf".source = ./dotfiles/mpv.conf;
