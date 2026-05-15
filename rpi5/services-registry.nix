@@ -24,7 +24,7 @@
         password = "{{HOMEPAGE_VAR_NEXTCLOUD_PASSWORD}}";
         fields = [ "freespace" "activeusers" "numfiles" "numshares" ];
       }; }
-    { port = 3010;  backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs";
+    { port = 443;   backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; funnel = true;
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:13010/graphql";
@@ -88,7 +88,9 @@
     { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Services"; description = "Coding stats (WakaTime-compatible)"; }
 
     # Backend — API services
-    { port = 443;   backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
+    # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
+    # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.
+    { port = 8444;  backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini)"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }

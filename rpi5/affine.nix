@@ -208,7 +208,7 @@ in
       HOME = dataDir;
       AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
-      AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}:3010";
+      AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}";
       DATABASE_URL = dbUrl;
       REDIS_SERVER_HOST = redisHost;
       REDIS_SERVER_PORT = toString redisPort;
@@ -239,7 +239,7 @@ in
       # endpoints via DI, so link-preview/image-proxy requests go to
       # the cloud worker instead of our local server.
       CLOUD="https://affine-worker.toeverything.workers.dev"
-      SELF="https://${tailnetFqdn}:3010"
+      SELF="https://${tailnetFqdn}"
       for f in ${appDir}/static/js/*.js; do
         if grep -q "$CLOUD" "$f" 2>/dev/null; then
           ${pkgs.gnused}/bin/sed -i "s|$CLOUD|$SELF|g" "$f"
