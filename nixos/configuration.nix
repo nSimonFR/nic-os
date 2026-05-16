@@ -493,7 +493,7 @@ in
   zramSwap = {
     enable = true;
     memoryPercent = 100; # 32GB zram = ~64-96GB effective with compression
-    algorithm = "zstd"; # Best compression ratio for Star Citizen
+    algorithm = "lz4hc"; # ~3x faster decompression than zstd — less page-fault stutter in Star Citizen at cost of ~3GB effective RAM
   };
 
   services.udev = {
