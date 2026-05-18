@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, config, ... }:
 let
   wakatimeExt = pkgs.vscode-extensions.wakatime.vscode-wakatime;
   cursorPrefix =
@@ -22,10 +22,13 @@ in
   xdg.configFile."zed/settings.json".source = ./dotfiles/editor/zed-settings.json;
 
   # ── Cursor ──────────────────────────────────────────────────────────
+  # Cursor writes back to settings.json (UI prompts, telemetry opt-outs, etc.),
+  # so symlink to the repo via mkOutOfStoreSymlink instead of a read-only store
+  # path. Just `git commit` after Cursor updates them.
   home.file."${cursorPrefix}/Cursor/User/settings.json".source =
-    ./dotfiles/editor/cursor-settings.json;
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/editor/cursor-settings.json";
   home.file."${cursorPrefix}/Cursor/User/keybindings.json".source =
-    ./dotfiles/editor/cursor-keybindings.json;
+    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/editor/cursor-keybindings.json";
 
   # Install the WakaTime extension on each HM switch. Cursor reuses the
   # VS Code extension API + Open VSX; the CLI is idempotent.
