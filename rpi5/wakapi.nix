@@ -28,6 +28,14 @@ in {
         allow_signup = false;
         insecure_cookies = false;
       };
+      # Disable wakapi's built-in scheduled wakatime.com importer.
+      # Why: wakatime.com warned us twice (2026-05-18, 2026-05-19) about the daily
+      # POST to /api/v1/users/current/data_dumps that the binary fires at 04:15
+      # whenever a user has a wakatime_api_key saved. The user-account key was
+      # also cleared, but this disables the scheduler at the source.
+      app = {
+        import_enabled = false;
+      };
       mail = {
         enabled = true;
         provider = "smtp";
