@@ -44,3 +44,8 @@
   b = blame -w -C -C -C
 [spice "branchCreate"]
   commit = false
+[url "https://github.com/"]
+  insteadOf = git@github.com:
+[credential "https://github.com"]
+  helper = ""
+  helper = "!f() { unset GH_TOKEN GITHUB_TOKEN; gh auth git-credential \"$@\"; }; f"
