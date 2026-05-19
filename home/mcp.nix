@@ -28,10 +28,9 @@ let
     "trusk-argocd"      = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:3000/mcp"; };
     "trusk-grafana"     = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:8000/mcp"; };
     "trusk-datadog"     = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:9000/mcp"; };
-    "trusk-github"      = { type = "sse";  url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7001/sse"; };
-    "trusk-context7"    = { type = "sse";  url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/sse"; };
-    "trusk-steampipe"   = { type = "sse";  url = "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/sse"; };
-    "trusk-searxncrawl" = { type = "sse";  url = "http://searxncrawl-mcp.dev-tools.svc.cluster.local:7010/sse"; };
+    "trusk-github"      = { type = "http"; url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7001/mcp"; };
+    "trusk-context7"    = { type = "http"; url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/mcp"; };
+    "trusk-steampipe"   = { type = "http"; url = "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/mcp"; };
     firecrawl           = { type = "http"; url = "https://mcp.firecrawl.dev/fc-c6a062b4ff1849d3991eeb116c0632a4/v2/mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
