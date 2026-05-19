@@ -17,4 +17,8 @@ bindkey -e   # Default to standard emacs bindings, regardless of editor string
 bindkey "[D" backward-word
 bindkey "[C" forward-word
 
+# xterm / VSCode / Cursor: modified arrow keys (Option+Left/Right)
+bindkey "^[[1;3D" backward-word
+bindkey "^[[1;3C" forward-word
+
 autoload -U select-word-style && select-word-style bash
