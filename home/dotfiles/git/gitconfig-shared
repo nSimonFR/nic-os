@@ -48,4 +48,4 @@
   insteadOf = git@github.com:
 [credential "https://github.com"]
   helper = ""
-  helper = "!f() { unset GH_TOKEN GITHUB_TOKEN; gh auth git-credential \"$@\"; }; f"
+  helper = "!gh auth git-credential"
