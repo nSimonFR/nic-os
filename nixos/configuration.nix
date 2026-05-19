@@ -75,7 +75,7 @@ in
       "nvidia-drm.fbdev=1" # Enable framebuffer device support
       "acpi_enforce_resources=lax" # Fix OpenRGB I2C/SMBus detection bug (GitLab issue #5059)
       "zswap.enabled=0" # Disable zswap when using zram (Star Citizen optimization)
-      "transparent_hugepages=madvise" # Allow large memory apps (Star Citizen) to use 2MB pages, reducing TLB pressure
+      "transparent_hugepage=always" # Auto-promote 4KB→2MB pages for all processes (Star Citizen + Wine don't request madvise themselves); cuts TLB miss overhead on the 21 GB working set. Singular spelling — `transparent_hugepages` (plural) is silently ignored by the kernel.
     ];
 
     kernel.sysctl = {
@@ -87,6 +87,7 @@ in
       "vm.dirty_expire_centisecs" = 1500; # Flush dirty pages after 15s (was 30s)
       "vm.dirty_writeback_centisecs" = 300; # Check for dirty pages every 3s (was 5s)
       "vm.min_free_kbytes" = 262144; # Keep 256MB free to prevent emergency reclaim I/O storms
+      "vm.vfs_cache_pressure" = 50; # Default 100. Keeps dentry/inode cache around longer — helps SC's tens of thousands of small asset files re-open faster on subsequent loads
     };
 
     kernelModules = [
@@ -448,6 +449,11 @@ in
       }
     ];
   };
+
+  # Override hardware-configuration.nix to disable atime writes on /. SC reads tens of
+  # thousands of asset files; relatime still issues writes on first read each day per file.
+  # noatime drops them entirely.
+  fileSystems."/".options = [ "noatime" ];
 
   fileSystems."/mnt/games" = {
     device = "/dev/disk/by-label/Games\\x20SSD";
