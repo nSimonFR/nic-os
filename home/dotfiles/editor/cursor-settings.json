@@ -148,6 +148,7 @@
   "gitlens.graph.layout": "editor",
   "datadog.telemetry.setup.enableTelemetry": "disabled",
   "datadog.telemetry.setup.enableAgentObservability": false,
-  "datadog.staticAnalysis.notification.suppressOnboarding": true,
   "datadog.connection.notification.suppressSignInNotification": true,
+  "window.autoDetectColorScheme": false,
+  "datadog.codeSecurity.notification.suppressOnboarding": true,
 }
