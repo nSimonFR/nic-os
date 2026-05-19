@@ -32,6 +32,18 @@
 
   '';
 
+  # Plex HTPC inherits QT_STYLE_OVERRIDE=Adwaita-Dark and QT_QPA_PLATFORMTHEME=qt5ct
+  # from the host session. Neither the Adwaita-Dark Qt style nor qt5ct's plugin is
+  # available inside the freedesktop 23.08 runtime, so the QML engine fails to load
+  # WebWindow.qml ("module \"Adwaita-Dark\" is not installed") and the app segfaults
+  # during the shutdown that follows. Unsetting both lets Qt fall back to its
+  # built-in default style, which is what the app expects.
+  home.activation.plexHtpcFlatpakOverrides = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    ${pkgs.flatpak}/bin/flatpak override --user tv.plex.PlexHTPC \
+      --unset-env=QT_STYLE_OVERRIDE \
+      --unset-env=QT_QPA_PLATFORMTHEME
+  '';
+
   services.flatpak.remotes = [
     {
       name = "RSILauncher";
@@ -42,6 +54,7 @@
   services.flatpak.packages = [
     { appId = "io.github.mactan_sc.RSILauncher"; origin = "RSILauncher"; }
     { appId = "org.freedesktop.Platform.VulkanLayer.MangoHud"; origin = "flathub"; }
+    { appId = "tv.plex.PlexHTPC"; origin = "flathub"; }
   ];
 
   programs.zsh.zplug.plugins = [

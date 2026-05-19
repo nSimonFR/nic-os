@@ -211,7 +211,7 @@ in
   services.openssh.enable = true;
 
   services.flatpak.enable = true;
-  
+
   programs.hyprland.enable = true;
 
   xdg.portal = {
