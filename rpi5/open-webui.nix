@@ -1,5 +1,10 @@
 { pkgs, lib, apertureUrl, tinyLlmGateUrl, ... }:
 let
+  # externalPort: Tailscale Serve + ROOT URL + socket-activate proxy.
+  # backendPort: where open-webui actually binds (behind the proxy).
+  externalPort = 8181;
+  backendPort  = 8182;
+
   # Torch 2.9.1 on aarch64 has a corrupt torchgen/__init__.py (all null bytes),
   # causing "source code string cannot contain null bytes" on import.
   # Fix: create a writable overlay with the corrected file, prepend to PYTHONPATH.
@@ -11,7 +16,7 @@ in
 {
   services.open-webui = {
     enable = true;
-    port = 8181;
+    port = backendPort;
     host = "127.0.0.1";
     environment = {
       # Chat completions via Aperture (observability) → tiny-llm-gate → providers.
@@ -46,7 +51,7 @@ in
   # Fix corrupt torchgen/__init__.py on aarch64: prepend patched module to PYTHONPATH
   # Must use lib.mkBefore so it runs before the NixOS module's ExecStart sets PYTHONPATH
   systemd.services.open-webui.serviceConfig.ExecStart = lib.mkForce
-    (let cfg = { port = 8181; host = "127.0.0.1"; package = pkgs.open-webui; }; in
+    (let cfg = { port = backendPort; host = "127.0.0.1"; package = pkgs.open-webui; }; in
      "${pkgs.writeShellScript "open-webui-wrapper" ''
        export PYTHONPATH="${torchgenFix}:''${PYTHONPATH:-}"
        # NLTK needs a resolvable HOME for its download directory
@@ -65,4 +70,24 @@ in
   # Start after tiny-llm-gate (embeddings/STT still go direct)
   systemd.services.open-webui.after = [ "tiny-llm-gate.service" ];
   systemd.services.open-webui.wants = [ "tiny-llm-gate.service" ];
+
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
+  # OWUI is Python/uvicorn; cold-start ~5-10s loading torch + the
+  # FastAPI tree. readyProbe required (Type=simple, listen() lands
+  # several seconds after fork). An open browser tab maintains a
+  # WebSocket which the proxy treats as an active connection — so
+  # OWUI stays awake while you're actively using it, and only idles
+  # out once you close the tab and 600s pass with no requests.
+  services.socketActivate.openwebui = {
+    enable    = true;
+    realUnit  = "open-webui.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/health";
+      expectStatus = 200;
+      timeoutSec   = 60;
+    };
+  };
 }
