@@ -1,8 +1,10 @@
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
-  # Internal port; Tailscale Serve exposes this as HTTPS :3400 on the tailnet.
-  # See rpi5/services-registry.nix.
-  port = 8200;
+  # externalPort: Tailscale Serve (HTTPS :3400 → 127.0.0.1:8200) and the
+  # socket-activate proxy listen here. backendPort: granian binds here
+  # behind the proxy. See rpi5/lib/socket-activate.nix.
+  externalPort = 8200;
+  backendPort  = 8201;
 
   # Reuse the shared Redis on DB 4 (0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich).
   redisUrl = "redis://${redisHost}:${toString redisPort}/4";
@@ -62,7 +64,7 @@ in
   services.paperless = {
     enable          = true;
     address         = "127.0.0.1";
-    port            = port;
+    port            = backendPort;
     consumptionDir  = consumeDir;
     # Admin password for the web UI superuser; created by the module's
     # scheduler preStart using manage_superuser the first time it runs.
@@ -144,6 +146,43 @@ in
   # them to reach the consume dir under <datadir>/data/nsimon/files/PAPERLESS.
   # Group membership grants the missing x bit without loosening perms.
   users.users.paperless.extraGroups = [ "nextcloud" ];
+
+  # Detach paperless-scheduler (the boot entry point in nixpkgs' paperless
+  # module) from pulling in web + task-queue + consumer at boot. Scheduler
+  # stays awake to fire Celery beat ticks into Redis; web + workers come up
+  # on demand via socket-activate.
+  systemd.services.paperless-scheduler.wants = lib.mkForce [ ];
+
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
+  # Paperless is the most complex migration — three workers with mixed
+  # policies. Django cold start is ~30s → readyProbe required.
+  #
+  # paperless-task-queue + paperless-consumer sleep with the web tier
+  # (their cadence is dictated by web requests / inotify rescans on wake).
+  # paperless-scheduler stays awake: it's Celery beat, missed ticks would
+  # break document-retention and classifier retraining schedules.
+  #
+  # Behavior change worth flagging: while paperless is asleep, documents
+  # dropped into PAPERLESS/ are NOT processed until the web UI is next
+  # opened. The consumer rescans on startup so nothing is lost. Flip
+  # paperless-consumer to keepAwake here if this becomes painful.
+  services.socketActivate.paperless = {
+    enable    = true;
+    realUnit  = "paperless-web.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/api/";
+      expectStatus = 302;   # Paperless redirects unauthenticated /api/ → login
+      timeoutSec   = 60;
+    };
+    workers = {
+      "paperless-task-queue.service".policy = "sleepWith";
+      "paperless-consumer.service".policy   = "sleepWith";
+      "paperless-scheduler.service".policy  = "keepAwake";
+    };
+  };
 
   # Consume dir lives inside Nextcloud's per-user files tree as a top-level
   # folder. Parents (nsimon, nsimon/files) are nextcloud-owned so paperless
