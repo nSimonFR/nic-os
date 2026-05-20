@@ -1,6 +1,9 @@
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, ... }:
 let
-  port = 13334; # internal port; Tailscale Serve exposes this as HTTPS :3333 on the tailnet
+  # externalPort: where Tailscale Serve (→ :3333) and the socket-activate
+  # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
+  externalPort = 13334;
+  backendPort  = 13335;
 
   # Route Sure's assistant/merchant-detection LLM calls through tiny-llm-gate
   # on :4001 (which then fans out to codex-proxy or Ollama). These ENVs take
@@ -74,10 +77,34 @@ in
   # ── Sure application (native Nix, via sure-nix flake) ─────────────────────
   services.sure = {
     enable          = true;
-    port            = port;
+    port            = backendPort;
     environmentFile = "/run/agenix/sure-app-env";
     databaseUrl     = "postgresql://sure_user@${pgHost}/sure_production";
     redisUrl        = "redis://${redisHost}:${toString redisPort}/2";
+  };
+
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
+  # Sure is the heaviest tier in the migration (~480 MB combined RSS for
+  # web + worker). Rails cold start is ~30s → readyProbe against /up
+  # (Rails 7.1+ health check) is required.
+  #
+  # sure-worker is sleepWith: Sidekiq stops alongside Puma. The companion
+  # tweak to sumeria-sync-trigger below routes the path trigger through
+  # sure-web (not sure-worker), so both tiers wake together; otherwise the
+  # plan's "PartOf wakes the web" claim doesn't hold — PartOf only
+  # propagates stops.
+  services.socketActivate.sure = {
+    enable    = true;
+    realUnit  = "sure-web.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/up";
+      expectStatus = 200;
+      timeoutSec   = 60;
+    };
+    workers."sure-worker.service".policy = "sleepWith";
   };
 
   # ── Sure memory optimizations ──────────────────────────────────────────────
@@ -117,7 +144,10 @@ in
   systemd.services.sumeria-sync-trigger = {
     description = "Trigger Sure sync after Sumeria token refresh";
     after       = [ "sure-web.service" "sure-worker.service" ];
-    requires    = [ "sure-worker.service" ];
+    # Requires sure-web (not just sure-worker) so that under socket-activate
+    # both tiers wake together — sure-worker has wantedBy=sure-web from the
+    # socket-activate module, so pulling in web pulls in worker too.
+    requires    = [ "sure-web.service" ];
     serviceConfig = {
       Type             = "oneshot";
       User             = config.services.sure.user;
@@ -136,7 +166,12 @@ in
       echo "[sumeria-sync] Sumeria tokens changed, triggering Sure sync..."
       ${config.services.sure.package}/bin/sure-rails runner \
         'LunchflowItem.find_each { |item| item.sync_later }'
-      echo "[sumeria-sync] Sync jobs queued"
+      echo "[sumeria-sync] Sync jobs queued; waiting 30s for Sidekiq to drain"
+      # Keep this oneshot alive so sure-web + sure-worker don't idle-stop
+      # before Sidekiq picks up and finishes the queued jobs (Sidekiq polls
+      # Redis every 1s; 30s comfortably covers a Lunchflow sync).
+      ${pkgs.coreutils}/bin/sleep 30
+      echo "[sumeria-sync] Done"
     '';
   };
 
