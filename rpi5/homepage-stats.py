@@ -2,12 +2,18 @@
 """Tiny stats aggregation API for homepage-dashboard widgets.
 
 Aggregates data from multiple service APIs into simple JSON endpoints,
-refreshed every 5 minutes. Serves on 127.0.0.1:8087.
+refreshed hourly. Serves on 127.0.0.1:8087.
 
 Endpoints:
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
+
+Refresh cadence: 3600s. Sure is socket-activated (rpi5/sure.nix) with a
+600s idle timer, so polling at <600s would pin sure-web + sure-worker
+in memory permanently. 3600s leaves ~50 min of every hour for Sure to
+sleep, at the cost of stats being up to an hour stale (acceptable: the
+underlying Lunchflow sync only runs ~every 3 hours anyway).
 """
 
 import http.server
@@ -23,7 +29,7 @@ CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
-REFRESH_INTERVAL = 300  # seconds
+REFRESH_INTERVAL = 3600  # seconds — see module docstring
 
 stats = {"sure": {}, "openwebui": {}}
 stats_lock = threading.Lock()
