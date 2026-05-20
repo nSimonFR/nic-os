@@ -2,18 +2,21 @@
 """Tiny stats aggregation API for homepage-dashboard widgets.
 
 Aggregates data from multiple service APIs into simple JSON endpoints,
-refreshed hourly. Serves on 127.0.0.1:8087.
+refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints:
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
 
-Refresh cadence: 3600s. Sure is socket-activated (rpi5/sure.nix) with a
-600s idle timer, so polling at <600s would pin sure-web + sure-worker
-in memory permanently. 3600s leaves ~50 min of every hour for Sure to
-sleep, at the cost of stats being up to an hour stale (acceptable: the
-underlying Lunchflow sync only runs ~every 3 hours anyway).
+Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
+with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
+it sleeps for the next ~23h50m. The stats are written to disk after each
+refresh so a service restart preserves the last good values rather than
+serving an empty payload until the next nightly refresh.
+
+State file: $STATE_DIRECTORY/stats.json (set by systemd StateDirectory=).
+Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
 """
 
 import http.server
@@ -29,7 +32,9 @@ CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
-REFRESH_INTERVAL = 3600  # seconds — see module docstring
+STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
+STATE_FILE = os.path.join(STATE_DIR, "stats.json")
+REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
 stats = {"sure": {}, "openwebui": {}}
 stats_lock = threading.Lock()
@@ -90,14 +95,52 @@ def fetch_openwebui():
             stats["openwebui"]["error"] = str(e)
 
 
+def load_cache():
+    try:
+        with open(STATE_FILE) as f:
+            payload = json.load(f)
+        with stats_lock:
+            for k in stats:
+                stats[k] = payload.get(k, {})
+        return payload.get("_fetched_at", 0)
+    except FileNotFoundError:
+        return 0
+    except Exception as e:
+        print(f"cache load failed: {e}", file=sys.stderr)
+        return 0
+
+
+def save_cache(ts):
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        with stats_lock:
+            payload = {k: dict(v) for k, v in stats.items()}
+            payload["_fetched_at"] = ts
+        tmp = STATE_FILE + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(payload, f)
+        os.replace(tmp, STATE_FILE)
+    except Exception as e:
+        print(f"cache save failed: {e}", file=sys.stderr)
+
+
 def refresh():
+    last_fetched = load_cache()
     while True:
+        next_due = last_fetched + REFRESH_INTERVAL
+        now = time.time()
+        wait = max(0, next_due - now)
+        if wait:
+            time.sleep(wait)
         try:
             fetch_sure()
             fetch_openwebui()
+            last_fetched = time.time()
+            save_cache(last_fetched)
         except Exception as e:
             print(f"refresh error: {e}", file=sys.stderr)
-        time.sleep(REFRESH_INTERVAL)
+            # Retry in 1 hour on failure rather than waiting another full day.
+            last_fetched = time.time() - REFRESH_INTERVAL + 3600
 
 
 class Handler(http.server.BaseHTTPRequestHandler):

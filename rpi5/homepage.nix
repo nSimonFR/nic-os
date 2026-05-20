@@ -88,6 +88,9 @@ in
       Type = "simple";
       Restart = "on-failure";
       RestartSec = "10s";
+      # systemd auto-creates /var/lib/homepage-stats and exports
+      # STATE_DIRECTORY for the cache file.
+      StateDirectory = "homepage-stats";
       ExecStart = "${pkgs.python3}/bin/python3 ${./homepage-stats.py}";
       Environment = [
         "CURL_BIN=${pkgs.curl}/bin/curl"
