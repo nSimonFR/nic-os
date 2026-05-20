@@ -139,20 +139,34 @@ let
 
   proxyExec = "${pkgs.systemd}/lib/systemd/systemd-socket-proxyd";
 
-  readyName = name: "${name}-ready";
+  readyProbeScript = name: c: pkgs.writeShellScript "socket-activate-${name}-ready" ''
+    set -eu
+    deadline=$(( $(${pkgs.coreutils}/bin/date +%s) + ${toString c.readyProbe.timeoutSec} ))
+    code=""
+    while [ "$(${pkgs.coreutils}/bin/date +%s)" -lt "$deadline" ]; do
+      code=$(${pkgs.curl}/bin/curl -sS -o /dev/null -w '%{http_code}' \
+             --max-time 5 ${lib.escapeShellArg (c.readyProbe.url or "")} 2>/dev/null || true)
+      if [ "$code" = "${toString (c.readyProbe.expectStatus or 200)}" ]; then
+        exit 0
+      fi
+      ${pkgs.coreutils}/bin/sleep 1
+    done
+    echo "readyProbe ${name} timed out after ${toString c.readyProbe.timeoutSec}s (last code: $code)" >&2
+    exit 1
+  '';
 
   proxyService = name: c:
     let
-      probeUnit = "${readyName name}.service";
-      reqs = [ c.realUnit ] ++ lib.optional (c.readyProbe != null) probeUnit;
       idleFlag = lib.optionalString (c.idleSec != null) "--exit-idle-time=${toString c.idleSec}s ";
+      execStartPre = lib.optional (c.readyProbe != null) (readyProbeScript name c);
     in {
       description = "Socket-activation proxy for ${name} (→ ${c.realUnit})";
-      requires = reqs;
-      after    = reqs;
+      requires = [ c.realUnit ];
+      after    = [ c.realUnit ];
       serviceConfig = {
-        ExecStart = "${proxyExec} ${idleFlag}${c.backend}";
-        Restart = "no";
+        ExecStartPre = execStartPre;
+        ExecStart    = "${proxyExec} ${idleFlag}${c.backend}";
+        Restart      = "no";
       };
     };
 
@@ -162,36 +176,6 @@ let
     listenStreams = c.listen;
     socketConfig = {
       Accept = false;
-    };
-  };
-
-  readyService = name: c: {
-    description = "Readiness probe for ${name} (${c.readyProbe.url})";
-    requires = [ c.realUnit ];
-    after    = [ c.realUnit ];
-    # Bind the probe's lifecycle to the proxy so it stops when the proxy
-    # idles out. Without this, RemainAfterExit=true keeps the probe pinned
-    # active forever, which keeps realUnit "needed" — defeating
-    # StopWhenUnneeded entirely.
-    partOf   = [ "${name}-proxy.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = pkgs.writeShellScript "socket-activate-${name}-ready" ''
-        set -eu
-        deadline=$(( $(${pkgs.coreutils}/bin/date +%s) + ${toString c.readyProbe.timeoutSec} ))
-        code=""
-        while [ "$(${pkgs.coreutils}/bin/date +%s)" -lt "$deadline" ]; do
-          code=$(${pkgs.curl}/bin/curl -sS -o /dev/null -w '%{http_code}' \
-                 --max-time 5 ${lib.escapeShellArg c.readyProbe.url} 2>/dev/null || true)
-          if [ "$code" = "${toString c.readyProbe.expectStatus}" ]; then
-            exit 0
-          fi
-          ${pkgs.coreutils}/bin/sleep 1
-        done
-        echo "readyProbe ${name} timed out after ${toString c.readyProbe.timeoutSec}s (last code: $code)" >&2
-        exit 1
-      '';
     };
   };
 
@@ -216,20 +200,12 @@ in {
       enabled;
 
     systemd.services = lib.mkMerge [
-      # 1. Proxy services
+      # 1. Proxy services (readyProbe folded in as ExecStartPre)
       (lib.mapAttrs'
         (name: c: lib.nameValuePair "${name}-proxy" (proxyService name c))
         enabled)
 
-      # 2. Ready-probe oneshot services
-      (lib.mkMerge (lib.mapAttrsToList
-        (name: c:
-          lib.optionalAttrs (c.readyProbe != null) {
-            ${readyName name} = readyService name c;
-          })
-        enabled))
-
-      # 3. Real-unit patches: clear boot-time wantedBy; add StopWhenUnneeded
+      # 2. Real-unit patches: clear boot-time wantedBy; add StopWhenUnneeded
       #    when idle-stop is enabled.
       (lib.mkMerge (lib.mapAttrsToList
         (name: c: {
@@ -242,7 +218,7 @@ in {
         })
         enabled))
 
-      # 4. Worker patches: sleepWith → bound to realUnit's lifecycle.
+      # 3. Worker patches: sleepWith → bound to realUnit's lifecycle.
       (lib.mkMerge (lib.concatMap
         (name:
           let c = enabled.${name}; in
