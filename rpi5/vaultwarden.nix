@@ -48,11 +48,20 @@ in {
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
   # Bitwarden clients are local-first; the first sync after sleep will time
   # out and retry, which is acceptable — the user can still unlock offline.
+  #
+  # readyProbe is required: vaultwarden is Type=simple and Rocket takes
+  # ~1s after fork to bind, which is enough for systemd-socket-proxyd to
+  # race the listen() and return ECONNREFUSED to the client.
   services.socketActivate.vaultwarden = {
     enable    = true;
     realUnit  = "vaultwarden.service";
     listen    = [ "127.0.0.1:${toString externalPort}" ];
     backend   = "127.0.0.1:${toString backendPort}";
     idleSec   = 600;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/alive";
+      expectStatus = 200;
+      timeoutSec   = 30;
+    };
   };
 }

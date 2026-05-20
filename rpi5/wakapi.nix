@@ -66,12 +66,21 @@ in {
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
   # IDE heartbeats are fire-and-forget POSTs; first one after sleep will be
   # slow then the wakapi binary stays warm for the editing session.
+  #
+  # readyProbe is required: wakapi runs DB migrations on startup (~1s on
+  # a warm SQLite cache) before binding the listen socket. Without the
+  # probe, the proxy races the listen() and the first heartbeat fails.
   services.socketActivate.wakapi = {
     enable    = true;
     realUnit  = "wakapi.service";
     listen    = [ "127.0.0.1:${toString externalPort}" ];
     backend   = "127.0.0.1:${toString backendPort}";
     idleSec   = 600;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/api/health";
+      expectStatus = 200;
+      timeoutSec   = 30;
+    };
   };
 
   # ── Daily SQLite backup → /mnt/data/backups/wakapi ──
