@@ -9,6 +9,7 @@ Endpoints:
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
   /paperless — Paperless (documents, inbox)
+  /immich    — Immich (photos, videos, storage)
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -38,7 +39,7 @@ STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}, "paperless": {}}
+stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}}
 stats_lock = threading.Lock()
 
 
@@ -126,6 +127,29 @@ def save_cache(ts):
         print(f"cache save failed: {e}", file=sys.stderr)
 
 
+def fetch_immich():
+    try:
+        env = open(ENV_FILE).read()
+        key = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "IMMICH_KEY" in l][0]
+        # Hit the externally-facing port (2283) so the daily fetch goes
+        # through the socket-activate proxy, wakes immich-server briefly,
+        # then lets it sleep again (same pattern as fetch_sure on :13334).
+        data = json.loads(subprocess.check_output([
+            CURL, "-sf",
+            "http://127.0.0.1:2283/api/server/statistics",
+            "-H", f"x-api-key: {key}", "-H", "Accept: application/json"
+        ]))
+        with stats_lock:
+            stats["immich"] = {
+                "photos": data.get("photos", 0),
+                "videos": data.get("videos", 0),
+                "usage":  data.get("usage", 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["immich"]["error"] = str(e)
+
+
 def fetch_paperless():
     try:
         token = open(PAPERLESS_TOKEN_FILE).read().strip()
@@ -156,6 +180,7 @@ def refresh(initial_fetched_at):
             fetch_sure()
             fetch_openwebui()
             fetch_paperless()
+            fetch_immich()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -173,6 +198,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["openwebui"])
             elif self.path == "/paperless":
                 data = dict(stats["paperless"])
+            elif self.path == "/immich":
+                data = dict(stats["immich"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
