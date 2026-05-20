@@ -48,8 +48,16 @@
           { field = "transactions"; label = "Transactions"; format = "number"; }
         ];
       }; }
-    { port = 10000; backend = "http://127.0.0.1:2283";  name = "Immich";         icon = "immich.svg";         category = "Apps"; description = "Photo management"; funnel = true;
-      widget = { type = "immich"; url = "http://127.0.0.1:2283"; key = "{{HOMEPAGE_VAR_IMMICH_KEY}}"; version = 2; }; }
+    { port = 10000; backend = "http://127.0.0.1:2283";  name = "Immich";         icon = "immich.svg";         category = "Apps"; description = "Photo management"; funnel = true; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/immich";
+        mappings = [
+          { field = "photos"; label = "Photos"; format = "number"; }
+          { field = "videos"; label = "Videos"; format = "number"; }
+          { field = "usage";  label = "Storage"; format = "bytes"; }
+        ];
+      }; }
     { port = 8181;  backend = "http://127.0.0.1:8181";  name = "Open WebUI";     icon = "open-webui.svg";     category = "Apps"; description = "LLM chat interface"; noSiteMonitor = true;
       widget = {
         type = "customapi";

@@ -1,9 +1,16 @@
 { pkgs, unstablePkgs, redisHost, redisPort, ... }:
+let
+  # externalPort: where mobile/web clients reach Immich (Tailscale Funnel
+  # terminates :10000 → http://127.0.0.1:2283). backendPort: where Immich
+  # actually binds, behind the socket-activate proxy.
+  externalPort = 2283;
+  backendPort  = 2284;
+in
 {
   services.immich = {
     enable        = true;
     package       = unstablePkgs.immich;
-    port          = 2283;
+    port          = backendPort;
     host          = "127.0.0.1";
     mediaLocation = "/mnt/data/immich";
     machine-learning.enable = true;
@@ -27,7 +34,10 @@
       ExecStartPre = [
         "+${pkgs.coreutils}/bin/chown immich:immich /mnt/data/immich"
       ];
-      MemoryMax = "512M";
+      # NestJS module init has a brief spike past steady-state RSS; the
+      # extra headroom prevents the cgroup OOMing the process mid-boot
+      # (cold-start now happens per socket-activate wake, not just at boot).
+      MemoryMax = "768M";
     };
   };
 
@@ -57,5 +67,28 @@
       MALLOC_ARENA_MAX = "2";
     };
     serviceConfig.MemoryMax = "1G";
+  };
+
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
+  # Immich is the first Funnel-exposed service in the socket-activate set:
+  # idleSec=1800 (not 600) dampens wake noise from public bot probes hitting
+  # the :10000 funnel URL. ML stops alongside the API tier (sleepWith) —
+  # it's request-driven from immich-server's microservices worker_thread
+  # and has nothing to do while the API is asleep. BullMQ jobs queue in
+  # Redis and resume on wake; @nestjs/schedule cron ticks (NightlyJobs,
+  # VersionCheck, LibraryScan) that fall in the asleep window are missed
+  # and fire on the next wake instead — all idempotent.
+  services.socketActivate.immich = {
+    enable    = true;
+    realUnit  = "immich-server.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 1800;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString backendPort}/api/server/ping";
+      expectStatus = 200;
+      timeoutSec   = 60;
+    };
+    workers."immich-machine-learning.service".policy = "sleepWith";
   };
 }
