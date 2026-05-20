@@ -210,13 +210,15 @@ in
     };
 
     # PHP-FPM tuning for a 4-GiB RPi5 sharing with Immich/HA/AFFiNE/Sure.
+    # pm = ondemand: workers fork on demand and exit after process_idle_timeout
+    # of inactivity. Saves ~120 MiB when nobody is hitting the Nextcloud UI;
+    # DAV reachability is unaffected because nginx still listens and php-fpm
+    # spins a worker on the next request (~50ms cost vs `dynamic`).
     poolSettings = {
-      "pm"                   = "dynamic";
-      "pm.max_children"      = "8";
-      "pm.start_servers"     = "2";
-      "pm.min_spare_servers" = "1";
-      "pm.max_spare_servers" = "3";
-      "pm.max_requests"      = "500";
+      "pm"                       = "ondemand";
+      "pm.max_children"          = "8";
+      "pm.process_idle_timeout"  = "60s";
+      "pm.max_requests"          = "500";
     };
 
     phpOptions = {
