@@ -169,6 +169,11 @@ let
     description = "Readiness probe for ${name} (${c.readyProbe.url})";
     requires = [ c.realUnit ];
     after    = [ c.realUnit ];
+    # Bind the probe's lifecycle to the proxy so it stops when the proxy
+    # idles out. Without this, RemainAfterExit=true keeps the probe pinned
+    # active forever, which keeps realUnit "needed" — defeating
+    # StopWhenUnneeded entirely.
+    partOf   = [ "${name}-proxy.service" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
