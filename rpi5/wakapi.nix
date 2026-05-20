@@ -1,12 +1,15 @@
 # rpi5/wakapi.nix — self-hosted WakaTime-compatible coding stats backend.
 #
-# Internal HTTP: 127.0.0.1:3030
-# Tailnet: Tailscale Serve proxies as HTTPS :3030 (see services-registry.nix).
-# Storage: SQLite at /var/lib/wakapi/wakapi.db (DynamicUser → /var/lib/private/wakapi).
+# Internal HTTP: 127.0.0.1:3031 (backend; wakapi binds here)
+# Tailnet     : Tailscale Serve → 127.0.0.1:3030 → socket-activate proxy
+#               → backend on 3031. After 600s of HTTP idleness, wakapi
+#               stops and frees ~13 MB; next IDE heartbeat wakes it.
+# Storage     : SQLite at /var/lib/wakapi/wakapi.db (DynamicUser → /var/lib/private/wakapi).
 # Daily backup at 03:45 → /mnt/data/backups/wakapi/ (picked up by storj-backup).
 { config, pkgs, lib, tailnetFqdn, ... }:
 let
-  port = 3030;
+  externalPort = 3030;
+  backendPort  = 3031;
 in {
   services.wakapi = {
     enable = true;
@@ -17,8 +20,8 @@ in {
     settings = {
       server = {
         listen_ipv4 = "127.0.0.1";
-        port = port;
-        public_url = "https://${tailnetFqdn}:${toString port}";
+        port = backendPort;
+        public_url = "https://${tailnetFqdn}:${toString externalPort}";
       };
       db = {
         dialect = "sqlite3";
@@ -59,6 +62,17 @@ in {
 
   # PrivateUsers (nixpkgs default) needs user namespaces — unsupported on RPi5.
   systemd.services.wakapi.serviceConfig.PrivateUsers = lib.mkForce false;
+
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
+  # IDE heartbeats are fire-and-forget POSTs; first one after sleep will be
+  # slow then the wakapi binary stays warm for the editing session.
+  services.socketActivate.wakapi = {
+    enable    = true;
+    realUnit  = "wakapi.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+  };
 
   # ── Daily SQLite backup → /mnt/data/backups/wakapi ──
   systemd.tmpfiles.rules = [
