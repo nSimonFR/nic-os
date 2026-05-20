@@ -11,6 +11,34 @@
 let
   blogwatcherPkg = pkgs.callPackage ./blogwatcher.nix { };
 
+  # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
+  # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs
+  # to avoid zram thrashing and a watchdog reset. Services come back up
+  # automatically during the activation phase of nixos-rebuild switch.
+  nixosRebuildSafe = pkgs.writeShellApplication {
+    name = "nixos-rebuild-safe";
+    runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
+    text = ''
+      heavy=(
+        immich-machine-learning.service
+        immich-server.service
+        dawarich-sidekiq-all.service
+        dawarich-web.service
+        affine.service
+        sure-worker.service
+        sure-web.service
+        paperless-consumer.service
+        paperless-scheduler.service
+        paperless-task-queue.service
+        paperless-web.service
+      )
+      echo "nixos-rebuild-safe: stopping heavy services to free memory…" >&2
+      sudo systemctl stop "''${heavy[@]}" || true
+      echo "nixos-rebuild-safe: running nixos-rebuild $*" >&2
+      exec sudo nixos-rebuild "$@"
+    '';
+  };
+
   # Fix nixos-raspberrypi bug: kernelboot-gen-builder.sh writes default/cmdline.txt
   # with a hardcoded nix store path instead of a profile symlink, causing boot failure
   # after nix GC deletes the store path (weekly GC).
@@ -200,12 +228,15 @@ in
   # hits zero and the system freezes waiting for the hardware watchdog.
   services.earlyoom = {
     enable = true;
-    # SIGTERM at <4% free RAM (~160 MiB) or <5% free swap (~250 MiB).
-    # SIGKILL follows at <2% / <3% if SIGTERM doesn't free enough in time.
-    freeMemThreshold      = 4;
-    freeMemKillThreshold  = 2;
-    freeSwapThreshold     = 5;
-    freeSwapKillThreshold = 3;
+    # Fire early — zram-on-RPi5 starts thrashing long before "0% free", and
+    # earlyoom's AND-of-(mem,swap) gate plus its victim-selection race means
+    # it has been observing recoveries and never actually killing. Trigger
+    # SIGTERM at <10% mem (~400 MiB) and <20% swap (~1.6 GiB), SIGKILL at
+    # <5% / <10%, well above the watchdog-reset thrash zone.
+    freeMemThreshold      = 10;
+    freeMemKillThreshold  = 5;
+    freeSwapThreshold     = 20;
+    freeSwapKillThreshold = 10;
     extraArgs = [
       # Prefer expendable heavy processes: immich transcoding/API and ffmpeg.
       "--prefer" "(immich|ffmpeg)"
@@ -309,6 +340,7 @@ in
     wakeonlan
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
+    nixosRebuildSafe
     hydroxide
     immich-cli
     dnsutils  # dig, nslookup
