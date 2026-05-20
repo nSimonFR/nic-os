@@ -38,7 +38,7 @@
           { field = "data.workspaces.0.blobsSize"; label = "Storage"; format = "bytes"; }
         ];
       }; }
-    { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance";
+    { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; noSiteMonitor = true;
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:8087/sure";
@@ -60,11 +60,14 @@
           { field = "messages"; label = "Messages"; format = "number"; }
         ];
       }; }
-    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)";
+    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)"; noSiteMonitor = true;
       widget = {
-        type = "paperlessngx";
-        url = "http://127.0.0.1:8200";
-        key = "{{HOMEPAGE_VAR_PAPERLESS_KEY}}";
+        type = "customapi";
+        url = "http://127.0.0.1:8087/paperless";
+        mappings = [
+          { field = "total"; label = "Total"; format = "number"; }
+          { field = "inbox"; label = "Inbox"; format = "number"; }
+        ];
       }; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
       widget = {
@@ -82,10 +85,11 @@
       }; }
 
     # Services: Vaultwarden → Dawarich → Forgejo → Wakapi
-    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; }
+    # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
+    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; noSiteMonitor = true; }
     { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
-    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; }
-    { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Services"; description = "Coding stats (WakaTime-compatible)"; }
+    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; noSiteMonitor = true; }
+    { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Services"; description = "Coding stats (WakaTime-compatible)"; noSiteMonitor = true; }
 
     # Backend — API services
     # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the

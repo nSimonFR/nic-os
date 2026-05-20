@@ -17,13 +17,17 @@ let
   entriesForCategory = cat:
     builtins.filter (e: e.category == cat) visibleEntries;
 
-  # Build tile config, including widget if the entry has one
+  # Build tile config, including widget if the entry has one.
+  # Entries with `noSiteMonitor = true` (typically socket-activated services)
+  # skip the tile up/down check — homepage pings siteMonitor every ~5 min,
+  # which would otherwise keep idle-stoppable backends pinned in memory.
   mkTile = e:
     let
       base = {
         icon = e.icon;
         href = "https://${tailnetFqdn}:${toString e.port}";
         inherit (e) description;
+      } // lib.optionalAttrs (! (e.noSiteMonitor or false)) {
         siteMonitor = "https://${tailnetFqdn}:${toString e.port}";
       };
       widgetAttr = if e ? widget then { inherit (e) widget; } else {};

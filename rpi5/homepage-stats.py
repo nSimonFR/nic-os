@@ -8,6 +8,7 @@ Endpoints:
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
+  /paperless — Paperless (documents, inbox)
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -32,11 +33,12 @@ CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
+PAPERLESS_TOKEN_FILE = "/run/agenix/paperless-api-token"
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}}
+stats = {"sure": {}, "openwebui": {}, "paperless": {}}
 stats_lock = threading.Lock()
 
 
@@ -124,6 +126,24 @@ def save_cache(ts):
         print(f"cache save failed: {e}", file=sys.stderr)
 
 
+def fetch_paperless():
+    try:
+        token = open(PAPERLESS_TOKEN_FILE).read().strip()
+        data = json.loads(subprocess.check_output([
+            CURL, "-sf",
+            "http://127.0.0.1:8200/api/statistics/",
+            "-H", f"Authorization: Token {token}", "-H", "Accept: application/json"
+        ]))
+        with stats_lock:
+            stats["paperless"] = {
+                "total": data.get("documents_total", 0),
+                "inbox": data.get("documents_inbox") or 0,
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["paperless"]["error"] = str(e)
+
+
 def refresh(initial_fetched_at):
     last_fetched = initial_fetched_at
     while True:
@@ -135,6 +155,7 @@ def refresh(initial_fetched_at):
         try:
             fetch_sure()
             fetch_openwebui()
+            fetch_paperless()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -150,8 +171,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["sure"])
             elif self.path == "/openwebui":
                 data = dict(stats["openwebui"])
+            elif self.path == "/paperless":
+                data = dict(stats["paperless"])
             else:
-                data = {"sure": dict(stats["sure"]), "openwebui": dict(stats["openwebui"])}
+                data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
         self.send_header("Content-Type", "application/json")
         self.end_headers()
