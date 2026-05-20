@@ -219,6 +219,10 @@ in {
         enabled))
 
       # 3. Worker patches: sleepWith → bound to realUnit's lifecycle.
+      # No `after = realUnit` here — workers connect to DB/Redis directly,
+      # not to the web tier, so they can start in parallel. Adding it
+      # creates a 2-cycle for workers like paperless-scheduler that the
+      # nixpkgs module already orders BEFORE realUnit (migrations).
       (lib.mkMerge (lib.concatMap
         (name:
           let c = enabled.${name}; in
@@ -228,7 +232,6 @@ in {
                 ${unitKey unit} = {
                   wantedBy = lib.mkForce [ c.realUnit ];
                   partOf   = [ c.realUnit ];
-                  after    = [ c.realUnit ];
                 };
               } else { })
             c.workers)
