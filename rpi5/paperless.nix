@@ -154,18 +154,19 @@ in
   systemd.services.paperless-scheduler.wants = lib.mkForce [ ];
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
-  # Paperless is the most complex migration — three workers with mixed
-  # policies. Django cold start is ~30s → readyProbe required.
+  # Paperless is the most complex migration — three workers, all
+  # sleepWith. Django cold start is ~30s → readyProbe required.
   #
-  # paperless-task-queue + paperless-consumer sleep with the web tier
-  # (their cadence is dictated by web requests / inotify rescans on wake).
-  # paperless-scheduler stays awake: it's Celery beat, missed ticks would
-  # break document-retention and classifier retraining schedules.
+  # All three workers (task-queue, consumer, scheduler) sleep with the
+  # web tier. Tradeoff for scheduler: Celery beat ticks that would have
+  # fired while paperless was asleep are missed — retention sweeps and
+  # classifier retraining only run when the stack is awake. Acceptable
+  # because both are idempotent and infrequent; missed ticks just shift
+  # to whenever the user next opens the UI.
   #
   # Behavior change worth flagging: while paperless is asleep, documents
   # dropped into PAPERLESS/ are NOT processed until the web UI is next
-  # opened. The consumer rescans on startup so nothing is lost. Flip
-  # paperless-consumer to keepAwake here if this becomes painful.
+  # opened. The consumer rescans on startup so nothing is lost.
   services.socketActivate.paperless = {
     enable    = true;
     realUnit  = "paperless-web.service";
@@ -180,7 +181,7 @@ in
     workers = {
       "paperless-task-queue.service".policy = "sleepWith";
       "paperless-consumer.service".policy   = "sleepWith";
-      "paperless-scheduler.service".policy  = "keepAwake";
+      "paperless-scheduler.service".policy  = "sleepWith";
     };
   };
 
