@@ -124,8 +124,8 @@ def save_cache(ts):
         print(f"cache save failed: {e}", file=sys.stderr)
 
 
-def refresh():
-    last_fetched = load_cache()
+def refresh(initial_fetched_at):
+    last_fetched = initial_fetched_at
     while True:
         next_due = last_fetched + REFRESH_INTERVAL
         now = time.time()
@@ -162,6 +162,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    threading.Thread(target=refresh, daemon=True).start()
-    time.sleep(2)  # initial fetch
+    # Load cache synchronously before serving so a restart never returns
+    # an empty payload while waiting on the daily refresh.
+    initial_fetched_at = load_cache()
+    threading.Thread(target=refresh, args=(initial_fetched_at,), daemon=True).start()
     http.server.HTTPServer(("127.0.0.1", 8087), Handler).serve_forever()
