@@ -1,7 +1,11 @@
 { config, pkgs, lib, tailnetFqdn, ... }:
 let
-  httpPort = 3100;
-  sshPort  = 2222;
+  # externalPort: what Tailscale Serve exposes and ROOT_URL advertises.
+  # Now bound by the socket-activate proxy (rpi5/lib/socket-activate.nix),
+  # which forwards to forgejo on backendPort when there is traffic.
+  externalPort = 3100;
+  backendPort  = 3101;
+  sshPort      = 2222;
 
   earl-grey-theme = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/Troplo/earl-grey/master/theme-earl-grey.css";
@@ -23,9 +27,9 @@ in
     settings = {
       server = {
         HTTP_ADDR          = "127.0.0.1";
-        HTTP_PORT          = httpPort;
+        HTTP_PORT          = backendPort;
         DOMAIN             = tailnetFqdn;
-        ROOT_URL           = "https://${tailnetFqdn}:${toString httpPort}/";
+        ROOT_URL           = "https://${tailnetFqdn}:${toString externalPort}/";
         START_SSH_SERVER   = true;
         SSH_SERVER_HOST    = "127.0.0.1";
         BUILTIN_SSH_SERVER_USER = "git";
@@ -87,6 +91,18 @@ in
   # ── PostgreSQL backup (appends to list in backups.nix) ─────────────────
   services.postgresqlBackup.databases = [ "forgejo" ];
 
+  # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
+  # Tailscale Serve and ROOT_URL still point at externalPort. The proxy
+  # listens there and wakes forgejo on first request; after idleSec of
+  # quiet, forgejo stops to free its ~80 MB RSS.
+  services.socketActivate.forgejo = {
+    enable    = true;
+    realUnit  = "forgejo.service";
+    listen    = [ "127.0.0.1:${toString externalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+  };
+
   # ── GitHub mirror sync (discover + create new mirrors) ────────────────
   systemd.services.forgejo-mirror-sync = {
     description = "Discover and mirror new GitHub repos into Forgejo";
@@ -103,7 +119,9 @@ in
       set -euo pipefail
 
       GITHUB_USER="nSimonFR"
-      FORGEJO_URL="http://127.0.0.1:${toString httpPort}"
+      # Hit the externally-facing port so the socket-activate proxy wakes
+      # Forgejo if it has been idle-stopped.
+      FORGEJO_URL="http://127.0.0.1:${toString externalPort}"
       FORGEJO_API="$FORGEJO_URL/api/v1"
 
       # GitHub auth via gh CLI (already authenticated for nsimon)
