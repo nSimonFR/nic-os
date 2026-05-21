@@ -319,8 +319,10 @@ in
     "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
 
   # Auto-login alfie into Steam gamescope at boot. After logout, default_session (greeter) takes over.
+  # `programs.steam.gamescopeSession.enable = true` adds the steam-gamescope wrapper to
+  # environment.systemPackages (a separate derivation, NOT under ${pkgs.steam}/bin) — invoke by bare name.
   services.greetd.settings.initial_session = {
-    command = "${pkgs.steam}/bin/steam-gamescope";
+    command = "steam-gamescope";
     user = "alfie";
   };
 
