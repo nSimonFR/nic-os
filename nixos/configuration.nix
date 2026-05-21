@@ -169,8 +169,14 @@ in
       "video"
       "audio"
       "input"
+      "seat"
     ];
   };
+
+  # Share nsimon's Hyprland config with alfie when she logs into Hyprland (after exiting gamescope).
+  systemd.tmpfiles.rules = [
+    "L+ /home/alfie/.config/hypr/hyprland.conf - - - - ${./dotfiles/hypr/hyprland.conf}"
+  ];
 
   environment.systemPackages = with pkgs; [
     cage
