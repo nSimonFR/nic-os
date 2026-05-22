@@ -91,35 +91,6 @@ $FAILED"
     };
   };
 
-  # ── Alert: HTTP health checks ────────────────────────────────────────────────
-  systemd.services.http-health-alert = {
-    description = "Alert on unhealthy HTTP services";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "http-health-alert" ''
-        CURL="${pkgs.curl}/bin/curl"
-        FAILURES=""
-        $CURL -sf --max-time 10 http://127.0.0.1:18789/health > /dev/null 2>&1 || FAILURES="$FAILURES
-- picoclaw (18789/health)"
-        $CURL -sf --max-time 10 http://127.0.0.1:${toString beszelHubPort}/api/health > /dev/null 2>&1 || FAILURES="$FAILURES
-- beszel (${toString beszelHubPort}/api/health)"
-        $CURL -sf --max-time 10 http://127.0.0.1:13900/api/v1/health > /dev/null 2>&1 || FAILURES="$FAILURES
-- dawarich (13900/api/v1/health)"
-        if [ -n "$FAILURES" ]; then
-          ${telegramNotify} "<b>HTTP health check failed on rpi5</b>
-$FAILURES"
-        fi
-      '';
-    };
-  };
-  systemd.timers.http-health-alert = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "2m";
-      OnUnitActiveSec = "2m";
-    };
-  };
-
   # ── Alert: earlyoom kills ────────────────────────────────────────────────────
   systemd.services.earlyoom-alert = {
     description = "Alert on earlyoom OOM kills";
