@@ -114,7 +114,11 @@ let
       # migrator on every boot).
       # `allow_from` accepts stringified IDs; numeric-only ID avoids the
       # username/ID mismatch bug reported in sipeed/picoclaw#62/#310.
-      allow_from = [ (toString telegramChatId) ];
+      # Senders (not chats): adding a user id also grants them DM access.
+      allow_from = [
+        (toString telegramChatId) # nSimon
+        "8627259779" # Alfie
+      ];
       use_markdown_v2 = false;
       streaming.enabled = true;
       # In group chats, only respond when the bot is @mentioned (otherwise it
@@ -189,7 +193,7 @@ let
       # Reuse OpenClaw's port so Tailscale Serve (:443 → :18789) keeps working
       # without downstream changes.
       port = 18789;
-      log_level = "debug"; # TEMP: revert to "info" once group_trigger.mention_only is verified
+      log_level = "info";
     };
   };
 
