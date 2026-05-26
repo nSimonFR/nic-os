@@ -117,8 +117,10 @@ let
       allow_from = [ (toString telegramChatId) ];
       use_markdown_v2 = false;
       streaming.enabled = true;
-      # Require @mention in groups (OpenClaw parity)
-      require_mention_in_groups = true;
+      # In group chats, only respond when the bot is @mentioned (otherwise it
+      # answers every message). `require_mention_in_groups` is silently
+      # ignored by picoclaw's schema — the real key is `group_trigger.mention_only`.
+      group_trigger.mention_only = true;
     };
 
     tools = {
