@@ -189,7 +189,7 @@ let
       # Reuse OpenClaw's port so Tailscale Serve (:443 → :18789) keeps working
       # without downstream changes.
       port = 18789;
-      log_level = "info";
+      log_level = "debug"; # TEMP: revert to "info" once group_trigger.mention_only is verified
     };
   };
 
