@@ -160,7 +160,7 @@ in
     ];
   };
 
-  # Couch user — auto-logs into Steam gamescope session at boot (see initial_session below).
+  # Couch user — logs in via greeter and launches Steam gamescope session.
   # Password set manually via: sudo passwd alfie
   users.users.alfie = {
     isNormalUser = true;
@@ -317,14 +317,6 @@ in
   # Use Hyprland instead of cage for greeter — enables hypridle DPMS (power saving after WOL)
   services.greetd.settings.default_session.command = lib.mkForce
     "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
-
-  # Auto-login alfie into Steam gamescope at boot. After logout, default_session (greeter) takes over.
-  # `programs.steam.gamescopeSession.enable = true` adds the steam-gamescope wrapper to
-  # environment.systemPackages (a separate derivation, NOT under ${pkgs.steam}/bin) — invoke by bare name.
-  services.greetd.settings.initial_session = {
-    command = "steam-gamescope";
-    user = "alfie";
-  };
 
   users.users.greeter = {
     isSystemUser = true;
