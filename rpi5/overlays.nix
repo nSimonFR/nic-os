@@ -50,5 +50,19 @@
         doInstallCheck = false;
       });
     })
+
+    # crates.io now 403s the default curl User-Agent (curl/X.Y.Z) that
+    # nixpkgs' fetchurl/fetchCrate uses. The static.crates.io CDN is fine,
+    # but the /api/v1/.../download endpoint blocks the bare curl UA. Inject
+    # a non-curl UA via curlOptsList. Safe — fetchurl is a fixed-output
+    # derivation keyed by outputHash, so existing cache hits still resolve;
+    # only new fetches see the new arg.
+    (final: prev: {
+      fetchurl = args: prev.fetchurl (args // {
+        curlOptsList = (args.curlOptsList or [ ]) ++ [
+          "--user-agent" "nixpkgs-fetchurl"
+        ];
+      });
+    })
   ];
 }
