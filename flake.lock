@@ -167,7 +167,7 @@
     },
     "cl-nix-lite": {
       "inputs": {
-        "flake-parts": "flake-parts_2",
+        "flake-parts": "flake-parts_3",
         "nixpkgs": "nixpkgs",
         "systems": "systems_3",
         "treefmt-nix": "treefmt-nix_2"
@@ -312,6 +312,27 @@
     "flake-parts": {
       "inputs": {
         "nixpkgs-lib": [
+          "gleaner",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1777988971,
+        "narHash": "sha256-qIoWPDs+0/8JecyYgE3gpKQxW/4bLW/gp45vow9ioCQ=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "0678d8986be1661af6bb555f3489f2fdfc31f6ff",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_2": {
+      "inputs": {
+        "nixpkgs-lib": [
           "llm-agents",
           "nixpkgs"
         ]
@@ -330,7 +351,7 @@
         "type": "github"
       }
     },
-    "flake-parts_2": {
+    "flake-parts_3": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib"
       },
@@ -348,7 +369,7 @@
         "type": "github"
       }
     },
-    "flake-parts_3": {
+    "flake-parts_4": {
       "inputs": {
         "nixpkgs-lib": [
           "nix-citizen",
@@ -369,7 +390,7 @@
         "type": "github"
       }
     },
-    "flake-parts_4": {
+    "flake-parts_5": {
       "inputs": {
         "nixpkgs-lib": "nixpkgs-lib_2"
       },
@@ -387,7 +408,7 @@
         "type": "github"
       }
     },
-    "flake-parts_5": {
+    "flake-parts_6": {
       "inputs": {
         "nixpkgs-lib": [
           "pi-mobile",
@@ -409,7 +430,7 @@
         "type": "github"
       }
     },
-    "flake-parts_6": {
+    "flake-parts_7": {
       "inputs": {
         "nixpkgs-lib": [
           "sure-nix",
@@ -571,6 +592,27 @@
         "type": "github"
       }
     },
+    "gleaner": {
+      "inputs": {
+        "flake-parts": "flake-parts",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1778779685,
+        "narHash": "sha256-J5WuKAqiA8qETOOV/iMEO0qePZrzMXQUaV5OEwECamk=",
+        "owner": "nSimonFR",
+        "repo": "gleaner",
+        "rev": "1b10f06f682978c62b3b6b8dd8fcb820422cebc2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nSimonFR",
+        "repo": "gleaner",
+        "type": "github"
+      }
+    },
     "gogcli-src": {
       "flake": false,
       "locked": {
@@ -667,7 +709,7 @@
       "inputs": {
         "blueprint": "blueprint",
         "bun2nix": "bun2nix",
-        "flake-parts": "flake-parts",
+        "flake-parts": "flake-parts_2",
         "nixpkgs": [
           "nixpkgs-unstable"
         ],
@@ -692,7 +734,7 @@
       "inputs": {
         "blueprint": "blueprint_2",
         "bun2nix": "bun2nix_2",
-        "flake-parts": "flake-parts_5",
+        "flake-parts": "flake-parts_6",
         "nixpkgs": [
           "pi-mobile",
           "nixpkgs"
@@ -761,7 +803,7 @@
     "nix-citizen": {
       "inputs": {
         "flake-compat": "flake-compat_2",
-        "flake-parts": "flake-parts_3",
+        "flake-parts": "flake-parts_4",
         "nix-gaming": [
           "nix-gaming"
         ],
@@ -803,7 +845,7 @@
     },
     "nix-gaming": {
       "inputs": {
-        "flake-parts": "flake-parts_4",
+        "flake-parts": "flake-parts_5",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs_5"
       },
@@ -1128,6 +1170,7 @@
       "inputs": {
         "darwin": "darwin",
         "for-sure": "for-sure",
+        "gleaner": "gleaner",
         "gogcli-src": "gogcli-src",
         "goplaces-src": "goplaces-src",
         "home-manager": "home-manager",
@@ -1171,7 +1214,7 @@
     },
     "sure-nix": {
       "inputs": {
-        "flake-parts": "flake-parts_6",
+        "flake-parts": "flake-parts_7",
         "nixpkgs": [
           "nixpkgs"
         ]

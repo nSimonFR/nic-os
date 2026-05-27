@@ -1,0 +1,43 @@
+# gleaner.config.yaml — quota-gated cron dispatcher (v0.3.0+)
+#
+# Each trigger has a `when` expression over the live claude+codex
+# quota snapshot and a `run` argv. The systemd timer fires `gleaner
+# tick` every services.gleaner.timer.onUnitActiveSec, evaluates each
+# trigger, and execs the matching ones.
+#
+# Identifiers available in `when`:
+#   claude.short_pct / claude.long_pct   (% of window used, 0..100)
+#   claude.extra_usage / claude.ok       (bool)
+#   codex.short_pct  / codex.long_pct    (same)
+#   codex.extra_usage  / codex.ok        (same)
+#
+# Operators: && || < <= > >= == !=. A provider that failed its
+# snapshot has *.ok = false and *_pct = +Inf, so `<` checks exclude.
+
+triggers:
+  # Wiring-health trigger: fires on every tick, just records the
+  # snapshot to the journal. Keep until the next real trigger lands
+  # — then either delete it or tighten its `when`.
+  - name: heartbeat
+    when: "claude.ok || codex.ok"
+    timeout: 5s
+    run:
+      - /run/current-system/sw/bin/logger
+      - -t
+      - gleaner
+      - heartbeat
+
+  # Example, commented out — uncomment + restart `gleaner.timer` once
+  # you're ready for gleaner to actually hand work to cyrus.
+  #
+  # - name: cyrus-handoff
+  #   when: "claude.long_pct < 50 && codex.short_pct < 80"
+  #   timeout: 10m
+  #   env:
+  #     LINEAR_KEY_FILE: /run/agenix/linear-key
+  #   run:
+  #     - bash
+  #     - -c
+  #     - |
+  #       export LINEAR_KEY=$(cat "$LINEAR_KEY_FILE")
+  #       exec claude -p "Pick the next NSI ticket labelled cyrus-ready (oldest first), assign it to the cyrus user, post a one-line ack comment. Use the linear skill. Quit immediately after."

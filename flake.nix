@@ -75,6 +75,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    gleaner = {
+      url = "github:nSimonFR/gleaner";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {
@@ -176,6 +181,7 @@
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
           inputs.pi-mobile.nixosModules.pi-mobile
+          inputs.gleaner.nixosModules.gleaner
           {
             home-manager = {
               useGlobalPkgs = true;
