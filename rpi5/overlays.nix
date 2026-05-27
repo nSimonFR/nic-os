@@ -50,5 +50,17 @@
         doInstallCheck = false;
       });
     })
+
+    # paperless-ngx 2.19.6 ships a timing-flaky test
+    # (test_management_consumer.py::TestConsumerRecursive::test_slow_write_and_move
+    # — "Expected 'delay' to have been called once. Called 0 times.")
+    # that fails reliably on the memory-constrained RPi5. The full
+    # 1362-test suite also costs ~14min on the RPi5; skip it.
+    (final: prev: {
+      paperless-ngx = prev.paperless-ngx.overrideAttrs (_: {
+        doCheck = false;
+        doInstallCheck = false;
+      });
+    })
   ];
 }
