@@ -420,6 +420,16 @@ in
     options = "--delete-older-than 7d";
   };
 
+  # crates.io's /api/v1/{crate}/{version}/download endpoint now 403s the
+  # default curl/X.Y.Z User-Agent that nixpkgs' fetchurl sends. The
+  # static.crates.io CDN is fine, but the redirect only fires for
+  # non-`curl/*` UAs. fetchurl already lists NIX_CURL_FLAGS in its
+  # impureEnvVars, so this env on the daemon flows through to every
+  # FOD builder. FOD identity is keyed on (name, outputHash), so cached
+  # hits still resolve; only cache misses run curl with the new UA.
+  systemd.services.nix-daemon.environment.NIX_CURL_FLAGS =
+    "--user-agent nixpkgs-fetchurl";
+
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
   # See tailscale-serve.nix.
 
