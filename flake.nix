@@ -66,7 +66,12 @@
     };
 
     llmfit = {
-      url = "github:AlexsJones/llmfit";
+      # Pinned to 064fa68 (pre-async-nats). Bumping past this brought in
+      # async-nats-0.48.0 as a transitive Rust dep, and crates.io now 403s
+      # the default curl User-Agent that nixpkgs' fetchCrate uses (the
+      # crate isn't pre-built in cache.nixos.org). Unpin once either
+      # nixpkgs fetchCrate sets a UA or crates.io reverts the policy.
+      url = "github:AlexsJones/llmfit/064fa68e6f0a32537469ed6e3c6cd3d756d8e039";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
