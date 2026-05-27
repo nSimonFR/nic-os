@@ -6,4 +6,5 @@ in {
   "telegram-bot-token.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "mcp-secrets.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wakatime.cfg.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "terradex-convex-deploy-key.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }
