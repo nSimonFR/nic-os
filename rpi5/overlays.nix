@@ -23,11 +23,6 @@
           doInstallCheck = false;
         });
         buildHomeAssistantComponent = unstablePkgs.buildHomeAssistantComponent;
-        # Track unstable so the heavy Svelte/Vite frontend build can hit
-        # cache.nixos.org. The release-25.11 open-webui-frontend drv is
-        # not cached and vite peaks above the RPi5's available memory,
-        # tripping earlyoom.
-        open-webui = unstablePkgs.open-webui;
       }
     )
 
