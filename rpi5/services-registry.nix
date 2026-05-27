@@ -106,7 +106,6 @@
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini)"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
-    { port = 4344;  backend = "http://127.0.0.1:8341";  name = "Pi Mobile";      icon = "mdi-cellphone-link"; category = "Backend"; description = "pi-coding-agent remote control bridge"; }
     # Hydroxide moved 8443 → 8083 (matches its backend port) to free 8443 for
     # Cyrus's Tailscale Funnel slot (Linear webhooks need a public URL, and
     # only 443/8443/10000 are funnel-eligible; 443 + 10000 are also taken).
