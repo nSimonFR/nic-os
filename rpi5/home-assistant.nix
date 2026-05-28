@@ -148,7 +148,22 @@ in
     ];
     wants = [ "network-online.target" ];
     serviceConfig = {
+      # After=home-assistant.service only waits for the unit to be marked
+      # active, not for the Python app to bind :8123 (~30s on the Pi). Poll
+      # until HA actually accepts connections so the first start doesn't race.
+      ExecStartPre = pkgs.writeShellScript "wait-for-ha" ''
+        for _ in $(${pkgs.coreutils}/bin/seq 1 60); do
+          if ${pkgs.curl}/bin/curl -fsS --connect-timeout 2 -o /dev/null \
+              http://127.0.0.1:8123/manifest.json 2>/dev/null; then
+            exit 0
+          fi
+          ${pkgs.coreutils}/bin/sleep 2
+        done
+        echo "ha-linky: timed out waiting for Home Assistant on :8123" >&2
+        exit 1
+      '';
       ExecStart = "${haLinky}/bin/ha-linky";
+      TimeoutStartSec = "180";
       Restart = "on-failure";
       RestartSec = "30";
       User = "ha-linky";
