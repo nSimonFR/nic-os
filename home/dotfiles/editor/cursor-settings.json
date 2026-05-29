@@ -37,7 +37,9 @@
   "editor.multiCursorModifier": "ctrlCmd",
   "editor.overviewRulerBorder": false,
   "editor.renderWhitespace": "all",
-  "editor.rulers": [100],
+  "editor.rulers": [
+    100
+  ],
   "editor.tabSize": 2,
   "editor.unicodeHighlight.invisibleCharacters": false,
   "editor.accessibilitySupport": "off",
@@ -117,7 +119,10 @@
   "files.insertFinalNewline": true,
   "diffEditor.ignoreTrimWhitespace": false,
   "vsicons.dontShowNewVersionMessage": true,
-  "cursor.cpp.disabledLanguages": ["plaintext", "scminput"],
+  "cursor.cpp.disabledLanguages": [
+    "plaintext",
+    "scminput"
+  ],
   "cursor.terminal.usePreviewBox": true,
   "editor.minimap.size": "fit",
   "editor.minimap.showSlider": "always",
