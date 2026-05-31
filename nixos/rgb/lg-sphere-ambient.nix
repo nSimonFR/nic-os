@@ -457,7 +457,7 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${lg-sphere-ambient}/bin/lg-sphere-ambient --output DP-1 --fps 30 --brightness 12 --openrgb --openrgb-devices dram,motherboard";
+      ExecStart = "${lg-sphere-ambient}/bin/lg-sphere-ambient --output DP-1 --fps 30 --brightness 12 --openrgb --openrgb-devices all";
       Restart = "on-failure";
       RestartSec = "5s";
       # turn the lights off if the service is stopped or fails terminally
