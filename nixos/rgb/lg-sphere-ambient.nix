@@ -238,6 +238,21 @@ let
                 # refresh device snapshots so device.leds reflects new sizes
                 self.client.update()
 
+        def _force_direct_mode(self, dev):
+            """Many devices (G502, ASUS mb) default to 'Off' / a pattern mode that
+            silently overrides per-LED writes. Force 'Direct' if the device has it."""
+            mode_names = [m.name for m in dev.modes]
+            if 'Direct' not in mode_names:
+                return
+            cur = mode_names[dev.active_mode] if dev.modes else None
+            if cur == 'Direct':
+                return
+            try:
+                dev.set_mode('Direct')
+                log.info("switched %s from %r to Direct mode", dev.name, cur)
+            except Exception as e:
+                log.warning("set_mode Direct on %s failed: %s", dev.name, e)
+
         def _connect(self):
             now = time.monotonic()
             if now - self.last_attempt < self.RECONNECT_BACKOFF:
@@ -251,6 +266,8 @@ let
                     d for d in self.client.devices
                     if d.type.name.lower() in self.allowed
                 ]
+                for d in self.devices:
+                    self._force_direct_mode(d)
                 log.info("openrgb connected — %d/%d devices in scope: %s",
                          len(self.devices), len(self.client.devices),
                          [d.name for d in self.devices])
