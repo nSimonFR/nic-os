@@ -45,6 +45,7 @@ in
     ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
     ./rgb/hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./rgb/hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
+    ./rgb/lg-sphere-ambient.nix # LG 38GN950 sphere lighting video-sync (wlr-screencopy → HID)
     ./piper-autoprofile.nix
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
     ./music-production.nix # REAPER + audio plugins/bridges
