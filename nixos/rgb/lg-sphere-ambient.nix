@@ -208,12 +208,35 @@ let
         # spam the log or stall the main capture loop.
         RECONNECT_BACKOFF = 5.0
 
-        def __init__(self, host, port, allowed_types):
+        def __init__(self, host, port, allowed_types, zone_sizes):
+            """zone_sizes: list of (device_type, zone_name, led_count) tuples."""
             self.host = host; self.port = port
             self.allowed = set(t.lower() for t in allowed_types)
+            self.zone_sizes = zone_sizes
             self.client = None
             self.devices = []
             self.last_attempt = 0.0
+
+        def _apply_zone_sizes(self):
+            """Make sure ARGB headers (etc.) are sized to what's physically wired."""
+            if not self.zone_sizes:
+                return
+            changed = False
+            for d in self.client.devices:
+                for dtype, zname, n in self.zone_sizes:
+                    if d.type.name.lower() != dtype.lower(): continue
+                    for z in d.zones:
+                        if z.name != zname: continue
+                        if len(z.leds) == n: continue
+                        try:
+                            z.resize(n)
+                            log.info("resized %s / %s: -> %d LEDs", d.name, zname, n)
+                            changed = True
+                        except Exception as e:
+                            log.warning("resize %s/%s -> %d failed: %s", d.name, zname, n, e)
+            if changed:
+                # refresh device snapshots so device.leds reflects new sizes
+                self.client.update()
 
         def _connect(self):
             now = time.monotonic()
@@ -223,6 +246,7 @@ let
             try:
                 from openrgb import OpenRGBClient
                 self.client = OpenRGBClient(self.host, self.port, name="lg-sphere-ambient")
+                self._apply_zone_sizes()
                 self.devices = [
                     d for d in self.client.devices
                     if d.type.name.lower() in self.allowed
@@ -314,6 +338,9 @@ let
         # ambient over the DualSense lightbar can fight with the game.
         ap.add_argument('--openrgb-devices', default='dram,motherboard',
                         help='comma-separated device types: dram,motherboard,gamepad,keyboard,mouse,headset,all')
+        ap.add_argument('--openrgb-zone-sizes', default="",
+                        help='comma-separated zone size specs: device_type/Zone Name=N,...  '
+                             '(applied on every OpenRGB connect; idempotent)')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -360,7 +387,17 @@ let
             if 'all' in allowed:
                 allowed = ['dram','motherboard','gamepad','keyboard','mouse','headset',
                            'cooler','ledstrip','gpu','storage','case','speaker','virtual','unknown']
-            orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed)
+            zone_sizes = []
+            for spec in args.openrgb_zone_sizes.split(','):
+                spec = spec.strip()
+                if not spec: continue
+                try:
+                    lhs, n = spec.rsplit('=', 1)
+                    dtype, zname = lhs.split('/', 1)
+                    zone_sizes.append((dtype.strip(), zname.strip(), int(n)))
+                except Exception as e:
+                    log.error("bad --openrgb-zone-sizes entry %r: %s", spec, e)
+            orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes)
 
         period = 1.0 / args.fps
         next_t = time.perf_counter()
@@ -457,7 +494,10 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${lg-sphere-ambient}/bin/lg-sphere-ambient --output DP-1 --fps 30 --brightness 12 --openrgb --openrgb-devices all";
+      ExecStart = ''${lg-sphere-ambient}/bin/lg-sphere-ambient \
+        --output DP-1 --fps 30 --brightness 12 \
+        --openrgb --openrgb-devices all \
+        --openrgb-zone-sizes "motherboard/Aura Addressable 1=24,motherboard/Aura Addressable 2=0,motherboard/Aura Addressable 3=8"'';
       Restart = "on-failure";
       RestartSec = "5s";
       # turn the lights off if the service is stopped or fails terminally
