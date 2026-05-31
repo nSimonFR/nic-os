@@ -502,6 +502,15 @@ in
     fi
   '';
 
+  # OpenRGB's NVIDIA FE GPU detector dlopens libnvidia-api.so.1, but on
+  # NixOS that lib sits in /run/opengl-driver/lib/ — not in the default
+  # ld.so search path — so the dlopen silently fails and the GeForce
+  # side-logo never gets enumerated. With this env var set,
+  # NvAPI_Initialize() returns 0 and NvAPI_EnumPhysicalGPUs() reports 1
+  # GPU on a 3080 Ti FE; the "Nvidia NvAPI Illumination" detector then
+  # produces an "NVIDIA GeForce RTX 3080 Ti FE" device on the SDK.
+  systemd.services.openrgb.environment.LD_LIBRARY_PATH = "/run/opengl-driver/lib";
+
   # User service — starts at login, restarts on failure, ends gracefully on logout.
   systemd.user.services.lg-sphere-ambient = {
     description = "LG 38GN950 sphere-lighting ambient sync";
