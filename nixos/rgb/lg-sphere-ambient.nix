@@ -200,6 +200,66 @@ let
     # 48 LED zones around the sphere: top16 + right8 + bottom16 + left8
     N_TOP, N_SIDE, BAND = 16, 8, 4
 
+    # ------------------------------------------------------------------
+    # Optional OpenRGB sink — picks up the same sampled frame and pushes a
+    # single averaged colour to whichever device classes are enabled.
+    class OpenRGBSink:
+        # ~5s minimum between reconnect attempts so a dead server doesn't
+        # spam the log or stall the main capture loop.
+        RECONNECT_BACKOFF = 5.0
+
+        def __init__(self, host, port, allowed_types):
+            self.host = host; self.port = port
+            self.allowed = set(t.lower() for t in allowed_types)
+            self.client = None
+            self.devices = []
+            self.last_attempt = 0.0
+
+        def _connect(self):
+            now = time.monotonic()
+            if now - self.last_attempt < self.RECONNECT_BACKOFF:
+                return False
+            self.last_attempt = now
+            try:
+                from openrgb import OpenRGBClient
+                self.client = OpenRGBClient(self.host, self.port, name="lg-sphere-ambient")
+                self.devices = [
+                    d for d in self.client.devices
+                    if d.type.name.lower() in self.allowed
+                ]
+                log.info("openrgb connected — %d/%d devices in scope: %s",
+                         len(self.devices), len(self.client.devices),
+                         [d.name for d in self.devices])
+                return True
+            except Exception as e:
+                log.warning("openrgb connect failed: %s", e)
+                self.client = None; self.devices = []
+                return False
+
+        def push(self, rgb):
+            from openrgb.utils import RGBColor
+            if self.client is None and not self._connect():
+                return
+            r, g, b = rgb
+            col = RGBColor(r, g, b)
+            dead = []
+            for dev in self.devices:
+                try:
+                    dev.set_color(col, fast=True)
+                except Exception as e:
+                    log.warning("openrgb device %s failed: %s", dev.name, e)
+                    dead.append(dev)
+            if dead:
+                # Drop dead devices and force a reconnect on the next tick
+                self.devices = [d for d in self.devices if d not in dead]
+                if not self.devices:
+                    self.client = None
+
+        def stop(self):
+            try:
+                if self.client: self.client.disconnect()
+            except Exception: pass
+
     def find_wayland_socket():
         """If WAYLAND_DISPLAY isn't set, look in XDG_RUNTIME_DIR."""
         if os.environ.get('WAYLAND_DISPLAY'):
@@ -247,6 +307,13 @@ let
         ap.add_argument('--brightness', type=int, default=12, choices=range(1, 13))
         ap.add_argument('--cursor', action='store_true', help='include cursor in capture')
         ap.add_argument('--debug', action='store_true')
+        ap.add_argument('--openrgb', action='store_true', help='also push averaged colour to OpenRGB SDK')
+        ap.add_argument('--openrgb-host', default='127.0.0.1')
+        ap.add_argument('--openrgb-port', type=int, default=6742)
+        # DRAM and motherboard by default; gamepad is opt-in because pushing
+        # ambient over the DualSense lightbar can fight with the game.
+        ap.add_argument('--openrgb-devices', default='dram,motherboard',
+                        help='comma-separated device types: dram,motherboard,gamepad,keyboard,mouse,headset,all')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -286,6 +353,15 @@ let
         lg.send_command(lg.brightness_commands[args.brightness], dev)
         log.info("ambient loop running at %d fps target on %s", args.fps, args.output)
 
+        # Optional OpenRGB fan-out
+        orgb = None
+        if args.openrgb:
+            allowed = [t.strip() for t in args.openrgb_devices.split(',') if t.strip()]
+            if 'all' in allowed:
+                allowed = ['dram','motherboard','gamepad','keyboard','mouse','headset',
+                           'cooler','ledstrip','gpu','storage','case','speaker','virtual','unknown']
+            orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed)
+
         period = 1.0 / args.fps
         next_t = time.perf_counter()
         try:
@@ -293,6 +369,13 @@ let
                 mm, w, h, stride = cap.next_frame()
                 colors = sample_zones(mm, w, h, stride)
                 lg.send_video_sync_data(colors, dev)
+                if orgb is not None:
+                    # average the 48 hex zones to one RGB
+                    avg = np.array(
+                        [(int(c[0:2],16), int(c[2:4],16), int(c[4:6],16)) for c in colors],
+                        dtype=np.uint16,
+                    ).mean(axis=0).astype(np.uint8)
+                    orgb.push((int(avg[0]), int(avg[1]), int(avg[2])))
                 next_t += period
                 sl = next_t - time.perf_counter()
                 if sl > 0: time.sleep(sl)
@@ -307,6 +390,7 @@ let
             except Exception: pass
             try: cap.stop()
             except Exception: pass
+            if orgb is not None: orgb.stop()
             log.info("clean exit")
         return 0
 
@@ -316,7 +400,7 @@ let
 
   # ------------------------------------------------------------------
   # Bundle the python sources into one package directory.
-  pythonEnv = python.withPackages (ps: with ps; [ pywayland hid numpy ]);
+  pythonEnv = python.withPackages (ps: with ps; [ pywayland hid numpy openrgb-python ]);
 
   lg-sphere-ambient = pkgs.stdenv.mkDerivation {
     pname = "lg-sphere-ambient";
@@ -357,7 +441,7 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = "${lg-sphere-ambient}/bin/lg-sphere-ambient --output DP-1 --fps 30 --brightness 12";
+      ExecStart = "${lg-sphere-ambient}/bin/lg-sphere-ambient --output DP-1 --fps 30 --brightness 12 --openrgb --openrgb-devices dram,motherboard";
       Restart = "on-failure";
       RestartSec = "5s";
       # turn the lights off if the service is stopped or fails terminally
