@@ -6,7 +6,8 @@ let
 
     src = pkgs.fetchzip {
       url = "https://tal-software.com/downloads/plugins/TAL-Vocoder-2_64_linux.zip";
-      hash = "sha256-QrYjoD9fs/JotlM86ZN/3N2Svcwds7xvXYudKuKt9gI=";
+      # Upstream silently re-zipped the file at this URL; old hash was QrYjoD9... — refreshed 2026-06-01.
+      hash = "sha256-S+ol+xj9Fofh9fOFpv3W8xJiJhCVCMtIgu58fLnGCR8=";
       stripRoot = false;
     };
 
@@ -21,15 +22,15 @@ let
     installPhase = ''
       runHook preInstall
 
-      install -Dm644 ReadmeLinux.txt \
+      # Upstream 2026 re-zip moved files into a TAL-Vocoder-2/ subdir and
+      # dropped the bundled .vst3 directory — only CLAP + VST2 ship now.
+      install -Dm644 TAL-Vocoder-2/ReadmeLinux.txt \
         $out/share/doc/${pname}/ReadmeLinux.txt
 
-      install -Dm755 TAL-Vocoder-2.clap \
+      install -Dm755 TAL-Vocoder-2/TAL-Vocoder-2.clap \
         $out/lib/clap/TAL-Vocoder-2.clap
-      install -Dm755 libTAL-Vocoder-2.so \
+      install -Dm755 TAL-Vocoder-2/libTAL-Vocoder-2.so \
         $out/lib/vst/libTAL-Vocoder-2.so
-      mkdir -p $out/lib/vst3
-      cp -r TAL-Vocoder-2.vst3 $out/lib/vst3/
 
       runHook postInstall
     '';
