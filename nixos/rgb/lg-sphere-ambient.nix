@@ -432,6 +432,22 @@ in
 
   environment.systemPackages = [ lg-sphere-ambient ];
 
+  # OpenRGB's LG plugin opens /dev/hidraw11 too — hidraw allows concurrent
+  # writers, so its writes race ours and the sphere flashes on every
+  # disagreement. Disable OpenRGB's LG-monitor detector before the server
+  # starts so this daemon is the sole writer; the rest of the OpenRGB
+  # device list (RAM, mobo, mouse, gamepad) is unaffected.
+  systemd.services.openrgb.preStart = lib.mkAfter ''
+    cfg=/var/lib/OpenRGB/OpenRGB.json
+    if [ -s "$cfg" ]; then
+      ${pkgs.jq}/bin/jq '.Detectors.detectors."LG 27GN950-B Monitor" = false' "$cfg" > "$cfg.tmp" \
+        && mv "$cfg.tmp" "$cfg"
+    else
+      mkdir -p /var/lib/OpenRGB
+      printf '{"Detectors":{"detectors":{"LG 27GN950-B Monitor":false}}}' > "$cfg"
+    fi
+  '';
+
   # User service — starts at login, restarts on failure, ends gracefully on logout.
   systemd.user.services.lg-sphere-ambient = {
     description = "LG 38GN950 sphere-lighting ambient sync";
