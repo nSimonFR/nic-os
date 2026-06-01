@@ -335,27 +335,132 @@ let
                 except OSError:
                     continue
 
-    def sample_zones(mm, w, h, stride):
+    # ------------------------------------------------------------------
+    # Colour-extraction algorithms.
+    #
+    # MEAN: plain BGR→RGB mean of edge pixels. Washes out — a desktop with
+    # mostly dark wallpaper plus one small saturated accent averages to
+    # near-grey. What every naive ambient-light tutorial does.
+    #
+    # HUE-HISTOGRAM: importance-weighted 16-bin hue histogram, Cornell ECE
+    # 5760 (Velleleth 2016). Per pixel: importance = (1 − |L − 0.5|·2) · S,
+    # so dark/bright/grey pixels weigh ~0 and only mid-luma saturated
+    # pixels vote. Heaviest hue bin wins; output is a fully saturated
+    # version at the importance-weighted lightness. Vivid colour even when
+    # the screen is mostly dark wallpaper — the only thing voting is the
+    # small saturated accent. Falls back to mean grey when no pixel has
+    # any saturation at all.
+
+    NBINS = 16
+
+    def rgb_to_hsl(rgb_u8):
+        # rgb_u8: (..., 3) uint8 → H,S,L floats in [0,1]
+        rgb = rgb_u8.astype(np.float32) / 255.0
+        r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+        cmax = np.maximum(np.maximum(r, g), b)
+        cmin = np.minimum(np.minimum(r, g), b)
+        d = cmax - cmin
+        L = (cmax + cmin) * 0.5
+        denom = np.where(L < 0.5, cmax + cmin, 2.0 - cmax - cmin)
+        S = np.where(d == 0, 0.0, d / np.maximum(denom, 1e-9))
+        H = np.zeros_like(L)
+        mask = d > 0
+        # use np.where so we don't divide by zero
+        rc = (cmax - r) / np.where(d == 0, 1, d)
+        gc = (cmax - g) / np.where(d == 0, 1, d)
+        bc = (cmax - b) / np.where(d == 0, 1, d)
+        H = np.where(cmax == r, bc - gc, H)
+        H = np.where(cmax == g, 2.0 + rc - bc, H)
+        H = np.where(cmax == b, 4.0 + gc - rc, H)
+        H = (H / 6.0) % 1.0
+        H = np.where(mask, H, 0.0)
+        return H, S, L
+
+    def hsl_to_rgb(h, s, l):
+        # scalars → (r, g, b) uint8
+        def hue2rgb(p, q, t):
+            t = t % 1.0
+            if t < 1/6: return p + (q - p) * 6 * t
+            if t < 1/2: return q
+            if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+            return p
+        if s == 0:
+            v = int(round(l * 255))
+            return v, v, v
+        q = l * (1 + s) if l < 0.5 else l + s - l * s
+        p = 2 * l - q
+        r = hue2rgb(p, q, h + 1/3)
+        g = hue2rgb(p, q, h)
+        b = hue2rgb(p, q, h - 1/3)
+        return int(round(r*255)), int(round(g*255)), int(round(b*255))
+
+    def pick_color_mean(pixels_bgr):
+        if pixels_bgr.size == 0: return (0, 0, 0)
+        m = pixels_bgr.reshape(-1, 3).mean(axis=0)
+        return (int(m[2]), int(m[1]), int(m[0]))   # BGR → RGB
+
+    def pick_color_hue_histogram(pixels_bgr):
+        if pixels_bgr.size == 0: return (0, 0, 0)
+        # BGR → RGB before HSL
+        flat = pixels_bgr.reshape(-1, 3)[:, ::-1]
+        H, S, L = rgb_to_hsl(flat)
+        importance = (1.0 - np.abs(L - 0.5) * 2.0) * S
+        total = importance.sum()
+        if total < 1.0:
+            # ~no saturation: fall back to plain mean (will be grey-ish)
+            return pick_color_mean(pixels_bgr)
+        bins = (H * NBINS).astype(np.int32) % NBINS
+        weights = np.bincount(bins, weights=importance, minlength=NBINS)
+        winner = int(weights.argmax())
+        winner_hue = (winner + 0.5) / NBINS
+        # importance-weighted lightness, clamped: never pure black (we lose
+        # the colour), never pure white (washes out the hue).
+        w = importance + 1e-6
+        final_L = float(np.clip((L * w).sum() / w.sum(), 0.15, 0.55))
+        return hsl_to_rgb(winner_hue, 1.0, final_L)
+
+    # 2 = every other pixel along both axes → 4× fewer pixels through the
+    # HSL conversion. Edge bands are tiny and have huge spatial redundancy;
+    # this is loss-free for the histogram (which counts hue bins, not pixels).
+    SS = 2
+
+    def sample_zones(mm, w, h, stride, algo='hue-histogram'):
+        pick = pick_color_hue_histogram if algo == 'hue-histogram' else pick_color_mean
         a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
         a = a[:, :w]
         out = []
-        band = a[:BAND, :, :3]
+        band = a[:BAND:1, ::SS, :3]
         for k in range(N_TOP):
-            x0 = k*w//N_TOP; x1 = (k+1)*w//N_TOP
-            m = band[:, x0:x1].mean(axis=(0,1)); out.append((int(m[2]), int(m[1]), int(m[0])))
-        band = a[:, w-BAND:, :3]
+            x0 = (k*w//N_TOP)//SS; x1 = ((k+1)*w//N_TOP)//SS
+            out.append(pick(band[:, x0:x1]))
+        band = a[::SS, w-BAND::1, :3]
         for k in range(N_SIDE):
-            y0 = k*h//N_SIDE; y1 = (k+1)*h//N_SIDE
-            m = band[y0:y1].mean(axis=(0,1)); out.append((int(m[2]), int(m[1]), int(m[0])))
-        band = a[h-BAND:, :, :3]
+            y0 = (k*h//N_SIDE)//SS; y1 = ((k+1)*h//N_SIDE)//SS
+            out.append(pick(band[y0:y1]))
+        band = a[h-BAND::1, ::SS, :3]
         for k in range(N_TOP):
-            x0 = k*w//N_TOP; x1 = (k+1)*w//N_TOP
-            m = band[:, x0:x1].mean(axis=(0,1)); out.append((int(m[2]), int(m[1]), int(m[0])))
-        band = a[:, :BAND, :3]
+            x0 = (k*w//N_TOP)//SS; x1 = ((k+1)*w//N_TOP)//SS
+            out.append(pick(band[:, x0:x1]))
+        band = a[::SS, :BAND:1, :3]
         for k in range(N_SIDE):
-            y0 = k*h//N_SIDE; y1 = (k+1)*h//N_SIDE
-            m = band[y0:y1].mean(axis=(0,1)); out.append((int(m[2]), int(m[1]), int(m[0])))
+            y0 = (k*h//N_SIDE)//SS; y1 = ((k+1)*h//N_SIDE)//SS
+            out.append(pick(band[y0:y1]))
         return [f"{r:02x}{g:02x}{b:02x}" for r,g,b in out]
+
+    def pick_global_color(mm, w, h, stride, algo='hue-histogram'):
+        """One colour for the whole edge frame — used by the OpenRGB fan-out.
+        Re-runs the algorithm on the full edge sample so we don't average
+        the 48 already-saturated per-zone outputs (which produces mud)."""
+        pick = pick_color_hue_histogram if algo == 'hue-histogram' else pick_color_mean
+        a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
+        a = a[:, :w]
+        # 2× subsample on the long axis of each band; edges have huge spatial
+        # redundancy so this is loss-free for hue-histogram bins.
+        top = a[:BAND,    ::SS, :3].reshape(-1, 3)
+        bot = a[h-BAND:,  ::SS, :3].reshape(-1, 3)
+        lef = a[::SS,    :BAND, :3].reshape(-1, 3)
+        rig = a[::SS, w-BAND:,  :3].reshape(-1, 3)
+        return pick(np.concatenate([top, bot, lef, rig]))
 
     def main():
         ap = argparse.ArgumentParser()
@@ -377,6 +482,10 @@ let
         ap.add_argument('--gpu-logo-threshold', type=int, default=30,
                         help='luma (0-255) below which the GPU SINGLE COLOR zone (the FE GeForce '
                              'side logo) is turned off. Default 30 ~ typical dark desktop')
+        ap.add_argument('--algo', default='hue-histogram', choices=['mean','hue-histogram'],
+                        help='colour-extraction algorithm. mean = plain edge-band average; '
+                             'hue-histogram = Cornell-style importance-weighted hue histogram '
+                             '(more saturated output, less washout on dark scenes). default hue-histogram.')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -436,20 +545,27 @@ let
             orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
                                args.gpu_logo_threshold)
 
+        log.info("colour algorithm: %s", args.algo)
         period = 1.0 / args.fps
         next_t = time.perf_counter()
+        frame_idx = 0
         try:
             while not stop[0]:
                 mm, w, h, stride = cap.next_frame()
-                colors = sample_zones(mm, w, h, stride)
+                colors = sample_zones(mm, w, h, stride, args.algo)
                 lg.send_video_sync_data(colors, dev)
                 if orgb is not None:
-                    # average the 48 hex zones to one RGB
-                    avg = np.array(
-                        [(int(c[0:2],16), int(c[2:4],16), int(c[4:6],16)) for c in colors],
-                        dtype=np.uint16,
-                    ).mean(axis=0).astype(np.uint8)
-                    orgb.push((int(avg[0]), int(avg[1]), int(avg[2])))
+                    # Re-run the algorithm on the whole edge sample for the
+                    # single OpenRGB colour. Cheaper + better than averaging
+                    # the 48 already-saturated per-zone outputs (which would
+                    # cancel out neighbouring hues into mud).
+                    push_color = pick_global_color(mm, w, h, stride, args.algo)
+                    orgb.push(push_color)
+                    # opt-in trace at --debug: log roughly every 2s
+                    frame_idx += 1
+                    if args.debug and frame_idx % 60 == 0:
+                        log.debug("pushed rgb=%s zone0=%s zone16=%s zone32=%s",
+                                  push_color, colors[0], colors[16], colors[32])
                 next_t += period
                 sl = next_t - time.perf_counter()
                 if sl > 0: time.sleep(sl)
