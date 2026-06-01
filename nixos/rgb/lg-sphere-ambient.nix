@@ -500,6 +500,10 @@ let
                              'Default 0.25 means each push is ~25%% new + ~75%% the previous frame, '
                              'which kills the hue-bin-flip flashing on close-tie scenes without '
                              'feeling laggy on real scene cuts.')
+        ap.add_argument('--capture-recycle', type=float, default=1.0,
+                        help='tear down + recreate the wlr-screencopy session every N seconds '
+                             'to defeat Hyprland fullscreen-mode-2 stale-buffer lock. '
+                             '0 = never recycle. default 1.0s (bounds staleness to <= 1s).')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -559,15 +563,30 @@ let
             orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
                                args.gpu_logo_threshold)
 
-        log.info("colour algorithm: %s  ema=%.2f", args.algo, args.ema)
+        log.info("colour algorithm: %s  ema=%.2f  capture-recycle=%.1fs",
+                 args.algo, args.ema, args.capture_recycle)
         period = 1.0 / args.fps
         next_t = time.perf_counter()
         frame_idx = 0
         ema = args.ema
         prev_zones = None      # list of 48 (r,g,b) ints
         prev_global = None     # one (r,g,b)
+        # Periodic Screencopy recycle: Hyprland's wlr-screencopy implementation
+        # locks long-lived clients to whatever frame was current when the
+        # session started during fullscreen-mode-2 windows on the output. The
+        # session is cheap to recreate (~ 1 ms), so we just tear it down and
+        # rebuild every N seconds; fresh sessions always see live frames.
+        last_recycle = time.perf_counter()
         try:
             while not stop[0]:
+                if (args.capture_recycle > 0 and
+                        time.perf_counter() - last_recycle > args.capture_recycle):
+                    try: cap.stop()
+                    except Exception as e: log.warning("cap.stop failed: %s", e)
+                    cap = Screencopy(output_name=args.output,
+                                     overlay_cursor=1 if args.cursor else 0)
+                    cap.start()
+                    last_recycle = time.perf_counter()
                 mm, w, h, stride = cap.next_frame()
                 raw_zones = sample_zones(mm, w, h, stride, args.algo)
                 # EMA in RGB space — kills the hue-bin flip-flopping that the
