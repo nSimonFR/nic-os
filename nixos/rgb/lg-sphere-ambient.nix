@@ -218,6 +218,7 @@ let
             self.client = None
             self.devices = []
             self.last_attempt = 0.0
+            self.last_push = None     # last (r,g,b) actually sent to devices
 
         def _apply_zone_sizes(self):
             """Make sure ARGB headers (etc.) are sized to what's physically wired."""
@@ -279,11 +280,25 @@ let
                 self.client = None; self.devices = []
                 return False
 
-        def push(self, rgb):
+        def push(self, rgb, min_delta=4):
+            """Push a colour to every in-scope device.
+
+            Skips entirely when the requested rgb is within ``min_delta``
+            (max per-channel) of the last successfully pushed value. RGB
+            hardware controllers don't need to be re-asserted to the same
+            colour 10× per second; skipping de-duplicated pushes cuts the
+            wire traffic dramatically and removes the subtle blink some
+            devices show when they're rapidly re-flashed with near-equal
+            commands. min_delta=4 ≈ imperceptible colour delta.
+            """
             from openrgb.utils import RGBColor
             if self.client is None and not self._connect():
                 return
             r, g, b = rgb
+            if self.last_push is not None:
+                lr, lg, lb = self.last_push
+                if max(abs(r-lr), abs(g-lg), abs(b-lb)) < min_delta:
+                    return
             col = RGBColor(r, g, b)
             # ITU-R BT.601 luma — gates the "binary on/off" zones (e.g. the
             # FE GeForce side logo, which can't actually do colour or PWM
@@ -311,6 +326,7 @@ let
                 self.devices = [d for d in self.devices if d not in dead]
                 if not self.devices:
                     self.client = None
+            self.last_push = (r, g, b)
 
         def stop(self):
             try:
@@ -504,6 +520,12 @@ let
                         help='tear down + recreate the wlr-screencopy session every N seconds '
                              'to defeat Hyprland fullscreen-mode-2 stale-buffer lock. '
                              '0 = never recycle. default 1.0s (bounds staleness to <= 1s).')
+        ap.add_argument('--openrgb-fps', type=float, default=10.0,
+                        help='OpenRGB push rate (Hz). The 6 device set_color calls per frame at '
+                             'the full 30 fps can race on the OpenRGB server with fast=True; lower '
+                             'rates also stop hardware controllers (Corsair RAM, ASUS Aura) from '
+                             'visibly flickering when re-asserted to near-equal colours. '
+                             'Default 10 Hz. Set higher for snappier sync to fast scene cuts.')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -563,14 +585,19 @@ let
             orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
                                args.gpu_logo_threshold)
 
-        log.info("colour algorithm: %s  ema=%.2f  capture-recycle=%.1fs",
-                 args.algo, args.ema, args.capture_recycle)
+        log.info("colour algorithm: %s  ema=%.2f  capture-recycle=%.1fs  openrgb-fps=%.1f",
+                 args.algo, args.ema, args.capture_recycle, args.openrgb_fps)
         period = 1.0 / args.fps
         next_t = time.perf_counter()
         frame_idx = 0
         ema = args.ema
         prev_zones = None      # list of 48 (r,g,b) ints
         prev_global = None     # one (r,g,b)
+        # OpenRGB rate limiting — independent of main fps so the LG ring keeps
+        # its 30 fps per-zone sync while OpenRGB devices update at a saner
+        # rate that doesn't race on the SDK server.
+        orgb_period = 1.0 / args.openrgb_fps if args.openrgb_fps > 0 else 0
+        next_orgb_t = 0.0
         # Periodic Screencopy recycle: Hyprland's wlr-screencopy implementation
         # locks long-lived clients to whatever frame was current when the
         # session started during fullscreen-mode-2 windows on the output. The
@@ -606,6 +633,8 @@ let
                 lg.send_video_sync_data(smoothed_zones, dev)
 
                 if orgb is not None:
+                    # Compute the smoothed value every frame so EMA stays fast-
+                    # converging, but only push to OpenRGB at the configured rate.
                     raw_global = pick_global_color(mm, w, h, stride, args.algo)
                     if prev_global is None or ema >= 1.0:
                         push_color = raw_global
@@ -616,7 +645,10 @@ let
                             int(ema*raw_global[2] + (1-ema)*prev_global[2]),
                         )
                     prev_global = push_color
-                    orgb.push(push_color)
+                    now = time.perf_counter()
+                    if now >= next_orgb_t:
+                        orgb.push(push_color)
+                        next_orgb_t = now + orgb_period
                     frame_idx += 1
                     if args.debug and frame_idx % 60 == 0:
                         log.debug("pushed rgb=%s (raw=%s) zone0=%s zone16=%s",
