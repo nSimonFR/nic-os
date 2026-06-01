@@ -447,20 +447,28 @@ let
             out.append(pick(band[y0:y1]))
         return [f"{r:02x}{g:02x}{b:02x}" for r,g,b in out]
 
+    # Whole-screen subsample stride for pick_global_color. 16× on each axis
+    # = 240×100 = 24k pixels on the 3840×1600 LG output, same ballpark as the
+    # edge sample so CPU is unchanged but the dominant-hue vote now comes
+    # from EVERY pixel on the screen, not just the bezel-adjacent ones.
+    SS_GLOBAL = 16
+
     def pick_global_color(mm, w, h, stride, algo='hue-histogram'):
-        """One colour for the whole edge frame — used by the OpenRGB fan-out.
-        Re-runs the algorithm on the full edge sample so we don't average
-        the 48 already-saturated per-zone outputs (which produces mud)."""
+        """One colour for the whole screen — used by the OpenRGB fan-out.
+
+        Samples a heavily-subsampled grid of the entire framebuffer (not
+        just the edges) so the dominant-hue vote reflects whatever is
+        on-screen, not just the 4-px band touching the bezel. The
+        hue-histogram's importance weighting (mid-luma · saturation) takes
+        care of the rest — a mostly-grey desktop with a small saturated
+        accent will still resolve to that accent's hue.
+        """
         pick = pick_color_hue_histogram if algo == 'hue-histogram' else pick_color_mean
         a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
         a = a[:, :w]
-        # 2× subsample on the long axis of each band; edges have huge spatial
-        # redundancy so this is loss-free for hue-histogram bins.
-        top = a[:BAND,    ::SS, :3].reshape(-1, 3)
-        bot = a[h-BAND:,  ::SS, :3].reshape(-1, 3)
-        lef = a[::SS,    :BAND, :3].reshape(-1, 3)
-        rig = a[::SS, w-BAND:,  :3].reshape(-1, 3)
-        return pick(np.concatenate([top, bot, lef, rig]))
+        # whole-screen strided view → (h/SS_GLOBAL, w/SS_GLOBAL, 3) BGR pixels
+        pixels = a[::SS_GLOBAL, ::SS_GLOBAL, :3].reshape(-1, 3)
+        return pick(pixels)
 
     def main():
         ap = argparse.ArgumentParser()
@@ -486,6 +494,12 @@ let
                         help='colour-extraction algorithm. mean = plain edge-band average; '
                              'hue-histogram = Cornell-style importance-weighted hue histogram '
                              '(more saturated output, less washout on dark scenes). default hue-histogram.')
+        ap.add_argument('--ema', type=float, default=0.25,
+                        help='temporal smoothing on the algorithm output (per-zone and global): '
+                             'new = ema*current + (1-ema)*prev. 0 = no smoothing, 1 = no history. '
+                             'Default 0.25 means each push is ~25%% new + ~75%% the previous frame, '
+                             'which kills the hue-bin-flip flashing on close-tie scenes without '
+                             'feeling laggy on real scene cuts.')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -545,27 +559,49 @@ let
             orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
                                args.gpu_logo_threshold)
 
-        log.info("colour algorithm: %s", args.algo)
+        log.info("colour algorithm: %s  ema=%.2f", args.algo, args.ema)
         period = 1.0 / args.fps
         next_t = time.perf_counter()
         frame_idx = 0
+        ema = args.ema
+        prev_zones = None      # list of 48 (r,g,b) ints
+        prev_global = None     # one (r,g,b)
         try:
             while not stop[0]:
                 mm, w, h, stride = cap.next_frame()
-                colors = sample_zones(mm, w, h, stride, args.algo)
-                lg.send_video_sync_data(colors, dev)
+                raw_zones = sample_zones(mm, w, h, stride, args.algo)
+                # EMA in RGB space — kills the hue-bin flip-flopping that the
+                # histogram does on close-tie scenes, at the cost of some
+                # reactivity on fast cuts. New = ema * raw + (1-ema) * prev.
+                if prev_zones is None or ema >= 1.0:
+                    smoothed_zones = raw_zones
+                else:
+                    smoothed_zones = []
+                    for raw_hex, prev_rgb in zip(raw_zones, prev_zones):
+                        r = int(raw_hex[0:2], 16); g = int(raw_hex[2:4], 16); b = int(raw_hex[4:6], 16)
+                        nr = int(ema*r + (1-ema)*prev_rgb[0])
+                        ng = int(ema*g + (1-ema)*prev_rgb[1])
+                        nb = int(ema*b + (1-ema)*prev_rgb[2])
+                        smoothed_zones.append(f"{nr:02x}{ng:02x}{nb:02x}")
+                prev_zones = [(int(c[0:2],16), int(c[2:4],16), int(c[4:6],16)) for c in smoothed_zones]
+                lg.send_video_sync_data(smoothed_zones, dev)
+
                 if orgb is not None:
-                    # Re-run the algorithm on the whole edge sample for the
-                    # single OpenRGB colour. Cheaper + better than averaging
-                    # the 48 already-saturated per-zone outputs (which would
-                    # cancel out neighbouring hues into mud).
-                    push_color = pick_global_color(mm, w, h, stride, args.algo)
+                    raw_global = pick_global_color(mm, w, h, stride, args.algo)
+                    if prev_global is None or ema >= 1.0:
+                        push_color = raw_global
+                    else:
+                        push_color = (
+                            int(ema*raw_global[0] + (1-ema)*prev_global[0]),
+                            int(ema*raw_global[1] + (1-ema)*prev_global[1]),
+                            int(ema*raw_global[2] + (1-ema)*prev_global[2]),
+                        )
+                    prev_global = push_color
                     orgb.push(push_color)
-                    # opt-in trace at --debug: log roughly every 2s
                     frame_idx += 1
                     if args.debug and frame_idx % 60 == 0:
-                        log.debug("pushed rgb=%s zone0=%s zone16=%s zone32=%s",
-                                  push_color, colors[0], colors[16], colors[32])
+                        log.debug("pushed rgb=%s (raw=%s) zone0=%s zone16=%s",
+                                  push_color, raw_global, smoothed_zones[0], smoothed_zones[16])
                 next_t += period
                 sl = next_t - time.perf_counter()
                 if sl > 0: time.sleep(sl)
