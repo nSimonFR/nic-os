@@ -208,11 +208,13 @@ let
         # spam the log or stall the main capture loop.
         RECONNECT_BACKOFF = 5.0
 
-        def __init__(self, host, port, allowed_types, zone_sizes):
-            """zone_sizes: list of (device_type, zone_name, led_count) tuples."""
+        def __init__(self, host, port, allowed_types, zone_sizes, gpu_logo_threshold):
+            """zone_sizes: list of (device_type, zone_name, led_count) tuples.
+            gpu_logo_threshold: luminance below this turns the GPU SINGLE COLOR zone off."""
             self.host = host; self.port = port
             self.allowed = set(t.lower() for t in allowed_types)
             self.zone_sizes = zone_sizes
+            self.gpu_logo_threshold = gpu_logo_threshold
             self.client = None
             self.devices = []
             self.last_attempt = 0.0
@@ -283,10 +285,24 @@ let
                 return
             r, g, b = rgb
             col = RGBColor(r, g, b)
+            # ITU-R BT.601 luma — gates the "binary on/off" zones (e.g. the
+            # FE GeForce side logo, which can't actually do colour or PWM
+            # despite OpenRGB exposing an SDK colour for it).
+            lum = (299*r + 587*g + 114*b) // 1000
+            on  = RGBColor(255, 255, 255)
+            off = RGBColor(0, 0, 0)
+            gate = on if lum >= self.gpu_logo_threshold else off
             dead = []
             for dev in self.devices:
                 try:
-                    dev.set_color(col, fast=True)
+                    if dev.type.name == 'GPU' and any('SINGLE' in z.name.upper() for z in dev.zones):
+                        # Drive RGBW zones with the actual colour, gate the
+                        # SINGLE COLOR zone (hardware is on/off only).
+                        for z in dev.zones:
+                            tgt = gate if 'SINGLE' in z.name.upper() else col
+                            z.set_color(tgt, fast=True)
+                    else:
+                        dev.set_color(col, fast=True)
                 except Exception as e:
                     log.warning("openrgb device %s failed: %s", dev.name, e)
                     dead.append(dev)
@@ -358,6 +374,9 @@ let
         ap.add_argument('--openrgb-zone-sizes', default="",
                         help='comma-separated zone size specs: device_type/Zone Name=N,...  '
                              '(applied on every OpenRGB connect; idempotent)')
+        ap.add_argument('--gpu-logo-threshold', type=int, default=30,
+                        help='luma (0-255) below which the GPU SINGLE COLOR zone (the FE GeForce '
+                             'side logo) is turned off. Default 30 ~ typical dark desktop')
         args = ap.parse_args()
         logging.basicConfig(
             level=logging.DEBUG if args.debug else logging.INFO,
@@ -414,7 +433,8 @@ let
                     zone_sizes.append((dtype.strip(), zname.strip(), int(n)))
                 except Exception as e:
                     log.error("bad --openrgb-zone-sizes entry %r: %s", spec, e)
-            orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes)
+            orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
+                               args.gpu_logo_threshold)
 
         period = 1.0 / args.fps
         next_t = time.perf_counter()
@@ -477,11 +497,17 @@ let
 
 in
 {
-  # Give the logged-in user access to hidraw11 (the sphere lighting endpoint)
-  # via systemd-logind's `uaccess` tag. No chmod, no group membership.
+  # Give the logged-in user access to /dev/hidraw11 (the sphere-lighting
+  # endpoint on the LG 38GN950) via group ownership. We previously used
+  # systemd-logind's TAG+="uaccess", but the resulting ACL came up with
+  # mask::--- on at least one reboot — the user entry was user:nsimon:rw-
+  # but the mask collapsed effective rights to nothing, the daemon
+  # crash-looped on "unable to open device", and a manual
+  # `setfacl -m m::rw` was needed to recover. GROUP="input" MODE="0660"
+  # skips the ACL/logind path entirely and is invariant across reboots.
   services.udev.extraRules = ''
     # LG 38GN950 (UltraGear) sphere lighting HID interface
-    SUBSYSTEM=="hidraw", ATTRS{idVendor}=="043e", ATTRS{idProduct}=="9a8a", TAG+="uaccess"
+    SUBSYSTEM=="hidraw", ATTRS{idVendor}=="043e", ATTRS{idProduct}=="9a8a", GROUP="input", MODE="0660"
   '';
 
   environment.systemPackages = [ lg-sphere-ambient ];
