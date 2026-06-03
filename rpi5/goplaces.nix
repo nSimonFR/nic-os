@@ -1,12 +1,14 @@
 {
   lib,
-  buildGoModule,
+  buildGo126Module,
   goplaces-src,
   version ? "0.4.3",
   vendorHash ? "sha256-OFTjLtKwYSy4tM+D12mqI28M73YJdG4DyqPkXS7ZKUg=",
 }:
 
-buildGoModule {
+# v0.4.3 go.mod requires Go ≥1.25.10; nixpkgs 25.11 default Go (1.25.9)
+# is too old. Use buildGo126Module like the sibling gogcli module.
+buildGo126Module {
   pname = "goplaces";
   inherit version vendorHash;
 
