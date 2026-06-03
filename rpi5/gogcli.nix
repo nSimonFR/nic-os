@@ -2,7 +2,7 @@
   lib,
   buildGo126Module,
   gogcli-src,
-  version ? "0.13.0",
+  version ? "0.21.0",
   vendorHash ? "sha256-BNVY9Wx+bQA/hxT0tHo5anBSNnMHSLWs9cedoaMhQTc=",
 }:
 
