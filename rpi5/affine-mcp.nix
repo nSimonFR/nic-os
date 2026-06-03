@@ -92,6 +92,15 @@ in
     serviceConfig = {
       DynamicUser = true;
       RuntimeDirectory = "affine-mcp";
+      # The env file is written into /run/affine-mcp by the separate
+      # affine-mcp-env oneshot (RemainAfterExit). Default RuntimeDirectoryPreserve=no
+      # makes systemd delete /run/affine-mcp on every stop of THIS service, so any
+      # crash- or rebuild-restart wipes the env file — and the oneshot, still
+      # "active", never regenerates it, leaving this unit in a permanent
+      # "Failed to load environment files" crash-loop. Preserve the dir so the
+      # injected env file survives restarts (only cleared at reboot, where the
+      # oneshot reruns before us via the before= ordering).
+      RuntimeDirectoryPreserve = "yes";
       EnvironmentFile = "/run/affine-mcp/env";
       ExecStart = "${pkgs.nodejs_22}/bin/node ${affineMcpServer}/lib/node_modules/affine-mcp-server/dist/index.js";
       Restart = "on-failure";
