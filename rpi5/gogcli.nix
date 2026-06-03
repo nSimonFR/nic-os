@@ -3,7 +3,7 @@
   buildGo126Module,
   gogcli-src,
   version ? "0.21.0",
-  vendorHash ? "sha256-BNVY9Wx+bQA/hxT0tHo5anBSNnMHSLWs9cedoaMhQTc=",
+  vendorHash ? "sha256-ElQF27p/kDaRSCwUuWLHV4AJ36ZlNI0OmqemmiJHBkE=",
 }:
 
 buildGo126Module {
