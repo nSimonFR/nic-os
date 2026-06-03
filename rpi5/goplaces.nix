@@ -2,7 +2,7 @@
   lib,
   buildGoModule,
   goplaces-src,
-  version ? "0.3.0",
+  version ? "0.4.3",
   vendorHash ? "sha256-OFTjLtKwYSy4tM+D12mqI28M73YJdG4DyqPkXS7ZKUg=",
 }:
 

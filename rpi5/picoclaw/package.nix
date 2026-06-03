@@ -2,7 +2,7 @@
   lib,
   buildGoModule,
   picoclaw-src,
-  version ? "0.2.6",
+  version ? "0.2.9",
   vendorHash ? "sha256-ARQUWPdeF+y74cWW7UHggdJ+VhrKjkQmGLtBXITsMOE=",
 }:
 

@@ -47,7 +47,7 @@
     # Nix TOFUs the new narHash; `vendorHash` only needs refreshing if
     # upstream's go.sum changed between tags (the rebuild will tell you).
     picoclaw-src = {
-      url = "github:sipeed/picoclaw/v0.2.6";
+      url = "github:sipeed/picoclaw/v0.2.9";
       flake = false;
     };
 
@@ -73,11 +73,11 @@
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {
-      url = "github:steipete/gogcli/v0.13.0";
+      url = "github:steipete/gogcli/v0.21.0";
       flake = false;
     };
     goplaces-src = {
-      url = "github:steipete/goplaces/v0.3.0";
+      url = "github:steipete/goplaces/v0.4.3";
       flake = false;
     };
 
