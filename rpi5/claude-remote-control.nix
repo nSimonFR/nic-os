@@ -47,6 +47,16 @@ let
   # by maxSessions=8 in startScript, so ~560MB ceiling — fine on the rpi5.
   maxInactivitySec = "86400"; # 24h
 
+  # Periodic no-op `claude -p` invocation whose sole purpose is to keep the
+  # OAuth access token fresh. When the bridge sits idle for long stretches the
+  # long-running process stops refreshing credentials.json; a headless print
+  # query forces a token refresh, which the path unit below picks up and
+  # re-extracts to /run/claude-oauth/token (consumed by tiny-llm-gate).
+  tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh" ''
+    set -eu
+    exec claude -p "say hello world" --dangerously-skip-permissions
+  '';
+
   stopScript = pkgs.writeShellScript "claude-remote-control-stop" ''
     # Send SIGTERM to the claude process inside tmux, giving it time
     # to deregister from Anthropic's API before we kill the session.
@@ -223,6 +233,33 @@ in
     timerConfig = {
       OnBootSec = "10min";
       OnUnitActiveSec = "30min";
+    };
+  };
+
+  # Keep the Claude OAuth token warm during idle periods. Runs a throwaway
+  # headless query every 6h; the resulting credentials.json refresh is detected
+  # by the path unit and re-extracted to /run/claude-oauth/token.
+  systemd.services.claude-token-refresh = {
+    description = "Refresh Claude Code OAuth token via headless query";
+    serviceConfig = {
+      Type = "oneshot";
+      User = username;
+      Group = "users";
+      ExecStart = tokenRefreshScript;
+      Environment = [
+        "HOME=/home/${username}"
+        "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+      ];
+    };
+  };
+
+  systemd.timers.claude-token-refresh = {
+    description = "Periodic Claude Code OAuth token refresh timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "15min";
+      OnUnitActiveSec = "6h";
+      Persistent = true;
     };
   };
 
