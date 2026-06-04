@@ -174,9 +174,12 @@ in
     ];
   };
 
-  # Share nsimon's Hyprland config with alfie when she logs into Hyprland (after exiting gamescope).
+  # Share nsimon's Hyprland config and rofi launcher config with alfie when she logs into
+  # Hyprland (after exiting gamescope). She has no home-manager, so these are root-owned
+  # symlinks recreated on each rebuild.
   systemd.tmpfiles.rules = [
     "L+ /home/alfie/.config/hypr/hyprland.conf - - - - ${./dotfiles/hypr/hyprland.conf}"
+    "L+ /home/alfie/.config/rofi - - - - ${./dotfiles/rofi}"
   ];
 
   environment.systemPackages = with pkgs; [
@@ -184,6 +187,8 @@ in
     ddcutil
     ethtool # verify WoL: ethtool eno1 | grep Wake
     dmenu
+    rofi # app launcher (SUPER+Space) for alfie — same one nsimon gets via home-manager
+    inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight # zen browser for alfie (nsimon's comes from home-manager)
     feh
     gamescope
     regreet
