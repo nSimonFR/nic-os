@@ -2,8 +2,8 @@
   lib,
   buildGoModule,
   picoclaw-src,
-  version ? "0.2.6",
-  vendorHash ? "sha256-ARQUWPdeF+y74cWW7UHggdJ+VhrKjkQmGLtBXITsMOE=",
+  version ? "0.2.9",
+  vendorHash ? "sha256-SMBbOABlzK6XdrIqUibuuQ00AwXqfwZNogx2xeiOtyU=",
 }:
 
 # PicoClaw: ultra-lightweight Go-based AI agent.

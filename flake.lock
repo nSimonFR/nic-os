@@ -464,16 +464,16 @@
     "gogcli-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1776722970,
-        "narHash": "sha256-UN1dW3VX7N3fymn8y40Xd0sIznihjeeLtb1nHOEMDcY=",
+        "lastModified": 1780350264,
+        "narHash": "sha256-V7kTXdLO2zsf69d4QV+7tGelQUYzaOMhDE17tffokts=",
         "owner": "steipete",
         "repo": "gogcli",
-        "rev": "5cd913e28780d330f27aaaabc7bfb6413491850a",
+        "rev": "2c84d8981dd59b9206bf975a066a8cf5f659043c",
         "type": "github"
       },
       "original": {
         "owner": "steipete",
-        "ref": "v0.13.0",
+        "ref": "v0.21.0",
         "repo": "gogcli",
         "type": "github"
       }
@@ -481,16 +481,16 @@
     "goplaces-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1771044968,
-        "narHash": "sha256-D54ybZznbc0EXNh/SqyIvfn5x3krI3G9fbXTTj1BaEs=",
+        "lastModified": 1779293117,
+        "narHash": "sha256-j5xHCWay2FUrHSGFBrihLYPFHBP+Dim32/m06WHnkJQ=",
         "owner": "steipete",
         "repo": "goplaces",
-        "rev": "46fa4a132305d3e942573ef6813ef05ff4a3e5da",
+        "rev": "cb837848f1bb7c2a6dadb993f3cd1cff3cfb247c",
         "type": "github"
       },
       "original": {
         "owner": "steipete",
-        "ref": "v0.3.0",
+        "ref": "v0.4.3",
         "repo": "goplaces",
         "type": "github"
       }
@@ -876,16 +876,16 @@
     "picoclaw-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1775643342,
-        "narHash": "sha256-ohqnfBn3CbBrR+ynOVtBsBBCgP7pP2HHzYElbw1Ygf8=",
+        "lastModified": 1779415600,
+        "narHash": "sha256-oMees7EKANS5dkMHIqAHfGcumrNMtTEEA+dmpl8/dLE=",
         "owner": "sipeed",
         "repo": "picoclaw",
-        "rev": "51eecde01ed2db893949b88939e3e1965204847c",
+        "rev": "2992eccbf03e54258a6889cf19a5a4fe6255895f",
         "type": "github"
       },
       "original": {
         "owner": "sipeed",
-        "ref": "v0.2.6",
+        "ref": "v0.2.9",
         "repo": "picoclaw",
         "type": "github"
       }

@@ -14,7 +14,8 @@
       "WebFetch(*)",
       "WebSearch(*)",
       "NotebookEdit(*)",
-      "Task(*)"
+      "Task(*)",
+      "mcp__*"
     ],
     "deny": []
   },

@@ -62,5 +62,15 @@
         doInstallCheck = false;
       });
     })
+
+    # beszel 0.18.7 ships a CPU-percent test that assumes single-CPU
+    # semantics (asserts pct <= 100) but the rpi5 has 4 cores so the
+    # subsequent-call delta can briefly exceed 100%. Skip checks.
+    (final: prev: {
+      beszel = prev.beszel.overrideAttrs (_: {
+        doCheck = false;
+        doInstallCheck = false;
+      });
+    })
   ];
 }

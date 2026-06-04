@@ -180,9 +180,21 @@ let
           max_search_results = 20;
         };
         servers = {
+          # picoclaw's MCP client (pkg/mcp/manager.go) speaks ONLY Streamable
+          # HTTP (go-sdk StreamableClientTransport) for BOTH type "sse" and
+          # "http": it POSTs `initialize` straight to the URL and never performs
+          # the legacy-SSE GET handshake. The shared home/mcp.nix bridge URL
+          # ends in /sse (legacy SSE, GET-only) → picoclaw hit 405 "Method Not
+          # Allowed" and loaded zero MCP tools. tiny-llm-gate only bridges
+          # SSE-to-client (no Streamable-HTTP client endpoint), so point picoclaw
+          # straight at the local affine-mcp backend's Streamable HTTP endpoint
+          # (loopback, no gate/tailnet hop). The bearer header is injected into
+          # the runtime config.json by setupScript so the token (a 0444 agenix
+          # secret) never enters the Nix store.
           affine = {
             enabled = true;
-            inherit (config.programs.claude-code.mcpServers.affine) type url;
+            type = "http";
+            url = "http://127.0.0.1:7021/mcp";
           };
         };
       };
@@ -205,7 +217,19 @@ let
   setupScript = pkgs.writeShellScript "picoclaw-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${configDir} ${workspaceDir} ${workspaceDir}/skills
-    ${pkgs.coreutils}/bin/install -m 0644 ${configFile} ${configDir}/config.json
+    ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${configDir}/config.json
+
+    # Inject the AFFiNE MCP bearer into the runtime config.json. The token is a
+    # secret (0444 agenix file) so it must NOT be baked into ${configFile}
+    # (which lands world-readable in the Nix store). picoclaw does no env
+    # expansion on the MCP `headers` map, so patch the literal value in here at
+    # start time. Mode 0600 above (picoclaw also rewrites it 0600 on migration).
+    affine_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/affine-mcp-http-token)"
+    ${pkgs.jq}/bin/jq \
+      --arg auth "Bearer $affine_tok" \
+      '.tools.mcp.servers.affine.headers.Authorization = $auth' \
+      ${configDir}/config.json > ${configDir}/config.json.tmp
+    ${pkgs.coreutils}/bin/mv ${configDir}/config.json.tmp ${configDir}/config.json
 
     # Skills: copy (not symlink) so realpath stays inside the workspace.
     ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \

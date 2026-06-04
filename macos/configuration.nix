@@ -11,6 +11,18 @@
 {
   nixpkgs.config.allowUnfree = true;
 
+  # Homebrew 5.x's `brew bundle` invokes `mas get <id>` to install Mac App Store
+  # apps, but nixpkgs release-25.11 still ships mas 2.2.2 (pre-`get`). Pull mas
+  # from nixpkgs-unstable (6.0.1+) so masApps entries can actually install.
+  nixpkgs.overlays = [
+    (final: prev: {
+      mas = (import inputs.nixpkgs-unstable {
+        inherit (prev.stdenv.hostPlatform) system;
+        config.allowUnfree = true;
+      }).mas;
+    })
+  ];
+
   #nix.configureBuildUsers = true;
 
   nix.extraOptions = ''
