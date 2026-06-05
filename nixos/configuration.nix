@@ -182,6 +182,19 @@ in
     "L+ /home/alfie/.config/rofi - - - - ${./dotfiles/rofi}"
   ];
 
+  # umask 002 so nsimon + alfie can both read/write the shared /mnt/games tree.
+  # Why: NTFS via ntfs3 doesn't honor default ACLs, so group-write on new files
+  # depends entirely on the creating process's umask. NixOS default login.defs is
+  # UMASK 077, which made alfie's Steam create dirs as 0755 and lock nsimon out
+  # of staging dirs ("Disk write failure" on POE2 update). Both users' primary
+  # group is `users`, so g+w is enough to share access.
+  environment.shellInit = "umask 002";
+  environment.loginShellInit = "umask 002";
+  systemd.user.extraConfig = ''
+    DefaultUMask=0002
+  '';
+  security.loginDefs.settings.UMASK = "002";
+
   environment.systemPackages = with pkgs; [
     cage
     ddcutil
