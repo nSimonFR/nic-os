@@ -48,7 +48,7 @@ in
     ./rgb/lg-sphere-ambient.nix # LG 38GN950 sphere lighting video-sync (wlr-screencopy → HID)
     ./piper-autoprofile.nix
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
-    ./music-production.nix # REAPER + audio plugins/bridges
+    ./music-production.nix # Audacity + Graillon voice plugins for alfie
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
     ./beszel-agent.nix
