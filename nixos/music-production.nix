@@ -1,55 +1,5 @@
 { pkgs, lib, ... }:
 let
-  talVocoder2 = pkgs.stdenvNoCC.mkDerivation rec {
-    pname = "tal-vocoder-2";
-    version = "2023-07-21";
-
-    src = pkgs.fetchzip {
-      url = "https://tal-software.com/downloads/plugins/TAL-Vocoder-2_64_linux.zip";
-      # Upstream silently re-zipped the file at this URL; old hash was QrYjoD9... — refreshed 2026-06-01.
-      hash = "sha256-S+ol+xj9Fofh9fOFpv3W8xJiJhCVCMtIgu58fLnGCR8=";
-      stripRoot = false;
-    };
-
-    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
-    buildInputs = with pkgs; [
-      alsa-lib
-      freetype
-      gcc.cc.lib
-      stdenv.cc.cc.lib
-    ];
-
-    installPhase = ''
-      runHook preInstall
-
-      # Upstream 2026 re-zip moved files into a TAL-Vocoder-2/ subdir and
-      # dropped the bundled .vst3 directory — only CLAP + VST2 ship now.
-      install -Dm644 TAL-Vocoder-2/ReadmeLinux.txt \
-        $out/share/doc/${pname}/ReadmeLinux.txt
-
-      install -Dm755 TAL-Vocoder-2/TAL-Vocoder-2.clap \
-        $out/lib/clap/TAL-Vocoder-2.clap
-      install -Dm755 TAL-Vocoder-2/libTAL-Vocoder-2.so \
-        $out/lib/vst/libTAL-Vocoder-2.so
-
-      runHook postInstall
-    '';
-
-    meta = {
-      description = "TAL-Vocoder-2 free vocoder plugin (CLAP, VST2, VST3)";
-      homepage = "https://tal-software.com/products/tal-vocoder";
-      license = lib.licenses.unfreeRedistributable;
-      platforms = [ "x86_64-linux" ];
-    };
-  };
-
-  reaperNoStartupErrors = pkgs.writeShellApplication {
-    name = "reaper";
-    text = ''
-      exec ${pkgs.reaper}/bin/reaper -ignoreerrors "$@"
-    '';
-  };
-
   graillonFree = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "graillon-free";
     version = "3.2";
@@ -98,34 +48,13 @@ let
   };
 in
 {
-  # Pro-audio basics for REAPER on PipeWire.
-  # Keep global PipeWire timing in nixos/audio.nix untouched; REAPER can opt into
-  # JACK/PipeWire with `pw-jack reaper` without changing the desktop audio graph.
-  security.rtkit.enable = true;
-  services.pipewire.jack.enable = true;
-
-  environment.systemPackages = with pkgs; [
-    (lib.hiPrio reaperNoStartupErrors)
-    reaper
-    reaper-sws-extension
-    reaper-reapack-extension
-
-    # Plugin formats / bridges / routing helpers
-    talVocoder2
+  environment.systemPackages = [
+    pkgs.audacity
     graillonFree
-    yabridge
-    yabridgectl
-    wineWowPackages.waylandFull
-    winetricks
-    qpwgraph
-    pipewire.jack # provides pw-jack for JACK clients on PipeWire
-
-    # Native Linux pitch-correction alternatives available in nixpkgs.
-    # MAutoPitch is not distributed as a native Linux plugin; use yabridge
-    # with its Windows VST build if you still want that specific plugin.
-    autotalent
-    x42-plugins
-    lsp-plugins
-    distrho-ports
   ];
+
+  environment.variables = {
+    VST3_PATH = "${graillonFree}/lib/vst3";
+    LV2_PATH = "${graillonFree}/lib/lv2";
+  };
 }
