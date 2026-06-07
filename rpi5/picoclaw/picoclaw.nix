@@ -69,7 +69,7 @@ let
       max_tokens = 8192;
       context_window = 131072;
       temperature = 0.7;
-      max_tool_iterations = 20;
+      max_tool_iterations = 100;
       summarize_message_threshold = 20;
       summarize_token_percent = 75;
     };
