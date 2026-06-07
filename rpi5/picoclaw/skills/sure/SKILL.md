@@ -11,28 +11,23 @@ Use this skill when the user asks about their **Sure** personal finance board: b
 
 ## Setup
 
-1. Open your Sure instance, for example: `https://localhost:3000`
-2. Go to **Settings → API key**
-3. Export your API key and base URL:
+On this host (rpi5) the Sure backend listens on **`http://127.0.0.1:13334`**
+(loopback) — NOT `:3000` (that's Beszel on the tailnet) and NOT `:8340`
+(that's the for-sure / Lunchflow connector, a different service with a
+different key). `SURE_API_KEY` is already injected into picoclaw's
+environment from `/run/agenix/picoclaw-env`, so you do **not** need to set it
+yourself — just use `$SURE_API_KEY`.
 
-```bash
-export SURE_API_KEY="YOUR_API_KEY"
-```
-
-Example:
-
-```bash
-# Optional remote example:
-# export SURE_BASE_URL="https://sure.example.com"
-export SURE_API_KEY="..."
-```
+If running the skill outside picoclaw, generate a key in your Sure instance
+under **Settings → API key** and `export SURE_API_KEY=...`. To target a remote
+instance, override the base URL: `export SURE_BASE_URL="https://sure.example.com"`.
 
 ## Auth header
 
-Base URL default:
+Base URL default (local Sure backend on rpi5):
 
 ```bash
-export SURE_BASE_URL="${SURE_BASE_URL:-http://127.0.0.1:3000}"
+export SURE_BASE_URL="${SURE_BASE_URL:-http://127.0.0.1:13334}"
 ```
 
 Reuse this in commands:
