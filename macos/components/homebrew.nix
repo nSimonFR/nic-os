@@ -9,6 +9,9 @@
     # autoUpdate = true;
     # upgrade = true;
     cleanup = "zap";
+    # Homebrew 5.x requires --force / --force-cleanup / $HOMEBREW_ASK
+    # for `brew bundle install --cleanup`.
+    extraFlags = [ "--force-cleanup" ];
   };
 
   taps = [
