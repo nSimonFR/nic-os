@@ -84,6 +84,10 @@ in
   # subset), and Claude Code's own settings/hooks. Picoclaw picks up the
   # same shared skills via rpi5/picoclaw/picoclaw.nix.
   home.file = sharedSkillFiles // claudeCommandFiles // {
+    # Claude-Code-only skill (NOT shared with codex/pi/picoclaw — picoclaw already
+    # *is* the Telegram bot): how to post messages/photos to Telegram via the bot.
+    ".claude/skills/telegram/SKILL.md".source = ./claude-skills/telegram/SKILL.md;
+
     # Writable settings.json — symlinked to the repo checkout so /voice etc.
     # can update it at runtime.
     ".claude/settings.json".source =
