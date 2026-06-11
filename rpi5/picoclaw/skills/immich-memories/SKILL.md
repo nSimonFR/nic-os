@@ -1,90 +1,77 @@
 ---
 name: immich-memories
-description: Download today's Immich "on this day" photos as JPGs and send copies into the chat (via send_file). Use when the user asks about Immich memories, on-this-day, or a recap of past photos from today's date.
+description: Post today's Immich "on this day" photos to Telegram as a single gallery (album). Use when the user asks about Immich memories, on-this-day, or a recap of past photos from today's date.
 homepage: https://immich.app
-metadata: {"openclaw":{"emoji":"📸","requires":{"bins":["python3"]},"agenix":["immich-api-key"]}}
+metadata: {"openclaw":{"emoji":"📸","requires":{"bins":["python3"]},"agenix":["immich-api-key","telegram-bot-token"]}}
 ---
 
 # Immich on-this-day reminder
 
-Downloads today's on-this-day photos as JPGs and prints a JSON manifest. You then
-send each photo into the chat as a **copy** (not a link) using the built-in
-`send_file` tool, plus a short caption message.
+Downloads today's on-this-day photos as JPGs and posts them to Telegram as **one
+media group (a gallery)**, with a summary caption on the first photo. The script
+sends the gallery itself via the Telegram Bot API — picoclaw can't build albums
+(it would send each photo as a separate message).
 
 ## When to use
 
 - "show me / what's on this day in Immich"
 - "Immich memories" / "any photos from today in past years"
-- A scheduled (cron) daily Immich digest where picoclaw sends the photos
+- A scheduled (cron) daily Immich digest
 
 ## Default invocation
 
-Run it plainly — the script reads the API key from `/run/agenix/immich-api-key`
-itself when `IMMICH_API_KEY` is unset:
+Run it plainly — the script reads the Immich key from `/run/agenix/immich-api-key`,
+the bot token from `/run/agenix/telegram-bot-token`, and the chat from
+`$TELEGRAM_CHAT_ID` (exported for the picoclaw service), all by itself:
 
 ```bash
-python3 {baseDir}/scripts/immich-on-this-day.py --download
+python3 {baseDir}/scripts/immich-on-this-day.py --send-album
 ```
 
-Do **not** prefix it with `IMMICH_API_KEY=$(cat /run/agenix/immich-api-key)`:
-picoclaw's exec safety guard blocks any `$(...)` command substitution, so that
-form fails. The script's built-in key-file read avoids the substitution entirely.
+Do **not** prefix it with `IMMICH_API_KEY=$(cat ...)` or similar: picoclaw's exec
+safety guard blocks any `$(...)` command substitution, so that form fails. The
+script's built-in file reads avoid the substitution entirely.
 
-This downloads the photos and prints a JSON manifest, e.g.:
+**That single command delivers everything** — the photos as a gallery and the
+caption. After it succeeds (it prints e.g. `sent album of 4 photos to chat …`),
+**do not** call `send_file` and **do not** re-send the caption. Just reply with a
+short confirmation (or nothing). On a non-zero exit, relay the error line it printed.
 
-```json
-{
-  "caption": "📸 Immich on this day\n\n3 memories today\n\n• 2021 — 12 photos (showing 4 of 12)\n• 2023 — 4 photos, 1 video\n• 2025 — 1 photo",
-  "files": [
-    "/tmp/immich-on-this-day/2021_00_IMG_5656.jpg",
-    "/tmp/immich-on-this-day/2021_01_IMG_5657.jpg",
-    "/tmp/immich-on-this-day/2025_05_IMG_5659.jpg"
-  ],
-  "photos_sent": 3,
-  "videos_skipped": 1,
-  "memories_total": 3
-}
-```
-
-## What to do with the manifest
-
-1. Send `caption` as a normal text message to the user.
-2. For **each** path in `files`, call the `send_file` tool with that `path`
-   (absolute path; just pass it through). Each call delivers one JPG into the chat.
-3. If `files` is empty but `caption` is non-empty (e.g. today's memories are all
-   videos), just send the caption. If `memories_total` is 0, relay something like
-   "no Immich memories for today".
-
-Defaults already keep the volume sane: top 3 memories, ≤ 4 photos each, **10 photos
-max** total. Videos are skipped (counted in `videos_skipped`), and the caption notes
-any per-memory cap ("showing 4 of 12"). Don't raise the caps unless the user asks.
+If today has no memories it prints `no memories today; nothing sent` and sends
+nothing — relay "no Immich memories for today".
 
 ## Flags
 
 | Flag | Default | Effect |
 | --- | --- | --- |
-| `--download` | off | Download photos as JPGs + print the JSON manifest above (the mode this skill uses). |
-| `--download-dir DIR` | `<tmp>/immich-on-this-day` | Where JPGs are written. Wiped + recreated every run (self-cleaning). |
-| `--per-memory N` | 4 | Download mode: max photos per memory. |
-| `--max-total N` | 10 | Download mode: hard cap on total photos. |
+| `--send-album` | off | Download photos + post them to Telegram as one gallery (the mode this skill uses). |
+| `--chat-id ID` | `$TELEGRAM_CHAT_ID` | `--send-album` recipient chat. |
+| `--per-memory N` | 4 | Max photos per memory. |
+| `--max-total N` | 10 | Hard cap on total photos (Telegram albums max out at 10). |
 | `--top N` | 3 | Cap to top N memories by asset count. |
+| `--download` | off | Just download + print a JSON manifest `{caption, files, …}`, no send (for testing). |
+| `--json` | off | Link-based structured JSON, no download — for ad-hoc text lookups. |
 | `--asset-preview N` | 2 | Text mode only: filenames listed per memory. |
-| `--json` | off | Link-based structured JSON (no download) — for ad-hoc lookups. |
 
-Without `--download` or `--json` the script prints the legacy human-readable text
-summary with Immich links — handy for a quick "what's on this day?" answer when the
-user does not want the photos sent.
+Without `--send-album`/`--download`/`--json` the script prints the legacy
+human-readable text summary with Immich links — handy for a quick "what's on this
+day?" text answer when the user does not want the photos sent.
 
 ## Notes
 
+- Album = 2–10 items shown as a grid. With exactly 1 photo the script falls back to
+  a single photo+caption; with 0 photos but a caption (an all-video day) it sends
+  the caption as a text message.
 - Photos come from `http://127.0.0.1:2283/api/assets/<id>/thumbnail?size=preview`
   (Immich's socket-activated proxy). `preview` always re-encodes to JPEG (~200–900 KB),
-  so HEIC/PNG originals still arrive as a `.jpg` — well under `send_file`'s 20 MB limit.
-  The first request wakes the backend; subsequent calls are fast.
-- The download dir is wiped at the start of every `--download` run, so yesterday's
-  photos never accumulate (bounded to ~one day, a few MB).
-- Override the instance via `IMMICH_INTERNAL_URL=` (download/API) and
-  `IMMICH_PUBLIC_URL=` (links used by text/`--json` modes only).
+  so HEIC/PNG originals still arrive as a `.jpg`. The first request wakes the backend.
+- Volume is bounded: top 3 memories, ≤ 4 photos each, **10 max**; videos are skipped
+  (noted in the caption); per-memory caps are surfaced ("showing 4 of 12"). Don't
+  raise the caps unless the user asks.
+- The download dir (`<tmp>/immich-on-this-day`) is wiped at the start of every run,
+  so photos never accumulate (a few MB, one day).
+- Overrides: `TELEGRAM_BOT_TOKEN` / `TELEGRAM_BOT_TOKEN_FILE` (token),
+  `IMMICH_INTERNAL_URL` (Immich API), `IMMICH_PUBLIC_URL` (links in text/`--json`).
 - Immich generates today's memories overnight via NightlyJobs. If the script runs
-  before that job has fired (e.g. the backend was asleep through the boundary), the
-  output may be empty even when photos for today exist; re-run after a few minutes.
+  before that job has fired (backend asleep through the boundary), the result may be
+  empty even when photos for today exist; re-run after a few minutes.

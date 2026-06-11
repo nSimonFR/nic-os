@@ -251,6 +251,10 @@ let
     . /run/agenix/picoclaw-env
     PICOCLAW_CHANNELS_TELEGRAM_TOKEN="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     PICOCLAW_TOOLS_WEB_TAVILY_API_KEYS="''${TAVILY_API_KEY:-}"
+    # Default chat for skills that talk to Telegram directly (e.g. immich-memories
+    # posts an album via the Bot API — picoclaw can't build media groups). The
+    # numeric chat id isn't surfaced to the model, so wire it from the flake.
+    TELEGRAM_CHAT_ID="${toString telegramChatId}"
     set +a
     export HOME="/home/nsimon"
     # systemd --user starts services with a minimal PATH (just systemd/bin).
