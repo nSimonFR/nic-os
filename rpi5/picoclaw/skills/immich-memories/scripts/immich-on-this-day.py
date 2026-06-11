@@ -171,6 +171,16 @@ def download_asset(base, api_key, asset_id, dest):
     return True
 
 
+FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
+             "août", "septembre", "octobre", "novembre", "décembre"]
+
+
+def french_date(d):
+    """Today's date in French, e.g. "11 juin 2026" (no locale dependency)."""
+    day = "1er" if d.day == 1 else str(d.day)
+    return f"{day} {FR_MONTHS[d.month - 1]} {d.year}"
+
+
 def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     """Download up to `max_total` photo JPGs (skip videos) and build a manifest.
 
@@ -185,44 +195,30 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
 
     files = []
     videos_skipped = 0
-    caption_lines = ["📸 Immich on this day", ""]
-    caption_lines.append(
-        f"{total_memories} memor{'y' if total_memories == 1 else 'ies'} today"
-    )
-    caption_lines.append("")
+    years = set()
 
     for m in shown:
         year = parse_iso_z(m["memoryAt"]).year
+        years.add(year)
         imgs = [a for a in m["assets"] if a.get("type") == "IMAGE"]
         videos_skipped += sum(1 for a in m["assets"] if a.get("type") == "VIDEO")
 
         remaining = max_total - len(files)
         take = imgs[: max(0, min(per_memory, remaining))]
 
-        sent = 0
         for a in take:
             stem = safe_filename(a.get("originalFileName") or a["id"])
             dest = os.path.join(out_dir, f"{year}_{len(files):02d}_{stem}.jpg")
             if download_asset(base, api_key, a["id"], dest):
                 files.append(dest)
-                sent += 1
 
-        # Per-memory caption line, with transparency notes for any cap applied.
-        notes = []
-        if len(take) < len(imgs):
-            notes.append(f"showing {sent} of {len(imgs)}")
-        elif sent < len(take):
-            notes.append(f"{sent} of {len(imgs)}")  # some downloads failed
-        line = f"• {year} — {count_phrase(m['assets'])}"
-        if notes:
-            line += f" ({'; '.join(notes)})"
-        caption_lines.append(line)
-
-    if total_memories > len(shown):
-        extra = total_memories - len(shown)
-        caption_lines.append(f"+ {extra} more memor{'y' if extra == 1 else 'ies'}")
-
-    caption = "\n".join(caption_lines).rstrip() if total_memories else ""
+    # One-line caption: today's date (French) + the years these memories are from.
+    if total_memories:
+        caption = f"📸 {french_date(datetime.now())}"
+        if years:
+            caption += " — " + ", ".join(str(y) for y in sorted(years))
+    else:
+        caption = ""
 
     return {
         "caption": caption,
