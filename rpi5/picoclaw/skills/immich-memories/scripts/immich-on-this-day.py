@@ -7,7 +7,8 @@ the chat via its built-in `send_file` tool (copies, not links). The text/--json
 modes are kept for ad-hoc "what's on this day?" queries.
 
 Config (env):
-  IMMICH_API_KEY        required  (/run/agenix/immich-api-key)
+  IMMICH_API_KEY        the key; if unset, read from IMMICH_API_KEY_FILE
+  IMMICH_API_KEY_FILE   default /run/agenix/immich-api-key (read when the var is unset)
   IMMICH_INTERNAL_URL   default http://127.0.0.1:2283
   IMMICH_PUBLIC_URL     default https://rpi5.gate-mintaka.ts.net:10000  (text/--json links only)
 """
@@ -248,7 +249,18 @@ def main():
 
     api_key = os.environ.get("IMMICH_API_KEY")
     if not api_key:
-        sys.exit("IMMICH_API_KEY env var is required")
+        # Read the agenix key file directly so the skill can run as a plain
+        # `python3 ... --download` with no `IMMICH_API_KEY=$(cat ...)` prefix —
+        # picoclaw's exec safety guard blocks any `$(...)` command substitution.
+        key_file = os.environ.get("IMMICH_API_KEY_FILE", "/run/agenix/immich-api-key")
+        try:
+            with open(key_file) as f:
+                api_key = f.read().strip()
+        except OSError:
+            api_key = ""
+    if not api_key:
+        sys.exit("set IMMICH_API_KEY, or make IMMICH_API_KEY_FILE "
+                 "(default /run/agenix/immich-api-key) readable")
 
     internal = os.environ.get("IMMICH_INTERNAL_URL", "http://127.0.0.1:2283").rstrip("/")
     public = os.environ.get("IMMICH_PUBLIC_URL", "https://rpi5.gate-mintaka.ts.net:10000").rstrip("/")

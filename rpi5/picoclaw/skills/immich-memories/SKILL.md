@@ -19,12 +19,16 @@ send each photo into the chat as a **copy** (not a link) using the built-in
 
 ## Default invocation
 
-`immich-api-key` is an agenix file on disk readable by the picoclaw user.
+Run it plainly — the script reads the API key from `/run/agenix/immich-api-key`
+itself when `IMMICH_API_KEY` is unset:
 
 ```bash
-IMMICH_API_KEY=$(cat /run/agenix/immich-api-key) \
-  python3 {baseDir}/scripts/immich-on-this-day.py --download
+python3 {baseDir}/scripts/immich-on-this-day.py --download
 ```
+
+Do **not** prefix it with `IMMICH_API_KEY=$(cat /run/agenix/immich-api-key)`:
+picoclaw's exec safety guard blocks any `$(...)` command substitution, so that
+form fails. The script's built-in key-file read avoids the substitution entirely.
 
 This downloads the photos and prints a JSON manifest, e.g.:
 
