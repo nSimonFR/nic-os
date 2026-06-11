@@ -195,11 +195,10 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
 
     files = []
     videos_skipped = 0
-    years = set()
+    per_year = {}  # year -> number of photos actually in the gallery
 
     for m in shown:
         year = parse_iso_z(m["memoryAt"]).year
-        years.add(year)
         imgs = [a for a in m["assets"] if a.get("type") == "IMAGE"]
         videos_skipped += sum(1 for a in m["assets"] if a.get("type") == "VIDEO")
 
@@ -211,12 +210,13 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
             dest = os.path.join(out_dir, f"{year}_{len(files):02d}_{stem}.jpg")
             if download_asset(base, api_key, a["id"], dest):
                 files.append(dest)
+                per_year[year] = per_year.get(year, 0) + 1
 
-    # One-line caption: today's date (French) + the years these memories are from.
+    # One-line caption: today's date (French) + each year with its photo count.
     if total_memories:
         caption = f"📸 {french_date(datetime.now())}"
-        if years:
-            caption += " — " + ", ".join(str(y) for y in sorted(years))
+        if per_year:
+            caption += " — " + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
     else:
         caption = ""
 

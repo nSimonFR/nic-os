@@ -65,8 +65,8 @@ day?" text answer when the user does not want the photos sent.
 - Photos come from `http://127.0.0.1:2283/api/assets/<id>/thumbnail?size=preview`
   (Immich's socket-activated proxy). `preview` always re-encodes to JPEG (~200–900 KB),
   so HEIC/PNG originals still arrive as a `.jpg`. The first request wakes the backend.
-- The caption is a single line: 📸 + today's date in French + the years the photos
-  are from, e.g. `📸 11 juin 2026 — 2006, 2023, 2025`.
+- The caption is a single line: 📸 + today's date in French + each year with its
+  photo count, e.g. `📸 11 juin 2026 — 2006 (2), 2023 (1), 2025 (1)`.
 - Volume is bounded: top 3 memories, ≤ 4 photos each, **10 max**; videos are skipped.
   Don't raise the caps unless the user asks.
 - The download dir (`<tmp>/immich-on-this-day`) is wiped at the start of every run,
