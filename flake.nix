@@ -88,6 +88,16 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Cyrus — Linear coding-agent dispatcher (cyrusagents/cyrus). Source-only
+    # input (`flake = false`): rpi5/cyrus.nix vendors it and builds with pnpm
+    # at service start. Tracks the default branch (no tag), so `nix flake
+    # update` auto-bumps it; cyrus-build.service rebuilds once per rev change.
+    # To pin a specific commit/tag instead, append `/<rev-or-tag>` to the URL.
+    cyrus-src = {
+      url = "github:cyrusagents/cyrus";
+      flake = false;
+    };
+
     # llm-agents.nix: numtide's daily-updated flake of AI coding agent
     # packages. We pull `pi` (pi-coding-agent) from here instead of pinning
     # an upstream tarball ourselves — auto-tracks new releases.

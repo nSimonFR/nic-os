@@ -27,7 +27,7 @@ let
   # claude-code auto-updates the list; if extraction breaks, the count guard
   # in jq fails the rebuild.
   anthropicModelsFile = pkgs.runCommand "claude-anthropic-models.json" { } ''
-    ${pkgs.gnugrep}/bin/grep -aoE '"claude-(opus|sonnet|haiku)-[a-z0-9-]+"' \
+    ${pkgs.gnugrep}/bin/grep -aoE '"claude-(opus|sonnet|haiku|fable|mythos)-[a-z0-9-]+"' \
       ${unstablePkgs.claude-code}/bin/.claude-wrapped \
       | ${pkgs.gnused}/bin/sed 's/"//g; /-$/d' \
       | sort -u \
@@ -36,7 +36,14 @@ let
       > $out
   '';
 
-  anthropicModels = builtins.fromJSON (builtins.readFile anthropicModelsFile);
+  # Always include claude-fable-5 (Mythos-class, public 2026-06-09). It is
+  # newer than the claude-code binary pinned via nixpkgs-unstable, so the
+  # regex extraction above can't see it yet — list it explicitly so the
+  # Anthropic passthrough provider routes it now. Once a fable-aware
+  # claude-code lands in nixpkgs the regex captures it too (deduped here).
+  anthropicModels = lib.unique (
+    builtins.fromJSON (builtins.readFile anthropicModelsFile) ++ [ "claude-fable-5" ]
+  );
 
   # The inner config that Aperture manages — this gets JSON-encoded into a
   # string value inside the PUT envelope.

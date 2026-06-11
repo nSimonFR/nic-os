@@ -4,7 +4,9 @@
 # against issues, opens PRs as the configured GitHub user. Public URL via
 # Tailscale Funnel on :8443 → 127.0.0.1:3456.
 #
-# Packaging: source is vendored as a fixed-output derivation (fetchFromGitHub).
+# Packaging: source comes from the `cyrus-src` flake input (flake.nix,
+# `flake = false`), so it's locked in flake.lock and auto-bumped by
+# `nix flake update` (no manual rev/hash to maintain here).
 # A one-shot `cyrus-build.service` copies the source into /var/lib/cyrus/src and
 # runs `pnpm install --frozen-lockfile && pnpm -r build` on first start (or when
 # the pinned rev changes). Pure-Nix packaging via `pnpm.fetchDeps` was tried and
@@ -31,18 +33,16 @@
 #                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
-{ config, lib, pkgs, unstablePkgs, apertureUrl, ... }:
+{ config, lib, pkgs, unstablePkgs, apertureUrl, inputs, ... }:
 let
   cfg = config.services.cyrus;
 
-  cyrusRev = "5f3ed02a9590318fac4ea36188a41d397a917a0b";
-
-  cyrusSrc = pkgs.fetchFromGitHub {
-    owner = "cyrusagents";
-    repo  = "cyrus";
-    rev   = cyrusRev;
-    hash  = "sha256-j5+DjuTbjX5nUwS5D60IoLo6WcIUJUy8x+OTUrygX8E=";
-  };
+  # Source from the `cyrus-src` flake input (flake.nix). Locked in flake.lock
+  # and auto-bumped by `nix flake update` (tracks the default branch). `.rev`
+  # is the locked commit — used as the cyrus-build rebuild marker so a bump
+  # triggers exactly one rebuild.
+  cyrusSrc = inputs.cyrus-src;
+  cyrusRev = inputs.cyrus-src.rev;
 in
 {
   options.services.cyrus = {
