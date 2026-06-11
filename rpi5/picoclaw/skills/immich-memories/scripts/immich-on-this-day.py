@@ -212,11 +212,11 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
                 files.append(dest)
                 per_year[year] = per_year.get(year, 0) + 1
 
-    # One-line caption: today's date (French) + each year with its photo count.
+    # Caption: today's date (French) on line 1, each year + its photo count on line 2.
     if total_memories:
         caption = f"📸 {french_date(datetime.now())}"
         if per_year:
-            caption += " — " + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
+            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
     else:
         caption = ""
 
