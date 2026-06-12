@@ -180,6 +180,8 @@ in
   systemd.tmpfiles.rules = [
     "L+ /home/alfie/.config/hypr/hyprland.conf - - - - ${./dotfiles/hypr/hyprland.conf}"
     "L+ /home/alfie/.config/rofi - - - - ${./dotfiles/rofi}"
+    # Per-user Proton prefix root for alfie (see alfie-bg3-prefix service below).
+    "d /home/alfie/proton-prefixes 0755 alfie users -"
   ];
 
   # umask 002 so nsimon + alfie can both read/write the shared /mnt/games tree.
@@ -194,6 +196,28 @@ in
     DefaultUMask=0002
   '';
   security.loginDefs.settings.UMASK = "002";
+
+  # Give alfie her own Baldur's Gate 3 Proton prefix in her home.
+  # /mnt/games is NTFS (ntfs3, uid=1000), so the shared Proton prefix under
+  # SteamLibrary/steamapps/compatdata/1086940 reads as owned by nsimon (uid 1000).
+  # Wine refuses a prefix that "is not owned by you", so BG3 launched and instantly
+  # died ONLY for alfie (uid 1001), while nsimon's worked. The fix is a per-game Steam
+  # launch option that redirects STEAM_COMPAT_DATA_PATH into alfie's home (ext4, real
+  # ownership). Steam keeps launch options across restarts, but they live in alfie's
+  # home and are not declarative; this oneshot re-asserts the option idempotently at
+  # boot (before display-manager, so Steam is not running) so the fix survives a Steam
+  # config reset and is reproducible from this config. See ./ensure-alfie-bg3-prefix.sh.
+  systemd.services.alfie-bg3-prefix = {
+    description = "Ensure alfie's BG3 Proton prefix redirect (shared NTFS games drive workaround)";
+    before = [ "display-manager.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ bash gawk gnugrep procps coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "alfie";
+      ExecStart = "${pkgs.bash}/bin/bash ${./ensure-alfie-bg3-prefix.sh}";
+    };
+  };
 
   environment.systemPackages = with pkgs; [
     cage
