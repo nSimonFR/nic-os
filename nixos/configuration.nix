@@ -180,6 +180,8 @@ in
   systemd.tmpfiles.rules = [
     "L+ /home/alfie/.config/hypr/hyprland.conf - - - - ${./dotfiles/hypr/hyprland.conf}"
     "L+ /home/alfie/.config/rofi - - - - ${./dotfiles/rofi}"
+    # Per-user Proton prefix root for alfie (see alfie-proton-prefixes service below).
+    "d /home/alfie/proton-prefixes 0755 alfie users -"
   ];
 
   # umask 002 so nsimon + alfie can both read/write the shared /mnt/games tree.
@@ -194,6 +196,30 @@ in
     DefaultUMask=0002
   '';
   security.loginDefs.settings.UMASK = "002";
+
+  # Give alfie her own Proton prefix for every game on the shared NTFS library.
+  # /mnt/games/SteamLibrary is NTFS (ntfs3, uid=1000), so every game's Proton prefix
+  # under steamapps/compatdata/<appid> reads as owned by nsimon (uid 1000). Wine refuses
+  # a prefix that "is not owned by you", so EVERY Proton game launched and instantly died
+  # ONLY for alfie (uid 1001), while nsimon's worked (native games are unaffected — no
+  # prefix). The fix is a per-game Steam launch option that redirects STEAM_COMPAT_DATA_PATH
+  # into alfie's home (ext4, real ownership), so Proton builds a fresh prefix she owns.
+  # Steam keeps launch options across restarts, but they live in alfie's home and are not
+  # declarative; this oneshot re-asserts them idempotently at boot (before display-manager,
+  # so Steam is not running) so the fix survives a Steam config reset, covers newly-installed
+  # games on the next boot, and is reproducible from this config. See
+  # ./ensure-alfie-proton-prefixes.sh.
+  systemd.services.alfie-proton-prefixes = {
+    description = "Ensure alfie's per-game Proton prefix redirects (shared NTFS games drive workaround)";
+    before = [ "display-manager.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ bash gawk gnugrep procps coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "alfie";
+      ExecStart = "${pkgs.bash}/bin/bash ${./ensure-alfie-proton-prefixes.sh}";
+    };
+  };
 
   environment.systemPackages = with pkgs; [
     cage
