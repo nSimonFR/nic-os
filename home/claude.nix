@@ -93,14 +93,6 @@ in
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
-    # Trusk infra notes — scoped to ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by
-    # walking UP the directory tree from cwd, so this file loads for every Trusk
-    # repo/subfolder and nowhere else (keeps ~6k tokens out of non-Trusk sessions).
-    # Writable out-of-store symlink so the "keep it fresh" workflow edits the repo
-    # file live, no rebuild needed.
-    "MyDocuments/TRUSK/CLAUDE.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
-
     # Stable path for the Telegram notify hook so settings.json doesn't
     # need to embed a Nix store path that changes on rebuild.
     ".claude/hooks/telegram-notify" = {
@@ -138,6 +130,14 @@ in
       source = ./scripts/claude-wakatime.sh;
       executable = true;
     };
+  } // lib.optionalAttrs pkgs.stdenv.isDarwin {
+    # Trusk infra notes — only the Mac (nBookPro) has the Trusk repos under
+    # ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by walking UP the dir tree, so it
+    # loads for every Trusk repo/subfolder and nowhere else. Gated off the Linux
+    # hosts (BeAsT/rpi5), where it would otherwise create a stray/dangling symlink.
+    # Writable out-of-store symlink so the "keep it fresh" workflow edits live.
+    "MyDocuments/TRUSK/CLAUDE.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
   };
 
 }
