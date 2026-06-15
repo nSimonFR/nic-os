@@ -10,6 +10,7 @@ Endpoints:
   /openwebui — Open WebUI (models, chats, messages)
   /paperless — Paperless (documents, inbox)
   /immich    — Immich (photos, videos, storage)
+  /karakeep  — Karakeep (bookmarks, favorites, archived, tags) — direct read-only SQLite
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -34,12 +35,17 @@ CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
+# Read karakeep's SQLite directly (read-only) instead of its HTTP API: no API
+# key needed, and — crucially — it never wakes karakeep, so the socket-activated
+# idle-sleep (rpi5/karakeep.nix) is preserved. -readonly avoids creating
+# root-owned -wal/-shm files that would break karakeep (runs as the karakeep user).
+KARAKEEP_DB = "/var/lib/karakeep/db.db"
 PAPERLESS_TOKEN_FILE = "/run/agenix/paperless-api-token"
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}}
+stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}, "karakeep": {}}
 stats_lock = threading.Lock()
 
 
@@ -168,6 +174,25 @@ def fetch_paperless():
             stats["paperless"]["error"] = str(e)
 
 
+def fetch_karakeep():
+    # Read-only direct SQLite query — no API key, never wakes karakeep.
+    def count(sql):
+        return int(subprocess.check_output(
+            [SQLITE, "-readonly", KARAKEEP_DB, sql]
+        ).decode().strip() or 0)
+    try:
+        with stats_lock:
+            stats["karakeep"] = {
+                "bookmarks": count("SELECT COUNT(*) FROM bookmarks;"),
+                "favorites": count("SELECT COUNT(*) FROM bookmarks WHERE favourited = 1;"),
+                "archived":  count("SELECT COUNT(*) FROM bookmarks WHERE archived = 1;"),
+                "tags":      count("SELECT COUNT(*) FROM bookmarkTags;"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["karakeep"]["error"] = str(e)
+
+
 def refresh(initial_fetched_at):
     last_fetched = initial_fetched_at
     while True:
@@ -181,6 +206,7 @@ def refresh(initial_fetched_at):
             fetch_openwebui()
             fetch_paperless()
             fetch_immich()
+            fetch_karakeep()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -200,6 +226,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["paperless"])
             elif self.path == "/immich":
                 data = dict(stats["immich"])
+            elif self.path == "/karakeep":
+                data = dict(stats["karakeep"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
