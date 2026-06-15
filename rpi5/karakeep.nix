@@ -44,6 +44,12 @@ in
 
       DISABLE_NEW_RELEASE_CHECK = "true";
 
+      # Admin account is set up, so lock down public registration: no new
+      # signups and the signup button is hidden in the UI. Existing users
+      # (us) can still sign in. NOT DISABLE_PASSWORD_AUTH — that would disable
+      # the local login form entirely, and no OAuth provider is configured.
+      DISABLE_SIGNUPS = "true";
+
       # ── AI auto-tagging via local inference (tiny-llm-gate → beast Ollama) ──
       OPENAI_API_KEY  = "ollama";                       # value ignored by tiny-llm-gate
       OPENAI_BASE_URL = "${tinyLlmGateUrl}/v1";          # http://127.0.0.1:4001/v1
