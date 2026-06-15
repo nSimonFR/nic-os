@@ -11,18 +11,6 @@ TUN2PROXY="/opt/homebrew/opt/tun2proxy/bin/tun2proxy-bin"
 GW="10.0.0.1"
 MARKER="# WORK-TAILSCALE-MANAGED"
 
-# Cluster-internal MCP hostnames that Claude Code can't resolve via
-# /etc/resolver/cluster.local (its HTTP client bypasses macOS's split-horizon
-# resolver). We dig each via the cluster CoreDNS reached over tun2proxy and
-# pin the answer into /etc/hosts under the same MARKER. See home/mcp.nix for
-# the URLs that reference these names.
-CLUSTER_DNS="192.168.64.10"
-CLUSTER_HOSTS=(
-  "gateway-mcp.dev-tools.svc.cluster.local"
-  "supergateway-mcp.dev-tools.svc.cluster.local"
-  "steampipe-mcp-server.dev-tools.svc.cluster.local"
-)
-
 # Wait for work tailscaled
 for _ in $(seq 1 30); do $TS --socket=$SOCK status >/dev/null 2>&1 && break; sleep 2; done
 
@@ -50,14 +38,6 @@ for p in (data.get('Peer') or {}).values():
     DNS)    echo "$value $extra $MARKER" ;;
   esac
 done > /tmp/hosts.work
-
-# Resolve cluster.local MCP hostnames via cluster CoreDNS and append.
-# Claude Code's MCP HTTP transport doesn't honor /etc/resolver/cluster.local,
-# so /etc/hosts is the only path that works for it.
-for h in "${CLUSTER_HOSTS[@]}"; do
-  ip=$(/usr/bin/dig +short +time=2 +tries=1 "@$CLUSTER_DNS" "$h" 2>/dev/null | /usr/bin/head -1)
-  [ -n "$ip" ] && echo "$ip $h $MARKER" >> /tmp/hosts.work
-done
 
 # Update /etc/hosts atomically
 grep -v "$MARKER" /etc/hosts > /tmp/hosts.clean 2>/dev/null || true
