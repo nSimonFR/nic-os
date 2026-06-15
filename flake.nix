@@ -81,6 +81,17 @@
       flake = false;
     };
 
+    # RTK — Rust Token Killer (rtk-ai/rtk). Source-only input (`flake = false`);
+    # pkgs/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
+    # as `pkgs.rtk` via outputs.overlays.rtk. Bumping is a 2-step edit:
+    #   1. change the tag in the URL below (e.g. v0.42.4 → v0.43.0)
+    #   2. bump `version` in pkgs/rtk.nix to match
+    # then `sudo nix flake lock --update-input rtk-src` + rebuild.
+    rtk-src = {
+      url = "github:rtk-ai/rtk/v0.42.4";
+      flake = false;
+    };
+
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
     # Pinned to a tag; bump the ref to roll forward.
     tiny-llm-gate = {
@@ -145,8 +156,33 @@
         tinyLlmGateUrl = "http://127.0.0.1:4001";
       };
       telegramChatId = 82389391;
+
+      # RTK package overlay — single source of truth so `pkgs.rtk` resolves
+      # identically in NixOS modules (via rpi5/overlays.nix) and standalone
+      # home-manager configs (the homeConfigurations pkgs below). Builds from
+      # the rtk-src flake input; see pkgs/rtk.nix.
+      rtkOverlay = final: _prev: {
+        rtk = final.callPackage ./pkgs/rtk.nix { rtk-src = inputs.rtk-src; };
+      };
     in
     {
+      # Exposed so rpi5/overlays.nix can pull the same overlay (DRY).
+      overlays.rtk = rtkOverlay;
+
+      # `nix build .#rtk` — standalone build target to isolate rtk's heavy LTO
+      # compile from a full rebuild (build it alone first on the rpi5).
+      packages = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
+        system:
+        {
+          rtk =
+            (import nixpkgs {
+              inherit system;
+              config.allowUnfree = true;
+              overlays = [ rtkOverlay ];
+            }).rtk;
+        }
+      );
+
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
         specialArgs = {
@@ -228,6 +264,7 @@
           pkgs = import nixpkgs {
             system = "x86_64-linux";
             config.allowUnfree = true;
+            overlays = [ rtkOverlay ];
           };
           extraSpecialArgs = {
             inherit
@@ -268,6 +305,7 @@
           pkgs = import nixpkgs {
             system = "aarch64-linux";
             config.allowUnfree = true;
+            overlays = [ rtkOverlay ];
           };
           extraSpecialArgs = {
             inherit
@@ -294,6 +332,7 @@
           pkgs = import nixpkgs {
             system = "aarch64-darwin";
             config.allowUnfree = true;
+            overlays = [ rtkOverlay ];
           };
           extraSpecialArgs = {
             inherit

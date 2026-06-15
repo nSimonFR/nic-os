@@ -393,6 +393,11 @@ in
         # (no fatal) but skipping them disables write-isolation.
         pkgs.socat
         pkgs.bubblewrap
+        # RTK (Rust Token Killer): the spawned Claude runs `rtk hook claude` as
+        # its PreToolUse Bash hook (installed by cyrus-rtk-hook.service), and the
+        # rewritten `rtk …` commands execute in the agent's shell — both need
+        # rtk on PATH (inherited by the SDK-spawned claude child).
+        pkgs.rtk
       ];
       serviceConfig = {
         Type = "simple";
@@ -423,6 +428,42 @@ in
         # via SIOCGIFCONF, but AF_NETLINK is the modern path libuv prefers.
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
       };
+    };
+
+    # ── RTK Claude hook install ────────────────────────────────────────────
+    # The Claude Agent SDK spawns `claude` with HOME=/var/lib/cyrus, so it reads
+    # the user settings at /var/lib/cyrus/.claude/settings.json. Merge in the
+    # same PreToolUse → `rtk hook claude` entry used by the interactive Claude
+    # config (home/dotfiles/claude-settings.json) so cyrus's agent shell-outs get
+    # token-compressed too. Idempotent: the jq merge replaces .hooks.PreToolUse.
+    # NOTE (verify live): whether the SDK honours file-based hooks is unconfirmed
+    # — if a session shows no rewriting, fall back to a CLAUDE.md instruction.
+    systemd.services.cyrus-rtk-hook = {
+      description = "Install the RTK PreToolUse hook into cyrus's Claude settings";
+      wantedBy = [ "multi-user.target" ];
+      before = [ "cyrus.service" ];
+      path = [ pkgs.jq pkgs.coreutils ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        User = cfg.user;
+        Group = cfg.user;
+      };
+      script = ''
+        set -e
+        SETTINGS_DIR=/var/lib/cyrus/.claude
+        SETTINGS="$SETTINGS_DIR/settings.json"
+        mkdir -p "$SETTINGS_DIR"
+        hook='{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"${pkgs.rtk}/bin/rtk hook claude","timeout":10}]}]}'
+        if [ -f "$SETTINGS" ]; then
+          tmp=$(mktemp)
+          jq --argjson h "$hook" '.hooks = ((.hooks // {}) * $h)' "$SETTINGS" > "$tmp"
+          mv "$tmp" "$SETTINGS"
+        else
+          echo "{}" | jq --argjson h "$hook" '.hooks = $h' > "$SETTINGS"
+        fi
+        echo "Installed RTK PreToolUse hook into $SETTINGS"
+      '';
     };
 
     # ── Default model sync ─────────────────────────────────────────────────
