@@ -15,7 +15,7 @@
 { }:
 {
   entries = [
-    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Home Assistant
+    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Karakeep → Home Assistant
     { port = 8085;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)";
       widget = {
         type = "nextcloud";
@@ -77,6 +77,8 @@
           { field = "inbox"; label = "Inbox"; format = "number"; }
         ];
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    { port = 3500;  backend = "http://127.0.0.1:8210";  name = "Karakeep";       icon = "karakeep.svg";       category = "Apps"; description = "Bookmarks + read-later (AI-tagged)"; noSiteMonitor = true; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
       widget = {
         type = "homeassistant";
