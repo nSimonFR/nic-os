@@ -24,13 +24,21 @@ let
   mcpServers = {
     # Public — no secrets
     Linear              = { type = "sse"; url = "https://mcp.linear.app/sse"; };
-    "trusk-k8s"         = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:8080/mcp"; };
-    "trusk-argocd"      = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:3000/mcp"; };
-    "trusk-grafana"     = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:8000/mcp"; };
-    "trusk-datadog"     = { type = "http"; url = "http://gateway-mcp.dev-tools.svc.cluster.local:9000/mcp"; };
-    "trusk-github"      = { type = "http"; url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7001/mcp"; };
-    "trusk-context7"    = { type = "http"; url = "http://supergateway-mcp.dev-tools.svc.cluster.local:7002/mcp"; };
-    "trusk-steampipe"   = { type = "http"; url = "http://steampipe-mcp-server.dev-tools.svc.cluster.local:9194/mcp"; };
+    # Work-tailnet MCP gateways. Migrated off the in-cluster
+    # *.dev-tools.svc.cluster.local services — those are no longer routable
+    # from the laptop (the cluster pod subnet isn't advertised over the work
+    # tunnel and cluster CoreDNS is unreachable), so the old URLs time out.
+    # These tailnet nodes resolve over the work Tailscale tunnel (utun) and
+    # serve valid TLS via `tailscale serve`. Verified 2026-06-15.
+    # Transport note: the gateway/gitnexus nodes speak streamable-HTTP at
+    # /mcp; context7 + steampipe (supergateway-based) speak SSE at /sse.
+    "trusk-k8s"         = { type = "http"; url = "https://ai-gateway-mcp-k8s.tail271d7a.ts.net/mcp"; };
+    "trusk-argocd"      = { type = "http"; url = "https://ai-gateway-mcp-argocd.tail271d7a.ts.net/mcp"; };
+    "trusk-grafana"     = { type = "http"; url = "https://ai-gateway-mcp-grafana.tail271d7a.ts.net/mcp"; };
+    "trusk-datadog"     = { type = "http"; url = "https://ai-gateway-mcp-datadog.tail271d7a.ts.net/mcp"; };
+    "trusk-github"      = { type = "http"; url = "https://ai-gitnexus-mcp.tail271d7a.ts.net/mcp"; };
+    "trusk-context7"    = { type = "sse";  url = "https://ai-supergateway-context7.tail271d7a.ts.net/sse"; };
+    "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
     firecrawl           = { type = "http"; url = "https://mcp.firecrawl.dev/fc-c6a062b4ff1849d3991eeb116c0632a4/v2/mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
