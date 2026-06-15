@@ -145,6 +145,7 @@ in
     ./immich.nix
     ./sure.nix
     ./paperless.nix
+    ./karakeep.nix
     ./nextcloud.nix
     ./sumeria-mitm.nix
     ./hydroxide.nix
