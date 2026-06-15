@@ -79,7 +79,20 @@
         ];
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
-    { port = 3500;  backend = "http://127.0.0.1:8210";  name = "Karakeep";       icon = "karakeep.svg";       category = "Apps"; description = "Bookmarks + read-later (AI-tagged)"; noSiteMonitor = true; }
+    { port = 3500;  backend = "http://127.0.0.1:8210";  name = "Karakeep";       icon = "karakeep.svg";       category = "Apps"; description = "Bookmarks + read-later (AI-tagged)"; noSiteMonitor = true;
+      # Stats via homepage-stats.py reading karakeep's SQLite read-only (no API
+      # key, never wakes karakeep → preserves idle-sleep). NOT the native
+      # `type = "karakeep"` widget, which would poll the API and keep it awake.
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/karakeep";
+        mappings = [
+          { field = "bookmarks"; label = "Bookmarks"; format = "number"; }
+          { field = "favorites"; label = "Favorites"; format = "number"; }
+          { field = "archived";  label = "Archived";  format = "number"; }
+          { field = "tags";      label = "Tags";      format = "number"; }
+        ];
+      }; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
       widget = {
         type = "homeassistant";
