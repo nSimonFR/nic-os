@@ -949,9 +949,27 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "picoclaw-src": "picoclaw-src",
         "ragenix": "ragenix",
+        "rtk-src": "rtk-src",
         "sure-nix": "sure-nix",
         "tiny-llm-gate": "tiny-llm-gate",
         "zen-browser": "zen-browser"
+      }
+    },
+    "rtk-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781280365,
+        "narHash": "sha256-8nLJ5PVefXmoXQyw6HERfCP06C+l4I+7XLwKFNVNpew=",
+        "owner": "rtk-ai",
+        "repo": "rtk",
+        "rev": "8a7dd7e5570d7744d4b6508479a3674fe8c49286",
+        "type": "github"
+      },
+      "original": {
+        "owner": "rtk-ai",
+        "ref": "v0.42.4",
+        "repo": "rtk",
+        "type": "github"
       }
     },
     "rust-overlay": {

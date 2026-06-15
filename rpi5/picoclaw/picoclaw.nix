@@ -207,6 +207,23 @@ let
       port = 18789;
       log_level = "info";
     };
+
+    # RTK (Rust Token Killer) transparent rewriting via a `before_tool` process
+    # hook (JSON-RPC over stdio — pkg/agent/hook_process.go). The hook rewrites
+    # the `exec` tool's `command` to its `rtk`-prefixed equivalent so picoclaw's
+    # LLM sees 60–90% fewer tokens of command output. `intercept` takes hook
+    # STAGE names (not tool names); `RTK_BIN` is an absolute store path so the
+    # hook finds rtk regardless of PATH. Fails open (see rtk-hook.py).
+    hooks = {
+      enabled = true;
+      processes.rtk = {
+        enabled = true;
+        transport = "stdio";
+        command = [ "${pkgs.python3}/bin/python3" "${./rtk-hook.py}" ];
+        intercept = [ "before_tool" ];
+        env.RTK_BIN = "${pkgs.rtk}/bin/rtk";
+      };
+    };
   };
 
   configFile = pkgs.writeText "picoclaw-config.json" (builtins.toJSON picoclawConfig);
@@ -259,7 +276,10 @@ let
     # Match what an interactive nsimon shell sees: home-manager's own bin
     # (gog/goplaces/summarize live *only* there, not in ~/.nix-profile/bin),
     # user profile, system profile, wrappers, and nix-profile.
-    export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
+    # ${pkgs.rtk}/bin is prepended explicitly so the rtk-prefixed commands the
+    # before_tool hook rewrites to (e.g. `rtk git status`) resolve even before
+    # home-manager activation has linked rtk into home-path/bin.
+    export PATH="${pkgs.rtk}/bin:$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
     exec ${picoclaw}/bin/picoclaw gateway
   '';
 in

@@ -1,5 +1,5 @@
 # NixOS module: nixpkgs overlays for the RPi5 system.
-{ inputs, ... }:
+{ inputs, outputs, ... }:
 {
   nixpkgs.overlays = [
     # uv 0.9.26 from release-25.11 fails to build on aarch64-linux; use nixpkgs-unstable
@@ -72,5 +72,11 @@
         doInstallCheck = false;
       });
     })
+
+    # RTK (Rust Token Killer) — exposes `pkgs.rtk`, built from the rtk-src flake
+    # input. Defined once in flake.nix (outputs.overlays.rtk) and reused here so
+    # NixOS modules (picoclaw, cyrus) and the NixOS-integrated home-manager
+    # generation resolve the same package as the standalone HM configs.
+    outputs.overlays.rtk
   ];
 }

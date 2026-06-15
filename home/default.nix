@@ -16,6 +16,7 @@
     ./wakatime.nix
     ./editors.nix
     ./pi-coding-agent
+    ./rtk
   ];
 
   fonts.fontconfig.enable = true;
