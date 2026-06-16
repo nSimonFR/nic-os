@@ -32,6 +32,10 @@ alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=o
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
 alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=openai/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
 
+# claude-direct: CC → api.anthropic.com (no Aperture). Uses --settings, not a shell
+# ANTHROPIC_BASE_URL prefix (which CC ignores — ~/.claude/settings.json env wins).
+alias claude-direct='command claude --dangerously-skip-permissions --remote-control --settings "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://api.anthropic.com\"}}"'
+
 # pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
 # All routes go through https://ai.gate-mintaka.ts.net for observability.
 # Pass any tlg model id as $1 to override the default, e.g.
