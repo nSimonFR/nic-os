@@ -65,8 +65,11 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Pinned to the 2026-06-10 rev: newer llmfit pulls sysinfo 0.39.3, which
+    # requires rustc 1.95, but release-25.11 ships rustc 1.91 → build fails.
+    # Unpin (drop the rev to track the branch again) once nixpkgs rustc >= 1.95.
     llmfit = {
-      url = "github:AlexsJones/llmfit";
+      url = "github:AlexsJones/llmfit/2365836fc55b6b5f96622b4fd40cfeaa1e7a5e2f";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
