@@ -71,13 +71,23 @@ in
 
     claudeDefaultModel = lib.mkOption {
       type = lib.types.str;
-      default = "sonnet";
+      default = "opus";
       description = ''
         Top-level `claudeDefaultModel` written to /var/lib/cyrus/.cyrus/config.json
         on each rebuild. Used by edge-worker when neither the session metadata
         nor the repo entry specifies a model. Accepts the same values the CLI
         does — "opus", "sonnet", "haiku", or a full model id like
         "claude-sonnet-4-6".
+      '';
+    };
+
+    enableUltracode = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = ''
+        Enable ultracode mode for Claude Agent SDK sessions. When true, agents
+        will operate with expanded token budgets and additional capabilities
+        for comprehensive codebase analysis and refactoring tasks.
       '';
     };
 
@@ -377,6 +387,7 @@ in
         config.age.secrets.cyrus-linear-webhook-secret.file
         config.age.secrets.cyrus-github-webhook-secret.file
         cfg.claudeDefaultModel
+        cfg.enableUltracode
       ];
       path = [
         pkgs.git
@@ -430,16 +441,17 @@ in
       };
     };
 
-    # ── RTK Claude hook install ────────────────────────────────────────────
+    # ── RTK Claude hook + ultracode install ────────────────────────────────
     # The Claude Agent SDK spawns `claude` with HOME=/var/lib/cyrus, so it reads
     # the user settings at /var/lib/cyrus/.claude/settings.json. Merge in the
     # same PreToolUse → `rtk hook claude` entry used by the interactive Claude
     # config (home/dotfiles/claude-settings.json) so cyrus's agent shell-outs get
-    # token-compressed too. Idempotent: the jq merge replaces .hooks.PreToolUse.
+    # token-compressed too. Also wire in the ultracode mode setting if enabled.
+    # Idempotent: the jq merge replaces .hooks.PreToolUse and .ultracode.
     # NOTE (verify live): whether the SDK honours file-based hooks is unconfirmed
     # — if a session shows no rewriting, fall back to a CLAUDE.md instruction.
     systemd.services.cyrus-rtk-hook = {
-      description = "Install the RTK PreToolUse hook into cyrus's Claude settings";
+      description = "Install the RTK PreToolUse hook and ultracode settings into cyrus's Claude settings";
       wantedBy = [ "multi-user.target" ];
       before = [ "cyrus.service" ];
       path = [ pkgs.jq pkgs.coreutils ];
@@ -455,14 +467,15 @@ in
         SETTINGS="$SETTINGS_DIR/settings.json"
         mkdir -p "$SETTINGS_DIR"
         hook='{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"${pkgs.rtk}/bin/rtk hook claude","timeout":10}]}]}'
+        ultracode='${if cfg.enableUltracode then "true" else "false"}'
         if [ -f "$SETTINGS" ]; then
           tmp=$(mktemp)
-          jq --argjson h "$hook" '.hooks = ((.hooks // {}) * $h)' "$SETTINGS" > "$tmp"
+          jq --argjson h "$hook" --argjson u "$ultracode" '.hooks = ((.hooks // {}) * $h) | .ultracode = $u' "$SETTINGS" > "$tmp"
           mv "$tmp" "$SETTINGS"
         else
-          echo "{}" | jq --argjson h "$hook" '.hooks = $h' > "$SETTINGS"
+          echo "{}" | jq --argjson h "$hook" --argjson u "$ultracode" '.hooks = $h | .ultracode = $u' > "$SETTINGS"
         fi
-        echo "Installed RTK PreToolUse hook into $SETTINGS"
+        echo "Installed RTK PreToolUse hook and ultracode=$ultracode into $SETTINGS"
       '';
     };
 
