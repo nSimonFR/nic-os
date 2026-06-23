@@ -43,6 +43,17 @@ let
   # triggers exactly one rebuild.
   cyrusSrc = inputs.cyrus-src;
   cyrusRev = inputs.cyrus-src.rev;
+
+  # ── Repositories cyrus manages ─────────────────────────────────────────────
+  # Edit this list to add/remove repos. nic-os is the catch-all: any Linear
+  # issue assigned to cyrus without a matching routing label / projectKey /
+  # teamKey / [repo=...] description tag lands there instead of triggering
+  # cyrus's "Which repository should I work in?" prompt. Other repos match via
+  # their name as the routing label. Wired into the repositories option default.
+  mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
+  managedRepos =
+    [ (mkRepo "nic-os" // { catchAll = true; }) ]
+    ++ map mkRepo [ "amarre" "for-sure" "gleaner" "sure-nix" "terradex" "tiny-llm-gate" ];
 in
 {
   options.services.cyrus = {
@@ -148,16 +159,8 @@ in
           };
         };
       }));
-      # rpi5 repo set baked in here (this is a single-host bespoke module, like
-      # baseUrl / GITHUB_BOT_USERNAME above). nic-os is the catch-all: any Linear
-      # issue assigned to cyrus without a matching routing label / projectKey /
-      # teamKey / [repo=...] description tag lands there instead of triggering
-      # cyrus's "Which repository should I work in?" prompt. Other repos match
-      # via their name as the routing label.
-      default =
-        let mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
-        in [ (mkRepo "nic-os" // { catchAll = true; }) ]
-           ++ map mkRepo [ "amarre" "for-sure" "gleaner" "sure-nix" "terradex" "tiny-llm-gate" ];
+      # Defined as `managedRepos` at the top of this file for easy editing.
+      default = managedRepos;
       description = ''
         Repositories cyrus manages. Synced declaratively on activation by
         `cyrus-sync-repos.service`:
