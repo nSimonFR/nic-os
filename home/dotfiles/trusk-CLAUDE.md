@@ -6,16 +6,16 @@ Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, servic
 
 ## Repos on disk — siblings under `/Users/nsimon/MyDocuments/TRUSK/`
 
-| Repo | Purpose |
-|---|---|
-| `trusk-k8s` | Cluster infra (cert-manager, datadog-operator, argocd projects/applications, `docs/flagd/*`). |
-| `trusk-applications` | ArgoCD applications + manifests per env (`applications/<env>.yaml`, `manifests/<env>/<service>/`). Umbrella renders services via the `trusk-argo-project` chart. |
-| `trusk-lib` | npm-workspaces monorepo. NestJS 11 pkgs in `nestjs-libraries/<name>/` = `@trusk-official/nestjs-*` (core, amqp, authentication, sql, health, url-shortener, business-policies, feature-flags). Legacy `nest-commons/` = NestJS 10. |
-| `trusk-chart-museum` | Helm charts in `charts/<name>/` (notably `trusk-argo-project`). Pushed to GCS bucket `trusk-helm-chart` by `release.sh` on every master merge (`helm-cd.yaml`). |
-| `github-actions` | Shared reusable GH workflows (e.g. `release.yaml`, used by every service's `cd.yaml`). |
-| `<service>` (rating, identity-access-management, mobile-app-gateway, …) | Layout: `src/`, `deployment/charts/<env>.yaml`, `deployment/configurations/<env>/{configmaps,secrets}/`, sometimes `deployment/flagd/<env>/`. |
-| `trusk-infra/<service>` | Older services pre-migration. |
-| `backoffice` | **The** live backoffice (Next.js) — use this for any BO work. |
+| Repo                                                                    | Purpose                                                                                                                                                                                                                            |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `trusk-k8s`                                                             | Cluster infra (cert-manager, datadog-operator, argocd projects/applications, `docs/flagd/*`).                                                                                                                                      |
+| `trusk-applications`                                                    | ArgoCD applications + manifests per env (`applications/<env>.yaml`, `manifests/<env>/<service>/`). Umbrella renders services via the `trusk-argo-project` chart.                                                                   |
+| `trusk-lib`                                                             | npm-workspaces monorepo. NestJS 11 pkgs in `nestjs-libraries/<name>/` = `@trusk-official/nestjs-*` (core, amqp, authentication, sql, health, url-shortener, business-policies, feature-flags). Legacy `nest-commons/` = NestJS 10. |
+| `trusk-chart-museum`                                                    | Helm charts in `charts/<name>/` (notably `trusk-argo-project`). Pushed to GCS bucket `trusk-helm-chart` by `release.sh` on every master merge (`helm-cd.yaml`).                                                                    |
+| `github-actions`                                                        | Shared reusable GH workflows (e.g. `release.yaml`, used by every service's `cd.yaml`).                                                                                                                                             |
+| `<service>` (rating, identity-access-management, mobile-app-gateway, …) | Layout: `src/`, `deployment/charts/<env>.yaml`, `deployment/configurations/<env>/{configmaps,secrets}/`, sometimes `deployment/flagd/<env>/`.                                                                                      |
+| `trusk-infra/<service>`                                                 | Older services pre-migration.                                                                                                                                                                                                      |
+| `backoffice`                                                            | **The** live backoffice (Next.js) — use this for any BO work.                                                                                                                                                                      |
 
 **`trusk-backoffice` and `trusk-infra/backoffice` are LEGACY — ignore entirely** (no grep, no cite, no edits). Only `backoffice` is live. Clone missing repos: `unset GH_TOKEN && gh repo clone trusk-official/<name> ~/MyDocuments/TRUSK/<name>`.
 
@@ -59,6 +59,7 @@ For "wait N minutes": `Bash(run_in_background:true)` with `sleep N && …`.
 - main `<service>` — `start:prod` (config / DB-connect / code crashes here).
 
 On CrashLoopBackOff check both:
+
 ```bash
 kubectl --context trusk-staging-ts -n staging logs <pod> -c <service>-pgm
 kubectl --context trusk-staging-ts -n staging logs <pod> --previous
@@ -73,11 +74,12 @@ kubectl --context trusk-staging-ts -n staging logs <pod> --previous
 `@trusk-official/config-release` releaseRules come from the `type-enum` in config-commitlint. Valid PascalCase scopes: **`Feature, Fix, Docs, Style, Refactor, Test, Chore`** — `Feature`/`Refactor` → minor, rest → patch. The Angular preset also adds lowercase `feat`→minor, `fix`→patch, `BREAKING CHANGE`→major.
 
 - **`Perf:` cuts NO release** (not in the list, not in the Angular preset) — same for any type outside the seven. Use `Fix:`/`Feature:`/lowercase `fix:` to force a bump. (Verified on fleet 2026-06-04.)
-- **No Linear prefix** on commit messages *or PR titles* unless asked — plain `Type(Scope): desc`. Repos squash-merge, so a PR title like `IN-625 Perf(…)` becomes the master commit and semantic-release can't parse it → no release, no deploy. Strip `IN-`/`EXTERN-`/`DO-` from PR titles before merge.
+- **No Linear prefix** on commit messages _or PR titles_ unless asked — plain `Type(Scope): desc`. Repos squash-merge, so a PR title like `IN-625 Perf(…)` becomes the master commit and semantic-release can't parse it → no release, no deploy. Strip `IN-`/`EXTERN-`/`DO-` from PR titles before merge.
 
 ## Generating a service's `-client` / `-query` lib (consume a new route)
 
 Each service publishes `@trusk-official/api-<service>-client` (raw fns, backend↔backend) and `@trusk-official/api-<service>-query` (TanStack-Query hooks, used by the backoffice) from its OpenAPI spec, via `orval-client-generator` + the reusable `generate-apiclient.yaml`. Two service workflows:
+
 - `generate-apiclient.yaml` (`on: push: tags`) → real versioned client+query on every release tag.
 - `generate-PR-apiclient.yaml` (`on: pull_request`, gated by the **`need client API`** label) → prerelease `<ver>-pr.<PR#>.<run>.<attempt>`.
 
@@ -97,47 +99,54 @@ Always brace `if` bodies, even one-liners. No `if (cond) doThing();`. All Trusk 
 - **Production** — no Tailscale; run the `proxy-prod` alias once/session (opens an IAP tunnel + SOCKS/HTTP proxy on `localhost:8888`), then `export http_proxy=localhost:8888 https_proxy=localhost:8888` and use ctx `gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`. Socket `/tmp/trusk-production-gke-bastion.socket` = readiness signal (direct GKE ctx times out on TLS — private control plane).
 
 `proxy-prod` is an interactive-shell alias and long-running. Run it autonomously via **`zsh -ic 'proxy-prod'`** in `Bash(run_in_background:true)` (don't block on it; may prompt for gcloud auth if tokens are stale), then poll for the socket:
+
 ```bash
 for i in $(seq 1 60); do [ -S /tmp/trusk-production-gke-bastion.socket ] && { echo up; break; }; sleep 2; done
 ```
-The socket is system-wide → any later Bash call uses the proxy by exporting the http(s)_proxy vars.
+
+The socket is system-wide → any later Bash call uses the proxy by exporting the http(s)\_proxy vars.
 
 ### Prod mutualised PG (via pod env)
 
 Prod PG = **`10.206.0.21`** (since 2026-06-10; old `10.206.0.11` is DEAD). **Always use DNS `postgres-trusk-production`** (ExternalName Svc in `production`, follows IP moves), not the raw IP. Charts hardcoding the old IP fail — when rolling back to such a tag, append `POSTGRES_URL=postgres-trusk-production` on both the main container and initContainer (duplicate env names OK — last wins):
+
 ```bash
 kubectl --context "$CTX" -n production patch deployment <svc> --type=json -p '[
   {"op":"add","path":"/spec/template/spec/containers/0/env/-","value":{"name":"POSTGRES_URL","value":"postgres-trusk-production"}},
   {"op":"add","path":"/spec/template/spec/initContainers/0/env/-","value":{"name":"POSTGRES_URL","value":"postgres-trusk-production"}}]'
 ```
+
 `psql` isn't in the Node alpine images — run ad-hoc SQL via the in-image `pg` driver:
+
 ```bash
 kubectl --context "$CTX" -n production exec <pod> -c <main> -- node -e '
 const {Client}=require("pg");
 const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER,password:process.env.POSTGRES_PASSWORD,database:process.env.POSTGRES_DB});
 (async()=>{await c.connect(); /* ... */ await c.end();})().catch(e=>{console.error(e.message);process.exit(1)});'
 ```
+
 For out-of-band schema mutations, also insert the `<schema>._migrations` row (`{id,timestamp,name}`) so the next deploy's init container skips re-running it.
 
 ## Datadog FM + dd-trace flaggingProvider — required env vars
 
 `tracer.init({ experimental:{ flaggingProvider:{ enabled:true }}})` is necessary but **not sufficient** — FM allocation matching uses Unified Service Tagging, so the pod env MUST set:
+
 ```yaml
-- { name: DD_SERVICE, value: <service-name> }   # match package.json + DD catalog
-- { name: DD_ENV,     value: <env> }            # production / staging
-- { name: DD_VERSION, value: "<x.y.z>" }        # hardcoded today
+- { name: DD_SERVICE, value: <service-name> } # match package.json + DD catalog
+- { name: DD_ENV, value: <env> } # production / staging
+- { name: DD_VERSION, value: "<x.y.z>" } # hardcoded today
 ```
+
 Without them, FM returns `client_configs: []` and `@datadog/openfeature-node-server` times out after 30s (`Initialization timeout after 30000ms`) → crashloop. `DD_REMOTE_CONFIGURATION_ENABLED` defaults true in dd-trace 5.x; the agent key needs `remote_config_read`. No other prod service sets these yet (none use `flaggingProvider`); ref `identity-access-management/deployment/charts/production.yaml`. Flag eval also needs a configured FM **allocation rule** per flag — see project memory `reference_datadog_feature_management.md`.
 
 ## nestjs-sql LockService = TypeORM pool deadlock under concurrency (TEC-105)
-
-Root cause of state-status 1.24.x/1.25.0 prod queue pile-ups. `@trusk-official/nestjs-sql` `LockService.lockBuilder` takes 1 pool conn (`createQueryRunner` → `pg_advisory_lock`), then `lockedOperation()` calls `repository.save()` needing a **2nd** conn. TypeORM pg pool max = **10** (not env-tunable). Once ≥10 handlers are inside `lockBuilder`, the pool is exhausted holding advisory locks and every `save()` waits forever → permanent deadlock, unlock never runs. Symptom: pods Ready, but AMQP `ack=0/s`, queues climb, `pg_stat_activity` = 10 idle conns/pod all on `pg_advisory_lock(hashtext($1))`. Restart clears it, re-wedges under load. **Staging never reproduces** (statuses 21MB/36k rows vs prod 8.3GB/11.5M). Fix = locked op on the same queryRunner, or `pg_advisory_xact_lock` in one txn. **state-status pinned at 1.19.1 in prod until TEC-105.**
 
 Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
 ## flagd kill-switch
 
 OpenFeature Operator on `trusk-staging-ts`; FeatureFlag CRDs in ns `flagd`, one per service (`<service>/deployment/flagd/<env>/featureflag.yaml`), with a companion ArgoCD app when the umbrella entry has `flagd: { enabled: true }`. Flip via `defaultVariant` (patches stick — the companion app has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
+
 ```bash
 kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merge \
   -p '{"spec":{"flagSpec":{"flags":{"<flag>":{"defaultVariant":"off","state":"ENABLED","variants":{"on":true,"off":false}}}}}}'
@@ -145,6 +154,19 @@ kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merg
 kubectl --context trusk-staging-ts -n <ns> exec <pod> -c <main> -- \
   sh -c "wget -qO- --post-data='{}' --header='Content-Type: application/json' http://localhost:8016/ofrep/v1/evaluate/flags/<flag>"
 ```
+
+## flagd kill-switch
+
+OpenFeature Operator on `trusk-staging-ts`; FeatureFlag CRDs in ns `flagd`, one per service (`<service>/deployment/flagd/<env>/featureflag.yaml`), with a companion ArgoCD app when the umbrella entry has `flagd: { enabled: true }`. Flip via `defaultVariant` (patches stick — the companion app has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
+
+```bash
+kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merge \
+  -p '{"spec":{"flagSpec":{"flags":{"<flag>":{"defaultVariant":"off","state":"ENABLED","variants":{"on":true,"off":false}}}}}}'
+# verify on any annotated pod's sidecar (~<1s):
+kubectl --context trusk-staging-ts -n <ns> exec <pod> -c <main> -- \
+  sh -c "wget -qO- --post-data='{}' --header='Content-Type: application/json' http://localhost:8016/ofrep/v1/evaluate/flags/<flag>"
+```
+
 Gotcha: `@RequireFlagsEnabled({flags:[{flagKey,defaultValue:true}]})` 403s **only when flagd serves `false`**; `state: DISABLED` or a missing flag falls back to `defaultValue` → request passes. Always flip `defaultVariant`, not `state`.
 
 ## ArgoCD selfHeal + operator-managed RBAC = drift trap
