@@ -267,6 +267,8 @@ in
   # cyrus-linear-*.age files with real values from the Linear OAuth app and
   # `systemctl restart cyrus`.
   services.cyrus.enable = true;
+  services.cyrus.claudeDefaultModel = "opus";
+  services.cyrus.enableUltracode = true;
   # nic-os is the catch-all: any Linear issue assigned to cyrus without a
   # matching routing label / projectKey / teamKey / [repo=...] description tag
   # lands here instead of triggering cyrus's "Which repository should I work
