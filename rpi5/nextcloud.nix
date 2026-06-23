@@ -242,7 +242,8 @@ in
 
   # Pre-cleanup: remove any real directories in store-apps (migration from Docker
   # where custom_components are real dirs, not symlinks). Prevents "Cannot redeclare
-  # class" crashes when both store and appstore versions coexist. See
+  # class" crashes when both store and appstore versions coexist. Also clears
+  # maintenance mode if left behind from a failed upgrade. See
   # [[known_issue_nextcloud_extraapps_appstore_dup]].
   systemd.services.nextcloud-cleanup = {
     description = "Clean up Nextcloud store-apps real directories before setup";
@@ -259,6 +260,12 @@ in
       # composer autoloader conflicts. A fresh appstore download will replace them.
       find ${datadir}/store-apps -maxdepth 1 -type d \( -name "mail" -o -name "contacts" -o -name "calendar" -o -name "tasks" \) \
         -exec rm -rf {} + 2>/dev/null || true
+
+      # Clear maintenance mode flag if left behind from a previous failed upgrade.
+      # This allows nextcloud-setup to proceed. The flag is set by nextcloud-setup itself.
+      if [ -f ${datadir}/config/config.php ]; then
+        ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" ${datadir}/config/config.php || true
+      fi
     '';
   };
 
