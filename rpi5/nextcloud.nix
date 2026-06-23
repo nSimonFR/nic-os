@@ -240,13 +240,14 @@ in
     { addr = "127.0.0.1"; port = port; ssl = false; }
   ];
 
-  # Pre-cleanup: remove any real directories in store-apps (migration from Docker
-  # where custom_components are real dirs, not symlinks). Prevents "Cannot redeclare
-  # class" crashes when both store and appstore versions coexist. Also clears
-  # maintenance mode if left behind from a failed upgrade. See
-  # [[known_issue_nextcloud_extraapps_appstore_dup]].
+  # ── Service orchestration for safe Nextcloud setup ────────────────────────────
+  # Prevents "Cannot redeclare class" crash when extraApps + appstore both provide
+  # the same app. See [[known_issue_nextcloud_extraapps_appstore_dup]].
+  # Order: cleanup → setup → appstore-enable → disable-defaults → mail-setup
+
+  # Step 1: Pre-setup cleanup — remove stale store-apps duplicates and maintenance flag
   systemd.services.nextcloud-cleanup = {
-    description = "Clean up Nextcloud store-apps real directories before setup";
+    description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
     after    = [ "nextcloud-pg-setup.service" ];
     requires = [ "nextcloud-pg-setup.service" ];
     before   = [ "nextcloud-setup.service" ];
@@ -254,95 +255,131 @@ in
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      StandardOutput = "journal";
+      StandardError = "journal";
+      SyslogIdentifier = "nextcloud-cleanup";
     };
     script = ''
-      # Remove real directories (not symlinks) in store-apps to prevent
-      # composer autoloader conflicts. A fresh appstore download will replace them.
-      find ${datadir}/store-apps -maxdepth 1 -type d \( -name "mail" -o -name "contacts" -o -name "calendar" -o -name "tasks" \) \
-        -exec rm -rf {} + 2>/dev/null || true
+      set -eu
+      datadir="${datadir}"
+      store_apps="$datadir/store-apps"
+      config_php="$datadir/config/config.php"
 
-      # Clear maintenance mode flag if left behind from a previous failed upgrade.
-      # This allows nextcloud-setup to proceed. The flag is set by nextcloud-setup itself.
-      if [ -f ${datadir}/config/config.php ]; then
-        ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" ${datadir}/config/config.php || true
+      # Remove real directories in store-apps (leftover from Docker) to prevent
+      # PHP Composer "Cannot redeclare class" crashes when both store + appstore
+      # versions coexist. Find will replace them on next appstore sync.
+      if [ -d "$store_apps" ]; then
+        for app in mail contacts calendar tasks; do
+          app_dir="$store_apps/$app"
+          if [ -d "$app_dir" ] && [ ! -L "$app_dir" ]; then
+            echo "Removing real directory: $app_dir"
+            rm -rf "$app_dir"
+          fi
+        done
+      fi
+
+      # Clear stale maintenance mode flag from prior crashes. Allows nextcloud-setup
+      # to proceed. (nextcloud-setup sets this flag itself on successful exit.)
+      if [ -f "$config_php" ]; then
+        if grep -q "'maintenance' => true" "$config_php"; then
+          echo "Clearing stale maintenance mode flag"
+          ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" "$config_php"
+        fi
       fi
     '';
   };
 
-  # nextcloud-setup runs occ maintenance:install — must wait for postgres role
-  # to have its password set. The module already orders after postgresql.service.
+  # Step 2: nextcloud-setup (module-provided service)
+  # Already ordered after postgresql.service; we add dependency on cleanup.
   systemd.services.nextcloud-setup = {
     after    = [ "nextcloud-cleanup.service" ];
     requires = [ "nextcloud-cleanup.service" ];
   };
 
-  # ── Enable app store and install non-bundled apps (assistant, integration_openai)
-  # Runs after nextcloud-setup so appstoreEnable=false doesn't block the upgrade.
-  # Must exit maintenance mode so downstream services (nextcloud-disable-defaults) can use occ.
-  # Safe to run even if apps are already installed (occ install is idempotent).
+  # Step 3: Post-setup appstore activation and non-bundled app installation
   systemd.services.nextcloud-appstore-enable = {
-    description = "Enable Nextcloud app store and install non-bundled apps";
+    description = "Nextcloud: exit maintenance mode and install non-bundled apps";
     after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
     requires = [ "nextcloud-setup.service" ];
+    before   = [ "nextcloud-disable-defaults.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      StandardOutput = "journal";
+      StandardError = "journal";
+      SyslogIdentifier = "nextcloud-appstore";
     };
     script = ''
-      OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
+      set -eu
+      occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
 
-      # Exit maintenance mode (set by nextcloud-setup) so later services can use occ
-      $OCC maintenance:mode --off
+      # Exit maintenance mode set by nextcloud-setup. Downstream services need
+      # occ to work (e.g., app:list for disable-defaults whitelist).
+      echo "Exiting maintenance mode"
+      $occ maintenance:mode --off
 
-      # Install non-bundled apps from store (idempotent; automatically enables appstore as needed)
-      $OCC app:install assistant || true
-      $OCC app:install integration_openai || true
+      # Install non-bundled apps (idempotent; succeeds if already present).
+      # These are not in extraApps to avoid duplicate conflicts (see [[known_issue_nextcloud_extraapps_appstore_dup]]).
+      for app in assistant integration_openai; do
+        echo "Installing app: $app"
+        $occ app:install "$app" || {
+          # Tolerate transient failure (e.g., app store unreachable); log and continue.
+          echo "Warning: failed to install $app, will retry on next boot"
+        }
+      done
     '';
   };
 
-  # ── Whitelist enforcement: enable everything on appsToKeep, disable anything
-  # else. Self-healing on every boot/rebuild. Robust against:
-  #   • new default apps in future Nextcloud majors
-  #   • apps the package re-enables on upgrade (viewer, workflowengine, etc.)
-  #   • apps shipped-but-not-auto-enabled (files_pdfviewer was in the keep-list
-  #     but stayed off because Nextcloud didn't auto-enable it on install)
-  # Idempotent — `app:enable`/`app:disable` are no-ops on the current state.
+  # Step 4: Whitelist enforcement — enable keep-list, disable everything else
   systemd.services.nextcloud-disable-defaults = {
-    description = "Enforce Nextcloud app whitelist (enable keep-list, disable rest)";
+    description = "Nextcloud: enforce app whitelist (enable keep-list, disable rest)";
     after    = [ "nextcloud-appstore-enable.service" "phpfpm-nextcloud.service" ];
     requires = [ "nextcloud-appstore-enable.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      StandardOutput = "journal";
+      StandardError = "journal";
+      SyslogIdentifier = "nextcloud-whitelist";
     };
     script = ''
-      OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
-      JQ=${pkgs.jq}/bin/jq
+      set -eu
+      occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
+      jq="${pkgs.jq}/bin/jq"
       keep=" ${lib.concatStringsSep " " appsToKeep} "
 
-      enabled=$($OCC app:list --output=json | $JQ -r '.enabled | keys[]')
-      enabled_padded=" $(echo $enabled | tr '\n' ' ') "
+      # Fetch enabled apps as space-padded list for fast substring matching.
+      enabled_str=$($occ app:list --output=json | $jq -r '.enabled | keys[]' | tr '\n' ' ')
+      enabled_padded=" $enabled_str "
 
-      # Pass 1: enable any keep-list app that isn't already enabled.
+      # Pass 1: enable all apps on keep-list that aren't already enabled.
+      echo "Pass 1: enabling keep-list apps"
       for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
         case "$enabled_padded" in
           *" $app "*) ;;
-          *) $OCC app:enable "$app" || true ;;
+          *)
+            echo "Enabling: $app"
+            $occ app:enable "$app" || echo "Failed (already enabled?): $app"
+            ;;
         esac
       done
 
-      # Pass 2: disable anything currently enabled and not on the keep-list.
-      # Re-fetch in case pass 1 changed state (it should not bring in extras
-      # but be defensive).
-      enabled=$($OCC app:list --output=json | $JQ -r '.enabled | keys[]')
-      for app in $enabled; do
+      # Pass 2: disable all enabled apps NOT on keep-list.
+      # Re-fetch to catch any state changes from pass 1.
+      echo "Pass 2: disabling unlisted apps"
+      enabled_str=$($occ app:list --output=json | $jq -r '.enabled | keys[]')
+      for app in $enabled_str; do
         case "$keep" in
           *" $app "*) ;;
-          *) $OCC app:disable "$app" || true ;;
+          *)
+            echo "Disabling: $app"
+            $occ app:disable "$app" || echo "Failed (already disabled?): $app"
+            ;;
         esac
       done
+      echo "App whitelist enforcement complete"
     '';
   };
 
