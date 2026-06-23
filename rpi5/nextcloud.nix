@@ -240,148 +240,85 @@ in
     { addr = "127.0.0.1"; port = port; ssl = false; }
   ];
 
-  # ── Service orchestration for safe Nextcloud setup ────────────────────────────
+  # ── Nextcloud service orchestration ──────────────────────────────────────────
   # Prevents "Cannot redeclare class" crash when extraApps + appstore both provide
-  # the same app. See [[known_issue_nextcloud_extraapps_appstore_dup]].
-  # Order: cleanup → setup → appstore-enable → disable-defaults → mail-setup
+  # the same app (see [[known_issue_nextcloud_extraapps_appstore_dup]]).
+  # Order: cleanup → setup → appstore-enable → disable-defaults.
 
-  # Step 1: Pre-setup cleanup — remove stale store-apps duplicates and maintenance flag
-  systemd.services.nextcloud-cleanup = {
-    description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
-    after    = [ "nextcloud-pg-setup.service" ];
-    requires = [ "nextcloud-pg-setup.service" ];
-    before   = [ "nextcloud-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      StandardOutput = "journal";
-      StandardError = "journal";
-      SyslogIdentifier = "nextcloud-cleanup";
+  let
+    mkServiceConfig = { description, syslog, after, before, requires, script }: {
+      inherit description after before requires script;
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal";
+        StandardError = "journal";
+        SyslogIdentifier = syslog;
+      };
     };
-    script = ''
-      set -eu
-      datadir="${datadir}"
-      store_apps="$datadir/store-apps"
-      config_php="$datadir/config/config.php"
-
-      # Remove real directories in store-apps (leftover from Docker) to prevent
-      # PHP Composer "Cannot redeclare class" crashes when both store + appstore
-      # versions coexist. Find will replace them on next appstore sync.
-      if [ -d "$store_apps" ]; then
+  in
+  {
+    systemd.services.nextcloud-cleanup = mkServiceConfig {
+      description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
+      syslog = "nextcloud-cleanup";
+      after = [ "nextcloud-pg-setup.service" ];
+      before = [ "nextcloud-setup.service" ];
+      requires = [ "nextcloud-pg-setup.service" ];
+      script = ''
+        set -eu
+        store_apps="${datadir}/store-apps"
+        config_php="${datadir}/config/config.php"
         for app in mail contacts calendar tasks; do
           app_dir="$store_apps/$app"
-          if [ -d "$app_dir" ] && [ ! -L "$app_dir" ]; then
-            echo "Removing real directory: $app_dir"
-            rm -rf "$app_dir"
-          fi
+          [ -d "$app_dir" ] && [ ! -L "$app_dir" ] && rm -rf "$app_dir"
         done
-      fi
-
-      # Clear stale maintenance mode flag from prior crashes. Allows nextcloud-setup
-      # to proceed. (nextcloud-setup sets this flag itself on successful exit.)
-      if [ -f "$config_php" ]; then
-        if grep -q "'maintenance' => true" "$config_php"; then
-          echo "Clearing stale maintenance mode flag"
-          ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" "$config_php"
-        fi
-      fi
-    '';
-  };
-
-  # Step 2: nextcloud-setup (module-provided service)
-  # Already ordered after postgresql.service; we add dependency on cleanup.
-  systemd.services.nextcloud-setup = {
-    after    = [ "nextcloud-cleanup.service" ];
-    requires = [ "nextcloud-cleanup.service" ];
-  };
-
-  # Step 3: Post-setup appstore activation and non-bundled app installation
-  systemd.services.nextcloud-appstore-enable = {
-    description = "Nextcloud: exit maintenance mode and install non-bundled apps";
-    after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
-    requires = [ "nextcloud-setup.service" ];
-    before   = [ "nextcloud-disable-defaults.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      StandardOutput = "journal";
-      StandardError = "journal";
-      SyslogIdentifier = "nextcloud-appstore";
+        grep -q "'maintenance' => true" "$config_php" 2>/dev/null && \
+          ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" "$config_php" || true
+      '';
     };
-    script = ''
-      set -eu
-      occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
 
-      # Exit maintenance mode set by nextcloud-setup. Downstream services need
-      # occ to work (e.g., app:list for disable-defaults whitelist).
-      echo "Exiting maintenance mode"
-      $occ maintenance:mode --off
-
-      # Install non-bundled apps (idempotent; succeeds if already present).
-      # These are not in extraApps to avoid duplicate conflicts (see [[known_issue_nextcloud_extraapps_appstore_dup]]).
-      for app in assistant integration_openai; do
-        echo "Installing app: $app"
-        $occ app:install "$app" || {
-          # Tolerate transient failure (e.g., app store unreachable); log and continue.
-          echo "Warning: failed to install $app, will retry on next boot"
-        }
-      done
-    '';
-  };
-
-  # Step 4: Whitelist enforcement — enable keep-list, disable everything else
-  systemd.services.nextcloud-disable-defaults = {
-    description = "Nextcloud: enforce app whitelist (enable keep-list, disable rest)";
-    after    = [ "nextcloud-appstore-enable.service" "phpfpm-nextcloud.service" ];
-    requires = [ "nextcloud-appstore-enable.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      StandardOutput = "journal";
-      StandardError = "journal";
-      SyslogIdentifier = "nextcloud-whitelist";
+    systemd.services.nextcloud-setup = {
+      after    = [ "nextcloud-cleanup.service" ];
+      requires = [ "nextcloud-cleanup.service" ];
     };
-    script = ''
-      set -eu
-      occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
-      jq="${pkgs.jq}/bin/jq"
-      keep=" ${lib.concatStringsSep " " appsToKeep} "
 
-      # Fetch enabled apps as space-padded list for fast substring matching.
-      enabled_str=$($occ app:list --output=json | $jq -r '.enabled | keys[]' | tr '\n' ' ')
-      enabled_padded=" $enabled_str "
+    systemd.services.nextcloud-appstore-enable = mkServiceConfig {
+      description = "Nextcloud: exit maintenance and install non-bundled apps";
+      syslog = "nextcloud-appstore";
+      after = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
+      before = [ "nextcloud-disable-defaults.service" ];
+      requires = [ "nextcloud-setup.service" ];
+      script = ''
+        ${config.services.nextcloud.occ}/bin/nextcloud-occ maintenance:mode --off
+        for app in assistant integration_openai; do
+          ${config.services.nextcloud.occ}/bin/nextcloud-occ app:install "$app" 2>/dev/null || true
+        done
+      '';
+    };
 
-      # Pass 1: enable all apps on keep-list that aren't already enabled.
-      echo "Pass 1: enabling keep-list apps"
-      for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
-        case "$enabled_padded" in
-          *" $app "*) ;;
-          *)
-            echo "Enabling: $app"
-            $occ app:enable "$app" || echo "Failed (already enabled?): $app"
-            ;;
-        esac
-      done
-
-      # Pass 2: disable all enabled apps NOT on keep-list.
-      # Re-fetch to catch any state changes from pass 1.
-      echo "Pass 2: disabling unlisted apps"
-      enabled_str=$($occ app:list --output=json | $jq -r '.enabled | keys[]')
-      for app in $enabled_str; do
-        case "$keep" in
-          *" $app "*) ;;
-          *)
-            echo "Disabling: $app"
-            $occ app:disable "$app" || echo "Failed (already disabled?): $app"
-            ;;
-        esac
-      done
-      echo "App whitelist enforcement complete"
-    '';
-  };
+    systemd.services.nextcloud-disable-defaults = mkServiceConfig {
+      description = "Nextcloud: enforce app whitelist";
+      syslog = "nextcloud-whitelist";
+      after = [ "nextcloud-appstore-enable.service" "phpfpm-nextcloud.service" ];
+      requires = [ "nextcloud-appstore-enable.service" ];
+      script = ''
+        set -eu
+        occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
+        keep=" ${lib.concatStringsSep " " appsToKeep} "
+        enabled_str=$($occ app:list --output=json | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+        for app in $enabled_str; do
+          case "$keep" in
+            *" $app "*) ;;
+            *) $occ app:disable "$app" 2>/dev/null || true ;;
+          esac
+        done
+        for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
+          echo "$enabled_str" | grep -q "^$app$" || $occ app:enable "$app" 2>/dev/null || true
+        done
+      '';
+    };
+  }
 
   # ── Bind-mount /mnt/data/cloud → user-files dir ────────────────────────────
   # Tailscale Drive shares /mnt/data/cloud (see tailscale-serve.nix). Bind-
