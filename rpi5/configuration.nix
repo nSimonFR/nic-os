@@ -266,25 +266,9 @@ in
   # service + funnel pipeline is exercised end-to-end. Replace the three
   # cyrus-linear-*.age files with real values from the Linear OAuth app and
   # `systemctl restart cyrus`.
+  # Model (opus), ultracode mode, and the managed repository set are configured
+  # as defaults in ./cyrus.nix (single-host bespoke module). Override there.
   services.cyrus.enable = true;
-  services.cyrus.claudeDefaultModel = "opus";
-  services.cyrus.enableUltracode = true;
-  # nic-os is the catch-all: any Linear issue assigned to cyrus without a
-  # matching routing label / projectKey / teamKey / [repo=...] description tag
-  # lands here instead of triggering cyrus's "Which repository should I work
-  # in?" prompt. Other repos still match via their name as the routing label.
-  services.cyrus.repositories = let
-    mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
-  in [
-    (mkRepo "nic-os" // { catchAll = true; })
-  ] ++ map mkRepo [
-    "amarre"
-    "for-sure"
-    "gleaner"
-    "sure-nix"
-    "terradex"
-    "tiny-llm-gate"
-  ];
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
   services.journald.extraConfig = ''
