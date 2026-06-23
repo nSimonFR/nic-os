@@ -120,9 +120,11 @@ in
     hostName = tailnetFqdn;
     https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
 
-    # Allow `occ app:install` to fetch from the Nextcloud app store. Used to
-    # install assistant + integration_openai (not bundled with the package).
-    appstoreEnable = true;
+    # DISABLED: appstoreEnable = true causes app-store mail to conflict with
+    # extraApps mail, triggering "Cannot redeclare class ComposerAutoloaderInitMail".
+    # See [[known_issue_nextcloud_extraapps_appstore_dup]]. Post-setup enablement
+    # is instead handled by nextcloud-appstore-enable below.
+    appstoreEnable = false;
 
     # Storage path on the data HDD. The nixpkgs module treats datadir as
     # Nextcloud's *home*: it creates /mnt/data/nextcloud/config/ (config.php)
@@ -161,8 +163,11 @@ in
     # Pre-install Contacts, Calendar, Tasks. extraAppsEnable enables them on
     # first boot. The tasks app provides a web UI for VTODOs that already flow
     # through CalDAV; disabling the UI later is one `occ app:disable`.
+    # NOTE: mail is excluded to avoid app-store duplicate conflicts (see
+    # [[known_issue_nextcloud_extraapps_appstore_dup]]) — it's installed by
+    # nextcloud-appstore-enable instead.
     extraApps = {
-      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks mail;
+      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks;
     };
     extraAppsEnable = true;
 
@@ -235,11 +240,57 @@ in
     { addr = "127.0.0.1"; port = port; ssl = false; }
   ];
 
+  # Pre-cleanup: remove any real directories in store-apps (migration from Docker
+  # where custom_components are real dirs, not symlinks). Prevents "Cannot redeclare
+  # class" crashes when both store and appstore versions coexist. See
+  # [[known_issue_nextcloud_extraapps_appstore_dup]].
+  systemd.services.nextcloud-cleanup = {
+    description = "Clean up Nextcloud store-apps real directories before setup";
+    after    = [ "nextcloud-pg-setup.service" ];
+    requires = [ "nextcloud-pg-setup.service" ];
+    before   = [ "nextcloud-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # Remove real directories (not symlinks) in store-apps to prevent
+      # composer autoloader conflicts. A fresh appstore download will replace them.
+      find ${datadir}/store-apps -maxdepth 1 -type d \( -name "mail" -o -name "contacts" -o -name "calendar" -o -name "tasks" \) \
+        -exec rm -rf {} + 2>/dev/null || true
+    '';
+  };
+
   # nextcloud-setup runs occ maintenance:install — must wait for postgres role
   # to have its password set. The module already orders after postgresql.service.
   systemd.services.nextcloud-setup = {
-    after    = [ "nextcloud-pg-setup.service" ];
-    requires = [ "nextcloud-pg-setup.service" ];
+    after    = [ "nextcloud-cleanup.service" ];
+    requires = [ "nextcloud-cleanup.service" ];
+  };
+
+  # ── Enable app store and install non-bundled apps (assistant, integration_openai)
+  # Runs after nextcloud-setup so appstoreEnable=false doesn't block the upgrade.
+  # Safe to run even if apps are already installed (occ install is idempotent).
+  systemd.services.nextcloud-appstore-enable = {
+    description = "Enable Nextcloud app store and install non-bundled apps";
+    after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
+    requires = [ "nextcloud-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
+
+      # Enable app store in config
+      $OCC config:app:set appstore --key "enabled" --value "yes" || true
+
+      # Install non-bundled apps from store (idempotent)
+      $OCC app:install assistant || true
+      $OCC app:install integration_openai || true
+    '';
   };
 
   # ── Whitelist enforcement: enable everything on appsToKeep, disable anything
@@ -251,8 +302,8 @@ in
   # Idempotent — `app:enable`/`app:disable` are no-ops on the current state.
   systemd.services.nextcloud-disable-defaults = {
     description = "Enforce Nextcloud app whitelist (enable keep-list, disable rest)";
-    after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
-    requires = [ "nextcloud-setup.service" ];
+    after    = [ "nextcloud-appstore-enable.service" "phpfpm-nextcloud.service" ];
+    requires = [ "nextcloud-appstore-enable.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
