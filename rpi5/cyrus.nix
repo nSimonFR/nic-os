@@ -83,11 +83,13 @@ in
 
     enableUltracode = lib.mkOption {
       type = lib.types.bool;
-      default = false;
+      default = true;
       description = ''
         Enable ultracode mode for Claude Agent SDK sessions. When true, agents
-        will operate with expanded token budgets and additional capabilities
-        for comprehensive codebase analysis and refactoring tasks.
+        operate with expanded token budgets and additional capabilities for
+        comprehensive codebase analysis and refactoring tasks. Written into the
+        agent's .claude/settings.json by cyrus-rtk-hook.service. Enabled by
+        default for this (single-host) deployment.
       '';
     };
 
@@ -146,7 +148,16 @@ in
           };
         };
       }));
-      default = [];
+      # rpi5 repo set baked in here (this is a single-host bespoke module, like
+      # baseUrl / GITHUB_BOT_USERNAME above). nic-os is the catch-all: any Linear
+      # issue assigned to cyrus without a matching routing label / projectKey /
+      # teamKey / [repo=...] description tag lands there instead of triggering
+      # cyrus's "Which repository should I work in?" prompt. Other repos match
+      # via their name as the routing label.
+      default =
+        let mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
+        in [ (mkRepo "nic-os" // { catchAll = true; }) ]
+           ++ map mkRepo [ "amarre" "for-sure" "gleaner" "sure-nix" "terradex" "tiny-llm-gate" ];
       description = ''
         Repositories cyrus manages. Synced declaratively on activation by
         `cyrus-sync-repos.service`:
