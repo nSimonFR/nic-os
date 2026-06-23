@@ -185,7 +185,8 @@
       }
     ]
   },
-  "effortLevel": "xhigh",
+  "model": "opus",
+  "effortLevel": "high",
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true,
   "voiceEnabled": true,
