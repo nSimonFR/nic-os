@@ -271,6 +271,7 @@ in
 
   # ── Enable app store and install non-bundled apps (assistant, integration_openai)
   # Runs after nextcloud-setup so appstoreEnable=false doesn't block the upgrade.
+  # Must exit maintenance mode so downstream services (nextcloud-disable-defaults) can use occ.
   # Safe to run even if apps are already installed (occ install is idempotent).
   systemd.services.nextcloud-appstore-enable = {
     description = "Enable Nextcloud app store and install non-bundled apps";
@@ -284,10 +285,10 @@ in
     script = ''
       OCC=${config.services.nextcloud.occ}/bin/nextcloud-occ
 
-      # Enable app store in config
-      $OCC config:app:set appstore --key "enabled" --value "yes" || true
+      # Exit maintenance mode (set by nextcloud-setup) so later services can use occ
+      $OCC maintenance:mode --off
 
-      # Install non-bundled apps from store (idempotent)
+      # Install non-bundled apps from store (idempotent; automatically enables appstore as needed)
       $OCC app:install assistant || true
       $OCC app:install integration_openai || true
     '';
