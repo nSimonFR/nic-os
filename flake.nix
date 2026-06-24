@@ -69,7 +69,7 @@
     # requires rustc 1.95, but release-25.11 ships rustc 1.91 → build fails.
     # Unpin (drop the rev to track the branch again) once nixpkgs rustc >= 1.95.
     llmfit = {
-      url = "github:AlexsJones/llmfit/2365836fc55b6b5f96622b4fd40cfeaa1e7a5e2f";
+      url = "github:AlexsJones/llmfit/6a30b4c6bb3266eb88c51c6703e87f8cdbf795f4";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
