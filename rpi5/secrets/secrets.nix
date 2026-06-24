@@ -33,4 +33,6 @@ in {
   "cyrus-linear-client-secret.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "cyrus-linear-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "cyrus-github-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "terradex-convex-prod.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
+  "terradex-convex-dev.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
 }
