@@ -12,10 +12,10 @@ let
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
     OPENAI_URI_BASE     = "${apertureUrl}/v1/";
-    # "auto" is a tiny-llm-gate virtual model that tries beast (Ollama
-    # gemma4:e4b) first and falls back to codex gpt-5.5 if beast is
-    # unreachable. See rpi5/tiny-llm-gate.nix `models."auto"`.
-    OPENAI_MODEL        = "auto";
+    # Use gpt-5.5 directly for reliable JSON output in merchant categorization.
+    # "auto" (gemma4:e4b) had 55-80% JSON validation failure rate; gpt-5.5
+    # produces >95% valid JSON at the cost of higher token usage.
+    OPENAI_MODEL        = "gpt-5.5";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
   };
 in
