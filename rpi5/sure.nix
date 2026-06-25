@@ -17,6 +17,13 @@ let
     # produces >95% valid JSON at the cost of higher token usage.
     OPENAI_MODEL        = "gpt-5.5";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
+    # Sure defaults the context window to 2048 (Ollama small-model baseline).
+    # That leaves only 2048-512-256=1280 input tokens, but the auto_categorize
+    # prompt (full category list) needs ~1352 → "Fixed prompt tokens exceed
+    # context budget" and categories were NEVER assigned. gpt-5.5 has a large
+    # context, so raise to 8192 (→ 7424 input budget). See
+    # app/models/provider/openai.rb#context_window.
+    LLM_CONTEXT_WINDOW  = "8192";
   };
 in
 {
