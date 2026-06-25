@@ -18,8 +18,25 @@ alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit no
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
-# Claude Code: env vars are set by the Nix wrapper (claude.nix)
-alias claude='command claude --dangerously-skip-permissions --remote-control'
+# Claude Code: env vars are set by the Nix wrapper (claude.nix). This is a
+# function (not an alias) so it routes interactive sessions through
+# claude-auto-retry, which waits out a usage-cap window and auto-sends
+# `continue` once it resets. It must be a function because a same-named alias
+# would shadow it. The CLAUDE_AUTO_RETRY_ACTIVE guard mirrors the tool's own
+# wrapper: once inside an auto-retry-managed session, fall through to the raw
+# wrapped binary. Our standard flags are injected in both paths.
+# `claude-car-launcher` comes from the claudeAutoRetry package (home/claude.nix).
+claude() {
+  if [ "$CLAUDE_AUTO_RETRY_ACTIVE" = "1" ]; then
+    command claude --dangerously-skip-permissions --remote-control "$@"
+    return $?
+  fi
+  export CLAUDE_AUTO_RETRY_ACTIVE=1
+  claude-car-launcher --dangerously-skip-permissions --remote-control "$@"
+  local _e=$?
+  unset CLAUDE_AUTO_RETRY_ACTIVE
+  return $_e
+}
 cc()     { command claude --continue "$@"; }
 cr()     { command claude --resume "$@"; }
 
