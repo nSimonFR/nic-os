@@ -1,6 +1,14 @@
-{ pkgs, username, ... }:
+{ pkgs, username, telegramChatId, ... }:
 let
   sessionName = "claude-rc";
+  # claude-rc auto-resume: detect bridge sessions stalled at the Claude usage
+  # cap and resume them headlessly once the window resets. DEFAULT DRY-RUN —
+  # a real cap-denial event has not been observed in the wild yet (only
+  # `allowed_warning`), and resuming a live bridge session is unproven, so the
+  # service only logs/notifies the planned resume until a real cap validates
+  # detection. Flip to false to perform actual resumes.
+  autoResumeDryRun = true;
+  telegramTokenFile = "/run/agenix/telegram-bot-token";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
   credentialsFile = "/home/${username}/.claude/.credentials.json";
   # RuntimeDirectory places the file under /run (owned by the service user);
@@ -233,6 +241,39 @@ in
     timerConfig = {
       OnBootSec = "10min";
       OnUnitActiveSec = "30min";
+    };
+  };
+
+  # Auto-resume bridge sessions stalled at the Claude usage cap. Each tick
+  # scans active bridge sessions for a blocking rate_limit_event and, once the
+  # window resets, resumes the conversation (dry-run by default — see
+  # autoResumeDryRun above). Logic lives in ./claude-rc-autoresume.py.
+  systemd.services.claude-rc-autoresume = {
+    description = "Auto-resume rate-limited claude-rc bridge sessions after cap reset";
+    serviceConfig = {
+      Type = "oneshot";
+      User = username;
+      Group = "users";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./claude-rc-autoresume.py}";
+      Environment = [
+        "HOME=/home/${username}"
+        "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        "CRC_DRY_RUN=${if autoResumeDryRun then "1" else "0"}"
+        "CRC_SESSIONS_DIR=${sessionsDir}"
+        "CRC_PROJECTS_DIR=${projectsDir}"
+        "CRC_CLAUDE_BIN=/home/${username}/.local/state/nix/profiles/home-manager/home-path/bin/claude"
+        "CRC_TELEGRAM_TOKEN_FILE=${telegramTokenFile}"
+        "CRC_TELEGRAM_CHAT_ID=${toString telegramChatId}"
+      ];
+    };
+  };
+
+  systemd.timers.claude-rc-autoresume = {
+    description = "claude-rc auto-resume timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "3min";
+      OnUnitActiveSec = "5min";
     };
   };
 
