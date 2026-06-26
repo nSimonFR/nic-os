@@ -42,16 +42,12 @@ alias claude-direct='command claude --dangerously-skip-permissions --remote-cont
 #   pi                  → default (Qwen3.6-27B-4bit on Mac, gpt-5.5 elsewhere)
 #   pi gemma4:e4b       → beast Ollama
 #   pi gpt-5.5          → Codex subscription
-#   pi auto             → beast-first with codex fallback
-#
-# On Mac the default is Qwen3.6-27B-4bit — local MLX inference on this host,
-# reached through Aperture (registered in rpi5/tiny-llm-gate.nix as
-# provider=omlx). Requires `tailscale serve --bg --https=8443
-# http://127.0.0.1:8000` to be set up once on this Mac so the RPi5 can reach
-# oMLX. The serve config persists across reboots; check with
-# `tailscale serve status`.
+# Defaults to local MLX on Mac, codex elsewhere. Override with --model:
+#   pi "prompt"               → default model
+#   pi --model gemma4:e4b "prompt"  → override model
+#   pi --help / --resume      → flags just work
 if [[ "$OSTYPE" == darwin* ]]; then
-  pi() { command pi --provider aperture --model "${1:-Qwen3.6-27B-4bit}" "${@:2}"; }
+  pi() { command pi --provider aperture --model Qwen3.6-27B-4bit "$@"; }
 else
-  pi() { command pi --provider aperture --model "${1:-gpt-5.5}" "${@:2}"; }
+  pi() { command pi --provider aperture --model gpt-5.5 "$@"; }
 fi
