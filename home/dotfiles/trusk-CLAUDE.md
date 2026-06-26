@@ -127,37 +127,13 @@ const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER
 
 For out-of-band schema mutations, also insert the `<schema>._migrations` row (`{id,timestamp,name}`) so the next deploy's init container skips re-running it.
 
-## Datadog FM + dd-trace flaggingProvider — required env vars
-
-`tracer.init({ experimental:{ flaggingProvider:{ enabled:true }}})` is necessary but **not sufficient** — FM allocation matching uses Unified Service Tagging, so the pod env MUST set:
-
-```yaml
-- { name: DD_SERVICE, value: <service-name> } # match package.json + DD catalog
-- { name: DD_ENV, value: <env> } # production / staging
-- { name: DD_VERSION, value: "<x.y.z>" } # hardcoded today
-```
-
-Without them, FM returns `client_configs: []` and `@datadog/openfeature-node-server` times out after 30s (`Initialization timeout after 30000ms`) → crashloop. `DD_REMOTE_CONFIGURATION_ENABLED` defaults true in dd-trace 5.x; the agent key needs `remote_config_read`. No other prod service sets these yet (none use `flaggingProvider`); ref `identity-access-management/deployment/charts/production.yaml`. Flag eval also needs a configured FM **allocation rule** per flag — see project memory `reference_datadog_feature_management.md`.
-
 ## nestjs-sql LockService = TypeORM pool deadlock under concurrency (TEC-105)
 
 Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
 ## flagd kill-switch
 
-OpenFeature Operator on `trusk-staging-ts`; FeatureFlag CRDs in ns `flagd`, one per service (`<service>/deployment/flagd/<env>/featureflag.yaml`), with a companion ArgoCD app when the umbrella entry has `flagd: { enabled: true }`. Flip via `defaultVariant` (patches stick — the companion app has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
-
-```bash
-kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merge \
-  -p '{"spec":{"flagSpec":{"flags":{"<flag>":{"defaultVariant":"off","state":"ENABLED","variants":{"on":true,"off":false}}}}}}'
-# verify on any annotated pod's sidecar (~<1s):
-kubectl --context trusk-staging-ts -n <ns> exec <pod> -c <main> -- \
-  sh -c "wget -qO- --post-data='{}' --header='Content-Type: application/json' http://localhost:8016/ofrep/v1/evaluate/flags/<flag>"
-```
-
-## flagd kill-switch
-
-OpenFeature Operator on `trusk-staging-ts`; FeatureFlag CRDs in ns `flagd`, one per service (`<service>/deployment/flagd/<env>/featureflag.yaml`), with a companion ArgoCD app when the umbrella entry has `flagd: { enabled: true }`. Flip via `defaultVariant` (patches stick — the companion app has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
+OpenFeature Operator on staging (`trusk-staging-ts`) **and prod** (since trusk-k8s#1262). FeatureFlag CRDs in ns `flagd`, one per service in the **global** `<service>/deployment/flagd/` folder (per-env subfolders dropped — TEC-130). The companion ArgoCD app is wired by an allowlist in the `trusk-argo-project` umbrella values: `applications.flagd.servicesByEnv.<env>` (chart-museum, umbrella ≥0.16.1) — **`applications/*.yaml` carries NO `flagd:` block**. Add a new flagd service = add its name to `servicesByEnv.<env>` in chart-museum (do NOT flip `autoDetect` on for all: a companion's directory source at a missing `deployment/flagd` path is an ArgoCD ComparisonError, not a no-op — `allowEmpty` only covers existing-but-empty dirs). Flip a flag via `defaultVariant` (patches stick — the companion has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
 
 ```bash
 kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merge \
