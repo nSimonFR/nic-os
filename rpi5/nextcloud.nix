@@ -76,6 +76,19 @@ let
     "viewer"
     "workflowengine"
   ];
+
+  # Shared shape for the Nextcloud orchestration oneshots below.
+  mkServiceConfig = { description, syslog, after, before, requires, script }: {
+    inherit description after before requires script;
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      StandardOutput = "journal";
+      StandardError = "journal";
+      SyslogIdentifier = syslog;
+    };
+  };
 in
 {
   # ── PostgreSQL: nextcloud_production database + nextcloud_user ─────────────
@@ -245,20 +258,6 @@ in
   # the same app (see [[known_issue_nextcloud_extraapps_appstore_dup]]).
   # Order: cleanup → setup → appstore-enable → disable-defaults.
 
-  let
-    mkServiceConfig = { description, syslog, after, before, requires, script }: {
-      inherit description after before requires script;
-      wantedBy = [ "multi-user.target" ];
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        StandardOutput = "journal";
-        StandardError = "journal";
-        SyslogIdentifier = syslog;
-      };
-    };
-  in
-  {
     systemd.services.nextcloud-cleanup = mkServiceConfig {
       description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
       syslog = "nextcloud-cleanup";
@@ -318,7 +317,6 @@ in
         done
       '';
     };
-  }
 
   # ── Bind-mount /mnt/data/cloud → user-files dir ────────────────────────────
   # Tailscale Drive shares /mnt/data/cloud (see tailscale-serve.nix). Bind-
