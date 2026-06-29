@@ -42,11 +42,9 @@ let
     value.source = "${sharedSkillsDir}/${name}/SKILL.md";
   }) claudeSlashCommandSkills);
 
-  notifyScript = (import ../shared/telegram-notify.nix { inherit pkgs telegramChatId; }) {
+  notifyScript = (import ../shared/telegram-notify.nix { inherit pkgs; }) {
     name = "claude";
-    header = "🤖 *Claude Code*";
-    stateDir = "/tmp/claude-notify-state";
-    tokenPath = config.age.secrets.telegram-bot-token.path;
+    source = "Claude Code";
   };
   claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];

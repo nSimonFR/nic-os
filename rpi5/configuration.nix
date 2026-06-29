@@ -158,6 +158,7 @@ in
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
     ./claude-remote-control.nix
+    ./claude-notify-aggregator.nix
     # ./open-webui.nix # DISABLED 2026-06-15: venv crash-loop (ExecStart exit 126, "venv/bin/open-webui: Permission denied") since the disk incident. Re-enable + rebuild the venv (rm -rf /var/lib/open-webui/venv) to restore.
     ./homepage.nix
     ./backups.nix
