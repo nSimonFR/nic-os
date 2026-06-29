@@ -269,6 +269,9 @@
           pkgs = import nixpkgs {
             system = "x86_64-linux";
             config.allowUnfree = true;
+            # VSCode bundles electron-39.8.10, flagged insecure on 25.11
+            # (2026-06) nixpkgs. Permit it so the HM switch (notify hook) builds.
+            config.permittedInsecurePackages = [ "electron-39.8.10" ];
             overlays = [ rtkOverlay ];
           };
           extraSpecialArgs = {
