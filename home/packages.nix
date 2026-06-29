@@ -37,6 +37,7 @@
       gnused
       gnugrep
       gzip
+      unstablePkgs.infisical
       unstablePkgs.jujutsu
       jq
       k9s
