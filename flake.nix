@@ -65,12 +65,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Pinned to the 2026-06-10 rev: newer llmfit pulls sysinfo 0.39.3, which
-    # requires rustc 1.95, but release-25.11 ships rustc 1.91 → build fails.
-    # Unpin (drop the rev to track the branch again) once nixpkgs rustc >= 1.95.
+    # llmfit's sysinfo 0.39.3 dep raised its MSRV to rustc 1.95. Our pinned
+    # nixpkgs (release-25.11) only ships 1.91, so build llmfit against
+    # nixpkgs-unstable (rustc 1.95) — matching upstream, which targets
+    # nixos-unstable and bumped its own builder to 1.95. Switch back to
+    # `follows = "nixpkgs"` once release-25.11 (or successor) ships rustc >= 1.95.
     llmfit = {
-      url = "github:AlexsJones/llmfit/5e4dc7b1e578c5a2366a8f7b94220d68178e2fae";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:AlexsJones/llmfit";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
     # steipete CLI tools: bump with
