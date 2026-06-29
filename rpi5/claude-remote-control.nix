@@ -2,12 +2,14 @@
 let
   sessionName = "claude-rc";
   # claude-rc auto-resume: detect bridge sessions stalled at the Claude usage
-  # cap and resume them headlessly once the window resets. DEFAULT DRY-RUN —
-  # a real cap-denial event has not been observed in the wild yet (only
-  # `allowed_warning`), and resuming a live bridge session is unproven, so the
-  # service only logs/notifies the planned resume until a real cap validates
-  # detection. Flip to false to perform actual resumes.
-  autoResumeDryRun = true;
+  # cap and resume them headlessly once the window resets. LIVE — performs real
+  # `claude -p --resume` once a blocking rate_limit_event's window has reset.
+  # NOTE: the blocking status string is still inferred (CRC_BLOCKING_STATUSES
+  # defaults to `overuse_denied`); only `allowed_warning` has been seen in the
+  # wild, so until a real cap validates the trigger, a live resume may not fire.
+  # The watcher logs every rate_limit_event it sees, so the first real cap
+  # reveals the true status string. Set back to true to revert to log/notify.
+  autoResumeDryRun = false;
   telegramTokenFile = "/run/agenix/telegram-bot-token";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
   credentialsFile = "/home/${username}/.claude/.credentials.json";
