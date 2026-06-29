@@ -78,7 +78,7 @@ let
   ];
 
   # Shared shape for the Nextcloud orchestration oneshots below.
-  mkServiceConfig = { description, syslog, after, before, requires, script }: {
+  mkServiceConfig = { description, syslog, after, requires, script, before ? [ ] }: {
     inherit description after before requires script;
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
