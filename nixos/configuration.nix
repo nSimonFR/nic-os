@@ -625,6 +625,7 @@ in
 
   virtualisation.docker = {
     enable = true;
+    package = pkgs.docker_29; # docker_28 unmaintained/insecure on 25.11 nixpkgs (2026-06)
   };
 
   # Libvirt/QEMU for Tobii Eye Tracker VM passthrough
