@@ -213,12 +213,6 @@ class OpenRGBSink:
         perled = perled or {}
         r, g, b = rgb
         global_col = RGBColor(r, g, b)
-        # ITU-R BT.601 luma — gates the GPU's SINGLE COLOR zone (the FE
-        # GeForce side logo can only do on/off in hardware).
-        lum = (299*r + 587*g + 114*b) // 1000
-        on  = RGBColor(255, 255, 255)
-        off = RGBColor(0, 0, 0)
-        gate = on if lum >= self.gpu_logo_threshold else off
         dead = []
         for dev in self.devices:
             plan = self._zone_plan.get(id(dev))
@@ -232,8 +226,9 @@ class OpenRGBSink:
                 if is_perled and key in perled and len(perled[key]) == n:
                     colors.extend(perled[key])
                 elif gpu_single and 'SINGLE' in zname.upper():
-                    gv = (255,255,255) if gate is on else (0,0,0)
-                    colors.extend([gv] * n)
+                    # GeForce RTX side logo forced off — keep it dark
+                    # regardless of scene luma (gpu_logo_threshold ignored).
+                    colors.extend([(0, 0, 0)] * n)
                 else:
                     colors.extend([(r, g, b)] * n)
             if not colors: continue
