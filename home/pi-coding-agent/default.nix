@@ -21,11 +21,9 @@ let
     '';
   };
 
-  notifyScript = (import ../../shared/telegram-notify.nix { inherit pkgs telegramChatId; }) {
+  notifyScript = (import ../../shared/telegram-notify.nix { inherit pkgs; }) {
     name = "pi";
-    header = "🤖 *Pi Coding Agent*";
-    stateDir = "/tmp/pi-notify-state";
-    tokenPath = config.age.secrets.telegram-bot-token.path;
+    source = "Pi Coding Agent";
   };
 in
 {
