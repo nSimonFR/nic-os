@@ -20,6 +20,7 @@
     "koekeishiya/formulae"
     "dbt-labs/dbt"
     "auth0/auth0-cli"
+    "infisical/get-cli"
     "Sikarugir-App/sikarugir"
     "RhetTbull/osxphotos"
     {
@@ -33,6 +34,7 @@
     "cookcli"
     "dbt-postgres"
     "helm"
+    "infisical"
     "omlx"
     "pinentry-touchid"
     "RhetTbull/osxphotos/osxphotos"
