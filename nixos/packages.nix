@@ -36,7 +36,7 @@ in
     libnotify
     unstablePkgs.code-cursor
     dconf
-    docker
+    docker_29
     dualsensectl
     dunst
     ghostty
