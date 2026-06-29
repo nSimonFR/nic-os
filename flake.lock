@@ -590,17 +590,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1781096216,
-        "narHash": "sha256-mjh6aX+6B9pk/mciRqauO2RgkCH7VONBt71V0CqHHNw=",
+        "lastModified": 1782739640,
+        "narHash": "sha256-8f4O+hii6kjXk8l+FH2JqKnNvIPqSqCUvN3z3rJjp9c=",
         "owner": "AlexsJones",
         "repo": "llmfit",
-        "rev": "2365836fc55b6b5f96622b4fd40cfeaa1e7a5e2f",
+        "rev": "5e4dc7b1e578c5a2366a8f7b94220d68178e2fae",
         "type": "github"
       },
       "original": {
         "owner": "AlexsJones",
         "repo": "llmfit",
-        "rev": "2365836fc55b6b5f96622b4fd40cfeaa1e7a5e2f",
+        "rev": "5e4dc7b1e578c5a2366a8f7b94220d68178e2fae",
         "type": "github"
       }
     },
