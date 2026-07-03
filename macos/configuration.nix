@@ -121,4 +121,12 @@
   homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs inputs; };
 
+  # Homebrew 6 refuses to load formulae/casks from non-official taps unless they
+  # are trusted (HOMEBREW_REQUIRE_TAP_TRUST). We deliberately use several third-party
+  # taps (dbt-labs, jorgelbg, jundot, rhettbull, auth0, sikarugir, …), so the
+  # `darwin-rebuild` `brew bundle` step fails on them. Disable the requirement
+  # system-wide via Homebrew's env file — read from /etc (which is set up before the
+  # bundle runs) on every brew invocation, independent of HOME/XDG.
+  environment.etc."homebrew/brew.env".text = "HOMEBREW_NO_REQUIRE_TAP_TRUST=1\n";
+
 }
