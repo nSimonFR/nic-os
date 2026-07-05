@@ -121,10 +121,14 @@ let
       ];
       use_markdown_v2 = false;
       streaming.enabled = true;
-      # In group chats, only respond when the bot is @mentioned (otherwise it
-      # answers every message). `require_mention_in_groups` is silently
-      # ignored by picoclaw's schema — the real key is `group_trigger.mention_only`.
-      group_trigger.mention_only = true;
+      # Respond to every message in group chats, not only when @mentioned.
+      # `mention_only = false` is picoclaw's permissive default; the only group
+      # the bot is in is "nSimon, ServaTilis and Alfie", so this makes it reply
+      # to all of Alfie's messages there. (`require_mention_in_groups` is
+      # silently ignored by picoclaw's schema — the real key is
+      # `group_trigger.mention_only`.) Setting is global per channel: picoclaw
+      # has no per-chat granularity.
+      group_trigger.mention_only = false;
     };
 
     tools = {
