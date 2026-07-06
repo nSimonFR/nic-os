@@ -21,6 +21,28 @@ let
     };
   };
 
+  # ha-intratone: reverse-engineered integration for the Intratone (Cogelec)
+  # cloud intercom. Goal here is on-demand remote door open via the "Clé mobile"
+  # / mobipass access locks (pure REST, POST /api/access/open/clemobil) — the
+  # visiophone audio/video path (go2rtc + ffmpeg) is left off (video opt-in,
+  # default false). Python deps are pulled from HA's own (unstable-overridden)
+  # python set so they match the ABI of the HA binary.
+  haIntratone = pkgs.buildHomeAssistantComponent rec {
+    owner = "GuiHash";
+    domain = "intratone";
+    version = "0.3.2";
+    src = pkgs.fetchFromGitHub {
+      owner = "GuiHash";
+      repo = "ha-intratone";
+      rev = "v${version}";
+      hash = "sha256-BkvdaY1oacmZM+bqTzxBf36G1jTkYK0wbxJRb4oIonY=";
+    };
+    dependencies = with config.services.home-assistant.package.python3Packages; [
+      firebase-messaging
+      voip-utils
+    ];
+  };
+
   # ha-linky: TypeScript/Node.js Linky → Home Assistant bridge.
   # config.ts hardcodes /data/options.json; the service uses BindReadOnlyPaths
   # to mount /etc/home-assistant/ha-linky at /data inside the unit's namespace.
@@ -59,7 +81,7 @@ in
     enable = true;
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
-    customComponents = [ haVoltalis ];
+    customComponents = [ haVoltalis haIntratone ];
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
       "homekit"    # HomeKit bridge — uses zeroconf/mDNS
