@@ -39,7 +39,11 @@ let
     "trusk-github"      = { type = "http"; url = "https://ai-gitnexus-mcp.tail271d7a.ts.net/mcp"; };
     "trusk-context7"    = { type = "sse";  url = "https://ai-supergateway-context7.tail271d7a.ts.net/sse"; };
     "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
-    firecrawl           = { type = "http"; url = "https://mcp.firecrawl.dev/fc-c6a062b4ff1849d3991eeb116c0632a4/v2/mcp"; };
+    # Self-hosted Firecrawl on the work tailnet (staging). Migrated off the
+    # public cloud (mcp.firecrawl.dev) per Tristan's 2026-07-06 announcement:
+    # no rate limiting, query freely. Only reachable over the work Tailscale
+    # tunnel — same reachability caveat as the trusk-* gateways above.
+    firecrawl           = { type = "http"; url = "https://ai-firecrawl-mcp.tail271d7a.ts.net/mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
