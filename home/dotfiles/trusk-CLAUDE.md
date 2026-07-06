@@ -106,6 +106,29 @@ Always brace `if` bodies, even one-liners. No `if (cond) doThing();`. All Trusk 
 
 `targetRevision` doesn't auto-bump after a release. **Push directly to `master`** (Nicolas 2026-06-03: PRs are needless churn + branch protection blocks non-admin merges anyway). Message: `Chore(Staging): bump <service> to <version>` / `Chore(Production): …`; diff is one line in `applications/<env>.yaml`. If a PR was already opened: `gh pr merge <n> --rebase --delete-branch --admin` (squash disabled here).
 
+### release-to-\<env\> — Renovate batch PRs (for a coordinated multi-service release)
+
+For a whole batch (not a one-off bump), Renovate keeps three long-lived **grouped** PRs, one per env, that bump every service's `targetRevision` to its newest **git tag**: branches `renovate/release-to-staging` (`applications/staging.yaml`), `renovate/release-to-preprod`, `renovate/release-to-production`. Author is the hosted **`app/renovate`** GitHub App — **there is NO in-repo renovate workflow** to dispatch. Config = `renovate.json` (customManagers regex on `repoURL`+`targetRevision`; staging/preprod use datasource `git-tags`, production uses `custom.localstaging` so prod can only go to the rev already on staging). Reviewers: staging/preprod = `chapter_qa`+`team_product`, prod = `managers`+`team_product`. So: service releases → new tag → next Renovate scan folds it into that env's PR. PR number isn't stable (Renovate can recreate) — find it by branch, e.g. `gh pr list --repo trusk-official/trusk-applications --head renovate/release-to-staging`.
+
+**Refresh now (don't wait for Renovate's schedule)** = tick the rebase checkbox in the PR body (`- [ ] <!-- rebase-check -->` → `- [x]`); Renovate rebases onto master + refreshes the diff within ~1-3 min (its own commit):
+
+```bash
+unset GH_TOKEN && cd ~/MyDocuments/TRUSK/trusk-applications
+PR=$(gh pr list --repo trusk-official/trusk-applications --head renovate/release-to-staging --json number --jq '.[0].number')
+gh pr view "$PR" --repo trusk-official/trusk-applications --json body --jq .body \
+ | sed 's/- \[ \] <!-- rebase-check -->/- [x] <!-- rebase-check -->/' \
+ | gh pr edit "$PR" --repo trusk-official/trusk-applications --body-file -
+# then poll until app/renovate pushes a fresh commit, re-read `gh pr diff "$PR"`
+```
+
+Only refresh **after** the services you want have actually released (their tags exist) — a service whose tag isn't cut yet simply won't appear in the diff. Then admin-merge (`gh pr merge "$PR" --repo … --rebase --admin` — squash disabled here). Merging = ArgoCD reconciles those services to the new revs on the next sweep.
+
+**Sync windows gate the actual rollout.** The staging/preprod/prod AppProjects carry ArgoCD **sync windows** (deny weekdays 20:00–07:00 + **all weekend** Sat 07:00→Mon 07:00 Europe/Paris; allow weekdays 07:00–20:00). Outside the allow window, merging the renovate PR changes nothing until it opens — `staging-gitops` sits `OutOfSync` with `operationState.message = "Sync operation blocked by sync window"`, and the child `<svc>-staging` apps keep the old `targetRevision`. `manualSync:true` permits manual overrides, but a raw `kubectl patch application … -p '{"operation":{"sync":{…}}}'` is **not** treated as manual and stays blocked — force it via the ArgoCD **UI** (`staging-argocd.trusk.com`) or `argocd app sync`, else just wait for the window. Independently, staging is **downscaled to 0 replicas off-hours** (a `downscaling-staging` app), so off-hours a service is both un-synced and scaled to 0. `state-status-staging` is an app-of-apps child rendered by `staging-gitops` (targetRevision comes from staging.yaml as a param), so the **parent** must sync first to propagate a bump.
+
+## Migration footgun — never add steps to an already-applied migration
+
+TypeORM/knex track migrations by name+timestamp. If a migration already ran (its row is in `_migrations`) and you later **add steps to that same file**, every env that recorded it **skips the new steps** → silent schema drift. Real case (state-status, 2026-07): the `label→status_label` / `detail→status_detail` rename was folded into the already-run `1782` split-drop-code migration. Staging had run 1782 **pre-rename** (the manual "run the migration in staging" step during review) → the 1.33.x redeploy saw 1782 in `_migrations` and skipped it → columns stayed `label`/`detail` while the entity mapped `status_label`/`status_detail` → **every write threw `42703 column status_label does not exist`** (TypeORM's post-insert entity reload). CI didn't catch it (CI builds the schema fresh from the full current migration; only envs with the stale recorded row drift). **Fix = a NEW idempotent migration** (rename only `IF EXISTS old_col AND NOT EXISTS new_col`, via a `DO $$ … $$` block) — never re-edit the applied one. Prod is safe if it never ran the intermediate version (it runs the complete migration once); the idempotent follow-up protects both.
+
 ## kubectl contexts
 
 - **Staging** — `trusk-staging-ts` (Tailscale operator), works directly.
