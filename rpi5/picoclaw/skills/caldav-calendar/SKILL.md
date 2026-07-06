@@ -7,7 +7,7 @@ metadata: {"openclaw":{"emoji":"📅","os":["linux"],"requires":{"bins":["vdirsy
 
 # CalDAV Calendar (vdirsyncer + khal)
 
-> **PERSONAL calendar only.** This skill is wired to the user's Nextcloud (`https://rpi5.gate-mintaka.ts.net:8085`). Work/Trusk calendar access goes through the `gog` skill instead.
+> **PERSONAL calendar only.** This skill is wired to the user's Nextcloud (`https://rpi5.gate-mintaka.ts.net/nextcloud`). Work/Trusk calendar access goes through the `gog` skill instead.
 
 **vdirsyncer** syncs CalDAV calendars to local `.ics` files. **khal** reads and writes them. On the rpi5 both binaries come from `home.packages` and the configs (`~/.config/vdirsyncer/config`, `~/.config/khal/config`) are Nix-managed in `rpi5/picoclaw/picoclaw.nix`; the Nextcloud password is read at sync time from `/run/agenix/nextcloud-homepage-password` via vdirsyncer's `password.fetch`.
 
@@ -111,4 +111,4 @@ Useful paths:
 - Local cache: `~/.local/share/vdirsyncer/calendars/<calendar>/*.ics`
 - vdirsyncer status: `~/.local/share/vdirsyncer/status/`
 - khal db: `~/.local/share/khal/khal.db`
-- Source of truth: `https://rpi5.gate-mintaka.ts.net:8085/remote.php/dav/`
+- Source of truth: `https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/`

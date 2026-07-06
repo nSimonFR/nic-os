@@ -23,12 +23,17 @@ let
   # which would otherwise keep idle-stoppable backends pinned in memory.
   mkTile = e:
     let
+      # Port 443 is the bare-URL funnel (Front Proxy path-mux) — omit the :port
+      # suffix and append the entry's path (e.g. /affine, /nextcloud) if it has one.
+      url = "https://${tailnetFqdn}"
+            + lib.optionalString (e.port != 443) ":${toString e.port}"
+            + (e.path or "");
       base = {
         icon = e.icon;
-        href = "https://${tailnetFqdn}:${toString e.port}";
+        href = url;
         inherit (e) description;
       } // lib.optionalAttrs (! (e.noSiteMonitor or false)) {
-        siteMonitor = "https://${tailnetFqdn}:${toString e.port}";
+        siteMonitor = url;
       };
       widgetAttr = if e ? widget then { inherit (e) widget; } else {};
     in base // widgetAttr;

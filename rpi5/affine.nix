@@ -208,7 +208,13 @@ in
       HOME = dataDir;
       AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
-      AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}";
+      # Served under /affine on the shared 443 Funnel (see front-proxy.nix). This sets
+      # config `server.path`, which AFFiNE applies as a NestJS global prefix — so ALL
+      # routes (incl. /graphql, /api/*) remount under /affine. Internal callers on :13010
+      # must include the prefix too (see affine-mcp.nix AFFINE_BASE_URL, and the homepage
+      # widget url in services-registry.nix).
+      AFFINE_SERVER_SUB_PATH = "/affine";
+      AFFINE_SERVER_EXTERNAL_URL = "https://${tailnetFqdn}/affine";
       DATABASE_URL = dbUrl;
       REDIS_SERVER_HOST = redisHost;
       REDIS_SERVER_PORT = toString redisPort;
@@ -239,7 +245,7 @@ in
       # endpoints via DI, so link-preview/image-proxy requests go to
       # the cloud worker instead of our local server.
       CLOUD="https://affine-worker.toeverything.workers.dev"
-      SELF="https://${tailnetFqdn}"
+      SELF="https://${tailnetFqdn}/affine"
       for f in ${appDir}/static/js/*.js; do
         if grep -q "$CLOUD" "$f" 2>/dev/null; then
           ${pkgs.gnused}/bin/sed -i "s|$CLOUD|$SELF|g" "$f"
@@ -252,6 +258,15 @@ in
       # from "reject if neither matches" to "reject only if a
       # header is present but doesn't match".
       ${pkgs.gnused}/bin/sed -i 's#if(!n&&!a)throw this.logger.error("Invalid Origin","ERROR"#if(!n\&\&!a\&\&(o||i))throw this.logger.error("Invalid Origin","ERROR"#' ${appDir}/dist/main.js
+
+      # NOTE on the /affine sub-path: AFFINE_SERVER_SUB_PATH=/affine moves the
+      # backend (API + assets, served under /affine) and the client router base,
+      # but the self-hosted build still emits root-relative asset URLs (its
+      # frontend publicPath is baked to the CDN and rewritten to "/" at serve
+      # time through several points — not cleanly overridable). So the web UI
+      # requests /js, /styles*.css at the domain root. front-proxy.nix absorbs
+      # this with a catch-all that maps those root asset requests onto the
+      # /affine backend, which is robust across AFFiNE upgrades.
 
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';

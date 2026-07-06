@@ -10,13 +10,19 @@
 # instead of `tailscale serve` (tailnet-only). Display order in homepage
 # follows list order regardless of funnel flag.
 #
+# `proxied = true` marks an entry that is fronted by the nginx path-mux
+# (see front-proxy.nix): tailscale-serve.nix emits NO serve/funnel command
+# for it (the single Front Proxy funnel on 443 fronts it instead), but
+# homepage still renders its tile. Such entries carry `path` (e.g. "/affine")
+# so the homepage tile links to https://<host><path>.
+#
 # Widget: optional homepage widget config (type + extra fields).
 #   Secrets use {{HOMEPAGE_VAR_NAME}} syntax resolved from environmentFile.
 { }:
 {
   entries = [
     # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Karakeep → Home Assistant
-    { port = 8085;  backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)";
+    { port = 443;   backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)"; proxied = true; path = "/nextcloud";
       widget = {
         type = "nextcloud";
         url = "http://127.0.0.1:8091";
@@ -24,10 +30,10 @@
         password = "{{HOMEPAGE_VAR_NEXTCLOUD_PASSWORD}}";
         fields = [ "freespace" "activeusers" "numfiles" "numshares" ];
       }; }
-    { port = 443;   backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; funnel = true;
+    { port = 443;   backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; proxied = true; path = "/affine";
       widget = {
         type = "customapi";
-        url = "http://127.0.0.1:13010/graphql";
+        url = "http://127.0.0.1:13010/affine/graphql";
         method = "POST";
         headers = { "Content-Type" = "application/json"; "Authorization" = "Bearer {{HOMEPAGE_VAR_AFFINE_TOKEN}}"; };
         requestBody = { query = "{ workspaces { memberCount blobsSize docs(pagination: {first: 0}) { totalCount } } }"; };
@@ -131,6 +137,9 @@
     { port = 8443;  backend = "http://127.0.0.1:3456";  name = "Cyrus";          icon = "mdi-robot-outline";  category = "Backend"; description = "Linear coding-agent (cyrusagents/cyrus)"; funnel = true; }
 
     # Infrastructure — not shown on dashboard
+    # Single public 443 Funnel → nginx path-mux (front-proxy.nix), which routes
+    # /affine → AFFiNE and /nextcloud → Nextcloud (both `proxied = true` above).
+    { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/affine, /nextcloud)"; funnel = true; }
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
     { port = 8088;  backend = "http://127.0.0.1:8088";  name = "Claude Notify";  icon = "mdi-bell";           category = "Infrastructure"; description = "Debounced agent → Telegram aggregator"; noSiteMonitor = true; }
   ];
