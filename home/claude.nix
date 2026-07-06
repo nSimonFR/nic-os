@@ -156,12 +156,22 @@ in
     # claude-auto-retry config (read at runtime by the monitor). marginSeconds
     # waits a bit past the parsed reset; fallbackWaitHours bounds the wait when
     # no reset time is parseable; retryMessage is what's sent via send-keys.
+    # customPatterns: the vendored 0.2.2 LIMIT_PATTERNS don't match Claude
+    # Code's current hard-cap wording "You've hit your session limit · resets
+    # 6pm" (the word "session"/"weekly" sits between "your" and "limit", which
+    # the built-in `your\s*limit` regex rejects), so a real cap was never
+    # detected and never auto-resumed. These custom patterns are matched
+    # against the full captured pane text and cover the session/weekly wording.
     ".claude-auto-retry.json".text = builtins.toJSON {
       maxRetries = 5;
       pollIntervalSeconds = 5;
       marginSeconds = 60;
       fallbackWaitHours = 5;
       retryMessage = "continue";
+      customPatterns = [
+        "hit your (session|weekly|usage) limit"
+        "(session|weekly) limit reached"
+      ];
     };
 
     # PostToolUse hook: mirror writes under
