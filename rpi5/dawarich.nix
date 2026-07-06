@@ -1,12 +1,15 @@
 # dawarich.nix — self-hosted location history (Google Timeline alternative)
 # Uses the native NixOS module (services.dawarich) — Rails + Sidekiq + PostGIS + Redis
-{ config, pkgs, lib, tailnetFqdn, redisHost, redisPort, ... }:
+{ config, pkgs, lib, unstablePkgs, tailnetFqdn, redisHost, redisPort, ... }:
 let
   internalPort = 13900;
 in
 {
   services.dawarich = {
     enable = true;
+    # release-25.11's dawarich is frozen at 1.7.5; track the unstable package
+    # for the latest release (mirrors immich in rpi5/immich.nix).
+    package = unstablePkgs.dawarich;
     localDomain = tailnetFqdn;
     webPort = internalPort;
     configureNginx = false; # Tailscale Serve handles HTTPS
