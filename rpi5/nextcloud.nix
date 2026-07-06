@@ -11,11 +11,11 @@
 # password set via a oneshot ALTER USER service, secrets via agenix.
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
-  # Internal nginx port. Tailscale Serve exposes Nextcloud at :8085 on the
-  # tailnet (the slot freed by filebrowser — see services-registry.nix) and
-  # forwards to this port on 127.0.0.1.
+  # Internal nginx port. Nextcloud is served at https://<tailnetFqdn>/nextcloud on the
+  # public 443 Tailscale Funnel via the nginx path-mux (front-proxy.nix), which strips
+  # the /nextcloud prefix and forwards to this port on 127.0.0.1. `overwritewebroot`
+  # below makes Nextcloud generate its links under /nextcloud to match.
   port = 8091;
-  servePort = 8085; # external tailnet port (used in trusted_domains)
 
   # Datadir on the data HDD. Nextcloud manages this tree exclusively:
   # per-user files at /mnt/data/nextcloud/data/<user>/files/, plus internal
@@ -186,10 +186,13 @@ in
 
     # Default settings; the module merges these into config.php.
     settings = {
-      trusted_domains   = [ tailnetFqdn "${tailnetFqdn}:${toString servePort}" ];
+      trusted_domains   = [ tailnetFqdn ];
       trusted_proxies   = [ "127.0.0.1" ];
       overwriteprotocol = "https";
-      overwritehost     = "${tailnetFqdn}:${toString servePort}";
+      overwritehost     = tailnetFqdn; # bare host on the 443 Funnel (no port suffix)
+      # Served behind the nginx path-mux at /nextcloud (front-proxy.nix strips the
+      # prefix); overwritewebroot makes Nextcloud regenerate its links under /nextcloud.
+      overwritewebroot  = "/nextcloud";
       overwritecondaddr = "^127\\.0\\.0\\.1$";
 
       # Default phone region for unparsed numbers in addressbooks (Contacts app

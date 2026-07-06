@@ -147,6 +147,7 @@ in
     ./paperless.nix
     ./karakeep.nix
     ./nextcloud.nix
+    ./front-proxy.nix
     ./sumeria-mitm.nix
     ./hydroxide.nix
     ./vaultwarden.nix

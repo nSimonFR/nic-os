@@ -5,8 +5,13 @@ let
   ts = "${pkgs.tailscale}/bin/tailscale";
 
   isFunnel  = e: e ? funnel && e.funnel;
-  serveEntries  = builtins.filter (e: !(isFunnel e)) registry.entries;
-  funnelEntries = builtins.filter isFunnel registry.entries;
+  # `proxied` entries are fronted by the nginx path-mux (front-proxy.nix) behind the
+  # single Front Proxy funnel on 443 — they must NOT get their own serve/funnel command
+  # (a second bind on 443 would conflict). They still appear as homepage tiles.
+  isProxied = e: e ? proxied && e.proxied;
+  directEntries = builtins.filter (e: !(isProxied e)) registry.entries;
+  serveEntries  = builtins.filter (e: !(isFunnel e)) directEntries;
+  funnelEntries = builtins.filter isFunnel directEntries;
 
   serveUp   = lib.concatMapStringsSep "\n  " (e: "${ts} serve   --bg --https=${toString e.port} ${e.backend}") serveEntries;
   funnelUp  = lib.concatMapStringsSep "\n  " (e: "${ts} funnel  --bg --https=${toString e.port} ${e.backend}") funnelEntries;

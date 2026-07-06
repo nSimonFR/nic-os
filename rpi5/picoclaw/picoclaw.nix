@@ -315,7 +315,7 @@ in
 
     [storage nc_remote]
     type = "caldav"
-    url = "https://rpi5.gate-mintaka.ts.net:8085/remote.php/dav/"
+    url = "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/"
     username = "nsimon"
     password.fetch = ["command", "cat", "/run/agenix/nextcloud-homepage-password"]
 
