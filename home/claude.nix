@@ -77,10 +77,14 @@ let
   # regardless of the caller's environment.
   claudeAutoRetry = pkgs.stdenvNoCC.mkDerivation rec {
     pname = "claude-auto-retry";
-    version = "0.2.2";
+    # >=0.4 detects Claude Code's current hard-cap wording "You've hit your
+    # session/weekly limit" (0.2.2's LIMIT_PATTERNS required `your`/`the`
+    # adjacent to `limit`, so the qualifier word broke detection and caps were
+    # never auto-resumed). Fixed upstream, so no local pattern override needed.
+    version = "0.5.1";
     src = pkgs.fetchurl {
       url = "https://registry.npmjs.org/claude-auto-retry/-/claude-auto-retry-${version}.tgz";
-      hash = "sha256-HnyMESM6LxzbexWE+vB0b/iFy8ywsaT43BvPRBaMajw=";
+      hash = "sha256-tH4XxtjlTgvX5Ovp3d/U26m2uMjd9BozFmC6clMlt5s=";
     };
     nativeBuildInputs = [ pkgs.makeWrapper ];
     dontConfigure = true;
@@ -156,22 +160,12 @@ in
     # claude-auto-retry config (read at runtime by the monitor). marginSeconds
     # waits a bit past the parsed reset; fallbackWaitHours bounds the wait when
     # no reset time is parseable; retryMessage is what's sent via send-keys.
-    # customPatterns: the vendored 0.2.2 LIMIT_PATTERNS don't match Claude
-    # Code's current hard-cap wording "You've hit your session limit · resets
-    # 6pm" (the word "session"/"weekly" sits between "your" and "limit", which
-    # the built-in `your\s*limit` regex rejects), so a real cap was never
-    # detected and never auto-resumed. These custom patterns are matched
-    # against the full captured pane text and cover the session/weekly wording.
     ".claude-auto-retry.json".text = builtins.toJSON {
       maxRetries = 5;
       pollIntervalSeconds = 5;
       marginSeconds = 60;
       fallbackWaitHours = 5;
       retryMessage = "continue";
-      customPatterns = [
-        "hit your (session|weekly|usage) limit"
-        "(session|weekly) limit reached"
-      ];
     };
 
     # PostToolUse hook: mirror writes under
