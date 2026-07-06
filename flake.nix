@@ -65,16 +65,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # llmfit's sysinfo 0.39.3 dep raised its MSRV to rustc 1.95. Our pinned
-    # nixpkgs (release-25.11) only ships 1.91, so build llmfit against
-    # nixpkgs-unstable (rustc 1.95) — matching upstream, which targets
-    # nixos-unstable and bumped its own builder to 1.95. Switch back to
-    # `follows = "nixpkgs"` once release-25.11 (or successor) ships rustc >= 1.95.
-    llmfit = {
-      url = "github:AlexsJones/llmfit";
-      inputs.nixpkgs.follows = "nixpkgs-unstable";
-    };
-
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {

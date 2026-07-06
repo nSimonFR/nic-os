@@ -78,9 +78,6 @@
       zoxide
       zsh
 
-      # LLM-to-hardware matching CLI
-      inputs.llmfit.packages.${pkgs.stdenv.hostPlatform.system}.default
-
     ]
     ++ lib.optionals devSetup [
       # Dev tools (heavy packages, only on dev machines)
