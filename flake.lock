@@ -940,11 +940,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1782820753,
-        "narHash": "sha256-Q7AiEa2VF8ISDW/LKfByrvrv9qQCM3SwNvbNYoUV37o=",
+        "lastModified": 1783331663,
+        "narHash": "sha256-33abjqbgkWNTn4XVUsSlfUday6Pt7lDg9LGtKx5GcdQ=",
         "owner": "nSimonFR",
         "repo": "sure-nix",
-        "rev": "782140f9150938bb225cc67997bb503f77cbddc6",
+        "rev": "603cbae0cb519ce95648d78fdb1e780ef4d04f00",
         "type": "github"
       },
       "original": {
