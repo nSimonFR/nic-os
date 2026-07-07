@@ -42,10 +42,6 @@ let
     value.source = "${sharedSkillsDir}/${name}/SKILL.md";
   }) claudeSlashCommandSkills);
 
-  notifyScript = (import ../shared/telegram-notify.nix { inherit pkgs; }) {
-    name = "claude";
-    source = "Claude Code";
-  };
   claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
     # The vendored vendor/ripgrep/arm64-linux/rg in claude-code's npm package
@@ -141,10 +137,13 @@ in
     "MyDocuments/TRUSK/CLAUDE.md".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
 
-    # Stable path for the Telegram notify hook so settings.json doesn't
-    # need to embed a Nix store path that changes on rebuild.
-    ".claude/hooks/telegram-notify" = {
-      source = notifyScript;
+    # Unified Telegram notify gate (see home/scripts/claude-notify.sh). Wired
+    # under three hook events in claude-settings.json: UserPromptSubmit
+    # (`activity`), Notification (`notification`, idle-gated), and
+    # PostToolUse/PushNotification (`push`, always through). Shared with the
+    # remote-control bridge via the ~/.claude-rc/hooks symlink.
+    ".claude/hooks/claude-notify" = {
+      source = ./scripts/claude-notify.sh;
       executable = true;
     };
 

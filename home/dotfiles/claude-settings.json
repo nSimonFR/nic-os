@@ -144,13 +144,35 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$HOME/.claude/hooks/telegram-notify",
+            "command": "$HOME/.claude/hooks/claude-notify notification",
             "timeout": 10
           }
         ]
       }
     ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/claude-notify activity",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
+      {
+        "matcher": "PushNotification",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "$HOME/.claude/hooks/claude-notify push",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "Write|Edit",
         "hooks": [

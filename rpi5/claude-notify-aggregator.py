@@ -61,15 +61,24 @@ def _format_line(host, project, message):
     return f"📁 {label}: {message or 'waiting for input'}"
 
 
-def add_event(host, project, message):
+def add_event(host, project, message, immediate=False):
     global _first_ts, _last_ts
     line = _format_line(host, project, message)
     now = time.time()
+    snapshot = None
     with _lock:
         if not _pending:
             _first_ts = now
         _pending[line] = _pending.get(line, 0) + 1
         _last_ts = now
+        # A PushNotification is an explicit "interrupt me now" from the agent,
+        # so flush the whole pending batch immediately instead of waiting out
+        # the quiet window. Snapshot under the lock, send outside it.
+        if immediate:
+            snapshot = dict(_pending)
+            _pending.clear()
+    if snapshot is not None:
+        _send(_build_text(snapshot))
 
 
 def _send(text):
@@ -141,6 +150,7 @@ class Handler(BaseHTTPRequestHandler):
             str(payload.get("host", "")),
             str(payload.get("project", "")),
             str(payload.get("message", "")),
+            immediate=bool(payload.get("immediate", False)),
         )
         self._respond()
 
