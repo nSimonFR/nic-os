@@ -216,7 +216,8 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     if total_memories:
         caption = f"📸 {french_date(datetime.now())}"
         if per_year:
-            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
+            # Newest year first — most recent memories read at the top.
+            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year, reverse=True))
     else:
         caption = ""
 
