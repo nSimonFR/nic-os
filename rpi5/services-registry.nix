@@ -45,7 +45,7 @@
           { field = "data.workspaces.0.blobsSize"; label = "Storage"; format = "bytes"; }
         ];
       }; }
-    { port = 3333;  backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; noSiteMonitor = true;
+    { port = 443;   backend = "http://127.0.0.1:13334"; name = "Sure";           icon = "maybe.svg";          category = "Apps"; description = "Personal finance"; noSiteMonitor = true; proxied = true; path = "/sure";
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:8087/sure";
@@ -101,10 +101,19 @@
         ];
       }; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
+      # Routed through the homepage-stats aggregator (:8087, daily-cached) like the
+      # other customapi tiles rather than the native `homeassistant` widget that
+      # polls HA directly. Counts can be up to the aggregator's REFRESH_INTERVAL
+      # (24h) stale — acceptable for a glanceable tile; the aggregator holds the
+      # HA token, so no key is exposed here.
       widget = {
-        type = "homeassistant";
-        url = "http://127.0.0.1:8123";
-        key = "{{HOMEPAGE_VAR_HA_TOKEN}}";
+        type = "customapi";
+        url = "http://127.0.0.1:8087/homeassistant";
+        mappings = [
+          { field = "people_home"; label = "Home";     format = "number"; }
+          { field = "lights_on";   label = "Lights";   format = "number"; }
+          { field = "switches_on"; label = "Switches"; format = "number"; }
+        ];
       }; }
     { port = 3000;  backend = "http://127.0.0.1:8090";  name = "Beszel";         icon = "beszel.svg";         category = "Apps"; description = "System monitoring";
       widget = {

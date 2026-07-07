@@ -78,6 +78,17 @@ in
         extraConfig = fwdHeaders;
       };
 
+      # Sure (Rails, socket-activated). UNLIKE Nextcloud/Cyrus this is passed
+      # through UNCHANGED (no trailing-slash strip): sure-nix's config.ru mounts
+      # the app under RAILS_RELATIVE_URL_ROOT=/sure via Rack::URLMap, which does
+      # the internal SCRIPT_NAME strip itself. Proxy to the socket-activate port
+      # (13334) so a request wakes Puma; readyProbe hits /sure/up.
+      "/sure" = {
+        proxyPass = "http://127.0.0.1:13334";
+        proxyWebsockets = true;
+        extraConfig = fwdHeaders;
+      };
+
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
