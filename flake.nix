@@ -72,6 +72,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Reactive Resume — self-hosted resume builder (rxresu.me), packaged like
+    # sure-nix / airtrail-nix.
+    reactive-resume-nix = {
+      url = "github:nSimonFR/reactive-resume-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {
@@ -219,6 +226,7 @@
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
           inputs.airtrail-nix.nixosModules.airtrail
+          inputs.reactive-resume-nix.nixosModules.reactive-resume
           {
             home-manager = {
               useGlobalPkgs = true;

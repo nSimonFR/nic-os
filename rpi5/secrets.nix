@@ -136,5 +136,13 @@
       # owning the file outright.
       group = "wheel";
     };
+    reactive-resume-db-password = {
+      file = ./secrets/reactive-resume-db-password.age;
+      owner = "postgres"; # reactive-resume-pg-setup runs as postgres; reactive-resume-env reads as root
+    };
+    reactive-resume-auth-secret = {
+      file = ./secrets/reactive-resume-auth-secret.age;
+      # root-readable; reactive-resume-env (root oneshot) reads it
+    };
 };
 }

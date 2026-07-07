@@ -123,6 +123,8 @@
         password = "homepage-widget-pass"; # superuser dedicated to homepage; same cred reused in monitoring.nix:213
         version = 2;
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
+    { port = 3200;  backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; }
 
     # Services: Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
