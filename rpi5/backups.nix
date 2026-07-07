@@ -6,7 +6,19 @@
   services.postgresqlBackup = {
     enable = true;
     location = "/mnt/data/backups/postgresql";
-    databases = [ "affine" "dawarich" "sure_production" "nextcloud_production" ];
+    # forgejo adds itself in forgejo.nix; immich dumps its own DB to
+    # /mnt/data/immich/backups. Everything else with a Postgres DB is listed
+    # here so the nightly dump lands on /mnt/data and reaches Storj via restic.
+    databases = [
+      "affine"
+      "dawarich"
+      "sure_production"
+      "nextcloud_production"
+      "airtrail"
+      "ghostfolio"
+      "paperless_production"
+      "reactive_resume"
+    ];
     compression = "gzip";
     startAt = "*-*-* 03:00:00";
   };
