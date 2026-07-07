@@ -50,6 +50,7 @@ let
     # system rg via USE_BUILTIN_RIPGREP=0 + PATH prefix.
     postFixup = (old.postFixup or "") + ''
       wrapProgram $out/bin/claude \
+        --prefix PATH : /run/wrappers/bin \
         --prefix PATH : ${pkgs.ripgrep}/bin \
         --set USE_BUILTIN_RIPGREP 0 \
         --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
