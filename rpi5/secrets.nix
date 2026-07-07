@@ -38,6 +38,15 @@
       file = ./secrets/sure-pg-password.age;
       owner = "postgres"; # ensurePasswordFile reads as postgres user
     };
+    airtrail-env = {
+      file = ./secrets/airtrail-env.age;
+      owner = "airtrail"; # EnvironmentFile for airtrail.service (DB_URL)
+      mode = "0400";
+    };
+    airtrail-pg-password = {
+      file = ./secrets/airtrail-pg-password.age;
+      owner = "postgres"; # airtrail-pg-setup runs as postgres and reads this
+    };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";

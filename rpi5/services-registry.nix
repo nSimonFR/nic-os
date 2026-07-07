@@ -124,10 +124,13 @@
         version = 2;
       }; }
 
-    # Services: Vaultwarden → Dawarich → Forgejo → Wakapi
+    # Services: Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
     { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; noSiteMonitor = true; }
     { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # icon: AirTrail isn't in dashboard-icons, so point at its favicon.svg via jsdelivr (pinned tag).
+    { port = 3600;  backend = "http://127.0.0.1:8310";  name = "AirTrail";       icon = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.11.1/static/favicon.svg"; category = "Services"; description = "Personal flight tracker"; noSiteMonitor = true; }
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; noSiteMonitor = true; }
     { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Services"; description = "Coding stats (WakaTime-compatible)"; noSiteMonitor = true; }
 

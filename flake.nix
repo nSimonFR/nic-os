@@ -65,6 +65,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # AirTrail — self-hosted flight tracker (johanohly/AirTrail), packaged like
+    # sure-nix.
+    airtrail-nix = {
+      url = "github:nSimonFR/airtrail-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {
@@ -211,6 +218,7 @@
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
           inputs.for-sure.nixosModules.default
+          inputs.airtrail-nix.nixosModules.airtrail
           {
             home-manager = {
               useGlobalPkgs = true;

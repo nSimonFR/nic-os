@@ -11,6 +11,8 @@ in {
   "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
   "sure-app-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
+  "airtrail-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
+  "airtrail-pg-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];

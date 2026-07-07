@@ -146,6 +146,7 @@ in
     ./sure.nix
     ./paperless.nix
     ./karakeep.nix
+    ./airtrail.nix
     ./nextcloud.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
