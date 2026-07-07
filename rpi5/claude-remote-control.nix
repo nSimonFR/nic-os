@@ -21,6 +21,21 @@ let
   projectsDir = "/home/${username}/.claude/projects";
   worktreesDir = "/home/${username}/nic-os/.claude/worktrees";
 
+  # Isolated CLAUDE_CONFIG_DIR for the bridge only. Remote Control in
+  # claude-code >= 2.1.x hard-refuses any API endpoint other than
+  # api.anthropic.com — the guard's bypass hook is compiled to always-false, so
+  # there is no env escape. But ~/.claude/settings.json forces the Aperture gate
+  # URL globally, and settings.json `env` outranks process env, so the bridge
+  # tripped the guard and exited 0 on every start (masked as active by
+  # RemainAfterExit; respawned every 5min by the watchdog). We shadow the real
+  # config here: symlink all state so OAuth, sessions/projects, skills, and the
+  # credentials.json that claude-oauth-extract watches stay authoritative in
+  # ~/.claude, and generate a settings.json whose only change is the base URL
+  # forced to direct Anthropic — the same escape the `claude-direct` shell alias
+  # already uses. Sessions the bridge spawns inherit this dir (direct Anthropic,
+  # bypassing the gate) which matches that established choice.
+  configDir = "/home/${username}/.claude-rc";
+
   # Extracts the current OAuth access token from ~/.claude/.credentials.json
   # and writes it atomically to /run/claude-oauth/token. The long-running
   # claude-remote-control process keeps credentials.json fresh by refreshing
@@ -75,10 +90,36 @@ let
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
   '';
 
+  # Build the isolated bridge config dir (see configDir note above) before each
+  # start, refreshing symlinks and regenerating settings.json so it tracks any
+  # change to the real ~/.claude/settings.json.
+  prepConfigScript = pkgs.writeShellScript "claude-rc-prep-config" ''
+    set -eu
+    export PATH="${pkgs.jq}/bin:${pkgs.coreutils}/bin:$PATH"
+    src="/home/${username}/.claude"
+    dst="${configDir}"
+    mkdir -p "$dst"
+    # Mirror every real config entry as a symlink (credentials, sessions,
+    # projects, skills, plugins, settings.local.json, ...) except settings.json,
+    # which is generated below. Keeps all state authoritative in ~/.claude.
+    for entry in "$src"/* "$src"/.[!.]*; do
+      [ -e "$entry" ] || continue
+      name="$(basename "$entry")"
+      [ "$name" = "settings.json" ] && continue
+      ln -sfn "$entry" "$dst/$name"
+    done
+    # Account/org state lives at $HOME/.claude.json (outside .claude); Remote
+    # Control needs it to resolve org eligibility.
+    ln -sfn "/home/${username}/.claude.json" "$dst/.claude.json"
+    # settings.json = real settings with the one key the guard checks overridden.
+    jq '.env.ANTHROPIC_BASE_URL = "https://api.anthropic.com"' \
+      "$src/settings.json" > "$dst/settings.json"
+  '';
+
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
     ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
-      "${claudeRc} \
+      "CLAUDE_CONFIG_DIR=${configDir} ${claudeRc} \
         --spawn worktree \
         --no-create-session-in-dir \
         --capacity 8 \
@@ -195,6 +236,7 @@ in
       User = username;
       Group = "users";
       WorkingDirectory = "/home/${username}/nic-os";
+      ExecStartPre = prepConfigScript;
       ExecStart = startScript;
       ExecStop = stopScript;
       TimeoutStopSec = "10s";
