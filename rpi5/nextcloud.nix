@@ -345,6 +345,33 @@ in
     wantedBy = [ "local-fs.target" ];
   }];
 
+  # ── serverinfo NC-Token for the homepage widget ──────────────────────────
+  # The homepage Nextcloud widget hits the serverinfo API, which accepts an
+  # `NC-Token` header. Basic auth as nsimon fails (401 — the homepage secret
+  # isn't nsimon's login password, and we won't reset the user's password for a
+  # stats tile). So set the serverinfo monitoring token to the existing
+  # nextcloud-homepage-password value; the widget authenticates with the same
+  # secret via `key` (HOMEPAGE_VAR_NEXTCLOUD_PASSWORD in homepage.nix). occ
+  # invalidates the appconfig cache; idempotent (same value each boot).
+  systemd.services.nextcloud-serverinfo-token = {
+    description = "Set Nextcloud serverinfo NC-Token for the homepage widget";
+    after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
+    requires = [ "nextcloud-setup.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      # The secret file has a stray trailing CR (\r); occ would store it as part
+      # of the token, but the widget's NC-Token HTTP header drops the \r → the
+      # stored token (73 bytes) wouldn't match the header (72) → 401. Strip
+      # CR/LF so the stored token is the clean 72-char value.
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ config:app:set serverinfo token \
+        --value="$(tr -d '\r\n' < /run/agenix/nextcloud-homepage-password)"
+    '';
+  };
+
   # ── Pre-seed Nextcloud Mail with a hydroxide-backed ProtonMail account ────
   # Runs once on first activation (sentinel-gated). Reads the bridge password
   # from agenix and registers it with the Mail app via occ. Idempotent.
