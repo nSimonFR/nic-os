@@ -1,8 +1,8 @@
 # Cyrus — Linear coding-agent dispatcher (cyrusagents/cyrus, Apache-2.0).
 #
 # Receives Linear webhooks, spawns Claude Code (via @anthropic-ai/claude-agent-sdk)
-# against issues, opens PRs as the configured GitHub user. Public URL via
-# Tailscale Funnel on :8443 → 127.0.0.1:3456.
+# against issues, opens PRs as the configured GitHub user. Public URL via the 443
+# nginx path-mux at /cyrus (front-proxy.nix) → 127.0.0.1:3456 (prefix stripped).
 #
 # Packaging: source comes from the `cyrus-src` flake input (flake.nix,
 # `flake = false`), so it's locked in flake.lock and auto-bumped by
@@ -27,9 +27,10 @@
 #   3. Running `sudo -u cyrus gh auth login` for nSimonFR-ai.
 #
 # Manual: linear.app → Settings → API → OAuth Applications → New
-#   Callback URL:  https://rpi5.gate-mintaka.ts.net:8443/callback
-#                  (must be exact — cyrus hardcodes /callback, not /oauth/callback)
-#   Webhook URL:   https://rpi5.gate-mintaka.ts.net:8443/linear-webhook
+#   Callback URL:  https://rpi5.gate-mintaka.ts.net/cyrus/callback
+#                  (must be exact — cyrus hardcodes /callback, not /oauth/callback;
+#                   nginx strips /cyrus so it lands at cyrus's root /callback)
+#   Webhook URL:   https://rpi5.gate-mintaka.ts.net/cyrus/linear-webhook
 #                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
@@ -71,13 +72,18 @@ in
     port = lib.mkOption {
       type = lib.types.port;
       default = 3456;
-      description = "Internal HTTP port. Public URL on Tailscale Funnel :8443.";
+      description = "Internal HTTP port. Public URL via the 443 path-mux at /cyrus.";
     };
 
     baseUrl = lib.mkOption {
       type = lib.types.str;
-      default = "https://rpi5.gate-mintaka.ts.net:8443";
-      description = "Public URL Linear webhooks reach (Tailscale Funnel).";
+      default = "https://rpi5.gate-mintaka.ts.net/cyrus";
+      description = ''
+        Public base URL Linear/GitHub reach. Cyrus is fronted by the 443 nginx
+        path-mux at /cyrus (front-proxy.nix, prefix stripped), so its OAuth
+        callback + webhook URLs are generated as <baseUrl>/callback,
+        <baseUrl>/linear-webhook, <baseUrl>/github-webhook.
+      '';
     };
 
     claudeDefaultModel = lib.mkOption {
@@ -184,7 +190,7 @@ in
         gh to the owner account and POST it manually:
           gh auth switch --user nSimonFR
           SECRET=$(sudo cat /run/agenix/cyrus-github-webhook-secret)
-          jq -nc --arg s "$SECRET" '{name:"web",active:true,events:["issue_comment","pull_request_review","pull_request_review_comment"],config:{url:"https://rpi5.gate-mintaka.ts.net:8443/github-webhook",content_type:"json",secret:$s,insecure_ssl:"0"}}' \
+          jq -nc --arg s "$SECRET" '{name:"web",active:true,events:["issue_comment","pull_request_review","pull_request_review_comment"],config:{url:"https://rpi5.gate-mintaka.ts.net/cyrus/github-webhook",content_type:"json",secret:$s,insecure_ssl:"0"}}' \
             | gh api -X POST /repos/nSimonFR/<repo>/hooks --input -
           gh auth switch --user nSimonfr-ai
       '';

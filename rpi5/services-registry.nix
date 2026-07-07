@@ -26,14 +26,15 @@
       widget = {
         type = "nextcloud";
         url = "http://127.0.0.1:8091";
-        username = "nsimon";
-        password = "{{HOMEPAGE_VAR_NEXTCLOUD_PASSWORD}}";
+        # serverinfo NC-Token (set to nextcloud-homepage-password by the
+        # nextcloud-serverinfo-token oneshot). Basic auth as nsimon 401s.
+        key = "{{HOMEPAGE_VAR_NEXTCLOUD_PASSWORD}}";
         fields = [ "freespace" "activeusers" "numfiles" "numshares" ];
       }; }
-    { port = 443;   backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; proxied = true; path = "/affine";
+    { port = 8443; backend = "http://127.0.0.1:13010"; name = "AFFiNE";         icon = "affine.svg";         category = "Apps"; description = "Collaborative docs"; funnel = true;
       widget = {
         type = "customapi";
-        url = "http://127.0.0.1:13010/affine/graphql";
+        url = "http://127.0.0.1:13010/graphql";
         method = "POST";
         headers = { "Content-Type" = "application/json"; "Authorization" = "Bearer {{HOMEPAGE_VAR_AFFINE_TOKEN}}"; };
         requestBody = { query = "{ workspaces { memberCount blobsSize docs(pagination: {first: 0}) { totalCount } } }"; };
@@ -128,18 +129,22 @@
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini)"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
-    # Hydroxide moved 8443 → 8083 (matches its backend port) to free 8443 for
-    # Cyrus's Tailscale Funnel slot (Linear webhooks need a public URL, and
-    # only 443/8443/10000 are funnel-eligible; 443 + 10000 are also taken).
+    # Hydroxide moved 8443 → 8083 (matches its backend port) to free the 8443
+    # Funnel slot (only 443/8443/10000 are funnel-eligible; 443 + 10000 are also
+    # taken). 8443 now fronts AFFiNE at its root origin (see the AFFiNE entry).
     # Devices using https://rpi5.gate-mintaka.ts.net:8443/.well-known/carddav
     # must update to :8083.
     { port = 8083;  backend = "http://127.0.0.1:8083";  name = "Hydroxide";      icon = "mdi-email-outline";  category = "Backend";  description = "ProtonMail bridge (SMTP + CardDAV)"; }
-    { port = 8443;  backend = "http://127.0.0.1:3456";  name = "Cyrus";          icon = "mdi-robot-outline";  category = "Backend"; description = "Linear coding-agent (cyrusagents/cyrus)"; funnel = true; }
+    # Cyrus is fronted by the 443 nginx path-mux at /cyrus (prefix stripped). Its
+    # public URL (CYRUS_BASE_URL in cyrus.nix) is https://…/cyrus, and its
+    # hardcoded root routes (/callback, /linear-webhook, /github-webhook) sit
+    # under it. AFFiNE took the freed 8443 Funnel slot (it needs a root origin).
+    { port = 443;   backend = "http://127.0.0.1:3456";  name = "Cyrus";          icon = "mdi-robot-outline";  category = "Backend"; description = "Linear coding-agent (cyrusagents/cyrus)"; proxied = true; path = "/cyrus"; }
 
     # Infrastructure — not shown on dashboard
     # Single public 443 Funnel → nginx path-mux (front-proxy.nix), which routes
-    # /affine → AFFiNE and /nextcloud → Nextcloud (both `proxied = true` above).
-    { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/affine, /nextcloud)"; funnel = true; }
+    # /nextcloud → Nextcloud and /cyrus → Cyrus (both `proxied = true` above).
+    { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/nextcloud, /cyrus)"; funnel = true; }
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
     { port = 8088;  backend = "http://127.0.0.1:8088";  name = "Claude Notify";  icon = "mdi-bell";           category = "Infrastructure"; description = "Debounced agent → Telegram aggregator"; noSiteMonitor = true; }
   ];

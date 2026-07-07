@@ -64,9 +64,10 @@ in
       mkdir -p /run/affine-mcp
       cat > /run/affine-mcp/env <<ENVEOF
       MCP_TRANSPORT=http
-      # AFFiNE runs under a NestJS global prefix (AFFINE_SERVER_SUB_PATH=/affine in
-      # affine.nix), so its API — GraphQL and /api/* — is served under /affine.
-      AFFINE_BASE_URL=http://127.0.0.1:13010/affine
+      # AFFiNE serves at root on :13010 (no NestJS global prefix — it runs at the
+      # root of its own :8443 Funnel, see affine.nix), so its API (GraphQL,
+      # /api/*) is at the root.
+      AFFINE_BASE_URL=http://127.0.0.1:13010
       AFFINE_API_TOKEN=$(cat ${config.age.secrets.affine-token.path})
       AFFINE_MCP_AUTH_MODE=bearer
       AFFINE_MCP_HTTP_TOKEN=$(cat ${config.age.secrets.affine-mcp-http-token.path})
