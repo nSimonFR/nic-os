@@ -1,31 +1,33 @@
 # front-proxy.nix — nginx path-mux on the single public 443 Tailscale Funnel.
 #
-# Tailscale Funnel only permits ports 443/8443/10000, and 8443→Cyrus / 10000→Immich
-# are taken. To expose Nextcloud publicly without evicting anyone, one Funnel on 443
-# points at this vhost, which routes by path to AFFiNE and Nextcloud on the same host:
+# Tailscale Funnel only permits ports 443/8443/10000, and 8443→AFFiNE / 10000→Immich
+# are taken. To expose Nextcloud and Cyrus publicly without a fourth port, one Funnel
+# on 443 points at this vhost, which routes by path:
 #
 #   tailscale funnel --https=443  →  127.0.0.1:8092 (this vhost)
-#     /                 → 301 → /affine/
-#     /affine           → 127.0.0.1:13010  (AFFiNE — prefix PASSED THROUGH: AFFiNE runs
-#                                            under a NestJS global prefix set by
-#                                            AFFINE_SERVER_SUB_PATH=/affine, so it expects
-#                                            the /affine prefix on incoming requests)
+#     /                 → 301 → /nextcloud/
 #     /nextcloud/       → 127.0.0.1:8091/  (Nextcloud — prefix STRIPPED: NC routes at its
 #                                            vhost root; overwritewebroot=/nextcloud only
 #                                            rewrites the links NC generates)
+#     /cyrus/           → 127.0.0.1:3456/  (Cyrus — prefix STRIPPED: cyrus mounts its
+#                                            routes (/callback, /linear-webhook,
+#                                            /github-webhook) at root and only knows its
+#                                            public base via CYRUS_BASE_URL=…/cyrus, so
+#                                            stripping /cyrus lands each at the right route)
 #     /.well-known/{caldav,carddav} → 301 → /nextcloud/remote.php/dav/  (DAV auto-discovery
-#                                            lands at the domain root, which now serves
-#                                            AFFiNE, so redirect it to Nextcloud)
+#                                            lands at the domain root; redirect to Nextcloud)
 #
-# Reuses the nginx instance the Nextcloud module already runs (no extra process). The
-# funnel entry that targets :8092 lives in services-registry.nix (Infrastructure category);
-# AFFiNE + Nextcloud entries carry `proxied = true` so tailscale-serve.nix emits no direct
+# AFFiNE is NOT here anymore — its SPA router insists on root paths, so it runs at the
+# root of its own 8443 Funnel (see affine.nix / services-registry.nix). Reuses the nginx
+# instance the Nextcloud module already runs (no extra process). The funnel entry that
+# targets :8092 lives in services-registry.nix (Infrastructure category); Nextcloud +
+# Cyrus entries carry `proxied = true` so tailscale-serve.nix emits no direct
 # serve/funnel command for them — this vhost fronts them instead.
 { ... }:
 let
   # Headers every proxied location forwards. X-Forwarded-Proto=https is required so
-  # Nextcloud (overwritecondaddr=^127\.0\.0\.1$, overwriteprotocol=https) and AFFiNE
-  # generate https links behind the TLS-terminating Tailscale Funnel.
+  # Nextcloud (overwritecondaddr=^127\.0\.0\.1$, overwriteprotocol=https) generates
+  # https links behind the TLS-terminating Tailscale Funnel.
   fwdHeaders = ''
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -47,31 +49,8 @@ in
     '';
 
     locations = {
-      # Bare URL used to be AFFiNE at root — send humans to /affine/.
-      "= /" = { return = "301 /affine/"; };
-
-      # AFFiNE human URL + API: forward the /affine prefix intact (NestJS global
-      # prefix — do NOT strip). Handles /affine, /affine/graphql, /affine/*.
-      "/affine" = {
-        proxyPass = "http://127.0.0.1:13010";
-        proxyWebsockets = true; # doc sync (graphql-ws / socket.io)
-        extraConfig = fwdHeaders;
-      };
-
-      # Catch-all: AFFiNE's web UI emits root-relative asset URLs (/js, /styles*.css,
-      # /manifest.json, lazy-loaded chunks) because the self-hosted build's frontend
-      # publicPath can't be pinned to /affine. Map every other root path onto the
-      # /affine backend (which serves the assets under the global prefix). More
-      # specific locations (/affine, /nextcloud/, /.well-known/*) win over this, so
-      # only AFFiNE's stray root assets land here. proxyPass has a URI with a
-      # trailing slash (/affine/) so nginx rewrites the leading "/" → "/affine/"
-      # (e.g. /js/x → /affine/js/x). Without the trailing slash it would emit
-      # /affinejs/x and 404.
-      "/" = {
-        proxyPass = "http://127.0.0.1:13010/affine/";
-        proxyWebsockets = true;
-        extraConfig = fwdHeaders;
-      };
+      # Bare URL → Nextcloud (the main human-facing app on this funnel).
+      "= /" = { return = "301 /nextcloud/"; };
 
       # Nextcloud: trailing slashes on both location and proxyPass strip /nextcloud
       # before forwarding to NC's root vhost.
@@ -86,6 +65,17 @@ in
           proxy_read_timeout 3600s;
           proxy_send_timeout 3600s;
         '';
+      };
+
+      # Cyrus: trailing slash on both strips /cyrus before forwarding. Cyrus's
+      # Fastify server mounts /callback, /linear-webhook, /github-webhook at its
+      # root, so /cyrus/linear-webhook → 3456/linear-webhook. proxyWebsockets in
+      # case any endpoint upgrades (harmless otherwise).
+      "= /cyrus" = { return = "301 /cyrus/"; };
+      "/cyrus/" = {
+        proxyPass = "http://127.0.0.1:3456/";
+        proxyWebsockets = true;
+        extraConfig = fwdHeaders;
       };
 
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
