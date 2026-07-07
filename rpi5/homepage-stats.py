@@ -11,6 +11,7 @@ Endpoints:
   /paperless — Paperless (documents, inbox)
   /immich    — Immich (photos, videos, storage)
   /karakeep  — Karakeep (bookmarks, favorites, archived, tags) — direct read-only SQLite
+  /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -45,7 +46,7 @@ STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}, "karakeep": {}}
+stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}, "karakeep": {}, "homeassistant": {}}
 stats_lock = threading.Lock()
 
 
@@ -53,14 +54,17 @@ def fetch_sure():
     try:
         env = open(ENV_FILE).read()
         key = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "SURE_KEY" in l][0]
+        # Sure is mounted under /sure now (RAILS_RELATIVE_URL_ROOT, see sure.nix),
+        # so its API lives at /sure/api/v1/* — the root path 404s. Hit :13334
+        # (socket-activate) so the daily poll wakes Puma briefly, then it sleeps.
         accts = json.loads(subprocess.check_output([
             CURL, "-sf",
-            "http://127.0.0.1:13334/api/v1/accounts",
+            "http://127.0.0.1:13334/sure/api/v1/accounts",
             "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
         ]))
         txns = json.loads(subprocess.check_output([
             CURL, "-sf",
-            "http://127.0.0.1:13334/api/v1/transactions?per_page=1",
+            "http://127.0.0.1:13334/sure/api/v1/transactions?per_page=1",
             "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json"
         ]))
         accounts = accts.get("accounts", [])
@@ -193,6 +197,33 @@ def fetch_karakeep():
             stats["karakeep"]["error"] = str(e)
 
 
+def fetch_homeassistant():
+    # HA is always-on (not socket-activated), so polling it doesn't wake anything.
+    # It's routed through this daily-cached aggregator only for consistency with
+    # the other tiles — note the counts can be up to REFRESH_INTERVAL stale.
+    try:
+        env = open(ENV_FILE).read()
+        token = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "HA_TOKEN" in l][0]
+        states = json.loads(subprocess.check_output([
+            CURL, "-sf", "http://127.0.0.1:8123/api/states",
+            "-H", f"Authorization: Bearer {token}", "-H", "Content-Type: application/json"
+        ]))
+
+        def count(prefix, st):
+            return sum(1 for e in states
+                       if e.get("entity_id", "").startswith(prefix) and e.get("state") == st)
+
+        with stats_lock:
+            stats["homeassistant"] = {
+                "people_home": count("person.", "home"),
+                "lights_on":   count("light.", "on"),
+                "switches_on": count("switch.", "on"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["homeassistant"]["error"] = str(e)
+
+
 def refresh(initial_fetched_at):
     last_fetched = initial_fetched_at
     while True:
@@ -207,6 +238,7 @@ def refresh(initial_fetched_at):
             fetch_paperless()
             fetch_immich()
             fetch_karakeep()
+            fetch_homeassistant()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -228,6 +260,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["immich"])
             elif self.path == "/karakeep":
                 data = dict(stats["karakeep"])
+            elif self.path == "/homeassistant":
+                data = dict(stats["homeassistant"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
