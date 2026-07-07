@@ -37,4 +37,5 @@ in {
   "cyrus-github-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "terradex-convex-prod.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
   "terradex-convex-dev.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "reactive-resume-encryption-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }

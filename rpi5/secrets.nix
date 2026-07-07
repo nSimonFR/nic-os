@@ -144,5 +144,11 @@
       file = ./secrets/reactive-resume-auth-secret.age;
       # root-readable; reactive-resume-env (root oneshot) reads it
     };
+    reactive-resume-encryption-secret = {
+      file = ./secrets/reactive-resume-encryption-secret.age;
+      # ENCRYPTION_SECRET (>=32 chars): encrypts per-user AI-provider API keys at
+      # rest (packages/api/.../ai/credentials.ts). root-readable; reactive-resume-env
+      # (root oneshot) reads it.
+    };
 };
 }
