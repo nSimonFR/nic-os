@@ -358,6 +358,27 @@
     "flake-parts_5": {
       "inputs": {
         "nixpkgs-lib": [
+          "reactive-resume-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782949081,
+        "narHash": "sha256-vp6Y/Grm98ESt6ceOkWiHWyZRDV3J1RID4w+6NWK9yA=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "17c9d6cdfc60c64f4ee8d306f9bc0b4ccb51481e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_6": {
+      "inputs": {
+        "nixpkgs-lib": [
           "sure-nix",
           "nixpkgs"
         ]
@@ -912,6 +933,27 @@
         "type": "github"
       }
     },
+    "reactive-resume-nix": {
+      "inputs": {
+        "flake-parts": "flake-parts_5",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783435455,
+        "narHash": "sha256-u1zxjlTkyJutWk4oGyjfOSGiGz+XaZKccZt2OtFM8N0=",
+        "owner": "nSimonFR",
+        "repo": "reactive-resume-nix",
+        "rev": "8309c35c05505fbea9c3b98ee4619c93507e0711",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nSimonFR",
+        "repo": "reactive-resume-nix",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "airtrail-nix": "airtrail-nix",
@@ -931,6 +973,7 @@
         "nixpkgs-unstable": "nixpkgs-unstable",
         "picoclaw-src": "picoclaw-src",
         "ragenix": "ragenix",
+        "reactive-resume-nix": "reactive-resume-nix",
         "rtk-src": "rtk-src",
         "sure-nix": "sure-nix",
         "tiny-llm-gate": "tiny-llm-gate",
@@ -977,7 +1020,7 @@
     },
     "sure-nix": {
       "inputs": {
-        "flake-parts": "flake-parts_5",
+        "flake-parts": "flake-parts_6",
         "nixpkgs": [
           "nixpkgs"
         ]
