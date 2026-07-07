@@ -124,7 +124,8 @@
         version = 2;
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
-    { port = 3200;  backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; }
+    # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
+    { port = 443;   backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; proxied = true; path = "/rxresume"; }
 
     # Services: Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
@@ -158,7 +159,7 @@
     # Infrastructure — not shown on dashboard
     # Single public 443 Funnel → nginx path-mux (front-proxy.nix), which routes
     # /nextcloud → Nextcloud and /cyrus → Cyrus (both `proxied = true` above).
-    { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/nextcloud, /cyrus)"; funnel = true; }
+    { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/nextcloud, /cyrus, /sure, /rxresume)"; funnel = true; }
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
     { port = 8088;  backend = "http://127.0.0.1:8088";  name = "Claude Notify";  icon = "mdi-bell";           category = "Infrastructure"; description = "Debounced agent → Telegram aggregator"; noSiteMonitor = true; }
   ];

@@ -75,7 +75,10 @@
     # Reactive Resume — self-hosted resume builder (rxresu.me), packaged like
     # sure-nix / airtrail-nix.
     reactive-resume-nix = {
-      url = "github:nSimonFR/reactive-resume-nix";
+      # Pinned to the base-path-support commit (PR #1, branch feat/base-path-support,
+      # pending review/merge). Once merged, repoint to plain
+      # `github:nSimonFR/reactive-resume-nix` (main) + relock.
+      url = "github:nSimonFR/reactive-resume-nix/0ee1f445d6857957f3346c91b6c98d5170270f1c";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

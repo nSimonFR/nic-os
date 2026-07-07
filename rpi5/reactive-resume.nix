@@ -8,11 +8,13 @@
 #   * reactive-resume-env — writes the runtime env file (DATABASE_URL + AUTH_SECRET).
 #   * services.reactive-resume — the flake module, wired to the above.
 #   * socket-activated idle-sleep (rpi5/lib/socket-activate.nix): the backend
-#     binds 127.0.0.1:13337 and a proxy on 127.0.0.1:13336 (what Tailscale Serve
-#     targets, :3200 → here) wakes it on first request and stops it after 10 min
-#     idle — reclaiming its ~367 MB RSS on this 4 GB Pi. rxresu.me v5 has no
-#     long-lived SSE/WebSocket in this config (Redis-gated AI workspace is off),
-#     so idle-stop is safe; JWT auth (stable AUTH_SECRET) survives a cold wake.
+#     binds 127.0.0.1:13337 and a proxy on 127.0.0.1:13336 (what the 443 nginx
+#     path-mux front-proxy /rxresume/ → here) wakes it on first request and stops
+#     it after 10 min idle — reclaiming its ~367 MB RSS on this 4 GB Pi. rxresu.me
+#     v5 has no long-lived SSE/WebSocket in this config (Redis-gated AI workspace
+#     is off — only the ENCRYPTION_SECRET-gated per-user AI providers are on), so
+#     idle-stop is safe; JWT auth (stable AUTH_SECRET) survives a cold wake.
+#     Public exposure means internet scanners can wake it more often than tailnet.
 #
 # Migrations self-apply on boot inside the app (apps/server/src/startup/checks.ts),
 # so there is no migrate oneshot — the app just needs a reachable DB.
@@ -24,8 +26,12 @@ let
   dataDir = "/var/lib/reactive-resume";
 
   backendPort = 13337; # real Node bind (localhost only)
-  proxyPort   = 13336; # socket-activate proxy listen; Tailscale Serve :3200 → here
-  appUrl = "https://${tailnetFqdn}:3200";
+  proxyPort   = 13336; # socket-activate proxy listen; front-proxy /rxresume/ → here
+  # Served publicly behind the 443 nginx path-mux (front-proxy.nix) at /rxresume.
+  # appUrl carries the sub-path (server builds absolute PDF/storage/share URLs
+  # from it) and basePath is the Vite build-time base — the two MUST match.
+  basePath = "/rxresume";
+  appUrl = "https://${tailnetFqdn}${basePath}";
 
   envFile = "/run/reactive-resume/env";
 in
@@ -79,6 +85,7 @@ in
     restartTriggers = [
       config.age.secrets.reactive-resume-db-password.file
       config.age.secrets.reactive-resume-auth-secret.file
+      config.age.secrets.reactive-resume-encryption-secret.file
     ];
     serviceConfig = {
       Type = "oneshot";
@@ -88,9 +95,11 @@ in
       mkdir -p /run/reactive-resume
       db_password=$(cat /run/agenix/reactive-resume-db-password)
       auth_secret=$(cat /run/agenix/reactive-resume-auth-secret)
+      encryption_secret=$(cat /run/agenix/reactive-resume-encryption-secret)
       cat > ${envFile} <<ENVEOF
       DATABASE_URL=postgresql://${dbUser}:$db_password@${pgHost}:${toString pgPort}/${dbName}
       AUTH_SECRET=$auth_secret
+      ENCRYPTION_SECRET=$encryption_secret
       ENVEOF
       chmod 0400 ${envFile}
     '';
@@ -105,6 +114,10 @@ in
     host = "127.0.0.1";
     port = backendPort;
     appUrl = appUrl;
+    # Build the SPA for the /rxresume sub-path (Vite base + router basepath +
+    # client/server URL bases). Rebuilds the package from the reactive-resume-nix
+    # base-path patch. MUST end with a slash and match appUrl's path.
+    appBasePath = "${basePath}/";
     storagePath = "${dataDir}/data";
     environmentFile = envFile;
     settings = {
@@ -112,6 +125,13 @@ in
       FLAG_DISABLE_IMAGE_PROCESSING = "true";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
+      # AI providers (Settings → AI): allow a provider baseURL on the loopback
+      # tiny-llm-gate (http://127.0.0.1:4001/v1). Without this, the AI url-policy
+      # rejects non-https / private-host base URLs. ENCRYPTION_SECRET (from the
+      # env file) is what actually enables the AI-providers feature; REDIS_URL is
+      # intentionally unset so the heavy "agent workspace" stays off and idle-stop
+      # remains safe (no long-lived SSE/WS).
+      FLAG_ALLOW_UNSAFE_AI_BASE_URL = "true";
       # 4 GiB RPi5 memory hygiene (mirrors affine.nix / sure.nix).
       NODE_OPTIONS = "--max-old-space-size=384";
       MALLOC_ARENA_MAX = "2";
@@ -127,6 +147,7 @@ in
     restartTriggers = [
       config.age.secrets.reactive-resume-db-password.file
       config.age.secrets.reactive-resume-auth-secret.file
+      config.age.secrets.reactive-resume-encryption-secret.file
     ];
   };
 

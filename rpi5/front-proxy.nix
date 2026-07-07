@@ -89,6 +89,24 @@ in
         extraConfig = fwdHeaders;
       };
 
+      # Reactive Resume (rxresu.me v5, socket-activated). Prefix STRIPPED (trailing
+      # slash on both) — the server is root-native; the SPA is built with Vite
+      # base=/rxresume/ so the browser requests everything under /rxresume/ (assets,
+      # /api, /auth), and the server's browser-facing URLs (PDF/storage/share) carry
+      # /rxresume via APP_URL. Proxy to the socket-activate port (13336) so a request
+      # wakes the Node backend; readyProbe hits /api/health.
+      "= /rxresume" = { return = "301 /rxresume/"; };
+      "/rxresume/" = {
+        proxyPass = "http://127.0.0.1:13336/";
+        proxyWebsockets = true;
+        extraConfig = ''
+          ${fwdHeaders}
+          # Cold-wake (socket-activation) takes ~18s; give the first request
+          # headroom over nginx's 60s default so it doesn't 504 (readyProbe=120s).
+          proxy_read_timeout 120s;
+        '';
+      };
+
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
