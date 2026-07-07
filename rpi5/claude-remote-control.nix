@@ -90,6 +90,15 @@ let
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
   '';
 
+  # post-checkout hook that re-gates RC bridge worker sessions to Aperture.
+  # The bridge's isolated config forces direct Anthropic (to pass the Remote
+  # Control guard), so worker sessions spawned into worktrees would bypass the
+  # gate. This hook drops a project-level settings.json (base URL = gate) into
+  # each bridge-created worktree; workers don't run the guard, so they're free
+  # to use the gate. Guarded by CLAUDE_CONFIG_DIR → no-op for normal checkouts.
+  worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate"
+    (builtins.readFile ./claude-rc-worktree-gate.sh);
+
   # Build the isolated bridge config dir (see configDir note above) before each
   # start, refreshing symlinks and regenerating settings.json so it tracks any
   # change to the real ~/.claude/settings.json.
@@ -114,6 +123,15 @@ let
     # settings.json = real settings with the one key the guard checks overridden.
     jq '.env.ANTHROPIC_BASE_URL = "https://api.anthropic.com"' \
       "$src/settings.json" > "$dst/settings.json"
+
+    # Install the worktree-gate post-checkout hook (symlink to the versioned
+    # script). Only if absent or already a symlink — never clobber a foreign hook.
+    hook="/home/${username}/nic-os/.git/hooks/post-checkout"
+    if [ ! -e "$hook" ] || [ -L "$hook" ]; then
+      ln -sfn ${worktreeGateHook} "$hook"
+    else
+      echo "post-checkout hook exists and is not ours; skipping worktree-gate install" >&2
+    fi
   '';
 
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
