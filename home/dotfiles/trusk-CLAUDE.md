@@ -6,26 +6,22 @@ Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, servic
 
 ## Repos on disk — siblings under `/Users/nsimon/MyDocuments/TRUSK/`
 
-| Repo                                                                    | Purpose                                                                                                                                                                                                                            |
-| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `trusk-k8s`                                                             | Cluster infra (cert-manager, datadog-operator, argocd projects/applications, `docs/flagd/*`).                                                                                                                                      |
-| `trusk-applications`                                                    | ArgoCD applications + manifests per env (`applications/<env>.yaml`, `manifests/<env>/<service>/`). Umbrella renders services via the `trusk-argo-project` chart.                                                                   |
-| `trusk-lib`                                                             | npm-workspaces monorepo. NestJS 11 pkgs in `nestjs-libraries/<name>/` = `@trusk-official/nestjs-*` (core, amqp, authentication, sql, health, url-shortener, business-policies, feature-flags). Legacy `nest-commons/` = NestJS 10. |
-| `trusk-chart-museum`                                                    | Helm charts in `charts/<name>/` (notably `trusk-argo-project`). Pushed to GCS bucket `trusk-helm-chart` by `release.sh` on every master merge (`helm-cd.yaml`).                                                                    |
-| `github-actions`                                                        | Shared reusable GH workflows (e.g. `release.yaml`, used by every service's `cd.yaml`).                                                                                                                                             |
-| `<service>` (rating, identity-access-management, mobile-app-gateway, …) | Layout: `src/`, `deployment/charts/<env>.yaml`, `deployment/configurations/<env>/{configmaps,secrets}/`, sometimes `deployment/flagd/<env>/`.                                                                                      |
-| `trusk-infra/<service>`                                                 | Older services pre-migration.                                                                                                                                                                                                      |
-| `backoffice`                                                            | **The** live backoffice (Next.js) — use this for any BO work.                                                                                                                                                                      |
+| Repo | Purpose |
+| --- | --- |
+| `trusk-k8s` | Cluster infra (cert-manager, datadog-operator, argocd projects/applications, `docs/flagd/*`). |
+| `trusk-applications` | ArgoCD applications + manifests per env (`applications/<env>.yaml`, `manifests/<env>/<service>/`). Umbrella renders services via the `trusk-argo-project` chart. |
+| `trusk-lib` | npm-workspaces monorepo. NestJS 11 pkgs in `nestjs-libraries/<name>/` = `@trusk-official/nestjs-*` (core, amqp, authentication, sql, health, url-shortener, business-policies, feature-flags). Legacy `nest-commons/` = NestJS 10. |
+| `trusk-chart-museum` | Helm charts in `charts/<name>/` (notably `trusk-argo-project`). Pushed to GCS bucket `trusk-helm-chart` by `release.sh` on every master merge (`helm-cd.yaml`). |
+| `github-actions` | Shared reusable GH workflows (e.g. `release.yaml`, used by every service's `cd.yaml`). |
+| `<service>` (rating, identity-access-management, mobile-app-gateway, …) | Layout: `src/`, `deployment/charts/<env>.yaml`, `deployment/configurations/<env>/{configmaps,secrets}/`, sometimes `deployment/flagd/<env>/`. |
+| `trusk-infra/<service>` | Older services pre-migration. |
+| `backoffice` | **The** live backoffice (Next.js) — use this for any BO work. |
 
 **`trusk-backoffice` and `trusk-infra/backoffice` are LEGACY — ignore entirely** (no grep, no cite, no edits). Only `backoffice` is live. Clone missing repos: `unset GH_TOKEN && gh repo clone trusk-official/<name> ~/MyDocuments/TRUSK/<name>`.
 
 ## GitHub auth — always `unset GH_TOKEN`
 
-The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see the `trusk-official` org** → bogus 404s on private repos. Prefix every git/gh command with `unset GH_TOKEN &&` to fall back to the keyring credential (`nSimonFR` work account).
-
-```bash
-unset GH_TOKEN && gh pr create ...
-```
+The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see the `trusk-official` org** → bogus 404s on private repos. Prefix every git/gh command with `unset GH_TOKEN &&` (e.g. `unset GH_TOKEN && gh pr create …`) to fall back to the keyring credential (`nSimonFR` work account).
 
 ## Linear — use the `linear` skill (not the MCP)
 
@@ -37,13 +33,11 @@ Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Rea
 
 ## Monitor / long-job waits
 
-For "wait then notify" (CI, ArgoCD syncs, rollouts): **Bash `run_in_background`** for one-shot exits, or **Monitor** for event streams — each stdout line = a notification, exit ends it. Don't foreground-poll; read the result with `TaskOutput`. Example:
+For "wait then notify" (CI, ArgoCD syncs, rollouts): **Bash `run_in_background`** for one-shot exits (incl. "wait N min" via `sleep N && …`), or **Monitor** for event streams (each stdout line = a notification, exit ends it). Don't foreground-poll; read via `TaskOutput`. Example:
 
 ```
 Monitor: until [ "$(gh run view <ID> --json status --jq .status)" = completed ]; do sleep 15; done && echo RUN_DONE && gh run view <ID> --json conclusion --jq .conclusion
 ```
-
-For "wait N minutes": `Bash(run_in_background:true)` with `sleep N && …`.
 
 ## PR CI ≠ local build — verify the real run
 
@@ -59,7 +53,7 @@ Match the run by headSha (its name is often `CI Workflow`, not the PR title). Dr
 
 ## Staging deploy flow — merge → pod live
 
-1. **`cd.yaml`** runs at merge; its `Trusk CD` job calls a reusable `github-actions` workflow — `gh run view <id> --json jobs` shows only wrapper steps (Install/Release/Linear); the docker build/push lives inside the reusable wf (`gh api repos/<owner>/<repo>/actions/runs/<id>/jobs` for the full list).
+1. **`cd.yaml`** runs at merge; its `Trusk CD` job calls a reusable `github-actions` workflow — `gh run view <id> --json jobs` shows only wrapper steps (Install/Release/Linear); the docker build/push lives inside the reusable wf (`gh api .../actions/runs/<id>/jobs` for the full list).
 2. **semantic-release** cuts the tag + pushes a `Chore(Version): <ver>` commit → a 2nd cd.yaml run where Trusk CD is correctly `skipped`.
 3. **Image** → `europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry/<service>:<version>`. Propagation 1–2 min; expect one `ErrImagePull`→`ImagePullBackOff`→pull cycle (~30s). Only dig into wf logs if it persists past ~5 min.
 4. **trusk-applications bump** is manual — see below.
@@ -96,7 +90,7 @@ Each service publishes `@trusk-official/api-<service>-client` (raw fns, backend�
 - `generate-apiclient.yaml` (`on: push: tags`) → real versioned client+query on every release tag.
 - `generate-PR-apiclient.yaml` (`on: pull_request`, gated by the **`need client API`** label) → prerelease `<ver>-pr.<PR#>.<run>.<attempt>`.
 
-Use a not-yet-merged route in the backoffice: (1) `gh pr edit <PR#> --add-label "need client API"` on the service repo. **Gotcha:** `generate-PR-apiclient.yaml` triggers on `pull_request` **push** events (`opened/synchronize/reopened/ready_for_review`), NOT on `labeled` — so labelling alone does nothing (the job stays `skipped`); after adding the label you must **push a commit** (`git commit --allow-empty -m "Chore(CI): trigger client gen" && git push`) or reopen the PR to actually fire a run. The repo label is often lowercase `need client api` while the workflow checks `'need client API'` — that's fine, GitHub Actions `contains()` is case-insensitive. (2) wait for "Generate PR client", read the version via `npm view @trusk-official/api-<service>-query versions --json | tail`; (3) bump the dep to that `-pr.*` version + `npm install`; (4) import the orval hook (`use<Tag><Method>`, e.g. `Mission`/`resync` → `useMissionResync`). After merge, bump to the clean released version.
+Use a not-yet-merged route in the backoffice: (1) `gh pr edit <PR#> --add-label "need client API"` on the service repo. **Gotcha:** the workflow triggers on `pull_request` **push** events, NOT `labeled` — labelling alone leaves the job `skipped`; after labelling, **push a commit** (`git commit --allow-empty && git push`) or reopen the PR to fire a run. Label case doesn't matter (`contains()` is case-insensitive). (2) wait for "Generate PR client", read the version via `npm view @trusk-official/api-<service>-query versions --json | tail`; (3) bump the dep to that `-pr.*` version + `npm install`; (4) import the orval hook (`use<Tag><Method>`, e.g. `Mission`/`resync` → `useMissionResync`). After merge, bump to the clean released version.
 
 ## Code style — brace every `if`
 
@@ -167,23 +161,9 @@ For out-of-band schema mutations, also insert the `<schema>._migrations` row (`{
 
 Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
-## flagd kill-switch
-
-OpenFeature Operator on staging (`trusk-staging-ts`) **and prod** (since trusk-k8s#1262). FeatureFlag CRDs in ns `flagd`, one per service in the **global** `<service>/deployment/flagd/` folder (per-env subfolders dropped — TEC-130). The companion ArgoCD app is wired by an allowlist in the `trusk-argo-project` umbrella values: `applications.flagd.servicesByEnv.<env>` (chart-museum, umbrella ≥0.16.1) — **`applications/*.yaml` carries NO `flagd:` block**. Add a new flagd service = add its name to `servicesByEnv.<env>` in chart-museum (do NOT flip `autoDetect` on for all: a companion's directory source at a missing `deployment/flagd` path is an ArgoCD ComparisonError, not a no-op — `allowEmpty` only covers existing-but-empty dirs). Flip a flag via `defaultVariant` (patches stick — the companion has `ignoreDifferences` on `.spec.flagSpec.flags[].state` / `.defaultVariant`):
-
-```bash
-kubectl --context trusk-staging-ts -n flagd patch featureflag <name> --type=merge \
-  -p '{"spec":{"flagSpec":{"flags":{"<flag>":{"defaultVariant":"off","state":"ENABLED","variants":{"on":true,"off":false}}}}}}'
-# verify on any annotated pod's sidecar (~<1s):
-kubectl --context trusk-staging-ts -n <ns> exec <pod> -c <main> -- \
-  sh -c "wget -qO- --post-data='{}' --header='Content-Type: application/json' http://localhost:8016/ofrep/v1/evaluate/flags/<flag>"
-```
-
-Gotcha: `@RequireFlagsEnabled({flags:[{flagKey,defaultValue:true}]})` 403s **only when flagd serves `false`**; `state: DISABLED` or a missing flag falls back to `defaultValue` → request passes. Always flip `defaultVariant`, not `state`.
-
 ## ArgoCD selfHeal + operator-managed RBAC = drift trap
 
-When an operator appends ServiceAccount subjects to a ClusterRoleBinding at runtime (OpenFeature Operator does this for `open-feature-operator-flagd-kubernetes-sync`; also cert-manager, Velero), `selfHeal: true` reverts the additions as drift → consumers 403 on first fetch. Fix = `ignoreDifferences` on `/subjects` for that binding (pattern in trusk-k8s#1191). Apply preemptively for any new RBAC-self-managing operator.
+When an operator appends ServiceAccount subjects to a ClusterRoleBinding at runtime (cert-manager, Velero, etc.), `selfHeal: true` reverts the additions as drift → consumers 403. Fix = `ignoreDifferences` on `/subjects` for that binding (pattern in trusk-k8s#1191). Apply preemptively for any new RBAC-self-managing operator.
 
 ## Quick verifications
 
