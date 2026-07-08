@@ -10,15 +10,16 @@
 #   * socket-activated idle-sleep (rpi5/lib/socket-activate.nix): the backend
 #     binds 127.0.0.1:13337 and a proxy on 127.0.0.1:13336 (what the 443 nginx
 #     path-mux front-proxy /rxresume/ → here) wakes it on first request and stops
-#     it after 10 min idle — reclaiming its ~367 MB RSS on this 4 GB Pi. rxresu.me
-#     v5 has no long-lived SSE/WebSocket in this config (Redis-gated AI workspace
-#     is off — only the ENCRYPTION_SECRET-gated per-user AI providers are on), so
-#     idle-stop is safe; JWT auth (stable AUTH_SECRET) survives a cold wake.
+#     it after 10 min idle — reclaiming its ~367 MB RSS on this 4 GB Pi. The AI
+#     agent workspace IS enabled (REDIS_URL → shared Redis DB 7 + ENCRYPTION_SECRET),
+#     which adds long-lived SSE while an agent chat is open; socket-activation stays
+#     safe because that activity resets the idle timer and idle-stop only fires once
+#     the chat closes. JWT auth (stable AUTH_SECRET) survives a cold wake.
 #     Public exposure means internet scanners can wake it more often than tailnet.
 #
 # Migrations self-apply on boot inside the app (apps/server/src/startup/checks.ts),
 # so there is no migrate oneshot — the app just needs a reachable DB.
-{ config, lib, pkgs, pgHost, pgPort, tailnetFqdn, ... }:
+{ config, lib, pkgs, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
   osUser = "reactive-resume"; # systemd/service identity (hyphen per convention)
   dbUser = "reactive_resume"; # postgres role == db name (no hyphen quoting needed)
@@ -128,10 +129,15 @@ in
       # AI providers (Settings → AI): allow a provider baseURL on the loopback
       # tiny-llm-gate (http://127.0.0.1:4001/v1). Without this, the AI url-policy
       # rejects non-https / private-host base URLs. ENCRYPTION_SECRET (from the
-      # env file) is what actually enables the AI-providers feature; REDIS_URL is
-      # intentionally unset so the heavy "agent workspace" stays off and idle-stop
-      # remains safe (no long-lived SSE/WS).
+      # env file) enables the AI-providers feature.
       FLAG_ALLOW_UNSAFE_AI_BASE_URL = "true";
+      # AI agent workspace (chat assistant that applies edits): needs REDIS_URL +
+      # ENCRYPTION_SECRET. Point at the shared Redis (databases.nix) on a spare DB
+      # index (0-6 are used by immich/dawarich/affine/nextcloud/etc.). Enabling
+      # this adds long-lived SSE while a chat is open — fine under socket-activation
+      # (activity resets the idle timer; it still stops after idleSec once the chat
+      # closes), but agent jobs only run while the service is awake (HTTP-woken).
+      REDIS_URL = "redis://${redisHost}:${toString redisPort}/7";
       # 4 GiB RPi5 memory hygiene (mirrors affine.nix / sure.nix).
       NODE_OPTIONS = "--max-old-space-size=384";
       MALLOC_ARENA_MAX = "2";
