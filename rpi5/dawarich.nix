@@ -1,5 +1,28 @@
 # dawarich.nix — self-hosted location history (Google Timeline alternative)
 # Uses the native NixOS module (services.dawarich) — Rails + Sidekiq + PostGIS + Redis
+#
+# Exposure: Tailscale Serve on :3900 → :13900 (tailnet-only; NOT a Funnel).
+# The tracking clients (Dawarich iOS/Android, OwnTracks, Overland, Traccar) post
+# GPS to /api/v1/… over the tailnet, so no public origin is needed.
+#
+# Studied NSI-76 — "move behind the 443 front-proxy path-mux at /dawarich/"
+# (like Nextcloud/Cyrus/Sure). REJECTED: not feasible with the stock package.
+#   • Dawarich's map frontend hardcodes absolute, domain-root paths — api_client.js
+#     `this.baseURL = "/api/v1"`, dozens of `fetch("/api/v1/…")`, the live-map
+#     websocket `/cable?share_id=…`, vector styles `/maps_maplibre/styles/*.json`,
+#     and turbo-nav to `/map/v2`. Worse, maps/places.js rebuilds the path via
+#     `new URL("/api/v1/places", window.location.origin)` — origin is scheme+host
+#     only, so it DISCARDS any prefix. Under /dawarich/ every map request 404s.
+#   • RAILS_RELATIVE_URL_ROOT is not wired in (would only fix server-rendered
+#     links/assets, never the JS above); a proxy sub_filter can't help either
+#     because the paths are built dynamically from origin. Maintainer confirms
+#     "no such functionality" (github.com/Freika/dawarich/discussions/330, #139).
+#   • Same failure class as AFFiNE (see front-proxy.nix): an SPA that insists on
+#     root paths can't be path-muxed. And there's no free Funnel port for a
+#     dedicated root origin (443/8443/10000 are all taken).
+# → Dawarich stays on tailnet-only Serve. (Public exposure would also hit the
+#   documented /api/* auth-bypass trap, dawarich #2469.) Revisit only if upstream
+#   adds a configurable base path or we fork+patch the frontend.
 { config, pkgs, lib, unstablePkgs, tailnetFqdn, redisHost, redisPort, ... }:
 let
   internalPort = 13900;

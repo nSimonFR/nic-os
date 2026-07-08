@@ -18,7 +18,11 @@
 #                                            lands at the domain root; redirect to Nextcloud)
 #
 # AFFiNE is NOT here anymore — its SPA router insists on root paths, so it runs at the
-# root of its own 8443 Funnel (see affine.nix / services-registry.nix). Reuses the nginx
+# root of its own 8443 Funnel (see affine.nix / services-registry.nix). Dawarich is
+# excluded for the same reason (studied NSI-76): its map frontend hardcodes absolute
+# /api/v1, /cable and /maps_maplibre/styles paths and rebuilds them from
+# window.location.origin, so it can't be path-muxed — see the rejection note in
+# dawarich.nix; it stays on tailnet-only Tailscale Serve. Reuses the nginx
 # instance the Nextcloud module already runs (no extra process). The funnel entry that
 # targets :8092 lives in services-registry.nix (Infrastructure category); Nextcloud +
 # Cyrus entries carry `proxied = true` so tailscale-serve.nix emits no direct
