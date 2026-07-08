@@ -38,6 +38,13 @@ in {
       # also cleared, but this disables the scheduler at the source.
       app = {
         import_enabled = false;
+        # Accept heartbeats older than the 168h default. The wakatime-cli
+        # [api_urls] fan-out (see home/wakatime.nix) replays a client's offline
+        # queue to wakapi too; after any offline stretch those heartbeats are
+        # >7d old and would 400 on wakapi's default Timely gate, then re-queue
+        # on the client forever. A generous window lets the backlog drain (and
+        # wakapi hash-dedups, so replays are harmless). NOT an import knob.
+        heartbeat_max_age = "8760h"; # 1 year
       };
       mail = {
         enabled = true;
