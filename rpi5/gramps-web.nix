@@ -11,10 +11,11 @@
 # Same call the repo already made for AFFiNE: keep it on its own origin. Here
 # that origin is a dedicated Tailscale Serve port (5050).
 #
-# Socket-activated idle-sleep (rpi5/lib/socket-activate.nix): gunicorn binds
+# Socket-activated lazy-start (rpi5/lib/socket-activate.nix): gunicorn binds
 # 127.0.0.1:15051 and a proxy on 127.0.0.1:15050 (the Tailscale Serve backend
-# for 5050) lazily starts gramps-web.service on the first connection, then stops
-# it — plus the Celery worker (sleepWith) — after idleSec of quiet. The readyProbe
+# for 5050) lazily starts gramps-web.service — plus the Celery worker
+# (sleepWith) — on the first connection. idleSec = null: no idle-stop, the units
+# stay warm once woken (avoids cold-wake latency on every use). The readyProbe
 # gates the first request on /ready (unauthenticated 200) so a cold gunicorn
 # (Gramps GI import is slow) doesn't drop it.
 { pkgs, lib, redisHost, redisPort, tailnetFqdn, ... }:
@@ -206,9 +207,9 @@ in
   };
 
   # ── Gramps Web API (Gunicorn) ───────────────────────────────────────
-  # No wantedBy: the socket-activate proxy on :15050 starts this on demand and
-  # stops it when idle (socket-activate.nix force-clears wantedBy + adds
-  # StopWhenUnneeded). Binds :15051 so the proxy can front it.
+  # No wantedBy: the socket-activate proxy on :15050 starts this on demand
+  # (socket-activate.nix force-clears wantedBy). idleSec = null → no idle-stop,
+  # so it stays up once woken. Binds :15051 so the proxy can front it.
   systemd.services.gramps-web = {
     description = "Gramps Web";
     after = [ "network.target" "redis-shared.service" "gramps-web-setup.service" ];
@@ -237,7 +238,8 @@ in
 
   # ── Celery worker (thumbnails, search indexing, exports) ─────────────
   # sleepWith the web tier (see socketActivate.workers below): starts alongside
-  # gramps-web on wake, stops alongside it on idle. No wantedBy of its own.
+  # gramps-web on wake (partOf, so it also stops if gramps-web ever stops). No
+  # wantedBy of its own.
   systemd.services.gramps-web-celery = {
     description = "Gramps Web Celery Worker";
     after = [ "network.target" "redis-shared.service" "gramps-web-setup.service" ];
@@ -263,9 +265,10 @@ in
     };
   };
 
-  # ── Socket-activated idle-sleep ──────────────────────────────────────
+  # ── Socket-activated lazy-start ──────────────────────────────────────
   # Proxy on :15050 (Tailscale Serve 5050 → here) lazily starts gramps-web on
-  # first connection and stops it after idleSec. readyProbe gates on /ready
+  # the first connection. idleSec = null → lazy-start only, no idle-stop: the
+  # web + celery units stay warm once woken. readyProbe gates on /ready
   # (unauthenticated, returns 200) because gunicorn answers slowly on a cold
   # start — Gramps' GObject-introspection import takes a few seconds — and the
   # proxy holds the first connection until the backend is actually up.
@@ -274,7 +277,7 @@ in
     realUnit = "gramps-web.service";
     listen   = [ "127.0.0.1:${toString proxyPort}" ];
     backend  = "127.0.0.1:${toString backendPort}";
-    idleSec  = 600;
+    idleSec  = null;  # ignore idle — lazy-start only, stays up once warm
     readyProbe = {
       url          = "http://127.0.0.1:${toString backendPort}/ready";
       expectStatus = 200;
