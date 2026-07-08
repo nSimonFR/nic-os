@@ -177,7 +177,10 @@ in
     };
 
     # PostToolUse hook on Bash: register each command with atuin under a
-    # sentinel cwd (~/.claude/bash) so it syncs across devices.
+    # separate host (ATUIN_HOST_NAME=claude-code) plus a sentinel cwd
+    # (~/.claude/bash) so commands sync across devices but stay out of the
+    # human's host-/workspace-filtered interactive recall (dotfiles/atuin.toml
+    # uses filter_mode = "host" and workspace = true).
     ".claude/hooks/bash-history" = {
       source = ./scripts/claude-bash-history.sh;
       executable = true;
