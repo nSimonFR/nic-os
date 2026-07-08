@@ -941,17 +941,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1783458708,
+        "lastModified": 1783497668,
         "narHash": "sha256-knl0LQC/8yKWzhkbhCL7B3Y2LnaFbnF8iRdGSjgUrOQ=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "0ac297fc90fe56f17fb74225e62e3f0425b2cf46",
+        "rev": "b80bdf7770ce4ad8c7e44345375f7e5d0cd36c3d",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "0ac297fc90fe56f17fb74225e62e3f0425b2cf46",
         "type": "github"
       }
     },
