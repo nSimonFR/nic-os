@@ -20,7 +20,6 @@ let
     runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
     text = ''
       heavy=(
-        immich-machine-learning.service
         immich-server.service
         dawarich-sidekiq-all.service
         dawarich-web.service

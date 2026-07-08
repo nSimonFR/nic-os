@@ -52,6 +52,7 @@ in
     # Tailscale client configuration
     (import ../shared/tailscale.nix { role = "client"; enableSSH = true; })
     ./beszel-agent.nix
+    ./immich-ml.nix # native GPU-accelerated Immich machine-learning (CLIP) for the rpi5
   ];
 
   nixpkgs.config.allowUnfree = true;
@@ -310,7 +311,8 @@ in
     });
     polkit.addRule(function(action, subject) {
       if (action.id === "org.freedesktop.systemd1.manage-units" &&
-          action.lookup("unit") === "ollama.service" &&
+          (action.lookup("unit") === "ollama.service" ||
+           action.lookup("unit") === "immich-machine-learning.service") &&
           subject.isInGroup("users")) {
         return polkit.Result.YES;
       }
@@ -483,11 +485,13 @@ in
       custom = {
         start = toString (pkgs.writeShellScript "gamemode-start" ''
           ${pkgs.libnotify}/bin/notify-send 'GameMode started'
-          ${pkgs.systemd}/bin/systemctl stop ollama || true
+          # Free VRAM for the game: stop the LLM and Immich ML services. Immich
+          # ML jobs the rpi5 dispatches queue in BullMQ and drain on end.
+          ${pkgs.systemd}/bin/systemctl stop ollama immich-machine-learning || true
         '');
         end = toString (pkgs.writeShellScript "gamemode-end" ''
           ${pkgs.libnotify}/bin/notify-send 'GameMode ended'
-          ${pkgs.systemd}/bin/systemctl start ollama
+          ${pkgs.systemd}/bin/systemctl start ollama immich-machine-learning
         '');
       };
     };
