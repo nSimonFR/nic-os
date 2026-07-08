@@ -66,6 +66,10 @@
     restic-password = {
       file = ./secrets/restic-password.age;
     };
+    gramps-web-secret = {
+      file  = ./secrets/gramps-web-secret.age;
+      owner = "gramps-web";
+    };
     affine-token = {
       file = ./secrets/affine-token.age;
       mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge, affine-mcp) needs to read it

@@ -126,6 +126,11 @@
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
     # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
     { port = 443;   backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; proxied = true; path = "/rxresume"; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # NOT behind the 443 path-mux: Gramps Web's SPA hardcodes absolute API paths and its
+    # service worker needs root scope (gramps-web#531), so it keeps its own Tailscale Serve
+    # port (5050 → socket-activate proxy :15050) — same call as AFFiNE on 8443.
+    { port = 5050;  backend = "http://127.0.0.1:15050"; name = "Gramps Web";      icon = "gramps.svg";         category = "Apps"; description = "Genealogy"; noSiteMonitor = true; }
 
     # Services: Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
