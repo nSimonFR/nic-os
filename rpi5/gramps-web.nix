@@ -136,6 +136,9 @@ in
   systemd.services.gramps-web-setup = {
     description = "Gramps Web venv setup";
     wantedBy = [ "multi-user.target" ];
+    # Order after tmpfiles so ${dataDir}/tmp (our TMPDIR, used by venv/ensurepip)
+    # exists before we run.
+    after = [ "systemd-tmpfiles-setup.service" ];
     path = [ pythonEnv pkgs.coreutils ];
     environment = serviceEnv // {
       TMPDIR = "${dataDir}/tmp";
@@ -151,9 +154,17 @@ in
     script = ''
       set -euo pipefail
 
-      # Create venv if it doesn't exist
-      if [ ! -f "${venvDir}/bin/python" ]; then
+      # TMPDIR is under dataDir; ensure it exists (tmpfiles usually made it, but
+      # a fresh dataDir on first switch can race — venv's ensurepip needs it).
+      mkdir -p "$TMPDIR"
+
+      # (Re)create the venv if bin/python3 is missing or a broken symlink. `-x`
+      # follows the link, so a stale venv left by an older Python (whose nix
+      # store path was GC'd → dangling symlink) is detected and rebuilt rather
+      # than tripping `python -m venv` on the leftover dir.
+      if [ ! -x "${venvDir}/bin/python3" ]; then
         echo "Creating Python venv at ${venvDir}..."
+        rm -rf "${venvDir}"
         ${pythonEnv}/bin/python3 -m venv --system-site-packages "${venvDir}"
       fi
 
