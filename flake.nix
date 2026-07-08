@@ -180,17 +180,28 @@
 
       # `nix build .#rtk` — standalone build target to isolate rtk's heavy LTO
       # compile from a full rebuild (build it alone first on the rpi5).
-      packages = nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
-        system:
+      #
+      # `.#reactive-resume` — the EXACT rpi5 Reactive Resume derivation (same
+      # nixpkgs + appBasePath as the running system). Exposed so garnix CI
+      # (garnix.yaml) pre-builds + pushes it to cache.garnix.io — already a
+      # trusted substituter here — so `nixos-rebuild` pulls the prebuilt binary
+      # instead of the ~20-min pnpm/turbo compile.
+      packages = nixpkgs.lib.recursiveUpdate
+        (nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
+          system:
+          {
+            rtk =
+              (import nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+                overlays = [ rtkOverlay ];
+              }).rtk;
+          }
+        ))
         {
-          rtk =
-            (import nixpkgs {
-              inherit system;
-              config.allowUnfree = true;
-              overlays = [ rtkOverlay ];
-            }).rtk;
-        }
-      );
+          aarch64-linux.reactive-resume =
+            self.nixosConfigurations.${rpiconfig}.config.services.reactive-resume.package;
+        };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
