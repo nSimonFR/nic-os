@@ -130,14 +130,16 @@
   nixConfig = {
     extra-substituters = [
       "https://cache.nixos.org"
+      # rpi5 kernel/firmware — nixos-raspberrypi's own Cachix (NOT garnix).
       "https://nixos-raspberrypi.cachix.org"
-      "https://cache.garnix.io"
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
     ];
+    # cache.garnix.io removed — garnix shuts down 2026-07-15 and nothing here was
+    # ever served by it (kernel is on nixos-raspberrypi.cachix.org; our own builds
+    # were never pushed to garnix). Replaced by self-hosted attic (see below).
   };
 
   outputs =
