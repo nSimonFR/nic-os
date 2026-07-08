@@ -155,9 +155,29 @@
       nixconfig = "BeAsT";
       macconfig = "nBookPro";
       rpiconfig = "rpi5";
+
+      # beast's tailnet MagicDNS name — single source of truth for its address.
+      # Prefer this over the raw 100.x tailscale IP: it survives a tailnet re-IP
+      # and there's exactly one place to change. Resolves from the rpi5 (and the
+      # tailnet generally) via MagicDNS.
+      beastHost = "beast.gate-mintaka.ts.net";
+
+      # Immich version — SINGLE SOURCE OF TRUTH shared by both hosts. The rpi5
+      # runs the Immich *server* from nixpkgs-unstable; beast runs the ML worker
+      # (nixos/immich-ml.nix) and Immich REQUIRES server==ML version. Derive it
+      # once from the unstable package so the two can never drift: bump nixpkgs-
+      # unstable and both hosts move together. (Version is a string attr; reading
+      # it forces no build. x86_64 vs aarch64 is irrelevant — same package def.)
+      immichVersion =
+        (import nixpkgs-unstable {
+          system = "x86_64-linux";
+          config.allowUnfree = true;
+        }).immich.version;
+
       rpi5Params = {
         tailnetFqdn = "rpi5.gate-mintaka.ts.net";
-        beastOllamaUrl = "http://100.125.240.34:11434";
+        inherit beastHost immichVersion;
+        beastOllamaUrl = "http://${beastHost}:11434";
         # Tailscale Aperture AI gateway — observability layer in front of tiny-llm-gate.
         # Set to the Aperture hostname after provisioning at aperture.tailscale.com.
         # Until then, points at tiny-llm-gate directly (no-op passthrough).
@@ -197,6 +217,8 @@
         specialArgs = {
           inherit inputs outputs username;
           hostname = nixconfig;
+          # beast runs the Immich ML worker; version must match the rpi5 server.
+          inherit immichVersion;
         };
         modules = [
           ./nixos/configuration.nix
@@ -211,7 +233,7 @@
         nixpkgs = inputs.nixpkgs;
         specialArgs = {
           inherit inputs outputs username telegramChatId;
-          inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
+          inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl beastHost immichVersion;
           hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           unstablePkgs = import nixpkgs-unstable {
