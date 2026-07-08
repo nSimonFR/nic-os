@@ -941,17 +941,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1783452115,
-        "narHash": "sha256-N8xXzvNsCVmSGj+9ng4XaScBpq1cgZs2Yd0MKUZVMs4=",
+        "lastModified": 1783458708,
+        "narHash": "sha256-knl0LQC/8yKWzhkbhCL7B3Y2LnaFbnF8iRdGSjgUrOQ=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "0ee1f445d6857957f3346c91b6c98d5170270f1c",
+        "rev": "0ac297fc90fe56f17fb74225e62e3f0425b2cf46",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "0ee1f445d6857957f3346c91b6c98d5170270f1c",
+        "rev": "0ac297fc90fe56f17fb74225e62e3f0425b2cf46",
         "type": "github"
       }
     },

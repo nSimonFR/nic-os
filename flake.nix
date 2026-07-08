@@ -78,7 +78,7 @@
       # Pinned to the base-path-support commit (PR #1, branch feat/base-path-support,
       # pending review/merge). Once merged, repoint to plain
       # `github:nSimonFR/reactive-resume-nix` (main) + relock.
-      url = "github:nSimonFR/reactive-resume-nix/0ee1f445d6857957f3346c91b6c98d5170270f1c";
+      url = "github:nSimonFR/reactive-resume-nix/0ac297fc90fe56f17fb74225e62e3f0425b2cf46";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
