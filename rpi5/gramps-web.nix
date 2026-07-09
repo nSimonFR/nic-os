@@ -1,8 +1,11 @@
-# gramps-web.nix — Gramps Web genealogy app (gramps-webapi + grampsjs SPA).
+# gramps-web.nix — Gramps Web genealogy app (gramps-web-api + grampsjs SPA).
 #
-# Python venv approach: nixpkgs provides the GObject/GTK/ICU system deps, and
-# gramps-webapi is pip-installed at runtime by the gramps-web-setup oneshot
-# (no [ai] extras — skips PyTorch/sentence-transformers, too heavy for the RPi5).
+# Native packages (no runtime pip): the API, the grampsjs frontend and their
+# Python deps are built from the derivations vendored in ./pkgs/gramps-web
+# (nixpkgs PR #417806, rebased onto our 25.11 — see that overlay for why it's
+# vendored rather than used as a flake input, and which upstream bits are cut).
+#   * pkgs.python3Packages.gramps-web-api — the WSGI/Celery backend
+#   * pkgs.gramps-web                      — the built SPA (→ .../static)
 #
 # Not behind the 443 front-proxy path-mux (front-proxy.nix): Gramps Web's SPA
 # hardcodes absolute API paths and its service worker needs root scope, so it
@@ -23,27 +26,26 @@ let
   backendPort = 15051; # real gunicorn bind (localhost only)
   proxyPort   = 15050; # socket-activate proxy listen; Tailscale Serve 5050 → here
   dataDir = "/var/lib/gramps-web";
-  venvDir = "${dataDir}/venv";
   user = "gramps-web";
   group = "gramps-web";
 
   # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 4=paperless, 5=nextcloud are taken.
   redisUrl = "redis://${redisHost}:${toString redisPort}/6";
 
-  # Python with GObject/GTK bindings from nixpkgs — pip can't compile these
-  # from source without the system C libraries. The venv uses
-  # --system-site-packages to inherit them.
-  pythonEnv = pkgs.python3.withPackages (ps: with ps; [
-    pygobject3
-    pycairo
-    pillow
-    pyicu
+  # Runtime Python env: the native gramps-web-api (pulls in gramps, celery,
+  # flask, sqlalchemy, …) plus gunicorn to serve it. gramps_webapi is importable
+  # and the celery/gunicorn console scripts land on the env's bin/.
+  pythonEnv = pkgs.python3.withPackages (ps: [
+    ps.gramps-web-api
+    ps.gunicorn
+    ps.celery
   ]);
 
-  # GObject Introspection typelibs — Gramps core needs GTK3, GExiv2,
-  # OsmGpsMap, Pango, etc. to import via `gi.require_version()`.
-  # Some packages (pango, glib) default to the -bin output which has no
-  # typelibs — use .out explicitly to get the girepository-1.0 directory.
+  # GObject Introspection typelibs — Gramps needs GTK3, GExiv2, OsmGpsMap,
+  # Pango, etc. at `gi.require_version()` time. gramps-web-api itself is built
+  # with wrapGAppsHook3, but we launch it via gunicorn from the env above (not
+  # its wrapped entry point), so GI_TYPELIB_PATH must be set on the service.
+  # pango/glib default to their -bin output which has no typelibs → use .out.
   typelibPkgs = with pkgs; [
     gobject-introspection  # cairo, DBus, fontconfig, freetype2
     at-spi2-core           # Atk, Atspi (required by GTK3)
@@ -76,7 +78,9 @@ let
     GRAMPSWEB_USER_DB_URI = "sqlite:///${dataDir}/data/users.sqlite";
     GRAMPSWEB_SEARCH_INDEX_DB_URI = "sqlite:///${dataDir}/indexdir/search_index.db";
     GRAMPSWEB_MEDIA_BASE_DIR = "${dataDir}/media";
-    GRAMPSWEB_STATIC_PATH = "${dataDir}/static";
+    # Frontend static assets come straight from the nix store (the missing piece
+    # of the old pip approach — index.html + sw.js live here).
+    GRAMPSWEB_STATIC_PATH = "${pkgs.gramps-web}/share/gramps-web/static";
     GRAMPSWEB_THUMBNAIL_CACHE_CONFIG__CACHE_DIR = "${dataDir}/cache/thumbnails";
     GRAMPSWEB_REQUEST_CACHE_CONFIG__CACHE_DIR = "${dataDir}/cache/request_cache";
     GRAMPSWEB_PERSISTENT_CACHE_CONFIG__CACHE_DIR = "${dataDir}/cache/persistent_cache";
@@ -86,7 +90,6 @@ let
     GRAMPSHOME = dataDir;
     CELERY_BROKER_URL = redisUrl;
     CELERY_RESULT_BACKEND = redisUrl;
-    GUNICORN_NUM_WORKERS = "1";
     GI_TYPELIB_PATH = giTypelibPath;
     # Limit thread usage for RPi5
     OMP_NUM_THREADS = "1";
@@ -111,6 +114,7 @@ in
   users.groups.${group} = { };
 
   # ── Data directories ─────────────────────────────────────────────────
+  # (No venv/static dir anymore — code + frontend live in the nix store.)
   systemd.tmpfiles.rules = [
     "d ${dataDir}            0750 ${user} ${group} -"
     "d ${dataDir}/data       0750 ${user} ${group} -"
@@ -123,99 +127,8 @@ in
     "d ${dataDir}/cache/persistent_cache 0750 ${user} ${group} -"
     "d ${dataDir}/cache/reports  0750 ${user} ${group} -"
     "d ${dataDir}/cache/export   0750 ${user} ${group} -"
-    "d ${dataDir}/static     0750 ${user} ${group} -"
     "d ${dataDir}/tmp        0750 ${user} ${group} -"
   ];
-
-  # ── Venv setup (oneshot) ─────────────────────────────────────────────
-  # Creates a Python venv with --system-site-packages (inherits GI/GTK
-  # bindings from nixpkgs) and pip-installs gramps-webapi. Runs at boot
-  # (independent of the socket-activated web tier) so the venv is warm
-  # before the first request — pip install is far too slow to do lazily.
-  # Re-run manually: sudo systemctl start gramps-web-setup
-  systemd.services.gramps-web-setup = {
-    description = "Gramps Web venv setup";
-    wantedBy = [ "multi-user.target" ];
-    # Order after tmpfiles so ${dataDir}/tmp (our TMPDIR, used by venv/ensurepip)
-    # exists before we run.
-    after = [ "systemd-tmpfiles-setup.service" ];
-    path = [ pythonEnv pkgs.coreutils ];
-    environment = serviceEnv // {
-      TMPDIR = "${dataDir}/tmp";
-    };
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = user;
-      Group = group;
-      WorkingDirectory = dataDir;
-      PrivateUsers = lib.mkForce false;
-    };
-    script = ''
-      set -euo pipefail
-
-      # TMPDIR is under dataDir; ensure it exists (tmpfiles usually made it, but
-      # a fresh dataDir on first switch can race — venv's ensurepip needs it).
-      mkdir -p "$TMPDIR"
-
-      # (Re)create the venv if bin/python3 is missing or a broken symlink. `-x`
-      # follows the link, so a stale venv left by an older Python (whose nix
-      # store path was GC'd → dangling symlink) is detected and rebuilt rather
-      # than tripping `python -m venv` on the leftover dir.
-      if [ ! -x "${venvDir}/bin/python3" ]; then
-        echo "Creating Python venv at ${venvDir}..."
-        rm -rf "${venvDir}"
-        ${pythonEnv}/bin/python3 -m venv --system-site-packages "${venvDir}"
-      fi
-
-      # Install/upgrade gramps-webapi (without AI extras)
-      echo "Installing gramps-webapi..."
-      "${venvDir}/bin/pip" install --upgrade --no-deps \
-        'gramps-webapi' \
-        'gramps[all]>=6.0.4,<6.1.0' \
-        'gunicorn'
-
-      # Install remaining deps that aren't in nixpkgs
-      "${venvDir}/bin/pip" install --upgrade \
-        'Flask>=2.1.0' \
-        'Flask-Caching>=2.0.0' \
-        'Flask-Compress' \
-        'Flask-Cors' \
-        'Flask-JWT-Extended>=4.2.1' \
-        'Flask-Limiter>=2.9.0' \
-        'Flask-SQLAlchemy' \
-        'flask-smorest' \
-        'marshmallow>=3.13.0' \
-        'waitress' \
-        'webargs' \
-        'SQLAlchemy>=2.0.0' \
-        'pdf2image' \
-        'bleach[css]>=5.0.0' \
-        'jsonschema' \
-        'ffmpeg-python' \
-        'boto3' \
-        'alembic' \
-        'celery[redis]' \
-        'Unidecode' \
-        'pytesseract' \
-        'gramps-ql>=0.4.0' \
-        'object-ql>=0.1.3' \
-        'sifts>=1.1.0' \
-        'requests' \
-        'yclade>=0.5.0' \
-        'Authlib>=1.6.4' \
-        'gramps-gedcom7' \
-        'typing-extensions>=4.13.0' \
-        'orjson' \
-        'Click>=7.0'
-
-      # Run user DB migrations
-      echo "Running user DB migrations..."
-      "${venvDir}/bin/python3" -m gramps_webapi user migrate || true
-
-      echo "Gramps Web setup complete."
-    '';
-  };
 
   # ── Gramps Web API (Gunicorn) ───────────────────────────────────────
   # No wantedBy: the socket-activate proxy on :15050 starts this on demand
@@ -223,8 +136,7 @@ in
   # so it stays up once woken. Binds :15051 so the proxy can front it.
   systemd.services.gramps-web = {
     description = "Gramps Web";
-    after = [ "network.target" "redis-shared.service" "gramps-web-setup.service" ];
-    requires = [ "gramps-web-setup.service" ];
+    after = [ "network.target" "redis-shared.service" ];
     wants = [ "redis-shared.service" ];
     path = [ pkgs.coreutils ] ++ runtimePkgs;
     environment = serviceEnv // {
@@ -233,7 +145,9 @@ in
     script = ''
       SECRET_KEY=$(cat /run/agenix/gramps-web-secret)
       export GRAMPSWEB_SECRET_KEY="$SECRET_KEY"
-      exec "${venvDir}/bin/gunicorn" \
+      # Idempotent user-DB migration (was the old pip setup oneshot's job).
+      ${pythonEnv}/bin/python3 -m gramps_webapi user migrate || true
+      exec "${pythonEnv}/bin/gunicorn" \
         -w 1 \
         -b 127.0.0.1:${toString backendPort} \
         --timeout 120 \
@@ -253,8 +167,7 @@ in
   # wantedBy of its own.
   systemd.services.gramps-web-celery = {
     description = "Gramps Web Celery Worker";
-    after = [ "network.target" "redis-shared.service" "gramps-web-setup.service" ];
-    requires = [ "gramps-web-setup.service" ];
+    after = [ "network.target" "redis-shared.service" ];
     wants = [ "redis-shared.service" ];
     path = [ pkgs.coreutils ] ++ runtimePkgs;
     environment = serviceEnv // {
@@ -263,7 +176,7 @@ in
     script = ''
       SECRET_KEY=$(cat /run/agenix/gramps-web-secret)
       export GRAMPSWEB_SECRET_KEY="$SECRET_KEY"
-      exec "${venvDir}/bin/celery" \
+      exec "${pythonEnv}/bin/celery" \
         -A gramps_webapi.celery \
         worker \
         --loglevel=info \

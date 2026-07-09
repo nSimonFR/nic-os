@@ -78,5 +78,10 @@
     # NixOS modules (picoclaw, cyrus) and the NixOS-integrated home-manager
     # generation resolve the same package as the standalone HM configs.
     outputs.overlays.rtk
+
+    # Native Gramps Web packages (frontend + gramps-web-api + Python deps),
+    # vendored from nixpkgs PR #417806 against our 25.11. Replaces the old
+    # runtime pip-in-venv approach in gramps-web.nix.
+    (import ./pkgs/gramps-web/overlay.nix)
   ];
 }
