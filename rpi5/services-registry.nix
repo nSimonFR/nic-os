@@ -21,7 +21,7 @@
 { }:
 {
   entries = [
-    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Karakeep → Home Assistant
+    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Papra → Karakeep → Home Assistant
     { port = 443;   backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)"; proxied = true; path = "/nextcloud";
       widget = {
         type = "nextcloud";
@@ -85,6 +85,9 @@
           { field = "inbox"; label = "Inbox"; format = "number"; }
         ];
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # Papra: document-management trial running ALONGSIDE Paperless (both live for now).
+    { port = 3450;  backend = "http://127.0.0.1:8220";  name = "Papra";          icon = "papra.svg";          category = "Apps"; description = "Document archive (Papra trial)"; noSiteMonitor = true; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     { port = 3500;  backend = "http://127.0.0.1:8210";  name = "Karakeep";       icon = "karakeep.svg";       category = "Apps"; description = "Bookmarks + read-later (AI-tagged)"; noSiteMonitor = true;
       # Stats via homepage-stats.py reading karakeep's SQLite read-only (no API
