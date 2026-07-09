@@ -144,6 +144,7 @@ in
     ./immich.nix
     ./sure.nix
     ./paperless.nix
+    ./papra.nix
     ./karakeep.nix
     ./airtrail.nix
     ./nextcloud.nix

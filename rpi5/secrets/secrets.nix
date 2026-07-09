@@ -25,6 +25,7 @@ in {
   "paperless-admin-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "paperless-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "paperless-api-token.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
+  "papra-env.age".publicKeys                = [ nsimon-age nsimon-ed25519 ];
   "nextcloud-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "protonmail-bridge-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "nextcloud-homepage-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];

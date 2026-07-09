@@ -29,6 +29,7 @@
     "d /mnt/data/backups/vaultwarden 0750 vaultwarden vaultwarden -"
     "d /mnt/data/backups/open-webui 0750 root root -"
     "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
+    "d /mnt/data/backups/papra 0750 papra papra -"
   ];
 
   systemd.services.hass-backup = {
@@ -66,6 +67,29 @@
     description = "Daily Open WebUI backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 03:30:00"; Persistent = true; };
+  };
+
+  # ── Papra (SQLite — Papra is libSQL-only, no Postgres) ──────────────────
+  # Papra's metadata DB lives on the SSD; document FILES live on /mnt/data
+  # (restic-covered directly). This atomic .backup lands the DB on /mnt/data too.
+  # Runs as papra so it can read the DB regardless of whether papra.service is
+  # awake (idle-sleep) — .backup only touches the file, not the running server.
+  systemd.services.papra-backup = {
+    description = "Papra database backup";
+    serviceConfig = { Type = "oneshot"; User = "papra"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/papra/db.sqlite ".backup '/mnt/data/backups/papra/papra-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/papra/papra-$STAMP.db"
+      ${pkgs.findutils}/bin/find /mnt/data/backups/papra -name "papra-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.papra-backup = {
+    description = "Daily Papra backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────

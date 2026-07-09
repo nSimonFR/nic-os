@@ -108,6 +108,11 @@
       file  = ./secrets/paperless-api-token.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
+    papra-env = {
+      file  = ./secrets/papra-env.age;
+      owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)
+      mode  = "0400";
+    };
     nextcloud-pg-password = {
       file  = ./secrets/nextcloud-pg-password.age;
       owner = "postgres"; # nextcloud-pg-setup runs as postgres; nextcloud-setup reads via LoadCredential as PID 1
