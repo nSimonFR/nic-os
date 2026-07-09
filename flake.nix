@@ -78,6 +78,11 @@
       url = "github:nSimonFR/reactive-resume-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
+    gramps-web-nix = {
+      url = "github:nSimonFR/gramps-web-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
@@ -262,6 +267,7 @@
           inputs.for-sure.nixosModules.default
           inputs.airtrail-nix.nixosModules.airtrail
           inputs.reactive-resume-nix.nixosModules.reactive-resume
+          inputs.gramps-web-nix.nixosModules.gramps-web
           {
             home-manager = {
               useGlobalPkgs = true;
