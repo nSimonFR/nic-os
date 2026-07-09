@@ -103,16 +103,24 @@ in
           ${fwdHeaders}
           # Cold-wake (socket-activation) takes ~18s; give the first request
           # headroom over nginx's 60s default so it doesn't 504 (readyProbe=120s).
-          proxy_read_timeout 120s;
-          # oRPC batches concurrent dashboard queries into a single streaming
-          # response (BatchLinkPlugin mode:"streaming" → Content-Type:
-          # text/event-stream). nginx's default proxy_buffering holds those SSE
-          # frames in-buffer, stalling the batched stream — so the initial
-          # dashboard draw hangs (empty resume list) until an interaction fires a
-          # standalone non-batched query. Disable buffering so SSE flushes live.
-          # Also fixes the builder's resume/updates/subscribe SSE subscription.
+          # Also covers AI resume import: parsePdf is a non-streaming Anthropic
+          # call (max_tokens 64000) that can run several minutes for a dense CV
+          # under load — match tiny-llm-gate's 600s upstream
+          # ResponseHeaderTimeout so the browser leg doesn't 504 before the
+          # backend answers.
+          proxy_read_timeout 600s;
+          # The RR client (@orpc BatchLinkPlugin mode:"streaming") and the AI
+          # chat stream responses via /api/rpc. oRPC also batches concurrent
+          # dashboard queries into one text/event-stream response. With nginx's
+          # default proxy_buffering, nginx withholds all bytes until the upstream
+          # finishes: the initial dashboard draw hangs (empty resume list) and,
+          # on a slow (~34s+) parse, the browser's stream reader sees nothing and
+          # cancels ("context canceled" in tailscaled) → the import shows an error
+          # even though the server created the resume. Disable buffering so SSE
+          # framing/keepalive bytes reach the client live.
           proxy_buffering off;
           proxy_cache off;
+          proxy_request_buffering off;
         '';
       };
 
