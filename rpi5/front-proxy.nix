@@ -104,6 +104,15 @@ in
           # Cold-wake (socket-activation) takes ~18s; give the first request
           # headroom over nginx's 60s default so it doesn't 504 (readyProbe=120s).
           proxy_read_timeout 120s;
+          # oRPC batches concurrent dashboard queries into a single streaming
+          # response (BatchLinkPlugin mode:"streaming" → Content-Type:
+          # text/event-stream). nginx's default proxy_buffering holds those SSE
+          # frames in-buffer, stalling the batched stream — so the initial
+          # dashboard draw hangs (empty resume list) until an interaction fires a
+          # standalone non-batched query. Disable buffering so SSE flushes live.
+          # Also fixes the builder's resume/updates/subscribe SSE subscription.
+          proxy_buffering off;
+          proxy_cache off;
         '';
       };
 
