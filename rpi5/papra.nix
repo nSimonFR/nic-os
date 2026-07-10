@@ -42,8 +42,8 @@ in
 
   services.papra = {
     enable  = true;
-    # 26.6.1 built from a vendored package.nix (rpi5/pkgs/papra/package.nix) via the
-    # overlay — pinned unstable is 26.5.0, which lacks AI auto-tagging (needs 26.6.0+).
+    # pkgs.papra resolves to unstablePkgs.papra via the overlay (overlays.nix) —
+    # needs 26.6.0+ for AI auto-tagging.
     package = pkgs.papra;
 
     # AUTH_SECRET (Better Auth) + OPENAI_API_KEY (tiny-llm-gate) come from agenix.

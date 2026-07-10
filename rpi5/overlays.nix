@@ -23,10 +23,8 @@
           doInstallCheck = false;
         });
         buildHomeAssistantComponent = unstablePkgs.buildHomeAssistantComponent;
-        # papra: pinned unstable is 26.5.0 (pre AI auto-tagging). Build 26.6.1 from a
-        # vendored package.nix using unstable's toolchain (nodejs_26/pnpm_11/vips/tsx).
-        # See rpi5/pkgs/papra/package.nix. Remove once pinned unstable ≥ 26.6.0.
-        papra = unstablePkgs.callPackage ./pkgs/papra/package.nix { };
+        # papra: needs 26.6.0+ for AI auto-tagging; unstable pin is kept ≥ that.
+        papra = unstablePkgs.papra;
       }
     )
 
