@@ -40,6 +40,14 @@ in
   systemd.services.gramps-web-celery.after = [ "redis-shared.service" ];
   systemd.services.gramps-web-celery.wants = [ "redis-shared.service" ];
 
+  # Disable Gramps Web's opt-out telemetry. Its before_request hook POSTs to a
+  # Google Cloud Run endpoint inline in the gunicorn worker and lets the failure
+  # escape preprocess_request — with outbound blocked here every *authenticated*
+  # request 502s (login 200s, then the SPA's first authed call dies). Flask reads
+  # GRAMPSWEB_-prefixed env into config, so this sets config DISABLE_TELEMETRY.
+  systemd.services.gramps-web.environment.GRAMPSWEB_DISABLE_TELEMETRY = "true";
+  systemd.services.gramps-web-celery.environment.GRAMPSWEB_DISABLE_TELEMETRY = "true";
+
   services.socketActivate.gramps-web = {
     enable   = true;
     realUnit = "gramps-web.service";
