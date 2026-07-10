@@ -28,6 +28,7 @@
     "d /mnt/data/backups/hass 0750 hass hass -"
     "d /mnt/data/backups/vaultwarden 0750 vaultwarden vaultwarden -"
     "d /mnt/data/backups/open-webui 0750 root root -"
+    "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
   ];
 
   systemd.services.hass-backup = {
@@ -84,5 +85,30 @@
     description = "Daily Vaultwarden backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 03:15:00"; Persistent = true; };
+  };
+
+  # ── Gramps Web (per-tree SQLite + media) ───────────────────────────────
+  systemd.services.gramps-web-backup = {
+    description = "Gramps Web family trees + media backup";
+    serviceConfig = { Type = "oneshot"; User = "gramps-web"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/gramps-web
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/gramps-web/data/users.sqlite ".backup '$OUT/users-$STAMP.sqlite'"
+      for tree in /var/lib/gramps-web/data/grampsdb/*/; do
+        id=$(${pkgs.coreutils}/bin/basename "$tree")
+        ${pkgs.sqlite}/bin/sqlite3 "$tree/sqlite.db" ".backup '$OUT/tree-$id-$STAMP.db'"
+      done
+      ${pkgs.gnutar}/bin/tar -czf "$OUT/media-$STAMP.tar.gz" -C /var/lib/gramps-web media
+      ${pkgs.gzip}/bin/gzip -f "$OUT"/*-"$STAMP".sqlite "$OUT"/*-"$STAMP".db
+      ${pkgs.findutils}/bin/find "$OUT" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.gramps-web-backup = {
+    description = "Daily Gramps Web backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
   };
 }
