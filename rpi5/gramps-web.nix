@@ -27,10 +27,18 @@ in
     enable        = true;
     host          = "127.0.0.1";
     port          = backendPort;
+    # Multi-tree: serve several independent family trees (Dolou, Le Dreff, …) from
+    # one instance. "*" flips GRAMPSWEB_TREE to TREE_MULTI so the frontend shows a
+    # tree switcher; an ADMIN-role (5) user can view/manage all trees. Trees are
+    # created offline via the bundled `gramps` CLI (see grampsdb dirs under dataDir).
+    tree          = "*";
     baseUrl       = "https://${tailnetFqdn}:5050";
     # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 4=paperless, 5=nextcloud are taken.
     redisUrl      = "redis://${redisHost}:${toString redisPort}/6";
     secretKeyFile = "/run/agenix/gramps-web-secret";
+    # Multi-tree hardening: prefix media paths by tree id so one tree's media can't
+    # be reached from another (gramps-web warns loudly without this in TREE_MULTI).
+    settings.GRAMPSWEB_MEDIA_PREFIX_TREE = "true";
   };
 
   # gramps-web-celery reaches Redis directly; make sure it's up first. (The web
