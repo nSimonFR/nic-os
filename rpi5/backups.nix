@@ -124,7 +124,10 @@
         id=$(${pkgs.coreutils}/bin/basename "$tree")
         ${pkgs.sqlite}/bin/sqlite3 "$tree/sqlite.db" ".backup '$OUT/tree-$id-$STAMP.db'"
       done
-      ${pkgs.gnutar}/bin/tar -czf "$OUT/media-$STAMP.tar.gz" -C /var/lib/gramps-web media
+      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks
+      # → use the absolute gzip like the sqlite dumps below.
+      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
+        -cf "$OUT/media-$STAMP.tar.gz" -C /var/lib/gramps-web media
       ${pkgs.gzip}/bin/gzip -f "$OUT"/*-"$STAMP".sqlite "$OUT"/*-"$STAMP".db
       ${pkgs.findutils}/bin/find "$OUT" -mtime +7 -delete
     '';
