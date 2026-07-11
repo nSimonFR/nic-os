@@ -11,7 +11,7 @@
 #
 # Memory-constrained RPi5: the stack (web + workers + Meilisearch) sleeps after
 # 10 min idle via the socket-activation pattern (rpi5/lib/socket-activate.nix,
-# same as paperless), returning to ~0 RAM at rest.
+# same as papra), returning to ~0 RAM at rest.
 #
 # Local headless Chromium (screenshots + full-page archival) is DISABLED: nixpkgs
 # has no cached aarch64 build at our pinned rev, so browser.enable = true would
@@ -79,7 +79,7 @@ in
   # (~0 RAM) that must run at boot to generate /var/lib/karakeep/settings.env (a
   # persistent StateDirectory file) before the first wake.
   #
-  # Behavior change to flag (like paperless): while asleep, a bookmark saved via
+  # Behavior change to flag (like papra): while asleep, a bookmark saved via
   # the extension/app first wakes the stack; the worker then crawls + AI-tags it
   # asynchronously.
   services.socketActivate.karakeep = {

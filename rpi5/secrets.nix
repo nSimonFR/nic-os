@@ -91,23 +91,6 @@
       owner = "dawarich";
       mode  = "0440";
     };
-    paperless-pg-password = {
-      file  = ./secrets/paperless-pg-password.age;
-      owner = "postgres"; # paperless-pg-setup runs as postgres and reads this
-    };
-    paperless-admin-password = {
-      file  = ./secrets/paperless-admin-password.age;
-      owner = "paperless"; # services.paperless.passwordFile -> LoadCredential
-    };
-    paperless-env = {
-      file  = ./secrets/paperless-env.age;
-      owner = "paperless"; # EnvironmentFile for all paperless-* services
-      mode  = "0400";
-    };
-    paperless-api-token = {
-      file  = ./secrets/paperless-api-token.age;
-      owner = "nsimon"; # homepage-dashboard-env reads this
-    };
     papra-env = {
       file  = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)

@@ -26,10 +26,6 @@ let
         affine.service
         sure-worker.service
         sure-web.service
-        paperless-consumer.service
-        paperless-scheduler.service
-        paperless-task-queue.service
-        paperless-web.service
       )
       echo "nixos-rebuild-safe: stopping heavy services to free memory…" >&2
       sudo systemctl stop "''${heavy[@]}" || true
@@ -143,7 +139,6 @@ in
     ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
-    ./paperless.nix
     ./papra.nix
     ./karakeep.nix
     ./airtrail.nix

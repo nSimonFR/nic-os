@@ -53,18 +53,6 @@
       });
     })
 
-    # paperless-ngx 2.19.6 ships a timing-flaky test
-    # (test_management_consumer.py::TestConsumerRecursive::test_slow_write_and_move
-    # — "Expected 'delay' to have been called once. Called 0 times.")
-    # that fails reliably on the memory-constrained RPi5. The full
-    # 1362-test suite also costs ~14min on the RPi5; skip it.
-    (final: prev: {
-      paperless-ngx = prev.paperless-ngx.overrideAttrs (_: {
-        doCheck = false;
-        doInstallCheck = false;
-      });
-    })
-
     # beszel 0.18.7 ships a CPU-percent test that assumes single-CPU
     # semantics (asserts pct <= 100) but the rpi5 has 4 cores so the
     # subsequent-call delta can briefly exceed 100%. Skip checks.

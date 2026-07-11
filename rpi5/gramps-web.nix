@@ -33,7 +33,7 @@ in
     # created offline via the bundled `gramps` CLI (see grampsdb dirs under dataDir).
     tree          = "*";
     baseUrl       = "https://${tailnetFqdn}:5050";
-    # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 4=paperless, 5=nextcloud are taken.
+    # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 5=nextcloud are taken (4 freed by Paperless removal).
     redisUrl      = "redis://${redisHost}:${toString redisPort}/6";
     secretKeyFile = "/run/agenix/gramps-web-secret";
     # Multi-tree hardening: prefix media paths by tree id so one tree's media can't

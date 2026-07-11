@@ -7,8 +7,8 @@
 # Tailscale Drive share defined in tailscale-serve.nix.
 # Calendars/addressbooks stay in PostgreSQL.
 #
-# Same shape as paperless.nix: shared system PostgreSQL + shared Redis,
-# password set via a oneshot ALTER USER service, secrets via agenix.
+# Same shape as sure.nix / airtrail.nix: shared system PostgreSQL + shared
+# Redis, password set via a oneshot ALTER USER service, secrets via agenix.
 { config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
   # Internal nginx port. Nextcloud is served at https://<tailnetFqdn>/nextcloud on the
@@ -23,7 +23,7 @@ let
   # to this user's files dir below — see the systemd.mounts block.
   datadir = "/mnt/data/nextcloud";
 
-  # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=Paperless.
+  # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=free (was Paperless).
   redisDb = 5;
 
   # Whitelist of apps to keep enabled. Anything currently-enabled and not on
@@ -97,7 +97,7 @@ in
     ensureUsers = [{
       name = "nextcloud_user";
       # ensureDBOwnership requires db name == username; granted in
-      # nextcloud-pg-setup below (same caveat as sure/paperless).
+      # nextcloud-pg-setup below (same caveat as sure/airtrail).
     }];
 
     authentication = lib.mkAfter ''

@@ -10,7 +10,7 @@
 #   * airtrail.service       — the Node HTTP server (adapter-node).
 #
 # Memory-constrained RPi5: steady-state RSS is ~65 MB, but per the socket-
-# activation policy used across immich/sure/paperless/karakeep the server also
+# activation policy used across immich/sure/papra/karakeep the server also
 # sleeps after 10 min idle (rpi5/lib/socket-activate.nix) and wakes on first
 # request, returning to ~0 RAM at rest.
 #
@@ -52,7 +52,7 @@ in
       RemainAfterExit = true;
       User = "postgres";
       # RPi5 kernel has no user namespaces; the default PrivateUsers=true breaks
-      # the oneshot (same fix as paperless-pg-setup).
+      # the oneshot (same fix as sure-pg-setup).
       PrivateUsers = lib.mkForce false;
     };
     script = ''

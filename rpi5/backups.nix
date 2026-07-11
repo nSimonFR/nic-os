@@ -16,7 +16,6 @@
       "nextcloud_production"
       "airtrail"
       "ghostfolio"
-      "paperless_production"
       "reactive_resume"
     ];
     compression = "gzip";

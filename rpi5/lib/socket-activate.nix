@@ -29,8 +29,8 @@ let
         type = lib.types.str;
         description = ''
           systemd unit (with .service suffix) put behind the proxy. No default —
-          half the targets here are not <name>.service (paperless-web,
-          sure-web, …). Explicit > implicit.
+          half the targets here are not <name>.service (sure-web, karakeep-web,
+          …). Explicit > implicit.
         '';
         example = "forgejo.service";
       };
@@ -220,9 +220,9 @@ in {
 
       # 3. Worker patches: sleepWith → bound to realUnit's lifecycle.
       # No `after = realUnit` here — workers connect to DB/Redis directly,
-      # not to the web tier, so they can start in parallel. Adding it
-      # creates a 2-cycle for workers like paperless-scheduler that the
-      # nixpkgs module already orders BEFORE realUnit (migrations).
+      # not to the web tier, so they can start in parallel. Adding it would
+      # create a 2-cycle for workers whose module already orders them BEFORE
+      # realUnit (e.g. migrations).
       (lib.mkMerge (lib.concatMap
         (name:
           let c = enabled.${name}; in
