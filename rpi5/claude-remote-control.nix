@@ -1,4 +1,4 @@
-{ pkgs, username, telegramChatId, ... }:
+{ pkgs, lib, username, telegramChatId, ... }:
 let
   sessionName = "claude-rc";
   # claude-rc auto-resume: detect bridge sessions stalled at the Claude usage
@@ -13,10 +13,6 @@ let
   telegramTokenFile = "/run/agenix/telegram-bot-token";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
   credentialsFile = "/home/${username}/.claude/.credentials.json";
-  # RuntimeDirectory places the file under /run (owned by the service user);
-  # tiny-llm-gate reads from the full path.
-  claudeOauthDir = "claude-oauth";                  # relative to /run
-  claudeOauthPath = "/run/${claudeOauthDir}/token";
   sessionsDir = "/home/${username}/.claude/sessions";
   projectsDir = "/home/${username}/.claude/projects";
   worktreesDir = "/home/${username}/nic-os/.claude/worktrees";
@@ -36,26 +32,16 @@ let
   # bypassing the gate) which matches that established choice.
   configDir = "/home/${username}/.claude-rc";
 
-  # Extracts the current OAuth access token from ~/.claude/.credentials.json
-  # and writes it atomically to /run/claude-oauth/token. The long-running
-  # claude-remote-control process keeps credentials.json fresh by refreshing
-  # the token during normal session activity; this extractor is re-triggered
-  # on file changes via a path unit so the /run file tracks the refreshes.
-  # tiny-llm-gate reads the resulting file on every request (FileBearer auth).
-  extractScript = pkgs.writeShellScript "claude-oauth-extract" ''
-    set -eu
-    umask 0333  # -r--r--r-- so tiny-llm-gate (DynamicUser) can read it
-    # $RUNTIME_DIRECTORY is set by systemd via RuntimeDirectory=
-    dest="$RUNTIME_DIRECTORY/token"
-    token=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.accessToken // empty' ${credentialsFile})
-    if [ -z "$token" ]; then
-      echo "no accessToken in credentials file" >&2
-      exit 1
-    fi
-    tmp="$dest.new"
-    printf '%s' "$token" > "$tmp"
-    mv "$tmp" "$dest"
-  '';
+  # OAuth keep-warm sidecar (token-refresh timer + extract-to-/run unit) for
+  # this account. The long-running claude-remote-control process keeps
+  # credentials.json fresh by refreshing the token during normal session
+  # activity; the refresh timer below covers idle stretches. See
+  # claude-oauth-keepwarm.nix (shared with the account-2 gate-only spare in
+  # claude-oauth-2.nix).
+  keepWarm = import ./claude-oauth-keepwarm.nix { inherit pkgs username; } {
+    inherit credentialsFile;
+    extractAfter = [ "claude-remote-control.service" ];
+  };
 
   # Seconds of conversation inactivity before a bridge session is reaped.
   # Uses the conversation JSONL file mtime (updated on every user/assistant
@@ -71,16 +57,6 @@ let
   # orphans: each holds ~70MB RSS + a worktree dir for up to a day. Bounded
   # by maxSessions=8 in startScript, so ~560MB ceiling — fine on the rpi5.
   maxInactivitySec = "86400"; # 24h
-
-  # Periodic no-op `claude -p` invocation whose sole purpose is to keep the
-  # OAuth access token fresh. When the bridge sits idle for long stretches the
-  # long-running process stops refreshing credentials.json; a headless print
-  # query forces a token refresh, which the path unit below picks up and
-  # re-extracts to /run/claude-oauth/token (consumed by tiny-llm-gate).
-  tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh" ''
-    set -eu
-    exec claude -p "say hello world" --dangerously-skip-permissions
-  '';
 
   stopScript = pkgs.writeShellScript "claude-remote-control-stop" ''
     # Send SIGTERM to the claude process inside tmux, giving it time
@@ -241,7 +217,7 @@ let
     [ "$killed" -gt 0 ] && echo "cleaned up $killed stale session(s)" || echo "no stale sessions found"
   '';
 in
-{
+lib.recursiveUpdate keepWarm.nixosConfig {
   systemd.services.claude-remote-control = {
     description = "Claude Code Remote Control server (tmux)";
     after = [ "network.target" ];
@@ -339,68 +315,4 @@ in
     };
   };
 
-  # Keep the Claude OAuth token warm during idle periods. Runs a throwaway
-  # headless query every 6h; the resulting credentials.json refresh is detected
-  # by the path unit and re-extracted to /run/claude-oauth/token.
-  systemd.services.claude-token-refresh = {
-    description = "Refresh Claude Code OAuth token via headless query";
-    serviceConfig = {
-      Type = "oneshot";
-      User = username;
-      Group = "users";
-      ExecStart = tokenRefreshScript;
-      Environment = [
-        "HOME=/home/${username}"
-        "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
-      ];
-    };
-  };
-
-  systemd.timers.claude-token-refresh = {
-    description = "Periodic Claude Code OAuth token refresh timer";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "15min";
-      OnUnitActiveSec = "6h";
-      Persistent = true;
-    };
-  };
-
-  # OAuth token extractor: keeps /run/claude-oauth in sync with the current
-  # access token in ~/.claude/.credentials.json. Runs as the owning user
-  # because the credentials file is mode 0600. Output is world-readable so
-  # tiny-llm-gate (DynamicUser) can consume it.
-  systemd.services.claude-oauth-extract = {
-    description = "Extract Claude Code OAuth access token to ${claudeOauthPath}";
-    # Run once at boot after the remote-control service has started (which
-    # ensures the credentials file is populated), then re-run on file changes
-    # via the path unit below.
-    after = [ "claude-remote-control.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      User = username;
-      Group = "users";
-      # RuntimeDirectory creates /run/claude-oauth owned by the service user
-      # with mode 0755, allowing tiny-llm-gate's DynamicUser to traverse it.
-      # RuntimeDirectoryPreserve keeps the dir alive after the oneshot exits.
-      RuntimeDirectory = claudeOauthDir;
-      RuntimeDirectoryMode = "0755";
-      RuntimeDirectoryPreserve = "yes";
-      ExecStart = extractScript;
-    };
-  };
-
-  systemd.paths.claude-oauth-extract = {
-    description = "Watch Claude credentials.json for OAuth token changes";
-    wantedBy = [ "multi-user.target" ];
-    pathConfig = {
-      PathChanged = credentialsFile;
-      # Default Unit= is <name>.service — explicit for clarity.
-      Unit = "claude-oauth-extract.service";
-      # Allow rapid re-triggering (default is 2s debounce which is fine,
-      # but make it explicit that we don't want triggers dropped).
-      TriggerLimitIntervalSec = 0;
-    };
-  };
 }
