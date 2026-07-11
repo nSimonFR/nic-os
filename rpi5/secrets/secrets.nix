@@ -21,10 +21,6 @@ in {
   "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
   "for-sure-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "dawarich-geoapify.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
-  "paperless-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
-  "paperless-admin-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
-  "paperless-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
-  "paperless-api-token.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
   "papra-env.age".publicKeys                = [ nsimon-age nsimon-ed25519 ];
   "nextcloud-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "protonmail-bridge-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];

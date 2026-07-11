@@ -21,7 +21,7 @@
 { }:
 {
   entries = [
-    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Paperless → Papra → Karakeep → Home Assistant
+    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Karakeep → Home Assistant → Beszel → Papra
     { port = 443;   backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)"; proxied = true; path = "/nextcloud";
       widget = {
         type = "nextcloud";
@@ -76,18 +76,6 @@
     #       { field = "messages"; label = "Messages"; format = "number"; }
     #     ];
     #   }; }
-    { port = 3400;  backend = "http://127.0.0.1:8200";  name = "Paperless";      icon = "paperless-ngx.svg";  category = "Apps"; description = "Document archive (bills, invoices)"; noSiteMonitor = true;
-      widget = {
-        type = "customapi";
-        url = "http://127.0.0.1:8087/paperless";
-        mappings = [
-          { field = "total"; label = "Total"; format = "number"; }
-          { field = "inbox"; label = "Inbox"; format = "number"; }
-        ];
-      }; }
-    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
-    # Papra: document-management trial running ALONGSIDE Paperless (both live for now).
-    { port = 3450;  backend = "http://127.0.0.1:8220";  name = "Papra";          icon = "papra.svg";          category = "Apps"; description = "Document archive (Papra trial)"; noSiteMonitor = true; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     { port = 3500;  backend = "http://127.0.0.1:8210";  name = "Karakeep";       icon = "karakeep.svg";       category = "Apps"; description = "Bookmarks + read-later (AI-tagged)"; noSiteMonitor = true;
       # Stats via homepage-stats.py reading karakeep's SQLite read-only (no API
@@ -126,6 +114,8 @@
         password = "homepage-widget-pass"; # superuser dedicated to homepage; same cred reused in monitoring.nix:213
         version = 2;
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    { port = 3450;  backend = "http://127.0.0.1:8220";  name = "Papra";          icon = "papra.svg";          category = "Apps"; description = "Document archive (bills, invoices)"; noSiteMonitor = true; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
     # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
     { port = 443;   backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; proxied = true; path = "/rxresume"; }

@@ -1,6 +1,5 @@
-# Papra — document-management app (papra-hq/papra), run as a TRIAL alongside the
-# existing Paperless-ngx (see paperless.nix). Both run in parallel; nothing in
-# paperless.nix is touched.
+# Papra — document-management app (papra-hq/papra). Replaced Paperless-ngx as
+# the sole document archive (bills, invoices).
 #
 # Papra ships as a native package + NixOS module in nixpkgs-UNSTABLE only
 # (`services.papra`), so we import that module from the unstable input and pin
@@ -17,9 +16,9 @@
 #
 # Idle-sleep: a single papra.service (PROCESS_MODE=all → web+worker+scheduler+
 # ingestion in one process) sits behind systemd-socket-proxyd (socket-activate.nix),
-# waking on first request and stopping after 10 min idle. Same tradeoff as
-# paperless: scheduled tasks / ingestion pause while asleep and resume on wake;
-# Better Auth sessions are SQLite-backed so a cold wake is safe.
+# waking on first request and stopping after 10 min idle. Tradeoff: scheduled
+# tasks / ingestion pause while asleep and resume on wake; Better Auth sessions
+# are SQLite-backed so a cold wake is safe.
 { config, lib, pkgs, inputs, tailnetFqdn, ... }:
 let
   # Tailscale Serve (HTTPS :3450) → socket-activate proxy (:8220) → papra (:8221).

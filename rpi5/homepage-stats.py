@@ -8,7 +8,6 @@ Endpoints:
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
-  /paperless — Paperless (documents, inbox)
   /immich    — Immich (photos, videos, storage)
   /karakeep  — Karakeep (bookmarks, favorites, archived, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
@@ -41,12 +40,11 @@ OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
 # idle-sleep (rpi5/karakeep.nix) is preserved. -readonly avoids creating
 # root-owned -wal/-shm files that would break karakeep (runs as the karakeep user).
 KARAKEEP_DB = "/var/lib/karakeep/db.db"
-PAPERLESS_TOKEN_FILE = "/run/agenix/paperless-api-token"
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}, "paperless": {}, "immich": {}, "karakeep": {}, "homeassistant": {}}
+stats = {"sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {}}
 stats_lock = threading.Lock()
 
 
@@ -160,24 +158,6 @@ def fetch_immich():
             stats["immich"]["error"] = str(e)
 
 
-def fetch_paperless():
-    try:
-        token = open(PAPERLESS_TOKEN_FILE).read().strip()
-        data = json.loads(subprocess.check_output([
-            CURL, "-sf",
-            "http://127.0.0.1:8200/api/statistics/",
-            "-H", f"Authorization: Token {token}", "-H", "Accept: application/json"
-        ]))
-        with stats_lock:
-            stats["paperless"] = {
-                "total": data.get("documents_total", 0),
-                "inbox": data.get("documents_inbox") or 0,
-            }
-    except Exception as e:
-        with stats_lock:
-            stats["paperless"]["error"] = str(e)
-
-
 def fetch_karakeep():
     # Read-only direct SQLite query — no API key, never wakes karakeep.
     def count(sql):
@@ -235,7 +215,6 @@ def refresh(initial_fetched_at):
         try:
             fetch_sure()
             fetch_openwebui()
-            fetch_paperless()
             fetch_immich()
             fetch_karakeep()
             fetch_homeassistant()
@@ -254,8 +233,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["sure"])
             elif self.path == "/openwebui":
                 data = dict(stats["openwebui"])
-            elif self.path == "/paperless":
-                data = dict(stats["paperless"])
             elif self.path == "/immich":
                 data = dict(stats["immich"])
             elif self.path == "/karakeep":
