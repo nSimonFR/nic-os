@@ -103,6 +103,7 @@ in
       Environment = [
         "CURL_BIN=${pkgs.curl}/bin/curl"
         "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"
+        "PSQL_BIN=${pkgs.postgresql}/bin/psql"
       ];
     };
   };

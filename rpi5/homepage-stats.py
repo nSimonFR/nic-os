@@ -11,6 +11,9 @@ Endpoints:
   /immich    — Immich (photos, videos, storage)
   /karakeep  — Karakeep (bookmarks, favorites, archived, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
+  /papra     — Papra (documents, tags, storage) — direct read-only SQLite
+  /reactiveresume — Reactive Resume (resumes, users, views) — direct Postgres query
+  /grampsweb — Gramps Web (people, families, events) — direct read-only SQLite, summed across trees
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -18,10 +21,15 @@ it sleeps for the next ~23h50m. The stats are written to disk after each
 refresh so a service restart preserves the last good values rather than
 serving an empty payload until the next nightly refresh.
 
+Papra, Reactive Resume and Gramps Web are also socket-activated, but unlike
+Sure/Immich their stats come from reading their database directly (SQLite or
+Postgres) rather than their HTTP API, so polling never wakes them at all.
+
 State file: $STATE_DIRECTORY/stats.json (set by systemd StateDirectory=).
 Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
 """
 
+import glob
 import http.server
 import json
 import os
@@ -33,6 +41,7 @@ import time
 
 CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
+PSQL = os.environ.get("PSQL_BIN", "psql")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
 # Read karakeep's SQLite directly (read-only) instead of its HTTP API: no API
@@ -40,11 +49,28 @@ OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
 # idle-sleep (rpi5/karakeep.nix) is preserved. -readonly avoids creating
 # root-owned -wal/-shm files that would break karakeep (runs as the karakeep user).
 KARAKEEP_DB = "/var/lib/karakeep/db.db"
+# Same direct-DB-read trick for Papra (rpi5/papra.nix) and Gramps Web
+# (rpi5/gramps-web.nix) — both socket-activated, both read read-only so polling
+# never wakes them.
+PAPRA_DB = "/var/lib/papra/db.sqlite"
+GRAMPS_TREES_GLOB = "/var/lib/gramps-web/data/grampsdb/*/sqlite.db"
+# Reactive Resume's Postgres role/db (rpi5/reactive-resume.nix, shared cluster).
+# pg_hba requires scram-sha-256 for this role (see pg_hba_file_rules), so the
+# password is read from the same agenix secret reactive-resume-env uses; root
+# can read it despite owner=postgres (root bypasses file permission bits).
+# Postgres isn't part of the socket-activated tier, so querying it never wakes
+# the reactive-resume Node service either.
+RXRESUME_DB = "reactive_resume"
+RXRESUME_ROLE = "reactive_resume"
+RXRESUME_PW_FILE = "/run/agenix/reactive-resume-db-password"
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
 
-stats = {"sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {}}
+stats = {
+    "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
+    "papra": {}, "reactiveresume": {}, "grampsweb": {},
+}
 stats_lock = threading.Lock()
 
 
@@ -177,6 +203,66 @@ def fetch_karakeep():
             stats["karakeep"]["error"] = str(e)
 
 
+def fetch_papra():
+    # Read-only direct SQLite query — same trick as fetch_karakeep, never wakes papra.
+    def q(sql):
+        return subprocess.check_output(
+            [SQLITE, "-readonly", PAPRA_DB, sql]
+        ).decode().strip()
+    try:
+        with stats_lock:
+            stats["papra"] = {
+                "documents": int(q("SELECT COUNT(*) FROM documents WHERE is_deleted = 0;") or 0),
+                "tags":      int(q("SELECT COUNT(*) FROM tags;") or 0),
+                "size":      int(q("SELECT COALESCE(SUM(original_size),0) FROM documents WHERE is_deleted = 0;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["papra"]["error"] = str(e)
+
+
+def fetch_reactive_resume():
+    def q(sql):
+        env = dict(os.environ, PGPASSWORD=open(RXRESUME_PW_FILE).read().strip())
+        return subprocess.check_output([
+            PSQL, "-h", "127.0.0.1", "-p", "5432",
+            "-U", RXRESUME_ROLE, "-d", RXRESUME_DB, "-tAc", sql,
+        ], env=env).decode().strip()
+    try:
+        with stats_lock:
+            stats["reactiveresume"] = {
+                "resumes": int(q("SELECT COUNT(*) FROM resume;") or 0),
+                "users":   int(q('SELECT COUNT(*) FROM "user";') or 0),
+                "views":   int(q("SELECT COALESCE(SUM(views), 0) FROM resume_statistics;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["reactiveresume"]["error"] = str(e)
+
+
+def fetch_gramps_web():
+    # Multi-tree (rpi5/gramps-web.nix tree = "*"): sum counts across every
+    # tree's SQLite database rather than assuming a single tree.
+    def sum_count(table):
+        total = 0
+        for db in glob.glob(GRAMPS_TREES_GLOB):
+            out = subprocess.check_output(
+                [SQLITE, "-readonly", db, f"SELECT COUNT(*) FROM {table};"]
+            ).decode().strip()
+            total += int(out or 0)
+        return total
+    try:
+        with stats_lock:
+            stats["grampsweb"] = {
+                "people":   sum_count("person"),
+                "families": sum_count("family"),
+                "events":   sum_count("event"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["grampsweb"]["error"] = str(e)
+
+
 def fetch_homeassistant():
     # HA is always-on (not socket-activated), so polling it doesn't wake anything.
     # It's routed through this daily-cached aggregator only for consistency with
@@ -218,6 +304,9 @@ def refresh(initial_fetched_at):
             fetch_immich()
             fetch_karakeep()
             fetch_homeassistant()
+            fetch_papra()
+            fetch_reactive_resume()
+            fetch_gramps_web()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -239,6 +328,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["karakeep"])
             elif self.path == "/homeassistant":
                 data = dict(stats["homeassistant"])
+            elif self.path == "/papra":
+                data = dict(stats["papra"])
+            elif self.path == "/reactiveresume":
+                data = dict(stats["reactiveresume"])
+            elif self.path == "/grampsweb":
+                data = dict(stats["grampsweb"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
