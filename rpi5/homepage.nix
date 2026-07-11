@@ -10,7 +10,6 @@ let
   # Tile order within each category is determined by list order in services-registry.nix.
   categoryOrder = [
     "Apps"
-    "Services"
     "Backend"
   ];
 
@@ -104,6 +103,7 @@ in
         "CURL_BIN=${pkgs.curl}/bin/curl"
         "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"
         "PSQL_BIN=${pkgs.postgresql}/bin/psql"
+        "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
       ];
     };
   };
@@ -125,7 +125,6 @@ in
       layout = [
         { "Quick Links" = { style = "row"; columns = 3; header = false; }; }
         { "Apps"        = { style = "row"; columns = 4; }; }
-        { "Services"    = { style = "row"; columns = 4; }; }
         { "Backend"     = { style = "row"; columns = 4; }; }
       ];
     };

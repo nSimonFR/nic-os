@@ -14,6 +14,11 @@ Endpoints:
   /papra     — Papra (documents, tags, storage) — direct read-only SQLite
   /reactiveresume — Reactive Resume (resumes, users, views) — direct Postgres query
   /grampsweb — Gramps Web (people, families, events) — direct read-only SQLite, summed across trees
+  /vaultwarden — Vaultwarden (items, users, devices) — direct read-only SQLite
+  /wakapi    — Wakapi (heartbeats, languages, users) — direct read-only SQLite
+  /dawarich  — Dawarich (points, trips, visits) — direct Postgres query (superuser)
+  /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
+  /forgejo   — Forgejo (repositories, open issues, open PRs) — direct Postgres query (superuser)
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -21,9 +26,12 @@ it sleeps for the next ~23h50m. The stats are written to disk after each
 refresh so a service restart preserves the last good values rather than
 serving an empty payload until the next nightly refresh.
 
-Papra, Reactive Resume and Gramps Web are also socket-activated, but unlike
-Sure/Immich their stats come from reading their database directly (SQLite or
-Postgres) rather than their HTTP API, so polling never wakes them at all.
+Papra, Reactive Resume, Gramps Web, Vaultwarden, Wakapi, Dawarich, AirTrail
+and Forgejo are also socket-activated (except Dawarich, which is always-on),
+but unlike Sure/Immich their stats come from reading their database directly
+(SQLite, or Postgres as the postgres superuser via peer auth) rather than
+their HTTP API, so polling never wakes them at all and no per-app API key or
+role password is needed.
 
 State file: $STATE_DIRECTORY/stats.json (set by systemd StateDirectory=).
 Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
@@ -42,6 +50,7 @@ import time
 CURL = os.environ.get("CURL_BIN", "curl")
 SQLITE = os.environ.get("SQLITE_BIN", "sqlite3")
 PSQL = os.environ.get("PSQL_BIN", "psql")
+RUNUSER = os.environ.get("RUNUSER_BIN", "runuser")
 ENV_FILE = "/run/homepage-dashboard/env"
 OWUI_DB = "/var/lib/private/open-webui/data/webui.db"
 # Read karakeep's SQLite directly (read-only) instead of its HTTP API: no API
@@ -63,6 +72,15 @@ GRAMPS_TREES_GLOB = "/var/lib/gramps-web/data/grampsdb/*/sqlite.db"
 RXRESUME_DB = "reactive_resume"
 RXRESUME_ROLE = "reactive_resume"
 RXRESUME_PW_FILE = "/run/agenix/reactive-resume-db-password"
+# Vaultwarden and Wakapi: same direct-SQLite-read trick as Papra/Karakeep above.
+VAULTWARDEN_DB = "/var/lib/vaultwarden/db.sqlite3"
+WAKAPI_DB = "/var/lib/wakapi/wakapi.db"
+# Dawarich, AirTrail, Forgejo: queried as the postgres superuser over the
+# local Unix socket (peer auth via `runuser -u postgres`) rather than each
+# app's own role. Simpler than the Reactive Resume password dance above —
+# no agenix secret needed — and works regardless of whether the app itself
+# authenticates via password (dawarich/airtrail) or peer auth on a Unix
+# socket (forgejo, which has no TCP/password role at all).
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
@@ -70,6 +88,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 stats = {
     "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
     "papra": {}, "reactiveresume": {}, "grampsweb": {},
+    "vaultwarden": {}, "wakapi": {}, "dawarich": {}, "airtrail": {}, "forgejo": {},
 }
 stats_lock = threading.Lock()
 
@@ -263,6 +282,89 @@ def fetch_gramps_web():
             stats["grampsweb"]["error"] = str(e)
 
 
+def fetch_vaultwarden():
+    # Read-only direct SQLite query — same trick as fetch_karakeep, never wakes vaultwarden.
+    def count(sql):
+        return int(subprocess.check_output(
+            [SQLITE, "-readonly", VAULTWARDEN_DB, sql]
+        ).decode().strip() or 0)
+    try:
+        with stats_lock:
+            stats["vaultwarden"] = {
+                "items":   count("SELECT COUNT(*) FROM ciphers WHERE deleted_at IS NULL;"),
+                "users":   count("SELECT COUNT(*) FROM users;"),
+                "devices": count("SELECT COUNT(*) FROM devices;"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["vaultwarden"]["error"] = str(e)
+
+
+def fetch_wakapi():
+    def count(sql):
+        return int(subprocess.check_output(
+            [SQLITE, "-readonly", WAKAPI_DB, sql]
+        ).decode().strip() or 0)
+    try:
+        with stats_lock:
+            stats["wakapi"] = {
+                "heartbeats": count("SELECT COUNT(*) FROM heartbeats;"),
+                "languages":  count("SELECT COUNT(DISTINCT language) FROM heartbeats WHERE language IS NOT NULL AND language != '';"),
+                "users":      count("SELECT COUNT(*) FROM users;"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["wakapi"]["error"] = str(e)
+
+
+def pg_superuser_query(db, sql):
+    # postgres superuser via peer auth on the local Unix socket — works for
+    # any DB regardless of the app's own auth (password role or, like
+    # forgejo, peer-only with no password role at all). Read-only SELECTs.
+    return subprocess.check_output(
+        [RUNUSER, "-u", "postgres", "--", PSQL, "-d", db, "-tAc", sql]
+    ).decode().strip()
+
+
+def fetch_dawarich():
+    try:
+        with stats_lock:
+            stats["dawarich"] = {
+                "points": int(pg_superuser_query("dawarich", "SELECT COUNT(*) FROM points;") or 0),
+                "trips":  int(pg_superuser_query("dawarich", "SELECT COUNT(*) FROM trips;") or 0),
+                "visits": int(pg_superuser_query("dawarich", "SELECT COUNT(*) FROM visits;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["dawarich"]["error"] = str(e)
+
+
+def fetch_airtrail():
+    try:
+        with stats_lock:
+            stats["airtrail"] = {
+                "flights":   int(pg_superuser_query("airtrail", "SELECT COUNT(*) FROM flight;") or 0),
+                "countries": int(pg_superuser_query("airtrail", "SELECT COUNT(*) FROM visited_country;") or 0),
+                "hours":     round(int(pg_superuser_query("airtrail", "SELECT COALESCE(SUM(duration),0) FROM flight;") or 0) / 60),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["airtrail"]["error"] = str(e)
+
+
+def fetch_forgejo():
+    try:
+        with stats_lock:
+            stats["forgejo"] = {
+                "repositories": int(pg_superuser_query("forgejo", "SELECT COUNT(*) FROM repository;") or 0),
+                "issues":       int(pg_superuser_query("forgejo", "SELECT COUNT(*) FROM issue WHERE is_pull=false AND is_closed=false;") or 0),
+                "pulls":        int(pg_superuser_query("forgejo", "SELECT COUNT(*) FROM issue WHERE is_pull=true AND is_closed=false;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["forgejo"]["error"] = str(e)
+
+
 def fetch_homeassistant():
     # HA is always-on (not socket-activated), so polling it doesn't wake anything.
     # It's routed through this daily-cached aggregator only for consistency with
@@ -307,6 +409,11 @@ def refresh(initial_fetched_at):
             fetch_papra()
             fetch_reactive_resume()
             fetch_gramps_web()
+            fetch_vaultwarden()
+            fetch_wakapi()
+            fetch_dawarich()
+            fetch_airtrail()
+            fetch_forgejo()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -334,6 +441,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["reactiveresume"])
             elif self.path == "/grampsweb":
                 data = dict(stats["grampsweb"])
+            elif self.path == "/vaultwarden":
+                data = dict(stats["vaultwarden"])
+            elif self.path == "/wakapi":
+                data = dict(stats["wakapi"])
+            elif self.path == "/dawarich":
+                data = dict(stats["dawarich"])
+            elif self.path == "/airtrail":
+                data = dict(stats["airtrail"])
+            elif self.path == "/forgejo":
+                data = dict(stats["forgejo"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)

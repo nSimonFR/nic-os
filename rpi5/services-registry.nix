@@ -21,7 +21,7 @@
 { }:
 {
   entries = [
-    # Apps: Nextcloud → AFFiNE → Sure → Immich → Open WebUI → Karakeep → Home Assistant → Beszel → Papra
+    # Apps: Nextcloud → AFFiNE → Sure → Immich → Papra → Open WebUI → Karakeep → Home Assistant → Beszel
     { port = 443;   backend = "http://127.0.0.1:8091";  name = "Nextcloud";      icon = "nextcloud.svg";      category = "Apps"; description = "Files + Contacts + Calendar (DAV)"; proxied = true; path = "/nextcloud";
       widget = {
         type = "nextcloud";
@@ -63,6 +63,19 @@
           { field = "photos"; label = "Photos"; format = "number"; }
           { field = "videos"; label = "Videos"; format = "number"; }
           { field = "usage";  label = "Storage"; format = "bytes"; }
+        ];
+      }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # Widget reads Papra's SQLite directly via homepage-stats.py (:8087/papra), not
+    # Papra's HTTP API, so the daily poll never wakes the service (see homepage-stats.py).
+    { port = 3450;  backend = "http://127.0.0.1:8220";  name = "Papra";          icon = "papra.svg";          category = "Apps"; description = "Document archive (bills, invoices)"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/papra";
+        mappings = [
+          { field = "documents"; label = "Documents"; format = "number"; }
+          { field = "tags"; label = "Tags"; format = "number"; }
+          { field = "size"; label = "Storage"; format = "bytes"; }
         ];
       }; }
     # Open WebUI DISABLED 2026-06-15 (venv crash-loop, exit 126); re-enable alongside ./open-webui.nix in configuration.nix.
@@ -114,19 +127,6 @@
         password = "homepage-widget-pass"; # superuser dedicated to homepage; same cred reused in monitoring.nix:213
         version = 2;
       }; }
-    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
-    # Widget reads Papra's SQLite directly via homepage-stats.py (:8087/papra), not
-    # Papra's HTTP API, so the daily poll never wakes the service (see homepage-stats.py).
-    { port = 3450;  backend = "http://127.0.0.1:8220";  name = "Papra";          icon = "papra.svg";          category = "Apps"; description = "Document archive (bills, invoices)"; noSiteMonitor = true;
-      widget = {
-        type = "customapi";
-        url = "http://127.0.0.1:8087/papra";
-        mappings = [
-          { field = "documents"; label = "Documents"; format = "number"; }
-          { field = "tags"; label = "Tags"; format = "number"; }
-          { field = "size"; label = "Storage"; format = "bytes"; }
-        ];
-      }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
     # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
     # Widget queries Reactive Resume's Postgres directly (:8087/reactiveresume, scram auth
@@ -159,23 +159,74 @@
         ];
       }; }
 
-    # Services: Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
+    # Apps (merged from former "Services" category): Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
-    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Services"; description = "Password manager"; noSiteMonitor = true; }
-    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Services"; description = "Location history"; }
+    # No native homepage widget exists for any of these five, so all widgets
+    # below read the app's database directly via homepage-stats.py (SQLite for
+    # Vaultwarden/Wakapi, Postgres-as-superuser for Dawarich/AirTrail/Forgejo)
+    # rather than each app's HTTP API — daily polling never wakes the
+    # socket-activated ones and needs no per-app API key or role password.
+    { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Apps"; description = "Password manager"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/vaultwarden";
+        mappings = [
+          { field = "items"; label = "Items"; format = "number"; }
+          { field = "users"; label = "Users"; format = "number"; }
+          { field = "devices"; label = "Devices"; format = "number"; }
+        ];
+      }; }
+    { port = 3900;  backend = "http://127.0.0.1:13900"; name = "Dawarich";       icon = "dawarich.svg";       category = "Apps"; description = "Location history";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/dawarich";
+        mappings = [
+          { field = "points"; label = "Points"; format = "number"; }
+          { field = "trips"; label = "Trips"; format = "number"; }
+          { field = "visits"; label = "Visits"; format = "number"; }
+        ];
+      }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # icon: AirTrail isn't in dashboard-icons, so point at its favicon.svg via jsdelivr (pinned tag).
-    { port = 3600;  backend = "http://127.0.0.1:8310";  name = "AirTrail";       icon = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.11.1/static/favicon.svg"; category = "Services"; description = "Personal flight tracker"; noSiteMonitor = true; }
-    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Services"; description = "Git hosting"; noSiteMonitor = true; }
-    { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Services"; description = "Coding stats (WakaTime-compatible)"; noSiteMonitor = true; }
+    { port = 3600;  backend = "http://127.0.0.1:8310";  name = "AirTrail";       icon = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.11.1/static/favicon.svg"; category = "Apps"; description = "Personal flight tracker"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/airtrail";
+        mappings = [
+          { field = "flights"; label = "Flights"; format = "number"; }
+          { field = "countries"; label = "Countries"; format = "number"; }
+          { field = "hours"; label = "Hours"; format = "number"; }
+        ];
+      }; }
+    { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Apps"; description = "Git hosting"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/forgejo";
+        mappings = [
+          { field = "repositories"; label = "Repos"; format = "number"; }
+          { field = "issues"; label = "Issues"; format = "number"; }
+          { field = "pulls"; label = "PRs"; format = "number"; }
+        ];
+      }; }
+    { port = 3030;  backend = "http://127.0.0.1:3030";  name = "Wakapi";         icon = "wakatime.svg";       category = "Apps"; description = "Coding stats (WakaTime-compatible)"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/wakapi";
+        mappings = [
+          { field = "heartbeats"; label = "Heartbeats"; format = "number"; }
+          { field = "languages"; label = "Languages"; format = "number"; }
+          { field = "users"; label = "Users"; format = "number"; }
+        ];
+      }; }
 
     # Backend — API services
     # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
     # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.
     { port = 8444;  backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
-    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini)"; }
+    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic)"; }
     { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
-    { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Backend"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
+    # Not shown on dashboard — internal MCP gateway, not user-facing.
+    { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Infrastructure"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
     # Hydroxide moved 8443 → 8083 (matches its backend port) to free the 8443
     # Funnel slot (only 443/8443/10000 are funnel-eligible; 443 + 10000 are also
     # taken). 8443 now fronts AFFiNE at its root origin (see the AFFiNE entry).
