@@ -17,6 +17,10 @@ let
     # produces >95% valid JSON at the cost of higher token usage.
     OPENAI_MODEL        = "gpt-5.5";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
+    # The 2048 default leaves only 1280 input tokens, but the auto_categorize
+    # prompt (full category list) needs ~1352 → categories were never assigned.
+    # gpt-5.5 has ample context; 8192 gives 7424 input budget.
+    LLM_CONTEXT_WINDOW  = "8192";
   };
 in
 {
