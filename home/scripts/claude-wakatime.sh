@@ -17,11 +17,17 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 project=$(basename "$cwd")
 # Entity must be a path-ish thing for wakatime-cli to accept it as a file;
 # use the project root so the heartbeat groups under that project.
+#
+# --plugin MUST end in "<editor>-wakatime/<ver>": wakapi's user-agent parser
+# (utils/http.go userAgentPattern) only extracts an editor when the UA ends
+# with that exact suffix. The old "claude-code-wrapper/1.0" failed the regex
+# entirely, so wakapi filed these heartbeats under a blank editor + blank OS
+# ("Unknown"). "Claude-Code-wakatime/1.0" parses as editor "Claude-Code".
 wakatime-cli \
   --write \
   --entity "$cwd" \
   --entity-type app \
-  --plugin "claude-code-wrapper/1.0" \
+  --plugin "Claude-Code-wakatime/1.0" \
   --project "$project" \
   --language "Claude" \
   --category "ai coding" \
