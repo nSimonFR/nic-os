@@ -156,6 +156,36 @@ $FAILED"
     };
   };
 
+  # ── Alert: Sure AutoCategorizeJob failures ───────────────────────────────────
+  # Catches both known failure modes (LLM_CONTEXT_WINDOW too small, codex-proxy
+  # OAuth expiry) plus anything else that makes the job error out — see
+  # rpi5/sure.nix sureLlmEnv and the "Failed to auto-categorize" log line in
+  # app/models/family#auto_categorize_transactions.
+  systemd.services.sure-autocategorize-alert = {
+    description = "Alert on Sure AutoCategorizeJob failures";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "sure-autocategorize-alert" ''
+        FAILURES=$(${pkgs.systemd}/bin/journalctl -u sure-worker --since=-16min --no-pager -q 2>/dev/null \
+          | ${pkgs.gnugrep}/bin/grep "Failed to auto-categorize" \
+          | ${pkgs.coreutils}/bin/cut -c1-300 \
+          | ${pkgs.coreutils}/bin/tail -n 5 || true)
+
+        if [ -n "$FAILURES" ]; then
+          ${telegramNotify} "<b>Sure auto-categorization failing on rpi5</b>
+<code>$FAILURES</code>"
+        fi
+      '';
+    };
+  };
+  systemd.timers.sure-autocategorize-alert = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5m";
+      OnUnitActiveSec = "15m";
+    };
+  };
+
   # ── Beszel SMART refresh (workaround for henrygd/beszel#1800) ───────────────
   # TODO(beszel#1800): DELETE THIS WHOLE BLOCK (service + timer) once Beszel
   #   0.19.0+ with a verified fix lands in nixpkgs and a natural background
