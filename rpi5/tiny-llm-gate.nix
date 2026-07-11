@@ -153,18 +153,37 @@ in
       # Anthropic passthrough proxy — Aperture sits in front (Claude Code's
       # ANTHROPIC_BASE_URL points at Aperture), and forwards /v1/messages
       # here with its own apikey. We strip that apikey and replace it with
-      # the current Claude Code access token from /run/claude-oauth/token, which
-      # a sidecar (claude-oauth-extract.service) keeps in sync with the
-      # token stored in ~/.claude/.credentials.json. tiny-llm-gate re-reads
-      # the file on every request (FileBearer auth), so rotation is
-      # transparent. Aperture sees the full real request and response bodies
-      # for observability.
+      # the current Claude Code access token, sourced from one of two
+      # accounts. Both tokens are kept fresh by sidecars
+      # (claude-oauth-extract.service / claude-oauth-extract-2.service) that
+      # track ~/.claude/.credentials.json / ~/.claude-secondary/.credentials.json.
+      # tiny-llm-gate re-reads the token file on every request (FileBearer
+      # auth), so rotation is transparent. Aperture sees the full real
+      # request and response bodies for observability.
+      #
+      # acct1 is the daily-driver login (team plan); acct2 is a dedicated
+      # gate-only spare (max plan) — see rpi5/claude-oauth-2.nix. The gate
+      # stays sticky on one account until it gets a 429, then fails over to
+      # the other and stays there (see anthropic.go's sticky-until-429
+      # selection). Naive round-robin was rejected as ToS-adjacent.
       anthropic = {
         upstream = "https://api.anthropic.com";
-        auth = {
-          type = "bearer";
-          token_file = "/run/claude-oauth/token";
-        };
+        accounts = [
+          {
+            name = "acct1";
+            auth = {
+              type = "bearer";
+              token_file = "/run/claude-oauth/token";
+            };
+          }
+          {
+            name = "acct2";
+            auth = {
+              type = "bearer";
+              token_file = "/run/claude-oauth-2/token";
+            };
+          }
+        ];
       };
     };
   };
@@ -180,7 +199,7 @@ in
   # static config: tiny-llm-gate registers them at startup and proxies
   # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "claude-oauth-extract.service" ];
-    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" ];
+    after = [ "network.target" "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
   };
 }
