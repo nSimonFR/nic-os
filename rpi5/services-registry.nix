@@ -169,6 +169,9 @@
         ];
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # icon: BeaverHabits isn't in dashboard-icons, so point at its apple-touch-icon via jsdelivr (pinned tag).
+    { port = 3650;  backend = "http://127.0.0.1:8320";  name = "BeaverHabits";   icon = "https://cdn.jsdelivr.net/gh/daya0576/beaverhabits@v0.9.1/statics/images/apple-touch-icon.png"; category = "Apps"; description = "Habit tracker"; noSiteMonitor = true; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # NOT behind the 443 path-mux: Gramps Web's SPA hardcodes absolute API paths and its
     # service worker needs root scope (gramps-web#531), so it keeps its own Tailscale Serve
     # port (5050 → socket-activate proxy :15050) — same call as AFFiNE on 8443.

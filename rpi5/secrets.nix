@@ -47,6 +47,11 @@
       file = ./secrets/airtrail-pg-password.age;
       owner = "postgres"; # airtrail-pg-setup runs as postgres and reads this
     };
+    beaverhabits-env = {
+      file = ./secrets/beaverhabits-env.age;
+      owner = "beaverhabits"; # EnvironmentFile for beaverhabits.service (signing secrets)
+      mode = "0400";
+    };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";

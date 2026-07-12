@@ -83,6 +83,13 @@
       url = "github:nSimonFR/gramps-web-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # BeaverHabits habit tracker — Python/NiceGUI, packaged via uv2nix. First
+    # Python native app here; its flake carries the uv2nix stack itself, so we
+    # only pin nixpkgs. See rpi5/beaverhabits.nix.
+    beaverhabits-nix = {
+      url = "github:nSimonFR/beaverhabits-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
@@ -268,6 +275,7 @@
           inputs.airtrail-nix.nixosModules.airtrail
           inputs.reactive-resume-nix.nixosModules.reactive-resume
           inputs.gramps-web-nix.nixosModules.gramps-web
+          inputs.beaverhabits-nix.nixosModules.beaverhabits
           {
             home-manager = {
               useGlobalPkgs = true;
