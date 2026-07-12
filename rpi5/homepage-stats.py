@@ -19,6 +19,7 @@ Endpoints:
   /dawarich  — Dawarich (points, trips, visits) — direct Postgres query (superuser)
   /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
   /forgejo   — Forgejo (repositories, open issues, open PRs) — direct Postgres query (superuser)
+  /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -75,6 +76,9 @@ RXRESUME_PW_FILE = "/run/agenix/reactive-resume-db-password"
 # Vaultwarden and Wakapi: same direct-SQLite-read trick as Papra/Karakeep above.
 VAULTWARDEN_DB = "/var/lib/vaultwarden/db.sqlite3"
 WAKAPI_DB = "/var/lib/wakapi/wakapi.db"
+# BeaverHabits (rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
+# user in habit_list.data — read-only, so polling never wakes the idle service.
+BEAVERHABITS_DB = "/var/lib/beaverhabits/habits.db"
 # Dawarich, AirTrail, Forgejo: queried as the postgres superuser over the
 # local Unix socket (peer auth via `runuser -u postgres`) rather than each
 # app's own role. Simpler than the Reactive Resume password dance above —
@@ -89,6 +93,7 @@ stats = {
     "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
     "papra": {}, "reactiveresume": {}, "grampsweb": {},
     "vaultwarden": {}, "wakapi": {}, "dawarich": {}, "airtrail": {}, "forgejo": {},
+    "beaverhabits": {},
 }
 stats_lock = threading.Lock()
 
@@ -238,6 +243,40 @@ def fetch_papra():
     except Exception as e:
         with stats_lock:
             stats["papra"]["error"] = str(e)
+
+
+def fetch_beaverhabits():
+    # Read-only direct SQLite query — same trick as fetch_papra, never wakes the
+    # socket-activated beaverhabits service. The habit list is a compact JSON blob
+    # per user in habit_list.data: {"habits":[{name,status,records:[{day,done}]}]}.
+    # "archive" status = habit the user retired, so it's excluded from the counts.
+    try:
+        raw = subprocess.check_output(
+            [SQLITE, "-readonly", BEAVERHABITS_DB, "SELECT data FROM habit_list;"]
+        ).decode()
+        today = time.strftime("%Y-%m-%d")
+        habits = done_today = checkins = 0
+        for line in raw.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            active = [h for h in json.loads(line).get("habits", [])
+                      if h.get("status") != "archive"]
+            habits += len(active)
+            for h in active:
+                recs = h.get("records", [])
+                checkins += sum(1 for r in recs if r.get("done"))
+                if any(r.get("day") == today and r.get("done") for r in recs):
+                    done_today += 1
+        with stats_lock:
+            stats["beaverhabits"] = {
+                "habits":     habits,
+                "done_today": done_today,
+                "checkins":   checkins,
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["beaverhabits"]["error"] = str(e)
 
 
 def fetch_reactive_resume():
@@ -414,6 +453,7 @@ def refresh(initial_fetched_at):
             fetch_dawarich()
             fetch_airtrail()
             fetch_forgejo()
+            fetch_beaverhabits()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -451,6 +491,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["airtrail"])
             elif self.path == "/forgejo":
                 data = dict(stats["forgejo"])
+            elif self.path == "/beaverhabits":
+                data = dict(stats["beaverhabits"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
