@@ -29,6 +29,7 @@
     "d /mnt/data/backups/open-webui 0750 root root -"
     "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
     "d /mnt/data/backups/papra 0750 papra papra -"
+    "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
   ];
 
   systemd.services.hass-backup = {
@@ -89,6 +90,29 @@
     description = "Daily Papra backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
+  };
+
+  # ── BeaverHabits (SQLite — HABITS_STORAGE=DATABASE) ─────────────────────
+  # Atomic .backup of habits.db onto /mnt/data so restic/storj picks it up.
+  # Runs as beaverhabits (stable uid, not DynamicUser) so it can read the DB
+  # whether or not the server is awake (idle-sleep) — .backup only touches the
+  # file, not the running process.
+  systemd.services.beaverhabits-backup = {
+    description = "BeaverHabits database backup";
+    serviceConfig = { Type = "oneshot"; User = "beaverhabits"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/beaverhabits/habits.db ".backup '/mnt/data/backups/beaverhabits/beaverhabits-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/beaverhabits/beaverhabits-$STAMP.db"
+      ${pkgs.findutils}/bin/find /mnt/data/backups/beaverhabits -name "beaverhabits-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.beaverhabits-backup = {
+    description = "Daily BeaverHabits backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────
