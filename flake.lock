@@ -72,11 +72,11 @@
         "uv2nix": "uv2nix"
       },
       "locked": {
-        "lastModified": 1783850862,
-        "narHash": "sha256-iDtdkfTzcc3Y7tv5GIUt9Fum6Jcxp6/NSFnxuGegPG4=",
+        "lastModified": 1783861369,
+        "narHash": "sha256-miNAduG0IHjSTbHzO8Y2oUuewIyi2Y1uoEZM74b9wVc=",
         "owner": "nSimonFR",
         "repo": "beaverhabits-nix",
-        "rev": "d1f35b55421d09dabce1b4053309e29dcaa08423",
+        "rev": "27d642d47e791d006854ac264bfdbf81a3846696",
         "type": "github"
       },
       "original": {
