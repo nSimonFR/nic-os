@@ -170,7 +170,17 @@
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # icon: BeaverHabits isn't in dashboard-icons, so point at its apple-touch-icon via jsdelivr (pinned tag).
-    { port = 3650;  backend = "http://127.0.0.1:8320";  name = "BeaverHabits";   icon = "https://cdn.jsdelivr.net/gh/daya0576/beaverhabits@v0.9.1/statics/images/apple-touch-icon.png"; category = "Apps"; description = "Habit tracker"; noSiteMonitor = true; }
+    # Widget reads habits.db (JSON blob) directly via :8087/beaverhabits, so the daily poll never wakes it.
+    { port = 3650;  backend = "http://127.0.0.1:8320";  name = "BeaverHabits";   icon = "https://cdn.jsdelivr.net/gh/daya0576/beaverhabits@v0.9.1/statics/images/apple-touch-icon.png"; category = "Apps"; description = "Habit tracker"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/beaverhabits";
+        mappings = [
+          { field = "habits"; label = "Habits"; format = "number"; }
+          { field = "done_today"; label = "Done today"; format = "number"; }
+          { field = "checkins"; label = "Check-ins"; format = "number"; }
+        ];
+      }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # NOT behind the 443 path-mux: Gramps Web's SPA hardcodes absolute API paths and its
     # service worker needs root scope (gramps-web#531), so it keeps its own Tailscale Serve
