@@ -127,45 +127,15 @@
         password = "homepage-widget-pass"; # superuser dedicated to homepage; same cred reused in monitoring.nix:213
         version = 2;
       }; }
-    # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
-    # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
-    # Widget queries Reactive Resume's Postgres directly (:8087/reactiveresume, scram auth
-    # via agenix password) — Postgres isn't part of the socket-activated tier, so this
-    # never wakes the Node service either.
-    { port = 443;   backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; proxied = true; path = "/rxresume";
-      widget = {
-        type = "customapi";
-        url = "http://127.0.0.1:8087/reactiveresume";
-        mappings = [
-          { field = "resumes"; label = "Resumes"; format = "number"; }
-          { field = "users"; label = "Users"; format = "number"; }
-          { field = "views"; label = "Views"; format = "number"; }
-        ];
-      }; }
-    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
-    # NOT behind the 443 path-mux: Gramps Web's SPA hardcodes absolute API paths and its
-    # service worker needs root scope (gramps-web#531), so it keeps its own Tailscale Serve
-    # port (5050 → socket-activate proxy :15050) — same call as AFFiNE on 8443.
-    # Widget reads Gramps Web's per-tree SQLite directly (:8087/grampsweb, summed across
-    # trees), so the daily poll never wakes the service.
-    { port = 5050;  backend = "http://127.0.0.1:15050"; name = "Gramps Web";      icon = "gramps.svg";         category = "Apps"; description = "Genealogy"; noSiteMonitor = true;
-      widget = {
-        type = "customapi";
-        url = "http://127.0.0.1:8087/grampsweb";
-        mappings = [
-          { field = "people"; label = "People"; format = "number"; }
-          { field = "families"; label = "Families"; format = "number"; }
-          { field = "events"; label = "Events"; format = "number"; }
-        ];
-      }; }
-
-    # Apps (merged from former "Services" category): Vaultwarden → Dawarich → AirTrail → Forgejo → Wakapi
+    # Apps continued: Vaultwarden → Dawarich → AirTrail → Gramps Web → Forgejo → Wakapi → Reactive Resume
     # noSiteMonitor on socket-activated entries — see homepage.nix mkTile.
-    # No native homepage widget exists for any of these five, so all widgets
-    # below read the app's database directly via homepage-stats.py (SQLite for
-    # Vaultwarden/Wakapi, Postgres-as-superuser for Dawarich/AirTrail/Forgejo)
-    # rather than each app's HTTP API — daily polling never wakes the
+    # Vaultwarden/Dawarich/AirTrail/Forgejo/Wakapi have no native homepage widget,
+    # so their widgets read the app's database directly via homepage-stats.py
+    # (SQLite for Vaultwarden/Wakapi, Postgres-as-superuser for Dawarich/AirTrail/
+    # Forgejo) rather than the app's HTTP API — daily polling never wakes the
     # socket-activated ones and needs no per-app API key or role password.
+    # Gramps Web and Reactive Resume use the same direct-read approach for their
+    # own reasons — see their individual comments below.
     { port = 8222;  backend = "http://127.0.0.1:8222";  name = "Vaultwarden";    icon = "vaultwarden.svg";    category = "Apps"; description = "Password manager"; noSiteMonitor = true;
       widget = {
         type = "customapi";
@@ -198,6 +168,22 @@
           { field = "hours"; label = "Hours"; format = "number"; }
         ];
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # NOT behind the 443 path-mux: Gramps Web's SPA hardcodes absolute API paths and its
+    # service worker needs root scope (gramps-web#531), so it keeps its own Tailscale Serve
+    # port (5050 → socket-activate proxy :15050) — same call as AFFiNE on 8443.
+    # Widget reads Gramps Web's per-tree SQLite directly (:8087/grampsweb, summed across
+    # trees), so the daily poll never wakes the service.
+    { port = 5050;  backend = "http://127.0.0.1:15050"; name = "Gramps Web";      icon = "gramps.svg";         category = "Apps"; description = "Genealogy"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/grampsweb";
+        mappings = [
+          { field = "people"; label = "People"; format = "number"; }
+          { field = "families"; label = "Families"; format = "number"; }
+          { field = "events"; label = "Events"; format = "number"; }
+        ];
+      }; }
     { port = 3100;  backend = "http://127.0.0.1:3100";  name = "Forgejo";        icon = "forgejo.svg";        category = "Apps"; description = "Git hosting"; noSiteMonitor = true;
       widget = {
         type = "customapi";
@@ -216,6 +202,21 @@
           { field = "heartbeats"; label = "Heartbeats"; format = "number"; }
           { field = "languages"; label = "Languages"; format = "number"; }
           { field = "users"; label = "Users"; format = "number"; }
+        ];
+      }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
+    # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
+    # Widget queries Reactive Resume's Postgres directly (:8087/reactiveresume, scram auth
+    # via agenix password) — Postgres isn't part of the socket-activated tier, so this
+    # never wakes the Node service either.
+    { port = 443;   backend = "http://127.0.0.1:13336"; name = "Reactive Resume"; icon = "reactive-resume.svg"; category = "Apps"; description = "Resume builder"; noSiteMonitor = true; proxied = true; path = "/rxresume";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/reactiveresume";
+        mappings = [
+          { field = "resumes"; label = "Resumes"; format = "number"; }
+          { field = "users"; label = "Users"; format = "number"; }
+          { field = "views"; label = "Views"; format = "number"; }
         ];
       }; }
 
