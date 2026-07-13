@@ -52,6 +52,15 @@
       owner = "beaverhabits"; # EnvironmentFile for beaverhabits.service (signing secrets)
       mode = "0400";
     };
+    ryot-env = {
+      file = ./secrets/ryot-env.age;
+      owner = "ryot"; # EnvironmentFile for ryot-backend/ryot-frontend (DATABASE_URL + tokens)
+      mode = "0400";
+    };
+    ryot-pg-password = {
+      file = ./secrets/ryot-pg-password.age;
+      owner = "postgres"; # ryot-pg-setup runs as postgres and reads this
+    };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";

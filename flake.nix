@@ -18,7 +18,8 @@
     nixos-raspberrypi = {
       url = "github:nvmd/nixos-raspberrypi/main";
       # Do NOT follow nixpkgs: let nixos-raspberrypi use its own pinned nixpkgs
-      # so the kernel derivation hash matches what Garnix/cachix pre-built.
+      # so the kernel derivation hash matches what its Cachix cache pre-built
+      # (nixos-raspberrypi.cachix.org — see nixConfig below).
     };
 
     zen-browser = {
@@ -90,6 +91,15 @@
       url = "github:nSimonFR/beaverhabits-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Ryot — self-hosted media & life tracker (IgnisDa/ryot), built from source
+    # (container-only upstream, not in nixpkgs). Same pattern as the others.
+    # NOTE: local path during bring-up; switch to github:nSimonFR/ryot-nix once
+    # published. The heavy Rust/Node compile is built locally on the Pi (no
+    # prebuild cache — see the garnix deprecation note in nixConfig below).
+    ryot-nix = {
+      url = "path:/home/nsimon/ryot-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
@@ -142,16 +152,20 @@
   nixConfig = {
     extra-substituters = [
       "https://cache.nixos.org"
-      # rpi5 kernel/firmware — nixos-raspberrypi's own Cachix (NOT garnix).
+      # rpi5 kernel/firmware come prebuilt from nixos-raspberrypi's own Cachix.
+      # This is the binary cache for the whole rpi5 build — populated upstream via
+      # `cachix push` (the nvmd/nixos-raspberrypi repo uses no CI cache service).
       "https://nixos-raspberrypi.cachix.org"
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
     ];
-    # cache.garnix.io removed — garnix shuts down 2026-07-15 and nothing here was
-    # ever served by it (kernel is on nixos-raspberrypi.cachix.org; our own builds
-    # were never pushed to garnix). Replaced by self-hosted attic (see below).
+    # DEPRECATED: garnix (CI + cache.garnix.io) — REMOVED. garnix shut down
+    # 2026-07-15. Nothing here was ever served by it: the kernel is on
+    # nixos-raspberrypi.cachix.org (above) and our own heavy builds (e.g. ryot)
+    # are compiled locally on the Pi. If a prebuild cache is wanted again, use
+    # Cachix (`cachix push`) or a self-hosted attic — same model as the kernel.
   };
 
   outputs =
@@ -216,10 +230,10 @@
       # compile from a full rebuild (build it alone first on the rpi5).
       #
       # `.#reactive-resume` — the EXACT rpi5 Reactive Resume derivation (same
-      # nixpkgs + appBasePath as the running system). Exposed so garnix CI
-      # (garnix.yaml) pre-builds + pushes it to cache.garnix.io — already a
-      # trusted substituter here — so `nixos-rebuild` pulls the prebuilt binary
-      # instead of the ~20-min pnpm/turbo compile.
+      # nixpkgs + appBasePath as the running system). Exposed as a standalone
+      # build target so its ~20-min pnpm/turbo compile can be isolated/pinned.
+      # (Was prebuilt by garnix CI — DEPRECATED, garnix shut down 2026-07-15;
+      # now built locally, or push to Cachix/attic if a cache is wanted.)
       packages = nixpkgs.lib.recursiveUpdate
         (nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
           system:
@@ -235,6 +249,12 @@
         {
           aarch64-linux.reactive-resume =
             self.nixosConfigurations.${rpiconfig}.config.services.reactive-resume.package;
+          # Expose Ryot as a standalone target (`nix build .#ryot`) so its heavy
+          # Rust LTO + Node build can be isolated/pinned and optionally pushed to
+          # a binary cache (Cachix/attic). Built locally on the Pi by default —
+          # there is no prebuild CI cache (garnix is deprecated). See rpi5/ryot.nix.
+          aarch64-linux.ryot =
+            self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
         };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
@@ -252,7 +272,8 @@
 
       nixosConfigurations.${rpiconfig} = inputs.nixos-raspberrypi.lib.nixosSystem {
         # Use our nixpkgs as the base so non-kernel packages hit cache.nixos.org.
-        # Kernel/firmware still come from nixos-raspberrypi's overlays (cached on cachix/garnix).
+        # Kernel/firmware still come from nixos-raspberrypi's overlays (cached on
+        # nixos-raspberrypi.cachix.org).
         # This is NOT the same as inputs.nixos-raspberrypi.inputs.nixpkgs.follows (which would
         # break the kernel cache).
         nixpkgs = inputs.nixpkgs;
@@ -276,6 +297,7 @@
           inputs.reactive-resume-nix.nixosModules.reactive-resume
           inputs.gramps-web-nix.nixosModules.gramps-web
           inputs.beaverhabits-nix.nixosModules.beaverhabits
+          inputs.ryot-nix.nixosModules.ryot
           {
             home-manager = {
               useGlobalPkgs = true;
