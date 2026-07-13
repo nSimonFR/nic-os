@@ -168,14 +168,19 @@ in
     ./backups.nix
     ./storj-backup.nix
     ./wakapi.nix
+    ./sidestore-reflector.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
-    # Subnet route for api.lydia-app.com — routes Sumeria traffic through RPi5
-    # for transparent MITM token extraction without enabling exit node.
+    # Subnet routes advertised through RPi5:
+    #   - 34.117.84.152/32: api.lydia-app.com, for transparent Sumeria MITM
+    #     token extraction (without enabling exit node).
+    #   - 10.7.0.1/32: SideStore's fixed "virtual computer" address. Advertising
+    #     it lets the phone reach 10.7.0.1 over the tailnet; sidestore-reflector.nix
+    #     then hairpins that traffic back so SideStore refreshes with no on-device VPN.
     (import ../shared/tailscale.nix {
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
-      advertiseRoutes = [ "34.117.84.152/32" ];
+      advertiseRoutes = [ "34.117.84.152/32" "10.7.0.1/32" ];
     })
   ];
 
