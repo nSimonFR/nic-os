@@ -308,7 +308,10 @@ in
         set -eu
         occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
         keep=" ${lib.concatStringsSep " " appsToKeep} "
-        enabled_str=$($occ app:list --output=json | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+        # occ prints warnings (e.g. an orphaned apps_paths entry after a
+        # package bump) to *stdout* ahead of the JSON, which would break the
+        # jq parse and fail the unit. Strip everything before the first `{`.
+        enabled_str=$($occ app:list --output=json 2>/dev/null | sed -n '/^{/,$p' | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
         for app in $enabled_str; do
           case "$keep" in
             *" $app "*) ;;
