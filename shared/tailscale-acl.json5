@@ -15,6 +15,17 @@
 			"src":    ["autogroup:member"],
 			"dst":    ["10.7.0.1/32:*", "34.117.84.152/32:*"],
 		},
+		{
+			// SideStore reflector return path. The rpi5 reflector rewrites the
+			// phone's 10.7.0.1 packets to appear sourced FROM 10.7.0.1 (StosVPN's
+			// swap), so the reflected SYN-ACK reaches the phone as a connection
+			// from 10.7.0.1. Without this rule Tailscale's stateful filter drops
+			// it (the swap's ports don't match the outbound flow's return tuple),
+			// so the handshake never completes.
+			"action": "accept",
+			"src":    ["10.7.0.1/32"],
+			"dst":    ["autogroup:member:*"],
+		},
 	],
 	"grants": [
 		{
