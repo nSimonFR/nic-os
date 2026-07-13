@@ -260,5 +260,9 @@
     { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/nextcloud, /cyrus, /sure, /rxresume)"; funnel = true; }
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
     { port = 8088;  backend = "http://127.0.0.1:8088";  name = "Claude Notify";  icon = "mdi-bell";           category = "Infrastructure"; description = "Debounced agent → Telegram aggregator"; noSiteMonitor = true; }
+    # epicgames-freegames device/captcha portal. Only listens during a run (and
+    # only when Epic demands an interactive solve), so noSiteMonitor. Tailnet-only
+    # serve so the Telegram captcha link resolves from a phone; hidden tile.
+    { port = 3700;  backend = "http://127.0.0.1:3211";  name = "Epic Free Games"; icon = "mdi-gift";           category = "Infrastructure"; description = "Auto-claim Epic weekly free games (Thu+Sun 04:00; captcha portal)"; noSiteMonitor = true; }
   ];
 }

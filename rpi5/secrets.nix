@@ -147,5 +147,10 @@
       # rest (packages/api/.../ai/credentials.ts). root-readable; reactive-resume-env
       # (root oneshot) reads it.
     };
+    epicgames-account-email = {
+      file = ./secrets/epicgames-account-email.age;
+      # Not secret, but the repo is public — kept out of git. root-readable;
+      # epicgames-freegames-config (root oneshot) reads it into config.json.
+    };
 };
 }
