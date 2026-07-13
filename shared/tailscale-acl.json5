@@ -49,5 +49,10 @@
 	],
 	"autoApprovers": {
 		"exitNode": ["autogroup:member"],
+		// 10.7.0.1/32 is SideStore's fixed virtual-computer address, advertised
+		// by rpi5 so the tailnet-connected phone can refresh with no on-device VPN.
+		"routes": {
+			"10.7.0.1/32": ["autogroup:member"],
+		},
 	},
 }
