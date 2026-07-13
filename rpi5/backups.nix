@@ -17,6 +17,7 @@
       "airtrail"
       "ghostfolio"
       "reactive_resume"
+      "ryot"
     ];
     compression = "gzip";
     startAt = "*-*-* 03:00:00";
