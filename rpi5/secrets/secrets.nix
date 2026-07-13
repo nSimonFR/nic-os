@@ -36,4 +36,5 @@ in {
   "terradex-convex-dev.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "reactive-resume-encryption-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "epicgames-account-email.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }
