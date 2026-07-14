@@ -1017,6 +1017,41 @@
         "type": "github"
       }
     },
+    "plane-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "plane-src": "plane-src"
+      },
+      "locked": {
+        "lastModified": 1784045844,
+        "narHash": "sha256-J6SIqPg0sWQigqjCJfyLN4svRaZ4Jfhlp5OKUk4YJXQ=",
+        "path": "/home/nsimon/plane-nix",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nsimon/plane-nix",
+        "type": "path"
+      }
+    },
+    "plane-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783602459,
+        "narHash": "sha256-j1AZA4DlPHkuqiFzxGm4CME3k1BHvkIKYUlfoeLzWvQ=",
+        "owner": "makeplane",
+        "repo": "plane",
+        "rev": "dc9d80b2d2a499b967f0b541e083b283f463719f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "makeplane",
+        "repo": "plane",
+        "rev": "dc9d80b2d2a499b967f0b541e083b283f463719f",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -1132,6 +1167,7 @@
         "nixpkgs": "nixpkgs_7",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "picoclaw-src": "picoclaw-src",
+        "plane-nix": "plane-nix",
         "ragenix": "ragenix",
         "reactive-resume-nix": "reactive-resume-nix",
         "rtk-src": "rtk-src",

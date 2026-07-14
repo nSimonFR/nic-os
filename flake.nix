@@ -84,6 +84,14 @@
       url = "github:nSimonFR/gramps-web-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Plane — OSS Jira/Linear alternative, packaged natively (no Docker).
+    # DEV: local path until published. Before merge/rebuild switch to
+    # `github:nSimonFR/plane-nix` (mirrors sure-nix). Eval-only for now.
+    plane-nix = {
+      url = "path:/home/nsimon/plane-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # BeaverHabits habit tracker — Python/NiceGUI, packaged via uv2nix. First
     # Python native app here; its flake carries the uv2nix stack itself, so we
     # only pin nixpkgs. See rpi5/beaverhabits.nix.
@@ -298,6 +306,7 @@
           inputs.gramps-web-nix.nixosModules.gramps-web
           inputs.beaverhabits-nix.nixosModules.beaverhabits
           inputs.ryot-nix.nixosModules.ryot
+          inputs.plane-nix.nixosModules.plane
           {
             home-manager = {
               useGlobalPkgs = true;
