@@ -1338,16 +1338,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1784115725,
-        "narHash": "sha256-RpfZRiQBjsKnP8X+gRfcF5DG4q7pZ+qgLTvQxiLKl3o=",
+        "lastModified": 1784128372,
+        "narHash": "sha256-vX7Nss6PfxkGzZxLBDq2jmln0caT4wz7xLJTUzbxKfs=",
         "owner": "nSimonFR",
         "repo": "tiny-llm-gate",
-        "rev": "ab1276883124daa11da14f2dca072834d2c96c9d",
+        "rev": "429428d571f8e80540f0baa82ba0435e15b9c140",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
-        "ref": "v0.8.1",
+        "ref": "v0.8.2",
         "repo": "tiny-llm-gate",
         "type": "github"
       }
