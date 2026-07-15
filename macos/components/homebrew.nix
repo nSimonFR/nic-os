@@ -65,7 +65,7 @@
     "jordanbaird-ice"
     "keyboardcleantool"
     "ledger-wallet"
-    "linear-linear"
+    "linear"
     "maccy"
     "macmediakeyforwarder"
     "obsidian"
