@@ -74,6 +74,12 @@ in
         "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
         "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
         "qwen3.6:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.6:35b-a3b"; };
+        # Papra on-prem document tagging. Beast-only, NO fallback: sensitive
+        # OCR'd text (bank/tax/ID) must never reach a cloud model, and a
+        # beast-down error is what makes the Papra tag-sweeper wait and retry
+        # rather than mis-tag via cloud. qwen3-vl:8b respects strict json_schema
+        # and does French tags well (num_ctx baked to 16384 on beast).
+        "qwen3-vl:8b"        = { provider = "ollama"; upstream_model = "qwen3-vl:8b"; };
         "qwen3-embedding:8b" = {
           provider = "ollama";
           upstream_model = "qwen3-embedding:8b";
@@ -127,6 +133,7 @@ in
         "openai/gemma4:e4b"          = "gemma4:e4b";
         "openai/gemma4:26b"          = "gemma4:26b";
         "openai/qwen3.6:35b-a3b"     = "qwen3.6:35b-a3b";
+        "openai/qwen3-vl:8b"         = "qwen3-vl:8b";
         "openai/qwen3-embedding:8b"  = "qwen3-embedding:8b";
         "openai/gpt-5.5"             = "gpt-5.5";
         "openai/gpt-5.5-mini"        = "gpt-5.5-mini";
