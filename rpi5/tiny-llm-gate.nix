@@ -216,13 +216,23 @@ in
     # oauth_chatgpt loader refreshes the ChatGPT access token and persists the
     # rotated refresh token back to codex-credentials.json, so — unlike the
     # read-only /run/claude-oauth/token — the file must live on a path the
-    # DynamicUser can write. systemd creates /var/lib/tiny-llm-gate and
-    # re-chowns it (and a once-seeded credentials file) to the DynamicUser on
-    # each start. Seed once with a valid ChatGPT refresh token; the gate owns
-    # rotation thereafter.
+    # DynamicUser can write. systemd owns the StateDirectory itself as the
+    # runtime DynamicUser, but does NOT reliably re-chown a credentials file
+    # seeded out-of-band: a root-owned seed stays root-owned and the gate gets
+    # EACCES at startup. The ExecStartPre chown forces the seed file to match
+    # the StateDirectory's runtime owner on each start.
+    #   "+" runs it as root (the DynamicUser can't chown);
+    #   "-" tolerates a missing file — on a fresh box codex simply stays
+    #       disabled (non-fatal provider init) until the file is seeded, while
+    #       the rest of the gate keeps serving.
+    # Seed once with a valid ChatGPT refresh token; the gate owns rotation
+    # writes thereafter (as the same DynamicUser, so ownership stays correct).
     serviceConfig = {
       StateDirectory = "tiny-llm-gate";
       StateDirectoryMode = "0700";
+      ExecStartPre = [
+        "-+${pkgs.coreutils}/bin/chown --reference=/var/lib/tiny-llm-gate /var/lib/tiny-llm-gate/codex-credentials.json"
+      ];
     };
   };
 }
