@@ -106,6 +106,15 @@ in
   # Star Citizen / LUG: hard open file limit (GE-Proton7-14-SC & LUG manual install)
   systemd.settings.Manager.DefaultLimitNOFILE = 524288;
 
+  # Hardware watchdog (SP5100 TCO) -- auto-recover from GPU-hang lockups.
+  # RuntimeWatchdogSec was 0, so the HW timer was unarmed at runtime and the
+  # 2026-07-15 stalled reboot never self-reset (needed a physical power-cycle).
+  # Arming it continuously lets the chipset force-reset a hard lockup on its own.
+  systemd.watchdog = {
+    runtimeTime = "120s"; # pet every 60s; hard lockup resets after 120s
+    rebootTime = "5min";  # stalled reboot force-resets after 5min
+  };
+
   networking.hostName = "BeAsT";
 
   # Wake-on-LAN: allow magic-packet wake on the ethernet interface.
