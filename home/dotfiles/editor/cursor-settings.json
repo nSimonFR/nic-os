@@ -37,9 +37,7 @@
   "editor.multiCursorModifier": "ctrlCmd",
   "editor.overviewRulerBorder": false,
   "editor.renderWhitespace": "all",
-  "editor.rulers": [
-    100
-  ],
+  "editor.rulers": [100],
   "editor.tabSize": 2,
   "editor.unicodeHighlight.invisibleCharacters": false,
   "editor.accessibilitySupport": "off",
@@ -119,10 +117,7 @@
   "files.insertFinalNewline": true,
   "diffEditor.ignoreTrimWhitespace": false,
   "vsicons.dontShowNewVersionMessage": true,
-  "cursor.cpp.disabledLanguages": [
-    "plaintext",
-    "scminput"
-  ],
+  "cursor.cpp.disabledLanguages": ["plaintext", "scminput"],
   "cursor.terminal.usePreviewBox": true,
   "editor.minimap.size": "fit",
   "editor.minimap.showSlider": "always",
@@ -156,4 +151,5 @@
   "datadog.connection.notification.suppressSignInNotification": true,
   "window.autoDetectColorScheme": false,
   "datadog.codeSecurity.notification.suppressOnboarding": true,
+  "terminal.integrated.tabs.enabled": false,
 }
