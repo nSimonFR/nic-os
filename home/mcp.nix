@@ -24,6 +24,14 @@ let
   mcpServers = {
     # Public — no secrets
     Linear              = { type = "sse"; url = "https://mcp.linear.app/sse"; };
+    # Metabase built-in MCP server. Streamable-HTTP at /api/mcp (the v0.61 docs'
+    # /api/metabase-mcp path 404s on v0.61.2.10; /api/mcp is the live route and
+    # returns a 401 OAuth challenge — `www-authenticate: Bearer realm="mcp"`).
+    # Auth via Metabase's embedded OAuth server (browser handshake on first call,
+    # token scoped to the connecting user's permissions) — no secret in config.
+    # Replaces the cookie-based `metabase` skill. Enabled instance-side
+    # (agent-api-enabled? / mcp-enabled? both true on metabase.trusk.com).
+    metabase            = { type = "http"; url = "https://metabase.trusk.com/api/mcp"; };
     # Work-tailnet MCP gateways. Migrated off the in-cluster
     # *.dev-tools.svc.cluster.local services — those are no longer routable
     # from the laptop (the cluster pod subnet isn't advertised over the work
