@@ -62,6 +62,7 @@
       "mcp__ide",
       "mcp__Linear",
       "mcp__Miro",
+      "mcp__metabase",
       "mcp__trusk-argocd",
       "mcp__trusk-context7",
       "mcp__trusk-datadog",
