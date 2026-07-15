@@ -30,6 +30,11 @@ let
 
   documentsDir = "/mnt/data/papra/documents";
   ingestionDir = "/mnt/data/papra/ingestion";
+
+  # Personal org ("Nico's organization") — auto-ingest target for the feeders.
+  personalOrg = "org_g9brest62431f0c6w3uywbdr";
+  # Nextcloud "Papra Inbox" folder (user-created in the Nextcloud UI).
+  ncInbox = "/mnt/data/nextcloud/data/nsimon/files/Papra Inbox";
 in
 {
   # Bring in the upstream `services.papra` module (absent from our 25.11 nixpkgs).
@@ -78,19 +83,19 @@ in
       # "," and validates each code against OCR_LANGUAGES.
       DOCUMENTS_OCR_LANGUAGES = "eng,fra";
 
-      # ── AI auto-tagging via the loopback tiny-llm-gate (OpenAI-compatible) ──
-      # Re-ingested docs get auto-tags (Paperless tags don't transfer — different
-      # data model). Model is trivially swappable; a local model keeps document
-      # content on-prem if privacy is preferred over cloud routing.
-      AI_IS_ENABLED       = true;
-      OPENAI_BASE_URL     = "http://127.0.0.1:4001/v1";
-      # Model id must be one the gate actually serves on /v1/chat/completions
-      # (NOT every id in /v1/models is routable there — e.g. gpt-5.5-mini 404s).
-      # gpt-4o-mini: cheap, fast, good at the structured-output JSON the tagger
-      # needs. Swap to a local gate model (e.g. openai://gemma4:e4b) if you'd
-      # rather keep document content fully on-prem.
-      AI_DEFAULT_MODEL    = "openai://gpt-4o-mini";
-      AUTO_TAGGING_ENABLED = true;
+      # ── AI tagging: OWNED BY THE ON-PREM SWEEPER, not Papra's ingest tagger ──
+      # Papra's built-in auto-tagger runs in an in-memory job queue that dies on
+      # idle-sleep/restart with no retry, and its default model routed through the
+      # gate's "auto" alias (cloud codex fallback when beast is down) — both are
+      # unacceptable for sensitive docs that must be tagged on-prem or not at all.
+      # So AUTO_TAGGING is DISABLED here; the papra-tag.timer sweeper (see below)
+      # is the single tagging path: beast-only qwen3-vl:8b, no cloud fallback,
+      # idempotent, retries every run so it simply WAITS for beast to come online.
+      AI_IS_ENABLED        = true;
+      OPENAI_BASE_URL      = "http://127.0.0.1:4001/v1";
+      # Kept on-prem-only (no cloud fallback) for any non-tagging AI feature.
+      AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
+      AUTO_TAGGING_ENABLED = false;
 
       # First registered user becomes admin (module/app default). Registration is
       # left enabled so the account can be created on first run; tighten later.
@@ -118,6 +123,60 @@ in
     "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = "0755"; };
     "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
     "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
+  };
+
+  # ── On-prem tag sweeper (single tagging path; Papra's own tagger is off) ──
+  # Runs the resumable rpi5/papra-retag.py against the beast-only gate model
+  # (qwen3-vl:8b, no cloud fallback). Reads the SQLite DB directly so it does NOT
+  # wake the socket-activated papra.service. If beast is down the script aborts
+  # with EX_TEMPFAIL and the next timer tick simply retries == waits for beast.
+  systemd.services.papra-tag = {
+    description = "Papra on-prem document tag sweeper (beast-only, resumable)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "papra";
+      Group = "papra";
+      WorkingDirectory = "/var/lib/papra";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./papra-retag.py}";
+    };
+  };
+  systemd.timers.papra-tag = {
+    description = "Periodic on-prem Papra tag sweep";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec       = "5min";
+      OnUnitActiveSec = "15min";
+      Persistent      = true;
+    };
+  };
+
+  # ── Nextcloud "Papra Inbox" feeder ───────────────────────────────────────
+  # Files dropped into the Nextcloud folder are copied into Papra's ingestion
+  # drop-zone (then Papra ingests + the papra-tag sweeper tags them). Originals
+  # are left in place (see script header) — create the folder in the Nextcloud
+  # UI once. Runs as root to bridge nextcloud-owned → papra-owned files.
+  systemd.services.papra-nextcloud-watch = {
+    description = "Feed Nextcloud 'Papra Inbox' into Papra ingestion";
+    path = with pkgs; [ coreutils findutils gnugrep ];
+    environment = {
+      PAPRA_NC_INBOX = ncInbox;
+      PAPRA_NC_DEST  = "${ingestionDir}/${personalOrg}";
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = "${pkgs.bash}/bin/bash ${./papra-nextcloud-watch.sh}";
+      StateDirectory = "papra-nextcloud-watch";
+    };
+  };
+  systemd.timers.papra-nextcloud-watch = {
+    description = "Poll Nextcloud 'Papra Inbox'";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec       = "3min";
+      OnUnitActiveSec = "2min";
+      Persistent      = true;
+    };
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────────
