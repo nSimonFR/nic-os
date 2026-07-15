@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "deniedMcpServers": [{ "serverName": "claude-in-chrome" }],
   "env": {
     "ANTHROPIC_BASE_URL": "https://ai.gate-mintaka.ts.net"
   },
@@ -57,7 +58,6 @@
       "mcp__claude_ai_Notion",
       "mcp__claude_ai_Slack",
       "mcp__claude_ai_Slite",
-      "mcp__claude-in-chrome",
       "mcp__firecrawl",
       "mcp__ide",
       "mcp__Linear",
@@ -126,6 +126,7 @@
     ],
     "_comment_deny": "Global token-saving Read denials (home-manager managed via nic-os/home/dotfiles/claude-settings.json, wired to ~/.claude/settings.json in home/claude.nix). permissions.deny Read() rules are Claude Code's real file-exclusion mechanism — .claudeignore is NOT a native feature. Rules follow gitignore semantics and apply to Read/Grep/Glob plus cat/head/tail/sed in Bash, across every project (user-level settings = global). Unanchored patterns (no // or ~ prefix) match at any depth. Conservative: dependencies, lockfiles, build output, minified/maps, caches, logs, binaries/media, and secrets only — never real source code. Secrets entries (*.enc/*.pem/*.key/*.p12) also cover sops-encrypted Trusk deployment/configurations/<env>/secrets/ payloads. Edit to extend; deny merges across scopes and a deny at any level wins."
   },
+  "model": "opus[1m]",
   "hooks": {
     "PreToolUse": [
       {
