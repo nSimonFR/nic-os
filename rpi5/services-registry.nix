@@ -206,7 +206,18 @@
       }; }
     # Ryot proxy (Caddy) is the entrypoint; it path-muxes backend+frontend and
     # serves the SPA at root, so an own Serve port fits (no 443 path-mux needed).
-    { port = 3700;  backend = "http://127.0.0.1:13350"; name = "Ryot";           icon = "ryot.svg";           category = "Apps"; description = "Media & life tracker"; }
+    # Widget reads Ryot's Postgres directly via homepage-stats.py (:8087/ryot,
+    # daily-cached, postgres superuser) — no API token on the tile.
+    { port = 3700;  backend = "http://127.0.0.1:13350"; name = "Ryot";           icon = "ryot.svg";           category = "Apps"; description = "Media & life tracker";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/ryot";
+        mappings = [
+          { field = "media";   label = "Media";   format = "number"; }
+          { field = "seen";    label = "Seen";    format = "number"; }
+          { field = "reviews"; label = "Reviews"; format = "number"; }
+        ];
+      }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
     # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
     # Widget queries Reactive Resume's Postgres directly (:8087/reactiveresume, scram auth
