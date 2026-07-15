@@ -35,6 +35,8 @@ let
   personalOrg = "org_g9brest62431f0c6w3uywbdr";
   # Nextcloud "Papra Inbox" folder (user-created in the Nextcloud UI).
   ncInbox = "/mnt/data/nextcloud/data/nsimon/files/Papra Inbox";
+  # nsimon-writable staging dir the picoclaw papra-ingest skill drops files into.
+  skillInbox = "/var/lib/papra/skill-inbox";
 in
 {
   # Bring in the upstream `services.papra` module (absent from our 25.11 nixpkgs).
@@ -150,33 +152,41 @@ in
     };
   };
 
-  # ── Nextcloud "Papra Inbox" feeder ───────────────────────────────────────
-  # Files dropped into the Nextcloud folder are copied into Papra's ingestion
-  # drop-zone (then Papra ingests + the papra-tag sweeper tags them). Originals
-  # are left in place (see script header) — create the folder in the Nextcloud
-  # UI once. Runs as root to bridge nextcloud-owned → papra-owned files.
-  systemd.services.papra-nextcloud-watch = {
-    description = "Feed Nextcloud 'Papra Inbox' into Papra ingestion";
+  # ── Multi-source inbox feeder (Nextcloud folder + picoclaw skill drop) ────
+  # Files dropped into any watched source are copied into Papra's ingestion
+  # drop-zone (then Papra ingests + the papra-tag sweeper tags them). Sources:
+  #   * Nextcloud "Papra Inbox" (create the folder in the Nextcloud UI once)
+  #   * skillInbox — nsimon-writable staging dir the papra-ingest skill uses
+  # Originals are left in place (see script header). Runs as root to bridge
+  # the differently-owned source files → papra-owned ingestion dir.
+  systemd.services.papra-inbox-watch = {
+    description = "Feed Nextcloud + skill inboxes into Papra ingestion";
     path = with pkgs; [ coreutils findutils gnugrep ];
     environment = {
-      PAPRA_NC_INBOX = ncInbox;
-      PAPRA_NC_DEST  = "${ingestionDir}/${personalOrg}";
+      PAPRA_INBOXES    = "${ncInbox}:${skillInbox}";
+      PAPRA_INBOX_DEST = "${ingestionDir}/${personalOrg}";
     };
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      ExecStart = "${pkgs.bash}/bin/bash ${./papra-nextcloud-watch.sh}";
-      StateDirectory = "papra-nextcloud-watch";
+      ExecStart = "${pkgs.bash}/bin/bash ${./papra-inbox-watch.sh}";
+      StateDirectory = "papra-inbox-watch";
     };
   };
-  systemd.timers.papra-nextcloud-watch = {
-    description = "Poll Nextcloud 'Papra Inbox'";
+  systemd.timers.papra-inbox-watch = {
+    description = "Poll Papra inbox sources";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec       = "3min";
       OnUnitActiveSec = "2min";
       Persistent      = true;
     };
+  };
+
+  # Staging dir the picoclaw papra-ingest skill drops files into (nsimon writes;
+  # the root feeder above relays them to Papra's ingestion drop-zone).
+  systemd.tmpfiles.settings."10-papra-skill-inbox"."${skillInbox}".d = {
+    user = "nsimon"; group = "users"; mode = "0775";
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────────
