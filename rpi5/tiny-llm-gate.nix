@@ -1,8 +1,9 @@
 # tiny-llm-gate — single Go binary replacing LiteLLM and affine-embed-proxy.
 #
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
-# protocols, and routes ChatGPT traffic through codex-proxy (:4040) for
-# proper token counts and tool_calls support. Target RSS: < 15 MiB.
+# protocols, and speaks the ChatGPT/Codex Responses API natively (native
+# `type: codex` provider, v0.9.1) for proper token counts and tool_calls —
+# no external codex-proxy. Target RSS: < 15 MiB.
 { config, pkgs, lib, inputs, beastOllamaUrl, ... }:
 let
   port = 4001;
@@ -30,13 +31,21 @@ in
           api_key = "ollama";
         };
 
-        # Codex: codex-proxy (icebear0828/codex-proxy) translates
-        # /v1/chat/completions → ChatGPT's /responses API with proper
-        # token counts and tool_calls support.
+        # Codex: native ChatGPT/Codex Responses API. The gate POSTs directly
+        # to chatgpt.com/backend-api/codex/responses, translating OpenAI chat
+        # ↔ Codex Responses in-process (tool calls, streaming, token counts,
+        # reasoning effort). Authenticated by a self-refreshing ChatGPT OAuth
+        # credential — the gate refreshes against auth.openai.com and persists
+        # the rotated token BACK to `file`, so it must live on writable state
+        # (StateDirectory below), not a read-only secret path. Seeded once from
+        # a valid ChatGPT refresh token.
         codex = {
-          type = "openai";
-          base_url = "http://127.0.0.1:4040/v1";
-          api_key = "unused";
+          type = "codex";
+          base_url = "https://chatgpt.com/backend-api/codex";
+          auth = {
+            type = "oauth_chatgpt";
+            file = "/var/lib/tiny-llm-gate/codex-credentials.json";
+          };
         };
 
         # oMLX on the Mac (M3 Pro, MLX backend). Reached via the Mac's
@@ -64,7 +73,7 @@ in
           default_embed_dimensions = 1024;
         };
 
-        # -- Codex-proxy models (OpenAI subscription via OAuth) --
+        # -- Codex models (OpenAI subscription via native ChatGPT OAuth) --
         "gpt-5.5" = {
           provider = "codex";
           upstream_model = "gpt-5.5";
@@ -188,8 +197,9 @@ in
     };
   };
 
-  # Starts after codex-proxy and claude-oauth-extract so /run/claude-oauth/token
-  # exists before the Anthropic handler validates the token file at startup.
+  # Starts after claude-oauth-extract so /run/claude-oauth/token exists before
+  # the Anthropic handler validates the token file at startup. (codex is now
+  # native — no external codex-proxy to order after.)
   #
   # Do NOT order after affine.service / affine-mcp.service: affine.service is
   # itself ordered after tiny-llm-gate.service (AFFiNE's copilot calls into
@@ -199,7 +209,20 @@ in
   # static config: tiny-llm-gate registers them at startup and proxies
   # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
-    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    after = [ "network.target" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    wants = [ "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+
+    # Writable state for the codex provider's OAuth credentials. The native
+    # oauth_chatgpt loader refreshes the ChatGPT access token and persists the
+    # rotated refresh token back to codex-credentials.json, so — unlike the
+    # read-only /run/claude-oauth/token — the file must live on a path the
+    # DynamicUser can write. systemd creates /var/lib/tiny-llm-gate and
+    # re-chowns it (and a once-seeded credentials file) to the DynamicUser on
+    # each start. Seed once with a valid ChatGPT refresh token; the gate owns
+    # rotation thereafter.
+    serviceConfig = {
+      StateDirectory = "tiny-llm-gate";
+      StateDirectoryMode = "0700";
+    };
   };
 }
