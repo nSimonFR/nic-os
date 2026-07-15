@@ -40,9 +40,38 @@ let
     mv "$tmp" "$dest"
   '';
 
+  # For the 5h-cap alert below: which account this sidecar drives (suffix "" =
+  # the daily-driver primary; "-2" = the gate-only spare) and what failover
+  # state a cap on it implies.
+  acctLabel = if suffix == "" then "acct1 (daily-driver)" else "acct2 (gate spare)";
+  failoverNote =
+    if suffix == ""
+    then "gate failing over to acct2"
+    else "no failover headroom left — acct2 is the last resort";
+
   tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh${suffix}" ''
-    set -eu
-    exec claude -p "say hello world" --dangerously-skip-permissions
+    set -u
+    # This headless query keeps the OAuth token warm/rotated AND — because it is
+    # a REAL request — trips the Anthropic 5h session cap when the account is
+    # exhausted. The OAuth refresh alone can't reveal a cap (it succeeds
+    # regardless), so this reply is the signal. If it's a session-limit error,
+    # notify via the aggregator (:8088 holds the root-only Telegram token; this
+    # unit runs as ${username} and can't read it directly), then exit 0 so the
+    # expected cap doesn't also trip the systemd-failed alert. Any OTHER failure
+    # keeps its non-zero exit so it surfaces normally.
+    out=$(claude -p "say hello world" --dangerously-skip-permissions 2>&1)
+    rc=$?
+    if printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -qiE "hit your (session|usage) limit|session limit ·|usage limit|rate.?limit"; then
+      resets=$(printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -oiE "resets[^.]*" | head -1)
+      msg="⚠️ Claude ${acctLabel} hit its 5h session limit — ${failoverNote}.''${resets:+ ($resets)}"
+      ${pkgs.curl}/bin/curl -sS -m 10 -X POST http://127.0.0.1:8088/notify \
+        -H 'content-type: application/json' \
+        --data-raw "$(${pkgs.jq}/bin/jq -nc --arg m "$msg" '{host:"rpi5",project:"claude-gate",message:$m,immediate:true}')" \
+        >/dev/null 2>&1 || true
+      echo "claude-token-refresh${suffix}: session cap detected, alerted" >&2
+      exit 0
+    fi
+    exit $rc
   '';
 in
 {

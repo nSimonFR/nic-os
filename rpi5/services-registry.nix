@@ -259,8 +259,9 @@
     # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
     # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.
     { port = 8444;  backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
-    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic)"; }
-    { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
+    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }
+    # Codex Proxy (:4040) removed 2026-07-15 — codex is now served natively by
+    # tiny-llm-gate; codex-proxy service + files deleted.
     # Not shown on dashboard — internal MCP gateway, not user-facing.
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Infrastructure"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
     # Hydroxide moved 8443 → 8083 (matches its backend port) to free the 8443
