@@ -130,6 +130,12 @@ in
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
+    # Keybindings — Enter submits, Shift+Enter inserts a newline. Symlinked to
+    # the repo checkout (not the Nix store) so it stays hand-editable.
+    # Baseline: home/dotfiles/claude-keybindings.json
+    ".claude/keybindings.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-keybindings.json";
+
     # Trusk infra notes — scoped to ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by
     # walking UP the directory tree from cwd, so this file loads for every Trusk
     # repo/subfolder and nowhere else (keeps ~6k tokens out of non-Trusk sessions).
