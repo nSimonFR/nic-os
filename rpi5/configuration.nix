@@ -158,6 +158,7 @@ in
     ./aperture-sync.nix
     ./claude-remote-control.nix
     ./claude-oauth-2.nix
+    ./claude-account-healthcheck.nix
     ./claude-notify-aggregator.nix
     ./gramps-web.nix
     ./epicgames-freegames.nix
