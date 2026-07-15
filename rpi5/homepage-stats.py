@@ -20,6 +20,7 @@ Endpoints:
   /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
   /forgejo   — Forgejo (repositories, open issues, open PRs) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
+  /ryot      — Ryot (media, seen, reviews) — direct Postgres query (superuser)
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -93,7 +94,7 @@ stats = {
     "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
     "papra": {}, "reactiveresume": {}, "grampsweb": {},
     "vaultwarden": {}, "wakapi": {}, "dawarich": {}, "airtrail": {}, "forgejo": {},
-    "beaverhabits": {},
+    "beaverhabits": {}, "ryot": {},
 }
 stats_lock = threading.Lock()
 
@@ -391,6 +392,23 @@ def fetch_airtrail():
             stats["airtrail"]["error"] = str(e)
 
 
+def fetch_ryot():
+    # Ryot (rpi5/ryot.nix) is Postgres-backed. Read its counts directly as the
+    # postgres superuser — no API token, and (like the other direct-read tiles)
+    # it never touches Ryot's own HTTP layer. Ryot is always-on (not socket-
+    # activated), so this is purely to avoid holding an API key on the tile.
+    try:
+        with stats_lock:
+            stats["ryot"] = {
+                "media":   int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM metadata;") or 0),
+                "seen":    int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM seen;") or 0),
+                "reviews": int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM review;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["ryot"]["error"] = str(e)
+
+
 def fetch_forgejo():
     try:
         with stats_lock:
@@ -454,6 +472,7 @@ def refresh(initial_fetched_at):
             fetch_airtrail()
             fetch_forgejo()
             fetch_beaverhabits()
+            fetch_ryot()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -493,6 +512,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["forgejo"])
             elif self.path == "/beaverhabits":
                 data = dict(stats["beaverhabits"])
+            elif self.path == "/ryot":
+                data = dict(stats["ryot"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
