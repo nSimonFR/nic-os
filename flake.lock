@@ -1025,8 +1025,8 @@
         "plane-src": "plane-src"
       },
       "locked": {
-        "lastModified": 1784120527,
-        "narHash": "sha256-Hq6IjtFjS7rYwagrY5CXBuHO0C+yPYOuYDys0/xHeSk=",
+        "lastModified": 1784122134,
+        "narHash": "sha256-zrYXeBtzMfpyxx8un1E7c4wHhhv8ofAQPHxPGLk+5W4=",
         "path": "/home/nsimon/plane-nix",
         "type": "path"
       },
