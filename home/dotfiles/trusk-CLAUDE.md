@@ -27,6 +27,17 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 
 `~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all IN-/EXTERN-/DO- tickets). Most-used team `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"IN-545"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
 
+## Metabase — query via the `metabase` MCP (not the old cookie skill)
+
+Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__metabase__*`, OAuth — first call → `authenticate` returns a browser URL to approve). Replaced the retired cookie `metabase` skill; wired in nic-os `home/mcp.nix` + allowlisted in `claude-settings.json`.
+
+- Endpoint is **`/api/mcp`** (docs' `/api/metabase-mcp` 404s on v0.61.2.10). Warehouse = **database id 6**.
+- Flow: `search` → `get_table {with-fields:true}` → `construct_query`/`query` → `execute_query` → `create_question`. `execute_query` caps at **200 rows** (saved cards show all). `create_question` `collection_id:null` → root "Our analytics" (no collection-lookup tool; move in UI). Link: `metabase.trusk.com/question/<id>`.
+- **Joins are unbuildable via `construct_query`** (`String cannot be cast to Associative`). Workaround — save any SQL (incl. joins) as a question by hand-crafting the base64 `query` as a native pMBQL stage, then pass to `execute_query`/`create_question`:
+  ```bash
+  jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
+  ```
+
 ## ArgoCD — read via MCP, write via UI/kubectl
 
 Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Read** via `mcp__trusk-argocd__*` (`get_application`, `list_applications`, `get_application_resource_tree`, `get_application_workload_logs`, …). MCP RBAC is per-project: restrictive projects (`staging`) may return `permission denied`; app-of-apps (`staging-gitops`) and permissive ones (`flagd`) read fine. **Write (sync/patch/restart) is NOT in the MCP** → use the UI, or kubectl directly. `nicolas.simon@trusk.com` is `trusk-admin` (cluster-admin) on **both** staging and prod (`gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`). Read pattern: `get_application("staging-gitops")` → `.status.resources` lists child apps with sync + health.
