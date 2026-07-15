@@ -445,16 +445,16 @@
     "flake-parts_8": {
       "inputs": {
         "nixpkgs-lib": [
-          "sure-nix",
+          "ryot-nix",
           "nixpkgs"
         ]
       },
       "locked": {
-        "lastModified": 1772408722,
-        "narHash": "sha256-rHuJtdcOjK7rAHpHphUb1iCvgkU3GpfvicLMwwnfMT0=",
+        "lastModified": 1782949081,
+        "narHash": "sha256-vp6Y/Grm98ESt6ceOkWiHWyZRDV3J1RID4w+6NWK9yA=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "f20dc5d9b8027381c474144ecabc9034d6a839a3",
+        "rev": "17c9d6cdfc60c64f4ee8d306f9bc0b4ccb51481e",
         "type": "github"
       },
       "original": {
@@ -1245,8 +1245,8 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1784052633,
-        "narHash": "sha256-zti6vOvtDkg9v+eKtcukkBVHkGL20DW6iO4icHsdnxM=",
+        "lastModified": 1784148490,
+        "narHash": "sha256-UuQbaMnpTjtVnwT3xYmtR/c29eBeVQZiroVZdZiZ9Ws=",
         "path": "/home/nsimon/ryot-nix",
         "type": "path"
       },
