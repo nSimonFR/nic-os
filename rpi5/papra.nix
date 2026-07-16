@@ -36,8 +36,6 @@ let
   # Top-level Nextcloud "PAPRA" folder (drive drop-zone; also the Proton poller's
   # ingestion target). Matches the user's ALL-CAPS top-level folder convention.
   ncInbox = "/mnt/data/nextcloud/data/nsimon/files/PAPRA";
-  # nsimon-writable staging dir the picoclaw papra-ingest skill drops files into.
-  skillInbox = "/var/lib/papra/skill-inbox";
 in
 {
   # Bring in the upstream `services.papra` module (absent from our 25.11 nixpkgs).
@@ -86,19 +84,18 @@ in
       # "," and validates each code against OCR_LANGUAGES.
       DOCUMENTS_OCR_LANGUAGES = "eng,fra";
 
-      # ── AI tagging: OWNED BY THE ON-PREM SWEEPER, not Papra's ingest tagger ──
-      # Papra's built-in auto-tagger runs in an in-memory job queue that dies on
-      # idle-sleep/restart with no retry, and its default model routed through the
-      # gate's "auto" alias (cloud codex fallback when beast is down) — both are
-      # unacceptable for sensitive docs that must be tagged on-prem or not at all.
-      # So AUTO_TAGGING is DISABLED here; the papra-tag.timer sweeper (see below)
-      # is the single tagging path: beast-only qwen3-vl:8b, no cloud fallback,
-      # idempotent, retries every run so it simply WAITS for beast to come online.
+      # ── AI auto-tagging: Papra-native, routed on-prem to beast ────────────
+      # Papra's built-in auto-tagger runs on ingest, via the loopback gate. The
+      # model is the beast-only qwen3-vl:8b entry (NO cloud fallback in the gate),
+      # so OCR'd content never leaves the network — a beast-down request errors
+      # rather than routing to a cloud model. qwen3-vl:8b respects the strict
+      # json_schema Papra's tagger requires and tags well in French.
+      # NOTE: native tagging is fire-once with no retry — a doc ingested while
+      # beast is asleep/down stays untagged until re-ingested (no wait-for-beast).
       AI_IS_ENABLED        = true;
       OPENAI_BASE_URL      = "http://127.0.0.1:4001/v1";
-      # Kept on-prem-only (no cloud fallback) for any non-tagging AI feature.
       AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
-      AUTO_TAGGING_ENABLED = false;
+      AUTO_TAGGING_ENABLED = true;
 
       # First registered user becomes admin (module/app default). Registration is
       # left enabled so the account can be created on first run; tighten later.
@@ -128,43 +125,16 @@ in
     "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
   };
 
-  # ── On-prem tag sweeper (single tagging path; Papra's own tagger is off) ──
-  # Runs the resumable rpi5/papra-retag.py against the beast-only gate model
-  # (qwen3-vl:8b, no cloud fallback). Reads the SQLite DB directly so it does NOT
-  # wake the socket-activated papra.service. If beast is down the script aborts
-  # with EX_TEMPFAIL and the next timer tick simply retries == waits for beast.
-  systemd.services.papra-tag = {
-    description = "Papra on-prem document tag sweeper (beast-only, resumable)";
-    serviceConfig = {
-      Type = "oneshot";
-      User = "papra";
-      Group = "papra";
-      WorkingDirectory = "/var/lib/papra";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./papra-retag.py}";
-    };
-  };
-  systemd.timers.papra-tag = {
-    description = "Periodic on-prem Papra tag sweep";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec       = "5min";
-      OnUnitActiveSec = "15min";
-      Persistent      = true;
-    };
-  };
-
-  # ── Multi-source inbox feeder (Nextcloud folder + picoclaw skill drop) ────
-  # Files dropped into any watched source are copied into Papra's ingestion
-  # drop-zone (then Papra ingests + the papra-tag sweeper tags them). Sources:
-  #   * Nextcloud "Papra Inbox" (create the folder in the Nextcloud UI once)
-  #   * skillInbox — nsimon-writable staging dir the papra-ingest skill uses
-  # Originals are left in place (see script header). Runs as root to bridge
-  # the differently-owned source files → papra-owned ingestion dir.
+  # ── Nextcloud "PAPRA" inbox feeder ────────────────────────────────────────
+  # Files dropped into the Nextcloud PAPRA folder are copied into Papra's
+  # ingestion drop-zone; Papra ingests them and its native auto-tagger tags them.
+  # Originals are left in place (see script header). Runs as root to bridge the
+  # nextcloud-owned source files → papra-owned ingestion dir.
   systemd.services.papra-inbox-watch = {
-    description = "Feed Nextcloud + skill inboxes into Papra ingestion";
+    description = "Feed the Nextcloud PAPRA folder into Papra ingestion";
     path = with pkgs; [ coreutils findutils gnugrep ];
     environment = {
-      PAPRA_INBOXES    = "${ncInbox}:${skillInbox}";
+      PAPRA_INBOXES    = ncInbox;
       PAPRA_INBOX_DEST = "${ingestionDir}/${personalOrg}";
     };
     serviceConfig = {
@@ -175,19 +145,13 @@ in
     };
   };
   systemd.timers.papra-inbox-watch = {
-    description = "Poll Papra inbox sources";
+    description = "Poll the Nextcloud PAPRA folder";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec       = "3min";
       OnUnitActiveSec = "2min";
       Persistent      = true;
     };
-  };
-
-  # Staging dir the picoclaw papra-ingest skill drops files into (nsimon writes;
-  # the root feeder above relays them to Papra's ingestion drop-zone).
-  systemd.tmpfiles.settings."10-papra-skill-inbox"."${skillInbox}".d = {
-    user = "nsimon"; group = "users"; mode = "0775";
   };
 
   # ── Proton Mail feeder (via the existing hydroxide bridge) ────────────────
