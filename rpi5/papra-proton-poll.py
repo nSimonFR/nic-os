@@ -28,23 +28,34 @@ HOST = "127.0.0.1"
 PORT = 1143
 USER = os.environ.get("PROTON_USER", "nsimon@protonmail.com")
 PASS_FILE = os.environ.get("PROTON_PASS_FILE", "/run/agenix/protonmail-bridge-password")
-MAILBOX = os.environ.get("PROTON_MAILBOX", "Papra")
+MAILBOX = os.environ.get("PROTON_MAILBOX", "All Mail")
+# Proton *label* to match. Hydroxide surfaces Proton labels as lowercase IMAP
+# keywords (NOT as folders), so we select the mailbox and SEARCH KEYWORD <label>.
+# The label is additive → mail stays in the Inbox; we never mutate it.
+LABEL = os.environ.get("PROTON_LABEL", "papra")
 DEST = os.environ["PAPRA_PROTON_DEST"]
 STATE_DIR = os.environ.get("PAPRA_PROTON_STATE_DIR", "/var/lib/papra-proton-poll")
 STATE = os.path.join(STATE_DIR, "seen")
 
-DOC_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".gif"}
+DOC_EXT = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".webp", ".heic", ".heif", ".gif"}
 DOC_CT = {"application/pdf"}
+MIN_IMG_BYTES = 30000  # skip decorative email images (footer/social icons are <2KB)
 
 
-def is_doc(ct, fn):
+def is_doc(ct, fn, disp, size):
     ct = (ct or "").lower()
     ext = os.path.splitext((fn or "").lower())[1]
+    is_attach = bool(disp and "attachment" in disp.lower())
     if ext == ".ics" or ct == "text/calendar":
         return False
-    if ct in DOC_CT or ct.startswith("image/"):
+    # PDFs are essentially always real documents.
+    if ct in DOC_CT or ext == ".pdf":
         return True
-    return ext in DOC_EXT
+    # Images: only real attachments above a size floor — this drops the logo /
+    # social / footer icons that marketing emails attach inline.
+    if ct.startswith("image/") or ext in DOC_EXT:
+        return is_attach and size >= MIN_IMG_BYTES
+    return False
 
 
 def safe(fn):
@@ -68,13 +79,18 @@ def main():
     pw = open(PASS_FILE).read().strip()
     M = imaplib.IMAP4(HOST, PORT)
     M.login(USER, pw)
-    typ, _ = M.select(MAILBOX, readonly=True)
+    # Quote mailbox names containing spaces (e.g. "All Mail") for IMAP.
+    mbox = f'"{MAILBOX}"' if " " in MAILBOX else MAILBOX
+    typ, _ = M.select(mbox, readonly=True)
     if typ != "OK":
-        print(f"error: cannot select mailbox {MAILBOX!r} (does the Proton folder exist?)",
-              file=sys.stderr)
+        print(f"error: cannot select mailbox {MAILBOX!r}", file=sys.stderr)
         return 1
 
-    typ, ids = M.search(None, "ALL")
+    # Match messages carrying the Proton label (hydroxide exposes it as a keyword).
+    if LABEL:
+        typ, ids = M.search(None, "KEYWORD", LABEL)
+    else:
+        typ, ids = M.search(None, "ALL")
     n = 0
     newseen = []
     for num in ids[0].split():
@@ -89,10 +105,10 @@ def main():
             disp = part.get("Content-Disposition")
             if not (fn or (disp and "attachment" in disp.lower())):
                 continue
-            if not is_doc(ct, fn):
-                continue
             payload = part.get_payload(decode=True)
             if not payload:
+                continue
+            if not is_doc(ct, fn, disp, len(payload)):
                 continue
             dest = os.path.join(DEST, safe(fn))
             base, ext = os.path.splitext(dest)
