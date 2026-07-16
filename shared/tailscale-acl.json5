@@ -1,8 +1,18 @@
 // Tailscale tailnet policy file (HuJSON syntax, named .json5 for
 // github native highlighting; the gitops-acl action reads it via
 // the explicit `path:` input regardless of extension).
-// Synced to https://login.tailscale.com/admin/acls/file by
-// .github/workflows/tailscale-acl.yml on push to main.
+//
+// THIS FILE IS THE SOURCE OF TRUTH for the tailnet ACL — GitOps applies it
+// to https://login.tailscale.com/admin/acls/file and OVERWRITES the admin
+// console, so edit here, not in the web UI (console edits get wiped on apply).
+//
+// Applied by .github/workflows/tailscale-acl.yml:
+//   - push to main (this file changed) -> apply (pushes to the tailnet)
+//   - pull request                     -> test  (dry-run validation only)
+//   - manual run (workflow_dispatch)   -> test or apply, your choice, any branch
+// To apply/test a WIP branch on demand without merging:
+//   gh workflow run "Sync Tailscale ACL" --ref <branch> -f action=apply
+// (or the Actions UI -> Run workflow -> pick branch + action).
 {
 	"acls": [
 		{
