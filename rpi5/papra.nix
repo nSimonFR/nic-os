@@ -246,6 +246,27 @@ in
     };
   };
 
+  # Idempotently (re)register the Papra webhook that drives the tag-sync receiver.
+  # Papra keeps webhooks as DB rows, so this reconciles them on every activation —
+  # surviving a Papra DB reset and picking up a rotated papra-webhook-secret.
+  systemd.services.papra-webhook-register = {
+    description = "Register the Papra -> Nextcloud tag-sync webhook";
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ sqlite coreutils ];
+    environment = {
+      PAPRA_DB = "/var/lib/papra/db.sqlite";
+      PAPRA_ORG = personalOrg;
+      PAPRA_WEBHOOK_URL = "http://127.0.0.1:8347/";
+      PAPRA_WEBHOOK_SECRET_FILE = "/run/agenix/papra-webhook-secret";
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = "${pkgs.bash}/bin/bash ${./scripts/papra-webhook-register.sh}";
+    };
+    restartTriggers = [ config.age.secrets.papra-webhook-secret.file ];
+  };
+
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────────
   # Proxy on :8220 lazily starts papra.service on first connection (Tailscale
   # Serve :3450 → here) and stops it after idleSec. readyProbe gates on

@@ -339,6 +339,12 @@ in
     # invalid"). Owning the parent root:root removes the escalation.
     "d /mnt/data/nextcloud 0755 root root -"
     "d /mnt/data/cloud 0755 root root -"
+    # Defensive: keep the user-files dir owned by the php-fpm user. If it ever
+    # ends up root-owned (e.g. a stray privileged operation in the tree), occ
+    # file scans fail ("not writable") and files dropped via the drive/PAPRA
+    # feeder never become visible to Nextcloud. `z` only adjusts the dir itself
+    # (non-recursive), leaving mode and children untouched.
+    "z ${datadir}/data/nsimon/files - nextcloud nextcloud -"
   ];
   systemd.mounts = [{
     where = "/mnt/data/cloud";
