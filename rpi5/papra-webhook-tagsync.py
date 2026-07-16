@@ -137,26 +137,22 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(n)
-        sig_raw = ""
-        for h in ("x-signature", "x-papra-signature", "x-hub-signature-256",
-                  "x-signature-256", "x-webhook-signature", "papra-signature"):
-            v = self.headers.get(h)
-            if v:
-                sig_raw = v.strip()
-                break
-        if not sig_raw:
-            print("no sig header; headers=" + str(dict(self.headers)), flush=True)
-        got = sig_raw[7:] if sig_raw.lower().startswith("sha256=") else sig_raw
-        mac = hmac.new(SECRET, body, hashlib.sha256)
-        hexd = mac.hexdigest()
-        b64 = base64.b64encode(mac.digest()).decode()
-        ok = got and (
-            hmac.compare_digest(got, hexd)
-            or hmac.compare_digest(got, b64)
-            or hmac.compare_digest(got.rstrip("="), b64.rstrip("="))
-        )
+        # Standard Webhooks (svix) scheme, as used by Papra:
+        #   signed content = "{webhook-id}.{webhook-timestamp}.{body}"
+        #   webhook-signature: space-separated "v1,<base64(hmac_sha256)>" entries
+        wid = self.headers.get("webhook-id", "")
+        wts = self.headers.get("webhook-timestamp", "")
+        wsig = self.headers.get("webhook-signature", "")
+        # svix secrets may be "whsec_<base64>"; ours is a plain string -> raw bytes
+        key = SECRET
+        if key.startswith(b"whsec_"):
+            key = base64.b64decode(key[6:])
+        signed = wid.encode() + b"." + wts.encode() + b"." + body
+        expected = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
+        sigs = [p.split(",", 1)[1] for p in wsig.split() if p.startswith("v1,")]
+        ok = any(hmac.compare_digest(expected, s) for s in sigs)
         if not ok:
-            print(f"REJECT bad/missing signature got={sig_raw[:24]!r} hex={hexd[:12]} b64={b64[:12]}", flush=True)
+            print(f"REJECT bad signature id={wid} sigs={sigs} expected={expected[:16]}", flush=True)
             return self._reply(401, "bad signature")
         ids = []
         for m in DOC_RE.findall(body):
