@@ -57,6 +57,16 @@ in
           base_url = "https://macbook-pro-appleosx-15.gate-mintaka.ts.net:8443/v1";
           api_key = "unused";
         };
+
+        # Claude, spoken natively (v0.9.4): the gate translates OpenAI chat ↔
+        # Anthropic Messages in-process and authenticates via the SHARED 2-account
+        # OAuth pool defined in the `anthropic` block below (no own auth). Lets
+        # any frontend route to Claude — used as "auto"'s last-resort fallback so
+        # the assistant still answers when BOTH beast (ollama) and codex are down.
+        claude = {
+          type = "anthropic";
+          base_url = "https://api.anthropic.com";
+        };
       };
 
       models = {
@@ -88,22 +98,26 @@ in
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
 
+        # -- Anthropic (Claude) via the shared 2-account OAuth pool --
+        "claude" = { provider = "claude"; upstream_model = "claude-opus-4-8"; };
+
         # -- oMLX models (Mac local inference via tailscale serve) --
         # No fallback: Mac-asleep should surface as an error rather than
         # silently consume the codex budget.
         "Qwen3.6-27B-4bit"         = { provider = "omlx"; upstream_model = "Qwen3.6-27B-4bit"; };
         "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
-        # "auto" — local-first model: try gemma4:e4b on beast, fall back to
-        # codex gpt-5.5 if beast is unreachable (TCP refused / timeout) or
-        # returns 5xx. Used by Sure (via OPENAI_MODEL) to prefer free local
-        # inference when beast is awake while keeping the assistant working
-        # when it's asleep. tiny-llm-gate's fallback chain triggers on both
-        # transport errors and 5xx — see internal/server/openai.go.
+        # "auto" — local-first model with a resilience cascade: gemma4:e4b on
+        # beast → codex gpt-5.5 (beast unreachable/5xx) → Claude (codex also
+        # down). Prefers free local inference when beast is awake, keeps the
+        # assistant working when it's asleep, and only reaches the metered
+        # Anthropic pool as a last resort. Works behind BOTH the OpenAI and
+        # Gemini frontends (chatUpstream dispatches per hop). Fallback triggers
+        # on transport errors + 5xx — see internal/server/chat.go.
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.5" ];
+          fallback       = [ "gpt-5.5" "claude" ];
         };
       };
 
