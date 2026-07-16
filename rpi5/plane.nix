@@ -47,6 +47,14 @@ in
     inherit baseUrl;
     # Redis DB 7 — 1=immich 2=sure 3=dawarich 5=nextcloud 6=gramps taken (0=default, 4 freed).
     redisUrl    = "redis://${redisHost}:${toString redisPort}/7";
+    # Plane's Celery broker is AMQP-only: settings.common derives CELERY_BROKER_URL
+    # from AMQP_URL, else defaults to amqp://guest@localhost:5672 (RabbitMQ). We run
+    # no RabbitMQ, so point Celery at Redis (kombu redis transport) on a dedicated
+    # DB (8, separate from the DB-7 cache). Without it every bg task — incl.
+    # workspace_seed.delay() — dies "Connection refused", so workspace creation → 500.
+    extraEnv = {
+      AMQP_URL = "redis://${redisHost}:${toString redisPort}/8";
+    };
     secretsFile = "/run/agenix/plane-app-env";
     gunicornWorkers = 1;  # bound RSS on the 4 GB rpi5
     s3 = {
