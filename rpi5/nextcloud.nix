@@ -339,13 +339,22 @@ in
     # invalid"). Owning the parent root:root removes the escalation.
     "d /mnt/data/nextcloud 0755 root root -"
     "d /mnt/data/cloud 0755 root root -"
-    # Defensive: keep the user-files dir owned by the php-fpm user. If it ever
-    # ends up root-owned (e.g. a stray privileged operation in the tree), occ
-    # file scans fail ("not writable") and files dropped via the drive/PAPRA
-    # feeder never become visible to Nextcloud. `z` only adjusts the dir itself
-    # (non-recursive), leaving mode and children untouched.
-    "z ${datadir}/data/nsimon/files - nextcloud nextcloud -"
   ];
+
+  # Defensive: keep the user-files dir owned by the php-fpm user. If it ever ends
+  # up root-owned (e.g. a stray privileged op in the tree), occ file scans fail
+  # ("not writable") and files dropped via the drive/PAPRA feeder never become
+  # visible to Nextcloud. A tmpfiles `z` rule can't repair this — systemd-tmpfiles
+  # refuses the root→nextcloud "unsafe path transition" — so use a plain chown
+  # oneshot (non-recursive: only the dir itself).
+  systemd.services.nextcloud-files-owner = {
+    description = "Ensure nsimon's Nextcloud files dir is owned by nextcloud";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.coreutils}/bin/chown nextcloud:nextcloud ${datadir}/data/nsimon/files";
+    };
+  };
   systemd.mounts = [{
     where = "/mnt/data/cloud";
     what  = "${datadir}/data/nsimon/files";
