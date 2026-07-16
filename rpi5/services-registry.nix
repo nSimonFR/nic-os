@@ -247,14 +247,6 @@
           { field = "checkins"; label = "Check-ins"; format = "number"; }
         ];
       }; }
-    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
-    # Own Serve port (not the 443 path-mux): Plane's React-Router SPAs (/, /spaces,
-    # /god-mode) need a root origin, like AFFiNE / Gramps Web. 3800 → the always-on
-    # nginx vhost (:8330) from nixosModules.plane, which lazy-wakes the api tier.
-    # No widget yet — add a homepage-stats.py :8087/plane DB-reader (like the other
-    # socket-activated tiles) so stats don't wake the service. eval-only for now.
-    { port = 3800;  backend = "http://127.0.0.1:8330";  name = "Plane";          icon = "plane.svg";          category = "Apps"; description = "Project management (Jira/Linear alt)"; noSiteMonitor = true; }
-
     # Backend — API services
     # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
     # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.

@@ -84,16 +84,6 @@
       file  = ./secrets/gramps-web-secret.age;
       owner = "gramps-web";
     };
-    plane-app-env = {
-      file = ./secrets/plane-app-env.age;
-      # root-readable; EnvironmentFile for the plane-* units. Carries SECRET_KEY,
-      # DATABASE_URL (with password), and the Storj S3 access key/secret.
-      # PLACEHOLDER values for now (eval-only) — fill before rebuild.
-    };
-    plane-pg-password = {
-      file  = ./secrets/plane-pg-password.age;
-      owner = "postgres"; # plane-pg-setup runs as postgres; must match DATABASE_URL's password
-    };
     affine-token = {
       file = ./secrets/affine-token.age;
       mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge, affine-mcp) needs to read it
