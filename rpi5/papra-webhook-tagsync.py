@@ -77,19 +77,29 @@ def sync(doc_id):
         return f"[{doc_id}] unknown/deleted doc — skip"
     if not tags:
         return f"[{doc_id}] no tags yet — skip"
+    # Candidate filenames: exact, then with Papra's import suffix "__N" stripped
+    # (Paperless originals were re-imported as "<title>__<N>.pdf").
+    candidates = [name]
+    stripped = re.sub(r"__\d+(\.[A-Za-z0-9]+)$", r"\1", name)
+    if stripped != name:
+        candidates.append(stripped)
+
     conn = pg()
     conn.autocommit = True
     cur = conn.cursor()
     try:
-        # Newest file with this name in the user's home storage.
-        cur.execute(
-            "SELECT fc.fileid, fc.path FROM oc_filecache fc "
-            "JOIN oc_storages s ON s.numeric_id = fc.storage "
-            "WHERE fc.name = %s AND s.id = %s ORDER BY fc.fileid DESC LIMIT 1",
-            (name, f"home::{NC_USER}"))
-        r = cur.fetchone()
+        r = None
+        for cand in candidates:
+            cur.execute(
+                "SELECT fc.fileid, fc.path FROM oc_filecache fc "
+                "JOIN oc_storages s ON s.numeric_id = fc.storage "
+                "WHERE fc.name = %s AND s.id = %s ORDER BY fc.fileid DESC LIMIT 1",
+                (cand, f"home::{NC_USER}"))
+            r = cur.fetchone()
+            if r:
+                break
         if not r:
-            return f"[{doc_id}] no Nextcloud file named {name!r} — skip"
+            return f"[{doc_id}] no Nextcloud file for {name!r} — skip"
         fileid, path = r
         applied = []
         for tag in tags:
