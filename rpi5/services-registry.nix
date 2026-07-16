@@ -285,6 +285,6 @@
     # epicgames-freegames device/captcha portal. Only listens during a run (and
     # only when Epic demands an interactive solve), so noSiteMonitor. Tailnet-only
     # serve so the Telegram captcha link resolves from a phone; hidden tile.
-    { port = 3750;  backend = "http://127.0.0.1:3211";  name = "Epic Free Games"; icon = "mdi-gift";           category = "Infrastructure"; description = "Auto-claim Epic weekly free games (Thu+Sun 04:00; captcha portal)"; noSiteMonitor = true; }
+    { port = 3750;  backend = "http://127.0.0.1:3211";  name = "Epic Free Games"; icon = "mdi-gift";           category = "Infrastructure"; description = "Auto-claim Epic weekly free games (Thu+Sun 12:30; captcha portal)"; noSiteMonitor = true; }
   ];
 }

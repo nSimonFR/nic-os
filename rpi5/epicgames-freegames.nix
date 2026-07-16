@@ -1,6 +1,6 @@
 # epicgames-freegames-node: auto-claim the Epic Games Store weekly free games.
 #
-# Design — "run at night, zero idle RAM":
+# Design — "run twice weekly, zero idle RAM":
 #   The upstream tool's Docker image runs a resident process that self-schedules
 #   via an internal cron. We do NOT use that. `node dist/src/index.js` performs
 #   exactly ONE redeem pass and then `process.exit(0)` (the scheduling lives only
@@ -143,7 +143,7 @@ in
       NODE_ENV = "production";
       # This Pi boots with cgroup_disable=memory, so systemd MemoryMax/High are
       # silently ignored — don't rely on them. Cap the Node heap here; the
-      # Chromium spike is bounded by running at 04:00 (idle) + earlyoom backstop.
+      # Chromium spike is bounded by this heap cap + the earlyoom backstop.
       NODE_OPTIONS = "--max-old-space-size=384";
     };
     serviceConfig = {
@@ -152,7 +152,7 @@ in
       Group = "epicgames-freegames";
       WorkingDirectory = stateDir;
       ExecStart = lib.getExe epicgames-freegames;
-      # Cap a stuck run (e.g. an unattended captcha/device-code wait at 04:00):
+      # Cap a stuck run (e.g. an unattended captcha/device-code wait):
       # Epic's device code expires in ~10 min, so 15 min covers the happy path
       # and fails cleanly otherwise (→ Telegram alert, retries next Thu/Sun).
       TimeoutStartSec = "15min";
@@ -160,12 +160,12 @@ in
   };
 
   systemd.timers.epicgames-freegames = {
-    description = "Twice-weekly Epic free-games claim (Thu + Sun, 04:00)";
+    description = "Twice-weekly Epic free-games claim (Thu + Sun, 12:30)";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       # Sun claims the current week's game with margin; Thu is the last-chance
       # grab of the previous game before it expires (~17:00 CET Thursdays).
-      OnCalendar = "Thu,Sun *-*-* 04:00:00";
+      OnCalendar = "Thu,Sun *-*-* 12:30:00";
       Persistent = true; # catch up a missed run if the Pi was off
       RandomizedDelaySec = "45m"; # be polite to Epic; don't hit exactly on the hour
     };
