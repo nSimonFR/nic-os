@@ -33,8 +33,9 @@ let
 
   # Personal org ("Nico's organization") — auto-ingest target for the feeders.
   personalOrg = "org_g9brest62431f0c6w3uywbdr";
-  # Nextcloud "Papra Inbox" folder (user-created in the Nextcloud UI).
-  ncInbox = "/mnt/data/nextcloud/data/nsimon/files/Papra Inbox";
+  # Top-level Nextcloud "PAPRA" folder (drive drop-zone; also the Proton poller's
+  # ingestion target). Matches the user's ALL-CAPS top-level folder convention.
+  ncInbox = "/mnt/data/nextcloud/data/nsimon/files/PAPRA";
   # nsimon-writable staging dir the picoclaw papra-ingest skill drops files into.
   skillInbox = "/var/lib/papra/skill-inbox";
 in
