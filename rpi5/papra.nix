@@ -158,6 +158,31 @@ in
     };
   };
 
+  # ── Tagging safety-net: reconcile any UNTAGGED docs (waits for beast) ─────
+  # Papra's native auto-tagger is fire-once with no retry, so a doc ingested
+  # while beast was asleep/down stays untagged. This sweeps untagged docs on-prem
+  # (beast-only qwen3-vl:8b) every 15 min; it aborts + retries next run when beast
+  # is unreachable, so the backlog is tagged once beast returns. Runs as papra.
+  systemd.services.papra-tag-sweep = {
+    description = "Papra tagging safety-net (reconcile untagged docs)";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "papra";
+      Group = "papra";
+      WorkingDirectory = "/var/lib/papra";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/papra-tag-sweep.py}";
+    };
+  };
+  systemd.timers.papra-tag-sweep = {
+    description = "Periodic Papra untagged-doc reconcile";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec       = "6min";
+      OnUnitActiveSec = "15min";
+      Persistent      = true;
+    };
+  };
+
   # ── Proton Mail feeder (via the existing hydroxide bridge) ────────────────
   # Polls the Proton "Papra" folder over hydroxide IMAP (:1143) and drops
   # document attachments (PDF/images, skips .ics) into Papra's ingestion
