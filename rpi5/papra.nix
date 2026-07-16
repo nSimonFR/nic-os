@@ -189,6 +189,36 @@ in
     user = "nsimon"; group = "users"; mode = "0775";
   };
 
+  # ── Proton Mail feeder (via the existing hydroxide bridge) ────────────────
+  # Polls the Proton "Papra" folder over hydroxide IMAP (:1143) and drops
+  # document attachments (PDF/images, skips .ics) into Papra's ingestion
+  # drop-zone. Processed messages tracked by Message-ID (mailbox never mutated).
+  # Runs as root: reads the hydroxide-group bridge password + writes the
+  # papra-owned ingestion dir. File a bill into the Proton "Papra" folder and it
+  # lands in Papra within a few minutes.
+  systemd.services.papra-proton-poll = {
+    description = "Feed Proton 'Papra' folder attachments into Papra ingestion";
+    after = [ "hydroxide.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [ pkgs.python3 ];
+    environment.PAPRA_PROTON_DEST = "${ingestionDir}/${personalOrg}";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./papra-proton-poll.py}";
+      StateDirectory = "papra-proton-poll";
+    };
+  };
+  systemd.timers.papra-proton-poll = {
+    description = "Poll Proton 'Papra' folder";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec       = "4min";
+      OnUnitActiveSec = "5min";
+      Persistent      = true;
+    };
+  };
+
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────────
   # Proxy on :8220 lazily starts papra.service on first connection (Tailscale
   # Serve :3450 → here) and stops it after idleSec. readyProbe gates on
