@@ -137,7 +137,15 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(n)
-        sig_raw = (self.headers.get("X-Signature") or self.headers.get("x-signature") or "").strip()
+        sig_raw = ""
+        for h in ("x-signature", "x-papra-signature", "x-hub-signature-256",
+                  "x-signature-256", "x-webhook-signature", "papra-signature"):
+            v = self.headers.get(h)
+            if v:
+                sig_raw = v.strip()
+                break
+        if not sig_raw:
+            print("no sig header; headers=" + str(dict(self.headers)), flush=True)
         got = sig_raw[7:] if sig_raw.lower().startswith("sha256=") else sig_raw
         mac = hmac.new(SECRET, body, hashlib.sha256)
         hexd = mac.hexdigest()
