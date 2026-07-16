@@ -19,7 +19,7 @@
 # waking on first request and stopping after 10 min idle. Tradeoff: scheduled
 # tasks / ingestion pause while asleep and resume on wake; Better Auth sessions
 # are SQLite-backed so a cold wake is safe.
-{ config, lib, pkgs, inputs, tailnetFqdn, ... }:
+{ config, lib, pkgs, inputs, tailnetFqdn, pgHost, pgPort, ... }:
 let
   # Tailscale Serve (HTTPS :3450) → socket-activate proxy (:8220) → papra (:8221).
   externalPort = 3450;
@@ -181,6 +181,39 @@ in
       OnBootSec       = "4min";
       OnUnitActiveSec = "5min";
       Persistent      = true;
+    };
+  };
+
+  # ── Papra → Nextcloud tag sync (webhook receiver) ─────────────────────────
+  # Papra fires an HMAC-signed webhook on document.tags.changed; this receiver
+  # (127.0.0.1:8347) verifies it, reads the doc's current tags from Papra's
+  # SQLite, matches the file in Nextcloud by original filename, and mirrors the
+  # tags as Nextcloud systemtags (writes oc_systemtag[_object_mapping] in PG as
+  # nextcloud_user; DB password read from Nextcloud's config.php). Docs with no
+  # Nextcloud counterpart (e.g. Proton-sourced) are skipped. Register the webhook
+  # in Papra pointing at this URL with the papra-webhook-secret.
+  systemd.services.papra-webhook-tagsync = {
+    description = "Papra -> Nextcloud tag sync (webhook receiver)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "postgresql.service" "network.target" ];
+    environment = {
+      LISTEN_ADDR = "127.0.0.1";
+      LISTEN_PORT = "8347";
+      PAPRA_DB = "/var/lib/papra/db.sqlite";
+      PAPRA_WEBHOOK_SECRET_FILE = "/run/agenix/papra-webhook-secret";
+      NC_PG_HOST = pgHost;
+      NC_PG_PORT = toString pgPort;
+      NC_PG_DB = "nextcloud_production";
+      NC_PG_USER = "nextcloud_user";
+      NC_CONFIG = "/mnt/data/nextcloud/config/config.php";
+      NC_USER = "nsimon";
+    };
+    serviceConfig = {
+      User = "nextcloud";
+      Group = "nextcloud";
+      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./papra-webhook-tagsync.py}";
+      Restart = "on-failure";
+      RestartSec = 5;
     };
   };
 
