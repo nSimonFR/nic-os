@@ -17,6 +17,7 @@ Env:
   PAPRA_WEBHOOK_SECRET_FILE (HMAC secret)
   NC_PG_HOST/PORT/DB/USER  NC_PG_PASSWORD_FILE  NC_USER (Nextcloud username)
 """
+import base64
 import hashlib
 import hmac
 import os
@@ -136,10 +137,18 @@ class H(BaseHTTPRequestHandler):
     def do_POST(self):
         n = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(n)
-        sig = (self.headers.get("X-Signature") or self.headers.get("x-signature") or "").split("=")[-1].strip()
-        mac = hmac.new(SECRET, body, hashlib.sha256).hexdigest()
-        if not sig or not hmac.compare_digest(mac, sig):
-            print("REJECT bad/missing signature", flush=True)
+        sig_raw = (self.headers.get("X-Signature") or self.headers.get("x-signature") or "").strip()
+        got = sig_raw[7:] if sig_raw.lower().startswith("sha256=") else sig_raw
+        mac = hmac.new(SECRET, body, hashlib.sha256)
+        hexd = mac.hexdigest()
+        b64 = base64.b64encode(mac.digest()).decode()
+        ok = got and (
+            hmac.compare_digest(got, hexd)
+            or hmac.compare_digest(got, b64)
+            or hmac.compare_digest(got.rstrip("="), b64.rstrip("="))
+        )
+        if not ok:
+            print(f"REJECT bad/missing signature got={sig_raw[:24]!r} hex={hexd[:12]} b64={b64[:12]}", flush=True)
             return self._reply(401, "bad signature")
         ids = []
         for m in DOC_RE.findall(body):
