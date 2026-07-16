@@ -144,7 +144,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      ExecStart = "${pkgs.bash}/bin/bash ${./papra-inbox-watch.sh}";
+      ExecStart = "${pkgs.bash}/bin/bash ${./scripts/papra-inbox-watch.sh}";
       StateDirectory = "papra-inbox-watch";
     };
   };
@@ -174,7 +174,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./papra-proton-poll.py}";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/papra-proton-poll.py}";
       StateDirectory = "papra-proton-poll";
     };
   };
@@ -215,7 +215,7 @@ in
     serviceConfig = {
       User = "nextcloud";
       Group = "nextcloud";
-      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./papra-webhook-tagsync.py}";
+      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./scripts/papra-webhook-tagsync.py}";
       Restart = "on-failure";
       RestartSec = 5;
     };
