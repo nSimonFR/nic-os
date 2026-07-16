@@ -142,7 +142,6 @@ in
     ./karakeep.nix
     ./airtrail.nix
     ./beaverhabits.nix
-    ./plane.nix
     ./nextcloud.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix

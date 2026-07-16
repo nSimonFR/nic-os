@@ -40,6 +40,4 @@ in {
   "reactive-resume-encryption-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "epicgames-account-email.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
-  "plane-app-env.age".publicKeys           = [ nsimon-age nsimon-ed25519 ];
-  "plane-pg-password.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
 }
