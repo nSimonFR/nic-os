@@ -97,6 +97,10 @@ in
       AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
       AUTO_TAGGING_ENABLED = true;
 
+      # Allow webhook delivery to the loopback tag-sync receiver (Papra's SSRF
+      # guard blocks 127.0.0.1 by default).
+      WEBHOOK_URL_ALLOWED_HOSTNAMES = "127.0.0.1";
+
       # First registered user becomes admin (module/app default). Registration is
       # left enabled so the account can be created on first run; tighten later.
       AUTH_FIRST_USER_AS_ADMIN = true;
