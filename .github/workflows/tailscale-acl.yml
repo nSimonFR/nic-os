@@ -7,6 +7,18 @@ on:
   pull_request:
     branches: [main]
     paths: [shared/tailscale-acl.json5]
+  # Manual trigger — run against any branch to test or apply a WIP policy on
+  # demand (push/PR only fire on shared/tailscale-acl.json5 changes). Pick the
+  # branch via the "Use workflow from" ref in the Actions UI, or:
+  #   gh workflow run "Sync Tailscale ACL" --ref <branch> -f action=test
+  # Defaults to test (dry-run); choose apply to push a WIP branch to the tailnet.
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "GitOps action: test (dry-run) or apply (push to tailnet)"
+        type: choice
+        options: [test, apply]
+        default: test
 
 jobs:
   acls:
@@ -18,5 +30,6 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tailnet:         nsimonfr.github
-          action:          ${{ github.event_name == 'pull_request' && 'test' || 'apply' }}
+          # workflow_dispatch → chosen input; PR → test (dry-run); push main → apply.
+          action:          ${{ github.event_name == 'workflow_dispatch' && inputs.action || github.event_name == 'pull_request' && 'test' || 'apply' }}
           policy-file:     shared/tailscale-acl.json5
