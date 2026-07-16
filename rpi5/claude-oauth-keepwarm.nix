@@ -59,7 +59,14 @@ let
     # unit runs as ${username} and can't read it directly), then exit 0 so the
     # expected cap doesn't also trip the systemd-failed alert. Any OTHER failure
     # keeps its non-zero exit so it surfaces normally.
-    out=$(claude -p "say hello world" --dangerously-skip-permissions 2>&1)
+    # Most minimal invocation possible: --setting-sources "" skips user/project/
+    # local settings AND CLAUDE.md auto-discovery (no hooks, no gate base-URL —
+    # goes direct to Anthropic on this account's own OAuth), --strict-mcp-config
+    # spawns no MCP servers, --tools "" drops all tool schemas from the request,
+    # and --model haiku uses the cheapest model. A cap on any model still trips
+    # the account-wide 5h session limit, so detection is unaffected.
+    out=$(claude -p "say hello world" --dangerously-skip-permissions \
+      --setting-sources "" --strict-mcp-config --tools "" --model haiku 2>&1)
     rc=$?
     if printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -qiE "hit your (session|usage) limit|session limit ·|usage limit|rate.?limit"; then
       resets=$(printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -oiE "resets[^.]*" | head -1)
@@ -99,7 +106,7 @@ in
       wantedBy = [ "timers.target" ];
       timerConfig = {
         OnBootSec = onBootSec;
-        OnUnitActiveSec = "6h";
+        OnUnitActiveSec = "30min";
         Persistent = true;
       };
     };
