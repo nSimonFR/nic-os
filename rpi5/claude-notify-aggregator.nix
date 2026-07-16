@@ -5,7 +5,7 @@
 # over the tailnet. It pools them into one shared stream and sends a single
 # Telegram digest only after a quiet period (or at most every MAX seconds),
 # replacing the old per-machine /tmp coalescing that fired immediately and
-# spammed thousands of messages a day. See ./claude-notify-aggregator.py.
+# spammed thousands of messages a day. See ./scripts/claude-notify-aggregator.py.
 #
 # Bound to 127.0.0.1:8088; exposed tailnet-wide via Tailscale Serve
 # (Infrastructure entry in services-registry.nix → no homepage tile).
@@ -26,7 +26,7 @@
       RestartSec = "10s";
       # Runs as root to read the root-owned /run/agenix/telegram-bot-token,
       # matching the monitoring.nix alert timers.
-      ExecStart = "${pkgs.python3}/bin/python3 ${./claude-notify-aggregator.py}";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/claude-notify-aggregator.py}";
       NoNewPrivileges = true;
       ProtectHome = true;
       Environment = [

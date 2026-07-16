@@ -21,7 +21,7 @@ let
     export TELEGRAM_CHAT_ID=${toString telegramChatId}
     export ALERT_STATE_DIR=/var/lib/telegram-alerts
     export PATH=${lib.makeBinPath [ pkgs.curl pkgs.jq pkgs.coreutils ]}''${PATH:+:$PATH}
-    exec ${pkgs.bash}/bin/bash ${./telegram-alert.sh} "$@"
+    exec ${pkgs.bash}/bin/bash ${./scripts/telegram-alert.sh} "$@"
   '';
 
   healthcheck = pkgs.writeShellScript "anthropic-account-healthcheck" ''
