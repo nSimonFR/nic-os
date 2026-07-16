@@ -120,6 +120,11 @@
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)
       mode  = "0400";
     };
+    papra-webhook-secret = {
+      file  = ./secrets/papra-webhook-secret.age;
+      owner = "nextcloud"; # HMAC secret for the papra→nextcloud tag-sync receiver
+      mode  = "0400";
+    };
     nextcloud-pg-password = {
       file  = ./secrets/nextcloud-pg-password.age;
       owner = "postgres"; # nextcloud-pg-setup runs as postgres; nextcloud-setup reads via LoadCredential as PID 1
