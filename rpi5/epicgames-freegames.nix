@@ -14,7 +14,7 @@
 #   the session is then persisted under the state dir (device-auths.json + cookies)
 #   and refreshed automatically on later runs. If Epic occasionally forces an
 #   hCaptcha, the tool spins up a portal (loopback :3211, exposed tailnet-only on
-#   :3700 — see services-registry.nix) and sends you a link to solve it.
+#   :3750 — see services-registry.nix) and sends you a link to solve it.
 { config, pkgs, lib, telegramChatId, tailnetFqdn, ... }:
 let
   # ── Tunables ───────────────────────────────────────────────────────────────
@@ -25,9 +25,9 @@ let
   configFile = "${stateDir}/config.json";
 
   # Device/captcha web portal: bound to loopback here, exposed tailnet-only via
-  # Tailscale Serve in services-registry.nix (external 3700 → 127.0.0.1:3211).
+  # Tailscale Serve in services-registry.nix (external 3750 → 127.0.0.1:3211).
   portalPort = 3211;
-  portalUrl = "https://${tailnetFqdn}:3700";
+  portalUrl = "https://${tailnetFqdn}:3750";
 
   # Pinned to master HEAD (2026-06-21): the tagged v5.1.0 release is from 2024;
   # master carries ~2 years of Epic-API fixes since. Bump rev + both hashes to update.
