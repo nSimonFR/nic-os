@@ -136,13 +136,13 @@ in
     ./tailscale-serve.nix
     ./blocky.nix
     ./monitoring.nix
-    ./openai-codex-proxy.nix
     ./immich.nix
     ./sure.nix
     ./papra.nix
     ./karakeep.nix
     ./airtrail.nix
     ./beaverhabits.nix
+    ./plane.nix
     ./nextcloud.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
@@ -158,8 +158,11 @@ in
     ./aperture-sync.nix
     ./claude-remote-control.nix
     ./claude-oauth-2.nix
+    ./claude-account-healthcheck.nix
     ./claude-notify-aggregator.nix
     ./gramps-web.nix
+    ./epicgames-freegames.nix
+    ./ryot.nix
     # ./open-webui.nix # DISABLED 2026-06-15: venv crash-loop (ExecStart exit 126, "venv/bin/open-webui: Permission denied") since the disk incident. Re-enable + rebuild the venv (rm -rf /var/lib/open-webui/venv) to restore.
     ./homepage.nix
     ./backups.nix
@@ -390,15 +393,17 @@ in
   system.stateVersion = "25.11";
 
   nix.settings = {
+    # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; everything
+    # else comes from cache.nixos.org or is built locally on the Pi.
+    # DEPRECATED: cache.garnix.io — REMOVED (garnix shut down 2026-07-15). If a
+    # prebuild cache is wanted for heavy local builds, use Cachix or attic.
     substituters = [
       "https://cache.nixos.org"
       "https://nixos-raspberrypi.cachix.org"
-      "https://cache.garnix.io"
     ];
     trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
-      "cache.garnix.io:CTFPyKSLcx5RMJKfLo5EEPUObbA78b0YQ2DTCJXqr9g="
     ];
     experimental-features = [
       "nix-command"

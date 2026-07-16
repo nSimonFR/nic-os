@@ -445,6 +445,27 @@
     "flake-parts_8": {
       "inputs": {
         "nixpkgs-lib": [
+          "ryot-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782949081,
+        "narHash": "sha256-vp6Y/Grm98ESt6ceOkWiHWyZRDV3J1RID4w+6NWK9yA=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "17c9d6cdfc60c64f4ee8d306f9bc0b4ccb51481e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
+    "flake-parts_9": {
+      "inputs": {
+        "nixpkgs-lib": [
           "sure-nix",
           "nixpkgs"
         ]
@@ -996,6 +1017,41 @@
         "type": "github"
       }
     },
+    "plane-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "plane-src": "plane-src"
+      },
+      "locked": {
+        "lastModified": 1784180954,
+        "narHash": "sha256-zbrRSqQlSaMTizmiwgu9mKe6cbJBKa+uWJmEWwZKEu4=",
+        "path": "/home/nsimon/plane-nix",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nsimon/plane-nix",
+        "type": "path"
+      }
+    },
+    "plane-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783602459,
+        "narHash": "sha256-j1AZA4DlPHkuqiFzxGm4CME3k1BHvkIKYUlfoeLzWvQ=",
+        "owner": "makeplane",
+        "repo": "plane",
+        "rev": "dc9d80b2d2a499b967f0b541e083b283f463719f",
+        "type": "github"
+      },
+      "original": {
+        "owner": "makeplane",
+        "repo": "plane",
+        "rev": "dc9d80b2d2a499b967f0b541e083b283f463719f",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -1111,9 +1167,11 @@
         "nixpkgs": "nixpkgs_7",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "picoclaw-src": "picoclaw-src",
+        "plane-nix": "plane-nix",
         "ragenix": "ragenix",
         "reactive-resume-nix": "reactive-resume-nix",
         "rtk-src": "rtk-src",
+        "ryot-nix": "ryot-nix",
         "sure-nix": "sure-nix",
         "tiny-llm-gate": "tiny-llm-gate",
         "zen-browser": "zen-browser"
@@ -1157,9 +1215,49 @@
         "type": "github"
       }
     },
-    "sure-nix": {
+    "rust-overlay_2": {
+      "inputs": {
+        "nixpkgs": [
+          "ryot-nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1783834461,
+        "narHash": "sha256-FCmrs1StAghJDKfqy56KM96KZtxpYzgeq6zM3QO8wjA=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "a286e5b998e852297a403786f063fb2c9fe7f57a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "ryot-nix": {
       "inputs": {
         "flake-parts": "flake-parts_8",
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": "rust-overlay_2"
+      },
+      "locked": {
+        "lastModified": 1784148490,
+        "narHash": "sha256-UuQbaMnpTjtVnwT3xYmtR/c29eBeVQZiroVZdZiZ9Ws=",
+        "path": "/home/nsimon/ryot-nix",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/nsimon/ryot-nix",
+        "type": "path"
+      }
+    },
+    "sure-nix": {
+      "inputs": {
+        "flake-parts": "flake-parts_9",
         "nixpkgs": [
           "nixpkgs"
         ]
@@ -1276,16 +1374,16 @@
         ]
       },
       "locked": {
-        "lastModified": 1783777907,
-        "narHash": "sha256-PL3o3kwWi3O5Cr8HGZWlf/hzIS8NJ4Tf9TfnRP3STo0=",
+        "lastModified": 1784190080,
+        "narHash": "sha256-Jo3mKXEXbwv4lO9ScbDZh5RF/HzIRLggUUGxnI5oLSw=",
         "owner": "nSimonFR",
         "repo": "tiny-llm-gate",
-        "rev": "c5fa4f656f0bd688fdcb6b98996f6370b0d37cd4",
+        "rev": "26a9325f60e5604af3ce42c7c055618e0c4b94a6",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
-        "ref": "v0.8.0",
+        "ref": "v0.9.4",
         "repo": "tiny-llm-gate",
         "type": "github"
       }

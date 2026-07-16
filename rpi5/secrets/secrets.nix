@@ -3,6 +3,7 @@ let
   nsimon-ed25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZ7wzLFXmWeZ52SWjvsfXSZr+LbvpZYt/EE/tzVZnFd";
 in {
   "picoclaw-env.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "papra-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "supervisor-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "linky-token.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "linky-prm.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
@@ -13,6 +14,8 @@ in {
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "airtrail-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "airtrail-pg-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "ryot-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "ryot-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
@@ -36,4 +39,7 @@ in {
   "terradex-convex-dev.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "reactive-resume-encryption-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "epicgames-account-email.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "plane-app-env.age".publicKeys           = [ nsimon-age nsimon-ed25519 ];
+  "plane-pg-password.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
 }

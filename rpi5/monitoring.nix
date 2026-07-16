@@ -3,14 +3,17 @@ let
   beszelHubPort = 8090;
   beszelAgentPort = 45876;
 
-  telegramNotify = pkgs.writeShellScript "telegram-notify" ''
-    TOKEN=$(< ${config.age.secrets.telegram-bot-token.path})
-    MSG="$1"
-    ${pkgs.curl}/bin/curl -sf -X POST \
-      "https://api.telegram.org/bot$TOKEN/sendMessage" \
-      -d chat_id=${toString telegramChatId} \
-      -d parse_mode=HTML \
-      -d text="$MSG"
+  # Self-updating Telegram alerter. Usage:
+  #   printf '%s' "$body" | ''${telegramAlert} <state-key> "<title>"
+  # An empty body means "cleared". See rpi5/telegram-alert.sh for the
+  # send-once / edit-in-place / resolve behaviour. This thin wrapper only
+  # injects the Nix-provided token, chat id, state dir, and tool PATH.
+  telegramAlert = pkgs.writeShellScript "telegram-alert" ''
+    export TELEGRAM_TOKEN_FILE=${config.age.secrets.telegram-bot-token.path}
+    export TELEGRAM_CHAT_ID=${toString telegramChatId}
+    export ALERT_STATE_DIR=/var/lib/telegram-alerts
+    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.jq pkgs.coreutils ]}''${PATH:+:$PATH}
+    exec ${pkgs.bash}/bin/bash ${./scripts/telegram-alert.sh} "$@"
   '';
 in
 {
@@ -76,10 +79,7 @@ in
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "systemd-failed-alert" ''
         FAILED=$(${pkgs.systemd}/bin/systemctl list-units --state=failed --no-legend)
-        if [ -n "$FAILED" ]; then
-          ${telegramNotify} "<b>systemd units failed on rpi5</b>
-$FAILED"
-        fi
+        printf '%s' "$FAILED" | ${telegramAlert} systemd-failed "systemd units failed on rpi5"
       '';
     };
   };
@@ -101,6 +101,7 @@ $FAILED"
           | ${pkgs.gnugrep}/bin/grep "sending SIG" \
           | ${pkgs.coreutils}/bin/tail -n 1 || true)
 
+        BODY=""
         if [ -n "$KILL_LINE" ]; then
           PROC=$(${pkgs.gnused}/bin/sed -n 's/.*process \([0-9]\+\).*"\([^"]\+\)".*/\2/p' <<< "$KILL_LINE")
           PID=$(${pkgs.gnused}/bin/sed -n 's/.*process \([0-9]\+\).*/\1/p' <<< "$KILL_LINE")
@@ -108,19 +109,19 @@ $FAILED"
           CMD=$(${pkgs.gnused}/bin/sed -n 's/.*cmdline "\([^"]*\)".*/\1/p' <<< "$KILL_LINE" | ${pkgs.coreutils}/bin/cut -c1-160)
 
           if [ -n "$PROC" ]; then
-            MSG="<b>earlyoom killed <code>$PROC</code> on rpi5</b>"
+            BODY="killed <code>$PROC</code>"
           else
-            MSG="<b>earlyoom killed a process on rpi5</b>"
+            BODY="killed a process"
           fi
-          [ -n "$PID" ] && MSG="$MSG
+          [ -n "$PID" ] && BODY="$BODY
 - pid: <code>$PID</code>"
-          [ -n "$RSS" ] && MSG="$MSG
+          [ -n "$RSS" ] && BODY="$BODY
 - rss: <code>$RSS</code>"
-          [ -n "$CMD" ] && MSG="$MSG
+          [ -n "$CMD" ] && BODY="$BODY
 - cmd: <code>$CMD</code>"
-
-          ${telegramNotify} "$MSG"
         fi
+
+        printf '%s' "$BODY" | ${telegramAlert} earlyoom "earlyoom OOM kill on rpi5"
       '';
     };
   };
@@ -141,10 +142,9 @@ $FAILED"
         RO_FS=$(${pkgs.gnugrep}/bin/grep -E 'ext4|xfs|btrfs' /proc/mounts \
                 | ${pkgs.gnugrep}/bin/grep -v '/nix/store' \
                 | ${pkgs.gnugrep}/bin/grep ' ro[, ]' || true)
-        if [ -n "$RO_FS" ]; then
-          ${telegramNotify} "<b>Read-only filesystem on rpi5</b>
-<code>$RO_FS</code>"
-        fi
+        BODY=""
+        [ -n "$RO_FS" ] && BODY="<code>$RO_FS</code>"
+        printf '%s' "$BODY" | ${telegramAlert} filesystem-ro "Read-only filesystem on rpi5"
       '';
     };
   };
@@ -171,10 +171,9 @@ $FAILED"
           | ${pkgs.coreutils}/bin/cut -c1-300 \
           | ${pkgs.coreutils}/bin/tail -n 5 || true)
 
-        if [ -n "$FAILURES" ]; then
-          ${telegramNotify} "<b>Sure auto-categorization failing on rpi5</b>
-<code>$FAILURES</code>"
-        fi
+        BODY=""
+        [ -n "$FAILURES" ] && BODY="<code>$FAILURES</code>"
+        printf '%s' "$BODY" | ${telegramAlert} sure-autocategorize "Sure auto-categorization failing on rpi5"
       '';
     };
   };

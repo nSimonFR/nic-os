@@ -27,6 +27,17 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 
 `~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all IN-/EXTERN-/DO- tickets). Most-used team `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"IN-545"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
 
+## Metabase — query via the `metabase` MCP (not the old cookie skill)
+
+Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__metabase__*`, OAuth — first call → `authenticate` returns a browser URL to approve). Replaced the retired cookie `metabase` skill; wired in nic-os `home/mcp.nix` + allowlisted in `claude-settings.json`.
+
+- Endpoint is **`/api/mcp`** (docs' `/api/metabase-mcp` 404s on v0.61.2.10). Warehouse = **database id 6**.
+- Flow: `search` → `get_table {with-fields:true}` → `construct_query`/`query` → `execute_query` → `create_question`. `execute_query` caps at **200 rows** (saved cards show all). `create_question` `collection_id:null` → root "Our analytics" (no collection-lookup tool; move in UI). Link: `metabase.trusk.com/question/<id>`.
+- **Joins are unbuildable via `construct_query`** (`String cannot be cast to Associative`). Workaround — save any SQL (incl. joins) as a question by hand-crafting the base64 `query` as a native pMBQL stage, then pass to `execute_query`/`create_question`:
+  ```bash
+  jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
+  ```
+
 ## ArgoCD — read via MCP, write via UI/kubectl
 
 Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Read** via `mcp__trusk-argocd__*` (`get_application`, `list_applications`, `get_application_resource_tree`, `get_application_workload_logs`, …). MCP RBAC is per-project: restrictive projects (`staging`) may return `permission denied`; app-of-apps (`staging-gitops`) and permissive ones (`flagd`) read fine. **Write (sync/patch/restart) is NOT in the MCP** → use the UI, or kubectl directly. `nicolas.simon@trusk.com` is `trusk-admin` (cluster-admin) on **both** staging and prod (`gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`). Read pattern: `get_application("staging-gitops")` → `.status.resources` lists child apps with sync + health.
@@ -117,7 +128,7 @@ gh pr view "$PR" --repo trusk-official/trusk-applications --json body --jq .body
 
 Only refresh **after** the services you want have actually released (their tags exist) — a service whose tag isn't cut yet simply won't appear in the diff. Then admin-merge (`gh pr merge "$PR" --repo … --rebase --admin` — squash disabled here). Merging = ArgoCD reconciles those services to the new revs on the next sweep.
 
-**Sync windows gate the actual rollout.** The staging/preprod/prod AppProjects carry ArgoCD **sync windows** (deny weekdays 20:00–07:00 + **all weekend** Sat 07:00→Mon 07:00 Europe/Paris; allow weekdays 07:00–20:00). Outside the allow window, merging the renovate PR changes nothing until it opens — `staging-gitops` sits `OutOfSync` with `operationState.message = "Sync operation blocked by sync window"`, and the child `<svc>-staging` apps keep the old `targetRevision`. `manualSync:true` permits manual overrides, but a raw `kubectl patch application … -p '{"operation":{"sync":{…}}}'` is **not** treated as manual and stays blocked — force it via the ArgoCD **UI** (`staging-argocd.trusk.com`) or `argocd app sync`, else just wait for the window. Independently, staging is **downscaled to 0 replicas off-hours** (a `downscaling-staging` app), so off-hours a service is both un-synced and scaled to 0. `state-status-staging` is an app-of-apps child rendered by `staging-gitops` (targetRevision comes from staging.yaml as a param), so the **parent** must sync first to propagate a bump.
+**Sync windows gate the actual rollout — staging/preprod only.** The staging/preprod AppProjects carry ArgoCD **sync windows** (deny weekdays 20:00–07:00 + **all weekend** Sat 07:00→Mon 07:00 Europe/Paris; allow weekdays 07:00–20:00). **Prod has NO deny window** (AppProject window = `allow */* * * *`, `automated{selfHeal:true}` on `production-gitops` + child apps) → a `production.yaml` bump auto-deploys immediately, no manual sync / window wait (verified 2026-07). Outside the allow window, merging the renovate PR changes nothing until it opens — `staging-gitops` sits `OutOfSync` with `operationState.message = "Sync operation blocked by sync window"`, and the child `<svc>-staging` apps keep the old `targetRevision`. `manualSync:true` permits manual overrides, but a raw `kubectl patch application … -p '{"operation":{"sync":{…}}}'` is **not** treated as manual and stays blocked — force it via the ArgoCD **UI** (`staging-argocd.trusk.com`) or `argocd app sync`, else just wait for the window. Independently, staging is **downscaled to 0 replicas off-hours** (a `downscaling-staging` app), so off-hours a service is both un-synced and scaled to 0. `state-status-staging` is an app-of-apps child rendered by `staging-gitops` (targetRevision comes from staging.yaml as a param), so the **parent** must sync first to propagate a bump.
 
 ## Migration footgun — never add steps to an already-applied migration
 
@@ -175,3 +186,20 @@ grep -A3 'name: <service>' ~/MyDocuments/TRUSK/trusk-applications/applications/s
 # configmap contents
 kubectl --context trusk-staging-ts -n staging get cm <name> -o jsonpath='{.data}' | python3 -m json.tool
 ```
+
+## Prod access + debug gotchas
+
+- **gcloud token refresh fails under proxy** (`print credential failed … proxy URL malformed`, or kubectl `connection refused` to 10.0.0.2): refresh DIRECT first — `unset http_proxy https_proxy && gcloud auth print-access-token >/dev/null` — then `export http_proxy=localhost:8888 https_proxy=localhost:8888` for kubectl. Token expires ~1h.
+- **proxy-prod socket goes stale**: the socket file lingers but the tunnel dies (`connection refused`). Test with a real `kubectl get ns`, not socket existence; re-run `zsh -ic 'proxy-prod'` if refused.
+- **`kubectl logs --since=60m` truncates** on verbose services (undercounts massively) → use short windows (`--since=15m`) or Datadog for reliable counts.
+- **Temp per-service debug** (LOGGER_LEVEL & LOG_LEVEL live in the SHARED `infra-env` cm, both read; editing it floods every service): override on the deployment + stop selfHeal from reverting it — `kubectl -n argocd patch application <svc>-production --type merge -p '{"spec":{"syncPolicy":{"automated":{"selfHeal":false}}}}'` → `kubectl -n production set env deploy/<svc> LOGGER_LEVEL=debug LOG_LEVEL=debug` → capture → revert (`set env … LOGGER_LEVEL- LOG_LEVEL-` + selfHeal:true).
+
+## state-status ↔ consumer state mirrors (2026-07)
+
+Each consumer keeps a local `state_label`/`state_detail` mirror, synced by consuming `state.<ENTITY>.*` off exchange `state-status` (`OrderStateSyncService` centiro, `Mission`/`OrderMissionStateSyncService` order-mission, `RoundtripStateSyncService` roundtrip). Prod mirror tables (DB `trusk`, id = state-status `entity_id`): `ikea_orders.log_order` (ORDER), `journey_trusk_order.order_mission` (ORDERMISSION) / `.mission` (MISSION), `roundtrip.roundtrip` (ROUNDTRIP).
+
+- **Sync-back re-reads, never trusts the event payload.** Consumer must call `StatusFindByEntityid(entity,id)` (HTTP `GET /status/{entity}/{entityId}`, states `date DESC`; `.find(isState)`=latest) — writing `payload.statusLabel/statusDetail` verbatim clobbers under out-of-order delivery. Client base-URL defaults from `TRUSK_STATE_STATUS_API_URL || STATE_STATUS_API_URL`.
+- **AND wrap a per-entity lock** (`lockService.lockBuilder(`<ent>:${id}`,…)`); fetch-latest alone still races. ORDERMISSION shipped without it → drift (fixed 1.46.2).
+- **state-status publish**: `createStateForEntity` always publishes `StatusEvent` (no guard), routing `${isState?'state':'status'}.${entity}.${entityId}`; save-then-publish, no wrapping tx (committed before publish).
+- **Cross-schema reconcile**: state-status DB role READs every schema but WRITEs only its own → joined UPDATE from the state-status pod fails `permission denied`; write each mirror from its **owning service's pod** (in-image `pg` driver).
+- **Residual drift under burst**: even with lock+fetch, a small % of roundtrip mirrors drift during peak routing (load race); self-heals on next event, settled ones need a reconcile sweep (mirror ← state-status latest, bounded to the buggy window, SETTLED-only >5min).

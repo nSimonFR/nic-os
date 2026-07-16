@@ -73,7 +73,7 @@ let
   # each bridge-created worktree; workers don't run the guard, so they're free
   # to use the gate. Guarded by CLAUDE_CONFIG_DIR → no-op for normal checkouts.
   worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate"
-    (builtins.readFile ./claude-rc-worktree-gate.sh);
+    (builtins.readFile ./scripts/claude-rc-worktree-gate.sh);
 
   # Build the isolated bridge config dir (see configDir note above) before each
   # start, refreshing symlinks and regenerating settings.json so it tracks any
@@ -285,14 +285,14 @@ lib.recursiveUpdate keepWarm.nixosConfig {
   # Auto-resume bridge sessions stalled at the Claude usage cap. Each tick
   # scans active bridge sessions for a blocking rate_limit_event and, once the
   # window resets, resumes the conversation (dry-run by default — see
-  # autoResumeDryRun above). Logic lives in ./claude-rc-autoresume.py.
+  # autoResumeDryRun above). Logic lives in ./scripts/claude-rc-autoresume.py.
   systemd.services.claude-rc-autoresume = {
     description = "Auto-resume rate-limited claude-rc bridge sessions after cap reset";
     serviceConfig = {
       Type = "oneshot";
       User = username;
       Group = "users";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./claude-rc-autoresume.py}";
+      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-autoresume.py}";
       Environment = [
         "HOME=/home/${username}"
         "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"

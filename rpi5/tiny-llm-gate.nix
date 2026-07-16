@@ -1,8 +1,9 @@
 # tiny-llm-gate — single Go binary replacing LiteLLM and affine-embed-proxy.
 #
 # Listens on :4001 (formerly LiteLLM), serves both OpenAI and Gemini
-# protocols, and routes ChatGPT traffic through codex-proxy (:4040) for
-# proper token counts and tool_calls support. Target RSS: < 15 MiB.
+# protocols, and speaks the ChatGPT/Codex Responses API natively (native
+# `type: codex` provider, v0.9.1) for proper token counts and tool_calls —
+# no external codex-proxy. Target RSS: < 15 MiB.
 { config, pkgs, lib, inputs, beastOllamaUrl, ... }:
 let
   port = 4001;
@@ -30,13 +31,21 @@ in
           api_key = "ollama";
         };
 
-        # Codex: codex-proxy (icebear0828/codex-proxy) translates
-        # /v1/chat/completions → ChatGPT's /responses API with proper
-        # token counts and tool_calls support.
+        # Codex: native ChatGPT/Codex Responses API. The gate POSTs directly
+        # to chatgpt.com/backend-api/codex/responses, translating OpenAI chat
+        # ↔ Codex Responses in-process (tool calls, streaming, token counts,
+        # reasoning effort). Authenticated by a self-refreshing ChatGPT OAuth
+        # credential — the gate refreshes against auth.openai.com and persists
+        # the rotated token BACK to `file`, so it must live on writable state
+        # (StateDirectory below), not a read-only secret path. Seeded once from
+        # a valid ChatGPT refresh token.
         codex = {
-          type = "openai";
-          base_url = "http://127.0.0.1:4040/v1";
-          api_key = "unused";
+          type = "codex";
+          base_url = "https://chatgpt.com/backend-api/codex";
+          auth = {
+            type = "oauth_chatgpt";
+            file = "/var/lib/tiny-llm-gate/codex-credentials.json";
+          };
         };
 
         # oMLX on the Mac (M3 Pro, MLX backend). Reached via the Mac's
@@ -48,6 +57,16 @@ in
           base_url = "https://macbook-pro-appleosx-15.gate-mintaka.ts.net:8443/v1";
           api_key = "unused";
         };
+
+        # Claude, spoken natively (v0.9.4): the gate translates OpenAI chat ↔
+        # Anthropic Messages in-process and authenticates via the SHARED 2-account
+        # OAuth pool defined in the `anthropic` block below (no own auth). Lets
+        # any frontend route to Claude — used as "auto"'s last-resort fallback so
+        # the assistant still answers when BOTH beast (ollama) and codex are down.
+        claude = {
+          type = "anthropic";
+          base_url = "https://api.anthropic.com";
+        };
       };
 
       models = {
@@ -55,6 +74,12 @@ in
         "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
         "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
         "qwen3.6:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.6:35b-a3b"; };
+        # Papra on-prem document tagging. Beast-only, NO fallback: sensitive
+        # OCR'd text (bank/tax/ID) must never reach a cloud model, and a
+        # beast-down error is what makes the Papra tag-sweeper wait and retry
+        # rather than mis-tag via cloud. qwen3-vl:8b respects strict json_schema
+        # and does French tags well (num_ctx baked to 16384 on beast).
+        "qwen3-vl:8b"        = { provider = "ollama"; upstream_model = "qwen3-vl:8b"; };
         "qwen3-embedding:8b" = {
           provider = "ollama";
           upstream_model = "qwen3-embedding:8b";
@@ -64,7 +89,7 @@ in
           default_embed_dimensions = 1024;
         };
 
-        # -- Codex-proxy models (OpenAI subscription via OAuth) --
+        # -- Codex models (OpenAI subscription via native ChatGPT OAuth) --
         "gpt-5.5" = {
           provider = "codex";
           upstream_model = "gpt-5.5";
@@ -79,22 +104,26 @@ in
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
 
+        # -- Anthropic (Claude) via the shared 2-account OAuth pool --
+        "claude" = { provider = "claude"; upstream_model = "claude-opus-4-8"; };
+
         # -- oMLX models (Mac local inference via tailscale serve) --
         # No fallback: Mac-asleep should surface as an error rather than
         # silently consume the codex budget.
         "Qwen3.6-27B-4bit"         = { provider = "omlx"; upstream_model = "Qwen3.6-27B-4bit"; };
         "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
-        # "auto" — local-first model: try gemma4:e4b on beast, fall back to
-        # codex gpt-5.5 if beast is unreachable (TCP refused / timeout) or
-        # returns 5xx. Used by Sure (via OPENAI_MODEL) to prefer free local
-        # inference when beast is awake while keeping the assistant working
-        # when it's asleep. tiny-llm-gate's fallback chain triggers on both
-        # transport errors and 5xx — see internal/server/openai.go.
+        # "auto" — local-first model with a resilience cascade: gemma4:e4b on
+        # beast → codex gpt-5.5 (beast unreachable/5xx) → Claude (codex also
+        # down). Prefers free local inference when beast is awake, keeps the
+        # assistant working when it's asleep, and only reaches the metered
+        # Anthropic pool as a last resort. Works behind BOTH the OpenAI and
+        # Gemini frontends (chatUpstream dispatches per hop). Fallback triggers
+        # on transport errors + 5xx — see internal/server/chat.go.
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.5" ];
+          fallback       = [ "gpt-5.5" "claude" ];
         };
       };
 
@@ -104,6 +133,7 @@ in
         "openai/gemma4:e4b"          = "gemma4:e4b";
         "openai/gemma4:26b"          = "gemma4:26b";
         "openai/qwen3.6:35b-a3b"     = "qwen3.6:35b-a3b";
+        "openai/qwen3-vl:8b"         = "qwen3-vl:8b";
         "openai/qwen3-embedding:8b"  = "qwen3-embedding:8b";
         "openai/gpt-5.5"             = "gpt-5.5";
         "openai/gpt-5.5-mini"        = "gpt-5.5-mini";
@@ -188,8 +218,9 @@ in
     };
   };
 
-  # Starts after codex-proxy and claude-oauth-extract so /run/claude-oauth/token
-  # exists before the Anthropic handler validates the token file at startup.
+  # Starts after claude-oauth-extract so /run/claude-oauth/token exists before
+  # the Anthropic handler validates the token file at startup. (codex is now
+  # native — no external codex-proxy to order after.)
   #
   # Do NOT order after affine.service / affine-mcp.service: affine.service is
   # itself ordered after tiny-llm-gate.service (AFFiNE's copilot calls into
@@ -199,7 +230,30 @@ in
   # static config: tiny-llm-gate registers them at startup and proxies
   # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
-    wants = [ "openai-codex-proxy.service" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    after = [ "network.target" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    wants = [ "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+
+    # Writable state for the codex provider's OAuth credentials. The native
+    # oauth_chatgpt loader refreshes the ChatGPT access token and persists the
+    # rotated refresh token back to codex-credentials.json, so — unlike the
+    # read-only /run/claude-oauth/token — the file must live on a path the
+    # DynamicUser can write. systemd owns the StateDirectory itself as the
+    # runtime DynamicUser, but does NOT reliably re-chown a credentials file
+    # seeded out-of-band: a root-owned seed stays root-owned and the gate gets
+    # EACCES at startup. The ExecStartPre chown forces the seed file to match
+    # the StateDirectory's runtime owner on each start.
+    #   "+" runs it as root (the DynamicUser can't chown);
+    #   "-" tolerates a missing file — on a fresh box codex simply stays
+    #       disabled (non-fatal provider init) until the file is seeded, while
+    #       the rest of the gate keeps serving.
+    # Seed once with a valid ChatGPT refresh token; the gate owns rotation
+    # writes thereafter (as the same DynamicUser, so ownership stays correct).
+    serviceConfig = {
+      StateDirectory = "tiny-llm-gate";
+      StateDirectoryMode = "0700";
+      ExecStartPre = [
+        "-+${pkgs.coreutils}/bin/chown --reference=/var/lib/tiny-llm-gate /var/lib/tiny-llm-gate/codex-credentials.json"
+      ];
+    };
   };
 }

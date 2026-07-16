@@ -308,7 +308,10 @@ in
         set -eu
         occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
         keep=" ${lib.concatStringsSep " " appsToKeep} "
-        enabled_str=$($occ app:list --output=json | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+        # occ prints warnings (e.g. an orphaned apps_paths entry after a
+        # package bump) to *stdout* ahead of the JSON, which would break the
+        # jq parse and fail the unit. Strip everything before the first `{`.
+        enabled_str=$($occ app:list --output=json 2>/dev/null | sed -n '/^{/,$p' | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
         for app in $enabled_str; do
           case "$keep" in
             *" $app "*) ;;
@@ -337,6 +340,21 @@ in
     "d /mnt/data/nextcloud 0755 root root -"
     "d /mnt/data/cloud 0755 root root -"
   ];
+
+  # Defensive: keep the user-files dir owned by the php-fpm user. If it ever ends
+  # up root-owned (e.g. a stray privileged op in the tree), occ file scans fail
+  # ("not writable") and files dropped via the drive/PAPRA feeder never become
+  # visible to Nextcloud. A tmpfiles `z` rule can't repair this — systemd-tmpfiles
+  # refuses the root→nextcloud "unsafe path transition" — so use a plain chown
+  # oneshot (non-recursive: only the dir itself).
+  systemd.services.nextcloud-files-owner = {
+    description = "Ensure nsimon's Nextcloud files dir is owned by nextcloud";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.coreutils}/bin/chown nextcloud:nextcloud ${datadir}/data/nsimon/files";
+    };
+  };
   systemd.mounts = [{
     where = "/mnt/data/cloud";
     what  = "${datadir}/data/nsimon/files";

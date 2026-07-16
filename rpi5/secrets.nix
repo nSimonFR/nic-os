@@ -52,6 +52,15 @@
       owner = "beaverhabits"; # EnvironmentFile for beaverhabits.service (signing secrets)
       mode = "0400";
     };
+    ryot-env = {
+      file = ./secrets/ryot-env.age;
+      owner = "ryot"; # EnvironmentFile for ryot-backend/ryot-frontend (DATABASE_URL + tokens)
+      mode = "0400";
+    };
+    ryot-pg-password = {
+      file = ./secrets/ryot-pg-password.age;
+      owner = "postgres"; # ryot-pg-setup runs as postgres and reads this
+    };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";
@@ -74,6 +83,16 @@
     gramps-web-secret = {
       file  = ./secrets/gramps-web-secret.age;
       owner = "gramps-web";
+    };
+    plane-app-env = {
+      file = ./secrets/plane-app-env.age;
+      # root-readable; EnvironmentFile for the plane-* units. Carries SECRET_KEY,
+      # DATABASE_URL (with password), and the Storj S3 access key/secret.
+      # PLACEHOLDER values for now (eval-only) — fill before rebuild.
+    };
+    plane-pg-password = {
+      file  = ./secrets/plane-pg-password.age;
+      owner = "postgres"; # plane-pg-setup runs as postgres; must match DATABASE_URL's password
     };
     affine-token = {
       file = ./secrets/affine-token.age;
@@ -99,6 +118,11 @@
     papra-env = {
       file  = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)
+      mode  = "0400";
+    };
+    papra-webhook-secret = {
+      file  = ./secrets/papra-webhook-secret.age;
+      owner = "nextcloud"; # HMAC secret for the papra→nextcloud tag-sync receiver
       mode  = "0400";
     };
     nextcloud-pg-password = {
@@ -146,6 +170,11 @@
       # ENCRYPTION_SECRET (>=32 chars): encrypts per-user AI-provider API keys at
       # rest (packages/api/.../ai/credentials.ts). root-readable; reactive-resume-env
       # (root oneshot) reads it.
+    };
+    epicgames-account-email = {
+      file = ./secrets/epicgames-account-email.age;
+      # Not secret, but the repo is public — kept out of git. root-readable;
+      # epicgames-freegames-config (root oneshot) reads it into config.json.
     };
 };
 }

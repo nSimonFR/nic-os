@@ -1,5 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "deniedMcpServers": [{ "serverName": "claude-in-chrome" }],
   "env": {
     "ANTHROPIC_BASE_URL": "https://ai.gate-mintaka.ts.net"
   },
@@ -57,11 +58,11 @@
       "mcp__claude_ai_Notion",
       "mcp__claude_ai_Slack",
       "mcp__claude_ai_Slite",
-      "mcp__claude-in-chrome",
       "mcp__firecrawl",
       "mcp__ide",
       "mcp__Linear",
       "mcp__Miro",
+      "mcp__metabase",
       "mcp__trusk-argocd",
       "mcp__trusk-context7",
       "mcp__trusk-datadog",

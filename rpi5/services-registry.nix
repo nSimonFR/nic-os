@@ -204,6 +204,20 @@
           { field = "users"; label = "Users"; format = "number"; }
         ];
       }; }
+    # Ryot proxy (Caddy) is the entrypoint; it path-muxes backend+frontend and
+    # serves the SPA at root, so an own Serve port fits (no 443 path-mux needed).
+    # Widget reads Ryot's Postgres directly via homepage-stats.py (:8087/ryot,
+    # daily-cached, postgres superuser) — no API token on the tile.
+    { port = 3700;  backend = "http://127.0.0.1:13350"; name = "Ryot";           icon = "ryot.svg";           category = "Apps"; description = "Media & life tracker";
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/ryot";
+        mappings = [
+          { field = "media";   label = "Media";   format = "number"; }
+          { field = "seen";    label = "Seen";    format = "number"; }
+          { field = "reviews"; label = "Reviews"; format = "number"; }
+        ];
+      }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the ~5-min homepage ping doesn't keep waking it (see homepage.nix mkTile).
     # Fronted by the 443 nginx path-mux at /rxresume (prefix stripped); the SPA is built with Vite base=/rxresume/. proxied → no direct serve/funnel.
     # Widget queries Reactive Resume's Postgres directly (:8087/reactiveresume, scram auth
@@ -233,13 +247,21 @@
           { field = "checkins"; label = "Check-ins"; format = "number"; }
         ];
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # Own Serve port (not the 443 path-mux): Plane's React-Router SPAs (/, /spaces,
+    # /god-mode) need a root origin, like AFFiNE / Gramps Web. 3800 → the always-on
+    # nginx vhost (:8330) from nixosModules.plane, which lazy-wakes the api tier.
+    # No widget yet — add a homepage-stats.py :8087/plane DB-reader (like the other
+    # socket-activated tiles) so stats don't wake the service. eval-only for now.
+    { port = 3800;  backend = "http://127.0.0.1:8330";  name = "Plane";          icon = "plane.svg";          category = "Apps"; description = "Project management (Jira/Linear alt)"; noSiteMonitor = true; }
 
     # Backend — API services
     # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
     # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.
     { port = 8444;  backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
-    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic)"; }
-    { port = 4040;  backend = "http://127.0.0.1:4040";  name = "Codex Proxy";    icon = "mdi-code-braces";    category = "Backend"; description = "ChatGPT OAuth proxy (token counts + tool_calls)"; }
+    { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }
+    # Codex Proxy (:4040) removed 2026-07-15 — codex is now served natively by
+    # tiny-llm-gate; codex-proxy service + files deleted.
     # Not shown on dashboard — internal MCP gateway, not user-facing.
     { port = 7020;  backend = "http://127.0.0.1:4001/mcp/affine"; name = "AFFiNE MCP"; icon = "mdi-api";       category = "Infrastructure"; description = "AFFiNE MCP gateway (via tiny-llm-gate)"; }
     # Hydroxide moved 8443 → 8083 (matches its backend port) to free the 8443
@@ -260,5 +282,9 @@
     { port = 443;   backend = "http://127.0.0.1:8092";  name = "Front Proxy";    icon = "mdi-sitemap";        category = "Infrastructure"; description = "nginx 443 path-mux (/nextcloud, /cyrus, /sure, /rxresume)"; funnel = true; }
     { port = 8082;  backend = "http://127.0.0.1:8082";  name = "Homepage";       icon = "homepage.svg";       category = "Infrastructure"; description = "Service dashboard"; }
     { port = 8088;  backend = "http://127.0.0.1:8088";  name = "Claude Notify";  icon = "mdi-bell";           category = "Infrastructure"; description = "Debounced agent → Telegram aggregator"; noSiteMonitor = true; }
+    # epicgames-freegames device/captcha portal. Only listens during a run (and
+    # only when Epic demands an interactive solve), so noSiteMonitor. Tailnet-only
+    # serve so the Telegram captcha link resolves from a phone; hidden tile.
+    { port = 3750;  backend = "http://127.0.0.1:3211";  name = "Epic Free Games"; icon = "mdi-gift";           category = "Infrastructure"; description = "Auto-claim Epic weekly free games (Thu+Sun 04:00; captcha portal)"; noSiteMonitor = true; }
   ];
 }
