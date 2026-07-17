@@ -115,6 +115,30 @@ in
     rebootTime = "5min";  # stalled reboot force-resets after 5min
   };
 
+  # Suspend guard: the runtime watchdog above is incompatible with s2idle sleep.
+  # During s2idle PID 1 is frozen and stops petting /dev/watchdog0, so the SP5100
+  # force-resets after 120s -- i.e. any suspend >2min = guaranteed reboot (this
+  # bit us 2026-07-17). systemd owns the watchdog fd and does NOT disarm it on
+  # sleep, but it does honour a runtime RuntimeWatchdogUSec change over D-Bus.
+  # So: disarm (=0) before sleep, re-arm (=120s) on resume. The box stays
+  # protected the whole time it's awake (a GPU hang only happens under load,
+  # never while frozen); only the brief sleep->resume window is unguarded.
+  # ExecStart runs before sleep.target is reached; ExecStop runs when it's torn
+  # down on resume (StopWhenUnneeded + WantedBy=sleep.target). The 120000000us
+  # re-arm value must stay in sync with systemd.watchdog.runtimeTime above.
+  systemd.services.watchdog-sleep-guard = {
+    description = "Disarm HW watchdog across sleep, re-arm on resume";
+    before = [ "sleep.target" ];
+    wantedBy = [ "sleep.target" ];
+    unitConfig.StopWhenUnneeded = true;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${config.systemd.package}/bin/busctl set-property org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager RuntimeWatchdogUSec t 0";
+      ExecStop = "${config.systemd.package}/bin/busctl set-property org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager RuntimeWatchdogUSec t 120000000";
+    };
+  };
+
   networking.hostName = "BeAsT";
 
   # Wake-on-LAN: allow magic-packet wake on the ethernet interface.
