@@ -88,6 +88,13 @@ in
     })
     
     inputs.nix-citizen.packages.${pkgs.stdenv.hostPlatform.system}.rsi-launcher
+
+    # Path of Exile companion trade tool (wrapped AppImage — see ../pkgs/sidekick.nix)
+    (pkgs.callPackage ../pkgs/sidekick.nix { })
+    # PoE2 price-check overlay, alternative to Sidekick (../pkgs/exiled-exchange-2.nix)
+    (pkgs.callPackage ../pkgs/exiled-exchange-2.nix { })
+    # Wayland-native PoE2 price-check overlay for Hyprland (../pkgs/waystone.nix)
+    (pkgs.callPackage ../pkgs/waystone.nix { })
   ];
 
 }
