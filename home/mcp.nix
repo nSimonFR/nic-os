@@ -40,7 +40,10 @@ let
     # (resolves over utun, valid TLS via `tailscale serve`); OAuth route also
     # exists at staging-toolhive-tech.trusk.com/mcp.
     "toolhive-tech"     = { type = "http"; url = "https://ai-toolhive-tech.tail271d7a.ts.net/mcp"; };
-    # Steampipe — supergateway/SSE. NOT fronted by ToolHive, so kept direct.
+    # Steampipe — query GCP as live SQL (only the turbot/gcp plugin is
+    # installed): `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster
+    # / gcp_service_account …`, read-only, hits the real GCP API per query.
+    # NOT fronted by ToolHive (no GCP; dbhub is real-DB only), so kept direct.
     "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
