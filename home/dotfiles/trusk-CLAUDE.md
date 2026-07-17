@@ -38,6 +38,16 @@ Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__m
   jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
   ```
 
+## ToolHive — unified MCP proxy (`toolhive-tech`, 2 meta-tools)
+
+Tristan's unified MCP gateway (announced #… 2026-07-17). Fronts ~140 underlying tools behind **only 2 meta-tools** — do NOT expect the underlying tool schemas directly. Wired in nic-os `home/mcp.nix` as `toolhive-tech` (`type: http`, `https://ai-toolhive-tech.tail271d7a.ts.net/mcp` over the work Tailscale tunnel; OAuth route `https://staging-toolhive-tech.trusk.com/mcp` also exists — Tailscale is preferred/simpler). Currently proxies: **grafana, datadog, argocd, k8s, gitnexus, dbhub, firecrawl, context7** (NOT steampipe/metabase/miro/linear/affine — keep those as separate MCPs). No Linear/GitHub-readonly on purpose (avoid conflicting with existing workflows).
+
+**Mandatory 2-step workflow — never guess a tool name or its params:**
+1. `find_tool(tool_description="<what you want, natural language>")` → returns candidate tools, each with its `name` + `inputSchema`.
+2. `call_tool(tool_name="<name from step 1>", parameters={<args matching that tool's inputSchema>})`.
+
+`parameters` must match the `inputSchema` from `find_tool` — always call `find_tool` first. Open question (pending Tristan): once we cut over, whether the individual `trusk-grafana/datadog/argocd/k8s/github`, `firecrawl`, `context7` MCP entries can be dropped in favour of `toolhive-tech`.
+
 ## ArgoCD — read via MCP, write via UI/kubectl
 
 Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Read** via `mcp__trusk-argocd__*` (`get_application`, `list_applications`, `get_application_resource_tree`, `get_application_workload_logs`, …). MCP RBAC is per-project: restrictive projects (`staging`) may return `permission denied`; app-of-apps (`staging-gitops`) and permissive ones (`flagd`) read fine. **Write (sync/patch/restart) is NOT in the MCP** → use the UI, or kubectl directly. `nicolas.simon@trusk.com` is `trusk-admin` (cluster-admin) on **both** staging and prod (`gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`). Read pattern: `get_application("staging-gitops")` → `.status.resources` lists child apps with sync + health.
