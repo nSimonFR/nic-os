@@ -27,6 +27,10 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 
 `~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all IN-/EXTERN-/DO- tickets). Most-used team `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"IN-545"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
 
+## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
+
+`trusk-steampipe` = query **GCP as live SQL**. Only the `turbot/gcp` plugin is installed, so it's for Google Cloud inventory/IAM/audit introspection — `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster / gcp_service_account …`, read-only, hits the real GCP API per query (nothing cached). Use it instead of `gcloud … | jq` for cross-resource GCP questions. It's **not** fronted by the ToolHive proxy (no GCP there; `dbhub` is real-database-only) — kept as its own MCP.
+
 ## Metabase — query via the `metabase` MCP (not the old cookie skill)
 
 Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__metabase__*`, OAuth — first call → `authenticate` returns a browser URL to approve). Replaced the retired cookie `metabase` skill; wired in nic-os `home/mcp.nix` + allowlisted in `claude-settings.json`.
