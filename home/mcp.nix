@@ -32,37 +32,16 @@ let
     # Replaces the cookie-based `metabase` skill. Enabled instance-side
     # (agent-api-enabled? / mcp-enabled? both true on metabase.trusk.com).
     metabase            = { type = "http"; url = "https://metabase.trusk.com/api/mcp"; };
-    # Work-tailnet MCP gateways. Migrated off the in-cluster
-    # *.dev-tools.svc.cluster.local services — those are no longer routable
-    # from the laptop (the cluster pod subnet isn't advertised over the work
-    # tunnel and cluster CoreDNS is unreachable), so the old URLs time out.
-    # These tailnet nodes resolve over the work Tailscale tunnel (utun) and
-    # serve valid TLS via `tailscale serve`. Verified 2026-06-15.
-    # Transport note: the gateway/gitnexus nodes speak streamable-HTTP at
-    # /mcp; context7 + steampipe (supergateway-based) speak SSE at /sse.
-    "trusk-k8s"         = { type = "http"; url = "https://ai-gateway-mcp-k8s.tail271d7a.ts.net/mcp"; };
-    "trusk-argocd"      = { type = "http"; url = "https://ai-gateway-mcp-argocd.tail271d7a.ts.net/mcp"; };
-    "trusk-grafana"     = { type = "http"; url = "https://ai-gateway-mcp-grafana.tail271d7a.ts.net/mcp"; };
-    "trusk-datadog"     = { type = "http"; url = "https://ai-gateway-mcp-datadog.tail271d7a.ts.net/mcp"; };
-    "trusk-github"      = { type = "http"; url = "https://ai-gitnexus-mcp.tail271d7a.ts.net/mcp"; };
-    "trusk-context7"    = { type = "sse";  url = "https://ai-supergateway-context7.tail271d7a.ts.net/sse"; };
-    "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
-    # Self-hosted Firecrawl on the work tailnet (staging). Migrated off the
-    # public cloud (mcp.firecrawl.dev) per Tristan's 2026-07-06 announcement:
-    # no rate limiting, query freely. Only reachable over the work Tailscale
-    # tunnel — same reachability caveat as the trusk-* gateways above.
-    firecrawl           = { type = "http"; url = "https://ai-firecrawl-mcp.tail271d7a.ts.net/mcp"; };
-    # ToolHive — unified MCP proxy (Tristan's 2026-07-17 announcement in
-    # #tech-... / demo). Fronts ~140 underlying tools behind just 2 meta-tools
-    # (find_tool / call_tool) — see the ToolHive block in trusk-CLAUDE.md for
-    # the mandatory 2-step workflow. Currently proxies: grafana, datadog,
-    # argocd, k8s, gitnexus, dbhub, firecrawl, context7. Reachable over the
-    # work Tailscale tunnel (same caveat as the other tailnet gateways); an
-    # OAuth route also exists at staging-toolhive-tech.trusk.com/mcp.
-    # NOTE: does NOT front steampipe/metabase/miro/linear/affine — keep those.
-    # Pending Tristan's answer on whether the individual grafana/datadog/argocd/
-    # k8s/github/firecrawl/context7 entries above can be dropped once we cut over.
+    # ToolHive — unified MCP proxy (Tristan's 2026-07-17 announcement). Fronts
+    # ~140 underlying tools behind just 2 meta-tools (find_tool / call_tool).
+    # We cut over to it and DROPPED the individual tailnet gateways it fronts:
+    # grafana, datadog, argocd, k8s, github (gitnexus), context7, firecrawl are
+    # now all reached via ToolHive. Reachable over the work Tailscale tunnel
+    # (resolves over utun, valid TLS via `tailscale serve`); OAuth route also
+    # exists at staging-toolhive-tech.trusk.com/mcp.
     "toolhive-tech"     = { type = "http"; url = "https://ai-toolhive-tech.tail271d7a.ts.net/mcp"; };
+    # Steampipe — supergateway/SSE. NOT fronted by ToolHive, so kept direct.
+    "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
