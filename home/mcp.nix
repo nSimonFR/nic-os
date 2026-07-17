@@ -52,6 +52,17 @@ let
     # no rate limiting, query freely. Only reachable over the work Tailscale
     # tunnel — same reachability caveat as the trusk-* gateways above.
     firecrawl           = { type = "http"; url = "https://ai-firecrawl-mcp.tail271d7a.ts.net/mcp"; };
+    # ToolHive — unified MCP proxy (Tristan's 2026-07-17 announcement in
+    # #tech-... / demo). Fronts ~140 underlying tools behind just 2 meta-tools
+    # (find_tool / call_tool) — see the ToolHive block in trusk-CLAUDE.md for
+    # the mandatory 2-step workflow. Currently proxies: grafana, datadog,
+    # argocd, k8s, gitnexus, dbhub, firecrawl, context7. Reachable over the
+    # work Tailscale tunnel (same caveat as the other tailnet gateways); an
+    # OAuth route also exists at staging-toolhive-tech.trusk.com/mcp.
+    # NOTE: does NOT front steampipe/metabase/miro/linear/affine — keep those.
+    # Pending Tristan's answer on whether the individual grafana/datadog/argocd/
+    # k8s/github/firecrawl/context7 entries above can be dropped once we cut over.
+    "toolhive-tech"     = { type = "http"; url = "https://ai-toolhive-tech.tail271d7a.ts.net/mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
