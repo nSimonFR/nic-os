@@ -59,6 +59,7 @@
       "mcp__claude_ai_Slite",
       "mcp__firecrawl",
       "mcp__ide",
+      "mcp__plugin_slack_slack",
       "mcp__Linear",
       "mcp__Miro",
       "mcp__metabase",
@@ -68,7 +69,8 @@
       "mcp__trusk-github",
       "mcp__trusk-grafana",
       "mcp__trusk-k8s",
-      "mcp__trusk-steampipe"
+      "mcp__trusk-steampipe",
+      "mcp__toolhive-tech"
     ],
     "deny": [
       "Read(**/node_modules/**)",
