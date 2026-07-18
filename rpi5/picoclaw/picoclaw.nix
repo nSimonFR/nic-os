@@ -200,6 +200,20 @@ let
             type = "http";
             url = "http://127.0.0.1:7021/mcp";
           };
+          # Sure (Maybe fork) personal-finance MCP — replaces the curl-based
+          # `sure` SKILL.md (deleted in this change). Same Streamable-HTTP
+          # constraint as affine: picoclaw POSTs `initialize` straight to the
+          # URL and never does the legacy-SSE GET handshake, so the endpoint
+          # must be Streamable HTTP (ends in /mcp, not /sse) or picoclaw 405s
+          # with 0 tools. The X-Api-Key header (Sure's REST auth, same key the
+          # old skill used) is injected into the runtime config.json by
+          # setupScript from picoclaw-env's SURE_API_KEY, so the 64-char secret
+          # never lands in the world-readable Nix store.
+          sure = {
+            enabled = true;
+            type = "http";
+            url = "https://rpi5.gate-mintaka.ts.net/mcp";
+          };
         };
       };
     };
@@ -249,6 +263,17 @@ let
     ${pkgs.jq}/bin/jq \
       --arg auth "Bearer $affine_tok" \
       '.tools.mcp.servers.affine.headers.Authorization = $auth' \
+      ${configDir}/config.json > ${configDir}/config.json.tmp
+    ${pkgs.coreutils}/bin/mv ${configDir}/config.json.tmp ${configDir}/config.json
+
+    # Same rationale for the Sure MCP: SURE_API_KEY is a secret, so it can't be
+    # baked into ${configFile} in the store. It lives in the KEY=VAL
+    # picoclaw-env agenix file (unquoted); extract just that one value and set
+    # the X-Api-Key header jq creates the path if absent).
+    sure_key="$(${pkgs.gnugrep}/bin/grep -E '^SURE_API_KEY=' /run/agenix/picoclaw-env | ${pkgs.coreutils}/bin/cut -d= -f2-)"
+    ${pkgs.jq}/bin/jq \
+      --arg key "$sure_key" \
+      '.tools.mcp.servers.sure.headers["X-Api-Key"] = $key' \
       ${configDir}/config.json > ${configDir}/config.json.tmp
     ${pkgs.coreutils}/bin/mv ${configDir}/config.json.tmp ${configDir}/config.json
 
