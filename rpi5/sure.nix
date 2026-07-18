@@ -85,6 +85,10 @@ in
     environmentFile = "/run/agenix/sure-app-env";
     databaseUrl     = "postgresql://sure_user@${pgHost}/sure_production";
     redisUrl        = "redis://${redisHost}:${toString redisPort}/2";
+    # Stop the AI auto-categorizer from labeling internal transfers
+    # (kind=funds_movement) — it mislabeled Livret A moves as "Investment
+    # Contributions". Optional source patch, enabled here per-deployment.
+    patchFlags = { auto-categorize-skip-transfers = true; };
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
