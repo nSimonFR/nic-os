@@ -108,6 +108,16 @@ SUBJECT_RE = re.compile(
     r"your (trip|stay|flight|train)|réserv",
     re.I,
 )
+# "Queries" — NOT confirmed bookings: inquiries, pending/unconfirmed reservation
+# requests, saved searches, price alerts, pre-approvals. Skipped deterministically
+# (regardless of the model), so e.g. Airbnb host "Inquiry"/"Pending: Reservation
+# Request" mail never becomes an event, while "Reservation confirmed" still does.
+NEGATIVE_SUBJECT_RE = re.compile(
+    r"\binquir|request to book|reservation request|réservation en attente|"
+    r"\bpending\b|en attente|pre-?approve|pré-?approu|saved search|"
+    r"recherche enregistr|wishlist|price alert|alerte prix|demande de réservation",
+    re.I,
+)
 
 TRAVEL_TYPES = {"stay", "flight", "train", "bus", "ferry", "car"}
 
@@ -235,7 +245,7 @@ def body_text(msg):
         elif ct == "text/html" and htmltext is None:
             htmltext = _decode(part)
     text = plain or _strip_html(htmltext or "")
-    return re.sub(r"\n{3,}", "\n\n", text).strip()[:8000]
+    return re.sub(r"\n{3,}", "\n\n", text).strip()[:12000]  # keep both legs of a round-trip
 
 
 def _decode(part):
@@ -359,6 +369,34 @@ def _fmt_dt(dt, all_day):
     if dt.tzinfo is not None:
         return ":" + dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return ":" + dt.strftime("%Y%m%dT%H%M%S")  # floating local time
+
+
+def roll_year_forward(b, received_date):
+    """Booking emails often write the trip date without a year ('lundi 3 août'),
+    and a small model then guesses a past year → the event gets filtered as past.
+    Deterministic local fix: if a date is before the email arrived, roll its year
+    forward to the next occurrence on/after the received date. Only applied to
+    recently-received mail (see caller) so it can't promote a genuine old trip."""
+    for key in ("start", "end"):
+        v = b.get(key)
+        if not v:
+            continue
+        all_day = bool(b.get("all_day"))
+        try:
+            dt = datetime.fromisoformat(v[:10] if all_day else v)
+        except ValueError:
+            continue
+        # Only correct a clearly-stale year (a PRIOR calendar year, the tell-tale
+        # of a dropped year), not a same-year recent-past date — that could be a
+        # genuinely past trip, which the past-filter should drop rather than promote.
+        guard = 0
+        while dt.year < received_date.year and dt.date() < received_date and guard < 6:
+            try:
+                dt = dt.replace(year=dt.year + 1)
+            except ValueError:  # Feb 29 → Feb 28
+                dt = dt.replace(year=dt.year + 1, day=28)
+            guard += 1
+        b[key] = dt.strftime("%Y-%m-%d") if all_day else dt.strftime("%Y-%m-%dT%H:%M")
 
 
 def booking_uid(b):
@@ -506,7 +544,9 @@ def scan(M, state, dry_run):
             continue
         frm = decode_header(head.get("From"))
         subj = decode_header(head.get("Subject"))
-        if not is_candidate(frm, subj):
+        # Drop "queries" (inquiries / pending requests / searches) up front, and
+        # non-candidates. Both are marked seen so they aren't reprocessed.
+        if NEGATIVE_SUBJECT_RE.search(subj or "") or not is_candidate(frm, subj):
             if mid:
                 seen.add(mid); state["seen"].append(mid)
             continue
@@ -516,6 +556,13 @@ def scan(M, state, dry_run):
             continue
         msg = email.message_from_bytes(d[0][1])
         text = f"From: {frm}\nSubject: {subj}\n\n{body_text(msg)}"
+        # Received date, used to roll year-less trip dates forward (below). Only
+        # trust it for recently-arrived mail so we never promote a genuine old trip.
+        try:
+            recv_date = email.utils.parsedate_to_datetime(msg.get("Date")).date()
+        except Exception:  # noqa: BLE001
+            recv_date = None
+        recent = bool(recv_date and recv_date >= datetime.now(timezone.utc).date() - timedelta(days=60))
         try:
             bookings = extract_booking(text)
         except UpstreamDown:
@@ -531,6 +578,8 @@ def scan(M, state, dry_run):
             if (not isinstance(b, dict) or not b.get("is_booking")
                     or not b.get("start") or b.get("type") not in TRAVEL_TYPES):
                 continue
+            if recent:
+                roll_year_forward(b, recv_date)  # fix a dropped/mis-guessed year
             # Drop trips that already ended (use end date, else start).
             ref = (b.get("end") or b.get("start") or "")[:10]
             try:
