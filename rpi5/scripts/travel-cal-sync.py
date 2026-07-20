@@ -91,6 +91,12 @@ NC_WEB = CALDAV_HOME.split("/remote.php")[0]
 TG_TOKEN_FILE = os.environ.get("TELEGRAM_TOKEN_FILE", "/run/agenix/telegram-bot-token")
 TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 
+# Link put in each event's description pointing back at the source mailbox. Proton
+# search is client-side with no per-message URL scheme (and hydroxide exposes no
+# Proton message id), so this can only open Proton Mail — the subject/date in the
+# description is what lets you find the exact message (local search).
+PROTON_MAIL_URL = os.environ.get("PROTON_MAIL_URL", "https://mail.proton.me/u/0/all-mail")
+
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
 SENDER_DOMAINS = (
@@ -130,7 +136,11 @@ SYSTEM_PROMPT = (
     "{\n"
     '  "is_booking": bool,      // true ONLY for a CONFIRMED travel reservation with concrete dates\n'
     '  "type": "stay|flight|train|bus|ferry|car",\n'
-    '  "title": str,            // e.g. "Airbnb — Lisbon", "Flight AF1234 CDG→LIS"\n'
+    '  "title": str,            // If someone is staying at the RECIPIENT\'S OWN place\n'
+    "                           // (a host reservation), use the GUEST'S NAME, e.g.\n"
+    '                           // "Mélissa Manté — Zen 2-Room Flat". For the recipient\'s\n'
+    '                           // own trip, use route/flight/lodging, e.g. "OUIGO\n'
+    '                           // Paris→Brest", "Flight AF1234 CDG→LIS", "Airbnb — Lisbon".\n'
     '  "location": str,         // address / city / airports; "" if unknown\n'
     '  "start": str,            // ISO 8601. stays: check-in DATE (YYYY-MM-DD).\n'
     "                           // flights/trains: departure datetime (YYYY-MM-DDTHH:MM, local)\n"
@@ -454,8 +464,19 @@ def build_ics(b, uid):
         desc.append("Ref: " + b["confirmation_code"])
     if b.get("notes"):
         desc.append(b["notes"])
+    # Link back to the source email. Proton has no per-message URL, so this opens
+    # Proton Mail and the subject/date below is what pinpoints it (local search).
+    src_subject = b.get("_source_subject")
+    src_date = b.get("_source_date")
+    src_link = b.get("_source_link")
+    if src_subject:
+        desc.append(f"Email: {src_subject}" + (f" ({src_date})" if src_date else ""))
+    if src_link:
+        desc.append(src_link)
     desc.append("added by travel-cal-sync")
     lines.append("DESCRIPTION:" + esc(" — ".join(desc)))
+    if src_link:  # clickable link on the event in Nextcloud
+        lines.append("URL:" + src_link)
     lines += ["END:VEVENT", "END:VCALENDAR"]
     return "\r\n".join(_fold(ln) for ln in lines) + "\r\n"
 
@@ -588,6 +609,10 @@ def scan(M, state, dry_run):
                 continue
             if ref_date < cutoff:
                 continue
+            # Source-email breadcrumbs for the event description / URL.
+            b["_source_subject"] = subj
+            b["_source_date"] = recv_date.isoformat() if recv_date else None
+            b["_source_link"] = PROTON_MAIL_URL
             uid = booking_uid(b)
             if uid in done_uids:
                 continue
