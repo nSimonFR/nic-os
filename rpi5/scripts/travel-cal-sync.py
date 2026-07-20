@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+"""travel-cal-sync — event-driven Proton → Nextcloud travel-booking calendar sync.
+
+Reads Proton over the local hydroxide IMAP bridge (same creds/pattern as
+`papra-proton-poll.py`), detects travel bookings (Airbnb / hotels / flights /
+trains) with the local `tiny-llm-gate`, and writes each as a VEVENT into a
+Nextcloud calendar over CalDAV. Each booking gets a stable UID, so the PUT is
+idempotent — re-runs update in place and never create duplicates, even if the
+state file is lost.
+
+Runs as a persistent daemon: a catch-up scan on every (re)connect (first run =
+backfill over LOOKBACK_DAYS), then IMAP IDLE — waking the moment new mail lands.
+A periodic re-scan (RESCAN_SECONDS) is the safety net for any missed IDLE push.
+The mailbox is opened READ-ONLY and never mutated (your read/unread state is
+untouched); processed messages are tracked by Message-ID in a state file.
+
+Stdlib only (imaplib + urllib) — no third-party deps.
+
+Modes:
+  (default)          daemon: scan + IDLE loop.
+  --dry-run          one scan, print detected bookings, exit. NO CalDAV writes;
+                     needs only the Proton password + tiny-llm-gate (no Nextcloud
+                     credential) — safe to run before that secret exists.
+  --list-calendars   PROPFIND the Nextcloud calendar home and print each
+                     calendar's URI + display name, then exit.
+
+Config via env (defaults suit rpi5):
+  PROTON_USER           default nsimon@protonmail.com
+  PROTON_PASS_FILE      default /run/agenix/protonmail-bridge-password
+  PROTON_MAILBOX        default "All Mail"
+  TINY_LLM_GATE_URL     default http://127.0.0.1:4001
+  MODEL                 default auto
+  LOOKBACK_DAYS         default 365
+  STATE_DIR             default /var/lib/travel-cal-sync
+  RESCAN_SECONDS        default 1200   (IDLE refresh / safety-net rescan)
+  NEXTCLOUD_CALDAV_URL  default https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/
+  NEXTCLOUD_USER        default nsimon
+  NEXTCLOUD_PASS_FILE   default /run/agenix/travel-cal-nextcloud-password
+  NEXTCLOUD_CAL         calendar collection URI (required for live writes)
+  TELEGRAM_TOKEN_FILE   default /run/agenix/telegram-bot-token
+  TELEGRAM_CHAT_ID      Telegram chat id (optional; no summary if unset)
+"""
+import base64
+import email
+import email.utils
+import hashlib
+import html
+import imaplib
+import json
+import os
+import re
+import socket
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timedelta, timezone
+
+# ── config ──────────────────────────────────────────────────────────────────
+IMAP_HOST = "127.0.0.1"
+IMAP_PORT = 1143
+PROTON_USER = os.environ.get("PROTON_USER", "nsimon@protonmail.com")
+PROTON_PASS_FILE = os.environ.get("PROTON_PASS_FILE", "/run/agenix/protonmail-bridge-password")
+MAILBOX = os.environ.get("PROTON_MAILBOX", "All Mail")
+
+GATE = os.environ.get("TINY_LLM_GATE_URL", "http://127.0.0.1:4001").rstrip("/")
+MODEL = os.environ.get("MODEL", "auto")
+
+LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "365"))
+STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/travel-cal-sync")
+STATE_FILE = os.path.join(STATE_DIR, "state.json")
+RESCAN_SECONDS = int(os.environ.get("RESCAN_SECONDS", "1200"))
+
+CALDAV_HOME = os.environ.get(
+    "NEXTCLOUD_CALDAV_URL",
+    "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/",
+).rstrip("/") + "/"
+NC_USER = os.environ.get("NEXTCLOUD_USER", "nsimon")
+NC_PASS_FILE = os.environ.get("NEXTCLOUD_PASS_FILE", "/run/agenix/travel-cal-nextcloud-password")
+NC_CAL = os.environ.get("NEXTCLOUD_CAL", "")
+
+TG_TOKEN_FILE = os.environ.get("TELEGRAM_TOKEN_FILE", "/run/agenix/telegram-bot-token")
+TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
+
+# Senders whose mail is worth handing to the LLM. Substring match on the From
+# address. Broad on purpose — the LLM guardrail is what actually decides.
+SENDER_DOMAINS = (
+    "airbnb.", "booking.com", "hotels.com", "expedia.", "agoda.com",
+    "marriott.", "accor.", "hilton.", "ihg.com", "vrbo.com", "abritel.",
+    "airfrance.", "klm.", "easyjet.", "ryanair.", "transavia.",
+    "lufthansa.", "ba.com", "britishairways.", "vueling.", "wizzair.",
+    "sncf.", "oui.sncf", "sncf-connect.", "trainline.", "thetrainline.",
+    "eurostar.", "flixbus.", "blablacar.", "renfe.", "trenitalia.",
+)
+# Subject keywords (any language we care about) as a fallback net.
+SUBJECT_RE = re.compile(
+    r"reservation|réservation|reservación|booking|confirmed|confirmation|"
+    r"itinerary|itinéraire|check-?in|billet|e-?ticket|boarding|"
+    r"your (trip|stay|flight|train)|réserv",
+    re.I,
+)
+
+TRAVEL_TYPES = {"stay", "flight", "train", "bus", "ferry", "car"}
+
+SYSTEM_PROMPT = (
+    "You extract TRAVEL bookings from a single email. A travel booking is "
+    "lodging (hotel/Airbnb/rental), a flight, a train, a bus/coach, a ferry, or "
+    "a rental car. Activities, restaurants, events, tickets to attractions, "
+    "laser tag, concerts, etc. are NOT travel — return is_booking=false for "
+    "those. Reply with ONLY a JSON object, no prose, no markdown fences. Schema:\n"
+    "{\n"
+    '  "is_booking": bool,      // true ONLY for a CONFIRMED travel reservation with concrete dates\n'
+    '  "type": "stay|flight|train|bus|ferry|car",\n'
+    '  "title": str,            // e.g. "Airbnb — Lisbon", "Flight AF1234 CDG→LIS"\n'
+    '  "location": str,         // address / city / airports; "" if unknown\n'
+    '  "start": str,            // ISO 8601. stays: check-in DATE (YYYY-MM-DD).\n'
+    "                           // flights/trains: departure datetime (YYYY-MM-DDTHH:MM, local)\n"
+    '  "end": str,              // ISO 8601. stays: check-out DATE. transit: arrival datetime; "" if unknown\n'
+    '  "all_day": bool,         // true for stays; false for flights/trains\n'
+    '  "confirmation_code": str,// booking/confirmation ref; "" if none\n'
+    '  "notes": str             // short extra detail; "" if none\n'
+    "}\n"
+    "If the email is marketing, a reminder, a receipt, a review request, or a "
+    "message about a PAST trip, or anything that is not a concrete confirmed "
+    'booking, return {"is_booking": false}. Extract the dates of the trip the '
+    "email is about; never invent dates."
+)
+
+# Only upcoming travel is calendar-worthy. A booking whose trip already ended
+# (with a small grace) is dropped — this discards the review-requests, receipts
+# and re-sent itineraries about past trips that recent mail is full of.
+PAST_GRACE_DAYS = 2
+
+
+# ── small utils ─────────────────────────────────────────────────────────────
+def log(*a):
+    print(*a, file=sys.stderr, flush=True)
+
+
+def read_file(path):
+    with open(path) as fh:
+        return fh.read().strip()
+
+
+def load_state():
+    try:
+        with open(STATE_FILE) as fh:
+            s = json.load(fh)
+    except (FileNotFoundError, ValueError):
+        s = {}
+    s.setdefault("seen", [])       # processed Message-IDs
+    s.setdefault("last_scan", 0)   # epoch of last successful scan
+    return s
+
+
+def save_state(s):
+    os.makedirs(STATE_DIR, exist_ok=True)
+    # keep the seen-set bounded
+    s["seen"] = s["seen"][-5000:]
+    tmp = STATE_FILE + ".tmp"
+    with open(tmp, "w") as fh:
+        json.dump(s, fh)
+    os.replace(tmp, STATE_FILE)
+
+
+# ── IMAP ────────────────────────────────────────────────────────────────────
+def imap_connect():
+    M = imaplib.IMAP4(IMAP_HOST, IMAP_PORT)
+    M.login(PROTON_USER, read_file(PROTON_PASS_FILE))
+    mbox = f'"{MAILBOX}"' if " " in MAILBOX else MAILBOX
+    typ, _ = M.select(mbox, readonly=True)
+    if typ != "OK":
+        raise RuntimeError(f"cannot select mailbox {MAILBOX!r}")
+    return M
+
+
+def fetch_headers(M, ids, chunk=500):
+    """Batch-fetch minimal headers for all message numbers → {num: email.Message}.
+    One IMAP round-trip per `chunk` messages (vs. one per message)."""
+    out = {}
+    for i in range(0, len(ids), chunk):
+        batch = b",".join(ids[i:i + chunk])
+        typ, data = M.fetch(batch, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)])")
+        if typ != "OK":
+            continue
+        for item in data:
+            if not isinstance(item, tuple):
+                continue
+            m = re.match(rb"(\d+)", item[0])
+            if m:
+                out[m.group(1).decode()] = email.message_from_bytes(item[1])
+    return out
+
+
+def is_candidate(frm, subject):
+    frm = (frm or "").lower()
+    if any(dom in frm for dom in SENDER_DOMAINS):
+        return True
+    return bool(subject and SUBJECT_RE.search(subject))
+
+
+def body_text(msg):
+    """Best-effort plain-text body; strip HTML if that's all we have."""
+    plain, htmltext = None, None
+    for part in msg.walk():
+        ct = part.get_content_type()
+        if part.get("Content-Disposition", "").lower().startswith("attachment"):
+            continue
+        if ct == "text/plain" and plain is None:
+            plain = _decode(part)
+        elif ct == "text/html" and htmltext is None:
+            htmltext = _decode(part)
+    text = plain or _strip_html(htmltext or "")
+    return re.sub(r"\n{3,}", "\n\n", text).strip()[:8000]
+
+
+def _decode(part):
+    payload = part.get_payload(decode=True) or b""
+    return payload.decode(part.get_content_charset() or "utf-8", "replace")
+
+
+def _strip_html(s):
+    s = re.sub(r"(?is)<(script|style).*?</\1>", " ", s)
+    s = re.sub(r"(?is)<br\s*/?>", "\n", s)
+    s = re.sub(r"(?is)</(p|div|tr|li|h[1-6])>", "\n", s)
+    s = re.sub(r"(?is)<[^>]+>", " ", s)
+    return html.unescape(s)
+
+
+# ── extraction via tiny-llm-gate ────────────────────────────────────────────
+class UpstreamDown(Exception):
+    """The LLM gate / local model is unreachable (e.g. beast asleep). Signals the
+    daemon to back off rather than hammer every candidate."""
+
+
+def extract_booking(text):
+    body = json.dumps({
+        "model": MODEL,
+        "temperature": 0,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": text},
+        ],
+    }).encode()
+    req = urllib.request.Request(
+        f"{GATE}/v1/chat/completions",
+        data=body,
+        headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            content = json.load(r)["choices"][0]["message"]["content"]
+    except urllib.error.HTTPError as e:
+        # 502/503/504 = gate reached but the (local) model upstream is down.
+        if e.code in (502, 503, 504):
+            raise UpstreamDown(f"gate {e.code}") from e
+        raise
+    except urllib.error.URLError as e:
+        raise UpstreamDown(f"gate unreachable: {e.reason}") from e
+    data = _parse_json(content)
+    # Normalise to a list of booking dicts: an email may hold several legs (a
+    # round-trip = two flights), so the model may return an array — or wrap the
+    # array under a key.
+    if isinstance(data, dict):
+        for k in ("bookings", "results", "items", "data"):
+            if isinstance(data.get(k), list):
+                return [x for x in data[k] if isinstance(x, dict)]
+        return [data]
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    return []
+
+
+def _parse_json(content):
+    content = content.strip()
+    if content.startswith("```"):
+        content = re.sub(r"^```[a-z]*\n?|\n?```$", "", content).strip()
+    try:
+        return json.loads(content)
+    except ValueError:
+        m = re.search(r"\{.*\}", content, re.S)
+        return json.loads(m.group(0)) if m else None
+
+
+# ── iCalendar / CalDAV ──────────────────────────────────────────────────────
+def esc(s):
+    return (s or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def _dt(value, all_day):
+    """Return an iCal property value fragment for start/end."""
+    if all_day:
+        d = datetime.fromisoformat(value[:10]).date()
+        return ";VALUE=DATE:" + d.strftime("%Y%m%d")
+    dt = datetime.fromisoformat(value)
+    if dt.tzinfo is not None:
+        return ":" + dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return ":" + dt.strftime("%Y%m%dT%H%M%S")  # floating local time
+
+
+def booking_uid(b):
+    # Natural identity of a booking: its type + the dates. Keyed this way, the
+    # confirmation, reminder and itinerary emails for one stay all map to the
+    # SAME UID → a single calendar event (the confirmation code is often absent
+    # from some of those emails, so it can't be the identity).
+    typ = b.get("type", "x")
+    key = f"{typ}|{(b.get('start') or '')[:10]}|{(b.get('end') or '')[:10]}"
+    return f"travelcal-{typ}-{hashlib.sha1(key.encode()).hexdigest()[:12]}@nic-os"
+
+
+def build_ics(b, uid):
+    all_day = bool(b.get("all_day"))
+    start = b["start"]
+    end = b.get("end") or ""
+    if not end:
+        # single point: default a stay to +1 day, transit to +2h
+        base = datetime.fromisoformat((start[:10] if all_day else start))
+        end = (base + (timedelta(days=1) if all_day else timedelta(hours=2))).isoformat()
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//nic-os//travel-cal-sync//EN",
+        "BEGIN:VEVENT",
+        f"UID:{uid}",
+        "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        f"SUMMARY:{esc(b.get('title') or 'Travel booking')}",
+        "DTSTART" + _dt(start, all_day),
+        "DTEND" + _dt(end, all_day),
+    ]
+    if b.get("location"):
+        lines.append(f"LOCATION:{esc(b['location'])}")
+    desc = []
+    if b.get("confirmation_code"):
+        desc.append("Ref: " + b["confirmation_code"])
+    if b.get("notes"):
+        desc.append(b["notes"])
+    desc.append("added by travel-cal-sync")
+    lines.append("DESCRIPTION:" + esc(" — ".join(desc)))
+    lines += ["END:VEVENT", "END:VCALENDAR"]
+    return "\r\n".join(lines) + "\r\n"
+
+
+def _nc_auth():
+    tok = base64.b64encode(f"{NC_USER}:{read_file(NC_PASS_FILE)}".encode()).decode()
+    return "Basic " + tok
+
+
+def caldav_put(uid, ics):
+    if not NC_CAL:
+        raise RuntimeError("NEXTCLOUD_CAL is not set — cannot write events")
+    url = f"{CALDAV_HOME}{NC_CAL}/{uid}.ics"
+    req = urllib.request.Request(
+        url, data=ics.encode(),
+        headers={"Authorization": _nc_auth(), "Content-Type": "text/calendar; charset=utf-8"},
+        method="PUT",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        return r.status  # 201 created / 204 updated
+
+
+def list_calendars():
+    body = (
+        '<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
+        "<d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>"
+    )
+    req = urllib.request.Request(
+        CALDAV_HOME, data=body.encode(),
+        headers={"Authorization": _nc_auth(), "Depth": "1", "Content-Type": "application/xml"},
+        method="PROPFIND",
+    )
+    with urllib.request.urlopen(req, timeout=30) as r:
+        xml = r.read().decode("utf-8", "replace")
+    out = []
+    for resp in re.findall(r"(?is)<d:response>.*?</d:response>", xml):
+        href = re.search(r"(?is)<d:href>(.*?)</d:href>", resp)
+        name = re.search(r"(?is)<d:displayname>(.*?)</d:displayname>", resp)
+        if not href:
+            continue
+        uri = href.group(1).rstrip("/").rsplit("/", 1)[-1]
+        if uri and "calendar" in resp.lower():
+            out.append((uri, html.unescape(name.group(1)) if name else ""))
+    return out
+
+
+# ── telegram ────────────────────────────────────────────────────────────────
+def telegram(msg):
+    if not TG_CHAT or not os.path.exists(TG_TOKEN_FILE):
+        return
+    try:
+        tok = read_file(TG_TOKEN_FILE)
+        data = urllib.parse.urlencode({
+            "chat_id": TG_CHAT, "parse_mode": "HTML", "text": msg,
+        }).encode()
+        urllib.request.urlopen(
+            f"https://api.telegram.org/bot{tok}/sendMessage", data=data, timeout=15
+        )
+    except Exception as e:  # noqa: BLE001 — never let a notify failure kill the run
+        log("telegram error:", e)
+
+
+# ── scan ────────────────────────────────────────────────────────────────────
+def scan(M, state, dry_run):
+    """One pass. Returns list of (booking, uid, written_bool)."""
+    since_epoch = state["last_scan"]
+    if since_epoch:
+        since = datetime.fromtimestamp(since_epoch, timezone.utc) - timedelta(days=2)
+    else:
+        since = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+    typ, ids = M.search(None, "SINCE", since.strftime("%d-%b-%Y"))
+    if typ != "OK":
+        raise RuntimeError("IMAP SEARCH failed")
+    nums = ids[0].split()
+    heads = fetch_headers(M, nums)
+    log(f"scan: {len(nums)} message(s) since {since:%Y-%m-%d}; screening headers")
+    seen = set(state["seen"])
+    results = []
+    done_uids = set()  # collapse multiple emails of the same booking within a scan
+    for num in nums:
+        head = heads.get(num.decode())
+        if head is None:
+            continue
+        mid = (head.get("Message-ID") or "").strip()
+        if mid and mid in seen:
+            continue
+        if not is_candidate(head.get("From"), head.get("Subject")):
+            if mid:
+                seen.add(mid); state["seen"].append(mid)
+            continue
+        # full fetch only for candidates
+        typ, d = M.fetch(num, "(BODY.PEEK[])")
+        if typ != "OK" or not d or not d[0]:
+            continue
+        msg = email.message_from_bytes(d[0][1])
+        text = f"From: {head.get('From')}\nSubject: {head.get('Subject')}\n\n{body_text(msg)}"
+        try:
+            bookings = extract_booking(text)
+        except UpstreamDown:
+            # Model host (beast) is down — stop the scan and let the daemon back
+            # off. This message stays unseen, so it's retried once beast is up.
+            raise
+        except Exception as e:  # noqa: BLE001
+            log("extract error:", e, "— subject:", head.get("Subject"))
+            continue
+        if mid:
+            seen.add(mid); state["seen"].append(mid)
+        cutoff = datetime.now(timezone.utc).date() - timedelta(days=PAST_GRACE_DAYS)
+        for b in bookings:
+            if (not isinstance(b, dict) or not b.get("is_booking")
+                    or not b.get("start") or b.get("type") not in TRAVEL_TYPES):
+                continue
+            # Drop trips that already ended (use end date, else start).
+            ref = (b.get("end") or b.get("start") or "")[:10]
+            try:
+                ref_date = datetime.fromisoformat(ref).date()
+            except ValueError:
+                continue
+            if ref_date < cutoff:
+                continue
+            uid = booking_uid(b)
+            if uid in done_uids:
+                continue
+            done_uids.add(uid)
+            written = False
+            if not dry_run:
+                try:
+                    caldav_put(uid, build_ics(b, uid))
+                    written = True
+                except Exception as e:  # noqa: BLE001
+                    log("caldav error:", e, "— booking:", b.get("title"))
+            results.append((b, uid, written))
+    state["last_scan"] = int(time.time())
+    return results
+
+
+def fmt_booking(b):
+    span = b.get("start", "")
+    if b.get("end"):
+        span += " → " + b["end"]
+    loc = f" @ {b['location']}" if b.get("location") else ""
+    code = f" [{b['confirmation_code']}]" if b.get("confirmation_code") else ""
+    return f"{b.get('type', '?'):5} {span}  {b.get('title', '')}{loc}{code}"
+
+
+# ── IDLE ────────────────────────────────────────────────────────────────────
+def idle_wait(M, timeout):
+    """Block until new mail (EXISTS/RECENT) or timeout. Returns True if woken."""
+    tag = M._new_tag()
+    M.send(tag + b" IDLE\r\n")
+    if not M.readline().startswith(b"+"):
+        raise RuntimeError("server did not enter IDLE")
+    woken = False
+    M.socket().settimeout(timeout)
+    try:
+        while True:
+            line = M.readline()
+            if not line:
+                break
+            if b"EXISTS" in line or b"RECENT" in line:
+                woken = True
+                break
+    except socket.timeout:
+        pass
+    finally:
+        M.socket().settimeout(None)
+        M.send(b"DONE\r\n")
+        while True:  # drain to the tagged completion
+            line = M.readline()
+            if not line or line.startswith(tag):
+                break
+    return woken
+
+
+# ── modes ───────────────────────────────────────────────────────────────────
+def run_dry_run():
+    state = load_state()
+    state["last_scan"] = 0  # force full backfill window for the review
+    M = imap_connect()
+    try:
+        results = scan(M, state, dry_run=True)
+    except UpstreamDown as e:
+        log(f"cannot extract — LLM upstream down ({e}). Is beast awake?")
+        return 2
+    finally:
+        try:
+            M.logout()
+        except Exception:  # noqa: BLE001
+            pass
+    print(f"\n=== {len(results)} travel booking(s) detected "
+          f"(last {LOOKBACK_DAYS} days) ===")
+    for b, uid, _ in results:
+        print("  " + fmt_booking(b))
+    print("\n(dry-run — nothing was written to the calendar)")
+    return 0
+
+
+def run_list_calendars():
+    for uri, name in list_calendars():
+        print(f"{uri}\t{name}")
+    return 0
+
+
+def run_daemon():
+    log("travel-cal-sync daemon starting")
+    while True:
+        try:
+            M = imap_connect()
+            log("connected; running catch-up scan")
+            while True:
+                state = load_state()
+                try:
+                    results = scan(M, state, dry_run=False)
+                except UpstreamDown as e:
+                    save_state(state)  # keep partial progress
+                    log(f"LLM upstream down ({e}); backing off 15 min")
+                    time.sleep(900)
+                    continue
+                save_state(state)
+                new = [r for r in results if r[2]]
+                if new:
+                    log(f"added {len(new)} event(s)")
+                    telegram(
+                        "🧳 <b>Travel bookings added to calendar</b>\n"
+                        + "\n".join("• " + html.escape(fmt_booking(b)) for b, _, _ in new)
+                    )
+                # trigger: block on IDLE until new mail or the safety-net timeout
+                idle_wait(M, RESCAN_SECONDS)
+        except Exception as e:  # noqa: BLE001
+            log("daemon error, reconnecting in 30s:", type(e).__name__, e)
+            time.sleep(30)
+
+
+def main():
+    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+    if arg == "--dry-run":
+        return run_dry_run()
+    if arg == "--list-calendars":
+        return run_list_calendars()
+    return run_daemon()
+
+
+if __name__ == "__main__":
+    sys.exit(main())
