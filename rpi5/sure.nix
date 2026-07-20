@@ -88,7 +88,16 @@ in
     # Stop the AI auto-categorizer from labeling internal transfers
     # (kind=funds_movement) — it mislabeled Livret A moves as "Investment
     # Contributions". Optional source patch, enabled here per-deployment.
-    patchFlags = { auto-categorize-skip-transfers = true; };
+    #
+    # coinstats-balance-holdings-fallback: keep CoinStats-synced crypto wallets
+    # from collapsing to $0 when the CoinStats free-tier credit limit is reached
+    # (every wallet endpoint 406s → zero-balance snapshot → reverse materializer
+    # sets cash = -holdings). Anchors the account to its preserved holdings value
+    # instead. See nSimonFR/sure-nix#17.
+    patchFlags = {
+      auto-categorize-skip-transfers = true;
+      coinstats-balance-holdings-fallback = true;
+    };
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ──────────
