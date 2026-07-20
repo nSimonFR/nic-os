@@ -63,48 +63,8 @@ let
     '';
   });
 
-  # claude-auto-retry (https://github.com/cheapestinference/claude-auto-retry):
-  # watches an interactive Claude session for a usage-cap message, waits out the
-  # reset window (timezone-aware), and auto-sends `continue` via tmux send-keys.
-  # The published npm package is dependency-free pure ESM, so we just vendor the
-  # tarball and wrap its entrypoints with node — no buildNpmPackage needed.
-  # Exposes two bins: `claude-auto-retry` (status/logs/version CLI) and
-  # `claude-car-launcher` (the wrapper the `claude` shell function calls).
-  # PATH is prefixed with tmux/procps/which so the forked monitor finds them
-  # regardless of the caller's environment.
-  claudeAutoRetry = pkgs.stdenvNoCC.mkDerivation rec {
-    pname = "claude-auto-retry";
-    # >=0.4 detects Claude Code's current hard-cap wording "You've hit your
-    # session/weekly limit" (0.2.2's LIMIT_PATTERNS required `your`/`the`
-    # adjacent to `limit`, so the qualifier word broke detection and caps were
-    # never auto-resumed). Fixed upstream, so no local pattern override needed.
-    version = "0.5.1";
-    src = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/claude-auto-retry/-/claude-auto-retry-${version}.tgz";
-      hash = "sha256-tH4XxtjlTgvX5Ovp3d/U26m2uMjd9BozFmC6clMlt5s=";
-    };
-    nativeBuildInputs = [ pkgs.makeWrapper ];
-    dontConfigure = true;
-    dontBuild = true;
-    installPhase = ''
-      runHook preInstall
-      mkdir -p $out/share/claude-auto-retry $out/bin
-      cp -r . $out/share/claude-auto-retry/
-      runtimePath=${lib.makeBinPath [ pkgs.tmux pkgs.procps pkgs.which ]}
-      makeWrapper ${pkgs.nodejs}/bin/node $out/bin/claude-auto-retry \
-        --add-flags $out/share/claude-auto-retry/bin/cli.js \
-        --prefix PATH : "$runtimePath"
-      makeWrapper ${pkgs.nodejs}/bin/node $out/bin/claude-car-launcher \
-        --add-flags $out/share/claude-auto-retry/src/launcher.js \
-        --prefix PATH : "$runtimePath"
-      runHook postInstall
-    '';
-  };
 in
 {
-  # claude-auto-retry CLI (`claude-auto-retry status|logs`) + the
-  # `claude-car-launcher` the `claude` shell function routes through.
-  home.packages = [ claudeAutoRetry ];
 
   programs.claude-code = {
     enable = true;
@@ -161,17 +121,6 @@ in
       source = pkgs.writeShellScript "claude-rc" ''
         exec "${claudeCodePkg}/bin/claude" remote-control "$@"
       '';
-    };
-
-    # claude-auto-retry config (read at runtime by the monitor). marginSeconds
-    # waits a bit past the parsed reset; fallbackWaitHours bounds the wait when
-    # no reset time is parseable; retryMessage is what's sent via send-keys.
-    ".claude-auto-retry.json".text = builtins.toJSON {
-      maxRetries = 5;
-      pollIntervalSeconds = 5;
-      marginSeconds = 60;
-      fallbackWaitHours = 5;
-      retryMessage = "continue";
     };
 
     # PostToolUse hook: mirror writes under

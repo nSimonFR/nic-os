@@ -293,7 +293,6 @@ def resume(session, jsonl):
         subprocess.run(
             [CLAUDE_BIN, "-p", "--resume", sid, RESUME_MSG],
             cwd=cwd,
-            env={**os.environ, "CLAUDE_AUTO_RETRY_ACTIVE": "1"},
             timeout=900,
             check=False,
         )
