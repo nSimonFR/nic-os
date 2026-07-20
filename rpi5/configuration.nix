@@ -163,6 +163,7 @@ in
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
     ./ryot.nix
+    ./scale-bridge.nix
     # ./open-webui.nix # DISABLED 2026-06-15: venv crash-loop (ExecStart exit 126, "venv/bin/open-webui: Permission denied") since the disk incident. Re-enable + rebuild the venv (rm -rf /var/lib/open-webui/venv) to restore.
     ./homepage.nix
     ./backups.nix
@@ -352,7 +353,10 @@ in
     pinentryPackage = pkgs.pinentry-curses;
   };
 
-  hardware.bluetooth.enable = lib.mkForce false;
+  # Onboard Bluetooth: enabled for the BLE scale bridge (see scale-bridge.nix).
+  # The raspberry-pi-5.bluetooth module enables it without mkDefault, so keep an
+  # explicit mkForce to control the final value from here.
+  hardware.bluetooth.enable = lib.mkForce true;
 
   fileSystems = {
     "/boot/firmware" = {
