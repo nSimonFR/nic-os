@@ -52,6 +52,16 @@
       flake = false;
     };
 
+    # Hermes Agent (NousResearch/hermes-agent) — Python+Node AI agent, a full
+    # flake carrying its own uv2nix stack (like beaverhabits-nix, we only pin
+    # nixpkgs; forcing the pyproject/uv2nix inputs to follow breaks the build).
+    # Consumed as an A/B alternative to PicoClaw on the SAME Telegram bot — see
+    # rpi5/hermes/hermes.nix. We use only the lean `messaging` package variant.
+    hermes-agent = {
+      url = "github:NousResearch/hermes-agent";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     mac-app-util.url = "github:hraban/mac-app-util";
 
     nix-flatpak.url = "github:gmodena/nix-flatpak";
@@ -215,6 +225,13 @@
       };
       telegramChatId = 82389391;
 
+      # Which "claw" agent autostarts on the rpi5. Both PicoClaw and Hermes are
+      # installed as symmetric home-manager user services, but only one may poll
+      # the shared Telegram bot at a time. This picks the boot default; the
+      # `claw-switch` script flips them live without a rebuild. See
+      # rpi5/hermes/hermes.nix + rpi5/picoclaw/picoclaw.nix.
+      clawBackend = "picoclaw";
+
       # RTK package overlay — single source of truth so `pkgs.rtk` resolves
       # identically in NixOS modules (via rpi5/overlays.nix) and standalone
       # home-manager configs (the homeConfigurations pkgs below). Builds from
@@ -256,6 +273,12 @@
           # there is no prebuild CI cache (garnix is deprecated). See rpi5/ryot.nix.
           aarch64-linux.ryot =
             self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
+          # Hermes Agent — lean `messaging` variant. Exposed as a standalone
+          # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
+          # npm compile can be validated/isolated on the Pi BEFORE wiring the
+          # user service (OOM-prone; no prebuild cache). See rpi5/hermes/hermes.nix.
+          aarch64-linux.hermes-messaging =
+            inputs.hermes-agent.packages.aarch64-linux.messaging;
         };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
@@ -310,6 +333,7 @@
                   outputs
                   username
                   telegramChatId
+                  clawBackend
                   ;
                 inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
                 devSetup = false;
@@ -399,6 +423,7 @@
               outputs
               username
               telegramChatId
+              clawBackend
               ;
             inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
             devSetup = false;

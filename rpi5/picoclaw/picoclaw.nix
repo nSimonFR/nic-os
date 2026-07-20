@@ -1,10 +1,12 @@
 {
   config,
+  lib,
   pkgs,
   inputs,
   telegramChatId,
   unstablePkgs,
   apertureUrl,
+  clawBackend,
   ...
 }:
 # PicoClaw home-manager module.
@@ -396,6 +398,10 @@ in
       # skill execution without being lax.
       MemoryMax = "256M";
     };
-    Install.WantedBy = [ "default.target" ];
+    # Only autostart PicoClaw when it's the selected backend. Both agents are
+    # always installed, but only one may poll the shared Telegram bot; the boot
+    # default is `clawBackend` (flake.nix), flipped live by `claw-switch`.
+    # WantedBy = [] keeps the unit installed but not started at login.
+    Install.WantedBy = lib.optionals (clawBackend == "picoclaw") [ "default.target" ];
   };
 }
