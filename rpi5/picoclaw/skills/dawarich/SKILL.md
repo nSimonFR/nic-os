@@ -127,8 +127,8 @@ curl -fsS "${AUTH[@]}" \
 ```
 
 This is the raw list for your own use — do **not** send it verbatim. Format it for the user
-per "Sending the daily message to Telegram" below (one status-annotated list, trimmed names,
-no raw `id=`), keeping the sort stable so the reply numbers map back to these ids.
+per "Sending the daily message to Telegram" below (one bullet list, trimmed names, no raw
+`id=`), keeping the sort stable so a place the user references maps back to these ids.
 
 ### Name suggestions for a visit
 
@@ -188,91 +188,74 @@ curl -fsS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
 
 ## Sending the daily message to Telegram (rich)
 
-When this runs as the daily job (channel `telegram`), send the recap yourself via the
-Bot API so you get HTML formatting **and** tap-through buttons — don't rely on picoclaw's
-plain-text channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is
-in `$TELEGRAM_CHAT_ID` (exported for the service).
+When this runs as the daily job (channel `telegram`), send the recap yourself via the Bot
+API so you get HTML formatting and clickable links — don't rely on picoclaw's plain-text
+channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is in
+`$TELEGRAM_CHAT_ID` (exported for the service).
 
-Use `parse_mode=HTML`. Make place names and the header clickable, and attach an inline
-keyboard of **URL buttons** (deep links from the section above). Build the message body and
-`reply_markup` in files (avoids `$(...)`), then POST:
+Use `parse_mode=HTML`. The header and each place name are **links** into Dawarich (deep links
+from the section above) — those links are the only navigation; do **not** attach inline-keyboard
+buttons. Build the message body in a file (avoids `$(...)`), then POST:
 
 ```bash
-# ...after writing $work/message.html (HTML) and $work/markup.json ...
+# ...after writing $work/message.html ...
 TOKEN=$(cat /run/agenix/telegram-bot-token)
-curl -fsS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+curl --max-time 15 -fsS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
   -d chat_id="$TELEGRAM_CHAT_ID" \
   -d parse_mode=HTML \
   -d link_preview_options='{"is_disabled":true}' \
-  --data-urlencode text@"$work/message.html" \
-  --data-urlencode reply_markup@"$work/markup.json"
+  --data-urlencode text@"$work/message.html"
 ```
 
-Add `--max-time 15` to every `curl` in the send script — the exec tool kills a command
-after ~60s, and three API calls + formatting can approach that on a slow day.
+Add `--max-time 15` to every `curl` in the send script — the exec tool kills a command after
+~60s, and a few API calls + formatting can approach that on a slow day.
 
-`markup.json` — two URL buttons (these work with no bot-side handling; Telegram opens them):
+### Layout — one bullet list
 
-```json
-{"inline_keyboard":[[
-  {"text":"🗺 Open timeline","url":"https://rpi5.gate-mintaka.ts.net:3900/map/v2?panel=timeline&date=2026-07-19&status=all"},
-  {"text":"✅ Review suggestions","url":"https://rpi5.gate-mintaka.ts.net:3900/map/v2?panel=timeline&date=2026-07-19&status=suggested"}
-]]}
+Print **one** list of the day's visits, sorted by start time, one bullet each:
+
+```
+• {start}–{end} · {duration} · {emoji} {name}
 ```
 
-### Layout — ONE status-annotated list (not two)
-
-Do **not** print a separate "Stops" list and "Suggested" list — that repeats every place.
-Print **one** list of the day's visits, sorted by start time, each prefixed by its status:
-
-- **`❓ N`** — a `suggested` visit. `N` is a running number (1, 2, 3 … over the suggested
-  ones only). This is what the user replies with.
-- **`✅`** (no number) — a `confirmed` visit. It needs nothing; show it dimmed so the day
-  reads as complete.
-- omit `declined` visits.
-
-Formatting rules:
-- **Trim the name to its first comma-segment** (the venue): `Restaurant Méert, Rue de
-  l'Espérance, 23, Roubaix` → `Restaurant Méert`. Full detail is one tap away via the link.
-- **Never show a raw `id=`** — the user replies by number (you map number→id yourself; see
-  "Applying replies").
+- **`emoji`** carries the status: **❓** = `suggested` (still a guess, worth a look), **✅** =
+  `confirmed`. Omit `declined` visits.
+- **`name`** is a **link** into that day's Dawarich timeline. Trim it to its first
+  comma-segment (the venue): `Restaurant Méert, Rue de l'Espérance, 23, Roubaix` →
+  `Restaurant Méert`; full detail is one tap away.
 - **Humanize duration:** `230` → `3h50`, `37` → `37min`.
-- **Human date** in the header: run `date -d DAY '+%a %-d %b'` as its own command → `Sun 29 Mar`.
-- **Flag low tracking:** append `(sparse)` after the point count when it's low (< ~50/day).
+
+No count line, no reply legend, no numbers — the ❓/✅ emoji and the links say it all. Header:
+human date (`date -d DAY '+%a %-d %b'`, its own command) linking to the day; then a place line
+with the city and point count (`(sparse)` when tracking is thin, < ~50/day).
 
 HTML body shape:
 
 ```
-🗺 <b><a href="…date=DAY&status=all">Dawarich · Sun 29 Mar</a></b>
-📍 <b>Roubaix, France</b> · 17 pts (sparse)
+🗺 <b><a href="…date=DAY&status=all">Dawarich · Sat 11 Apr</a></b>
+📍 <b>Paris, France</b> · 13 pts (sparse)
 
-2 stops to review, 1 already confirmed:
-
-❓ 1  <a href="…date=DAY&status=suggested">Restaurant Méert</a> · 16:21–16:58 · 37min
-❓ 2  Le Grand Café · 17:46–18:09 · 23min
-✅    Home · 19:20–23:10 · 3h50
-
-Reply per number:  ok (keep) · a name (rename) · no (drop) · "merge 1 2"
+• 16:39–17:23 · 43min · ✅ <a href="…date=DAY&status=all">Maison de Victor Hugo</a>
+• 17:46–18:03 · 16min · ❓ <a href="…date=DAY&status=suggested">Place Des Vosges</a>
 ```
 
-If nothing needs review, drop the legend and end with `all confirmed ✅`. If the day has no
-visits at all, send a one-liner and check the point count (don't invent stops).
+If the day has no visits at all, send a one-liner and check the point count (don't invent stops).
 
-> **HTML-escape** names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;` (Dawarich
-> names can contain `&`). Only `<b> <i> <a> <code>` tags are allowed. **No action buttons:**
-> picoclaw ignores `callback_query`, so the two `url` buttons are the only interactive
-> Telegram element — the actual keep/rename/drop/merge happens by text reply.
+> **HTML-escape** names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;` (Dawarich names
+> can contain `&`). Only `<b> <a>` tags are used. No inline-keyboard buttons.
 
-### Applying replies (a later turn)
+### Applying replies
 
-The user replies to the recap later, in a fresh turn with no memory of the numbering, e.g.
-`1 ok, 2 Le Grand Café, 3 no` or `merge 1 2`. Re-fetch that day's **suggested** visits in the
-SAME sort (`started_at`) and number them 1, 2, 3 … to map numbers → visit ids, then apply:
+The user acts on the ❓ items either by **tapping a name** and editing in Dawarich directly, or
+by **replying in Telegram** referencing the place — e.g. `rename Place des Vosges to Vosges`,
+`drop the 16min one`, `confirm Méert`, `merge Méert and Grand Café`. To resolve a reference to
+a visit id, re-fetch that day's **suggested** visits (same `started_at` sort) and match by name
+or time, then apply:
 
-- `ok` / `keep` → `PATCH status=confirmed`
-- a free-text name → `PATCH name=… status=confirmed`
-- `no` / `drop` → `PATCH status=declined`
-- `merge A B` → `POST /visits/merge` with those ids
+- confirm / keep → `PATCH status=confirmed`
+- a new name → `PATCH name=… status=confirmed`
+- drop / no → `PATCH status=declined`
+- merge → `POST /visits/merge` with the matched ids
 
 Default to yesterday (the last recap's day) unless the user names a date. Reply confirming
 exactly what changed.
@@ -282,11 +265,10 @@ exactly what changed.
 This is the intended daily flow (also driven by a cron job):
 
 1. Compute DAY = yesterday.
-2. Send ONE rich Telegram message (see "Sending" above): human-date header, place line, and a
-   single status-annotated list (❓ numbered = needs review, ✅ = already confirmed), a
-   `Reply per number` legend, and the two URL buttons.
-3. When the user replies (a later turn), map their numbers → visit ids by re-fetching that
-   day's suggested visits in the same order, then apply keep / rename / drop / merge.
+2. Send ONE rich Telegram message (see "Sending" above): human-date header + place line, then a
+   bullet list of the day's stops (`time · duration · ❓/✅ name`, names linked into Dawarich).
+3. When the user replies (or edits in Dawarich), resolve the referenced place to a visit id by
+   re-fetching that day's suggested visits, then apply confirm / rename / drop / merge.
 4. Reply confirming exactly what changed.
 
 Never mutate a visit without an explicit user decision — the recap is read-only;
