@@ -104,13 +104,15 @@ in
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
 
-        # -- GPT-5.6 tiers (Sol / Terra / Luna), GA 2026-07-09. `gpt-5.6` is
-        #    OpenAI's alias for the flagship Sol; Terra is the balanced coding
-        #    tier, Luna the high-volume/extraction tier. Same gemma4:e4b
-        #    fallback as 5.5 so the bot keeps answering when codex/OAuth is down.
-        #    NB: the codex-surface ids for -terra/-luna are inferred, not yet
-        #    verified against a live call — confirm before relying on them.
-        "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6";       fallback = [ "gemma4:e4b" ]; };
+        # -- GPT-5.6 tiers (Sol / Terra / Luna), GA 2026-07-09. Client-facing
+        #    `gpt-5.6` is the flagship Sol; Terra is the balanced coding tier,
+        #    Luna the high-volume/extraction tier. Same gemma4:e4b fallback as
+        #    5.5 so the bot keeps answering when codex/OAuth is down.
+        #    NB: the codex surface requires the tier-SUFFIXED upstream id — the
+        #    bare `gpt-5.6` alias is rejected ("not supported when using Codex
+        #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
+        #    All three verified live via /v1/chat/completions on 2026-07-20.
+        "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
 
