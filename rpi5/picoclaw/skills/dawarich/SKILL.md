@@ -126,8 +126,9 @@ curl -fsS "${AUTH[@]}" \
            | "\(.key+1). id=\(.value.id) | \(.value.name) | \(.value.started_at[11:16])-\(.value.ended_at[11:16]) | \(.value.duration)min"'
 ```
 
-Present these as a numbered list to the user and ask what to do with each (confirm as-is,
-rename, merge, or decline).
+This is the raw list for your own use — do **not** send it verbatim. Format it for the user
+per "Sending the daily message to Telegram" below (one status-annotated list, trimmed names,
+no raw `id=`), keeping the sort stable so the reply numbers map back to these ids.
 
 ### Name suggestions for a visit
 
@@ -219,41 +220,77 @@ after ~60s, and three API calls + formatting can approach that on a slow day.
 ]]}
 ```
 
-HTML body shape (link the header to the day, and each stop name to the suggestions view):
+### Layout — ONE status-annotated list (not two)
+
+Do **not** print a separate "Stops" list and "Suggested" list — that repeats every place.
+Print **one** list of the day's visits, sorted by start time, each prefixed by its status:
+
+- **`❓ N`** — a `suggested` visit. `N` is a running number (1, 2, 3 … over the suggested
+  ones only). This is what the user replies with.
+- **`✅`** (no number) — a `confirmed` visit. It needs nothing; show it dimmed so the day
+  reads as complete.
+- omit `declined` visits.
+
+Formatting rules:
+- **Trim the name to its first comma-segment** (the venue): `Restaurant Méert, Rue de
+  l'Espérance, 23, Roubaix` → `Restaurant Méert`. Full detail is one tap away via the link.
+- **Never show a raw `id=`** — the user replies by number (you map number→id yourself; see
+  "Applying replies").
+- **Humanize duration:** `230` → `3h50`, `37` → `37min`.
+- **Human date** in the header: run `date -d DAY '+%a %-d %b'` as its own command → `Sun 29 Mar`.
+- **Flag low tracking:** append `(sparse)` after the point count when it's low (< ~50/day).
+
+HTML body shape:
 
 ```
-🗺 <b><a href="…date=DAY&status=all">Dawarich — DAY</a></b>
+🗺 <b><a href="…date=DAY&status=all">Dawarich · Sun 29 Mar</a></b>
+📍 <b>Roubaix, France</b> · 17 pts (sparse)
 
-📍 <b>Roubaix</b> (France) · 17 pts tracked
+2 stops to review, 1 already confirmed:
 
-<b>Stops</b>
-• 16:21–16:58 · <a href="…date=DAY&status=suggested">Restaurant Méert</a> · 37min
-• 17:46–18:09 · Le Grand Café · 23min
+❓ 1  <a href="…date=DAY&status=suggested">Restaurant Méert</a> · 16:21–16:58 · 37min
+❓ 2  Le Grand Café · 17:46–18:09 · 23min
+✅    Home · 19:20–23:10 · 3h50
 
-<b>Suggested — reply to fix</b>
-1. <code>id=330</code> Restaurant Méert · 16:21–16:58 · 37min
-2. <code>id=331</code> Le Grand Café · 17:46–18:09 · 23min
+Reply per number:  ok (keep) · a name (rename) · no (drop) · "merge 1 2"
 ```
 
-> **HTML-escape** all place names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`
-> (Dawarich names can contain `&`). Only `<b> <i> <a> <code>` etc. are allowed tags.
-> **No action buttons:** picoclaw does not process `callback_query`, so buttons that
-> aren't `url` buttons would do nothing. Confirm/rename/decline stays a text reply (below),
-> or the user taps **Review suggestions** and edits in Dawarich directly.
+If nothing needs review, drop the legend and end with `all confirmed ✅`. If the day has no
+visits at all, send a one-liner and check the point count (don't invent stops).
+
+> **HTML-escape** names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;` (Dawarich
+> names can contain `&`). Only `<b> <i> <a> <code>` tags are allowed. **No action buttons:**
+> picoclaw ignores `callback_query`, so the two `url` buttons are the only interactive
+> Telegram element — the actual keep/rename/drop/merge happens by text reply.
+
+### Applying replies (a later turn)
+
+The user replies to the recap later, in a fresh turn with no memory of the numbering, e.g.
+`1 ok, 2 Le Grand Café, 3 no` or `merge 1 2`. Re-fetch that day's **suggested** visits in the
+SAME sort (`started_at`) and number them 1, 2, 3 … to map numbers → visit ids, then apply:
+
+- `ok` / `keep` → `PATCH status=confirmed`
+- a free-text name → `PATCH name=… status=confirmed`
+- `no` / `drop` → `PATCH status=declined`
+- `merge A B` → `POST /visits/merge` with those ids
+
+Default to yesterday (the last recap's day) unless the user names a date. Reply confirming
+exactly what changed.
 
 ## The morning "recap + fix" loop
 
 This is the intended daily flow (also driven by a cron job):
 
 1. Compute DAY = yesterday.
-2. Post the recap (Part 1) as a rich Telegram message (section above): clickable header +
-   places + stops, with **Open timeline** / **Review suggestions** URL buttons.
-3. List the **suggested** visits for DAY as a numbered list with `id`, name, time, duration.
-4. Ask the user to reply with decisions, e.g. `1=Gym, 2=confirm, 3=merge 4, 5=decline`.
-5. Apply each decision with PATCH / bulk_update / merge above, then confirm what changed.
+2. Send ONE rich Telegram message (see "Sending" above): human-date header, place line, and a
+   single status-annotated list (❓ numbered = needs review, ✅ = already confirmed), a
+   `Reply per number` legend, and the two URL buttons.
+3. When the user replies (a later turn), map their numbers → visit ids by re-fetching that
+   day's suggested visits in the same order, then apply keep / rename / drop / merge.
+4. Reply confirming exactly what changed.
 
-Never mutate a visit without an explicit user decision — the recap and the suggestion list
-are read-only; PATCH/merge/bulk_update only run in response to the user's reply.
+Never mutate a visit without an explicit user decision — the recap is read-only;
+PATCH/merge/bulk_update only run in response to the user's reply.
 
 ## Notes / gotchas
 
