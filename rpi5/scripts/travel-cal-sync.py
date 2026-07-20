@@ -95,7 +95,7 @@ TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 # search is client-side with no per-message URL scheme (and hydroxide exposes no
 # Proton message id), so this can only open Proton Mail — the subject/date in the
 # description is what lets you find the exact message (local search).
-PROTON_MAIL_URL = os.environ.get("PROTON_MAIL_URL", "https://mail.proton.me/u/0/all-mail")
+PROTON_MAIL_URL = os.environ.get("PROTON_MAIL_URL", "https://mail.proton.me/u/2/all-mail")
 
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
@@ -127,6 +127,30 @@ NEGATIVE_SUBJECT_RE = re.compile(
 
 TRAVEL_TYPES = {"stay", "flight", "train", "bus", "ferry", "car"}
 
+# Map a sender to a human platform label shown on the event (title prefix +
+# iCal CATEGORIES) — e.g. an Airbnb reservation reads as "Airbnb".
+SOURCE_PLATFORMS = (
+    ("airbnb.", "Airbnb"), ("booking.com", "Booking.com"), ("hotels.com", "Hotels.com"),
+    ("expedia.", "Expedia"), ("agoda.", "Agoda"), ("vrbo.", "Vrbo"), ("abritel.", "Abritel"),
+    ("marriott.", "Marriott"), ("accor.", "Accor"), ("hilton.", "Hilton"), ("ihg.com", "IHG"),
+    ("thetrainline.", "Trainline"), ("trainline.", "Trainline"),
+    ("sncf-connect.", "SNCF Connect"), ("oui.sncf", "SNCF"), ("sncf.", "SNCF"),
+    ("eurostar.", "Eurostar"), ("flixbus.", "FlixBus"), ("blablacar.", "BlaBlaCar"),
+    ("renfe.", "Renfe"), ("trenitalia.", "Trenitalia"),
+    ("airfrance.", "Air France"), ("klm.", "KLM"), ("easyjet.", "easyJet"),
+    ("ryanair.", "Ryanair"), ("transavia.", "Transavia"), ("lufthansa.", "Lufthansa"),
+    ("vueling.", "Vueling"), ("wizzair.", "Wizz Air"),
+    ("britishairways.", "British Airways"), ("ba.com", "British Airways"),
+)
+
+
+def source_platform(frm):
+    frm = (frm or "").lower()
+    for sub, label in SOURCE_PLATFORMS:
+        if sub in frm:
+            return label
+    return ""
+
 SYSTEM_PROMPT = (
     "You extract TRAVEL bookings from a single email. A travel booking is "
     "lodging (hotel/Airbnb/rental), a flight, a train, a bus/coach, a ferry, or "
@@ -146,6 +170,9 @@ SYSTEM_PROMPT = (
     "                           // flights/trains: departure datetime (YYYY-MM-DDTHH:MM, local)\n"
     '  "end": str,              // ISO 8601. stays: check-out DATE. transit: arrival datetime; "" if unknown\n'
     '  "all_day": bool,         // true for stays; false for flights/trains\n'
+    '  "checkin_time": str,     // STAYS only: check-in/arrival time HH:MM (24h) if the\n'
+    '                           // email states it, e.g. "16:00"; "" if unknown\n'
+    '  "checkout_time": str,    // STAYS only: check-out/departure time HH:MM; "" if unknown\n'
     '  "confirmation_code": str,// booking/confirmation ref; "" if none\n'
     '  "notes": str             // short extra detail; "" if none\n'
     "}\n"
@@ -433,9 +460,20 @@ def build_ics(b, uid):
     """Build a VCALENDAR string. Raises ValueError if start/end are unparseable
     (the caller treats that as a permanent skip, not a transient write failure).
     Guarantees DTEND > DTSTART so sabre-dav/Nextcloud never rejects the event."""
+    typ = b.get("type")
     all_day = bool(b.get("all_day"))
-    start = _parse_dt(b["start"], all_day)
+    start_raw = b["start"]
     end_raw = b.get("end") or ""
+    ci = (b.get("checkin_time") or "").strip()
+    co = (b.get("checkout_time") or "").strip()
+    tm = re.compile(r"^\d{1,2}:\d{2}$")
+    # Stays: if the email gave check-in AND check-out times, emit a TIMED event so
+    # the arrival and departure times show, instead of an all-day block.
+    if typ == "stay" and tm.match(ci) and tm.match(co) and end_raw:
+        all_day = False
+        start_raw = f"{start_raw[:10]}T{ci}"
+        end_raw = f"{end_raw[:10]}T{co}"
+    start = _parse_dt(start_raw, all_day)
     end = _parse_dt(end_raw, all_day) if end_raw else None
     # Guarantee a positive duration (all-day DTEND is exclusive; a zero-length or
     # reversed span — e.g. tz-confused transit — is rejected by the server).
@@ -446,6 +484,10 @@ def build_ics(b, uid):
         bad = True
     if bad:
         end = start + default
+    # Title prefixed with the source platform, e.g. "Airbnb · Mélissa Manté — …".
+    title = b.get("title") or "Travel booking"
+    platform = b.get("_platform") or ""
+    summary = f"{platform} · {title}" if platform and platform.lower() not in title.lower() else title
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -453,24 +495,32 @@ def build_ics(b, uid):
         "BEGIN:VEVENT",
         f"UID:{uid}",
         "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
-        f"SUMMARY:{esc(b.get('title') or 'Travel booking')}",
+        f"SUMMARY:{esc(summary)}",
         "DTSTART" + _fmt_dt(start, all_day),
         "DTEND" + _fmt_dt(end, all_day),
     ]
+    if platform:
+        lines.append("CATEGORIES:" + esc(platform))
     if b.get("location"):
         lines.append(f"LOCATION:{esc(b['location'])}")
+    # Description names the EXACT source email (from / subject / date) so it can be
+    # found by local search, plus a Proton Mail link. Proton exposes no per-message
+    # URL over hydroxide, so the link opens the mailbox, not the single message.
     desc = []
     if b.get("confirmation_code"):
         desc.append("Ref: " + b["confirmation_code"])
     if b.get("notes"):
         desc.append(b["notes"])
-    # Link back to the source email. Proton has no per-message URL, so this opens
-    # Proton Mail and the subject/date below is what pinpoints it (local search).
+    src_from = b.get("_source_from")
     src_subject = b.get("_source_subject")
     src_date = b.get("_source_date")
     src_link = b.get("_source_link")
-    if src_subject:
-        desc.append(f"Email: {src_subject}" + (f" ({src_date})" if src_date else ""))
+    if src_subject or src_from:
+        meta = ", ".join(p for p in [
+            f"from {src_from}" if src_from else "",
+            f"on {src_date}" if src_date else "",
+        ] if p)
+        desc.append(f'Email: "{src_subject or ""}"' + (f" ({meta})" if meta else ""))
     if src_link:
         desc.append(src_link)
     desc.append("added by travel-cal-sync")
@@ -610,9 +660,11 @@ def scan(M, state, dry_run):
             if ref_date < cutoff:
                 continue
             # Source-email breadcrumbs for the event description / URL.
+            b["_source_from"] = frm
             b["_source_subject"] = subj
             b["_source_date"] = recv_date.isoformat() if recv_date else None
             b["_source_link"] = PROTON_MAIL_URL
+            b["_platform"] = source_platform(frm)
             uid = booking_uid(b)
             if uid in done_uids:
                 continue
