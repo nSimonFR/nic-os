@@ -91,12 +91,6 @@ NC_WEB = CALDAV_HOME.split("/remote.php")[0]
 TG_TOKEN_FILE = os.environ.get("TELEGRAM_TOKEN_FILE", "/run/agenix/telegram-bot-token")
 TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
 
-# Link put in each event's description pointing back at the source mailbox. Proton
-# search is client-side with no per-message URL scheme (and hydroxide exposes no
-# Proton message id), so this can only open Proton Mail — the subject/date in the
-# description is what lets you find the exact message (local search).
-PROTON_MAIL_URL = os.environ.get("PROTON_MAIL_URL", "https://mail.proton.me/u/2/all-mail")
-
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
 SENDER_DOMAINS = (
@@ -504,8 +498,9 @@ def build_ics(b, uid):
     if b.get("location"):
         lines.append(f"LOCATION:{esc(b['location'])}")
     # Description names the EXACT source email (from / subject / date) so it can be
-    # found by local search, plus a Proton Mail link. Proton exposes no per-message
-    # URL over hydroxide, so the link opens the mailbox, not the single message.
+    # found by Proton's (client-side) local search. No mailbox link — Proton exposes
+    # no per-message URL over hydroxide, and a link that only opens the mailbox is
+    # not useful, so it's omitted.
     desc = []
     if b.get("confirmation_code"):
         desc.append("Ref: " + b["confirmation_code"])
@@ -514,19 +509,14 @@ def build_ics(b, uid):
     src_from = b.get("_source_from")
     src_subject = b.get("_source_subject")
     src_date = b.get("_source_date")
-    src_link = b.get("_source_link")
     if src_subject or src_from:
         meta = ", ".join(p for p in [
             f"from {src_from}" if src_from else "",
             f"on {src_date}" if src_date else "",
         ] if p)
         desc.append(f'Email: "{src_subject or ""}"' + (f" ({meta})" if meta else ""))
-    if src_link:
-        desc.append(src_link)
     desc.append("added by travel-cal-sync")
     lines.append("DESCRIPTION:" + esc(" — ".join(desc)))
-    if src_link:  # clickable link on the event in Nextcloud
-        lines.append("URL:" + src_link)
     lines += ["END:VEVENT", "END:VCALENDAR"]
     return "\r\n".join(_fold(ln) for ln in lines) + "\r\n"
 
@@ -663,7 +653,6 @@ def scan(M, state, dry_run):
             b["_source_from"] = frm
             b["_source_subject"] = subj
             b["_source_date"] = recv_date.isoformat() if recv_date else None
-            b["_source_link"] = PROTON_MAIL_URL
             b["_platform"] = source_platform(frm)
             uid = booking_uid(b)
             if uid in done_uids:
