@@ -65,7 +65,7 @@ let
       # break most skills. Trust model here is the single-chat-ID allowlist
       # on the Telegram channel, not workspace isolation.
       restrict_to_workspace = false;
-      model_name = "primary";
+      model_name = "terra";
       max_tokens = 8192;
       context_window = 131072;
       temperature = 0.7;
@@ -75,14 +75,28 @@ let
     };
 
     # Flat model list keyed by `model_name`. Routing and fallback are done by
-    # tiny-llm-gate, not PicoClaw. `primary` uses the "auto" virtual model
-    # which tries Ollama (gemma4:e4b) first and falls back to codex (gpt-5.5)
-    # when beast is unreachable. This gives proper Aperture observability
-    # (token counts, tool calls) when Ollama handles the request.
+    # tiny-llm-gate, not PicoClaw. The default is `terra` (GPT-5.6 Terra, the
+    # balanced coding tier); `sol` (flagship) and `luna` (high-volume) are
+    # selectable per-chat. Each 5.6 tier falls back to Ollama gemma4:e4b at the
+    # gate when codex/OAuth is down, so the assistant keeps answering (with
+    # Aperture observability on the local hop). gemma-*/qwen remain as explicit
+    # local-model picks.
     model_list = [
       {
-        model_name = "primary";
-        model = "openai/gpt-5.5";
+        model_name = "sol";
+        model = "openai/gpt-5.6"; # Sol — bare gpt-5.6 is OpenAI's flagship alias
+        api_base = litellmBase;
+        api_key = "unused";
+      }
+      {
+        model_name = "terra";
+        model = "openai/gpt-5.6-terra";
+        api_base = litellmBase;
+        api_key = "unused";
+      }
+      {
+        model_name = "luna";
+        model = "openai/gpt-5.6-luna";
         api_base = litellmBase;
         api_key = "unused";
       }

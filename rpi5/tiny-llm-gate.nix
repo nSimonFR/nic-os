@@ -104,6 +104,16 @@ in
         "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
         "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
 
+        # -- GPT-5.6 tiers (Sol / Terra / Luna), GA 2026-07-09. `gpt-5.6` is
+        #    OpenAI's alias for the flagship Sol; Terra is the balanced coding
+        #    tier, Luna the high-volume/extraction tier. Same gemma4:e4b
+        #    fallback as 5.5 so the bot keeps answering when codex/OAuth is down.
+        #    NB: the codex-surface ids for -terra/-luna are inferred, not yet
+        #    verified against a live call — confirm before relying on them.
+        "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6";       fallback = [ "gemma4:e4b" ]; };
+        "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
+
         # -- Anthropic (Claude) via the shared 2-account OAuth pool --
         "claude" = { provider = "claude"; upstream_model = "claude-opus-4-8"; };
 
@@ -140,6 +150,13 @@ in
         "openai/gpt-5.2"             = "gpt-5.2";
         "openai/gpt-5.3-codex"       = "gpt-5.3-codex";
         "openai/codex-auto-review"   = "codex-auto-review";
+        # GPT-5.6 tiers. `gpt-5.6-sol`/`gpt-5.6` both resolve to the flagship,
+        # mirroring OpenAI's own aliasing.
+        "gpt-5.6-sol"                = "gpt-5.6";
+        "openai/gpt-5.6"             = "gpt-5.6";
+        "openai/gpt-5.6-sol"         = "gpt-5.6";
+        "openai/gpt-5.6-terra"       = "gpt-5.6-terra";
+        "openai/gpt-5.6-luna"        = "gpt-5.6-luna";
 
         # AFFiNE hardcodes OpenAI GPT model names for its OpenAI provider.
         # Route through "auto" so beast-down falls back to codex.
