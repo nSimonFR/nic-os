@@ -42,6 +42,7 @@ Config via env (defaults suit rpi5):
 """
 import base64
 import email
+import email.header
 import email.utils
 import hashlib
 import html
@@ -71,6 +72,10 @@ LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "365"))
 STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/travel-cal-sync")
 STATE_FILE = os.path.join(STATE_DIR, "state.json")
 RESCAN_SECONDS = int(os.environ.get("RESCAN_SECONDS", "1200"))
+# Socket timeout for normal IMAP commands, so a black-holed connection surfaces
+# as an error the reconnect loop can handle instead of blocking forever.
+SOCKET_TIMEOUT = 300
+IDLE_DRAIN_TIMEOUT = 60  # finite timeout for the IDLE DONE-drain
 
 CALDAV_HOME = os.environ.get(
     "NEXTCLOUD_CALDAV_URL",
@@ -79,6 +84,9 @@ CALDAV_HOME = os.environ.get(
 NC_USER = os.environ.get("NEXTCLOUD_USER", "nsimon")
 NC_PASS_FILE = os.environ.get("NEXTCLOUD_PASS_FILE", "/run/agenix/travel-cal-nextcloud-password")
 NC_CAL = os.environ.get("NEXTCLOUD_CAL", "")
+# Nextcloud web base (for calendar deep links), derived from the CalDAV URL:
+# https://host/nextcloud/remote.php/dav/... -> https://host/nextcloud
+NC_WEB = CALDAV_HOME.split("/remote.php")[0]
 
 TG_TOKEN_FILE = os.environ.get("TELEGRAM_TOKEN_FILE", "/run/agenix/telegram-bot-token")
 TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
@@ -143,6 +151,17 @@ def read_file(path):
         return fh.read().strip()
 
 
+def decode_header(s):
+    """Decode an RFC 2047 header (=?utf-8?...?=) so encoded subjects match the
+    candidate regex and reach the model as real text, not mojibake."""
+    if not s:
+        return ""
+    try:
+        return str(email.header.make_header(email.header.decode_header(s)))
+    except Exception:  # noqa: BLE001
+        return s
+
+
 def load_state():
     try:
         with open(STATE_FILE) as fh:
@@ -156,8 +175,11 @@ def load_state():
 
 def save_state(s):
     os.makedirs(STATE_DIR, exist_ok=True)
-    # keep the seen-set bounded
-    s["seen"] = s["seen"][-5000:]
+    # Keep the seen-set bounded but comfortably larger than any plausible
+    # rescan-window (SINCE last_scan-2d) message count, so an in-window Message-ID
+    # is never evicted and reprocessed. (Re-processing is idempotent anyway via
+    # the stable UID, but this avoids wasted LLM/CalDAV calls.)
+    s["seen"] = s["seen"][-20000:]
     tmp = STATE_FILE + ".tmp"
     with open(tmp, "w") as fh:
         json.dump(s, fh)
@@ -167,6 +189,7 @@ def save_state(s):
 # ── IMAP ────────────────────────────────────────────────────────────────────
 def imap_connect():
     M = imaplib.IMAP4(IMAP_HOST, IMAP_PORT)
+    M.socket().settimeout(SOCKET_TIMEOUT)  # login/select/search/fetch can't hang forever
     M.login(PROTON_USER, read_file(PROTON_PASS_FILE))
     mbox = f'"{MAILBOX}"' if " " in MAILBOX else MAILBOX
     typ, _ = M.select(mbox, readonly=True)
@@ -259,6 +282,10 @@ def extract_booking(text):
         raise
     except urllib.error.URLError as e:
         raise UpstreamDown(f"gate unreachable: {e.reason}") from e
+    except (TimeoutError, socket.timeout) as e:
+        # Slow/asleep model host — treat like upstream-down so the daemon backs
+        # off instead of skipping this message as a one-off extract error.
+        raise UpstreamDown(f"gate timeout: {e}") from e
     data = _parse_json(content)
     # Normalise to a list of booking dicts: an email may hold several legs (a
     # round-trip = two flights), so the model may return an array — or wrap the
@@ -280,44 +307,97 @@ def _parse_json(content):
     try:
         return json.loads(content)
     except ValueError:
-        m = re.search(r"\{.*\}", content, re.S)
-        return json.loads(m.group(0)) if m else None
+        pass
+    # Fallback: pull the first JSON array or object out of surrounding prose.
+    # Must never raise — a raise here would deterministically reprocess the email
+    # on every scan (temperature=0 → identical bad output forever).
+    for pat in (r"\[.*\]", r"\{.*\}"):
+        m = re.search(pat, content, re.S)
+        if m:
+            try:
+                return json.loads(m.group(0))
+            except ValueError:
+                continue
+    return None
 
 
 # ── iCalendar / CalDAV ──────────────────────────────────────────────────────
 def esc(s):
-    return (s or "").replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+    return ((s or "").replace("\\", "\\\\").replace(";", "\\;")
+            .replace(",", "\\,").replace("\r", "").replace("\n", "\\n"))
 
 
-def _dt(value, all_day):
-    """Return an iCal property value fragment for start/end."""
+def _fold(line):
+    """Fold an iCalendar content line to <=75 octets (RFC 5545), never splitting a
+    multi-byte UTF-8 char. Continuation lines start with a single space."""
+    if len(line.encode()) <= 75:
+        return line
+    out, cur, cur_len = [], "", 0
+    for ch in line:
+        n = len(ch.encode())
+        limit = 75 if not out else 74  # continuation lines carry a leading space
+        if cur_len + n > limit:
+            out.append(cur)
+            cur, cur_len = ch, n
+        else:
+            cur += ch
+            cur_len += n
+    out.append(cur)
+    return "\r\n ".join(out)
+
+
+def _parse_dt(value, all_day):
+    """Parse a booking date/datetime. Raises ValueError on unparseable input."""
+    return datetime.fromisoformat(value[:10]).date() if all_day \
+        else datetime.fromisoformat(value)
+
+
+def _fmt_dt(dt, all_day):
+    """Format a date/datetime as an iCal DTSTART/DTEND value fragment."""
     if all_day:
-        d = datetime.fromisoformat(value[:10]).date()
-        return ";VALUE=DATE:" + d.strftime("%Y%m%d")
-    dt = datetime.fromisoformat(value)
+        return ";VALUE=DATE:" + dt.strftime("%Y%m%d")
     if dt.tzinfo is not None:
         return ":" + dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     return ":" + dt.strftime("%Y%m%dT%H%M%S")  # floating local time
 
 
 def booking_uid(b):
-    # Natural identity of a booking: its type + the dates. Keyed this way, the
-    # confirmation, reminder and itinerary emails for one stay all map to the
-    # SAME UID → a single calendar event (the confirmation code is often absent
-    # from some of those emails, so it can't be the identity).
+    # Natural identity of a booking, chosen so the confirmation / reminder /
+    # itinerary emails for ONE trip collapse to a single UID (confirmation codes
+    # are often absent from some of those emails, so they can't be the identity).
     typ = b.get("type", "x")
-    key = f"{typ}|{(b.get('start') or '')[:10]}|{(b.get('end') or '')[:10]}"
+    start = b.get("start") or ""
+    end = b.get("end") or ""
+    if typ == "stay":
+        # Lodging: identified by its dates. Reminder emails vary in wording but
+        # share dates. (Two unrelated stays with identical check-in AND check-out
+        # dates would collide — rare enough to accept.)
+        key = f"stay|{start[:10]}|{end[:10]}"
+    else:
+        # Transit: one day can hold several legs (A->B then B->C), so dates alone
+        # are not unique. Key on the full departure+arrival datetimes, which
+        # differ between legs but are stable across reminders of the same leg.
+        key = f"{typ}|{start}|{end}"
     return f"travelcal-{typ}-{hashlib.sha1(key.encode()).hexdigest()[:12]}@nic-os"
 
 
 def build_ics(b, uid):
+    """Build a VCALENDAR string. Raises ValueError if start/end are unparseable
+    (the caller treats that as a permanent skip, not a transient write failure).
+    Guarantees DTEND > DTSTART so sabre-dav/Nextcloud never rejects the event."""
     all_day = bool(b.get("all_day"))
-    start = b["start"]
-    end = b.get("end") or ""
-    if not end:
-        # single point: default a stay to +1 day, transit to +2h
-        base = datetime.fromisoformat((start[:10] if all_day else start))
-        end = (base + (timedelta(days=1) if all_day else timedelta(hours=2))).isoformat()
+    start = _parse_dt(b["start"], all_day)
+    end_raw = b.get("end") or ""
+    end = _parse_dt(end_raw, all_day) if end_raw else None
+    # Guarantee a positive duration (all-day DTEND is exclusive; a zero-length or
+    # reversed span — e.g. tz-confused transit — is rejected by the server).
+    default = timedelta(days=1) if all_day else timedelta(hours=2)
+    try:
+        bad = end is None or end <= start
+    except TypeError:  # e.g. one side tz-aware, the other naive
+        bad = True
+    if bad:
+        end = start + default
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
@@ -326,8 +406,8 @@ def build_ics(b, uid):
         f"UID:{uid}",
         "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
         f"SUMMARY:{esc(b.get('title') or 'Travel booking')}",
-        "DTSTART" + _dt(start, all_day),
-        "DTEND" + _dt(end, all_day),
+        "DTSTART" + _fmt_dt(start, all_day),
+        "DTEND" + _fmt_dt(end, all_day),
     ]
     if b.get("location"):
         lines.append(f"LOCATION:{esc(b['location'])}")
@@ -339,7 +419,7 @@ def build_ics(b, uid):
     desc.append("added by travel-cal-sync")
     lines.append("DESCRIPTION:" + esc(" — ".join(desc)))
     lines += ["END:VEVENT", "END:VCALENDAR"]
-    return "\r\n".join(lines) + "\r\n"
+    return "\r\n".join(_fold(ln) for ln in lines) + "\r\n"
 
 
 def _nc_auth():
@@ -424,7 +504,9 @@ def scan(M, state, dry_run):
         mid = (head.get("Message-ID") or "").strip()
         if mid and mid in seen:
             continue
-        if not is_candidate(head.get("From"), head.get("Subject")):
+        frm = decode_header(head.get("From"))
+        subj = decode_header(head.get("Subject"))
+        if not is_candidate(frm, subj):
             if mid:
                 seen.add(mid); state["seen"].append(mid)
             continue
@@ -433,7 +515,7 @@ def scan(M, state, dry_run):
         if typ != "OK" or not d or not d[0]:
             continue
         msg = email.message_from_bytes(d[0][1])
-        text = f"From: {head.get('From')}\nSubject: {head.get('Subject')}\n\n{body_text(msg)}"
+        text = f"From: {frm}\nSubject: {subj}\n\n{body_text(msg)}"
         try:
             bookings = extract_booking(text)
         except UpstreamDown:
@@ -441,11 +523,10 @@ def scan(M, state, dry_run):
             # off. This message stays unseen, so it's retried once beast is up.
             raise
         except Exception as e:  # noqa: BLE001
-            log("extract error:", e, "— subject:", head.get("Subject"))
+            log("extract error:", e, "— subject:", subj)
             continue
-        if mid:
-            seen.add(mid); state["seen"].append(mid)
         cutoff = datetime.now(timezone.utc).date() - timedelta(days=PAST_GRACE_DAYS)
+        write_failed = False
         for b in bookings:
             if (not isinstance(b, dict) or not b.get("is_booking")
                     or not b.get("start") or b.get("type") not in TRAVEL_TYPES):
@@ -461,15 +542,34 @@ def scan(M, state, dry_run):
             uid = booking_uid(b)
             if uid in done_uids:
                 continue
-            done_uids.add(uid)
+            # Build first: a malformed booking (bad datetime) is a PERMANENT skip —
+            # dedupe it so it isn't retried, and don't set write_failed (the source
+            # message can still be marked seen). Only a CalDAV PUT failure is
+            # transient → write_failed → message left unseen for retry.
+            try:
+                ics = build_ics(b, uid)
+            except Exception as e:  # noqa: BLE001
+                log("skip malformed booking:", e, "—", b.get("title"))
+                done_uids.add(uid)
+                continue
             written = False
             if not dry_run:
                 try:
-                    caldav_put(uid, build_ics(b, uid))
+                    caldav_put(uid, ics)
                     written = True
                 except Exception as e:  # noqa: BLE001
                     log("caldav error:", e, "— booking:", b.get("title"))
+                    write_failed = True
+            # Dedupe a UID once safely written (or in dry-run); a failed write is
+            # left un-deduped so a later email for it can still succeed this scan.
+            if written or dry_run:
+                done_uids.add(uid)
             results.append((b, uid, written))
+        # Mark the source message processed ONLY if nothing failed to write, so a
+        # transient CalDAV outage doesn't permanently drop a booking — the message
+        # stays unseen and is retried on the next scan.
+        if mid and not write_failed:
+            seen.add(mid); state["seen"].append(mid)
     state["last_scan"] = int(time.time())
     return results
 
@@ -481,6 +581,13 @@ def fmt_booking(b):
     loc = f" @ {b['location']}" if b.get("location") else ""
     code = f" [{b['confirmation_code']}]" if b.get("confirmation_code") else ""
     return f"{b.get('type', '?'):5} {span}  {b.get('title', '')}{loc}{code}"
+
+
+def event_link(b):
+    """Deep link into the Nextcloud Calendar app at the trip's start date (month
+    view), so the Telegram message links straight to the appointment."""
+    date = (b.get("start") or "")[:10] or "now"
+    return f"{NC_WEB}/apps/calendar/dayGridMonth/{date}"
 
 
 # ── IDLE ────────────────────────────────────────────────────────────────────
@@ -503,19 +610,24 @@ def idle_wait(M, timeout):
     except socket.timeout:
         pass
     finally:
-        M.socket().settimeout(None)
+        # Finite (NOT None): a black-holed connection must not wedge the drain
+        # forever. A timeout here raises and the daemon's reconnect loop handles it.
+        M.socket().settimeout(IDLE_DRAIN_TIMEOUT)
         M.send(b"DONE\r\n")
         while True:  # drain to the tagged completion
             line = M.readline()
             if not line or line.startswith(tag):
                 break
+        M.socket().settimeout(SOCKET_TIMEOUT)  # restore for subsequent commands
     return woken
 
 
 # ── modes ───────────────────────────────────────────────────────────────────
 def run_dry_run():
-    state = load_state()
-    state["last_scan"] = 0  # force full backfill window for the review
+    # Fresh state (NOT the daemon's persisted state): re-evaluate the entire
+    # LOOKBACK window so the review list is complete, regardless of what the
+    # running daemon has already marked seen.
+    state = {"seen": [], "last_scan": 0}
     M = imap_connect()
     try:
         results = scan(M, state, dry_run=True)
@@ -543,6 +655,7 @@ def run_list_calendars():
 
 def run_daemon():
     log("travel-cal-sync daemon starting")
+    M = None
     while True:
         try:
             M = imap_connect()
@@ -560,14 +673,22 @@ def run_daemon():
                 new = [r for r in results if r[2]]
                 if new:
                     log(f"added {len(new)} event(s)")
-                    telegram(
-                        "🧳 <b>Travel bookings added to calendar</b>\n"
-                        + "\n".join("• " + html.escape(fmt_booking(b)) for b, _, _ in new)
-                    )
+                    lines = [
+                        f'• {html.escape(fmt_booking(b))}\n'
+                        f'  <a href="{event_link(b)}">📅 Open in calendar</a>'
+                        for b, _, _ in new
+                    ]
+                    telegram("🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(lines))
                 # trigger: block on IDLE until new mail or the safety-net timeout
                 idle_wait(M, RESCAN_SECONDS)
         except Exception as e:  # noqa: BLE001
             log("daemon error, reconnecting in 30s:", type(e).__name__, e)
+            try:
+                if M is not None:
+                    M.logout()
+            except Exception:  # noqa: BLE001
+                pass
+            M = None
             time.sleep(30)
 
 
