@@ -166,5 +166,13 @@
       # Not secret, but the repo is public — kept out of git. root-readable;
       # epicgames-freegames-config (root oneshot) reads it into config.json.
     };
+    scale-bridge-env = {
+      file  = ./secrets/scale-bridge-env.age;
+      # RYOT_TOKEN + SHIM_KEY + body-comp profile (USER_HEIGHT/BIRTH_DATE/GENDER).
+      # owner scale-bridge (shim reads via EnvironmentFile); root (ble-scale-sync
+      # + the config.yaml activation script) reads it regardless of the bits.
+      owner = "scale-bridge";
+      mode  = "0400";
+    };
 };
 }
