@@ -24,11 +24,14 @@ injected into picoclaw's environment from `/run/agenix/picoclaw-env`, so you do 
 need to set it yourself — just use `$DAWARICH_API_KEY`.
 
 ```bash
-export DAWARICH_BASE_URL="${DAWARICH_BASE_URL:-http://127.0.0.1:13900}"
+export DAWARICH_BASE_URL="${DAWARICH_BASE_URL:-http://127.0.0.1:13900}"   # API (loopback)
+export DAWARICH_WEB_URL="${DAWARICH_WEB_URL:-https://rpi5.gate-mintaka.ts.net:3900}"  # UI (for user-facing links)
 AUTH=(-H "Authorization: Bearer $DAWARICH_API_KEY")
 ```
 
-Reuse `"${AUTH[@]}"` in every request below.
+Reuse `"${AUTH[@]}"` in every request below. `DAWARICH_BASE_URL` is loopback and only
+reachable from rpi5 — never put it in a message. Links you send the user must use
+`DAWARICH_WEB_URL` (the Tailscale Serve URL, reachable from their phone on the tailnet).
 
 > **Exec-guard note:** picoclaw's exec safety guard blocks any `$(...)` command
 > substitution, so never inline `$(date …)` or `KEY=$(cat …)`. When you need a date,
@@ -36,6 +39,17 @@ Reuse `"${AUTH[@]}"` in every request below.
 > printed value, then paste the literal date (e.g. `2026-07-19`) into the URL. Env-var
 > expansion like `$DAWARICH_API_KEY` and array use like `"${AUTH[@]}"` are fine — those
 > are not command substitution.
+
+## Dawarich deep links (for user-facing messages)
+
+The modern UI is `/map/v2` with a timeline panel that takes a date and a status filter.
+Build links off `DAWARICH_WEB_URL` so they open the right day straight from Telegram:
+
+- **Full day timeline:** `$DAWARICH_WEB_URL/map/v2?panel=timeline&date=DAY&status=all`
+- **Review suggestions (the fix view):** `$DAWARICH_WEB_URL/map/v2?panel=timeline&date=DAY&status=suggested`
+
+`DAY` is `YYYY-MM-DD` (e.g. `2026-07-19`). Always include a link to the suggestions view
+in the daily message so the user can also fix the timeline visually in one tap.
 
 ## Quick connectivity check
 
@@ -171,12 +185,69 @@ curl -fsS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
 
 ---
 
+## Sending the daily message to Telegram (rich)
+
+When this runs as the daily job (channel `telegram`), send the recap yourself via the
+Bot API so you get HTML formatting **and** tap-through buttons — don't rely on picoclaw's
+plain-text channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is
+in `$TELEGRAM_CHAT_ID` (exported for the service).
+
+Use `parse_mode=HTML`. Make place names and the header clickable, and attach an inline
+keyboard of **URL buttons** (deep links from the section above). Build the message body and
+`reply_markup` in files (avoids `$(...)`), then POST:
+
+```bash
+# ...after writing $work/message.html (HTML) and $work/markup.json ...
+TOKEN=$(cat /run/agenix/telegram-bot-token)
+curl -fsS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
+  -d chat_id="$TELEGRAM_CHAT_ID" \
+  -d parse_mode=HTML \
+  -d link_preview_options='{"is_disabled":true}' \
+  --data-urlencode text@"$work/message.html" \
+  --data-urlencode reply_markup@"$work/markup.json"
+```
+
+Add `--max-time 15` to every `curl` in the send script — the exec tool kills a command
+after ~60s, and three API calls + formatting can approach that on a slow day.
+
+`markup.json` — two URL buttons (these work with no bot-side handling; Telegram opens them):
+
+```json
+{"inline_keyboard":[[
+  {"text":"🗺 Open timeline","url":"https://rpi5.gate-mintaka.ts.net:3900/map/v2?panel=timeline&date=2026-07-19&status=all"},
+  {"text":"✅ Review suggestions","url":"https://rpi5.gate-mintaka.ts.net:3900/map/v2?panel=timeline&date=2026-07-19&status=suggested"}
+]]}
+```
+
+HTML body shape (link the header to the day, and each stop name to the suggestions view):
+
+```
+🗺 <b><a href="…date=DAY&status=all">Dawarich — DAY</a></b>
+
+📍 <b>Roubaix</b> (France) · 17 pts tracked
+
+<b>Stops</b>
+• 16:21–16:58 · <a href="…date=DAY&status=suggested">Restaurant Méert</a> · 37min
+• 17:46–18:09 · Le Grand Café · 23min
+
+<b>Suggested — reply to fix</b>
+1. <code>id=330</code> Restaurant Méert · 16:21–16:58 · 37min
+2. <code>id=331</code> Le Grand Café · 17:46–18:09 · 23min
+```
+
+> **HTML-escape** all place names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;`
+> (Dawarich names can contain `&`). Only `<b> <i> <a> <code>` etc. are allowed tags.
+> **No action buttons:** picoclaw does not process `callback_query`, so buttons that
+> aren't `url` buttons would do nothing. Confirm/rename/decline stays a text reply (below),
+> or the user taps **Review suggestions** and edits in Dawarich directly.
+
 ## The morning "recap + fix" loop
 
 This is the intended daily flow (also driven by a cron job):
 
 1. Compute DAY = yesterday.
-2. Post a short recap (Part 1): cities, tracking health, and the ordered list of stops.
+2. Post the recap (Part 1) as a rich Telegram message (section above): clickable header +
+   places + stops, with **Open timeline** / **Review suggestions** URL buttons.
 3. List the **suggested** visits for DAY as a numbered list with `id`, name, time, duration.
 4. Ask the user to reply with decisions, e.g. `1=Gym, 2=confirm, 3=merge 4, 5=decline`.
 5. Apply each decision with PATCH / bulk_update / merge above, then confirm what changed.
