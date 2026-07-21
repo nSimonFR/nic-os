@@ -21,6 +21,14 @@
 # The DATABASE_URL (with password), SERVER_ADMIN_ACCESS_TOKEN and SESSION_SECRET
 # come from the agenix env file so secrets never enter the world-readable Nix
 # store.
+#
+# MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN also lives in that env file. Upstream Ryot
+# binaries fetch shared metadata-provider keys at runtime, gated by a compile-time
+# UNKEY_ROOT_KEY that ryot-nix builds set to "" — so our from-source build ships
+# with NO TMDB key and every movie/show metadata lookup 401s ("Failed to retrieve
+# metadata details"), breaking imports AND live Plex tracking. Fix: supply a free
+# TMDB v4 "API Read Access Token" (themoviedb.org/settings/api) via this env var
+# (env prefix MOVIES_AND_SHOWS_TMDB_, field access_token — see ryot config crate).
 { config, pkgs, lib, pgHost, tailnetFqdn, ... }:
 let
   backendPort  = 13352; # Rust backend (localhost)
@@ -68,7 +76,7 @@ in
     enable          = true;
     inherit backendPort frontendPort proxyPort;
     frontendUrl     = "https://ryot.${tailnetFqdn}";
-    environmentFile = "/run/agenix/ryot-env"; # DATABASE_URL + SERVER_ADMIN_ACCESS_TOKEN + SESSION_SECRET
+    environmentFile = "/run/agenix/ryot-env"; # DATABASE_URL + SERVER_ADMIN_ACCESS_TOKEN + SESSION_SECRET + MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN
   };
 
   # The backend self-migrates on boot, so it must start after the role/password
