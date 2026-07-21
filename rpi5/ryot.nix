@@ -35,6 +35,45 @@ let
   frontendPort = 13351; # React-Router SSR (localhost)
   proxyPort    = 13350; # Caddy entrypoint; Tailscale Serve → here
   servePort    = 3700;  # external tailnet HTTPS port (see services-registry.nix)
+
+  # Ryot's SPA is now built with a /ryot/ base (ryot-nix frontend.nix basename +
+  # vite base), so it lives under /ryot/ *everywhere*. Re-root Caddy's path-mux
+  # under /ryot: backend routes strip the prefix (handle_path) then apply the stock
+  # rewrites; frontend routes KEEP the prefix (handle, no strip) since the SSR
+  # server expects the basename. Reuses the {$PORT}/{$CADDY_*_TARGET} env the
+  # ryot-nix module already sets on ryot-proxy. Mirrors ${cfg.package}/etc/ryot/Caddyfile.
+  caddyfile = pkgs.writeText "ryot-subpath-Caddyfile" ''
+    {
+      admin off
+      auto_https off
+    }
+
+    :{$PORT:8000} {
+      vars {
+        frontend_url {$CADDY_FRONTEND_TARGET:127.0.0.1:3000}
+        backend_url {$CADDY_BACKEND_TARGET:127.0.0.1:5000}
+      }
+
+      handle_path /ryot/_i/* {
+        rewrite * /webhooks/integrations{path}
+        reverse_proxy {vars.backend_url}
+      }
+      handle_path /ryot/backend* {
+        reverse_proxy {vars.backend_url}
+      }
+      handle_path /ryot/u/* {
+        rewrite * /api/sharing{path}?isAccountDefault=true
+        reverse_proxy {vars.frontend_url}
+      }
+      handle_path /ryot/_s/* {
+        rewrite * /api/sharing{path}
+        reverse_proxy {vars.frontend_url}
+      }
+      handle /ryot/* {
+        reverse_proxy {vars.frontend_url}
+      }
+    }
+  '';
 in
 {
   # ── PostgreSQL: ryot database + ryot role ─────────────────────────────────
@@ -75,7 +114,9 @@ in
   services.ryot = {
     enable          = true;
     inherit backendPort frontendPort proxyPort;
-    frontendUrl     = "https://ryot.${tailnetFqdn}";
+    # Public URL Ryot is served from, on the single 443 funnel front-proxy → sets
+    # backend FRONTEND_URL (absolute/share links). Ryot lives under /ryot/ now.
+    frontendUrl     = "https://${tailnetFqdn}/ryot";
     environmentFile = "/run/agenix/ryot-env"; # DATABASE_URL + SERVER_ADMIN_ACCESS_TOKEN + SESSION_SECRET + MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN
   };
 
@@ -85,4 +126,14 @@ in
     after    = [ "ryot-pg-setup.service" ];
     requires = [ "ryot-pg-setup.service" ];
   };
+
+  # Run the proxy with the /ryot-rooted Caddyfile instead of the stock root one
+  # baked into the package.
+  systemd.services.ryot-proxy.serviceConfig.ExecStart =
+    lib.mkForce "${pkgs.caddy}/bin/caddy run --adapter caddyfile --config ${caddyfile}";
+
+  # SSR loaders reach the backend through the re-rooted Caddy /ryot/backend route
+  # (module default is the stock /backend, which no longer exists in our Caddyfile).
+  systemd.services.ryot-frontend.environment.API_URL =
+    lib.mkForce "http://127.0.0.1:${toString proxyPort}/ryot/backend";
 }

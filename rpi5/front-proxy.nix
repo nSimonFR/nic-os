@@ -124,6 +124,18 @@ in
         '';
       };
 
+      # Ryot (media/life tracker, always-on). Prefix KEPT (no trailing-slash
+      # strip): Ryot's SSR frontend is built with a /ryot/ base + basename and its
+      # Caddy entrypoint (:13350) is re-rooted to mux under /ryot (see ryot.nix),
+      # so forward /ryot/* verbatim and let Ryot's Caddy own the sub-routing
+      # (frontend pages/assets, /ryot/backend GraphQL, /ryot/_i Plex webhook).
+      "= /ryot" = { return = "301 /ryot/"; };
+      "/ryot/" = {
+        proxyPass = "http://127.0.0.1:13350";
+        proxyWebsockets = true;
+        extraConfig = fwdHeaders;
+      };
+
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
