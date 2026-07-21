@@ -58,11 +58,15 @@ let
   gateModel = "gpt-5.5";
 
   # Reuse the exact skills + persona docs PicoClaw uses, so an A/B compares the
-  # agents, not two different skill sets. Both descend from OpenClaw's SKILL.md
-  # format so most port directly (some may need edits).
+  # agents (and migrated cron jobs run) against the same skill set, not a subset.
+  # Mirrors picoclaw.nix's skillsSource: shared cross-agent skills + picoclaw's
+  # local skills (dawarich, immich-memories, caldav-calendar, …) that several
+  # migrated jobs depend on. Both descend from OpenClaw's SKILL.md format so most
+  # port directly (some may need edits).
   skillsSource = pkgs.runCommand "hermes-skills" { } ''
     mkdir -p $out
     cp -r ${../../shared/skills}/. $out/
+    cp -rf ${../picoclaw/skills}/. $out/
   '';
   documentsSource = ../picoclaw/documents;
 
