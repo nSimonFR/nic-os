@@ -15,6 +15,7 @@ in {
   "airtrail-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "airtrail-pg-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "ryot-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "ryot-import-env.age".publicKeys     = [ nsimon-age nsimon-ed25519 ];
   "ryot-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
