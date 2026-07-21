@@ -115,9 +115,15 @@ let
     # (nSimon + Alfie) for a true A/B on the same channel.
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
+    # TELEGRAM_HOME_CHANNEL pins where Hermes delivers cron results + proactive
+    # messages (gateway/config.py:1741) — nSimon's DM (chat_id == user id for a
+    # private chat). Set declaratively rather than via /sethome, which would be
+    # wiped when this setup script regenerates config.yaml on the next restart.
     ${pkgs.coreutils}/bin/cat > ${hermesHome}/.env <<EOF
     TELEGRAM_BOT_TOKEN=$tg_tok
     TELEGRAM_ALLOWED_USERS=${toString telegramChatId},8627259779
+    TELEGRAM_HOME_CHANNEL=${toString telegramChatId}
+    TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
 
