@@ -102,6 +102,15 @@ let
       enabled = true;
       threshold = 0.85;
     };
+
+    # External memory provider. `holographic` is the local, zero-API-key store
+    # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real
+    # upgrade over the built-in flat markdown recall, and it needs no cloud key.
+    # NOTE: true dense-vector semantic recall would need an embedding endpoint;
+    # the gate advertises embedding models but currently routes them to beast
+    # (502 when beast is asleep), so holographic runs in its always-available
+    # local/FTS5 mode here rather than depending on that intermittent upstream.
+    memory.provider = "holographic";
   };
 
   configFile = pkgs.writeText "hermes-config.yaml" (builtins.toJSON hermesConfig);
