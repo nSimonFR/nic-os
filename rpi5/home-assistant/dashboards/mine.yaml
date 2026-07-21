@@ -1,0 +1,168 @@
+# Home Assistant "Mine" dashboard - versioned in nic-os (YAML mode).
+# Loaded via services.home-assistant activation in rpi5/home-assistant.nix.
+# Edit here + rebuild; NOT editable from the HA UI.
+views:
+- title: Home
+  sections:
+  - type: grid
+    cards:
+    - type: heading
+      heading_style: title
+      heading: General
+    - clock_style: digital
+      clock_size: large
+      time_format: '24'
+      show_seconds: true
+      no_background: false
+      type: clock
+      grid_options:
+        columns: 12
+        rows: 3
+    - type: gauge
+      entity: sensor.nphone_battery_level
+      needle: false
+      severity:
+        green: 33
+        yellow: 20
+        red: 0
+      grid_options:
+        columns: 6
+        rows: 3
+    - show_current: true
+      show_forecast: true
+      type: weather-forecast
+      entity: weather.forecast_home
+      forecast_type: hourly
+      grid_options:
+        rows: 3
+        columns: 30
+      forecast_slots: 7
+    - square: false
+      type: grid
+      cards:
+      - square: true
+        type: grid
+        cards:
+        - type: thermostat
+          entity: climate.living_room_salon
+          features:
+          - type: climate-hvac-modes
+            hvac_modes:
+            - auto
+            - heat
+            - 'off'
+        - type: thermostat
+          entity: climate.kitchen_cuisine
+          features:
+          - type: climate-hvac-modes
+            hvac_modes:
+            - auto
+            - heat
+            - 'off'
+        - type: thermostat
+          entity: climate.bedroom_chambre
+          features:
+          - type: climate-hvac-modes
+            hvac_modes:
+            - auto
+            - heat
+            - 'off'
+        - type: thermostat
+          entity: climate.bathroom_sdb
+          features:
+          - type: climate-hvac-modes
+            hvac_modes:
+            - auto
+            - heat
+            - 'off'
+        grid_options:
+          columns: 12
+          rows: auto
+        columns: 2
+      - square: false
+        type: grid
+        cards:
+        - type: statistics-graph
+          grid_options:
+            columns: 24
+            rows: auto
+          entities:
+          - sensor.essentielle_verte_6_kva_base_live_consumption
+          title: Voltalis Consumption
+          days_to_show: 30
+          period: day
+          chart_type: line
+          stat_types:
+          - mean
+          - min
+          - max
+        - chart_type: bar
+          period: day
+          type: statistics-graph
+          title: Linky Energy (kWh)
+          stat_types:
+          - state
+          entities:
+          - linky:07233719170885
+          grid_options:
+            columns: 24
+            rows: auto
+          logarithmic_scale: false
+          days_to_show: 365
+        columns: 1
+      grid_options:
+        columns: 36
+        rows: auto
+      columns: 2
+    - square: false
+      type: grid
+      cards:
+      - show_state: true
+        show_name: true
+        camera_view: auto
+        fit_mode: cover
+        type: picture-entity
+        entity: camera.intratone_0612356362_intercom
+        camera_image: camera.intratone_0612356362_intercom
+        grid_options:
+          columns: 12
+          rows: auto
+        show_entity_picture: false
+      - type: tile
+        entity: lock.intratone_0612356362_door
+        show_entity_picture: false
+        hide_state: false
+        vertical: false
+        features:
+        - type: lock-commands
+        features_position: inline
+      - type: logbook
+        target:
+          entity_id:
+          - event.intratone_0612356362_doorbell
+        hours_to_show: 8760
+        grid_options:
+          columns: 15
+          rows: 8
+      columns: 1
+      grid_options:
+        rows: auto
+    - type: horizontal-stack
+      cards:
+      - type: entities
+        title: SDB Towel Warmup
+        entities:
+        - entity: automation.sdb_towel_warmup_start
+          name: Start
+        - entity: automation.sdb_towel_warmup_stop
+          name: Stop
+      - type: entities
+        entities:
+        - select.program
+      - type: entities
+        entities:
+        - button.sfr_box_restart
+      grid_options:
+        columns: 48
+    column_span: 4
+  cards: []

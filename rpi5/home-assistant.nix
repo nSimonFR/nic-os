@@ -84,6 +84,22 @@ let
       runHook postInstall
     '';
   };
+
+  # Lovelace registration block appended once to the (otherwise unmanaged)
+  # configuration.yaml. Kept as a writeText file so the activation script can
+  # `cat` it in verbatim — avoids heredoc/Nix-interpolation quoting pitfalls.
+  lovelaceInclude = pkgs.writeText "nic-os-lovelace.yaml" ''
+
+    # nic-os-managed: lovelace-dashboards
+    lovelace:
+      dashboards:
+        mine-dashboard:
+          mode: yaml
+          title: Mine
+          icon: mdi:account
+          show_in_sidebar: true
+          filename: dashboards/mine.yaml
+  '';
 in
 {
   # ── Native Home Assistant service ─────────────────────────────────────
@@ -156,6 +172,32 @@ in
     if [ -d /var/lib/hass/custom_components ]; then
       find /var/lib/hass/custom_components -maxdepth 1 -mindepth 1 -type d \
         -exec rm -rf {} +
+    fi
+  '';
+
+  # Versioned "Mine" dashboard: load the repo-tracked YAML dashboard in YAML
+  # mode. The dashboard file is symlinked into the config dir at a stable path
+  # so the store hash can change on rebuild without editing configuration.yaml,
+  # and the lovelace registration is injected once (marker-guarded, same idiom
+  # as the automation include above). configuration.yaml stays otherwise
+  # unmanaged — if the user has already added a `lovelace:` key by hand we skip
+  # rather than create a duplicate mapping key.
+  system.activationScripts.hassVersionedDashboards.text = ''
+    if [ ! -d /var/lib/hass ]; then
+      exit 0
+    fi
+
+    install -d -o hass -g hass /var/lib/hass/dashboards
+    ln -fns ${./home-assistant/dashboards/mine.yaml} /var/lib/hass/dashboards/mine.yaml
+
+    cfg=/var/lib/hass/configuration.yaml
+    if [ -e "$cfg" ] && ! grep -q 'nic-os-managed: lovelace-dashboards' "$cfg"; then
+      if grep -Eq '^[[:space:]]*lovelace:' "$cfg"; then
+        echo "hass: existing 'lovelace:' key in configuration.yaml; skipping managed dashboard block" >&2
+      else
+        cat ${lovelaceInclude} >> "$cfg"
+        chown hass:hass "$cfg"
+      fi
     fi
   '';
 
