@@ -1327,8 +1327,8 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1784148490,
-        "narHash": "sha256-UuQbaMnpTjtVnwT3xYmtR/c29eBeVQZiroVZdZiZ9Ws=",
+        "lastModified": 1784661222,
+        "narHash": "sha256-QgRaLw4EsVZTeC9Ob1qJyG7rXRNVktSass9VarzAtHE=",
         "path": "/home/nsimon/ryot-nix",
         "type": "path"
       },

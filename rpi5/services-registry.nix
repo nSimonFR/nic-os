@@ -207,11 +207,13 @@
           { field = "users"; label = "Users"; format = "number"; }
         ];
       }; }
-    # Ryot proxy (Caddy) is the entrypoint; it path-muxes backend+frontend and
-    # serves the SPA at root, so an own Serve port fits (no 443 path-mux needed).
+    # Ryot's SPA is built with a /ryot/ base (ryot-nix) and its Caddy entrypoint is
+    # re-rooted to mux under /ryot, so it's fronted by the 443 nginx path-mux at
+    # /ryot (see front-proxy.nix / ryot.nix) — this also makes the Plex webhook
+    # (…/ryot/_i/<id>) publicly reachable. proxied → no direct serve/funnel.
     # Widget reads Ryot's Postgres directly via homepage-stats.py (:8087/ryot,
     # daily-cached, postgres superuser) — no API token on the tile.
-    { port = 3700;  backend = "http://127.0.0.1:13350"; name = "Ryot";           icon = "ryot.svg";           category = "Apps"; description = "Media & life tracker";
+    { port = 443;   backend = "http://127.0.0.1:13350"; name = "Ryot";           icon = "ryot.svg";           category = "Apps"; description = "Media & life tracker"; proxied = true; path = "/ryot";
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:8087/ryot";
