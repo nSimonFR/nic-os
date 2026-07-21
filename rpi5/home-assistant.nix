@@ -9,16 +9,29 @@ let
   # pkgs.home-assistant and pkgs.buildHomeAssistantComponent are both overridden
   # in overlays.nix to use nixpkgs-unstable, keeping HA current and preventing
   # the "cannot downgrade" startup failure when .HA_VERSION > binary version.
+  # ppaglier/voltalis-homeassistant: fuller-featured Voltalis integration than
+  # the previous jdelahayes/ha-voltalis (sensor-only). Adds climate/thermostat
+  # control, water-heater, per-device preset/switch and global program selects.
+  # Same domain "voltalis" → this is a drop-in source swap. Config-entry data
+  # schema differs: ppaglier reads entry.data["username"] (jdelahayes stored
+  # "email") — the existing config entry must be migrated out-of-band (HA
+  # stopped; .storage/core.config_entries is HA-owned and rewritten at runtime,
+  # so it can't be patched from an activation script) or re-added via the UI.
+  # manifest requirements: aiohttp (HA core) + pydantic (>=2.12.2; HA ships 2.12.x).
   haVoltalis = pkgs.buildHomeAssistantComponent rec {
-    owner = "jdelahayes";
+    owner = "ppaglier";
     domain = "voltalis";
-    version = "master";
+    version = "0.6.6";
     src = pkgs.fetchFromGitHub {
-      owner = "jdelahayes";
-      repo = "ha-voltalis";
-      rev = "master";
-      sha256 = "sha256-lCqXtVEkhwmLYosWycO2GbECglEp9wfFFaIDuSFUBBk=";
+      owner = "ppaglier";
+      repo = "voltalis-homeassistant";
+      rev = version;
+      hash = "sha256-uliKbPrgTYSJ8J+Mv9z3hLzdVz/dNJolNChjPNKroBE=";
     };
+    dependencies = with config.services.home-assistant.package.python3Packages; [
+      aiohttp
+      pydantic
+    ];
   };
 
   # ha-intratone: reverse-engineered integration for the Intratone (Cogelec)
