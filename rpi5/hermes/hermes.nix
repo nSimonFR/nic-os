@@ -132,7 +132,12 @@ let
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
 
     # Skills + persona docs (copy, not symlink, so realpath stays inside HOME).
-    ${pkgs.rsync}/bin/rsync -aL --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+    # NOTE: deliberately NO --delete here. Hermes writes its own self-authored
+    # skills into this same dir (see hermes-skill-promote below); --delete would
+    # wipe them on every restart before they can be reviewed. The cost is that a
+    # skill removed from the repo lingers in the runtime dir until manually
+    # cleaned (Hermes' own `curator prune` archives idle ones anyway).
+    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${skillsSource}/" "${hermesHome}/skills/"
     ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
@@ -154,6 +159,35 @@ let
     export PATH="${pkgs.rtk}/bin:${pkgs.ripgrep}/bin:$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
     exec ${hermes}/bin/hermes gateway run
   '';
+
+  # Bridge Hermes' self-authored skills back into the repo for manual
+  # versioning. Hermes writes generated skills into ~/.hermes/skills/; this
+  # copies any that aren't builtin/seeded into the canonical checkout's
+  # shared/skills/ as UNTRACKED files, then nudges via Telegram. It never runs
+  # git — a human reviews and commits. Logic lives in hermes-skill-promote.sh
+  # (kept out of Nix per the repo's no-inline-scripts convention).
+  nicosRepo = "/home/nsimon/nic-os";
+  promoteWrapper = pkgs.writeShellScript "hermes-skill-promote-wrapper" ''
+    export HOME="/home/nsimon"
+    export HERMES_SKILLS_DIR="${hermesHome}/skills"
+    export DEST_SKILLS="${nicosRepo}/shared/skills"
+    export PICOCLAW_SKILLS="${nicosRepo}/rpi5/picoclaw/skills"
+    export TG_CHAT_ID="${toString telegramChatId}"
+    export TG_TOKEN_FILE="/run/agenix/telegram-bot-token"
+    export PATH="${
+      lib.makeBinPath [
+        hermes
+        pkgs.systemd
+        pkgs.rsync
+        pkgs.curl
+        pkgs.coreutils
+        pkgs.gawk
+        pkgs.gnugrep
+        pkgs.findutils
+      ]
+    }:$PATH"
+    exec ${pkgs.bash}/bin/bash ${./hermes-skill-promote.sh}
+  '';
 in
 {
   home.packages = [ hermes ];
@@ -174,5 +208,28 @@ in
     };
     # Only autostart when Hermes is the selected backend (see picoclaw.nix).
     Install.WantedBy = lib.optionals (clawBackend == "hermes") [ "default.target" ];
+  };
+
+  # Promote Hermes self-authored skills into the repo (untracked) for manual
+  # versioning. Oneshot driven by an hourly timer; the script no-ops when Hermes
+  # is inactive, so it's safe to leave the timer enabled regardless of backend.
+  systemd.user.services.hermes-skill-promote = {
+    Unit = {
+      Description = "Promote Hermes self-authored skills into nic-os (untracked, for manual versioning)";
+      After = [ "hermes.service" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${promoteWrapper}";
+    };
+  };
+  systemd.user.timers.hermes-skill-promote = {
+    Unit.Description = "Hourly promotion of Hermes self-authored skills into nic-os";
+    Timer = {
+      OnBootSec = "10min";
+      OnUnitActiveSec = "1h";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 }
