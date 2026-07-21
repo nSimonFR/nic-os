@@ -136,4 +136,35 @@ in
   # (module default is the stock /backend, which no longer exists in our Caddyfile).
   systemd.services.ryot-frontend.environment.API_URL =
     lib.mkForce "http://127.0.0.1:${toString proxyPort}/ryot/backend";
+
+  # ── Nightly Plex → Ryot watch-history sync (no Plex Pass) ─────────────────
+  # Ryot v10 has no working Plex pull for watch progress (yank only mirrors
+  # libraries; the sink webhook needs Plex Pass, which nSimon lacks). The only
+  # no-Plex-Pass path is to re-run the one-time Plex importer on a schedule — but
+  # it isn't idempotent (seen has no unique constraint), so scripts/ryot-plex-import.sh
+  # imports both shared servers, waits for the jobs, then dedups seen.
+  systemd.services.ryot-plex-import = {
+    description = "Nightly Plex → Ryot watch-history re-import + dedup";
+    after = [ "ryot-proxy.service" "ryot-backend.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "ryot";
+      # DATABASE_URL from ryot-env; RYOT_LOGIN_* + PLEX_IMPORT_SERVERS from ryot-import-env.
+      EnvironmentFile = [ "/run/agenix/ryot-env" "/run/agenix/ryot-import-env" ];
+      ExecStart = lib.getExe (pkgs.writeShellApplication {
+        name = "ryot-plex-import";
+        runtimeInputs = [ pkgs.curl pkgs.jq pkgs.postgresql pkgs.coreutils ];
+        text = builtins.readFile ./scripts/ryot-plex-import.sh;
+      });
+    };
+  };
+  systemd.timers.ryot-plex-import = {
+    description = "Nightly Plex → Ryot re-import";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 04:40:00";  # after the 03:00-04:00 backup window
+      Persistent = true;              # catch up a missed run if the Pi was off
+    };
+  };
 }

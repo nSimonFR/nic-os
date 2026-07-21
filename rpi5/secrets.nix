@@ -57,6 +57,11 @@
       owner = "ryot"; # EnvironmentFile for ryot-backend/ryot-frontend (DATABASE_URL + tokens)
       mode = "0400";
     };
+    ryot-import-env = {
+      file = ./secrets/ryot-import-env.age;
+      owner = "ryot"; # EnvironmentFile for ryot-plex-import.service (RYOT_LOGIN_* + PLEX_IMPORT_SERVERS)
+      mode = "0400";
+    };
     ryot-pg-password = {
       file = ./secrets/ryot-pg-password.age;
       owner = "postgres"; # ryot-pg-setup runs as postgres and reads this
