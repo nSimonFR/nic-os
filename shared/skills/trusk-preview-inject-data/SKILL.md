@@ -21,13 +21,19 @@ Prereqs: the preview env is deployed and healthy (see the `trusk-preview-deploy`
 
 ```bash
 CTX=trusk-staging-ts
-# 3) data-bo
+# 3) data-bo. Two variants:
+#   - do-1361-workflow-template-data-bo    → gated: first step check-argocd-app
+#         retries 20×60s until the env's ArgoCD app is Healthy+Synced, then FAILS.
+#   - poc-wf-data-bo-without-check-argocd  → SKIPS that gate. Use this on a preview
+#         whose aggregate app is Degraded/OutOfSync from bystander apps (very common:
+#         service-ratings-typeform init errors, a selfHeal-off backoffice, OutOfSync
+#         infra) but is functionally up (BO pod Running). Otherwise data-bo never seeds.
 cat <<EOF | kubectl --context $CTX -n awf-qa create -f -
 apiVersion: argoproj.io/v1alpha1
 kind: Workflow
 metadata: { generateName: data-bo-<name>- }
 spec:
-  workflowTemplateRef: { name: do-1361-workflow-template-data-bo }
+  workflowTemplateRef: { name: poc-wf-data-bo-without-check-argocd }
   arguments:
     parameters:
       - { name: STAGING_NAME, value: pr-<name> }
@@ -49,7 +55,7 @@ spec:
 EOF
 ```
 
-Verify template names/params first — they drift (`data-bo` is currently deployed as `do-1361-workflow-template-data-bo`):
+Verify template names/params first — they drift (the gated data-bo is currently `do-1361-workflow-template-data-bo`, the no-check one `poc-wf-data-bo-without-check-argocd`):
 ```bash
 kubectl --context $CTX -n awf-qa get workflowtemplates
 kubectl --context $CTX -n awf-qa get workflowtemplate workflow-gen-data \
@@ -83,6 +89,7 @@ kubectl --context $CTX -n awf-qa logs <wf> --container main   # or: follow the p
 ## Gotchas
 
 - **data-bo before gen-data** — no contract/org ⇒ order creation fails.
+- **The gated data-bo stalls on `check-argocd-app`** if the preview's ArgoCD app isn't `Healthy/Synced` — it retries 20×60s then fails, seeding nothing. Symptom: the workflow sits `Running` for ages and the `check-argocd-app` pod logs `❌ Application ArgoCD n'est pas Healthy … Retry dans 60 secondes` (`Tentative N/20`). Previews are routinely Degraded/OutOfSync from bystander apps, so prefer `poc-wf-data-bo-without-check-argocd`. Check the gate's live status: `kubectl -n awf-qa logs -l workflows.argoproj.io/workflow=<wf> -c main --tail=5`.
 - data-bo needs the **BO reachable + QA creds** (`trusk-automation-env` configMap+secret in `awf-qa`). If the preview BO crashlooped on env validation, fix it first (it happens — the BO needs `NEXT_PUBLIC_BO_URL` / `NEXT_PUBLIC_TRACK_PAGE_URL` / `NEXT_PUBLIC_TRUSK_BACKOFFICE_URL` injected in a preview namespace).
 - Order creation flows **SFTP → centiro EDI ingestion** — the preview's `centiro-edi-warehouse` / `centiro-data-grabber` must be running.
 - Volume = `RUN_COUNT × POINTS_COUNT`; too large ⇒ pod timeout (`activeDeadlineSeconds`). Start small (3×1).
