@@ -105,6 +105,9 @@
         ];
       }; }
     { port = 8123;  backend = "http://127.0.0.1:8123";  name = "Home Assistant"; icon = "home-assistant.svg"; category = "Apps"; description = "Home automation";
+      # Deep-link the tile straight to the "Mine" Lovelace dashboard
+      # (url_path "mine-dashboard" in home-assistant.nix) instead of HA's root.
+      path = "/mine-dashboard/";
       # Routed through the homepage-stats aggregator (:8087, daily-cached) like the
       # other customapi tiles rather than the native `homeassistant` widget that
       # polls HA directly. Counts can be up to the aggregator's REFRESH_INTERVAL
