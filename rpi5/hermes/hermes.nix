@@ -30,7 +30,7 @@
 #   - `api_mode = "chat"` forces /v1/chat/completions, dodging the Ollama-native
 #     probe hang (upstream #26489).
 #   - context_length ≥64k is required or hermes rejects the model at startup;
-#     gpt-5.5 (codex, via the gate) is declared at 131072.
+#     gpt-5.6-terra (via the gate) is declared at 131072.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
 #     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS is the sender allowlist.
 #   - The gate needs no auth, so api_key="unused" is a non-secret placeholder;
@@ -51,11 +51,12 @@ let
   # tiny-llm-gate exposes an OpenAI-compatible API at :4001 (loopback, no auth).
   # Reach it directly rather than via Aperture for reliability (no tailnet hop).
   gateBase = "${tinyLlmGateUrl}/v1";
-  # gpt-5.5 (codex-backed) has a >64k context window; the small gemma models do
-  # not, and hermes rejects sub-64k models at startup — so only gpt-5.5 here.
-  # (picoclaw's default moved to the gpt-5.6 terra/sol/luna tiers; keep hermes on
-  # a gate model verified to answer — bump this one line if the gate drops 5.5.)
-  gateModel = "gpt-5.5";
+  # gpt-5.6-terra (the balanced GPT-5.6 coding tier) has a >64k context window;
+  # the small gemma models don't, and hermes rejects sub-64k models at startup.
+  # Match PicoClaw's default (`terra`) so the A/B compares the two agents on the
+  # SAME model, not different ones. Alternatives on the gate: gpt-5.6-sol
+  # (flagship), gpt-5.6-luna (high-volume), gpt-5.5. Bump this one line to switch.
+  gateModel = "gpt-5.6-terra";
 
   # Reuse the exact skills + persona docs PicoClaw uses, so an A/B compares the
   # agents (and migrated cron jobs run) against the same skill set, not a subset.
