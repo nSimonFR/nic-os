@@ -94,9 +94,16 @@ in
     # (every wallet endpoint 406s → zero-balance snapshot → reverse materializer
     # sets cash = -holdings). Anchors the account to its preserved holdings value
     # instead. See nSimonFR/sure-nix#17.
+    #
+    # editable-linked-transaction-date: re-enable editing the date of
+    # connector-imported (linked?) transactions. Upstream disables the date
+    # field on any entry with an external_id, which is all of them here; the
+    # lock is UI-only (server permits :date and marks the entry user_modified
+    # so sync won't overwrite it). See nSimonFR/sure-nix#18.
     patchFlags = {
       auto-categorize-skip-transfers = true;
       coinstats-balance-holdings-fallback = true;
+      editable-linked-transaction-date = true;
     };
   };
 

@@ -1227,11 +1227,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1784617401,
-        "narHash": "sha256-zpJR7510D2BdHzH3J8LWnMvJrb/w5FPGEyJE/DmUgzM=",
+        "lastModified": 1784631691,
+        "narHash": "sha256-PUP+oQww4FSwzRYGVl7hcmq4i8I9G2NBqOXTe+vQ3Ds=",
         "owner": "nSimonFR",
         "repo": "sure-nix",
-        "rev": "837fea94e1684bac0d5ffea72926400b414d3c06",
+        "rev": "d5d6184d6387f9effe747a047bd345102c3bcf58",
         "type": "github"
       },
       "original": {
