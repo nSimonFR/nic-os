@@ -60,6 +60,28 @@ Use the mission's **`customer_id`** for both `truskCustomer` and IAM `client_id`
 
 **After any scope change the user must re-login** — Auth0/session caches the old scope.
 
+## Calendar config — unblock `/api/appointments` + the tracking postpone/cancel button
+On the tracking page the schedule / **"Annuler ma livraison"** (postpone) UI renders only when `DisplaySchedule` sees **both** `enableScheduleModule` (order-level: the flag + an `appointment_selected` status) **and** `appointmentsData` (`/api/appointments/:id` → `calendar.getFreeAppointments`). A fresh preview has no calendar for the order's delivery zone → `/api/appointments` returns **412 `config_missing` / `calendar_not_defined`** → `appointmentsData` falsy → **button hidden**. (Same gap blocks appointment validation and roundtrip availabilities.)
+
+`trusk-calendar` is **internal DB-backed** (schema `trusk`, no Google): 
+- `trusk.appointment_availabilities` (`delivery_zone, brand, tag, date_search_from, date_search_to, date_search_split`) = the **calendar + search config** in one row. Lookup is `(zone, brand)` then falls back to `(zone)` — the zone-level row uses `brand='#NONE#'`, `tag='deliveryZone==<zone>'` (brand rows use `tag='deliveryZone--brand==<zone>--<brand>'`).
+- `trusk.availabilities` = the actual bookable **slot events** per `tag` (only needed for a working appointment *picker*; the postpone/report path shows without slots).
+
+**Unblock a zone (e.g. `idf_paris_pc`)** — insert one config row with a **current** window (in-cluster, calendar pod):
+```bash
+CTX=trusk-staging-ts NS=pr-<name>
+CALP=$(kubectl --context $CTX -n $NS get po | awk '/trusk-calendar.*Running/{print $1;exit}')
+kubectl --context $CTX -n $NS exec $CALP -c trusk-calendar -- node -e '
+const {Client}=require("pg");const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER,password:process.env.POSTGRES_PASSWORD,database:process.env.POSTGRES_DB,connectionTimeoutMillis:8000});
+(async()=>{await c.connect();
+await c.query("insert into trusk.appointment_availabilities (delivery_zone,brand,tag,date_search_from,date_search_to,date_search_split,created_at,updated_at) values ($1,$2,$3,$4,$5,$6,now(),now())",
+  ["idf_paris_pc","#NONE#","deliveryZone==idf_paris_pc","2026-07-21T00:00:00.000Z","2026-08-12T00:00:00.000Z","2026-08-01T00:00:00.000Z"]);
+await c.end();console.log("seeded");})().catch(e=>console.log("ERR",e.message));'
+```
+Pitfalls: pass **explicit ISO timestamps** (a `now() - interval '1 day'` built with escaped quotes silently inserted NULL dates); the calendar pod's PG connect can hang — wrap with `timeout 60` and set `connectionTimeoutMillis`. Verify: `/api/appointments/<orderId>` (via the tracking svc in-cluster) → **200** with `dateSearchFrom/To` + `appointmentsByDate`. Copy real window/slot shapes from **staging** (`kubectl -n staging exec <trusk-calendar> …` → `trusk.appointment_availabilities where delivery_zone='<zone>'`) if you need bookable slots too.
+
+The order's `delivery_zone` is on the COA order (`flow.delivery_zone`) / `ikea_orders.log_order.flow_delivery_zone`.
+
 ## Gotchas
 - trusk-api user update is **POST /user/:id** (PUT → 405).
 - COA admin appointment-validate → **412** on fresh previews (no calendar); use `PUT /order/:id` with dates.
