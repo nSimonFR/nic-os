@@ -66,6 +66,16 @@
       file = ./secrets/ryot-pg-password.age;
       owner = "postgres"; # ryot-pg-setup runs as postgres and reads this
     };
+    steam-connector-env = {
+      file  = ./secrets/steam-connector-env.age;
+      owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service
+      mode  = "0400";
+    };
+    spotify-connector-env = {
+      file  = ./secrets/spotify-connector-env.age;
+      owner = "ryot-connector"; # EnvironmentFile for spotify-to-ryot.service
+      mode  = "0400";
+    };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";

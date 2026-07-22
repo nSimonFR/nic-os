@@ -163,6 +163,7 @@ in
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
     ./ryot.nix
+    ./ryot-connectors.nix
     ./scale-bridge.nix
     # ./open-webui.nix # DISABLED 2026-06-15: venv crash-loop (ExecStart exit 126, "venv/bin/open-webui: Permission denied") since the disk incident. Re-enable + rebuild the venv (rm -rf /var/lib/open-webui/venv) to restore.
     ./homepage.nix
