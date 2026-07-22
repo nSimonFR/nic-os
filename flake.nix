@@ -104,11 +104,12 @@
     };
     # Ryot — self-hosted media & life tracker (IgnisDa/ryot), built from source
     # (container-only upstream, not in nixpkgs). Same pattern as the others.
-    # NOTE: local path during bring-up; switch to github:nSimonFR/ryot-nix once
-    # published. The heavy Rust/Node compile is built locally on the Pi (no
-    # prebuild cache — see the garnix deprecation note in nixConfig below).
+    # Published at github:nSimonFR/ryot-nix (self-hosted Renovate bumps the version;
+    # nSimonFR-ai has push access). Bump with `nix flake lock --update-input ryot-nix`.
+    # Heavy Rust/Node compile is built locally on the Pi (no prebuild cache — see the
+    # garnix deprecation note in nixConfig below).
     ryot-nix = {
-      url = "path:/home/nsimon/ryot-nix";
+      url = "github:nSimonFR/ryot-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

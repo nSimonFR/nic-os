@@ -1327,14 +1327,17 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1784661222,
-        "narHash": "sha256-QgRaLw4EsVZTeC9Ob1qJyG7rXRNVktSass9VarzAtHE=",
-        "path": "/home/nsimon/ryot-nix",
-        "type": "path"
+        "lastModified": 1784667791,
+        "narHash": "sha256-j4j8sB0S1N2/Re/Bbxp+UMeIDMyjenYEC1QuQFEwmIo=",
+        "owner": "nSimonFR",
+        "repo": "ryot-nix",
+        "rev": "0d9572ffc776ffb28e1d3deed872168a717a49b4",
+        "type": "github"
       },
       "original": {
-        "path": "/home/nsimon/ryot-nix",
-        "type": "path"
+        "owner": "nSimonFR",
+        "repo": "ryot-nix",
+        "type": "github"
       }
     },
     "sure-nix": {
