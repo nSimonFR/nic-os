@@ -17,6 +17,8 @@ in {
   "ryot-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "ryot-import-env.age".publicKeys     = [ nsimon-age nsimon-ed25519 ];
   "ryot-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
+  "steam-connector-env.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
+  "spotify-connector-env.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
