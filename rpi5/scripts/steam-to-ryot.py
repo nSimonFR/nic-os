@@ -6,23 +6,28 @@ Steam is NOT a native Ryot source (only `igdb`/`giant_bomb` exist for games), so
 we resolve each Steam appid to an IGDB game id (via the Twitch/IGDB API) and push
 a `CompleteExport` payload to Ryot's Generic JSON integration webhook. Ryot's
 backend then resolves the IGDB id to full metadata (needs
-VIDEO_GAMES_TWITCH_CLIENT_ID/SECRET in ryot-env) and files the game under a
-collection, optionally with a play "seen".
-
-Idempotency (the sink has no seen dedup — re-pushing the same seen duplicates it):
-  * State in $STATE_DIR (steam-state.json) tracks, per appid, the last
-    playtime_forever we've pushed and whether the game is already in the
-    collection. A game is (re)sent only when it is new to the collection or when
-    its total playtime has grown.
-  * appid -> IGDB id resolutions are cached (steam-igdb-map.json) since IGDB is
-    rate-limited; a "" value marks a known-unmapped appid so we don't re-query.
+VIDEO_GAMES_TWITCH_CLIENT_ID/SECRET in ryot-env). Games attach to the library via
+a play "seen" — so only PLAYED games appear (the sink's `collections` field needs
+a collection_id + timestamps we can't supply, and a bad entry drops the game).
 
 Playtime model (best-effort — Steam exposes only cumulative time, no sessions or
 completion signal): each time playtime_forever grows by >= MIN_DELTA_MIN minutes
 we emit ONE seen carrying that delta as `manual_time_spent` (seconds). Total time
 spent therefore aggregates correctly; the trade-off is that each growth counts as
-a "seen"/completion in Ryot. A v2 could switch to the GraphQL API to keep exactly
-one evolving seen per game.
+a "seen" in Ryot.
+
+Idempotency + completion (mirrors the spotify connector / Ryot's YouTube Music
+integration):
+  * State $STATE_DIR/steam-state.json = {games:{appid:last_playtime_min},
+    pending:[...]}. A game is pushed only when its total playtime grew (the delta
+    is one seen); already-synced playtime is never re-pushed (no dup).
+  * A game new to Ryot lands as in_progress@0 because the backend resolves its
+    IGDB metadata asynchronously. Such first-ever games go into `pending` and are
+    re-pushed on the NEXT run — metadata now exists, so the re-push flips the seen
+    to completed in place. Known games complete immediately, so they never enter
+    pending and are never duplicated.
+  * appid -> IGDB id resolutions are cached (steam-igdb-map.json) since IGDB is
+    rate-limited; a "" value marks a known-unmapped appid so we don't re-query.
 
 Stdlib only. Config via environment:
   STEAM_API_KEY           Steam Web API key (steamcommunity.com/dev/apikey)   [required]
@@ -31,7 +36,6 @@ Stdlib only. Config via environment:
   TWITCH_CLIENT_SECRET    Twitch/IGDB app client secret                      [required]
   RYOT_WEBHOOK_URL        Ryot Generic JSON integration URL (.../ryot/_i/<slug>) [required]
   STATE_DIR               state directory                 (default /var/lib/ryot-connectors)
-  COLLECTION_NAME         collection to file games under  (default "Steam")
   MIN_DELTA_MIN           min playtime growth to log a seen, minutes (default 1)
 """
 
@@ -50,14 +54,15 @@ TWITCH_CLIENT_ID = os.environ.get("TWITCH_CLIENT_ID", "")
 TWITCH_CLIENT_SECRET = os.environ.get("TWITCH_CLIENT_SECRET", "")
 RYOT_WEBHOOK_URL = os.environ.get("RYOT_WEBHOOK_URL", "")
 STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/ryot-connectors")
-COLLECTION_NAME = os.environ.get("COLLECTION_NAME", "Steam")
 MIN_DELTA_MIN = int(os.environ.get("MIN_DELTA_MIN", "1"))
 
 STATE_FILE = os.path.join(STATE_DIR, "steam-state.json")
 IGDB_MAP_FILE = os.path.join(STATE_DIR, "steam-igdb-map.json")
 
-# IGDB external_games.category for Steam (EXTERNAL_GAME_CATEGORY_STEAM).
-IGDB_STEAM_CATEGORY = 1
+# IGDB external_games.external_game_source id for Steam (verified via
+# /v4/external_game_sources: id 1 = "Steam"). The older `category` field is
+# deprecated and no longer reliably matches Steam rows.
+IGDB_STEAM_SOURCE = 1
 
 
 def log(msg):
@@ -135,7 +140,7 @@ def resolve_igdb_ids(appids, token, igdb_map):
         uids = ",".join(f'"{a}"' for a in chunk)
         body = (
             f"fields game,uid; "
-            f"where category = {IGDB_STEAM_CATEGORY} & uid = ({uids}); "
+            f"where external_game_source = {IGDB_STEAM_SOURCE} & uid = ({uids}); "
             f"limit 500;"
         ).encode()
         req = urllib.request.Request(
@@ -162,10 +167,49 @@ def resolve_igdb_ids(appids, token, igdb_map):
     )
 
 
-def build_payload(games, igdb_map, state):
+def game_seen(seconds, ended_on):
+    return [
+        {
+            "progress": 100,
+            "manual_time_spent": seconds,  # Decimal-as-string
+            "ended_on": ended_on,
+            "providers_consumed_on": ["Steam"],
+        }
+    ]
+
+
+def game_item(igdb_id, name, seen):
+    return {
+        "lot": "video_game",
+        "source": "igdb",
+        "identifier": igdb_id,
+        "source_id": name,
+        # reviews + collections are non-optional in ImportOrExportMetadataItem;
+        # omitting them makes Ryot's strict deserialize drop the whole item.
+        # NOTE collections stays []: CollectionToEntityDetails needs collection_id +
+        # timestamps we can't supply from here, and a bad collection entry drops the
+        # whole game. Games therefore attach to the library via their seen (played
+        # games only — an unplayed game has no seen and so does not persist).
+        "reviews": [],
+        "collections": [],
+        "seen_history": seen,
+    }
+
+
+def build_payload(games, igdb_map, prev_games):
+    """Return (metadata, new_games, first_evers).
+
+    Push a game only when its total playtime grew (the delta is recorded as one
+    play "seen"); an unplayed game has no seen and cannot persist via the sink, so
+    it is skipped. `first_evers` are games never pushed before — they land as
+    in_progress@0 (Ryot resolves IGDB metadata asynchronously), so they are
+    re-pushed next run to complete (same two-phase trick the music connector uses).
+    `prev_games` maps appid -> last pushed playtime_forever (minutes).
+    """
     now = datetime.now(timezone.utc).isoformat()
     metadata = []
-    pending = {}  # appid -> new state, applied only after a successful push
+    new_games = dict(prev_games)
+    first_evers = []
     for g in games:
         appid = str(g.get("appid"))
         igdb_id = igdb_map.get(appid)
@@ -173,41 +217,17 @@ def build_payload(games, igdb_map, state):
             continue  # unmapped in IGDB — skip
         name = g.get("name", appid)
         playtime = int(g.get("playtime_forever", 0))  # minutes
-        prev = state.get(appid, {})
-        last_pt = int(prev.get("pt", 0))
-        added = bool(prev.get("added", False))
-        delta = playtime - last_pt
-
-        seen = []
-        if delta >= MIN_DELTA_MIN:
-            seen = [
-                {
-                    "progress": 100,
-                    "manual_time_spent": str(delta * 60),  # seconds, Decimal-as-string
-                    "ended_on": now,
-                    "providers_consumed_on": ["Steam"],
-                }
-            ]
-
-        # Only (re)send a game when it's new to the collection or has new playtime.
-        if added and not seen:
-            continue
-
-        metadata.append(
-            {
-                "lot": "video_game",
-                "source": "igdb",
-                "identifier": igdb_id,
-                "source_id": name,
-                # reviews is non-optional in ImportOrExportMetadataItem; omitting it
-                # makes Ryot's strict deserialize drop the whole item.
-                "reviews": [],
-                "collections": [{"collection_name": COLLECTION_NAME}],
-                "seen_history": seen,
-            }
-        )
-        pending[appid] = {"pt": playtime, "added": True}
-    return metadata, pending
+        delta = playtime - int(prev_games.get(appid, 0))
+        if delta < MIN_DELTA_MIN:
+            continue  # no new playtime
+        secs = str(delta * 60)
+        metadata.append(game_item(igdb_id, name, game_seen(secs, now)))
+        if appid not in prev_games:
+            first_evers.append(
+                {"identifier": igdb_id, "source_id": name, "seconds": secs, "ended_on": now}
+            )
+        new_games[appid] = playtime
+    return metadata, new_games, first_evers
 
 
 def post_to_ryot(metadata):
@@ -240,6 +260,8 @@ def main():
     os.makedirs(STATE_DIR, exist_ok=True)
 
     state = load_json(STATE_FILE, {})
+    prev_games = state.get("games", {})
+    prev_pending = state.get("pending", [])
     igdb_map = load_json(IGDB_MAP_FILE, {})
 
     games = get_owned_games()
@@ -251,15 +273,23 @@ def main():
     resolve_igdb_ids(appids, get_twitch_token(), igdb_map)
     save_json(IGDB_MAP_FILE, igdb_map)  # cache resolutions regardless of push outcome
 
-    metadata, pending = build_payload(games, igdb_map, state)
-    if not metadata:
-        log("no new games or playtime since last run — nothing to push")
+    metadata, new_games, first_evers = build_payload(games, igdb_map, prev_games)
+
+    # Second phase: complete last run's first-ever games (metadata now resolved),
+    # flipping their in_progress@0 seen to completed in place (no duplicate).
+    repush = [
+        game_item(p["identifier"], p["source_id"], game_seen(p["seconds"], p["ended_on"]))
+        for p in prev_pending
+    ]
+
+    all_meta = metadata + repush
+    if not all_meta:
+        log("no new playtime and nothing to complete — nothing to push")
         return
 
-    with_seen = sum(1 for m in metadata if m["seen_history"])
-    log(f"pushing {len(metadata)} games ({with_seen} with new playtime)")
+    log(f"pushing {len(metadata)} games with new playtime + {len(repush)} completions")
     try:
-        status, resp = post_to_ryot(metadata)
+        status, resp = post_to_ryot(all_meta)
     except (urllib.error.URLError, KeyError) as e:
         log(f"FATAL: push to Ryot failed: {e}")
         sys.exit(1)
@@ -267,9 +297,11 @@ def main():
         log(f"FATAL: Ryot returned {status}: {resp[:300]}")
         sys.exit(1)
 
-    state.update(pending)
-    save_json(STATE_FILE, state)
-    log(f"done (Ryot {status}); state persisted for {len(pending)} games")
+    save_json(STATE_FILE, {"games": new_games, "pending": first_evers})
+    log(
+        f"done (Ryot {status}); {len(new_games)} games tracked, "
+        f"{len(first_evers)} pending completion next run"
+    )
 
 
 if __name__ == "__main__":
