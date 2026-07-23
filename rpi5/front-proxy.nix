@@ -135,6 +135,18 @@ in
         proxyWebsockets = true;
         extraConfig = fwdHeaders;
       };
+      # Ryot's *browser-side* GraphQL/upload client hardcodes
+      # `${window.location.origin}/backend/graphql` (see clientGqlService in the
+      # frontend) — window.location.origin is host-only, so it ignores the /ryot/
+      # basename and posts to the domain ROOT /backend/*. Ryot is designed to own
+      # the root; under our subpath the SSR uses /ryot/backend but the client can't.
+      # Route root /backend/* straight to the backend (trailing slash strips the
+      # prefix → backend serves /graphql, /upload). Without this every client-side
+      # query/mutation in the web UI 404s.
+      "/backend/" = {
+        proxyPass = "http://127.0.0.1:13352/";
+        extraConfig = fwdHeaders;
+      };
 
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
