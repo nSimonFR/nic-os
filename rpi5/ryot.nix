@@ -61,6 +61,16 @@ let
       handle_path /ryot/backend* {
         reverse_proxy {vars.backend_url}
       }
+      # The SPA's browser-side GraphQL client posts to <base>/graphql — i.e.
+      # /ryot/graphql — whereas the SSR loaders use /ryot/backend/graphql. Without
+      # this route /ryot/graphql falls through to the frontend catch-all and 404s,
+      # breaking every client-side query/mutation in the web UI. Send it to the
+      # backend's /graphql (same target the /backend* strip reaches). Upstream gap
+      # in the ryot-nix subpath patch — the client path should carry /backend.
+      handle /ryot/graphql {
+        rewrite * /graphql
+        reverse_proxy {vars.backend_url}
+      }
       handle_path /ryot/u/* {
         rewrite * /api/sharing{path}?isAccountDefault=true
         reverse_proxy {vars.frontend_url}
