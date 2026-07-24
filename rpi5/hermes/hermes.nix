@@ -96,6 +96,21 @@ let
     terminal = {
       backend = "local";
       cwd = "${hermesHome}/workspace";
+      # gog (Google Workspace CLI, Work/Gmail) unlocks its encrypted file
+      # keyring non-interactively from GOG_KEYRING_PASSWORD. Hermes' execute_code
+      # /terminal sandbox scrubs any env var whose NAME contains a secret
+      # substring (KEY/TOKEN/SECRET/PASSWORD/…) before spawning agent
+      # subprocesses (code_execution_tool.py `_scrub_child_env`), so in the cron
+      # mail-digest the Work inbox failed with "no TTY … set GOG_KEYRING_PASSWORD"
+      # while interactive turns (plain terminal path, no substring strip) worked.
+      # `env_passthrough` is the intended opt-in escape hatch, checked BEFORE the
+      # scrub — it lets these non-provider names through so gog can decrypt its
+      # keyring headlessly. GOG_ACCOUNT isn't a secret but is passed too so the
+      # skill needn't repeat --account.
+      env_passthrough = [
+        "GOG_KEYRING_PASSWORD"
+        "GOG_ACCOUNT"
+      ];
     };
 
     compression = {
