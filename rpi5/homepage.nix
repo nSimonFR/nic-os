@@ -79,8 +79,8 @@ in
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
       HOMEPAGE_VAR_AFFINE_TOKEN=$(cat ${config.age.secrets.affine-token.path})
-      HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.picoclaw-env.path} | cut -d= -f2)
-      HOMEPAGE_VAR_HA_TOKEN=$(grep HA_TOKEN ${config.age.secrets.picoclaw-env.path} | cut -d= -f2)
+      HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.agent-env.path} | cut -d= -f2)
+      HOMEPAGE_VAR_HA_TOKEN=$(grep HA_TOKEN ${config.age.secrets.agent-env.path} | cut -d= -f2)
       HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=$(tr -d '\r\n' < ${config.age.secrets.nextcloud-homepage-password.path})
       ENVEOF
     '';

@@ -1,6 +1,6 @@
 { pkgs, username, ... }:
 # Mail tooling for rpi5: himalaya CLI talking to the local hydroxide ProtonMail
-# bridge. Co-located with the picoclaw `protonmail` skill that consumes it.
+# bridge. Consumed by the hermes `protonmail` skill (rpi5/hermes/skills).
 #
 # Bridge endpoints + group access are configured in rpi5/hydroxide.nix:
 #   - IMAP 127.0.0.1:1143, SMTP 127.0.0.1:1025 (also exposed on tailscale0)

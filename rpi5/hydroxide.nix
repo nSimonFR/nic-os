@@ -37,9 +37,9 @@ in
   };
   users.groups.hydroxide = {};
 
-  # Picoclaw runs as ${username} and shells out to himalaya, which reads the bridge
-  # password at invocation time. Group membership grants read on the 0440 agenix
-  # file without changing its owner. See rpi5/picoclaw/skills/protonmail/.
+  # The Hermes agent runs as ${username} and shells out to himalaya, which reads
+  # the bridge password at invocation time. Group membership grants read on the
+  # 0440 agenix file without changing its owner. See rpi5/hermes/skills/protonmail/.
   users.users.${username}.extraGroups = [ "hydroxide" ];
 
   systemd.tmpfiles.rules = [
