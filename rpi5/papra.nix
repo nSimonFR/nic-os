@@ -19,7 +19,7 @@
 # waking on first request and stopping after 10 min idle. Tradeoff: scheduled
 # tasks / ingestion pause while asleep and resume on wake; Better Auth sessions
 # are SQLite-backed so a cold wake is safe.
-{ config, lib, pkgs, inputs, tailnetFqdn, pgHost, pgPort, ... }:
+{ config, lib, pkgs, inputs, tailnetFqdn, pgHost, pgPort, apertureUrl, ... }:
 let
   # Tailscale Serve (HTTPS :3450) → socket-activate proxy (:8220) → papra (:8221).
   externalPort = 3450;
@@ -85,15 +85,20 @@ in
       DOCUMENTS_OCR_LANGUAGES = "eng,fra";
 
       # ── AI auto-tagging: Papra-native, routed on-prem to beast ────────────
-      # Papra's built-in auto-tagger runs on ingest, via the loopback gate. The
-      # model is the beast-only qwen3-vl:8b entry (NO cloud fallback in the gate),
-      # so OCR'd content never leaves the network — a beast-down request errors
-      # rather than routing to a cloud model. qwen3-vl:8b respects the strict
+      # Papra's built-in auto-tagger runs on ingest, via the Aperture gate
+      # (ai.gate-mintaka.ts.net → tiny-llm-gate on :4001, all on the tailnet, so
+      # AI traffic shows up in Aperture's observability). The model is the
+      # beast-only qwen3-vl:8b entry (NO cloud fallback in the gate), so OCR'd
+      # content never leaves the network — a beast-down request errors rather
+      # than routing to a cloud model. qwen3-vl:8b respects the strict
       # json_schema Papra's tagger requires and tags well in French.
+      # Chat-only (no embeddings), so Aperture — which rejects /v1/embeddings —
+      # handles every call; that's why this can route through Aperture while
+      # karakeep/affine (embedding-using) must hit :4001 directly.
       # NOTE: native tagging is fire-once with no retry — a doc ingested while
       # beast is asleep/down stays untagged until re-ingested (no wait-for-beast).
       AI_IS_ENABLED        = true;
-      OPENAI_BASE_URL      = "http://127.0.0.1:4001/v1";
+      OPENAI_BASE_URL      = "${apertureUrl}/v1";
       AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
       AUTO_TAGGING_ENABLED = true;
 
