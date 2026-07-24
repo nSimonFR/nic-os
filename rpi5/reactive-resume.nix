@@ -126,10 +126,15 @@ in
       FLAG_DISABLE_IMAGE_PROCESSING = "true";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
-      # AI providers (Settings → AI): allow a provider baseURL on the loopback
-      # tiny-llm-gate (http://127.0.0.1:4001/v1). Without this, the AI url-policy
-      # rejects non-https / private-host base URLs. ENCRYPTION_SECRET (from the
-      # env file) enables the AI-providers feature.
+      # AI providers (Settings → AI): allow a provider baseURL on the Aperture
+      # gate (http://ai.gate-mintaka.ts.net/v1 → tiny-llm-gate, so RxResume's AI
+      # traffic shows up in Aperture's observability). The base URL is a per-user
+      # runtime setting stored in the `ai_providers` DB table (base_url column),
+      # NOT a nix env — update it there, not here. Without this flag the AI
+      # url-policy rejects the non-https / private-host base URL. RxResume's AI is
+      # chat/messages-only (Anthropic claude-haiku-4-5), so it routes cleanly
+      # through Aperture (no embeddings → no /v1/embeddings 404). ENCRYPTION_SECRET
+      # (from the env file) enables the AI-providers feature.
       FLAG_ALLOW_UNSAFE_AI_BASE_URL = "true";
       # AI agent workspace (chat assistant that applies edits): needs REDIS_URL +
       # ENCRYPTION_SECRET. Point at the shared Redis (databases.nix) on a spare DB
