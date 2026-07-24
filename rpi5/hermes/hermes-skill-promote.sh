@@ -19,7 +19,7 @@
 # key off Source alone. Instead:
 #   promote = (on-disk skills) − (repo-seeded dirs) − (builtins)
 # where repo-seeded dirs are excluded by DIRECTORY name ($DEST_SKILLS +
-# $PICOCLAW_SKILLS, which we copy verbatim so dir names line up) and builtins by
+# $HERMES_LOCAL_SKILLS, which we copy verbatim so dir names line up) and builtins by
 # frontmatter `name:`. We map each runtime DIRECTORY to its `name:` (dir != name,
 # e.g. dir `tavily-search` has name `tavily`) before the builtin check.
 #
@@ -30,7 +30,7 @@
 # Env (all set by the systemd unit wrapper):
 #   HERMES_SKILLS_DIR   runtime skills dir             (~/.hermes/skills)
 #   DEST_SKILLS         repo dest for new skills       (…/nic-os/shared/skills)
-#   PICOCLAW_SKILLS     other repo-seeded skills dir   (…/rpi5/picoclaw/skills)
+#   HERMES_LOCAL_SKILLS other repo-seeded skills dir   (…/rpi5/hermes/skills)
 #   TG_CHAT_ID          Telegram chat id for the nudge (optional)
 #   TG_TOKEN_FILE       file holding the bot token     (optional)
 # Tools (hermes, systemctl, rsync, curl, awk, install) come from the wrapper PATH.
@@ -38,7 +38,7 @@ set -euo pipefail
 
 HERMES_SKILLS_DIR="${HERMES_SKILLS_DIR:-$HOME/.hermes/skills}"
 DEST_SKILLS="${DEST_SKILLS:?DEST_SKILLS must be set}"
-PICOCLAW_SKILLS="${PICOCLAW_SKILLS:-}"
+HERMES_LOCAL_SKILLS="${HERMES_LOCAL_SKILLS:-}"
 TG_CHAT_ID="${TG_CHAT_ID:-}"
 TG_TOKEN_FILE="${TG_TOKEN_FILE:-/run/agenix/telegram-bot-token}"
 
@@ -69,10 +69,10 @@ if [ -z "$builtinNames" ]; then
   exit 0
 fi
 
-# seededDirs = DIRECTORY names we seed from the repo (shared/skills + picoclaw
+# seededDirs = DIRECTORY names we seed from the repo (shared/skills + hermes local
 # skills). These are already versioned, so exclude them by dir name. DEST_SKILLS
 # doubles as a seed source, so anything already promoted is excluded here too.
-seededDirs="$( { [ -d "$DEST_SKILLS" ] && ls -1 "$DEST_SKILLS"; [ -n "$PICOCLAW_SKILLS" ] && [ -d "$PICOCLAW_SKILLS" ] && ls -1 "$PICOCLAW_SKILLS"; } 2>/dev/null | sort -u)"
+seededDirs="$( { [ -d "$DEST_SKILLS" ] && ls -1 "$DEST_SKILLS"; [ -n "$HERMES_LOCAL_SKILLS" ] && [ -d "$HERMES_LOCAL_SKILLS" ] && ls -1 "$HERMES_LOCAL_SKILLS"; } 2>/dev/null | sort -u)"
 
 promoted=""
 while IFS= read -r skdir; do

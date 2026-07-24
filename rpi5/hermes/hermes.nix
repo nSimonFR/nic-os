@@ -5,20 +5,18 @@
   inputs,
   telegramChatId,
   tinyLlmGateUrl,
-  clawBackend,
   ...
 }:
-# Hermes Agent home-manager module — A/B alternative to PicoClaw.
+# Hermes Agent home-manager module — the rpi5 Telegram agent.
 #
-# Deliberately mirrors rpi5/picoclaw/picoclaw.nix so the two agents are
-# symmetric: both run as `nsimon` user services, share the same exec PATH,
-# skills, documents and agenix secrets, and both target the local tiny-llm-gate
-# (:4001). Only one may poll the shared Telegram bot at a time — `clawBackend`
-# (flake.nix) picks the boot default and `claw-switch` flips them live.
+# Runs as an `nsimon` user service polling the Telegram bot and targeting the
+# local tiny-llm-gate (:4001). It succeeded PicoClaw (retired 2026-07): the
+# shared cross-agent skills, the local agent skills (./skills), the persona
+# documents (./documents) and the agenix agent-env secret all moved here when
+# the A/B ended.
 #
-# Unlike PicoClaw (Go, ~8MB), Hermes is a Python+Node runtime: expect hundreds
-# of MB resident, hence MemoryMax=1G. This is a comparison deployment, not a
-# permanent replacement.
+# Hermes is a Python+Node runtime: expect hundreds of MB resident, hence
+# MemoryMax=1G.
 #
 # Config surface — all VERIFIED against the built hermes 0.19.0 binary:
 #   - Runner is `hermes gateway run` (foreground); config/state live in $HERMES_HOME.
@@ -40,8 +38,8 @@
 # Runtime layout:
 #   ~/.hermes/config.yaml   — generated below, overwritten on restart
 #   ~/.hermes/.env          — bot token + allowlist, written 0600 from /run/agenix
-#   ~/.hermes/skills/       — SKILL.md skills (shared, reused from picoclaw)
-#   ~/.hermes/*.md          — SOUL.md / IDENTITY.md / USER.md (reused from picoclaw)
+#   ~/.hermes/skills/       — SKILL.md skills (shared/skills + ./skills)
+#   ~/.hermes/*.md          — SOUL.md / IDENTITY.md / USER.md (from ./documents)
 #   ~/.hermes/…             — SQLite memory + agent state (Hermes-managed)
 let
   hermes = inputs.hermes-agent.packages.${pkgs.system}.messaging;
@@ -53,23 +51,20 @@ let
   gateBase = "${tinyLlmGateUrl}/v1";
   # gpt-5.6-terra (the balanced GPT-5.6 coding tier) has a >64k context window;
   # the small gemma models don't, and hermes rejects sub-64k models at startup.
-  # Match PicoClaw's default (`terra`) so the A/B compares the two agents on the
-  # SAME model, not different ones. Alternatives on the gate: gpt-5.6-sol
-  # (flagship), gpt-5.6-luna (high-volume), gpt-5.5. Bump this one line to switch.
+  # Alternatives on the gate: gpt-5.6-sol (flagship), gpt-5.6-luna (high-volume),
+  # gpt-5.5. Bump this one line to switch.
   gateModel = "gpt-5.6-terra";
 
-  # Reuse the exact skills + persona docs PicoClaw uses, so an A/B compares the
-  # agents (and migrated cron jobs run) against the same skill set, not a subset.
-  # Mirrors picoclaw.nix's skillsSource: shared cross-agent skills + picoclaw's
-  # local skills (dawarich, immich-memories, caldav-calendar, …) that several
-  # migrated jobs depend on. Both descend from OpenClaw's SKILL.md format so most
-  # port directly (some may need edits).
+  # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
+  # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
+  # cron jobs depend on. These local skills moved here from the retired PicoClaw
+  # module (rpi5/hermes/skills). All descend from OpenClaw's SKILL.md format.
   skillsSource = pkgs.runCommand "hermes-skills" { } ''
     mkdir -p $out
     cp -r ${../../shared/skills}/. $out/
-    cp -rf ${../picoclaw/skills}/. $out/
+    cp -rf ${./skills}/. $out/
   '';
-  documentsSource = ../picoclaw/documents;
+  documentsSource = ./documents;
 
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a
@@ -140,8 +135,7 @@ let
     ${pkgs.coreutils}/bin/install -m 0644 ${configFile} ${hermesHome}/config.yaml
 
     # .env — bot token (secret) + sender allowlist. TELEGRAM_BOT_TOKEN presence
-    # auto-enables the Telegram platform. Reuse picoclaw's bot + allowlist
-    # (nSimon + Alfie) for a true A/B on the same channel.
+    # auto-enables the Telegram platform. Allowlist = nSimon + Alfie.
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
     # TELEGRAM_HOME_CHANNEL pins where Hermes delivers cron results + proactive
@@ -176,7 +170,7 @@ let
   # service (no TTY to prompt on).
   execWrapper = pkgs.writeShellScript "hermes-exec" ''
     set -a
-    . /run/agenix/picoclaw-env
+    . /run/agenix/agent-env
     set +a
     export HOME="/home/nsimon"
     export HERMES_HOME="${hermesHome}"
@@ -196,7 +190,7 @@ let
     export HOME="/home/nsimon"
     export HERMES_SKILLS_DIR="${hermesHome}/skills"
     export DEST_SKILLS="${nicosRepo}/shared/skills"
-    export PICOCLAW_SKILLS="${nicosRepo}/rpi5/picoclaw/skills"
+    export HERMES_LOCAL_SKILLS="${nicosRepo}/rpi5/hermes/skills"
     export TG_CHAT_ID="${toString telegramChatId}"
     export TG_TOKEN_FILE="/run/agenix/telegram-bot-token"
     export PATH="${
@@ -219,7 +213,7 @@ in
 
   systemd.user.services.hermes = {
     Unit = {
-      Description = "Hermes Agent gateway (PicoClaw A/B alternative)";
+      Description = "Hermes Agent gateway (Telegram agent)";
       After = [ "network-online.target" ];
       Wants = [ "network-online.target" ];
     };
@@ -231,8 +225,8 @@ in
       # Python runtime — hundreds of MB expected, vs picoclaw's <20MB. 1G cap.
       MemoryMax = "1G";
     };
-    # Only autostart when Hermes is the selected backend (see picoclaw.nix).
-    Install.WantedBy = lib.optionals (clawBackend == "hermes") [ "default.target" ];
+    # Hermes is the sole Telegram agent (PicoClaw retired), so always autostart.
+    Install.WantedBy = [ "default.target" ];
   };
 
   # Promote Hermes self-authored skills into the repo (untracked) for manual

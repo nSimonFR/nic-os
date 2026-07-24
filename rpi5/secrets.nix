@@ -7,8 +7,11 @@
   age.identityPaths = [ "/root/.ssh/age" ];
 
   age.secrets = {
-    picoclaw-env = {
-      file = ./secrets/picoclaw-env.age;
+    # Shared agent env (skill/tool creds: GOG_*, HA_*, SURE/LINEAR/RYOT keys, …)
+    # sourced by the Hermes agent service. Named picoclaw-env historically; kept
+    # as agent-env after PicoClaw was retired.
+    agent-env = {
+      file = ./secrets/agent-env.age;
       owner = "nsimon";
     };
     telegram-bot-token = {

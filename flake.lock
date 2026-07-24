@@ -1067,23 +1067,6 @@
         "type": "github"
       }
     },
-    "picoclaw-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1779415600,
-        "narHash": "sha256-oMees7EKANS5dkMHIqAHfGcumrNMtTEEA+dmpl8/dLE=",
-        "owner": "sipeed",
-        "repo": "picoclaw",
-        "rev": "2992eccbf03e54258a6889cf19a5a4fe6255895f",
-        "type": "github"
-      },
-      "original": {
-        "owner": "sipeed",
-        "ref": "v0.2.9",
-        "repo": "picoclaw",
-        "type": "github"
-      }
-    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -1249,7 +1232,6 @@
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_7",
         "nixpkgs-unstable": "nixpkgs-unstable",
-        "picoclaw-src": "picoclaw-src",
         "ragenix": "ragenix",
         "reactive-resume-nix": "reactive-resume-nix",
         "rtk-src": "rtk-src",

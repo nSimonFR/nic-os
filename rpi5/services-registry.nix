@@ -253,9 +253,6 @@
         ];
       }; }
     # Backend — API services
-    # PicoClaw demoted from 443 to 8444 (tailnet-only) so AFFiNE can claim the
-    # bare https://rpi5.gate-mintaka.ts.net URL via Tailscale Funnel.
-    { port = 8444;  backend = "http://127.0.0.1:18789"; name = "PicoClaw";       icon = "mdi-robot";          category = "Backend"; description = "AI gateway"; }
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }
     # Codex Proxy (:4040) removed 2026-07-15 — codex is now served natively by
     # tiny-llm-gate; codex-proxy service + files deleted.
