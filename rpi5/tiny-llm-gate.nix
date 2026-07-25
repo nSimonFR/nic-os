@@ -117,7 +117,9 @@ in
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
 
         # -- Anthropic (Claude) via the shared 2-account OAuth pool --
-        "claude" = { provider = "claude"; upstream_model = "claude-opus-4-8"; };
+        # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
+        # Claude Max/Pro, so the subscription-OAuth pool serves it natively.
+        "claude" = { provider = "claude"; upstream_model = "claude-opus-5"; };
 
         # -- oMLX models (Mac local inference via tailscale serve) --
         # No fallback: Mac-asleep should surface as an error rather than
