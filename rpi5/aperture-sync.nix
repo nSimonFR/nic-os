@@ -36,13 +36,16 @@ let
       > $out
   '';
 
-  # Always include claude-fable-5 (Mythos-class, public 2026-06-09). It is
-  # newer than the claude-code binary pinned via nixpkgs-unstable, so the
-  # regex extraction above can't see it yet — list it explicitly so the
-  # Anthropic passthrough provider routes it now. Once a fable-aware
-  # claude-code lands in nixpkgs the regex captures it too (deduped here).
+  # Always include the newest Claude models that ship faster than the
+  # claude-code binary pinned via nixpkgs-unstable can track:
+  #   claude-fable-5 (public 2026-06-09) — most capable widely-released model
+  #   claude-opus-5  (public 2026-07-24) — flagship Opus, new Max/Pro default
+  # Both are newer than the pinned claude-code, so the regex extraction above
+  # can't see them yet — list them explicitly so the Anthropic passthrough
+  # provider routes them now. Once a newer claude-code lands in nixpkgs the
+  # regex captures them too (deduped here).
   anthropicModels = lib.unique (
-    builtins.fromJSON (builtins.readFile anthropicModelsFile) ++ [ "claude-fable-5" ]
+    builtins.fromJSON (builtins.readFile anthropicModelsFile) ++ [ "claude-fable-5" "claude-opus-5" ]
   );
 
   # The inner config that Aperture manages — this gets JSON-encoded into a
