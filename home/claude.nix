@@ -90,6 +90,15 @@ in
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
+    # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
+    # spare login (see rpi5/claude-oauth-2.nix). Its settings.json was previously
+    # unmanaged; point it at the SAME baseline as ~/.claude so it inherits the
+    # Aperture gate URL, permissions and hooks — one source of truth. Writable
+    # out-of-store symlink; note runtime toggles (/voice, theme, …) are shared
+    # with the primary config since both symlink the same file.
+    ".claude-secondary/settings.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+
     # Keybindings — Enter submits, Shift+Enter inserts a newline. Symlinked to
     # the repo checkout (not the Nix store) so it stays hand-editable.
     # Baseline: home/dotfiles/claude-keybindings.json
