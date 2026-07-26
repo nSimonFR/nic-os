@@ -73,9 +73,14 @@
     };
 
     # Reactive Resume — self-hosted resume builder (rxresu.me), packaged like
-    # sure-nix / airtrail-nix.
+    # sure-nix / airtrail-nix. Held at the last rev whose pnpm-deps FOD hash is
+    # correct for aarch64. Upstream 770703c6 (reactive-resume 5.2.3) ships a
+    # pnpm-deps hash recomputed by x86 Renovate CI, but pnpm pulls
+    # platform-specific binaries so the aarch64 build hashes differently ->
+    # "hash mismatch in fixed-output derivation". 67720c89 is the rev the
+    # running system builds. Unpin once upstream hashes are platform-correct.
     reactive-resume-nix = {
-      url = "github:nSimonFR/reactive-resume-nix";
+      url = "github:nSimonFR/reactive-resume-nix/67720c895642549444b873b8554e06b8ab592177";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
