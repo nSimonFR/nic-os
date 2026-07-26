@@ -1,6 +1,10 @@
-{ config, pkgs, ... }:
+{ config, pkgs, inputs, ... }:
 let
   secretsPath = config.age.secrets.mcp-secrets.path;
+
+  # MTG MCP — Go binary built from the pinned mtg-mcp-src input (see flake.nix
+  # + pkgs/mtg-mcp.nix). stdio transport, no secrets: just needs outbound HTTPS.
+  mtgMcp = pkgs.callPackage ../pkgs/mtg-mcp.nix { mtg-mcp-src = inputs.mtg-mcp-src; };
 
   # Wrapper scripts: read secrets from agenix at runtime, then exec the MCP server
   githubMcp = pkgs.writeShellScript "github-mcp" ''
@@ -45,6 +49,10 @@ let
     # / gcp_service_account …`, read-only, hits the real GCP API per query.
     # NOT fronted by ToolHive (no GCP; dbhub is real-DB only), so kept direct.
     "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
+    # MTG (Magic: The Gathering / Commander) — local Go binary, stdio, no
+    # secrets. 20 tools: Scryfall card search/legality/pricing/rulings, EDHREC
+    # recs/combos, Moxfield + Archidekt deck lookup, and comprehensive rules.
+    mtg                 = { command = "${mtgMcp}/bin/mtg-mcp"; };
 
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };

@@ -141,6 +141,19 @@
       flake = false;
     };
 
+    # MTG MCP — Magic: The Gathering / Commander MCP server (Go, stdio, no
+    # secrets). Source-only input (`flake = false`); pkgs/mtg-mcp.nix builds it
+    # with buildGo126Module and home/mcp.nix wires the binary into Claude Code.
+    # Bump is a 2-step edit:
+    #   1. change the tag in the URL below (e.g. v2.1.0 → v2.2.0)
+    #   2. bump `version` default in pkgs/mtg-mcp.nix to match
+    # then `nix flake lock --update-input mtg-mcp-src` + rebuild. Refresh
+    # `vendorHash` only if upstream's go.sum changed (the rebuild will tell you).
+    mtg-mcp-src = {
+      url = "github:nathanmartins/mtg-mcp/v2.1.0";
+      flake = false;
+    };
+
     # llm-agents.nix: numtide's daily-updated flake of AI coding agent
     # packages. We pull `pi` (pi-coding-agent) from here instead of pinning
     # an upstream tarball ourselves — auto-tracks new releases.
@@ -245,6 +258,15 @@
                 config.allowUnfree = true;
                 overlays = [ rtkOverlay ];
               }).rtk;
+
+            # `nix build .#mtg-mcp` — standalone target for the MTG MCP Go
+            # binary (also wired into Claude Code via home/mcp.nix). Handy for
+            # refreshing vendorHash after a bump without a full rebuild.
+            mtg-mcp =
+              (import nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+              }).callPackage ./pkgs/mtg-mcp.nix { mtg-mcp-src = inputs.mtg-mcp-src; };
           }
         ))
         {

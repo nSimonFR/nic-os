@@ -753,6 +753,23 @@
         "type": "github"
       }
     },
+    "mtg-mcp-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784062281,
+        "narHash": "sha256-cqYiW13FvdNW22rZ9yOJonUPq+y5N8lZzDaqsOZx8vk=",
+        "owner": "nathanmartins",
+        "repo": "mtg-mcp",
+        "rev": "46449a376751e80c40a1c94afe0fbb41d7326fbf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nathanmartins",
+        "ref": "v2.1.0",
+        "repo": "mtg-mcp",
+        "type": "github"
+      }
+    },
     "nix-citizen": {
       "inputs": {
         "flake-compat": "flake-compat_2",
@@ -1200,6 +1217,7 @@
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
         "mac-app-util": "mac-app-util",
+        "mtg-mcp-src": "mtg-mcp-src",
         "nix-citizen": "nix-citizen",
         "nix-flatpak": "nix-flatpak",
         "nix-gaming": "nix-gaming",
