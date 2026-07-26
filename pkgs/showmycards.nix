@@ -1,0 +1,165 @@
+# ShowMyCards — self-hosted Magic: The Gathering collection manager
+# (github.com/showmycards/showmycards, MIT). Built from source for aarch64:
+# upstream only publishes an amd64 container image, so the prebuilt image can't
+# run on the rpi5. Same local-vendoring model as pkgs/rtk.nix — a `flake = false`
+# source input (showmycards-src, pinned in flake.nix) built here and exposed as
+# `pkgs.showmycards` via an overlay.
+#
+# Upstream bundles backend + frontend in one supervisord container. We build
+# both and expose two wrappers consumed by rpi5/showmycards.nix:
+#   * $out/bin/showmycards-backend   — Go/Fiber API (SQLite, cgo); GODEBUG pinned
+#   * $out/bin/showmycards-frontend  — SvelteKit adapter-node server (`node build`)
+#
+# node_modules are materialised by fixed-output derivations that run
+# `npm install` (network is allowed in FODs). We use npm --legacy-peer-deps
+# rather than upstream's `bun install` because bun 1.3.x mis-extracts daisyui's
+# root files (index.js / daisyui.css from its package `files` field) →
+# "@tailwindcss/vite: Failed to resolve entry for package daisyui". npm honours
+# `files` correctly. The repo ships bun.lock (no package-lock.json), so the FOD
+# outputHash — not a lockfile — is what pins determinism here.
+#
+# ⚠ HASHES ARE PLACEHOLDERS. vendorHash + the two FOD outputHashes are
+#   lib.fakeHash. On the first real build Nix prints `got: sha256-…` for each —
+#   paste those in (backend vendorHash first, then depsBuild, then depsProd).
+#
+# ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.5`. A pure Nix build cannot
+#   fetch a toolchain (GOTOOLCHAIN=auto has no network in the build sandbox), so
+#   the `go` passed in must already be ≥ 1.26.5. If the default nixpkgs `go` is
+#   older, override the callPackage in flake.nix with `go = pkgs.go_1_26;` (or
+#   `unstablePkgs.go`).
+{
+  lib,
+  stdenv,
+  stdenvNoCC,
+  showmycards-src,
+  buildGoModule,
+  go,
+  gcc,
+  nodejs_22,
+  cacert,
+  makeWrapper,
+}:
+
+let
+  pname = "showmycards";
+  version = "0.3.0"; # keep in lock-step with the showmycards-src tag in flake.nix
+  src = showmycards-src;
+
+  # ── Go backend (cgo: mattn/go-sqlite3) ────────────────────────────────────
+  backend = (buildGoModule.override { inherit go; }) {
+    pname = "showmycards-backend";
+    inherit version src;
+    modRoot = "backend";
+    # Placeholder — replace with the real hash on first build.
+    vendorHash = lib.fakeHash;
+    nativeBuildInputs = [ gcc ];
+    env.CGO_ENABLED = "1";
+    ldflags = [ "-X" "backend/version.Version=${version}" ];
+    # Upstream tests hit the network / fixtures; skip for the packaged build.
+    doCheck = false;
+  };
+
+  # ── Frontend node_modules via fixed-output derivations (npm, see header) ───
+  mkNpmModules = { name, npmArgs, outputHash }:
+    stdenvNoCC.mkDerivation {
+      name = "showmycards-frontend-${name}-${version}";
+      inherit src;
+      nativeBuildInputs = [ nodejs_22 cacert ];
+      dontUnpack = true;
+      dontConfigure = true;
+      dontFixup = true;
+      buildPhase = ''
+        runHook preBuild
+        export HOME=$TMPDIR
+        export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
+        export npm_config_cache=$TMPDIR/npm-cache
+        # Skip browser/binary downloads pulled by some devDeps (playwright).
+        export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+        # Copy the frontend subtree out of the read-only source and install there.
+        cp -R ${src}/frontend/. .
+        chmod -R u+w .
+        npm install ${npmArgs} --legacy-peer-deps --no-audit --no-fund --no-progress
+        runHook postBuild
+      '';
+      installPhase = ''
+        runHook preInstall
+        rm -rf node_modules/.cache
+        mkdir -p $out
+        cp -R node_modules $out/node_modules
+        runHook postInstall
+      '';
+      outputHashMode = "recursive";
+      outputHashAlgo = "sha256";
+      inherit outputHash;
+    };
+
+  # Full tree (dev + prod) used to run `vite build`.
+  depsBuild = mkNpmModules {
+    name = "deps-build";
+    npmArgs = "";
+    outputHash = lib.fakeHash; # placeholder — replace on first build
+  };
+
+  # Production-only tree shipped at runtime. adapter-node keeps `dependencies`
+  # external (see frontend package.json), so `node build` needs them present.
+  depsProd = mkNpmModules {
+    name = "deps-prod";
+    npmArgs = "--omit=dev";
+    outputHash = lib.fakeHash; # placeholder — replace on first build
+  };
+
+in
+stdenv.mkDerivation {
+  inherit pname version;
+  dontUnpack = true;
+
+  nativeBuildInputs = [ nodejs_22 makeWrapper ];
+
+  buildPhase = ''
+    runHook preBuild
+    export HOME=$TMPDIR
+    cp -R ${src}/frontend/. ./frontend
+    chmod -R u+w frontend
+    cd frontend
+    cp -R ${depsBuild}/node_modules ./node_modules
+    chmod -R u+w node_modules
+    # node_modules/.bin shebangs are `#!/usr/bin/env node`; /usr/bin/env doesn't
+    # exist in the pure build sandbox. Rewrite to the store node.
+    patchShebangs node_modules
+    export NODE_ENV=production
+    # Vite/Rollup are memory-hungry; cap heap so the rpi5 leans on swap rather
+    # than being OOM-killed mid-build (same guard as airtrail-nix).
+    export NODE_OPTIONS=--max-old-space-size=3072
+    npm run build
+    cd ..
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+    fdir=$out/share/showmycards/frontend
+    mkdir -p "$fdir" $out/bin
+    cp -R frontend/build         "$fdir/build"
+    cp    frontend/package.json  "$fdir/package.json"
+    cp -R ${depsProd}/node_modules "$fdir/node_modules"
+
+    # Frontend: `node build` from the adapter-node output dir.
+    makeWrapper ${nodejs_22}/bin/node $out/bin/showmycards-frontend \
+      --add-flags "$fdir/build" \
+      --chdir "$fdir"
+
+    # Backend: force HTTP/1.1 for the large streamed Scryfall bulk import —
+    # Go's HTTP/2 client chokes on the ~multi-GB all_cards gzip stream with
+    # "PROTOCOL_ERROR" on the rpi5 (observed during the throwaway test).
+    makeWrapper ${backend}/bin/backend $out/bin/showmycards-backend \
+      --set GODEBUG http2client=0
+    runHook postInstall
+  '';
+
+  meta = {
+    description = "Self-hosted Magic: The Gathering collection manager (from source)";
+    homepage = "https://showmy.cards";
+    license = lib.licenses.mit;
+    platforms = lib.platforms.linux;
+  };
+}

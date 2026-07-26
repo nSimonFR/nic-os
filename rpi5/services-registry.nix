@@ -252,6 +252,10 @@
           { field = "checkins"; label = "Check-ins"; format = "number"; }
         ];
       }; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
+    # Backend (Go API) is localhost-only; only the SvelteKit frontend is served.
+    { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true; }
+
     # Backend — API services
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }
     # Codex Proxy (:4040) removed 2026-07-15 — codex is now served natively by
