@@ -461,7 +461,14 @@ in
     # the .drvs of the current system; keep-outputs pins their output paths.
     keep-outputs = true;
     keep-derivations = true;
+    # Build heavy node_modules (reactive-resume, hermes) on /mnt/data (686 GB)
+    # instead of root's nearly-full /tmp, so a big build can't ENOSPC the 171 GB
+    # root disk mid-switch. Dir ensured by the tmpfiles rule below.
+    build-dir = "/mnt/data/nix-build";
   };
+
+  # 0755 (not 1777): nix's build-dir security check rejects a world-writable dir.
+  systemd.tmpfiles.rules = [ "d /mnt/data/nix-build 0755 root root -" ];
 
   nix.gc = {
     automatic = true;
