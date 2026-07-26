@@ -25,16 +25,30 @@ whichever bridge currently owns that environment:
     headers: Authorization: Bearer <oauth>, anthropic-version: 2023-06-01,
              anthropic-beta: environments-2025-11-01
 
-The current environment id comes from a clean list call (no process memory, no
-device token needed — plain OAuth is accepted):
-
-    GET /v1/environments   -> pick the newest whose name starts "<device>:"
-                              (the bridge registers e.g. "rpi5:nic-os:<hash>")
-
 A *fresh* bridge (post-reboot / post-restart) has an empty in-memory
 completed-work set, so it accepts the re-queued session and spawns the worker on
 its next poll (~2 s). The worktree must still exist on disk (it does right after
 boot/restart — this unit runs before the orphan-worktree cleanup timer).
+
+## The environment must be the SAME one the session was created under
+
+reconnect is environment-scoped: hitting it with a session that belongs to a
+different environment returns 400 "Session does not belong to this environment."
+A bridge only keeps its environment across a restart when it writes
+bridge-pointer.json, which requires --create-session-in-dir (see the long note
+in claude-remote-control.nix). Without that the old environment is DELETED on
+shutdown and every reconnect here fails 400 — that was the first live run:
+revived=0 failed=3.
+
+So the environment id is read from the bridge's own pointer file, the same
+source the bridge itself uses to request reuseEnvironmentId:
+
+    $CLAUDE_CONFIG_DIR/projects/<slugified dir>/bridge-pointer.json
+      -> {"sessionId", "environmentId", "source": "standalone", "pid", ...}
+
+Falling back to `GET /v1/environments` and picking the newest "<device>:*" is
+kept only for the case where the pointer is missing; it is strictly worse, since
+any other bridge on this box matches that prefix too.
 
 The OAuth token is read from the bridge's own config dir (~/.claude-rc), which
 `claude` keeps fresh — NOT ~/.claude, whose copy goes stale (see the
@@ -65,6 +79,8 @@ STATE_FILE = Path(os.environ.get("CRC_STATE_FILE", HOME / ".claude/state/claude-
 CRED_FILE = Path(os.environ.get("CRC_CREDENTIALS_FILE", HOME / ".claude-rc/.credentials.json"))
 WORKTREES_DIR = Path(os.environ.get("CRC_WORKTREES_DIR", HOME / "nic-os/.claude/worktrees"))
 DEVICE_NAME = os.environ.get("CRC_DEVICE_NAME", "rpi5")
+BRIDGE_DIR = os.environ.get("CRC_BRIDGE_DIR", str(HOME / "nic-os"))
+CONFIG_DIR = Path(os.environ.get("CRC_CONFIG_DIR", HOME / ".claude-rc"))
 ORG_UUID = os.environ.get("CRC_ORG_UUID", "")
 BASE = os.environ.get("CRC_API_BASE", "https://api.anthropic.com")
 BETA = os.environ.get("CRC_ENVIRONMENTS_BETA", "environments-2025-11-01")
@@ -180,12 +196,38 @@ def _headers(tok):
     return h
 
 
+def bridge_pointer_path():
+    """$CLAUDE_CONFIG_DIR/projects/<slugified bridge dir>/bridge-pointer.json.
+
+    Mirrors claude-code's own getBridgePointerPath(): join(configDir, "projects",
+    dir.replace(/[^a-zA-Z0-9]/g, "-"), "bridge-pointer.json").
+    """
+    slug = re.sub(r"[^a-zA-Z0-9]", "-", BRIDGE_DIR)
+    return CONFIG_DIR / "projects" / slug / "bridge-pointer.json"
+
+
 def current_env_id(tok):
-    """Newest environment whose name starts '<device>:' — the running bridge's."""
+    """The environment the running bridge is actually serving.
+
+    Preferred source is the bridge's own bridge-pointer.json — the same file it
+    reads on start to request reuseEnvironmentId, so it is authoritative and
+    needs no network call. Listing /v1/environments and taking the newest
+    '<device>:*' is only a fallback: the name is '<device>:<basename>:<hash>',
+    so a second bridge started anywhere else on this box (say a throwaway one in
+    /tmp) also matches '<device>:' and, being newer, would win.
+    """
+    ptr = load_json(bridge_pointer_path(), {})
+    env = ptr.get("environmentId") if isinstance(ptr, dict) else None
+    if env:
+        log(f"resume: environment {env} from bridge pointer {bridge_pointer_path()}")
+        return env
+
+    log("resume: no bridge pointer; falling back to /v1/environments listing")
     req = urllib.request.Request(f"{BASE}/v1/environments", headers=_headers(tok))
     d = json.loads(urllib.request.urlopen(req, timeout=20).read())
     items = d.get("data") or d.get("environments") or (d if isinstance(d, list) else [])
-    mine = [e for e in items if isinstance(e, dict) and str(e.get("name", "")).startswith(DEVICE_NAME + ":")]
+    prefix = f"{DEVICE_NAME}:{Path(BRIDGE_DIR).name}:"
+    mine = [e for e in items if isinstance(e, dict) and str(e.get("name", "")).startswith(prefix)]
     if not mine:
         return None
     mine.sort(key=lambda e: e.get("created_at", ""), reverse=True)

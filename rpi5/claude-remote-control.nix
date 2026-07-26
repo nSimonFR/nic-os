@@ -6,7 +6,8 @@ let
   # Boot/restart auto-resume: when the bridge (re)starts, re-host the sessions
   # that were live before, so a reboot or watchdog restart doesn't leave every
   # remote session dead until the user pokes it from the app. Mechanism (see the
-  # script header): GET /v1/environments to find this bridge's environment, then
+  # script header): read this bridge's environment id from its own
+  # bridge-pointer.json, then
   # POST /v1/environments/<env>/bridge/reconnect {session_id} per session — the
   # account OAuth token alone is accepted; a *fresh* bridge then work-polls the
   # re-queued session and spawns its worker. Replaces the old cap-autoresume,
@@ -23,6 +24,9 @@ let
   sessionsDir = "/home/${username}/.claude/sessions";
   projectsDir = "/home/${username}/.claude/projects";
   worktreesDir = "/home/${username}/nic-os/.claude/worktrees";
+  # The directory the bridge serves. Also part of the bridge-pointer.json path
+  # (claude slugifies it), which is how boot-resume finds the live environment.
+  workingDir = "/home/${username}/nic-os";
 
   # Isolated CLAUDE_CONFIG_DIR for the bridge only. Remote Control in
   # claude-code >= 2.1.x hard-refuses any API endpoint other than
@@ -117,12 +121,49 @@ let
     fi
   '';
 
+  # NOTE: --create-session-in-dir (the default) is LOAD-BEARING for session
+  # recovery — do not re-add --no-create-session-in-dir.
+  #
+  # The bridge only keeps its environment across a restart if it wrote
+  # $CLAUDE_CONFIG_DIR/projects/<slugified-dir>/bridge-pointer.json. Reversing
+  # claude-code 2.1.217 (`bin/.claude-wrapped`), the write is gated on having a
+  # session to anchor the pointer to:
+  #
+  #   let cr = Xe ?? de ?? null;                    // resumed / adopted session
+  #   if (ie && !Xe && !de) cr = await createBridgeSession(...)   // ie = createSessionInDir
+  #   let Xt = cr ?? (preserveOnShutdown ? ne ?? "" : null);
+  #   if (Xt !== null && !ae)
+  #     if (await writeBridgePointer(dir, {sessionId: Xt, environmentId, source: "standalone", ...}))
+  #       preserveOnShutdown = true, ownsPointer = true;
+  #
+  # With --no-create-session-in-dir, ie=false => cr=null => Xt=null => the
+  # pointer is never written => preserveOnShutdown stays false. On shutdown the
+  # bridge then takes the other branch and calls deregisterEnvironment(), so the
+  # environment is DELETED server-side (GET returns 404, not archived). The next
+  # start finds no pointer, requests no reuse, and registers a brand-new env.
+  # Every previously-live session then belongs to an environment that no longer
+  # exists, and POST /v1/environments/<new-env>/bridge/reconnect answers
+  # 400 "Session does not belong to this environment." — which is exactly why
+  # claude-rc-boot-resume revived 0/3 sessions on its first live run.
+  #
+  # Letting it default to on makes the bridge pre-create one anchor session in
+  # this cwd, which anchors the pointer => preserveOnShutdown=true => shutdown
+  # skips archive+deregister ("Environment preserved.") => next start reads the
+  # pointer and registers with reuseEnvironmentId => SAME env id, and the anchor
+  # session is re-adopted via bridge/reconnect. Verified end-to-end against a
+  # throwaway bridge in /tmp: same env id and same session id across a full
+  # SIGTERM/restart cycle.
+  #
+  # Cost: one always-on anchor session in this directory (1 of capacity 8). It
+  # is a placeholder — it is NOT spawned into a worktree, so it does not get the
+  # worktree-gate post-checkout settings.json and would talk to Anthropic
+  # directly rather than through the Aperture gate if anyone actually used it.
+  # Leave it idle; open worktree sessions from claude.ai/code instead.
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
     ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
     ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
       "CLAUDE_CONFIG_DIR=${configDir} ${claudeRc} \
         --spawn worktree \
-        --no-create-session-in-dir \
         --capacity 8 \
         --permission-mode bypassPermissions \
         --name rpi5 \
@@ -259,7 +300,7 @@ lib.recursiveUpdate keepWarm.nixosConfig {
       RemainAfterExit = true;
       User = username;
       Group = "users";
-      WorkingDirectory = "/home/${username}/nic-os";
+      WorkingDirectory = workingDir;
       ExecStartPre = prepConfigScript;
       ExecStart = startScript;
       # Snapshot the live session set before tearing the bridge down, then stop.
@@ -354,7 +395,7 @@ lib.recursiveUpdate keepWarm.nixosConfig {
       Type = "oneshot";
       User = username;
       Group = "users";
-      WorkingDirectory = "/home/${username}/nic-os";
+      WorkingDirectory = workingDir;
       ExecStart = "${bootResume} resume";
       Environment = [
         "HOME=/home/${username}"
@@ -367,6 +408,11 @@ lib.recursiveUpdate keepWarm.nixosConfig {
         "CRC_CREDENTIALS_FILE=${configDir}/.credentials.json"
         "CRC_WORKTREES_DIR=${worktreesDir}"
         "CRC_DEVICE_NAME=rpi5"
+        # Where the bridge runs + its config dir: together these locate
+        # bridge-pointer.json, the authoritative source for the environment id
+        # to reconnect against (see current_env_id in the script).
+        "CRC_BRIDGE_DIR=${workingDir}"
+        "CRC_CONFIG_DIR=${configDir}"
         "CRC_ORG_UUID=${orgUuid}"
         "CRC_RECENCY_SECONDS=${maxInactivitySec}"
         "CRC_TELEGRAM_TOKEN_FILE=${telegramTokenFile}"

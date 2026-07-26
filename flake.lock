@@ -1212,6 +1212,7 @@
         "reactive-resume-nix": "reactive-resume-nix",
         "rtk-src": "rtk-src",
         "ryot-nix": "ryot-nix",
+        "showmycards-src": "showmycards-src",
         "sure-nix": "sure-nix",
         "tiny-llm-gate": "tiny-llm-gate",
         "zen-browser": "zen-browser"
@@ -1295,6 +1296,23 @@
       "original": {
         "owner": "nSimonFR",
         "repo": "ryot-nix",
+        "type": "github"
+      }
+    },
+    "showmycards-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779861299,
+        "narHash": "sha256-pDkbLV0LBG12/dB9FyzCEX88iY8tSb7kur7HwZ1vZSQ=",
+        "owner": "showmycards",
+        "repo": "showmycards",
+        "rev": "7cc4284a04b370aef3c0f94126c669fa15513a53",
+        "type": "github"
+      },
+      "original": {
+        "owner": "showmycards",
+        "ref": "v0.3.0",
+        "repo": "showmycards",
         "type": "github"
       }
     },
