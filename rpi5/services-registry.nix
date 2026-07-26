@@ -254,8 +254,7 @@
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # Backend (Go API) is localhost-only; only the SvelteKit frontend is served.
-    # DISABLED with ./showmycards.nix (un-buildable as merged — see configuration.nix). Re-enable both together.
-    # { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true; }
+    { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true; }
 
     # Backend — API services
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }
