@@ -1,16 +1,20 @@
 { pkgs, lib, username, telegramChatId, ... }:
 let
   sessionName = "claude-rc";
-  # claude-rc auto-resume: detect bridge sessions stalled at the Claude usage
-  # cap and resume them headlessly once the window resets. LIVE — performs real
-  # `claude -p --resume` once a blocking rate_limit_event's window has reset.
-  # NOTE: the blocking status string is still inferred (CRC_BLOCKING_STATUSES
-  # defaults to `overuse_denied`); only `allowed_warning` has been seen in the
-  # wild, so until a real cap validates the trigger, a live resume may not fire.
-  # The watcher logs every rate_limit_event it sees, so the first real cap
-  # reveals the true status string. Set back to true to revert to log/notify.
-  autoResumeDryRun = false;
   telegramTokenFile = "/run/agenix/telegram-bot-token";
+
+  # Boot/restart auto-resume: when the bridge (re)starts, re-host the sessions
+  # that were live before, so a reboot or watchdog restart doesn't leave every
+  # remote session dead until the user pokes it from the app. Mechanism (see the
+  # script header): GET /v1/environments to find this bridge's environment, then
+  # POST /v1/environments/<env>/bridge/reconnect {session_id} per session — the
+  # account OAuth token alone is accepted; a *fresh* bridge then work-polls the
+  # re-queued session and spawns its worker. Replaces the old cap-autoresume,
+  # which used `claude -p --resume` (a silent in-app no-op). Ships dry-run.
+  bootResumeDryRun = true;
+  bootResumeState = "/home/${username}/.claude/state/claude-rc-boot-resume";
+  orgUuid = "49157a56-e1c6-4ec1-8ad4-032f3125e527";
+  bootResume = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-boot-resume.py}";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
   credentialsFile = "/home/${username}/.claude/.credentials.json";
   sessionsDir = "/home/${username}/.claude/sessions";
@@ -232,8 +236,9 @@ lib.recursiveUpdate keepWarm.nixosConfig {
       WorkingDirectory = "/home/${username}/nic-os";
       ExecStartPre = prepConfigScript;
       ExecStart = startScript;
-      ExecStop = stopScript;
-      TimeoutStopSec = "10s";
+      # Snapshot the live session set before tearing the bridge down, then stop.
+      ExecStop = [ "${bootResume} snapshot" "${stopScript}" ];
+      TimeoutStopSec = "15s";
       Environment = [
         "HOME=/home/${username}"
         "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
@@ -282,36 +287,65 @@ lib.recursiveUpdate keepWarm.nixosConfig {
     };
   };
 
-  # Auto-resume bridge sessions stalled at the Claude usage cap. Each tick
-  # scans active bridge sessions for a blocking rate_limit_event and, once the
-  # window resets, resumes the conversation (dry-run by default — see
-  # autoResumeDryRun above). Logic lives in ./scripts/claude-rc-autoresume.py.
-  systemd.services.claude-rc-autoresume = {
-    description = "Auto-resume rate-limited claude-rc bridge sessions after cap reset";
+  # Snapshot the live bridge sessions periodically (and on clean stop, via the
+  # bridge's ExecStop) so a restarted/rebooted bridge knows which sessions to
+  # re-host. Captures only PID-alive sdk-cli sessions -> always "these were live".
+  systemd.services.claude-rc-snapshot = {
+    description = "Snapshot live claude-rc bridge sessions for boot-resume";
     serviceConfig = {
       Type = "oneshot";
       User = username;
       Group = "users";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-autoresume.py}";
+      ExecStart = "${bootResume} snapshot";
       Environment = [
         "HOME=/home/${username}"
-        "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
-        "CRC_DRY_RUN=${if autoResumeDryRun then "1" else "0"}"
         "CRC_SESSIONS_DIR=${sessionsDir}"
         "CRC_PROJECTS_DIR=${projectsDir}"
-        "CRC_CLAUDE_BIN=/home/${username}/.local/state/nix/profiles/home-manager/home-path/bin/claude"
-        "CRC_TELEGRAM_TOKEN_FILE=${telegramTokenFile}"
-        "CRC_TELEGRAM_CHAT_ID=${toString telegramChatId}"
+        "CRC_SNAPSHOT_FILE=${bootResumeState}/snapshot.json"
       ];
     };
   };
 
-  systemd.timers.claude-rc-autoresume = {
-    description = "claude-rc auto-resume timer";
+  systemd.timers.claude-rc-snapshot = {
+    description = "claude-rc live-session snapshot timer";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec = "3min";
-      OnUnitActiveSec = "5min";
+      OnBootSec = "1min";
+      OnUnitActiveSec = "3min";
+    };
+  };
+
+  # Re-host previously-live sessions whenever the bridge (re)starts. Pulled in by
+  # the bridge via wantedBy (fires on boot AND on every watchdog restart) and
+  # ordered after it. Validated mechanism lives in ./scripts/claude-rc-boot-resume.py.
+  systemd.services.claude-rc-boot-resume = {
+    description = "Re-host previously-live claude-rc sessions on bridge (re)start";
+    after = [ "claude-remote-control.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+    wantedBy = [ "claude-remote-control.service" ];
+    partOf = [ "claude-remote-control.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = username;
+      Group = "users";
+      WorkingDirectory = "/home/${username}/nic-os";
+      ExecStart = "${bootResume} resume";
+      Environment = [
+        "HOME=/home/${username}"
+        "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
+        "CRC_DRY_RUN=${if bootResumeDryRun then "1" else "0"}"
+        "CRC_SNAPSHOT_FILE=${bootResumeState}/snapshot.json"
+        "CRC_STATE_FILE=${bootResumeState}/handled.json"
+        "CRC_SESSIONS_DIR=${sessionsDir}"
+        "CRC_PROJECTS_DIR=${projectsDir}"
+        "CRC_CREDENTIALS_FILE=${configDir}/.credentials.json"
+        "CRC_WORKTREES_DIR=${worktreesDir}"
+        "CRC_DEVICE_NAME=rpi5"
+        "CRC_ORG_UUID=${orgUuid}"
+        "CRC_RECENCY_SECONDS=${maxInactivitySec}"
+        "CRC_TELEGRAM_TOKEN_FILE=${telegramTokenFile}"
+        "CRC_TELEGRAM_CHAT_ID=${toString telegramChatId}"
+      ];
     };
   };
 
