@@ -19,13 +19,34 @@ let
     name = "nixos-rebuild-safe";
     runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
     text = ''
+      # All userspace app services, heaviest → lightest. Socket-activated ones
+      # (gramps-web, reactive-resume, beaverhabits, airtrail, papra, wakapi,
+      # forgejo, sure, vaultwarden) free their RSS here and re-activate on
+      # demand via their .socket; always-on ones are restarted by the
+      # activation phase of nixos-rebuild switch. Infra (tailscaled, nginx,
+      # postgresql, redis, blocky) is deliberately left running.
       heavy=(
         immich-server.service
+        home-assistant.service
+        reactive-resume.service
         dawarich-sidekiq-all.service
         dawarich-web.service
         affine.service
+        affine-mcp.service
         sure-worker.service
         sure-web.service
+        gramps-web.service
+        gramps-web-celery.service
+        ryot-backend.service
+        ryot-frontend.service
+        beaverhabits.service
+        airtrail.service
+        papra.service
+        forgejo.service
+        wakapi.service
+        vaultwarden.service
+        homepage-dashboard.service
+        homepage-stats.service
       )
       echo "nixos-rebuild-safe: stopping heavy services to free memory…" >&2
       sudo systemctl stop "''${heavy[@]}" || true
