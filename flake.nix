@@ -79,8 +79,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
+    # Held at the last rev whose gramps-web-api builds against our pinned
+    # nixpkgs. Upstream a3f86d5 bumped gramps-web-api → 3.17.0 (gramps-web v26),
+    # which needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/
+    # gramps-gedcom7/flask-smorest — none satisfied by our nixpkgs — so its
+    # pythonRuntimeDepsCheck fails. Unpin once gramps-web-nix is compatible.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix";
+      url = "github:nSimonFR/gramps-web-nix/4e1740a1fdb7cccf3244d3152e26e2ce4dcab027";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
