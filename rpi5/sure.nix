@@ -31,6 +31,7 @@ in
     enable           = true;
     exitNodeClients  = [ "100.112.22.60" ]; # nphone
     tokenFileGroup   = "for-sure";
+    conversationLog.enable = true; # POC: log ChatGPT app conversations (plan cozy-wibbling-dijkstra)
   };
 
   services.for-sure = {

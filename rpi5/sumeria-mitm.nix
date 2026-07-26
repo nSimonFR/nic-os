@@ -92,6 +92,19 @@ in
       description = "Tailscale IPs of devices using the RPi5 as exit node (HTTPS intercepted)";
       example     = [ "100.112.22.60" ];
     };
+
+    # POC (plan cozy-wibbling-dijkstra): the terminating iptables REDIRECT means
+    # only ONE transparent proxy can serve a given client, so ChatGPT capture
+    # piggybacks on THIS proxy — it just widens --allow-hosts + loads a second
+    # addon. No extra iptables/exit-node/QUIC wiring (already present for the phone).
+    conversationLog = {
+      enable = lib.mkEnableOption "ChatGPT conversation logging (also decrypt chatgpt.com on this proxy and append exchanges to JSONL)";
+      file = lib.mkOption {
+        type        = lib.types.str;
+        default     = "/var/lib/sumeria-mitm/chatgpt-conversations.jsonl";
+        description = "Path where captured ChatGPT conversations are appended (JSONL)";
+      };
+    };
   };
 
   config = lib.mkIf cfg.enable {
@@ -112,15 +125,15 @@ in
       wants       = [ "network-online.target" ];
 
       serviceConfig = {
-        ExecStart = lib.concatStringsSep " " [
+        ExecStart = lib.concatStringsSep " " ([
           "${pkgs.mitmproxy}/bin/mitmdump"
           "--mode transparent"
           "-p ${toString cfg.port}"
-          "--allow-hosts api\\.lydia-app\\.com"
+          "--allow-hosts api\\.lydia-app\\.com${lib.optionalString cfg.conversationLog.enable "|chatgpt\\.com"}"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set block_global=false"
           "-s ${tokenExtractor}"
-        ];
+        ] ++ lib.optional cfg.conversationLog.enable "-s ${./chatgpt-logger.py}");
         User                = "sumeria-mitm";
         Group               = "sumeria-mitm";
         Restart             = "on-failure";
@@ -130,7 +143,11 @@ in
         LimitNOFILE         = 65536;
       };
 
-      environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
+      environment = {
+        SUMERIA_TOKEN_FILE = cfg.tokenFile;
+      } // lib.optionalAttrs cfg.conversationLog.enable {
+        CHATGPT_LOG_FILE = cfg.conversationLog.file;
+      };
     };
 
     # Redirect HTTPS from subnet-routed / exit-node clients → mitmproxy.
