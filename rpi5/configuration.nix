@@ -303,6 +303,11 @@ in
       "wheel"
       "video"
       "networkmanager"
+      # r/w on /mnt/data/cloud for the Hermes agent (runs as this user); the
+      # group's rwX ACL is applied in nextcloud.nix (nextcloud-files-owner).
+      # NB: a new group needs a user-session restart (reboot / loginctl
+      # terminate-user), not just a nixos-rebuild switch.
+      "nextcloud"
     ];
     home = "/home/${username}";
     openssh.authorizedKeys.keys = [
