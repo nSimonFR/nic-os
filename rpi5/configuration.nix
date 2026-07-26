@@ -163,7 +163,12 @@ in
     ./karakeep.nix
     ./airtrail.nix
     ./beaverhabits.nix
-    ./showmycards.nix
+    # ./showmycards.nix  # DISABLED: un-buildable as merged — pkgs/showmycards.nix
+    #   has 3 lib.fakeHash placeholders (backend vendorHash + 2 npm FOD
+    #   outputHashes) and backend/go.mod needs go 1.26.5 (nixpkgs ships 1.25.10).
+    #   To re-enable: override the callPackage with `go = pkgs.go_1_26;` in
+    #   flake.nix, do one real build to capture the three `got: sha256-…` hashes,
+    #   paste them in, then un-comment this import. See pkgs/showmycards.nix.
     ./nextcloud.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
