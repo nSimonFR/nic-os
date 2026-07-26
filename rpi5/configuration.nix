@@ -425,6 +425,15 @@ in
     impure-env = "NIX_CURL_FLAGS=--user-agent=nixpkgs-fetchurl";
     trusted-users = [ username ];
     auto-optimise-store = true;
+    # Keep the build-time closure of live GC roots (the running system) alive so
+    # GC never evicts the expensive-to-rebuild inputs of our custom flake
+    # packages — chiefly reactive-resume's pnpm-deps FOD, but also airtrail /
+    # beaverhabits / gramps-web / ryot. These aren't on cache.nixos.org (custom
+    # flakes; garnix cache is dead), so once evicted the 3.9 GB Pi rebuilds them
+    # from source — slow, and a real OOM/disk-thrash risk. keep-derivations pins
+    # the .drvs of the current system; keep-outputs pins their output paths.
+    keep-outputs = true;
+    keep-derivations = true;
   };
 
   nix.gc = {
