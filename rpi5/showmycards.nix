@@ -51,13 +51,14 @@ in
   ];
 
   # ── Go backend ─────────────────────────────────────────────────────────────
-  # Not wantedBy multi-user.target — started on demand alongside the frontend
-  # (frontend `wants` it) and idle-stopped with it (partOf).
+  # No wantedBy here — the socketActivate `workers` block below binds this to the
+  # frontend's lifecycle (sleepWith → wantedBy + partOf = frontend), so it starts
+  # when the frontend wakes and idle-stops with it. Both processes reach ~0 RAM
+  # at rest.
   systemd.services.showmycards-backend = {
     description = "ShowMyCards backend (Go/Fiber API, SQLite)";
     after    = [ "network-online.target" ];
     wants    = [ "network-online.target" ];
-    partOf   = [ "showmycards-frontend.service" ];
     environment = {
       PORT            = toString backendPort;
       DATABASE_PATH   = "${dataDir}/database.db";
@@ -76,11 +77,12 @@ in
     };
   };
 
-  # ── SvelteKit frontend (adapter-node) ──────────────────────────────────────
+  # ── SvelteKit frontend (adapter-node) — the socket-activated realUnit ──────
+  # Backend coupling is handled by the socketActivate `workers` block (the
+  # backend is wantedBy this unit), and the readyProbe gates traffic until the
+  # backend is reachable through the proxy — so no explicit wants/after here.
   systemd.services.showmycards-frontend = {
     description = "ShowMyCards frontend (SvelteKit adapter-node)";
-    after = [ "showmycards-backend.service" ];
-    wants = [ "showmycards-backend.service" ];
     environment = {
       HOST               = "127.0.0.1";
       PORT               = toString internalPort;
@@ -97,16 +99,20 @@ in
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ─────────────
-  # Proxy on :8330 lazily starts showmycards-frontend on first connection (which
-  # `wants` the backend) and stops both after idleSec. Probe /api/health THROUGH
-  # the frontend proxy so a wake only reports ready once frontend + backend are
-  # both up. See the FIRST BOOT note above before the initial import.
+  # Proxy on :8330 lazily starts the frontend on first connection and idle-stops
+  # it after idleSec. The backend is declared as a `sleepWith` worker so it
+  # starts and stops in lock-step with the frontend (both → ~0 RAM at rest).
+  # readyProbe hits /api/health THROUGH the frontend proxy, so a wake only
+  # reports ready once the whole chain (frontend + backend) is up. See the FIRST
+  # BOOT note above before the initial import.
   services.socketActivate.showmycards = {
     enable   = true;
     realUnit = "showmycards-frontend.service";
     listen   = [ "127.0.0.1:${toString proxyPort}" ];
     backend  = "127.0.0.1:${toString internalPort}";
     idleSec  = 600;
+    # Backend sleeps alongside the frontend (wantedBy + partOf = frontend).
+    workers."showmycards-backend.service".policy = "sleepWith";
     readyProbe = {
       url          = "http://127.0.0.1:${toString internalPort}/api/health";
       expectStatus = 200;
