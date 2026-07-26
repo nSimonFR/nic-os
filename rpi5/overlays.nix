@@ -68,5 +68,10 @@
     # NixOS modules (picoclaw, cyrus) and the NixOS-integrated home-manager
     # generation resolve the same package as the standalone HM configs.
     outputs.overlays.rtk
+
+    # ShowMyCards (MTG collection manager) — exposes `pkgs.showmycards`, built
+    # from the showmycards-src flake input. Defined once in flake.nix
+    # (outputs.overlays.showmycards) and reused here; see rpi5/showmycards.nix.
+    outputs.overlays.showmycards
   ];
 }

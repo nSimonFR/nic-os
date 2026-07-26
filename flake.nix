@@ -124,6 +124,17 @@
       flake = false;
     };
 
+    # ShowMyCards — self-hosted Magic: The Gathering collection manager
+    # (showmycards/showmycards). Source-only input (`flake = false`): the
+    # prebuilt image is amd64-only, so pkgs/showmycards.nix builds it from source
+    # (Go backend + SvelteKit frontend) and exposes `pkgs.showmycards` via an
+    # overlay. Bump: change the tag here + `version` in pkgs/showmycards.nix, then
+    # `sudo nix flake lock --update-input showmycards-src` + rebuild.
+    showmycards-src = {
+      url = "github:showmycards/showmycards/v0.3.0";
+      flake = false;
+    };
+
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
     # Pinned to a tag; bump the ref to roll forward.
     tiny-llm-gate = {
@@ -222,10 +233,22 @@
       rtkOverlay = final: _prev: {
         rtk = final.callPackage ./pkgs/rtk.nix { rtk-src = inputs.rtk-src; };
       };
+
+      # ShowMyCards package overlay — exposes `pkgs.showmycards`, built from the
+      # showmycards-src flake input. Reused in rpi5/overlays.nix (DRY) so NixOS
+      # modules and the standalone build target resolve the same derivation.
+      showmycardsOverlay = final: _prev: {
+        showmycards = final.callPackage ./pkgs/showmycards.nix {
+          showmycards-src = inputs.showmycards-src;
+          # go.mod needs go >= 1.26.5; override here if the default is older.
+          # go = final.go_1_26;
+        };
+      };
     in
     {
       # Exposed so rpi5/overlays.nix can pull the same overlay (DRY).
       overlays.rtk = rtkOverlay;
+      overlays.showmycards = showmycardsOverlay;
 
       # `nix build .#rtk` — standalone build target to isolate rtk's heavy LTO
       # compile from a full rebuild (build it alone first on the rpi5).
@@ -256,6 +279,11 @@
           # there is no prebuild CI cache (garnix is deprecated). See rpi5/ryot.nix.
           aarch64-linux.ryot =
             self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
+          # ShowMyCards — `nix build .#showmycards` to isolate its Go (cgo) +
+          # SvelteKit compile from a full rebuild and validate/pin it first
+          # (no prebuild cache). Pulls the exact rpi5 derivation via the overlay.
+          aarch64-linux.showmycards =
+            self.nixosConfigurations.${rpiconfig}.pkgs.showmycards;
           # Hermes Agent — lean `messaging` variant. Exposed as a standalone
           # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
           # npm compile can be validated/isolated on the Pi BEFORE wiring the
