@@ -66,6 +66,37 @@ let
   '';
   documentsSource = ./documents;
 
+  # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
+  # (Scryfall card search + pricing + rulings + legality, deck validation,
+  # Moxfield/Archidekt deck import, EDHREC recs/combos, comprehensive rules).
+  # All public data — no auth or API keys. Upstream ships a static (CGO-free) Go
+  # release binary, so we fetch+install it directly rather than buildGoModule
+  # (no vendorHash, no Go toolchain at build time). Hermes' built-in MCP client
+  # (mcp_servers, below) launches it over stdio and registers its tools as
+  # mcp__mtg__* in every conversation.
+  mtgMcp = pkgs.stdenvNoCC.mkDerivation rec {
+    pname = "mtg-mcp";
+    version = "2.1.0";
+    src = pkgs.fetchurl {
+      url = "https://github.com/nathanmartins/mtg-mcp/releases/download/v${version}/mtg-mcp_Linux_arm64.tar.gz";
+      hash = "sha256-NajD9ADrQoVOtQiL+X0tVjA7wR5ZI+yIZQvRQM+JHN4=";
+    };
+    sourceRoot = ".";
+    dontConfigure = true;
+    dontBuild = true;
+    installPhase = ''
+      runHook preInstall
+      install -Dm755 mtg-mcp $out/bin/mtg-mcp
+      runHook postInstall
+    '';
+    meta = {
+      description = "MCP server for Magic: The Gathering Commander (Scryfall, decks, rules)";
+      homepage = "https://github.com/nathanmartins/mtg-mcp";
+      license = pkgs.lib.licenses.mit;
+      platforms = [ "aarch64-linux" ];
+    };
+  };
+
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a
     # user-defined OpenAI-compatible endpoint (see header note).
@@ -84,6 +115,13 @@ let
         models.${gateModel}.context_length = 131072;
       }
     ];
+
+    # Native MCP client: launch mtg-mcp over stdio at startup and auto-register
+    # its tools (mcp__mtg__search_cards, __validate_deck, __get_card_price,
+    # __get_edhrec_recommendations, …) into every platform toolset. Public MTG
+    # data only, so no `env`/secrets are passed to the subprocess. Requires the
+    # `mcp` Python package, which the hermes-agent env already bundles.
+    mcp_servers.mtg.command = "${mtgMcp}/bin/mtg-mcp";
 
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
