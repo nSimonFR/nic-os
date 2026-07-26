@@ -127,13 +127,36 @@ let
         --debug-file /tmp/claude-rc-debug.log"
   '';
 
+  # Health = the bridge PROCESS is alive, not "does a tmux window exist". The
+  # tmux wrapper is incidental, and probing the per-user tmux socket from this
+  # root-run watchdog was fragile: right after a nixos-rebuild restart the
+  # socket churns, and a single `has-session` probe (with stderr swallowed)
+  # would hang/error and read identically to "session dead" -> the watchdog
+  # SIGKILLed a healthy, in-use bridge every 5min (restart's ExecStop reliably
+  # hits TimeoutStopSec). Fixes: (1) check the process directly via pgrep,
+  # (2) debounce over 3 probes so a momentary blip never triggers a restart,
+  # (3) don't swallow tmux stderr, so a real fault is diagnosable in the log.
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
-    # tmux server is per-user; point to the user's socket
-    TMUX_SOCKET="/tmp/tmux-$(id -u ${username})/default"
-    if ! ${pkgs.tmux}/bin/tmux -S "$TMUX_SOCKET" has-session -t ${sessionName} 2>/dev/null; then
-      echo "tmux session ${sessionName} missing, restarting service"
-      systemctl restart claude-remote-control.service
-    fi
+    export PATH="${pkgs.procps}/bin:${pkgs.tmux}/bin:${pkgs.coreutils}/bin:$PATH"
+    uid="$(id -u ${username})"
+    tmux_socket="/tmp/tmux-$uid/default"
+
+    alive() {
+      # Primary signal: the bridge process itself.
+      pgrep -u "$uid" -f 'remote-control --spawn' >/dev/null && return 0
+      # Fallback: the tmux window, in case the cmdline pattern ever drifts.
+      # Stderr is intentionally NOT discarded so socket faults show in the log.
+      tmux -S "$tmux_socket" has-session -t ${sessionName} && return 0
+      return 1
+    }
+
+    for i in 1 2 3; do
+      alive && exit 0
+      [ "$i" -lt 3 ] && sleep 3
+    done
+
+    echo "bridge absent on 3 probes over ~6s, restarting service"
+    systemctl restart claude-remote-control.service
   '';
 
   # Kill stale bridge sessions and clean up orphaned worktrees.
