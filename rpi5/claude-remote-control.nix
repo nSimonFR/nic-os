@@ -10,8 +10,11 @@ let
   # POST /v1/environments/<env>/bridge/reconnect {session_id} per session — the
   # account OAuth token alone is accepted; a *fresh* bridge then work-polls the
   # re-queued session and spawns its worker. Replaces the old cap-autoresume,
-  # which used `claude -p --resume` (a silent in-app no-op). Ships dry-run.
-  bootResumeDryRun = true;
+  # which used `claude -p --resume` (a silent in-app no-op). Live: on a fresh
+  # bridge (reboot / watchdog restart) it actually re-hosts the snapshotted
+  # sessions. Safe to run live now that PR#441 stopped the watchdog thrash, so
+  # bridge restarts are rare/legitimate rather than every 5min.
+  bootResumeDryRun = false;
   bootResumeState = "/home/${username}/.claude/state/claude-rc-boot-resume";
   orgUuid = "49157a56-e1c6-4ec1-8ad4-032f3125e527";
   bootResume = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-boot-resume.py}";
