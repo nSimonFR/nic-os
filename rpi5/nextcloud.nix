@@ -363,6 +363,58 @@ in
     wantedBy = [ "local-fs.target" ];
   }];
 
+  # ── Hermes agent r/w access to /mnt/data/cloud ─────────────────────────────
+  # The Hermes Telegram agent (rpi5/hermes) runs as nsimon's systemd user
+  # service with a local shell backend and no FS sandbox, so its filesystem
+  # access is exactly nsimon's. nsimon is now in the `nextcloud` group
+  # (configuration.nix); this grants that group rwX on nsimon's Nextcloud files
+  # tree so the agent can read and write /mnt/data/cloud directly.
+  #
+  # POSIX ACLs (not chmod) because they are ADDITIVE: base nextcloud:nextcloud
+  # ownership and modes stay untouched, so Nextcloud's own file logic and the
+  # nextcloud-files-owner guard are unaffected. The access entry grants rwX on
+  # everything present now; the default (d:) entry makes files created later —
+  # by Nextcloud or by Hermes — inherit group access. Re-applied each activation
+  # (~2.4k entries, sub-second), which also re-grants rwX on anything Nextcloud
+  # created since the last rebuild. `setfacl -R` does not traverse symlinks, so
+  # the PHOTOS -> immich symlink leaves the immich tree untouched.
+  systemd.services.nextcloud-hermes-acl = {
+    description = "Grant nextcloud group (nsimon/Hermes) rwX ACL on nsimon's Nextcloud files";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "nextcloud-files-owner.service" ];
+    requires = [ "nextcloud-files-owner.service" ];
+    unitConfig.ConditionPathIsDirectory = "${datadir}/data/nsimon/files";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${pkgs.acl}/bin/setfacl -R -m g:nextcloud:rwX,d:g:nextcloud:rwX ${datadir}/data/nsimon/files";
+    };
+  };
+
+  # Files Hermes writes straight to disk bypass DAV/the web UI, so Nextcloud
+  # doesn't know about them until an `occ files:scan` re-indexes the tree. Run an
+  # incremental scan of nsimon's files on a timer so out-of-band writes (and
+  # edits/deletes) surface in the UI, DAV, and the Tailscale Drive share. The
+  # scan is mtime-based and cheap at this tree size; occ runs via the module
+  # wrapper, which handles the credentials/env (see [[known_issue_nextcloud_occ_creds]]).
+  systemd.services.nextcloud-files-rescan = {
+    description = "Rescan nsimon's Nextcloud files to surface out-of-band (Hermes) writes";
+    after = [ "phpfpm-nextcloud.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = ''${config.services.nextcloud.occ}/bin/nextcloud-occ files:scan --path="nsimon/files"'';
+    };
+  };
+  systemd.timers.nextcloud-files-rescan = {
+    description = "Periodic rescan of nsimon's Nextcloud files (surface Hermes writes)";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "15min";
+      Persistent = true;
+    };
+  };
+
   # ── serverinfo NC-Token for the homepage widget ──────────────────────────
   # The homepage Nextcloud widget hits the serverinfo API, which accepts an
   # `NC-Token` header. Basic auth as nsimon fails (401 — the homepage secret

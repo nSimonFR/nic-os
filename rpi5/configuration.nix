@@ -303,6 +303,12 @@ in
       "wheel"
       "video"
       "networkmanager"
+      # r/w on /mnt/data/cloud (Nextcloud's nsimon files dir) for the Hermes
+      # agent, which runs as this user's systemd service. Access itself comes
+      # from the group rwX ACL applied in nextcloud.nix (nextcloud-hermes-acl).
+      # NB: a new group is only picked up after the user session restarts
+      # (reboot / loginctl terminate-user), not on a plain nixos-rebuild switch.
+      "nextcloud"
     ];
     home = "/home/${username}";
     openssh.authorizedKeys.keys = [
