@@ -18,15 +18,16 @@
 # `files` correctly. The repo ships bun.lock (no package-lock.json), so the FOD
 # outputHash — not a lockfile — is what pins determinism here.
 #
-# ⚠ HASHES ARE PLACEHOLDERS. vendorHash + the two FOD outputHashes are
-#   lib.fakeHash. On the first real build Nix prints `got: sha256-…` for each —
-#   paste those in (backend vendorHash first, then depsBuild, then depsProd).
+# ⚠ HASHES. vendorHash + the two FOD outputHashes below are content hashes of
+#   fetched dependencies, so they change whenever the pinned source's go.sum or
+#   frontend deps move. After bumping showmycards-src, set the changed one back
+#   to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
 #
-# ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.5`. A pure Nix build cannot
-#   fetch a toolchain (GOTOOLCHAIN=auto has no network in the build sandbox), so
-#   the `go` passed in must already be ≥ 1.26.5. If the default nixpkgs `go` is
-#   older, override the callPackage in flake.nix with `go = pkgs.go_1_26;` (or
-#   `unstablePkgs.go`).
+# ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.3`, and a pure Nix build
+#   cannot fetch a toolchain (GOTOOLCHAIN=auto has no network in the build
+#   sandbox), so the `go` passed in must already satisfy it. nixpkgs' default
+#   `go` is 1.25.10 — too old — so flake.nix passes `go = final.go_1_26`
+#   (1.26.4), matching upstream's golang:1.26-alpine build image.
 {
   lib,
   stdenv,
@@ -50,8 +51,7 @@ let
     pname = "showmycards-backend";
     inherit version src;
     modRoot = "backend";
-    # Placeholder — replace with the real hash on first build.
-    vendorHash = lib.fakeHash;
+    vendorHash = "sha256-WPOJe+v/gVJX/Q8Rm7Jtd6EB0rW5Wc0CoCA8dbj0US0=";
     nativeBuildInputs = [ gcc ];
     env.CGO_ENABLED = "1";
     ldflags = [ "-X" "backend/version.Version=${version}" ];
@@ -97,7 +97,7 @@ let
   depsBuild = mkNpmModules {
     name = "deps-build";
     npmArgs = "";
-    outputHash = lib.fakeHash; # placeholder — replace on first build
+    outputHash = "sha256-90sxgYWGHQyIo/GIABnOSHi4B9D/2pMo1oLpjelc0Zc=";
   };
 
   # Production-only tree shipped at runtime. adapter-node keeps `dependencies`
@@ -105,7 +105,7 @@ let
   depsProd = mkNpmModules {
     name = "deps-prod";
     npmArgs = "--omit=dev";
-    outputHash = lib.fakeHash; # placeholder — replace on first build
+    outputHash = "sha256-rRC6hQkeHLzv7o9LV3R5GZzc7hp7vb4F5Ogw+lDPy5Y=";
   };
 
 in
