@@ -250,8 +250,11 @@
       showmycardsOverlay = final: _prev: {
         showmycards = final.callPackage ./pkgs/showmycards.nix {
           showmycards-src = inputs.showmycards-src;
-          # go.mod needs go >= 1.26.5; override here if the default is older.
-          # go = final.go_1_26;
+          # backend/go.mod requires `go 1.26.3` and a pure build can't fetch a
+          # toolchain (no network in the sandbox), so pass one that already
+          # satisfies it: the default `go` is 1.25.10, too old. go_1_26 is
+          # 1.26.4 here, matching upstream's golang:1.26-alpine build image.
+          go = final.go_1_26;
         };
       };
     in
