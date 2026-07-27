@@ -1,114 +1,80 @@
-<!-- vendored via `npx skills add sundial-org/awesome-openclaw-skills@caldav-calendar` (commit b80cde2) -->
 ---
 name: caldav-calendar
-description: Sync and query the user's personal Nextcloud calendar via CalDAV using vdirsyncer + khal. Events cached locally as .ics under ~/.local/share/vdirsyncer/calendars/.
-metadata: {"openclaw":{"emoji":"📅","os":["linux"],"requires":{"bins":["vdirsyncer","khal"]}}}
+description: Read and write the user's personal Nextcloud calendar over CalDAV using the bundled zero-dependency nc-cal.py client (add/list/edit/delete events, list calendars). No sync step, no local cache — reads and writes go straight to the server.
+metadata: {"hermes":{"emoji":"📅","os":["linux"],"requires":{"bins":["python3"]}}}
 ---
 
-# CalDAV Calendar (vdirsyncer + khal)
+# CalDAV Calendar (nc-cal.py)
 
-> **PERSONAL calendar only.** This skill is wired to the user's Nextcloud (`https://rpi5.gate-mintaka.ts.net/nextcloud`). Work/Trusk calendar access goes through the `gog` skill instead.
+> **PERSONAL calendar only.** Wired to the user's Nextcloud
+> (`https://rpi5.gate-mintaka.ts.net/nextcloud`). Work/Trusk calendar access
+> goes through the `gog` skill instead.
 
-**vdirsyncer** syncs CalDAV calendars to local `.ics` files. **khal** reads and writes them. On the rpi5 both binaries come from `home.packages` and the configs (`~/.config/vdirsyncer/config`, `~/.config/khal/config`) are Nix-managed in `rpi5/picoclaw/picoclaw.nix`; the Nextcloud password is read at sync time from `/run/agenix/nextcloud-homepage-password` via vdirsyncer's `password.fetch`.
+`scripts/nc-cal.py` is a small, standard-CalDAV (RFC 4791) client using only the
+Python standard library. It talks straight to the server on every call — there
+is **no `sync` step, no local cache, and no config file to keep in order**.
+Everything server-specific is defaulted for this machine (Nextcloud URL, user
+`nsimon`, password read from the agenix file `/run/agenix/nextcloud-homepage-password`),
+overridable via `CALDAV_BASE` / `CALDAV_USER` / `CALDAV_PASSWORD[_FILE]` /
+`CALDAV_CALENDAR` env vars.
 
-## Sync First
-
-Always sync before querying or after making changes:
-```bash
-vdirsyncer sync
-```
-
-## View Events
-
-```bash
-khal list                        # Today
-khal list today 7d               # Next 7 days
-khal list tomorrow               # Tomorrow
-khal list 2026-01-15 2026-01-20  # Date range
-khal list -a nextcloud today     # Specific calendar
-```
-
-## Search
+Run it with:
 
 ```bash
-khal search "meeting"
-khal search "dentist" --format "{start-date} {title}"
+python3 ~/.hermes/skills/caldav-calendar/scripts/nc-cal.py <command> [options]
 ```
 
-## Create Events
+## List calendars
 
 ```bash
-khal new 2026-01-15 10:00 11:00 "Meeting title"
-khal new 2026-01-15 "All day event"
-khal new tomorrow 14:00 15:30 "Call" -a nextcloud
-khal new 2026-01-15 10:00 11:00 "With notes" :: Description goes here
+nc-cal.py calendars            # prints "collection-id<TAB>Display Name"
 ```
+The default calendar is `personal`; pass `--calendar <id>` to any command to
+target another (use the collection-id from the left column, e.g. `personal`).
 
-After creating, sync to push changes:
-```bash
-vdirsyncer sync
-```
-
-## Edit Events (interactive)
-
-`khal edit` is interactive — requires a TTY. Use tmux if automating:
+## View events
 
 ```bash
-khal edit "search term"
-khal edit -a nextcloud "search term"
-khal edit --show-past "old event"
+nc-cal.py list                                   # next 30 days (default)
+nc-cal.py list --from 2026-08-01 --to 2026-08-31 # explicit range
+nc-cal.py list --calendar personal --json        # machine-readable
 ```
+Output is time-sorted; each event prints its `uid:` (needed for edit/delete).
 
-Menu options:
-- `s` → edit summary
-- `d` → edit description
-- `t` → edit datetime range
-- `l` → edit location
-- `D` → delete event
-- `n` → skip (save changes, next match)
-- `q` → quit
-
-After editing, sync:
-```bash
-vdirsyncer sync
-```
-
-## Delete Events
-
-Use `khal edit`, then press `D` to delete.
-
-## Output Formats
-
-For scripting:
-```bash
-khal list --format "{start-date} {start-time}-{end-time} {title}" today 7d
-khal list --format "{uid} | {title} | {calendar}" today
-```
-
-Placeholders: `{title}`, `{description}`, `{start}`, `{end}`, `{start-date}`, `{start-time}`, `{end-date}`, `{end-time}`, `{location}`, `{calendar}`, `{uid}`
-
-## Caching
-
-khal caches events in `~/.local/share/khal/khal.db`. If data looks stale after syncing:
-```bash
-rm ~/.local/share/khal/khal.db
-```
-
-## Initial Setup (rpi5)
-
-On this host both configs are already Nix-managed (see `rpi5/picoclaw/picoclaw.nix` — `home.file.".config/vdirsyncer/config"` and `home.file.".config/khal/config"`). Do **not** hand-edit them; changes get overwritten on the next `home-manager switch`. Edit the Nix module instead.
-
-Bootstrap, once interactively:
+## Add an event
 
 ```bash
-vdirsyncer discover   # asks y/N per Nextcloud calendar — accept the ones you want
-vdirsyncer sync
+# timed event (local time, HH:MM)
+nc-cal.py add --summary "Dentist" --start 2026-08-15T10:00 --end 2026-08-15T11:00
+
+# all-day (a bare date, or add --all-day)
+nc-cal.py add --summary "Holiday" --start 2026-08-20 --all-day
+
+# with extras
+nc-cal.py add --summary "Call" --start 2026-08-15T14:00 --end 2026-08-15T14:30 \
+  --location "Zoom" --description "Sync with X" --calendar personal
+```
+Prints the new `uid`. A missing/invalid `--end` defaults to +1h (timed) or the
+next day (all-day), so the server never rejects a zero-length event.
+
+## Edit an event (non-interactive)
+
+```bash
+nc-cal.py edit --uid <uid> --summary "New title"
+nc-cal.py edit --uid <uid> --start 2026-08-15T11:00 --end 2026-08-15T12:00
+```
+Fetches the event, applies only the flags you pass, and PUTs it back. Get the
+`uid` from `list`.
+
+## Delete an event
+
+```bash
+nc-cal.py delete --uid <uid>
 ```
 
-Afterwards `vdirsyncer sync` and all `khal …` commands work non-interactively.
+## Notes
 
-Useful paths:
-- Local cache: `~/.local/share/vdirsyncer/calendars/<calendar>/*.ics`
-- vdirsyncer status: `~/.local/share/vdirsyncer/status/`
-- khal db: `~/.local/share/khal/khal.db`
-- Source of truth: `https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/`
+- Times without a timezone offset are floating local time (the server shows them
+  in the viewer's zone). Append an offset (`2026-08-15T10:00+02:00`) to pin UTC.
+- Dates are `YYYY-MM-DD`; datetimes are `YYYY-MM-DDTHH:MM`.
+- Recurring events list at their next occurrence with the master `uid`.
