@@ -17,8 +17,43 @@ let
   # automatically during the activation phase of nixos-rebuild switch.
   nixosRebuildSafe = pkgs.writeShellApplication {
     name = "nixos-rebuild-safe";
-    runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
+    runtimeInputs = with pkgs; [ systemd nixos-rebuild git ];
     text = ''
+      # Refuse to switch from a checkout that is behind origin/main. Rebuilding
+      # from a stale tree silently ROLLS THE WHOLE SYSTEM BACK to that tree's
+      # state — every merged commit it lacks is reverted on the running box,
+      # with no error. This has bitten twice (gen 750; gen 953 on 2026-07-27,
+      # which deleted the showmycards units mid-import). Nix has no way to know
+      # you meant "deploy main", so check it here.
+      # Override with NIXOS_REBUILD_ALLOW_STALE=1 when the staleness is
+      # deliberate (bisecting, testing an old generation).
+      flakeRef=""
+      args=("$@")
+      for i in "''${!args[@]}"; do
+        case "''${args[i]}" in
+          --flake) flakeRef="''${args[i+1]-}" ;;
+          --flake=*) flakeRef="''${args[i]#--flake=}" ;;
+        esac
+      done
+      flakeDir="''${flakeRef%%#*}"
+      flakeDir="''${flakeDir#path:}"
+      [ -n "$flakeDir" ] || flakeDir="."
+      if [ "''${NIXOS_REBUILD_ALLOW_STALE-0}" != "1" ] &&
+         git -C "$flakeDir" rev-parse --git-dir >/dev/null 2>&1; then
+        GIT_TERMINAL_PROMPT=0 git -C "$flakeDir" fetch --quiet origin 2>/dev/null || true
+        if upstream=$(git -C "$flakeDir" rev-parse --verify --quiet origin/main); then
+          behind=$(git -C "$flakeDir" rev-list --count "HEAD..$upstream" 2>/dev/null || echo 0)
+          if [ "$behind" -gt 0 ]; then
+            echo "nixos-rebuild-safe: REFUSING — $flakeDir is $behind commit(s) behind origin/main." >&2
+            echo "  Switching from here would revert those commits on the running system." >&2
+            git -C "$flakeDir" log --oneline "HEAD..$upstream" | sed 's/^/    /' >&2
+            echo "  Fix:      git -C $flakeDir merge --ff-only origin/main" >&2
+            echo "  Override: NIXOS_REBUILD_ALLOW_STALE=1 nixos-rebuild-safe $*" >&2
+            exit 1
+          fi
+        fi
+      fi
+
       # All userspace app services, heaviest → lightest. Socket-activated ones
       # (gramps-web, reactive-resume, beaverhabits, airtrail, papra, wakapi,
       # forgejo, sure, vaultwarden) free their RSS here and re-activate on
