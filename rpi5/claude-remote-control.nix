@@ -278,6 +278,27 @@ let
           esac
         done
         if [ "$in_use" = "0" ]; then
+          # Preserve recently-active worktrees even with no live worker. A bridge
+          # worker process only exists mid-turn, so an idle-but-resumable session
+          # — and, right after a reboot, EVERY session until it is re-hosted — has
+          # no live cwd here and would be reaped, which deletes the worktree and
+          # freezes the session permanently (the app has nothing to spawn into).
+          # Gate on the transcript JSONL mtime, the same 24h window the stale-
+          # process loop above uses. Workers run with CLAUDE_CONFIG_DIR=~/.claude-rc
+          # whose projects/ symlink points into $PROJECTS_DIR; the transcript dir
+          # is the worktree path slugified (every non-alphanumeric char -> '-').
+          slug="$(printf '%s' "$wt" | tr -c 'A-Za-z0-9' '-')"
+          conv_dir="$PROJECTS_DIR/$slug"
+          last_mod=0
+          if [ -d "$conv_dir" ]; then
+            last_mod="$(find "$conv_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\n' 2>/dev/null \
+              | cut -d. -f1 | sort -rn | head -1)"
+            [ -z "$last_mod" ] && last_mod=0
+          fi
+          if [ "$last_mod" -gt 0 ] && [ "$(( now - last_mod ))" -le "$MAX_INACTIVITY" ]; then
+            echo "preserving recently-active worktree: $wt_name (idle $(( (now - last_mod) / 60 ))min)"
+            continue
+          fi
           echo "removing orphaned worktree: $wt_name"
           git -C /home/${username}/nic-os worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
         fi
@@ -354,9 +375,12 @@ lib.recursiveUpdate keepWarm.nixosConfig {
     };
   };
 
-  # Snapshot the live bridge sessions periodically (and on clean stop, via the
-  # bridge's ExecStop) so a restarted/rebooted bridge knows which sessions to
-  # re-host. Captures only PID-alive sdk-cli sessions -> always "these were live".
+  # Snapshot the recently-active bridge sessions periodically (and on clean stop,
+  # via the bridge's ExecStop) so a restarted/rebooted bridge knows which sessions
+  # to re-host. Enumerated from the on-disk bridge-cse_* worktrees + transcript
+  # mtimes (both survive a reboot), NOT live worker PIDs — a worker only exists
+  # mid-turn, so the old PID snapshot was empty on every real reboot and revived
+  # nothing. Bounded to the maxInactivitySec (24h) recency window.
   systemd.services.claude-rc-snapshot = {
     description = "Snapshot live claude-rc bridge sessions for boot-resume";
     serviceConfig = {
@@ -366,9 +390,10 @@ lib.recursiveUpdate keepWarm.nixosConfig {
       ExecStart = "${bootResume} snapshot";
       Environment = [
         "HOME=/home/${username}"
-        "CRC_SESSIONS_DIR=${sessionsDir}"
         "CRC_PROJECTS_DIR=${projectsDir}"
+        "CRC_WORKTREES_DIR=${worktreesDir}"
         "CRC_SNAPSHOT_FILE=${bootResumeState}/snapshot.json"
+        "CRC_RECENCY_SECONDS=${maxInactivitySec}"
       ];
     };
   };
