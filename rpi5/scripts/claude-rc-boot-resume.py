@@ -130,53 +130,63 @@ def save_json(path, obj):
     tmp.replace(path)
 
 
-def pid_alive(pid):
-    try:
-        return Path(f"/proc/{int(pid)}").exists()
-    except Exception:  # noqa: BLE001
-        return False
-
-
 def cse_from_cwd(cwd):
     m = CSE_RE.search(cwd or "")
     return m.group(1) if m else None
 
 
-def conv_mtime(session_id, cwd):
-    """Latest conversation-JSONL mtime for a session (activity proxy)."""
-    hits = list(PROJECTS_DIR.glob(f"*/{session_id}.jsonl"))
-    if not hits and cwd:
-        slug = cwd.replace("/", "-").replace(".", "-").replace("_", "-")
-        p = PROJECTS_DIR / slug / f"{session_id}.jsonl"
-        if p.exists():
-            hits = [p]
-    return max((h.stat().st_mtime for h in hits), default=0.0)
+def _slug(path):
+    """claude-code's project-dir slug: every non-alphanumeric char -> '-'.
+    Mirrors the slugify it uses for $CLAUDE_CONFIG_DIR/projects/<slug>/."""
+    return re.sub(r"[^A-Za-z0-9]", "-", str(path))
+
+
+def worktree_last_active(cwd):
+    """Newest conversation-JSONL mtime for a bridge worktree's session (activity
+    proxy). Bridge workers run with cwd=<worktree> and
+    CLAUDE_CONFIG_DIR=~/.claude-rc, whose `projects` symlink points back into
+    PROJECTS_DIR (~/.claude/projects), so the transcript lives at
+    PROJECTS_DIR/<slug of cwd>/<uuid>.jsonl. Its mtime is bumped on every
+    user/assistant message and survives a reboot -> unlike a live worker PID, it
+    still marks an idle-but-resumable session as recently active."""
+    d = PROJECTS_DIR / _slug(cwd)
+    if not d.is_dir():
+        return 0.0
+    return max((p.stat().st_mtime for p in d.glob("*.jsonl")), default=0.0)
 
 
 # ---------------------------------------------------------------- snapshot ----
 def cmd_snapshot():
-    """Record the currently-live bridge sessions so a later (restarted) instance
-    knows what to revive. Only PID-alive sdk-cli sessions are captured, so the
-    snapshot always means 'these were live', never stale history."""
+    """Record the recently-active bridge sessions so a later (restarted) instance
+    knows what to revive.
+
+    Enumerated from the on-disk bridge-cse_* worktrees + their transcript mtimes,
+    NOT from live worker PIDs. A bridge worker process only exists while a session
+    is mid-turn, so the old PID-based snapshot was empty almost always and a
+    reboot revived nothing (revived=0 on every real reboot). The worktree dir and
+    its transcript both survive a reboot, so keying off them captures the idle-
+    but-resumable sessions that are the whole point of boot-resume. Bounded to the
+    RECENCY window so an abandoned session ages out instead of being revived
+    forever."""
+    now = time.time()
     records = {}
-    for f in sorted(SESSIONS_DIR.glob("*.json")):
-        s = load_json(f, None)
-        if not isinstance(s, dict) or s.get("entrypoint") != "sdk-cli":
+    for wt in sorted(WORKTREES_DIR.glob("bridge-cse_*")):
+        if not wt.is_dir():
             continue
-        if not pid_alive(s.get("pid")):
-            continue
-        cwd = s.get("cwd", "")
-        cse = cse_from_cwd(cwd)
+        cse = cse_from_cwd(wt.name)
         if not cse:
+            continue
+        la = worktree_last_active(wt) or wt.stat().st_mtime
+        if now - la > RECENCY:
             continue
         records[cse] = {
             "cseId": cse,
-            "cwd": cwd,
-            "localUuid": s.get("sessionId"),
-            "lastActive": conv_mtime(s.get("sessionId"), cwd),
+            "cwd": str(wt),
+            "localUuid": None,
+            "lastActive": la,
         }
-    save_json(SNAPSHOT_FILE, {"savedAt": int(time.time()), "sessions": list(records.values())})
-    log(f"snapshot: {len(records)} live session(s) -> {SNAPSHOT_FILE}")
+    save_json(SNAPSHOT_FILE, {"savedAt": int(now), "sessions": list(records.values())})
+    log(f"snapshot: {len(records)} recently-active session(s) -> {SNAPSHOT_FILE}")
 
 
 # ------------------------------------------------------------------ resume ----
