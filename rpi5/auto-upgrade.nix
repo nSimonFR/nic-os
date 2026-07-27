@@ -11,9 +11,13 @@
 #      the script aborts BEFORE the reboot line, the new generation is not
 #      booted, and the existing systemd-failed monitor (monitoring.nix)
 #      Telegram-alerts on the failed unit.
-#   4. On success, schedules a reboot in +1 min so this unit exits cleanly
-#      first. The weekly reboot is unconditional (user's choice) and also
-#      clears memory-leak buildup on the Pi.
+#   4. On success, fires a one-off Telegram message, then schedules a reboot in
+#      +1 min so this unit exits cleanly first. The weekly reboot is
+#      unconditional (user's choice) and also clears memory-leak buildup.
+#
+# The reboot ping is a plain fire-and-forget sendMessage (NOT the stateful
+# telegramAlert helper — that is for open/resolve incidents); telegram being
+# down never fails the unit.
 #
 # Notes / risks:
 #   - `nix flake update` bumps ALL inputs (nixpkgs, nixos-raspberrypi, sure-nix,
@@ -23,11 +27,12 @@
 #   - flake.lock is left uncommitted in the working tree (matches how the
 #     deployed lock == live state). `git status` will show it modified; review
 #     and land it via a normal PR whenever you like.
-{ config, lib, pkgs, ... }:
+{ config, lib, pkgs, telegramChatId, ... }:
 let
   flakeDir = "/home/nsimon/nic-os";
   owner = "nsimon";
   heavyServices = import ./lib/heavy-services.nix;
+  tokenFile = config.age.secrets.telegram-bot-token.path;
 in
 {
   systemd.services.nixos-auto-upgrade = {
@@ -43,8 +48,9 @@ in
       git
       systemd      # systemctl, shutdown
       util-linux   # runuser
-      coreutils    # df
+      coreutils    # df, readlink, basename
       gnugrep
+      curl         # reboot notification
       bash
     ];
 
@@ -83,8 +89,21 @@ in
       echo "auto-upgrade: disk after build:" >&2
       df -h /nix /mnt/data >&2 2>/dev/null || true
 
-      # 4. Reboot in +1 min so this unit records success first.
-      echo "auto-upgrade: rebuild OK — scheduling reboot (+1 min)" >&2
+      # 4. Notify (fire-and-forget), then reboot in +1 min so this unit records
+      #    success first.
+      echo "auto-upgrade: rebuild OK — notifying + scheduling reboot (+1 min)" >&2
+      NEWGEN=$(basename "$(readlink -f /run/current-system 2>/dev/null || echo unknown)")
+      MSG="🔄 <b>rpi5 auto-upgrade</b>
+Weekly flake update + rebuild done.
+New system: <code>$NEWGEN</code>
+Rebooting in ~1 min."
+      curl -sf -m 20 -X POST \
+        "https://api.telegram.org/bot$(< ${lib.escapeShellArg tokenFile})/sendMessage" \
+        -d chat_id=${toString telegramChatId} \
+        -d parse_mode=HTML \
+        -d disable_web_page_preview=true \
+        --data-urlencode "text=$MSG" >/dev/null || true
+
       shutdown -r +1 "nixos-auto-upgrade: weekly reboot after flake update + rebuild"
     '';
   };
