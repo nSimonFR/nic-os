@@ -12,9 +12,15 @@
 #     /api/* to the backend SERVER-SIDE (frontend/src/routes/api/[...path]),
 #     so the browser only ever talks to the frontend — no browser CORS.
 #
-# ⚠ DISK: user chose the full Scryfall `all_cards` dataset (~multi-GB). The DB
-#   therefore lives on /mnt/data (594 GB free), NEVER on / (~89% full — importing
-#   all_cards to / is exactly what filled the root fs on 2026-07-26).
+# ⚠ DISK: we import from the full Scryfall `all_cards` feed but keep only the
+#   en + fr printings (filter patched in via pkgs/showmycards.nix) — 171158 of
+#   535598 objects, so ~0.9 GB of SQLite rather than ~2.7 GB. The DB still lives
+#   on /mnt/data (586 GB free), NEVER on / (~96% full — importing all_cards to /
+#   is exactly what filled the root fs on 2026-07-26).
+#
+#   To widen the language set, edit the filter in pkgs/showmycards.nix and
+#   re-import; note the DB is NOT re-scanned on restart (see below), so an
+#   existing DB must be removed for the new scope to take effect.
 #
 # ⚠ FIRST BOOT / bulk import: the backend AUTO-triggers the all_cards import
 #   when the DB is empty (main.go: bulkDataService.TriggerInitialImport). That
@@ -27,6 +33,16 @@
 #   Re-enable normal idle-sleep once the DB is populated. The Scryfall refresh
 #   scheduler runs in-process, so scheduled refreshes only fire while the service
 #   is awake — acceptable for a personal collection tool.
+#
+# ⚠ A PARTIAL IMPORT IS STICKY. TriggerInitialImport is gated on HasBulkData(),
+#   which is "are there ANY card rows", not "is the import complete". If an
+#   import dies halfway, every later start logs "bulk data already exists,
+#   skipping initial import" and silently leaves you on a partial catalogue.
+#   There is no resume. To retry you must delete the DB first:
+#       sudo systemctl stop showmycards-proxy.socket showmycards-frontend showmycards-backend
+#       sudo rm -f /mnt/data/showmycards/database.db{,-wal,-shm}
+#   (POST /api/bulk-data/import re-runs it in place, but re-imports everything
+#   anyway, so wiping is the predictable path.)
 { config, pkgs, lib, tailnetFqdn, ... }:
 let
   backendPort  = 13344;  # Go API (real backend bind, localhost only)
