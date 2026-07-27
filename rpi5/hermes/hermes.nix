@@ -66,6 +66,15 @@ let
   '';
   documentsSource = ./documents;
 
+  # Workspace scripts the cron jobs shell out to (daily pending digest, weekly
+  # job-alerts). These were agent-authored under the retired PicoClaw's
+  # ~/.picoclaw/workspace and lived only there (untracked runtime); versioning
+  # them here + seeding into ~/.hermes/workspace makes the cron jobs reproducible
+  # and removes the last dependency on the retired agent's home. Runtime state
+  # (job-alerts/.seen_jobs.json, scratch tmp/) is deliberately NOT tracked and
+  # survives restarts because the seed rsync below omits --delete.
+  workspaceSource = ./workspace;
+
   # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
   # (Scryfall card search + pricing + rulings + legality, deck validation,
   # Moxfield/Archidekt deck import, EDHREC recs/combos, comprehensive rules).
@@ -198,6 +207,12 @@ let
       "${skillsSource}/" "${hermesHome}/skills/"
     ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
+
+    # Cron workspace scripts (executable). Same NO --delete rule: the workspace
+    # also holds live runtime state (kanban.db, sandboxes, job-alerts/.seen_jobs.json)
+    # that must survive restarts, so only add/refresh the tracked scripts.
+    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
+      "${workspaceSource}/" "${hermesHome}/workspace/"
   '';
 
   # ExecStart wrapper: source shared skill creds, set HERMES_HOME, and give the

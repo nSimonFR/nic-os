@@ -1,0 +1,51 @@
+{
+  "profile": {
+    "location": "Paris / France / Europe remote",
+    "keywords": [
+      "engineering manager", "engineer manager", "team lead", "technical lead",
+      "staff", "principal", "architect", "vp engineering", "head of engineering",
+      "software engineer", "backend", "frontend", "fullstack", "site reliability", "sre",
+      "platform", "infrastructure", "devex", "golang", "typescript"
+    ],
+    "locations": ["paris", "france", "remote", "europe", "emea"]
+  },
+  "sources": [
+    {
+      "name": "Mistral AI",
+      "type": "ashby",
+      "board": "mistral.ai",
+      "url": "https://jobs.ashbyhq.com/mistral.ai?locationId=bb6ddf2e-f6bf-4259-a8ca-09d5e2c51f7b"
+    },
+    {
+      "name": "Nous Research",
+      "type": "generic_page",
+      "url": "https://nousresearch.com/careers"
+    },
+    {
+      "name": "Datadog",
+      "type": "generic_page",
+      "url": "https://careers.datadoghq.com/all-jobs/?location_EMEA%5B0%5D=France"
+    },
+    {
+      "name": "Fortiche",
+      "type": "generic_page",
+      "url": "https://forticheprod.com/become-a-forticher/#offers"
+    },
+    {
+      "name": "BlaBlaCar",
+      "type": "blablacar",
+      "url": "https://jobs.blablacar.com/vacancies?where=Paris+or+Remote+from+France#jobs"
+    },
+    {
+      "name": "Finary",
+      "type": "ashby",
+      "board": "finary",
+      "url": "https://jobs.ashbyhq.com/finary"
+    },
+    {
+      "name": "Linear",
+      "type": "linear_single",
+      "url": "https://linear.app/careers/d3bc1ced-3ce4-4086-a050-555055dbb1ff?ashby_jid=d3bc1ced-3ce4-4086-a050-555055dbb1ff"
+    }
+  ]
+}
