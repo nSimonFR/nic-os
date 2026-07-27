@@ -23,13 +23,9 @@
 #   frontend deps move. After bumping showmycards-src, set the changed one back
 #   to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
 #
-# ⚠ SOURCE PATCHES. `postPatch` on the backend rewrites two things in
-#   backend/services/bulk_data.go: the bulk-download client timeout (30min →
-#   6h) and a card-language filter (keep en + fr only). Without the first the
-#   import cannot finish on this hardware at all; the second is a deliberate
-#   scope choice. Both use --replace-fail, so a source bump that moves those
-#   lines fails the build loudly instead of silently dropping the patch —
-#   re-anchor them rather than deleting them. Details at the call site below.
+# ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout and adds an
+#   en+fr language filter (see the call site). They use --replace-fail, so a
+#   source bump that moves those lines fails the build — re-anchor, don't drop.
 #
 # ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.3`, and a pure Nix build
 #   cannot fetch a toolchain (GOTOOLCHAIN=auto has no network in the build
@@ -64,30 +60,19 @@ let
     env.CGO_ENABLED = "1";
     ldflags = [ "-X" "backend/version.Version=${version}" ];
 
-    # ⚠ BULK IMPORT PATCHES — both are required for `all_cards` to import at
-    #   all on the rpi5. See the header note for the full reasoning.
+    # Both edits are required for the import to finish on the rpi5.
     #
-    #   1. Timeout. Upstream gives the bulk download an `http.Client{Timeout:
-    #      30 * time.Minute}`. Go's Client.Timeout bounds the WHOLE exchange
-    #      including reading the body, and the importer stream-decodes cards
-    #      straight off that body — so it's a budget for the entire import, not
-    #      the download. The rpi5 sustains ~90 inserts/s, so any dataset over
-    #      ~160k cards is unimportable: the 2026-07-27 run died at exactly
-    #      30m09s / 181000 cards with "context deadline exceeded ... while
-    #      reading body". 6h leaves plenty of headroom while still bounding a
-    #      genuinely wedged transfer.
+    #   1. Go's Client.Timeout bounds the whole exchange including the body
+    #      read, and the importer stream-decodes off that body — so upstream's
+    #      30min is a budget for the entire import. At ~90 inserts/s the
+    #      2026-07-27 run died at 30m09s / 181000 cards. 6h still bounds a
+    #      wedged transfer.
+    #   2. Keep only en+fr: 171158 rows instead of all_cards' 535598, ~0.9 GB
+    #      instead of ~2.7. (Not Scryfall's default_cards feed — that is
+    #      English-or-sole-language, so it carries no French printings.)
     #
-    #   2. Language filter. `all_cards` is every printing in every language:
-    #      535598 objects, ~2.7 GB of SQLite. We only want en + fr (113565 +
-    #      57593 = 171158), so drop everything else before it reaches the
-    #      insert batch. Note this filters the FULL all_cards stream rather
-    #      than switching to Scryfall's smaller `default_cards` bulk file,
-    #      because default_cards is English-or-sole-language and so would not
-    #      give us French printings at all.
-    #
-    #   Written as one-liners on purpose: the Go source is tab-indented, and
-    #   Nix indented-string literals rewrite leading whitespace, which would
-    #   silently corrupt a multi-line replacement.
+    # One-liners on purpose: the source is tab-indented and Nix indented
+    # strings rewrite leading whitespace, corrupting multi-line replacements.
     postPatch = ''
       substituteInPlace backend/services/bulk_data.go \
         --replace-fail 'Timeout: 30 * time.Minute' 'Timeout: 6 * time.Hour' \
