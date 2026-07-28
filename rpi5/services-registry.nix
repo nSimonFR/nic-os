@@ -258,7 +258,11 @@
     # the idle timer. Widget reads ShowMyCards' SQLite directly via homepage-stats.py
     # (:8087/showmycards) rather than its HTTP API: :8330 is the only thing that wakes
     # the service, so an API-backed widget would pin it awake permanently.
-    { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true;
+    # backend is :8331 (nginx read-only guard), NOT :8330 (the socket-activate proxy):
+    # Moxfield is the single writer, so an edit made here would be reverted by the next
+    # daily sync. moxfield-sync itself still writes via :8330, which the tailnet cannot
+    # reach — see the read-only guard in rpi5/showmycards.nix.
+    { port = 3550;  backend = "http://127.0.0.1:8331";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection (read-only — edit on Moxfield)"; noSiteMonitor = true;
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:8087/showmycards";

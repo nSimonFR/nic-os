@@ -41,7 +41,8 @@
 let
   backendPort  = 13344;  # Go API (real backend bind, localhost only)
   internalPort = 13343;  # SvelteKit node server (real frontend bind, localhost only)
-  proxyPort    = 8330;   # socket-activate proxy listen; Tailscale Serve → here
+  proxyPort    = 8330;   # socket-activate proxy listen; moxfield-sync writes here
+  roPort       = 8331;   # nginx read-only guard; Tailscale Serve → here (see below)
   servePort    = 3550;   # external tailnet HTTPS port (see services-registry.nix)
   dataDir      = "/mnt/data/showmycards";
   origin       = "https://${tailnetFqdn}:${toString servePort}";
@@ -117,6 +118,38 @@ in
       Group     = "showmycards";
       Restart   = "on-failure";
       RestartSec = 5;
+    };
+  };
+
+  # ── Read-only guard for the tailnet (nginx) ────────────────────────────────
+  # ShowMyCards has NO authentication of any kind — no token, no session, every
+  # write unguarded — and since moxfield-sync.nix made Moxfield the single writer,
+  # anything edited in this UI is silently reverted on the next daily sync. Better
+  # to refuse the edit than to accept it and throw it away overnight.
+  #
+  # The filter sits in FRONT of the socket-activate proxy rather than on it, because
+  # :8330 is also how moxfield-sync writes. Tailscale Serve points at this vhost
+  # (see services-registry.nix), so browsers get read-only while the sync — which
+  # talks to 127.0.0.1:8330 directly, and is not reachable from the tailnet — keeps
+  # full access. Read-only is therefore a property of the ROUTE, not the service.
+  services.nginx.virtualHosts."showmycards-ro" = {
+    listen = [ { addr = "127.0.0.1"; port = roPort; ssl = false; } ];
+    locations."/" = {
+      proxyPass = "http://127.0.0.1:${toString proxyPort}";
+      proxyWebsockets = true;
+      extraConfig = ''
+        # GET/HEAD/OPTIONS through, everything mutating refused. This covers both
+        # the SvelteKit /api/* passthrough and its form actions, since both are
+        # POST/PUT/PATCH/DELETE from the browser's point of view.
+        limit_except GET HEAD OPTIONS { deny all; }
+
+        # A cold wake runs the socket-activate readyProbe, which is allowed up to
+        # 60s (see below). nginx's 60s defaults would 504 at exactly the wrong
+        # moment — the first visit after idle — so give the chain room.
+        proxy_connect_timeout 75s;
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+      '';
     };
   };
 
