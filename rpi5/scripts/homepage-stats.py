@@ -308,44 +308,6 @@ select round(coalesce(sum(q * cast(
     else json_extract(j,'$.prices.eur')
   end as real)),0),2) from px;
 """
-# One value point per day, so the widget can show a change and not just a number.
-# Lives beside the stats cache; ~400 points is a bit over a year at one refresh/day.
-SHOWMYCARDS_HISTORY = os.path.join(STATE_DIR, "showmycards-value.json")
-SHOWMYCARDS_HISTORY_MAX = 400
-
-
-def _showmycards_value_history(value):
-    """Record today's value. -> (change since the previous point, points held).
-
-    Keyed by day and rewritten in place, so several refreshes in one day update that
-    day rather than stacking points and reporting a change of 0. The change spans
-    "since the previous recorded day", which is normally 24h but stretches if the box
-    was off — the alternative, a fixed 30d window, reads as 0 for its first month.
-    """
-    history = []
-    try:
-        with open(SHOWMYCARDS_HISTORY) as f:
-            history = json.load(f)
-    except FileNotFoundError:
-        pass
-    except Exception as e:  # noqa: BLE001 - a corrupt history must not lose the stat
-        print(f"showmycards history unreadable, restarting it: {e}", file=sys.stderr)
-
-    today = time.strftime("%Y-%m-%d")
-    previous = [h for h in history if h.get("date") != today]
-    change = value - previous[-1]["value"] if previous else 0.0
-    history = (previous + [{"date": today, "value": value}])[-SHOWMYCARDS_HISTORY_MAX:]
-    try:
-        os.makedirs(STATE_DIR, exist_ok=True)
-        tmp = SHOWMYCARDS_HISTORY + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump(history, f)
-        os.replace(tmp, SHOWMYCARDS_HISTORY)
-    except Exception as e:  # noqa: BLE001
-        print(f"showmycards history not saved: {e}", file=sys.stderr)
-    return round(change, 2), len(history)
-
-
 def fetch_showmycards():
     # Read-only direct SQLite query — same trick as fetch_papra, never wakes the
     # socket-activated showmycards pair.
@@ -358,16 +320,12 @@ def fetch_showmycards():
             [SQLITE, "-readonly", SHOWMYCARDS_DB, sql]
         ).decode().strip()
     try:
-        value = float(q(SHOWMYCARDS_VALUE_SQL) or 0)
-        change, points = _showmycards_value_history(value)
         with stats_lock:
             stats["showmycards"] = {
                 "cards":     int(q("SELECT COALESCE(SUM(quantity),0) FROM inventories;") or 0),
                 "decks":     int(q("SELECT COUNT(*) FROM lists;") or 0),
                 "locations": int(q("SELECT COUNT(*) FROM storage_locations;") or 0),
-                "value":     round(value, 2),
-                "change":    change,
-                "points":    points,
+                "value":     round(float(q(SHOWMYCARDS_VALUE_SQL) or 0), 2),
             }
     except Exception as e:
         with stats_lock:
