@@ -266,10 +266,15 @@
       widget = {
         type = "customapi";
         url = "http://127.0.0.1:8087/showmycards";
+        # "value" is EUR, computed foil-aware from the Scryfall prices in the local
+        # catalogue (which self-updates daily at 03:00) — NOT ShowMyCards' own
+        # total_collection_value, which is a different currency or blend and could
+        # not be reproduced. "change" is the move since the previous recorded day.
         mappings = [
           { field = "cards"; label = "Cards"; format = "number"; }
           { field = "decks"; label = "Decks"; format = "number"; }
-          { field = "wanted"; label = "Wanted"; format = "number"; }
+          { field = "value"; label = "Value"; format = "float"; prefix = "€"; }
+          { field = "change"; label = "Δ"; format = "float"; prefix = "€"; }
         ];
       }; }
 

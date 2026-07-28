@@ -286,6 +286,66 @@ def fetch_beaverhabits():
             stats["beaverhabits"]["error"] = str(e)
 
 
+# Collection value in EUR, foil-aware. Deliberately NOT ShowMyCards' own
+# total_collection_value: that reports 226.48 for this data and no combination of
+# prices.{eur,usd}{,_foil} reproduces it (eur=148.87, usd=190.13), so it is some
+# other currency or blend. EUR is what the user actually wants, and reading it here
+# means the figure never depends on waking the service.
+#
+# The treatment CASE matters: a foil row priced from prices.eur silently contributes
+# 0 whenever a printing is foil-only, which is how an earlier naive sum came out at
+# 125.07 instead of 148.87. Coverage is currently 623/623 cards priced, so this is a
+# complete total rather than a floor — worth re-checking if it ever drifts.
+SHOWMYCARDS_VALUE_SQL = """
+with px as (
+  select i.quantity q, i.treatment t,
+         (select raw_json from cards where scryfall_id = i.scryfall_id) j
+  from inventories i)
+select round(coalesce(sum(q * cast(
+  case t
+    when 'foil'   then coalesce(json_extract(j,'$.prices.eur_foil'),   json_extract(j,'$.prices.eur'))
+    when 'etched' then coalesce(json_extract(j,'$.prices.eur_etched'), json_extract(j,'$.prices.eur_foil'), json_extract(j,'$.prices.eur'))
+    else json_extract(j,'$.prices.eur')
+  end as real)),0),2) from px;
+"""
+# One value point per day, so the widget can show a change and not just a number.
+# Lives beside the stats cache; ~400 points is a bit over a year at one refresh/day.
+SHOWMYCARDS_HISTORY = os.path.join(STATE_DIR, "showmycards-value.json")
+SHOWMYCARDS_HISTORY_MAX = 400
+
+
+def _showmycards_value_history(value):
+    """Record today's value. -> (change since the previous point, points held).
+
+    Keyed by day and rewritten in place, so several refreshes in one day update that
+    day rather than stacking points and reporting a change of 0. The change spans
+    "since the previous recorded day", which is normally 24h but stretches if the box
+    was off — the alternative, a fixed 30d window, reads as 0 for its first month.
+    """
+    history = []
+    try:
+        with open(SHOWMYCARDS_HISTORY) as f:
+            history = json.load(f)
+    except FileNotFoundError:
+        pass
+    except Exception as e:  # noqa: BLE001 - a corrupt history must not lose the stat
+        print(f"showmycards history unreadable, restarting it: {e}", file=sys.stderr)
+
+    today = time.strftime("%Y-%m-%d")
+    previous = [h for h in history if h.get("date") != today]
+    change = value - previous[-1]["value"] if previous else 0.0
+    history = (previous + [{"date": today, "value": value}])[-SHOWMYCARDS_HISTORY_MAX:]
+    try:
+        os.makedirs(STATE_DIR, exist_ok=True)
+        tmp = SHOWMYCARDS_HISTORY + ".tmp"
+        with open(tmp, "w") as f:
+            json.dump(history, f)
+        os.replace(tmp, SHOWMYCARDS_HISTORY)
+    except Exception as e:  # noqa: BLE001
+        print(f"showmycards history not saved: {e}", file=sys.stderr)
+    return round(change, 2), len(history)
+
+
 def fetch_showmycards():
     # Read-only direct SQLite query — same trick as fetch_papra, never wakes the
     # socket-activated showmycards pair.
@@ -293,22 +353,21 @@ def fetch_showmycards():
     # `cards` is the 171k-printing Scryfall catalogue, NOT the collection: counting
     # it would report 171182 owned cards. The collection is `inventories`, and a row
     # there is a stack, so cards = SUM(quantity), not COUNT(*).
-    #
-    # No collection value: ShowMyCards' dashboard reports 226.48 for this data and
-    # no combination of prices.{eur,usd}{,_foil} in the catalogue reproduces it
-    # (eur=125.07, usd=190.13), so any figure here would silently contradict the
-    # app's own number. `wanted` matches its total_wishlist_cards exactly.
     def q(sql):
         return subprocess.check_output(
             [SQLITE, "-readonly", SHOWMYCARDS_DB, sql]
         ).decode().strip()
     try:
+        value = float(q(SHOWMYCARDS_VALUE_SQL) or 0)
+        change, points = _showmycards_value_history(value)
         with stats_lock:
             stats["showmycards"] = {
                 "cards":     int(q("SELECT COALESCE(SUM(quantity),0) FROM inventories;") or 0),
                 "decks":     int(q("SELECT COUNT(*) FROM lists;") or 0),
                 "locations": int(q("SELECT COUNT(*) FROM storage_locations;") or 0),
-                "wanted":    int(q("SELECT COALESCE(SUM(desired_quantity),0) FROM list_items;") or 0),
+                "value":     round(value, 2),
+                "change":    change,
+                "points":    points,
             }
     except Exception as e:
         with stats_lock:
