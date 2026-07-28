@@ -27,8 +27,15 @@ whichever bridge currently owns that environment:
 
 A *fresh* bridge (post-reboot / post-restart) has an empty in-memory
 completed-work set, so it accepts the re-queued session and spawns the worker on
-its next poll (~2 s). The worktree must still exist on disk (it does right after
-boot/restart — this unit runs before the orphan-worktree cleanup timer).
+its next poll (~2 s). The worktree does NOT need to pre-exist: on work-poll the
+bridge does "Created agent worktree at <cwd> on branch worktree-bridge-<cse>"
+before spawning, so it recreates a missing worktree from the session branch.
+This matters because a *graceful* bridge stop (our ExecStop C-c, and every
+watchdog restart) makes the bridge delete its worktrees on shutdown while
+"Skipping archive+deregister to allow resume" — so the session stays resumable
+but its worktree is gone by the time resume runs. (A hard reboot kills the bridge
+before that cleanup, so there the worktree survives.) Either way, reconnect is
+the right move: a genuinely-dead/archived session just fails the reconnect.
 
 ## The environment must be the SAME one the session was created under
 
@@ -285,7 +292,7 @@ def cmd_resume():
         return
     log(f"resume: environment={env_id} dry_run={DRY_RUN} candidates={len(sessions)}")
 
-    revived = skipped_stale = skipped_cooldown = skipped_noworktree = failed = 0
+    revived = skipped_stale = skipped_cooldown = failed = 0
     done = []
     for rec in sorted(sessions, key=lambda r: r.get("lastActive", 0), reverse=True):
         if revived >= MAX_REVIVE:
@@ -302,10 +309,10 @@ def cmd_resume():
         if now - int(state.get(key, {}).get("revivedAt", 0)) < COOLDOWN:
             skipped_cooldown += 1
             continue
-        if cwd and not Path(cwd).is_dir():
-            log(f"resume: worktree gone for {cse[:12]} ({cwd}) — skipping")
-            skipped_noworktree += 1
-            continue
+        # NOTE: intentionally do NOT skip when the worktree is missing. A graceful
+        # bridge stop deletes the worktree but keeps the session resumable, and the
+        # bridge recreates the worktree from its branch on the reconnected work
+        # poll. Reconnect is the right move either way; a dead session just fails.
         if DRY_RUN:
             log(f"DRY-RUN: would reconnect {cse} (cwd={Path(cwd).name})")
             revived += 1
@@ -326,9 +333,9 @@ def cmd_resume():
     save_json(STATE_FILE, state)
     summary = (f"{'[dry-run] ' if DRY_RUN else ''}claude-rc boot-resume: "
                f"revived={revived} stale={skipped_stale} cooldown={skipped_cooldown} "
-               f"noWorktree={skipped_noworktree} failed={failed}")
+               f"failed={failed}")
     log(summary)
-    if revived or failed or skipped_noworktree:
+    if revived or failed:
         short = ", ".join(c[4:12] for c in done)
         telegram(f"🔁 {summary}" + (f"\nrevived: {short}" if short else ""))
 
