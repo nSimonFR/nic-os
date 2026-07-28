@@ -56,35 +56,22 @@ let
   # account's collection into it would claim ownership of cards that are not here.
   collectionUser = "nSimon";
 
-  # Moxfield trade binder -> ShowMyCards storage location.
+  # There is deliberately NO binder -> storage-location map here. Storage locations
+  # are discovered from the collection and reconciled by sync_storage_locations():
+  # a binder seen for the first time creates a location, and a binder renamed on
+  # Moxfield renames it. Adding or renaming one costs no config edit and no rebuild.
   #
-  # Keyed on the binder's publicId, NOT its name. Names are display strings edited in
-  # passing — "Magic Big Box" -> "Big Box", "Red Dragon Book" -> "BOOK - Red Dragon"
-  # and "EDH 2013 - Alfie" -> "EDH - Alfie" all happened inside a single afternoon,
-  # while every publicId held. Keying on the name means each of those breaks the sync
-  # until someone edits this file and rebuilds; keying on the id means they cost
-  # nothing. The values are ShowMyCards location names, kept identical to the Moxfield
-  # binder names so the two read the same — but only the id side is load-bearing.
+  # A hardcoded map was the first design and it did not survive contact: "Magic Big
+  # Box" -> "Big Box", "Red Dragon Book" -> "BOOK - Red Dragon", "EDH 2013 - Alfie"
+  # -> "EDH - Alfie" -> "EDH - Errant", plus a brand-new "EDH - Hei", all inside one
+  # afternoon. Every one of those needed a file edit and a rebuild, and the last one
+  # aborted the sync outright.
   #
-  # Explicit rather than inferred, because an unmatched binder must be a loud failure:
-  # the fallback for "no location" is an unassigned card, and the placement now exists
-  # ONLY on Moxfield, so a silent miss would strip it off every card in that binder.
-  # The script aborts instead, printing a ready-to-paste line for the missing binder —
-  # which is how "EDH - Hei" was caught the day it was created.
-  #
-  # ShowMyCards' Box-vs-Binder type is NOT derivable from Moxfield, which has no such
-  # concept; it lives only in the storage locations themselves. Recreating a location
-  # means choosing it by hand (see the export in ~/smc-backup for the last known set).
-  binderMap = {
-    "zr2HXZwJU02IqehMUC2XIA" = "Big Box";
-    "7HN4zuxR2Euw4zHQ63Yw-A" = "Green Deck Box";
-    "1xYAgk-t9UCzmA185Ok9OA" = "Purple Dragon Shield - Nico";
-    "RDPW1cjnu02dQzjgbhxeAw" = "Blue Dragon Shield - Alfie";
-    "BXU-Q9-XB0WKZ1RTlFlJkw" = "EDH - Alfie";
-    "b7STqs9nLkWmyzOLxC-t_A" = "EDH - OG";
-    "tN-xvHOf9kyRg3H6K9k_Zw" = "BOOK - Red Dragon";
-    "Rvt1bv1pAU2JJwCimYCHdg" = "EDH - Hei";
-  };
+  # The publicId -> location id link lives in ${stateDir}/binders.json, because
+  # ShowMyCards storage rows have no field to hold a foreign id and names cannot be
+  # the link when renaming is the thing being handled. Box-vs-Binder is the one bit
+  # Moxfield genuinely cannot express, so it is inferred from the name on create —
+  # cosmetic in ShowMyCards, so a wrong guess costs an icon rather than data.
 
   # Discovered decks to ignore, by publicId. Discovery is deliberately greedy, so
   # scratch decks need naming here or they become lists in ShowMyCards.
@@ -103,8 +90,6 @@ in
     environment = {
       MOXFIELD_USERS = lib.concatStringsSep "," users;
       MOXFIELD_COLLECTION_USER = collectionUser;
-      # {binder publicId: showmycards storage location name}
-      MOXFIELD_BINDER_MAP = builtins.toJSON binderMap;
       MOXFIELD_EXCLUDE_IDS = lib.concatStringsSep "," excludeIds;
       # Honest, identifiable UA with a contact route, rather than impersonating a
       # browser: if Moxfield want this traffic gone they should be able to see who

@@ -80,6 +80,12 @@ WAKAPI_DB = "/var/lib/wakapi/wakapi.db"
 # BeaverHabits (rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
 # user in habit_list.data — read-only, so polling never wakes the idle service.
 BEAVERHABITS_DB = "/var/lib/beaverhabits/habits.db"
+# ShowMyCards (rpi5/showmycards.nix): socket-activated with a 600s idle timer, so
+# the same read-only-SQLite trick applies — its HTTP API is the ONLY thing that can
+# wake it, and a widget polling :8330 would pin both processes awake permanently on
+# a 3.9 GB box. The DB is 0750 showmycards:showmycards; this service runs as root.
+# Lives on /mnt/data, never / (the catalogue is ~0.9 GB).
+SHOWMYCARDS_DB = "/mnt/data/showmycards/database.db"
 # Dawarich, AirTrail, Forgejo: queried as the postgres superuser over the
 # local Unix socket (peer auth via `runuser -u postgres`) rather than each
 # app's own role. Simpler than the Reactive Resume password dance above —
@@ -94,7 +100,7 @@ stats = {
     "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
     "papra": {}, "reactiveresume": {}, "grampsweb": {},
     "vaultwarden": {}, "wakapi": {}, "dawarich": {}, "airtrail": {}, "forgejo": {},
-    "beaverhabits": {}, "ryot": {},
+    "beaverhabits": {}, "ryot": {}, "showmycards": {},
 }
 stats_lock = threading.Lock()
 
@@ -280,6 +286,35 @@ def fetch_beaverhabits():
             stats["beaverhabits"]["error"] = str(e)
 
 
+def fetch_showmycards():
+    # Read-only direct SQLite query — same trick as fetch_papra, never wakes the
+    # socket-activated showmycards pair.
+    #
+    # `cards` is the 171k-printing Scryfall catalogue, NOT the collection: counting
+    # it would report 171182 owned cards. The collection is `inventories`, and a row
+    # there is a stack, so cards = SUM(quantity), not COUNT(*).
+    #
+    # No collection value: ShowMyCards' dashboard reports 226.48 for this data and
+    # no combination of prices.{eur,usd}{,_foil} in the catalogue reproduces it
+    # (eur=125.07, usd=190.13), so any figure here would silently contradict the
+    # app's own number. `wanted` matches its total_wishlist_cards exactly.
+    def q(sql):
+        return subprocess.check_output(
+            [SQLITE, "-readonly", SHOWMYCARDS_DB, sql]
+        ).decode().strip()
+    try:
+        with stats_lock:
+            stats["showmycards"] = {
+                "cards":     int(q("SELECT COALESCE(SUM(quantity),0) FROM inventories;") or 0),
+                "decks":     int(q("SELECT COUNT(*) FROM lists;") or 0),
+                "locations": int(q("SELECT COUNT(*) FROM storage_locations;") or 0),
+                "wanted":    int(q("SELECT COALESCE(SUM(desired_quantity),0) FROM list_items;") or 0),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["showmycards"]["error"] = str(e)
+
+
 def fetch_reactive_resume():
     def q(sql):
         env = dict(os.environ, PGPASSWORD=open(RXRESUME_PW_FILE).read().strip())
@@ -449,8 +484,61 @@ def fetch_homeassistant():
             stats["homeassistant"]["error"] = str(e)
 
 
+# Single source for "which fetcher owns which stats key", used by both the daily
+# refresh and the startup backfill. Keeping it a dict rather than a call list means
+# a newly added widget cannot be wired into one and forgotten in the other.
+FETCHERS = {
+    "sure": fetch_sure,
+    "openwebui": fetch_openwebui,
+    "immich": fetch_immich,
+    "karakeep": fetch_karakeep,
+    "homeassistant": fetch_homeassistant,
+    "papra": fetch_papra,
+    "showmycards": fetch_showmycards,
+    "reactiveresume": fetch_reactive_resume,
+    "grampsweb": fetch_gramps_web,
+    "vaultwarden": fetch_vaultwarden,
+    "wakapi": fetch_wakapi,
+    "dawarich": fetch_dawarich,
+    "airtrail": fetch_airtrail,
+    "forgejo": fetch_forgejo,
+    "beaverhabits": fetch_beaverhabits,
+    "ryot": fetch_ryot,
+}
+
+
+def backfill_missing(fetched_at):
+    """Populate keys the cache has no entry for. -> the timestamp to schedule from.
+
+    Without this, adding a widget means its tile reads empty for up to
+    REFRESH_INTERVAL (a full day): load_cache() seeds every key from the cached
+    payload, and a key absent from that payload stays {} until the next daily tick,
+    which is scheduled from the EXISTING cache timestamp. Only missing keys are
+    fetched, so this costs nothing for services already cached and will not wake the
+    socket-activated ones on every restart.
+
+    The original timestamp is preserved when there was one, so backfilling a single
+    new widget does not push the whole daily refresh back by a day. On a cold cache
+    everything is missing, so this IS the first full fetch and dates from now —
+    which also stops refresh() from immediately repeating it.
+    """
+    missing = [k for k, v in stats.items() if not v]
+    if not missing:
+        return fetched_at
+    print(f"backfilling: {', '.join(missing)}", file=sys.stderr)
+    for key in missing:
+        fn = FETCHERS.get(key)
+        if fn:
+            fn()
+    ts = fetched_at or time.time()
+    save_cache(ts)
+    return ts
+
+
 def refresh(initial_fetched_at):
-    last_fetched = initial_fetched_at
+    # Runs in the refresh thread, not at startup, so the HTTP listener comes up
+    # immediately serving cached data rather than blocking on a cold-cache fetch.
+    last_fetched = backfill_missing(initial_fetched_at)
     while True:
         next_due = last_fetched + REFRESH_INTERVAL
         now = time.time()
@@ -458,21 +546,8 @@ def refresh(initial_fetched_at):
         if wait:
             time.sleep(wait)
         try:
-            fetch_sure()
-            fetch_openwebui()
-            fetch_immich()
-            fetch_karakeep()
-            fetch_homeassistant()
-            fetch_papra()
-            fetch_reactive_resume()
-            fetch_gramps_web()
-            fetch_vaultwarden()
-            fetch_wakapi()
-            fetch_dawarich()
-            fetch_airtrail()
-            fetch_forgejo()
-            fetch_beaverhabits()
-            fetch_ryot()
+            for fn in FETCHERS.values():
+                fn()
             last_fetched = time.time()
             save_cache(last_fetched)
         except Exception as e:
@@ -514,6 +589,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 data = dict(stats["beaverhabits"])
             elif self.path == "/ryot":
                 data = dict(stats["ryot"])
+            elif self.path == "/showmycards":
+                data = dict(stats["showmycards"])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
