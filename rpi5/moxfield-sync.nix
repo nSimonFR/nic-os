@@ -72,12 +72,6 @@ let
   # the link when renaming is the thing being handled. Box-vs-Binder is the one bit
   # Moxfield genuinely cannot express, so it is inferred from the name on create —
   # cosmetic in ShowMyCards, so a wrong guess costs an icon rather than data.
-
-  # Discovered decks to ignore, by publicId. Discovery is deliberately greedy, so
-  # scratch decks need naming here or they become lists in ShowMyCards.
-  excludeIds = [
-    "tDUo_eAaoUy4JN-45Qdelw" # "Test Pixie 2" — scratch copy of Pixie Dust
-  ];
 in
 {
   # No wantedBy: only the timer (or a manual `systemctl start`) should run this.
@@ -90,7 +84,6 @@ in
     environment = {
       MOXFIELD_USERS = lib.concatStringsSep "," users;
       MOXFIELD_COLLECTION_USER = collectionUser;
-      MOXFIELD_EXCLUDE_IDS = lib.concatStringsSep "," excludeIds;
       # Honest, identifiable UA with a contact route, rather than impersonating a
       # browser: if Moxfield want this traffic gone they should be able to see who
       # it is and tell us.

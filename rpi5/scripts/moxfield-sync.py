@@ -42,7 +42,6 @@ showIllegal=true is load-bearing there.
 Env contract (all set by rpi5/moxfield-sync.nix):
   MOXFIELD_USERS            comma-separated Moxfield usernames whose decks to sync
   MOXFIELD_COLLECTION_USER  single username whose collection mirrors to inventory
-  MOXFIELD_EXCLUDE_IDS      comma-separated publicIds to skip (scratch/test decks)
   MOXFIELD_USER_AGENT       honest UA naming the project + a contact URL
   SMC_API                   ShowMyCards API base, e.g. http://127.0.0.1:8330/api
   SMC_DB                    read-only sqlite path, for printing/oracle lookups
@@ -81,7 +80,6 @@ FINISHES = {"nonFoil": "nonfoil", "foil": "foil", "etched": "etched"}
 
 USERS = [u.strip() for u in os.environ.get("MOXFIELD_USERS", "").split(",") if u.strip()]
 COLLECTION_USER = os.environ.get("MOXFIELD_COLLECTION_USER", "").strip()
-EXCLUDE_IDS = {d.strip() for d in os.environ.get("MOXFIELD_EXCLUDE_IDS", "").split(",") if d.strip()}
 USER_AGENT = os.environ.get("MOXFIELD_USER_AGENT", "nic-os-moxfield-sync/1.0")
 SMC = os.environ.get("SMC_API", "http://127.0.0.1:8330/api").rstrip("/")
 DB = os.environ.get("SMC_DB", "/mnt/data/showmycards/database.db")
@@ -739,9 +737,9 @@ def main():
         # decks were deleted on Moxfield" and reconcile would empty the lists.
         log(f"discovery FAILED for {','.join(USERS)}: {e} — aborting without changes")
         return 1
-    decks = [(pid, name) for pid, name, _ in found if pid not in EXCLUDE_IDS]
+    decks = [(pid, name) for pid, name, _ in found]
     for pid, name, author in found:
-        log(f"  {'skip' if pid in EXCLUDE_IDS else 'deck'}: {name} ({pid}, by {author})")
+        log(f"  deck: {name} ({pid}, by {author})")
     log(f"{len(decks)} deck(s) from {len(USERS)} user(s), {len(lists)} list(s) in "
         f"ShowMyCards, dry_run={DRY_RUN}")
 
