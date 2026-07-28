@@ -72,10 +72,12 @@ in
       };
     };
 
-    dump = {
-      enable   = true;
-      interval = "daily";
-    };
+    # NOTE: `dump` stays off. `forgejo dump` is a migration tool with no
+    # incremental mode — each run wrote a standalone ~2.2 GB zip (99.6% of it
+    # the bare repos) to /var/lib/forgejo/dump, i.e. the SAME disk as the data
+    # it "backed up" and outside restic's /mnt/data scope. 29 retained copies
+    # cost 61 GB of root for zero disaster-recovery value. Replaced by
+    # forgejo-state-backup below (~300 KB/day, lands on /mnt/data → Storj).
   };
 
   # ── Earl Grey dark theme ──────────────────────────────────────────────
@@ -90,6 +92,41 @@ in
 
   # ── PostgreSQL backup (appends to list in backups.nix) ─────────────────
   services.postgresqlBackup.databases = [ "forgejo" ];
+
+  # ── Forgejo state backup (secrets, config, avatars) ────────────────────
+  # The repos live on /mnt/data/repositories and the DB is dumped by
+  # postgresqlBackup — both already reach Storj via restic. What was NOT
+  # covered is the ~440 KB of non-declarative state under /var/lib/forgejo:
+  # custom/conf/secret_key (encrypts 2FA secrets, OAuth tokens and mirror
+  # passwords stored in the DB), internal_token, oauth2_jwt_secret,
+  # data/jwt/private.pem, data/ssh/gitea.rsa (SSH host key) and avatars.
+  # Without secret_key a restored DB is undecryptable, so this is the piece
+  # that actually makes the other backups restorable.
+  systemd.tmpfiles.rules = [
+    "d /mnt/data/backups/forgejo 0750 forgejo forgejo -"
+  ];
+
+  systemd.services.forgejo-state-backup = {
+    description = "Forgejo state backup (secrets, config, avatars)";
+    serviceConfig = { Type = "oneshot"; User = "forgejo"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      # -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks
+      # → absolute path via --use-compress-program (same fix as gramps-web).
+      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
+        -cf "/mnt/data/backups/forgejo/forgejo-state-$STAMP.tar.gz" \
+        -C /var/lib/forgejo --exclude=./dump --exclude=./log .
+      ${pkgs.findutils}/bin/find /mnt/data/backups/forgejo \
+        -name "forgejo-state-*.tar.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.forgejo-state-backup = {
+    description = "Daily Forgejo state backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 03:15:00"; Persistent = true; };
+  };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────
   # Tailscale Serve and ROOT_URL still point at externalPort. The proxy
