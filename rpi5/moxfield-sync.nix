@@ -1,72 +1,108 @@
 # rpi5/moxfield-sync.nix
 #
-# Keeps ShowMyCards decks in step with Moxfield, and generates the files needed to
-# push the other way by hand.
+# Makes ShowMyCards a read-only mirror of Moxfield.
 #
-#   PULL (automated): Moxfield is where decks are actually edited, so each run
-#   reconciles the matching ShowMyCards list to the Moxfield deck. ShowMyCards
-#   remains authoritative for physical storage (binders/boxes) — a concept Moxfield
-#   has no representation for — so the two never own the same field and there are no
-#   real conflicts to resolve.
+# Moxfield is the single writer for BOTH halves of the data:
 #
-#   PUSH (manual, by necessity): writes to Moxfield need `Authorization: Bearer`,
-#   and the token endpoint POST /v2/account/token requires a Cloudflare Turnstile
-#   CAPTCHA token that cannot be produced server-side. That is not a guess —
-#   moxfield/moxfield-public#143 is an open report from a developer whose
-#   User-Agent was whitelisted by Moxfield support, concluding it "prevents any
-#   automated interaction with the private API, even for approved clients".
-#   Separately, Moxfield's ToS §4(c)(5) prohibits using "any robot … to access the
-#   Site for any purpose" without written approval, and their FAQ states "our API is
-#   not public". Every third-party project that tried this landed in the same place:
-#   of the ones surveyed, none write server-side, and the closest analogue
-#   (fecet/moxtrice, a Moxfield↔Cockatrice sync) shipped read-only because "we
-#   cannot really 'login'". So the export direction writes files the user uploads.
+#   - deck contents      -> ShowMyCards lists
+#   - the card collection, including which binder/box each card sits in
+#                        -> ShowMyCards inventory + storage locations
 #
-#   NOTE the pull itself is only *tolerated*, not sanctioned — clause 4(c)(5) covers
-#   it too. Moxfield's FAQ says they will help personal, non-commercial projects
-#   via support@moxfield.com; getting written permission + a whitelisted User-Agent
-#   is the one route that makes this legitimate. Until then: serial fetches, a
-#   3 s delay, exponential backoff, an honest User-Agent, and a hash check so an
-#   unchanged deck costs zero requests beyond the fetch.
+# The second half used to be the argument for editing ShowMyCards directly: physical
+# storage was thought to be a concept Moxfield had no representation for. It has one
+# — trade binders — and the collection is public, so it reads with no auth at all
+# (GET /v1/users/<user> -> collectionPublicId, then /v1/collections/search/<id>).
+# With that, nothing needs to write to ShowMyCards by hand, and the agent skill that
+# documented how to do so is gone.
 #
-# Why a pinned deck list rather than discovery: `authorUserNames=<user>` search
-# works unauthenticated but returned only 3 of this user's 4 *public* decks — "Hei
-# Bai" is absent from their index. Discovery would silently drop decks, so the set
-# is declared here where a missing deck is visible in git.
+# There is deliberately NO push direction. Writes to Moxfield need
+# `Authorization: Bearer`, and the token endpoint POST /v2/account/token requires a
+# Cloudflare Turnstile CAPTCHA that cannot be produced server-side — see
+# moxfield/moxfield-public#143, an open report from a developer whose User-Agent was
+# whitelisted by Moxfield support, concluding it "prevents any automated interaction
+# with the private API, even for approved clients". So the user edits on Moxfield and
+# this job propagates; there is no reverse path and nothing to reconcile.
+#
+# NOTE the pull itself is only *tolerated*, not sanctioned — Moxfield's ToS §4(c)(5)
+# prohibits using "any robot … to access the Site for any purpose" without written
+# approval, and their FAQ states "our API is not public". Their FAQ does say they
+# will help personal, non-commercial projects via support@moxfield.com; getting
+# written permission + a whitelisted User-Agent is the one route that makes this
+# legitimate. Until then: serial fetches, a 3 s delay, exponential backoff, an honest
+# User-Agent, and a hash check so an unchanged deck costs zero requests beyond the
+# fetch. The collection mirror adds exactly two requests per day.
+#
+# Decks are discovered per user rather than pinned by id, so a new deck on Moxfield
+# syncs on its own. The one non-obvious requirement is `showIllegal=true` on the
+# search (see the script): without it Moxfield hides decks it deems illegal, which
+# silently drops any deck still being built — exactly the ones worth syncing.
 #
 # Reconciliation is diff-based (add/update/delete per item), NOT delete-and-recreate:
 # ShowMyCards' /api/data/import is additive-only with no replace mode, so a
 # recreate-style sync would duplicate the collection on every run.
 { config, pkgs, lib, ... }:
 let
-  exportDir = "/mnt/data/moxfield-export";
   stateDir = "/var/lib/moxfield-sync";
 
-  # Moxfield publicIds. Add a line per deck; `journalctl -u moxfield-sync` names
-  # any deck whose list is missing.
-  deckIds = [
-    "Ou4xWfrIaEuFpqYIUyJ81Q" # Délinquant et Giada
-    "XdlAEgx_QU28JlLtV118hg" # Hei Bai, esprit de l'équilibre
-    "2pOKPPUVz0KinKotVJ71tA" # Manœuvre D'Évasion
-    "KS3hvEsuqUyeeZ8hn1GK7w" # Pixie Dust
+  # Moxfield usernames whose DECKS to sync. The search matches AUTHORS, not just the
+  # creator, so co-authored decks already arrive through either account — "Pixie
+  # Dust" is owned by Hexaphrodite and reachable via nSimon alone. Listing
+  # Hexaphrodite as well widens this to *all* of their decks, co-authored or not.
+  # Results are deduped by publicId, so the overlap costs nothing but the search.
+  users = [ "nSimon" "Hexaphrodite" ];
+
+  # Whose COLLECTION mirrors into ShowMyCards. Deliberately one user, not `users`:
+  # the inventory represents the cards physically in this house, and merging a second
+  # account's collection into it would claim ownership of cards that are not here.
+  collectionUser = "nSimon";
+
+  # Moxfield trade binder -> ShowMyCards storage location.
+  #
+  # Keyed on the binder's publicId, NOT its name. Names are display strings the user
+  # edits in passing: "Magic Big Box" was renamed to "Big Box" mid-development while
+  # its publicId (zr2HXZwJU02IqehMUC2XIA) stayed put. Keying on the name means every
+  # such rename breaks the sync until someone edits this file and rebuilds; keying on
+  # the id means renames cost nothing. The trailing comment is the name as of the
+  # last edit and is documentation only — nothing reads it.
+  #
+  # Explicit rather than inferred, because an unmatched binder must be a loud failure:
+  # the fallback for "no location" is an unassigned card, and the placement now exists
+  # ONLY on Moxfield, so a silent miss would strip it off every card in that binder.
+  # The script aborts on an unmapped binder instead, printing its name and publicId.
+  #
+  # The two mappings whose names do not correspond were confirmed by card count
+  # rather than guessed: "EDH 2013 - Alfie" is 75 cards and so is "EDH 2013 Bottom";
+  # "EDH 2013 - OG" is 64 and so is "EDH 2013 Top".
+  binderMap = {
+    "7HN4zuxR2Euw4zHQ63Yw-A" = "Green Deck Box";        # Green Deck Box
+    "zr2HXZwJU02IqehMUC2XIA" = "Magic Big Box";         # Big Box (was: Magic Big Box)
+    "tN-xvHOf9kyRg3H6K9k_Zw" = "Red Dragon Book";       # Red Dragon Book
+    "RDPW1cjnu02dQzjgbhxeAw" = "Blue Dragon Shield";    # Blue Dragon Shield - Alfie
+    "1xYAgk-t9UCzmA185Ok9OA" = "Purple Dragon Shield";  # Purple Dragon Shield - Nico
+    "BXU-Q9-XB0WKZ1RTlFlJkw" = "EDH 2013 Bottom";       # EDH 2013 - Alfie
+    "b7STqs9nLkWmyzOLxC-t_A" = "EDH 2013 Top";          # EDH 2013 - OG
+  };
+
+  # Discovered decks to ignore, by publicId. Discovery is deliberately greedy, so
+  # scratch decks need naming here or they become lists in ShowMyCards.
+  excludeIds = [
+    "tDUo_eAaoUy4JN-45Qdelw" # "Test Pixie 2" — scratch copy of Pixie Dust
   ];
 in
 {
-  # Export dir lives on /mnt/data (root is ~96% full) and is group-readable by
-  # filebrowser's user so the generated files can be fetched over the tailnet.
-  systemd.tmpfiles.rules = [
-    "d ${exportDir} 0755 showmycards showmycards - -"
-  ];
-
   # No wantedBy: only the timer (or a manual `systemctl start`) should run this.
   # A run on every activation would hammer Moxfield on each rebuild.
   systemd.services.moxfield-sync = {
-    description = "Sync Moxfield decks → ShowMyCards lists, and export Moxfield-importable files";
+    description = "Mirror Moxfield collection + decks into ShowMyCards";
     after = [ "showmycards-proxy.socket" "network-online.target" ];
     wants = [ "network-online.target" ];
     path = [ pkgs.python3 ];
     environment = {
-      MOXFIELD_DECK_IDS = lib.concatStringsSep "," deckIds;
+      MOXFIELD_USERS = lib.concatStringsSep "," users;
+      MOXFIELD_COLLECTION_USER = collectionUser;
+      # {binder publicId: showmycards storage location name}
+      MOXFIELD_BINDER_MAP = builtins.toJSON binderMap;
+      MOXFIELD_EXCLUDE_IDS = lib.concatStringsSep "," excludeIds;
       # Honest, identifiable UA with a contact route, rather than impersonating a
       # browser: if Moxfield want this traffic gone they should be able to see who
       # it is and tell us.
@@ -75,16 +111,18 @@ in
       # sleeping backend. :13344 cold is connection-refused.
       SMC_API = "http://127.0.0.1:8330/api";
       SMC_DB = "/mnt/data/showmycards/database.db";
-      EXPORT_DIR = exportDir;
       STATE_DIR = stateDir;
-      # Ships dry-run. Flip to "0" after one clean run has been eyeballed —
-      # the first live run is what deletes list items, so it earns a look first.
-      DRY_RUN = "1";
+      # Live. Validated by a dry run first (2026-07-28): inventory +0 ~0 -0 against a
+      # 618-card collection with 182 printings remapped to their fr variant, which is
+      # the signal that the language resolution in resolve_printings() is correct.
+      # Set back to "1" before changing anything about the mirror — there is no
+      # soft-delete anywhere in ShowMyCards.
+      DRY_RUN = "0";
     };
     serviceConfig = {
       Type = "oneshot";
       # Runs as showmycards for read access to the 0750 sqlite DB (read-only, for
-      # oracle_id lookups the API cannot do) and write access to the export dir.
+      # the printing lookups the API cannot express).
       User = "showmycards";
       Group = "showmycards";
       StateDirectory = "moxfield-sync";
@@ -93,7 +131,7 @@ in
   };
 
   systemd.timers.moxfield-sync = {
-    description = "Daily Moxfield → ShowMyCards deck sync";
+    description = "Daily Moxfield → ShowMyCards mirror";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 05:20:00"; # after the backup window, before the morning
