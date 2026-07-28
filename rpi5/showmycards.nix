@@ -60,6 +60,18 @@ in
     "d ${dataDir}/data 0750 showmycards showmycards - -"
   ];
 
+  # Machine-readable API contract for the `showmycards` agent skill. There is no
+  # OpenAPI spec (upstream's DEVELOPMENT.md claims /swagger; it 404s), so the
+  # tygo-generated TS types are the authoritative shapes — they carry every
+  # request/response interface plus the limits (MaxBatchIDs, MaxBatchItems,
+  # CurrentExportVersion). Pinning them to a stable path means the skill points
+  # at generated truth and follows the package on every version bump, instead of
+  # embedding a prose snapshot that silently drifts.
+  environment.etc."showmycards/api/api.ts".source =
+    "${pkgs.showmycards}/share/showmycards/api/api.ts";
+  environment.etc."showmycards/api/models.ts".source =
+    "${pkgs.showmycards}/share/showmycards/api/models.ts";
+
   # ── Go backend ─────────────────────────────────────────────────────────────
   # No wantedBy here — the socketActivate `workers` block below binds this to the
   # frontend's lifecycle (sleepWith → wantedBy + partOf = frontend), so it starts

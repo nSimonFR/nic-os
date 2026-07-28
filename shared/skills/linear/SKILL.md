@@ -22,13 +22,13 @@ Two Linear workspaces are available:
 
 Keys are format `lin_api_…`. All API calls go to `https://api.linear.app/graphql` with header `Authorization: $LINEAR_KEY` (no `Bearer` prefix — Linear personal keys are sent raw).
 
-**If `$LINEAR_KEY` is unset, resolve it before giving up.** Interactive nsimon shells source it from `secrets.zsh`, but systemd-spawned agents (e.g. `claude-remote-control`) run with a minimal env and their Bash subshells don't. On rpi5 the same keys live in the system agenix file `/run/agenix/picoclaw-env` (KEY=VAL, owner `nsimon`, always present — no dependency on picoclaw running). Run this once at the start of a Linear task:
+**If `$LINEAR_KEY` is unset, resolve it before giving up.** Interactive nsimon shells source it from `secrets.zsh`, but systemd-spawned agents (e.g. `claude-remote-control`) run with a minimal env and their Bash subshells don't. On rpi5 the same keys live in the system agenix file `/run/agenix/agent-env` (KEY=VAL, owner `nsimon`, always present — no dependency on any agent running). Run this once at the start of a Linear task:
 
 ```bash
 # Self-heal LINEAR_KEY / LINEAR_KEY_TRUSK if the shell didn't export them.
-if [ -z "$LINEAR_KEY" ] && [ -r /run/agenix/picoclaw-env ]; then
-  export LINEAR_KEY=$(sed -n 's/^LINEAR_KEY=//p' /run/agenix/picoclaw-env)
-  export LINEAR_KEY_TRUSK=$(sed -n 's/^LINEAR_KEY_TRUSK=//p' /run/agenix/picoclaw-env)
+if [ -z "$LINEAR_KEY" ] && [ -r /run/agenix/agent-env ]; then
+  export LINEAR_KEY=$(sed -n 's/^LINEAR_KEY=//p' /run/agenix/agent-env)
+  export LINEAR_KEY_TRUSK=$(sed -n 's/^LINEAR_KEY_TRUSK=//p' /run/agenix/agent-env)
 fi
 ```
 
@@ -64,8 +64,8 @@ All examples use the default nsimon workspace (`$LINEAR_KEY`). For trusk, swap `
 ```bash
 linear_q() {
   # Self-heal LINEAR_KEY for systemd-spawned agents (see "How auth works here").
-  [ -z "$LINEAR_KEY" ] && [ -r /run/agenix/picoclaw-env ] && \
-    export LINEAR_KEY=$(sed -n 's/^LINEAR_KEY=//p' /run/agenix/picoclaw-env)
+  [ -z "$LINEAR_KEY" ] && [ -r /run/agenix/agent-env ] && \
+    export LINEAR_KEY=$(sed -n 's/^LINEAR_KEY=//p' /run/agenix/agent-env)
   curl -sS -X POST https://api.linear.app/graphql \
     -H "Authorization: $LINEAR_KEY" \
     -H "Content-Type: application/json" \

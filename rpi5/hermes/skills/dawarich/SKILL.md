@@ -20,7 +20,7 @@ decline the noise.
 
 On this host (rpi5) the Dawarich API listens on **`http://127.0.0.1:13900`** (loopback)
 — NOT `:3900` (that's the Tailscale Serve HTTPS port). `DAWARICH_API_KEY` is already
-injected into picoclaw's environment from `/run/agenix/picoclaw-env`, so you do **not**
+injected into the agent’s environment from `/run/agenix/agent-env`, so you do **not**
 need to set it yourself — just use `$DAWARICH_API_KEY`.
 
 ```bash

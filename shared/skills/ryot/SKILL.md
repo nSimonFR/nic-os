@@ -20,13 +20,13 @@ Bearer token in `$RYOT_API_KEY`.
 
 **Resolve `$RYOT_API_KEY` before giving up.** Interactive `nsimon` shells may not
 export it, and systemd-spawned agents (Hermes, `claude-remote-control`) run with a
-minimal env. The token lives in the agent creds file `/run/agenix/picoclaw-env`
+minimal env. The token lives in the agent creds file `/run/agenix/agent-env`
 (owner `nsimon`, mode 400 — readable by the agents, always present). Self-heal at
 the start of any Ryot task:
 
 ```bash
-if [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/picoclaw-env ]; then
-  export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/picoclaw-env)
+if [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/agent-env ]; then
+  export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/agent-env)
 fi
 ```
 
@@ -38,8 +38,8 @@ Helper used throughout — a query/mutation runner that self-heals the key:
 
 ```bash
 ryot_q() {  # ryot_q '<graphql>' '<variables-json>'
-  [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/picoclaw-env ] && \
-    export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/picoclaw-env)
+  [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/agent-env ] && \
+    export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/agent-env)
   curl -fsS http://127.0.0.1:13352/graphql \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $RYOT_API_KEY" \
@@ -283,7 +283,7 @@ GraphQL enums serialize **SCREAMING_SNAKE_CASE**.
   To mint a fresh durable token you need an existing session token — log in with the
   admin creds (in `/run/agenix/ryot-import-env`, `ryot`-owned → needs sudo) then
   `mutation{ generateAuthToken }`, and store the result as `RYOT_API_KEY` in
-  `picoclaw-env`. Prefer asking the user before rotating.
+  `agent-env`. Prefer asking the user before rotating.
 - **Wishlist add "did nothing"**: the deploy job is async — re-query
   `userMetadataDetails.collections` after a moment. Also confirm `creatorUserId` is
   **your** id (`usr_o04hupYGQWIM`) and `collectionName` is spelled exactly (`Watchlist`).
