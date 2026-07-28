@@ -7,6 +7,12 @@
 # booking lands on the calendar within minutes of arriving — no polling timer.
 # Each booking has a stable UID, so the PUT is idempotent (no duplicates).
 #
+# It also files the mail's document attachments (e-ticket / boarding pass /
+# voucher PDFs) into Papra's ingestion drop-zone, so a trip's paperwork is
+# archived and auto-tagged without manual filing. papra-proton-poll only covers
+# mail hand-labelled `papra` in Proton, so travel mail was otherwise uncovered;
+# that poller's Message-ID ledger is read here so an overlap files only once.
+#
 # Runs as root (like papra-proton-poll) so it can read all three secrets:
 #   /run/agenix/protonmail-bridge-password   (Proton IMAP, hydroxide:hydroxide 0440)
 #   /run/agenix/nextcloud-homepage-password  (Nextcloud app-password, reused; nsimon 0400)
@@ -15,7 +21,7 @@
 # dashboard widget) is a full user token, so it authenticates CalDAV writes too.
 # The mailbox is opened read-only and never mutated. Crash-loops surface via the
 # existing systemd-failed Telegram alert in monitoring.nix.
-{ pkgs, telegramChatId, tinyLlmGateUrl, tailnetFqdn, ... }:
+{ config, pkgs, telegramChatId, tinyLlmGateUrl, tailnetFqdn, ... }:
 {
   systemd.services.travel-cal-sync = {
     description = "Event-driven Proton -> Nextcloud travel-booking calendar sync";
@@ -37,6 +43,11 @@
       NEXTCLOUD_PASS_FILE = "/run/agenix/nextcloud-homepage-password";
       # Calendar collection URI to write into (from `--list-calendars`): "Personal".
       NEXTCLOUD_CAL = "personal";
+      # Papra ingestion drop-zone. Read off papra-proton-poll's unit rather than
+      # restating <ingestionDir>/<personalOrg> — papra.nix stays the single source
+      # for the org id, and both mail feeders provably target the same folder.
+      PAPRA_DEST = config.systemd.services.papra-proton-poll.environment.PAPRA_PROTON_DEST;
+      PAPRA_POLL_STATE = "/var/lib/papra-proton-poll/seen";
     };
     serviceConfig = {
       Type = "simple";
