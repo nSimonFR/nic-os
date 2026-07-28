@@ -147,6 +147,7 @@ in
     ./airtrail.nix
     ./beaverhabits.nix
     ./showmycards.nix
+    ./moxfield-sync.nix
     ./nextcloud.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
