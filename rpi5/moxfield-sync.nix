@@ -58,29 +58,32 @@ let
 
   # Moxfield trade binder -> ShowMyCards storage location.
   #
-  # Keyed on the binder's publicId, NOT its name. Names are display strings the user
-  # edits in passing: "Magic Big Box" was renamed to "Big Box" mid-development while
-  # its publicId (zr2HXZwJU02IqehMUC2XIA) stayed put. Keying on the name means every
-  # such rename breaks the sync until someone edits this file and rebuilds; keying on
-  # the id means renames cost nothing. The trailing comment is the name as of the
-  # last edit and is documentation only — nothing reads it.
+  # Keyed on the binder's publicId, NOT its name. Names are display strings edited in
+  # passing — "Magic Big Box" -> "Big Box", "Red Dragon Book" -> "BOOK - Red Dragon"
+  # and "EDH 2013 - Alfie" -> "EDH - Alfie" all happened inside a single afternoon,
+  # while every publicId held. Keying on the name means each of those breaks the sync
+  # until someone edits this file and rebuilds; keying on the id means they cost
+  # nothing. The values are ShowMyCards location names, kept identical to the Moxfield
+  # binder names so the two read the same — but only the id side is load-bearing.
   #
   # Explicit rather than inferred, because an unmatched binder must be a loud failure:
   # the fallback for "no location" is an unassigned card, and the placement now exists
   # ONLY on Moxfield, so a silent miss would strip it off every card in that binder.
-  # The script aborts on an unmapped binder instead, printing its name and publicId.
+  # The script aborts instead, printing a ready-to-paste line for the missing binder —
+  # which is how "EDH - Hei" was caught the day it was created.
   #
-  # The two mappings whose names do not correspond were confirmed by card count
-  # rather than guessed: "EDH 2013 - Alfie" is 75 cards and so is "EDH 2013 Bottom";
-  # "EDH 2013 - OG" is 64 and so is "EDH 2013 Top".
+  # ShowMyCards' Box-vs-Binder type is NOT derivable from Moxfield, which has no such
+  # concept; it lives only in the storage locations themselves. Recreating a location
+  # means choosing it by hand (see the export in ~/smc-backup for the last known set).
   binderMap = {
-    "7HN4zuxR2Euw4zHQ63Yw-A" = "Green Deck Box";        # Green Deck Box
-    "zr2HXZwJU02IqehMUC2XIA" = "Magic Big Box";         # Big Box (was: Magic Big Box)
-    "tN-xvHOf9kyRg3H6K9k_Zw" = "Red Dragon Book";       # Red Dragon Book
-    "RDPW1cjnu02dQzjgbhxeAw" = "Blue Dragon Shield";    # Blue Dragon Shield - Alfie
-    "1xYAgk-t9UCzmA185Ok9OA" = "Purple Dragon Shield";  # Purple Dragon Shield - Nico
-    "BXU-Q9-XB0WKZ1RTlFlJkw" = "EDH 2013 Bottom";       # EDH 2013 - Alfie
-    "b7STqs9nLkWmyzOLxC-t_A" = "EDH 2013 Top";          # EDH 2013 - OG
+    "zr2HXZwJU02IqehMUC2XIA" = "Big Box";
+    "7HN4zuxR2Euw4zHQ63Yw-A" = "Green Deck Box";
+    "1xYAgk-t9UCzmA185Ok9OA" = "Purple Dragon Shield - Nico";
+    "RDPW1cjnu02dQzjgbhxeAw" = "Blue Dragon Shield - Alfie";
+    "BXU-Q9-XB0WKZ1RTlFlJkw" = "EDH - Alfie";
+    "b7STqs9nLkWmyzOLxC-t_A" = "EDH - OG";
+    "tN-xvHOf9kyRg3H6K9k_Zw" = "BOOK - Red Dragon";
+    "Rvt1bv1pAU2JJwCimYCHdg" = "EDH - Hei";
   };
 
   # Discovered decks to ignore, by publicId. Discovery is deliberately greedy, so
