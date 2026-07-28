@@ -1,5 +1,9 @@
 result
 
 __pycache__/
-.claude/
+# Ignore .claude/ contents (worktrees/, settings.local.json, …) but keep the
+# repo-scoped settings.json tracked. Must be `.claude/*` not `.claude/` — git
+# cannot re-include a file whose parent directory is itself excluded.
+.claude/*
+!.claude/settings.json
 .vscode/

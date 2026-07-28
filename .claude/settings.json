@@ -1,0 +1,12 @@
+{
+  "_comment_mcp": "Repo-scoped Claude Code settings for nic-os. Trims per-session context: claude.ai account connectors load into EVERY project regardless of relevance, and Figma (27 tools) + Slite (39) + Slack (19) together outweigh all ~35 built-in tools. Their schemas are the fattest because of internal duplication — Slite inlines the whole sliteml 'Core rules' paragraph in create-note/append-blocks/modify-block/modify-range/update-note and twice inside edit-document's oneOf (~7 copies); Slack inlines the full Canvas-markdown spec in both slack_create_canvas and slack_update_canvas. None of the three is callable work in a NixOS config repo. Denied here rather than in home/dotfiles/claude-settings.json (user scope) so they stay available in the Trusk repos. deniedMcpServers merges across every settings scope and a deny at any level wins. Deliberately NOT disableClaudeAiConnectors: that is any-source-true and would also drop 'claude.ai Claude Code Remote', which the bridge depends on. serverName must match ~/.claude.json claudeAiMcpEverConnected verbatim (real names have spaces; mcp__claude_ai_* is only the sanitised tool prefix).",
+  "deniedMcpServers": [
+    { "serverName": "claude.ai Figma" },
+    { "serverName": "claude.ai Slack" },
+    { "serverName": "claude.ai Slite" }
+  ],
+  "_comment_plugins": "The slack plugin ships 8 skills plus its own MCP server (mcp__plugin_slack_slack) — dead weight once the Slack connector is denied. It is enabled at user scope in home/dotfiles/claude-settings.json; settings precedence is user < project < local, so false here disables it for nic-os only and leaves it on elsewhere.",
+  "enabledPlugins": {
+    "slack@claude-plugins-official": false
+  }
+}
