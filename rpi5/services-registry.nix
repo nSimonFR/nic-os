@@ -254,7 +254,20 @@
       }; }
     # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm the idle timer.
     # Backend (Go API) is localhost-only; only the SvelteKit frontend is served.
-    { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true; }
+    # Socket-activated (idle-sleep) — noSiteMonitor so the homepage ping doesn't re-arm
+    # the idle timer. Widget reads ShowMyCards' SQLite directly via homepage-stats.py
+    # (:8087/showmycards) rather than its HTTP API: :8330 is the only thing that wakes
+    # the service, so an API-backed widget would pin it awake permanently.
+    { port = 3550;  backend = "http://127.0.0.1:8330";  name = "ShowMyCards";    icon = "mdi-cards-playing-outline"; category = "Apps"; description = "Magic: The Gathering collection"; noSiteMonitor = true;
+      widget = {
+        type = "customapi";
+        url = "http://127.0.0.1:8087/showmycards";
+        mappings = [
+          { field = "cards"; label = "Cards"; format = "number"; }
+          { field = "decks"; label = "Decks"; format = "number"; }
+          { field = "wanted"; label = "Wanted"; format = "number"; }
+        ];
+      }; }
 
     # Backend — API services
     { port = 4001;  backend = "http://127.0.0.1:4001";  name = "tiny-llm-gate";  icon = "mdi-brain";          category = "Backend"; description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)"; }

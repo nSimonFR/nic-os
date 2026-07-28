@@ -42,7 +42,6 @@ showIllegal=true is load-bearing there.
 Env contract (all set by rpi5/moxfield-sync.nix):
   MOXFIELD_USERS            comma-separated Moxfield usernames whose decks to sync
   MOXFIELD_COLLECTION_USER  single username whose collection mirrors to inventory
-  MOXFIELD_BINDER_MAP       JSON {moxfield binder publicId: showmycards location name}
   MOXFIELD_EXCLUDE_IDS      comma-separated publicIds to skip (scratch/test decks)
   MOXFIELD_USER_AGENT       honest UA naming the project + a contact URL
   SMC_API                   ShowMyCards API base, e.g. http://127.0.0.1:8330/api
@@ -82,7 +81,6 @@ FINISHES = {"nonFoil": "nonfoil", "foil": "foil", "etched": "etched"}
 
 USERS = [u.strip() for u in os.environ.get("MOXFIELD_USERS", "").split(",") if u.strip()]
 COLLECTION_USER = os.environ.get("MOXFIELD_COLLECTION_USER", "").strip()
-BINDER_MAP = json.loads(os.environ.get("MOXFIELD_BINDER_MAP") or "{}")
 EXCLUDE_IDS = {d.strip() for d in os.environ.get("MOXFIELD_EXCLUDE_IDS", "").split(",") if d.strip()}
 USER_AGENT = os.environ.get("MOXFIELD_USER_AGENT", "nic-os-moxfield-sync/1.0")
 SMC = os.environ.get("SMC_API", "http://127.0.0.1:8330/api").rstrip("/")
@@ -346,9 +344,74 @@ def resolve_printings(con, rows, oids):
 
 # ── collection mirror (Moxfield -> ShowMyCards inventory) ───────────────────────
 
-def storage_ids():
-    """-> {showmycards location name: id}. /storage/with-counts is a BARE ARRAY."""
-    return {s["name"]: s["id"] for s in (smc("/storage/with-counts") or [])}
+def infer_storage_type(name):
+    """Moxfield has no Box-vs-Binder distinction and ShowMyCards requires one, so the
+    name is the only signal there is. It is cosmetic in ShowMyCards — it picks an
+    icon, nothing more — so a wrong guess costs an icon, not data. Correct for all
+    eight binders in use ("Big Box"/"Green Deck Box" are the only Boxes)."""
+    return "Box" if "box" in (name or "").lower() else "Binder"
+
+
+def sync_storage_locations(rows):
+    """-> {binder publicId: showmycards storage_location_id}
+
+    Locations follow Moxfield instead of being declared in config. Binders get
+    created on first sight and renamed when Moxfield renames them, so adding or
+    renaming one costs no config edit and no rebuild — which matters, because these
+    names turn out to change constantly ("Magic Big Box" -> "Big Box",
+    "EDH 2013 - Alfie" -> "EDH - Alfie" -> "EDH - Errant" inside one afternoon).
+
+    The publicId -> location id link is kept in STATE_DIR because ShowMyCards storage
+    has no field to hold a foreign id, and names cannot serve as the link: the whole
+    point is that they change. On a cold state file the name is used once to adopt
+    existing locations, so a rebuilt state re-attaches instead of duplicating.
+
+    Locations with no matching binder are left alone — they may be the user's own,
+    and DELETE /storage/:id is guarded by referential integrity anyway.
+    """
+    binders = {}
+    for r in rows:
+        b = r.get("tradeBinder") or {}
+        if b.get("publicId"):
+            binders[b["publicId"]] = b.get("name") or b["publicId"]
+
+    state_path = os.path.join(STATE_DIR, "binders.json")
+    state = {}
+    if os.path.exists(state_path):
+        try:
+            state = json.load(open(state_path))
+        except Exception:  # noqa: BLE001 - a corrupt state file must not wedge the sync
+            log("  ! binders.json unreadable — re-adopting locations by name")
+
+    current = {s["id"]: s for s in (smc("/storage/with-counts") or [])}
+    by_name = {s["name"]: s for s in current.values()}
+
+    out, changed = {}, False
+    for pid, name in sorted(binders.items(), key=lambda kv: kv[1]):
+        loc = current.get(state.get(pid)) or by_name.get(name)
+        if loc is None:
+            typ = infer_storage_type(name)
+            if DRY_RUN:
+                log(f"  + would create storage location {name!r} ({typ})")
+                continue
+            loc = smc("/storage", "POST", {"name": name, "storage_type": typ})
+            log(f"  + created storage location {name!r} ({typ})")
+        elif (loc.get("name") or "") != name:
+            log(f"  ~ storage location {loc['name']!r} renamed on Moxfield -> {name!r}")
+            if not DRY_RUN:
+                # storage_type is a non-pointer field — omitting it writes an empty
+                # value, the same trap as description on PUT /lists/:id.
+                smc(f"/storage/{loc['id']}", "PUT",
+                    {"name": name, "storage_type": loc["storage_type"]})
+        out[pid] = loc["id"]
+        if state.get(pid) != loc["id"]:
+            state[pid] = loc["id"]
+            changed = True
+
+    if changed and not DRY_RUN:
+        with open(state_path, "w") as fh:
+            json.dump(state, fh, indent=2, sort_keys=True)
+    return out
 
 
 def build_wanted_inventory(con, rows):
@@ -358,26 +421,7 @@ def build_wanted_inventory(con, rows):
     row, because ShowMyCards' inventory has no language and no condition column. The
     en/fr pair of one printing in one binder is exactly that case.
     """
-    locations = storage_ids()
-    missing_loc = sorted({
-        BINDER_MAP[b] for b in BINDER_MAP if BINDER_MAP[b] not in locations})
-    if missing_loc:
-        raise RuntimeError(
-            f"binder map points at storage locations that do not exist in "
-            f"ShowMyCards: {missing_loc} (have: {sorted(locations)})")
-
-    # Matched on publicId, which survives a rename on Moxfield; the name is only ever
-    # used to make this error message actionable.
-    unmapped = sorted({
-        f'"{b["publicId"]}" = "?";  # {b.get("name")}'
-        for b in (r.get("tradeBinder") for r in rows)
-        if b and b.get("publicId") not in BINDER_MAP})
-    if unmapped:
-        # Never silently unassign: a card with no location is indistinguishable from
-        # one that was never placed, and the placement only exists on Moxfield now.
-        raise RuntimeError(
-            "Moxfield binders with no mapping — add to binderMap in "
-            "rpi5/moxfield-sync.nix:\n    " + "\n    ".join(unmapped))
+    locations = sync_storage_locations(rows)
 
     # Doubles as the catalogue-membership test: oracle_ids() only returns ids that
     # exist locally with an oracle_id, and an id without one cannot be POSTed anyway.
@@ -420,8 +464,7 @@ def build_wanted_inventory(con, rows):
         binder = (r.get("tradeBinder") or {}).get("publicId")
         if binder is None:
             stats["no_binder"] += 1
-        loc = BINDER_MAP.get(binder)
-        wanted[(sid, treat, locations.get(loc) if loc else None)] += int(r.get("quantity") or 0)
+        wanted[(sid, treat, locations.get(binder))] += int(r.get("quantity") or 0)
 
     for u in unresolved:
         log(f"  ! not in local en+fr catalogue: {u}")
