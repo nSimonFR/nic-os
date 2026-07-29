@@ -26,6 +26,9 @@
 # ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout and adds an
 #   en+fr language filter (see the call site). They use --replace-fail, so a
 #   source bump that moves those lines fails the build — re-anchor, don't drop.
+#   `patches` additionally carries an upstream cherry-pick for the gzipped-JSONL
+#   Scryfall feed — that one is droppable once the pinned tag contains it (see
+#   patches/showmycards-scryfall-jsonl.patch).
 #
 # ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.3`, and a pure Nix build
 #   cannot fetch a toolchain (GOTOOLCHAIN=auto has no network in the build
@@ -59,6 +62,17 @@ let
     nativeBuildInputs = [ gcc ];
     env.CGO_ENABLED = "1";
     ldflags = [ "-X" "backend/version.Version=${version}" ];
+
+    # Scryfall retired the plain JSON-array bulk downloads on 2026-07-20:
+    # /bulk-data entries now carry only `jsonl_download_uri` (gzipped JSONL),
+    # and `download_uri` is gone. v0.3.0 reads the absent field, so it resolved
+    # an empty URL and every scheduled refresh failed with `unsupported protocol
+    # scheme ""` — the catalogue silently froze at the last good import. This is
+    # upstream's own fix (38c0019b / PR #155), which landed after the v0.3.0 tag;
+    # applied via `patches` rather than substituteInPlace because it is a
+    # multi-line rewrite (see the indented-string caveat below). Drop it when the
+    # pinned tag includes it.
+    patches = [ ./patches/showmycards-scryfall-jsonl.patch ];
 
     # Both edits are required for the import to finish on the rpi5.
     #
