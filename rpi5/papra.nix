@@ -31,11 +31,27 @@ let
   documentsDir = "/mnt/data/papra/documents";
   ingestionDir = "/mnt/data/papra/ingestion";
 
+  # Read-only, machine-managed mirror of the archive, organised <Type>/<Year>/.
+  # DELIBERATELY OUTSIDE /mnt/data/nextcloud/data/nsimon/files: that dir is
+  # bind-mounted to /mnt/data/cloud and shared by Tailscale Drive **as root**, so
+  # anything inside it is writable by Drive clients no matter what the POSIX mode
+  # says. Keeping the archive out of the bind-mount is the only way to make it
+  # genuinely read-only; Nextcloud gets a view of it via a files_external mount
+  # instead (see papra-nc-archive-mount below). Still under /mnt/data, so restic
+  # → Storj covers it.
+  archiveDir   = "/mnt/data/papra-archive";
+  # Mount point name inside Nextcloud (appears as a top-level folder for nsimon).
+  archiveMount = "Papra";
+
   # Personal org ("Nico's organization") — auto-ingest target for the feeders.
   personalOrg = "org_g9brest62431f0c6w3uywbdr";
   # Top-level Nextcloud "PAPRA" folder (drive drop-zone; also the Proton poller's
   # ingestion target). Matches the user's ALL-CAPS top-level folder convention.
-  ncInbox = "/mnt/data/nextcloud/data/nsimon/files/PAPRA";
+  # This one STAYS writable — it is the input side. Only the archive is locked.
+  ncUser  = "nsimon";
+  ncInbox = "/mnt/data/nextcloud/data/${ncUser}/files/PAPRA";
+
+  occ = "${config.services.nextcloud.occ}/bin/nextcloud-occ";
 in
 {
   # Bring in the upstream `services.papra` module (absent from our 25.11 nixpkgs).
@@ -102,10 +118,6 @@ in
       AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
       AUTO_TAGGING_ENABLED = true;
 
-      # Allow webhook delivery to the loopback tag-sync receiver (Papra's SSRF
-      # guard blocks 127.0.0.1 by default).
-      WEBHOOK_URL_ALLOWED_HOSTNAMES = "127.0.0.1";
-
       # First registered user becomes admin (module/app default). Registration is
       # left enabled so the account can be created on first run; tighten later.
       AUTH_FIRST_USER_AS_ADMIN = true;
@@ -132,6 +144,13 @@ in
     "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = "0755"; };
     "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
     "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
+    # papra:papra 0755 is the actual read-only enforcement for the archive.
+    # php-fpm runs as uid `nextcloud`, whose only group is `nextcloud` — it is not
+    # in `papra`, so Nextcloud physically cannot write here whatever the UI thinks.
+    # nsimon isn't in `papra` either (users/wheel/video/hydroxide/nextcloud), so
+    # the local shell and Hermes are read-only too. The files_external read-only
+    # flag below is then just the UI telling the truth about it.
+    "${archiveDir}".d     = { user = "papra"; group = "papra"; mode = "0755"; };
   };
 
   # ── Nextcloud "PAPRA" inbox feeder ────────────────────────────────────────
@@ -218,58 +237,111 @@ in
     };
   };
 
-  # ── Papra → Nextcloud tag sync (webhook receiver) ─────────────────────────
-  # Papra fires an HMAC-signed webhook on document.tags.changed; this receiver
-  # (127.0.0.1:8347) verifies it, reads the doc's current tags from Papra's
-  # SQLite, matches the file in Nextcloud by original filename, and mirrors the
-  # tags as Nextcloud systemtags (writes oc_systemtag[_object_mapping] in PG as
-  # nextcloud_user; DB password read from Nextcloud's config.php). Docs with no
-  # Nextcloud counterpart (e.g. Proton-sourced) are skipped. Register the webhook
-  # in Papra pointing at this URL with the papra-webhook-secret.
-  systemd.services.papra-webhook-tagsync = {
-    description = "Papra -> Nextcloud tag sync (webhook receiver)";
+  # ── Nextcloud read-only view of the archive (files_external) ──────────────
+  # A symlink from the user-files dir would NOT work: Nextcloud does not traverse
+  # symlinks in the data dir (the existing PHOTOS -> immich link has 0 rows in
+  # oc_filecache to prove it). So the archive is surfaced as a Local external
+  # storage instead, mounted read-only for nsimon.
+  #
+  # files_external ships with the server but is DISABLED by default, and
+  # nextcloud-disable-defaults turns off anything absent from `appsToKeep` on
+  # every activation — hence the matching entry in nextcloud.nix. Without it this
+  # mount would silently vanish on the next rebuild.
+  systemd.services.papra-nc-archive-mount = {
+    description = "Mount the Papra archive into Nextcloud, read-only";
     wantedBy = [ "multi-user.target" ];
-    after = [ "postgresql.service" "network.target" ];
+    after = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
+    requires = [ "nextcloud-setup.service" ];
+    path = with pkgs; [ jq ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "root";
+    };
+    script = ''
+      ${occ} app:enable files_external >/dev/null 2>&1 || true
+
+      # Idempotent: reuse the mount if it already points at the archive.
+      mount_id=$(${occ} files_external:list --output=json 2>/dev/null \
+        | jq -r --arg mp "/${archiveMount}" \
+            'map(select(.mount_point == $mp)) | .[0].mount_id // empty')
+
+      if [ -z "$mount_id" ]; then
+        mount_id=$(${occ} files_external:create --output=json \
+          "/${archiveMount}" local null::null -c datadir=${archiveDir} 2>/dev/null \
+          | jq -r 'if type == "array" then .[0].mount_id else .mount_id end // empty')
+        # Belt and braces: some occ builds print a bare id rather than JSON.
+        [ -n "$mount_id" ] || mount_id=$(${occ} files_external:list --output=json 2>/dev/null \
+          | jq -r --arg mp "/${archiveMount}" \
+              'map(select(.mount_point == $mp)) | .[0].mount_id // empty')
+      fi
+
+      if [ -z "$mount_id" ]; then
+        echo "could not create/find the ${archiveMount} external mount" >&2
+        exit 1
+      fi
+
+      # Scope to nsimon only, and make it read-only in the Nextcloud UI. The real
+      # guarantee is POSIX (papra:papra 0755, php-fpm not in that group); this
+      # flag stops the UI from offering edits it cannot perform.
+      ${occ} files_external:applicable --add-user ${ncUser} "$mount_id" >/dev/null
+      ${occ} files_external:option "$mount_id" readonly true >/dev/null 2>&1 || true
+      echo "archive mounted at /${archiveMount} (mount $mount_id), read-only"
+      ${occ} files_external:list --output=json \
+        | jq -r --arg mp "/${archiveMount}" \
+            '.[] | select(.mount_point == $mp) | "  options: \(.options)  users: \(.applicable_users)"'
+    '';
+  };
+
+  # ── Papra → Nextcloud archive reconciler ──────────────────────────────────
+  # Replaces the old webhook receiver + registrar, which never tagged a single
+  # file in their entire lifetime: they waited on `document:tag:added`, but
+  # papra-tag-sweep.py writes documents_tags straight into SQLite and bypasses
+  # Papra's API, so that event never fires for our pipeline. Every delivery we
+  # ever received was `document:created` firing BEFORE tagging.
+  #
+  # A reconciler has no ordering problem, self-heals, and backfills the whole
+  # archive on first run — where the event-driven version could only ever catch
+  # new documents. Dropping it also removes an HTTP listener, an HMAC
+  # implementation, an agenix secret and Papra's SSRF carve-out for 127.0.0.1.
+  #
+  # Runs as root: reads Papra's SQLite (ro) and its papra-owned blobs, writes the
+  # papra-owned archive, runs occ, and writes oc_systemtag* in PG.
+  systemd.services.papra-nc-sync = {
+    description = "Reconcile Papra documents into the read-only Nextcloud archive";
+    after = [ "postgresql.service" "papra-nc-archive-mount.service" ];
+    wants = [ "papra-nc-archive-mount.service" ];
     environment = {
-      LISTEN_ADDR = "127.0.0.1";
-      LISTEN_PORT = "8347";
       PAPRA_DB = "/var/lib/papra/db.sqlite";
-      PAPRA_WEBHOOK_SECRET_FILE = "/run/agenix/papra-webhook-secret";
+      PAPRA_DOCUMENTS_ROOT = documentsDir;
+      PAPRA_ARCHIVE_ROOT = archiveDir;
+      PAPRA_ARCHIVE_MOUNT = archiveMount;
+      PAPRA_STATE_DIR = "/var/lib/papra-nc-sync";
+      NC_OCC = occ;
       NC_PG_HOST = pgHost;
       NC_PG_PORT = toString pgPort;
       NC_PG_DB = "nextcloud_production";
       NC_PG_USER = "nextcloud_user";
       NC_CONFIG = "/mnt/data/nextcloud/config/config.php";
-      NC_USER = "nsimon";
-    };
-    serviceConfig = {
-      User = "nextcloud";
-      Group = "nextcloud";
-      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./scripts/papra-webhook-tagsync.py}";
-      Restart = "on-failure";
-      RestartSec = 5;
-    };
-  };
-
-  # Idempotently (re)register the Papra webhook that drives the tag-sync receiver.
-  # Papra keeps webhooks as DB rows, so this reconciles them on every activation —
-  # surviving a Papra DB reset and picking up a rotated papra-webhook-secret.
-  systemd.services.papra-webhook-register = {
-    description = "Register the Papra -> Nextcloud tag-sync webhook";
-    wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ sqlite coreutils ];
-    environment = {
-      PAPRA_DB = "/var/lib/papra/db.sqlite";
-      PAPRA_ORG = personalOrg;
-      PAPRA_WEBHOOK_URL = "http://127.0.0.1:8347/";
-      PAPRA_WEBHOOK_SECRET_FILE = "/run/agenix/papra-webhook-secret";
+      NC_USER = ncUser;
     };
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      ExecStart = "${pkgs.bash}/bin/bash ${./scripts/papra-webhook-register.sh}";
+      StateDirectory = "papra-nc-sync";
+      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./scripts/papra-nc-sync.py}";
     };
-    restartTriggers = [ config.age.secrets.papra-webhook-secret.file ];
+  };
+  systemd.timers.papra-nc-sync = {
+    description = "Periodic Papra -> Nextcloud archive reconcile";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # After papra-tag-sweep (6min/15min) so a freshly tagged+dated document
+      # lands in the right folder on the very next pass.
+      OnBootSec       = "9min";
+      OnUnitActiveSec = "15min";
+      Persistent      = true;
+    };
   };
 
   # ── Socket-activated idle sleep (rpi5/lib/socket-activate.nix) ────────────

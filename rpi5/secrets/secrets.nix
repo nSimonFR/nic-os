@@ -3,7 +3,6 @@ let
   nsimon-ed25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZ7wzLFXmWeZ52SWjvsfXSZr+LbvpZYt/EE/tzVZnFd";
 in {
   "agent-env.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
-  "papra-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "supervisor-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "linky-token.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "linky-prm.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];

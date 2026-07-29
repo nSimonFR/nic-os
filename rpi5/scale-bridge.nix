@@ -26,7 +26,7 @@
 # rendered at activation from that secret into /etc (never the Nix store / git).
 { config, pkgs, lib, ... }:
 let
-  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only (8347 taken by papra-webhook)
+  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only (8347 was papra-webhook, now retired)
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
   ryotUrl = "http://127.0.0.1:13352/graphql"; # ryot-backend (see ryot.nix)
 
