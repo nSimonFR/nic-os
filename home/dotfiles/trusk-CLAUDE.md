@@ -27,6 +27,20 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 
 `~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all IN-/EXTERN-/DO- tickets). Most-used team `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"IN-545"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
 
+### Filing defaults on `IN` (INTERNAL)
+
+| Field | Default | ids |
+| --- | --- | --- |
+| Swimlane | exactly one, from the `> SWIM LANES` group — the board keys on it | `BUG/RUN` `f3166fe6-b3c7-40c0-81f3-591b054f1566` · `TECH` `5274833e-40ae-43cc-83e7-0f1095a78ac6` · `GROOMED` `55c1f085-885d-44d7-b15d-bd16f130f390` |
+| Priority | `2` for a prod defect, `1` only for a live incident | 0 none · 1 urgent · 2 high · 3 medium · 4 low |
+| Estimate | `1` for a one-file fix | fibonacci, zero allowed, extended |
+| Assignee | Nicolas | `803d1002-a245-4dc8-bcb0-a01d9b959c63` |
+| State | `Sprint Backlog` if slotted into a cycle, else `Backlog` | `99b3b72b-c364-4c52-80b5-a27c916f6a15` / `c1d1b450-41cc-4ed8-94c3-f3ad43e3c1a9` |
+
+Leave the `PRODUCT - *`, `QA - *` and `TECH - Chapters` labels alone — product and QA own them.
+
+Two traps: a shipped ticket ends at **`In Production`** (`7dc6b655-09d0-41f9-9a25-9df31bd448cc`), not `To Release` — both are `completed`-typed. And `cycles(filter:{isFuture:{eq:true}})` returns cycles **descending**, so next cycle = lowest `number`, not `nodes[0]`.
+
 ## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
 
 `trusk-steampipe` = query **GCP as live SQL**. Only the `turbot/gcp` plugin is installed, so it's for Google Cloud inventory/IAM/audit introspection — `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster / gcp_service_account …`, read-only, hits the real GCP API per query (nothing cached). Use it instead of `gcloud … | jq` for cross-resource GCP questions. It's **not** fronted by the ToolHive proxy (no GCP there; `dbhub` is real-database-only) — kept as its own MCP.
