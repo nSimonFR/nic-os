@@ -60,31 +60,7 @@ collections).
 Mutation: **`createOrUpdateUserWorkout(input: UserWorkoutInput!)`** → returns the
 new workout id (`wor_…`).
 
-### 1. Read a similar prior workout first — mandatory
-
-**Before every create or update**, retrieve the recent workout IDs and read at least one
-similar workout in full. Reuse its exact `exerciseId`, exercise order, set count, and
-set-lot convention whenever the same movement appears. This prevents accidental
-substitution of a Smith-machine, cable, or free-weight exercise for a standalone
-machine. If no comparable entry exists, search the library and explicitly verify the
-chosen exercise's `id`, `name`, and `lot` before writing.
-
-```bash
-# 1) List recents; choose the closest matching workout.
-ryot_q 'query{ userWorkoutsList(input:{}){ response{ items } } }' '{}' | jq -c \
-  '.data.userWorkoutsList.response.items'
-
-# 2) Inspect it before constructing the new payload.
-ryot_q 'query($id:String!){ userWorkoutDetails(workoutId:$id){ response{ details{
-  name information{ exercises{ id lot sets{ lot statistic{ reps weight duration distance } } } }
-} } } }' '{"id":"wor_…"}' | jq -c '.data.userWorkoutDetails.response.details'
-```
-
-Do this read **immediately before** the create/update mutation, not merely earlier in
-the session. The mutation must use verified library IDs, never guessed names. For an
-update, preserve `updateWorkoutId` and replace only the corrected fields.
-
-### 2. Resolve the exercise id
+### 1. Resolve the exercise id
 
 **An exercise's id is its human name** (e.g. `"Barbell Bench Press - Medium Grip"`),
 and it must match the library **exactly** (case-sensitive). ⚠️ Ryot **silently
@@ -146,12 +122,7 @@ ryot_q 'mutation($input:UserWorkoutInput!){ createOrUpdateUserWorkout(input:$inp
 ```
 
 Notes:
-- **Set consistency is required.** Retain the user's stated set counts and reps exactly.
-  For a familiar movement, mirror its prior `exerciseId`, exercise order, and
-  `SetLot` pattern from the mandatory similar-workout read. Do not silently normalize
-  sets, infer warm-ups, or substitute a different equipment variant.
-- **`SetLot`**: `NORMAL` | `WARM_UP` | `DROP` | `FAILURE`. Default to `NORMAL` only
-  when no prior comparable set convention exists.
+- **`SetLot`**: `NORMAL` | `WARM_UP` | `DROP` | `FAILURE`. Default to `NORMAL`.
 - Multiple exercises → add more entries to `exercises[]`. Each carries its own `sets`.
 - Optional per-set: `rpe` (Int 1–10), `restTime` (Int seconds), `note` (String).
 - Optional workout-level: `duration` (Int seconds — otherwise derived from start/end),
