@@ -90,6 +90,12 @@ kubectl --context trusk-staging-ts -n staging logs <pod> --previous
 
 `10.106.0.3` (corp VPN). One DB+role per service; creds in `deployment/configurations/staging/secrets/` (sops). `PGPASSWORD='<secret>' psql -h 10.106.0.3 -U <service> -d <service_db>`.
 
+## Legacy users (trusk-api) — in Postgres, not Mongo
+
+Mongo holds only `orders`/`eventsHistory`; **users/organisations are in PG** (`trusk_api`, schema `trusk`). Nicolas' staging user id is literally `nicos`.
+
+PF Pro visibility = `trusk.users.trusk_customer` (read as `profile.truskCustomer`), matched against the mission's `customer_id`. To show a user a given order set, set it to that set's `mission.customer_id` — **mono-valued, it REPLACES the previous one** (note the old value), and needs a re-login. Backoffice scoping is elsewhere: IAM's `contract_ids`/`shipment_site_ids`.
+
 ## Conventional commits → semantic-release
 
 `@trusk-official/config-release` releaseRules come from the `type-enum` in config-commitlint. Valid PascalCase scopes: **`Feature, Fix, Docs, Style, Refactor, Test, Chore`** — `Feature`/`Refactor` → minor, rest → patch. The Angular preset also adds lowercase `feat`→minor, `fix`→patch, `BREAKING CHANGE`→major.
