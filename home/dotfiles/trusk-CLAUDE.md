@@ -42,9 +42,17 @@ Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__m
   jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
   ```
 
+## ToolHive (`toolhive-tech`) — the MCP proxy, and what it fronts
+
+One MCP (`find_tool` to discover, `call_tool` to run) proxying several tool sets — **notably Datadog** alongside ArgoCD. Datadog tools: `tech-datadog_logs` (`search` / `aggregate`), `tech-datadog_security`, plus the logs indexes/pipelines/archives admin tools.
+
+Datadog gotchas: **`env:production` and `namespace:production` are NOT searchable facets** — filter with `host:gke-trusk-production*`. Version in scope is `@version` (log attribute) or `image_tag:` (pod tag). Prefer `aggregate` + `groupBy` for anything you'll quote as a number; `sample:"spread"` samples and must never be counted, and the **current time bucket is incomplete** so never conclude "it dropped to zero" on it. `search` with `sample:"diverse"` is the right tool to enumerate distinct error patterns.
+
+Before calling a new regression: `aggregate` the same query over 3-30d `groupBy ["@version"]` — it separates "introduced by the version we just shipped" from "pre-existing, only now reaching this env".
+
 ## ArgoCD — read via MCP, write via UI/kubectl
 
-Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Read** via the ToolHive MCP proxy (`toolhive-tech` → `find_tool`/`call_tool`; the argocd tools it fronts are `get_application`, `list_applications`, `get_application_resource_tree`, `get_application_workload_logs`, …). MCP RBAC is per-project: restrictive projects (`staging`) may return `permission denied`; app-of-apps (`staging-gitops`) and permissive ones (`flagd`) read fine. **Write (sync/patch/restart) is NOT in the MCP** → use the UI, or kubectl directly. `nicolas.simon@trusk.com` is `trusk-admin` (cluster-admin) on **both** staging and prod (`gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`). Read pattern: `get_application("staging-gitops")` → `.status.resources` lists child apps with sync + health.
+Staging cluster `trusk-staging-ts`, UI <https://staging-argocd.trusk.com>. **Read** via the same ToolHive proxy (`toolhive-tech` → `find_tool`/`call_tool`; the argocd tools it fronts are `get_application`, `list_applications`, `get_application_resource_tree`, `get_application_workload_logs`, …). MCP RBAC is per-project: restrictive projects (`staging`) may return `permission denied`; app-of-apps (`staging-gitops`) and permissive ones (`flagd`) read fine. **Write (sync/patch/restart) is NOT in the MCP** → use the UI, or kubectl directly. `nicolas.simon@trusk.com` is `trusk-admin` (cluster-admin) on **both** staging and prod (`gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`). Read pattern: `get_application("staging-gitops")` → `.status.resources` lists child apps with sync + health.
 
 ## Monitor / long-job waits
 
