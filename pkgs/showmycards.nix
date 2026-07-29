@@ -1,7 +1,10 @@
 # ShowMyCards — self-hosted Magic: The Gathering collection manager
 # (github.com/showmycards/showmycards, MIT). Built from source for aarch64:
-# upstream only publishes an amd64 container image, so the prebuilt image can't
-# run on the rpi5. Same local-vendoring model as pkgs/rtk.nix — a `flake = false`
+# the only published container image is amd64, so it can't run on the rpi5.
+# (Upstream added multi-arch amd64+arm64 CI in 51d7268c, but that landed after
+# v0.3.0 and no release has been cut since, so no arm64 image exists yet. Once
+# one ships, this whole from-source build may become unnecessary — re-evaluate.)
+# Same local-vendoring model as pkgs/rtk.nix — a `flake = false`
 # source input (showmycards-src, pinned in flake.nix) built here and exposed as
 # `pkgs.showmycards` via an overlay.
 #
@@ -23,15 +26,27 @@
 #   frontend deps move. After bumping showmycards-src, set the changed one back
 #   to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
 #
-# ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout and adds an
-#   en+fr language filter (see the call site). They use --replace-fail, so a
-#   source bump that moves those lines fails the build — re-anchor, don't drop.
+# ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout, adds an en+fr
+#   language filter (see the call site), and lowers go.mod's toolchain floor (see
+#   ⚠ GO TOOLCHAIN). They use --replace-fail, so a source bump that moves those
+#   lines fails the build — re-anchor, don't drop.
 #
-# ⚠ GO TOOLCHAIN. backend/go.mod requires `go 1.26.3`, and a pure Nix build
-#   cannot fetch a toolchain (GOTOOLCHAIN=auto has no network in the build
-#   sandbox), so the `go` passed in must already satisfy it. nixpkgs' default
-#   `go` is 1.25.10 — too old — so flake.nix passes `go = final.go_1_26`
-#   (1.26.4), matching upstream's golang:1.26-alpine build image.
+# ⚠ GO TOOLCHAIN — go.mod ASKS FOR MORE THAN NIXPKGS HAS. A pure Nix build cannot
+#   fetch a toolchain (GOTOOLCHAIN=auto has no network in the build sandbox), so
+#   the `go` passed in must already satisfy go.mod. nixpkgs' default `go` is
+#   1.25.10 — too old — so flake.nix passes `go = final.go_1_26`. But that is
+#   1.26.4, and upstream's 2dcbd344 raised backend/go.mod to `go 1.26.5`
+#   ("clear govulncheck findings"), which nothing in nixpkgs provides yet:
+#
+#     go: go.mod requires go >= 1.26.5 (running go 1.26.4; GOTOOLCHAIN=local)
+#
+#   So postPatch rewrites the directive back to 1.26.4. Safe: 1.26.5 is a patch
+#   release, and Go patch releases add no language features — the directive is
+#   toolchain selection, not a source-compatibility gate. What we DON'T get is
+#   whatever stdlib fix landed in 1.26.5; that is unobtainable here regardless,
+#   since 1.26.4 is the nixpkgs ceiling and is what this host already runs.
+#   DROP THE go.mod REWRITE the moment nixpkgs ships go 1.26.5 — re-check with
+#   `nix eval --raw nixpkgs#go_1_26.version`.
 {
   lib,
   stdenv,
@@ -47,7 +62,10 @@
 
 let
   pname = "showmycards";
-  version = "0.3.0"; # keep in lock-step with the showmycards-src tag in flake.nix
+  # nixpkgs "unstable" convention: <last release>-unstable-<commit date>, because
+  # showmycards-src is pinned to a commit past v0.3.0, not to a tag. See the
+  # ⚠ PINNED TO A COMMIT note in flake.nix; keep both in lock-step.
+  version = "0.3.0-unstable-2026-07-20";
   src = showmycards-src;
 
   # ── Go backend (cgo: mattn/go-sqlite3) ────────────────────────────────────
@@ -77,6 +95,8 @@ let
       substituteInPlace backend/services/bulk_data.go \
         --replace-fail 'Timeout: 30 * time.Minute' 'Timeout: 6 * time.Hour' \
         --replace-fail 'batch = append(batch, card)' 'if card.Lang != "en" && card.Lang != "fr" { continue }; batch = append(batch, card)'
+      substituteInPlace backend/go.mod \
+        --replace-fail 'go 1.26.5' 'go 1.26.4'
     '';
 
     # Upstream tests hit the network / fixtures; skip for the packaged build.
@@ -121,7 +141,7 @@ let
   depsBuild = mkNpmModules {
     name = "deps-build";
     npmArgs = "";
-    outputHash = "sha256-90sxgYWGHQyIo/GIABnOSHi4B9D/2pMo1oLpjelc0Zc=";
+    outputHash = "sha256-VkyhZ+0vqEpzRsTyen4jeVBXenOzS1CkuBV3yctFJq4=";
   };
 
   # Production-only tree shipped at runtime. adapter-node keeps `dependencies`

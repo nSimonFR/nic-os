@@ -138,10 +138,18 @@
     # (showmycards/showmycards). Source-only input (`flake = false`): the
     # prebuilt image is amd64-only, so pkgs/showmycards.nix builds it from source
     # (Go backend + SvelteKit frontend) and exposes `pkgs.showmycards` via an
-    # overlay. Bump: change the tag here + `version` in pkgs/showmycards.nix, then
+    # overlay. Bump: change the ref here + `version` in pkgs/showmycards.nix, then
     # `sudo nix flake lock --update-input showmycards-src` + rebuild.
+    #
+    # ⚠ PINNED TO A COMMIT, NOT A TAG. v0.3.0 (2026-05-27) is still upstream's
+    #   newest release, but Scryfall retired the plain-JSON bulk downloads in late
+    #   July 2026 and v0.3.0 cannot ingest the replacement gzipped-JSONL feed —
+    #   every scheduled refresh dies with `unsupported protocol scheme ""`. The
+    #   fix (38c0019b, PR #155) landed 21 commits after the tag and has never been
+    #   released. Go back to a plain tag pin as soon as upstream cuts one that
+    #   contains 38c0019b.
     showmycards-src = {
-      url = "github:showmycards/showmycards/v0.3.0";
+      url = "github:showmycards/showmycards/38c0019b2e63bcbf5ed5c8eee57ff5d9580ac7f0";
       flake = false;
     };
 
