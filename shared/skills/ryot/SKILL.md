@@ -63,13 +63,11 @@ new workout id (`wor_…`).
 ### 1. Read a similar prior workout first — mandatory
 
 **Before every create or update**, retrieve the recent workout IDs and read at least one
-similar workout in full. Reuse its exact `exerciseId`, exercise order, and set-lot
-convention whenever the same movement appears. **The current workout always overrides
-historical set count, reps, weight, and exercise order:** write exactly what the user
-reported for this session. This prevents accidental substitution of a Smith-machine,
-cable, or free-weight exercise for a standalone machine. If no comparable entry exists,
-search the library and explicitly verify the chosen exercise's `id`, `name`, and `lot`
-before writing.
+similar workout in full. Reuse its exact `exerciseId`, exercise order, set count, and
+set-lot convention whenever the same movement appears. This prevents accidental
+substitution of a Smith-machine, cable, or free-weight exercise for a standalone
+machine. If no comparable entry exists, search the library and explicitly verify the
+chosen exercise's `id`, `name`, and `lot` before writing.
 
 ```bash
 # 1) List recents; choose the closest matching workout.
@@ -148,13 +146,12 @@ ryot_q 'mutation($input:UserWorkoutInput!){ createOrUpdateUserWorkout(input:$inp
 ```
 
 Notes:
-- **Current-workout precedence.** The user's stated set count, reps, weight, and
-  exercise order are authoritative and must be written exactly; never add, remove, or
-  normalize sets from prior history. Reuse historical data only for the verified
-  `exerciseId` and, unless the user specifies otherwise, the `SetLot` pattern. Do not
-  substitute a different equipment variant.
+- **Set consistency is required.** Retain the user's stated set counts and reps exactly.
+  For a familiar movement, mirror its prior `exerciseId`, exercise order, and
+  `SetLot` pattern from the mandatory similar-workout read. Do not silently normalize
+  sets, infer warm-ups, or substitute a different equipment variant.
 - **`SetLot`**: `NORMAL` | `WARM_UP` | `DROP` | `FAILURE`. Default to `NORMAL` only
-  when the user did not specify a set type and no comparable set convention exists.
+  when no prior comparable set convention exists.
 - Multiple exercises → add more entries to `exercises[]`. Each carries its own `sets`.
 - Optional per-set: `rpe` (Int 1–10), `restTime` (Int seconds), `note` (String).
 - Optional workout-level: `duration` (Int seconds — otherwise derived from start/end),
