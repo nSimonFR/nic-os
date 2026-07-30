@@ -1,6 +1,6 @@
 # epicgames-freegames-node: auto-claim the Epic Games Store weekly free games.
 #
-# Design — "run twice weekly, zero idle RAM":
+# Design — "run daily, zero idle RAM":
 #   The upstream tool's Docker image runs a resident process that self-schedules
 #   via an internal cron. We do NOT use that. `node dist/src/index.js` performs
 #   exactly ONE redeem pass and then `process.exit(0)` (the scheduling lives only
@@ -154,18 +154,23 @@ in
       ExecStart = lib.getExe epicgames-freegames;
       # Cap a stuck run (e.g. an unattended captcha/device-code wait):
       # Epic's device code expires in ~10 min, so 15 min covers the happy path
-      # and fails cleanly otherwise (→ Telegram alert, retries next Thu/Sun).
+      # and fails cleanly otherwise (→ Telegram alert, retries tomorrow).
       TimeoutStartSec = "15min";
     };
   };
 
   systemd.timers.epicgames-freegames = {
-    description = "Twice-weekly Epic free-games claim (Thu + Sun, 12:30)";
+    description = "Daily Epic free-games claim (12:30)";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      # Sun claims the current week's game with margin; Thu is the last-chance
-      # grab of the previous game before it expires (~17:00 CET Thursdays).
-      OnCalendar = "Thu,Sun *-*-* 12:30:00";
+      # MUST run at least every 2 days, and not (as it used to) twice a week:
+      # Epic's device-auth refresh token carries refresh_expires = 172800s (48h)
+      # and is only extended by a run that actually uses it. A Thu+Sun schedule
+      # leaves a 3-4 day gap, so the session was always dead by the next run —
+      # every run then blocked on an interactive re-login until TimeoutStartSec
+      # killed it. Daily keeps the session alive unattended indefinitely, and
+      # still covers both the new weekly game and the Thursday last-chance grab.
+      OnCalendar = "*-*-* 12:30:00";
       Persistent = true; # catch up a missed run if the Pi was off
       RandomizedDelaySec = "45m"; # be polite to Epic; don't hit exactly on the hour
     };
