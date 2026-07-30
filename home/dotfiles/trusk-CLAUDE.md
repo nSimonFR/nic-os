@@ -182,7 +182,7 @@ TypeORM/knex track migrations by name+timestamp. If a migration already ran (its
 - **Staging** — `trusk-staging-ts` (Tailscale operator), works directly.
 - **Production** — no Tailscale; run the `proxy-prod` alias once/session (opens an IAP tunnel + SOCKS/HTTP proxy on `localhost:8888`), then `export http_proxy=localhost:8888 https_proxy=localhost:8888` and use ctx `gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`. Socket `/tmp/trusk-production-gke-bastion.socket` = readiness signal (direct GKE ctx times out on TLS — private control plane).
 
-`proxy-prod` is an interactive-shell alias and long-running. Run it autonomously via **`zsh -ic 'proxy-prod'`** in `Bash(run_in_background:true)` (don't block on it; may prompt for gcloud auth if tokens are stale), then poll for the socket:
+`proxy-prod` is an interactive-shell alias and long-running. Run it autonomously via **`zsh -ic 'proxy-prod'`** in `Bash(run_in_background:true)`, prefixed with the ADC token export below (without it, stale user creds make `get-credentials` die on `Reauthentication failed. cannot prompt during non-interactive execution`), then poll for the socket:
 
 ```bash
 for i in $(seq 1 60); do [ -S /tmp/trusk-production-gke-bastion.socket ] && { echo up; break; }; sleep 2; done
@@ -232,7 +232,16 @@ kubectl --context trusk-staging-ts -n staging get cm <name> -o jsonpath='{.data}
 
 ## Prod access + debug gotchas
 
-- **gcloud token refresh fails under proxy** (`print credential failed … proxy URL malformed`, or kubectl `connection refused` to 10.0.0.2): refresh DIRECT first — `unset http_proxy https_proxy && gcloud auth print-access-token >/dev/null` — then `export http_proxy=localhost:8888 https_proxy=localhost:8888` for kubectl. Token expires ~1h.
+- **Auth: use ADC, never ask for `gcloud auth login`.** The *user* credential (`gcloud auth print-access-token`) routinely needs interactive reauth and dies non-interactively (`Reauthentication failed. cannot prompt during non-interactive execution`) — that is NOT a blocker and never a reason to hand the user a login command. `gcloud auth application-default login` is set up and long-lived, and gcloud honours it when passed explicitly. Export it once per Bash call (mint it OUTSIDE the proxy, then set the proxy vars) and both `proxy-prod`/`get-credentials` and kubectl work:
+
+  ```bash
+  export CLOUDSDK_AUTH_ACCESS_TOKEN=$(unset http_proxy https_proxy; gcloud auth application-default print-access-token)
+  export http_proxy=localhost:8888 https_proxy=localhost:8888
+  kubectl --context gke_trusk-production-kkypwi_europe-west1_trusk-production-gke get ns
+  ```
+
+  Env doesn't persist across Bash calls → re-export in each. Token expires ~1h. Verified 2026-07-30 end-to-end (get-credentials → IAP tunnel → kubectl → `exec … node pg`) with the user cred fully expired.
+- **gcloud token refresh fails under proxy** (`print credential failed … proxy URL malformed`, or kubectl `connection refused` to 10.0.0.2): mint any token DIRECT (`unset http_proxy https_proxy` in a subshell, as above), then set `http_proxy`/`https_proxy` for kubectl.
 - **proxy-prod socket goes stale**: the socket file lingers but the tunnel dies (`connection refused`). Test with a real `kubectl get ns`, not socket existence; re-run `zsh -ic 'proxy-prod'` if refused.
 - **`kubectl logs --since=60m` truncates** on verbose services (undercounts massively) → use short windows (`--since=15m`) or Datadog for reliable counts.
 - **Temp per-service debug** (LOGGER_LEVEL & LOG_LEVEL live in the SHARED `infra-env` cm, both read; editing it floods every service): override on the deployment + stop selfHeal from reverting it — `kubectl -n argocd patch application <svc>-production --type merge -p '{"spec":{"syncPolicy":{"automated":{"selfHeal":false}}}}'` → `kubectl -n production set env deploy/<svc> LOGGER_LEVEL=debug LOG_LEVEL=debug` → capture → revert (`set env … LOGGER_LEVEL- LOG_LEVEL-` + selfHeal:true).
