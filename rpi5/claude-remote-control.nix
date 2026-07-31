@@ -314,8 +314,17 @@ lib.recursiveUpdate keepWarm.nixosConfig {
     description = "Claude Code Remote Control server (tmux)";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
-    # Stop cleanly before rebuilds: nixos-rebuild triggers stop→start
-    stopIfChanged = true;
+    # Never let activation touch the bridge. It hosts the tmux server that any
+    # Claude session rebuilding this box is running inside, so a stop→start here
+    # kills the caller mid-activation: nixos-rebuild hands
+    # switch-to-configuration its own stdout via `systemd-run --pipe`, that pipe
+    # dies with the caller, and the next write panics it with exit 101 — leaving
+    # everything nixos-rebuild-safe had stopped stopped. Twice on 2026-07-29,
+    # once for 1d15h (Home Assistant, AFFiNE, Ryot, Dawarich, homepage).
+    # Config changes here need a manual `systemctl restart
+    # claude-remote-control`; ExecStop snapshots the live sessions and
+    # boot-resume re-hosts them, same as a watchdog restart.
+    restartIfChanged = false;
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;

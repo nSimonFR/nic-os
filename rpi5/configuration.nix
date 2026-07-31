@@ -17,8 +17,9 @@ let
 
   # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
   # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs
-  # to avoid zram thrashing and a watchdog reset. Services come back up
-  # automatically during the activation phase of nixos-rebuild switch.
+  # to avoid zram thrashing and a watchdog reset. On success the activation phase
+  # of nixos-rebuild switch brings them back; on failure it never runs, so the
+  # wrapper restarts the always-on ones itself.
   nixosRebuildSafe = pkgs.writeShellApplication {
     name = "nixos-rebuild-safe";
     runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
@@ -31,10 +32,29 @@ let
       heavy=(
         ${lib.concatStringsSep "\n        " heavyServices}
       )
+
+      # Remember the always-on ones so a failed rebuild can put them back:
+      # activation never runs, and nothing else restarts them. Socket-idle units
+      # (StopWhenUnneeded=yes) are skipped — they re-activate on the next
+      # request, so leaving them down keeps the RAM free.
+      restore=()
+      for unit in "''${heavy[@]}"; do
+        if ! systemctl is-active --quiet "$unit"; then continue; fi
+        if [ "$(systemctl show "$unit" --property=StopWhenUnneeded --value)" = yes ]; then continue; fi
+        restore+=("$unit")
+      done
+
       echo "nixos-rebuild-safe: stopping heavy services to free memory…" >&2
       sudo systemctl stop "''${heavy[@]}" || true
+
       echo "nixos-rebuild-safe: running nixos-rebuild $*" >&2
-      exec sudo nixos-rebuild "$@"
+      if sudo nixos-rebuild "$@"; then
+        exit 0
+      fi
+
+      echo "nixos-rebuild-safe: rebuild failed — restarting ''${#restore[@]} always-on service(s)" >&2
+      sudo systemctl start "''${restore[@]}" || true
+      exit 1
     '';
   };
 
