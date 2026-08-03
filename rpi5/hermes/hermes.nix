@@ -160,6 +160,14 @@ let
       threshold = 0.85;
     };
 
+    # Stream replies to Telegram DMs using Bot API draft messages. `auto` uses
+    # native drafts where Telegram supports them and falls back to edited previews
+    # for group chats/topics.
+    gateway.streaming = {
+      enabled = true;
+      transport = "auto";
+    };
+
     # External memory provider. `holographic` is the local, zero-API-key store
     # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real
     # upgrade over the built-in flat markdown recall, and it needs no cloud key.
