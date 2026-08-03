@@ -160,12 +160,11 @@ let
       threshold = 0.85;
     };
 
-    # Stream replies to Telegram DMs using Bot API draft messages. `auto` uses
-    # native drafts where Telegram supports them and falls back to edited previews
-    # for group chats/topics.
+    # Stream replies progressively by editing a Telegram message as tokens arrive.
+    # This is the documented transport for Hermes 0.19.0.
     gateway.streaming = {
       enabled = true;
-      transport = "auto";
+      transport = "edit";
     };
 
     # External memory provider. `holographic` is the local, zero-API-key store
