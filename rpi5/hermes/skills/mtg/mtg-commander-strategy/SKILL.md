@@ -1,14 +1,14 @@
 ---
 name: mtg-commander-strategy
 description: Use when creating a Commander pilot guide from a finished deck.
-version: 1.0.0
+version: 1.1.0
 author: Nico + Hermes Agent
 license: 0BSD
 metadata:
   hermes:
     emoji: "🧭"
     tags: [mtg, commander, edh, strategy, pilot-guide, moxfield, rules]
-    related_skills: [mtg-commander-deckbuilding, mtg-rules-citations]
+    related_skills: [mtg-commander-deckbuilding]
 ---
 
 # Commander Strategy Guide
@@ -33,7 +33,7 @@ Do not use for deck construction, upgrades, validation, or collection filtering;
 2. **Establish the play context.** Use the stated Commander bracket/power target. If absent, state that the guide assumes ordinary casual multiplayer rather than claiming a precise bracket.
 3. **Ground card claims.** Retrieve exact Oracle text for the commander and every card used in a specific line or interaction. Do not rely on memory for card behavior.
 4. **Map the deck.** Identify primary plan, secondary plan, ramp, card advantage, interaction, protection, recursion, finishers, and cards that must be kept alive. Verify each category against the actual list.
-5. **Check interactions.** For every non-obvious mechanical or rules claim, load `mtg-rules-citations` and follow its evidence workflow. Include only its resulting concise verdict/citation; if evidence is unavailable, say so.
+5. **Check interactions.** For every non-obvious mechanical or rules claim, retrieve exact Oracle text with `mcp__mtg__get_card_details`, published rulings where useful with `mcp__mtg__get_card_rulings`, then decisive Comprehensive Rules evidence (`mcp__mtg__get_rule`; or `mcp__mtg__search_rules` then `get_rule`; use `mcp__mtg__get_glossary_term` for a keyword). Give only the concise verdict/citation; if evidence is unavailable, say so.
 6. **Write the primer.** Include the sections below. A section may be brief when inapplicable, but do not fabricate a combo, politics plan, or backup win condition.
 7. **Quality gate.** Re-check that every named card is in the deck, every non-obvious mechanical claim has evidence, and the output contains no upgrade recommendations.
 
@@ -81,6 +81,6 @@ Do not use for deck construction, upgrades, validation, or collection filtering;
 - [ ] Deck source, format, commander(s), and board contents verified.
 - [ ] Every named line uses cards present in the deck.
 - [ ] Exact Oracle text checked for cards central to the guide.
-- [ ] Every non-obvious mechanical claim has tool-backed evidence via `mtg-rules-citations`.
+- [ ] Every non-obvious mechanical claim has tool-backed Oracle/ruling/CR evidence.
 - [ ] Primer contains no unsolicited upgrade recommendations.
 - [ ] Mulligan, early-game, midgame, closing, and table-play guidance reflect this deck.

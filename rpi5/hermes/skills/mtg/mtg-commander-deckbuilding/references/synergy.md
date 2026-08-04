@@ -23,4 +23,4 @@ When several candidates fill the same role, choose the denser legal option that 
 - [ ] Commander/engine text was retrieved, not remembered.
 - [ ] Candidate queries use Commander color identity.
 - [ ] Themed additions state at least two concrete contacts or are identified as structural exceptions.
-- [ ] Every claimed interaction is checked through `mtg-rules-citations` when non-obvious.
+- [ ] Every non-obvious claimed interaction has tool-backed Oracle/ruling/CR evidence.
