@@ -52,6 +52,10 @@ let
     "files_trashbin"       # safety net before permanent delete
     "files_pdfviewer"      # in-browser PDF preview
     "files_downloadlimit"  # let admin cap download counts on shares
+    # Read-only view of /mnt/data/papra-archive (rpi5/papra.nix). Ships disabled;
+    # without it on this list, nextcloud-disable-defaults would turn it back off
+    # on the next activation and silently drop the Papra archive mount.
+    "files_external"       # Local external storage (Papra archive, read-only)
     "text"                 # collaborative text editor (md, txt)
     "systemtags"           # tag files for organisation
     "activity"             # change feed (file events) — useful as a log
