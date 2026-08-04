@@ -4,6 +4,7 @@ description: Use when analyzing Magic decks or Moxfield collections.
 metadata:
   hermes:
     emoji: "🃏"
+    related_skills: [mtg-commander-strategy, mtg-rules-citations]
 ---
 
 # MTG deck analysis and Moxfield exports
