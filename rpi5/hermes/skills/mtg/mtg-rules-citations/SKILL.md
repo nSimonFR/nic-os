@@ -1,79 +1,58 @@
 ---
 name: mtg-rules-citations
-description: Use when answering MTG rules questions with official citations.
-version: 1.0.0
+description: Use when answering MTG rules questions with current official citations.
+version: 1.1.0
 author: Nico + Hermes Agent
 license: 0BSD
 metadata:
   hermes:
     emoji: "⚖️"
     tags: [mtg, magic, rules, rulings, comprehensive-rules, commander]
-    related_skills: [mtg-deck-analysis, mtg-commander-strategy]
+    related_skills: [mtg-commander-deckbuilding, mtg-commander-strategy]
 ---
 
 # MTG Rules Citations
 
-## Overview
+Answer rules or card-interaction questions with current Oracle text, official rulings, and Comprehensive Rules evidence. Give the verdict first, then only the evidence that decides it.
 
-Answer Magic rules and card-interaction questions using authoritative, current evidence: the Comprehensive Rules glossary/rules and official card rulings exposed through the installed MTG MCP. Give the verdict first, cite the evidence, then name only material edge cases.
-
-Adapted from `dan-blanchard/mtg-skills` `rules-lawyer` (0BSD), using the installed MTG MCP instead of its local `mtg_utils` CLI and downloaded rules/card-data workflow. Source reviewed: https://github.com/dan-blanchard/mtg-skills
+0BSD adaptation of `dan-blanchard/mtg-skills` `rules-lawyer`, using installed MTG MCP tools rather than local scripts/downloaded data. Source: https://github.com/dan-blanchard/mtg-skills
 
 ## When to Use
 
-- The user asks how cards, keywords, triggers, layers, replacement effects, combat, priority, or Commander rules work.
-- A deck review depends on a non-obvious rules interaction.
-- The user asks for an official ruling or a Comprehensive Rules citation.
+- A user asks how cards, keywords, timing, layers, replacement effects, combat, or Commander rules work.
+- A deckbuilding or pilot recommendation depends on a non-obvious mechanical claim.
 
-Do not use this skill for informal strategic advice that does not rest on a rules claim.
+Do not use for ordinary strategic advice with no rules conclusion.
 
-## Evidence Workflow
+## Evidence Loop
 
-1. **Identify the question type.** Determine whether the answer needs a card's Oracle text, a published card ruling, one CR rule, or several interacting rules.
-2. **Verify card facts.** Use `mcp__mtg__get_card_details` for exact Oracle text. Use `mcp__mtg__get_card_rulings` for official card-specific rulings.
-3. **Locate rule evidence.**
-   - Known rule number: `mcp__mtg__get_rule`.
-   - Keyword or defined term: `mcp__mtg__get_glossary_term`.
-   - Unknown rule or phrase: `mcp__mtg__search_rules` with a narrow query.
-4. **Resolve the interaction.** For multi-rule questions, collect every load-bearing rule before reaching a conclusion. Keep dependencies explicit: identify which event happens first, whether an effect is triggered/replacement/static, and whose choices apply.
-5. **Write the answer.** Use the required structure below. Every cited rule number must appear in the current tool output; never cite from memory.
-6. **Stop honestly.** If the available evidence does not settle the case, say what is missing and avoid a confident answer.
+1. Get exact relevant Oracle text: `mcp__mtg__get_card_details`.
+2. Get card-specific published rulings when useful: `mcp__mtg__get_card_rulings`.
+3. Get rules evidence:
+   - known number: `mcp__mtg__get_rule`;
+   - defined term/keyword: `mcp__mtg__get_glossary_term`;
+   - unknown rule: `mcp__mtg__search_rules`, then retrieve the decisive rule.
+4. For interacting effects, establish event order, effect type (triggered/replacement/static), choices, and every load-bearing rule before concluding.
+5. If evidence is insufficient, say so. Never cite rule numbers, Oracle text, or rulings from memory.
 
-## Required Answer Structure
+## Answer Format
 
-**Verdict:** One direct sentence describing the outcome.
+**Verdict:** direct outcome.
 
-**Evidence:**
-- Exact relevant Oracle text or official card ruling, if applicable.
-- `CR <number>` with the directly relevant returned text; quote only what is needed.
+**Evidence:** relevant Oracle text/ruling and `CR <number>` with only the deciding text.
 
-**Edge case:** Only conditions that would change the result. Omit generic caveats.
+**Edge case:** only a condition that changes the result.
 
-For a simple keyword question, use the glossary and linked rule. For a card-specific question, lead with card rulings and use CR text to resolve any gap.
+EDHREC is never rules proof. MCP resource summaries are orientation only; do not cite them as current authority for format procedures (especially mulligans) without targeted current rule/ruling evidence.
 
-## Commander-Specific Checks
+## Commander Notes
 
-When relevant, verify rather than assume:
+When relevant, verify command-zone casting/replacement, color identity, commander damage, multiplayer wording, and special command-zone permissions (Partner, Background, Doctor’s companion, Friends forever). Deck legality validation belongs to `mtg-commander-deckbuilding`.
 
-- Color identity and format legality.
-- Commander-zone casting, replacement effects, and commander tax.
-- Multiplayer targeting/attack restrictions and teammate/opponent wording.
-- Partner, Background, Doctor's companion, Friends forever, and choose-a-Background deck-construction rules.
-- Commander damage, shared life totals, and variant rules only when the user specifies the variant.
+## Checklist
 
-## Common Pitfalls
-
-1. **Answering from training memory.** Use the MCP even if the answer seems obvious.
-2. **Citing a rule number without returned text.** Search or retrieve it first.
-3. **Confusing Oracle text with a ruling.** Oracle text establishes the card; rulings clarify common applications.
-4. **Treating a search snippet as complete proof.** Open the specific rule when its details matter.
-5. **Mixing formats.** Do not import Arena, Two-Headed Giant, Planechase, or house-rule assumptions into ordinary Commander.
-6. **Overloading the answer.** Cite the rules that decide this question, not every possibly related rule.
-
-## Verification Checklist
-
-- [ ] Exact cards and current Oracle text verified where relevant.
-- [ ] All material rule numbers retrieved in the current task.
-- [ ] Verdict follows from the cited text and the stated game state.
-- [ ] Format/variant assumptions are explicit when they matter.
-- [ ] No uncited remembered rules, card text, or invented rulings remain.
+- [ ] Exact cards and current Oracle text checked.
+- [ ] Each material rule number/ruling came from current tool output.
+- [ ] Verdict follows from the stated game state.
+- [ ] Format/variant assumptions are explicit when material.
+- [ ] No remembered or invented citation remains.
