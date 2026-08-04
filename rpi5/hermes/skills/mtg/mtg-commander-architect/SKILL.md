@@ -31,7 +31,7 @@ Do not use for a few swaps, collection-only filtering, or a pilot guide. Use `mt
 - Do not promise dual-vendor, cheapest-printing, or bulk pricing: the installed MCP price tool returns current card price data per requested card, not the upstream script’s Card Kingdom/TCGPlayer batch workflow.
 - Price checks are a snapshot. State pricing source/currency and date, and label any unavailable price as unavailable rather than estimating it.
 - Build **exactly 100 cards including commander(s)**. Use `mcp__mtg__validate_deck` for its deck-size/singleton checks, plus current ban-list and per-card MCP checks for full legality; do not treat an LLM review as a substitute.
-- For an owned-cards-only deck, load `mtg-collection-deckbuilding` and verify each nonbasic against the supplied collection before presenting it.
+- For an owned-cards-only deck, require a supplied collection export or verified collection data before presenting ownership claims. If a collection workflow skill is installed in the active Hermes environment, use it; otherwise treat ownership as unverified and provide a buy-list rather than claiming the list is owned-only.
 
 ## Intake
 
@@ -148,4 +148,4 @@ At most two correction passes per stage by default. Stop earlier when the final 
 - [ ] Material rules claims are backed by current rule/ruling tools.
 - [ ] Price claims, if any, identify source/currency and limitations.
 - [ ] Decklist is a flat Moxfield-importable list with no comments/categories.
-- [ ] Owned-only requirements were checked against the supplied collection.
+- [ ] Owned-only requirements were checked against supplied verified collection data, or ownership was clearly left unverified.
