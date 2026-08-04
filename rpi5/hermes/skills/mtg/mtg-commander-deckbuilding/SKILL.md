@@ -1,14 +1,14 @@
 ---
 name: mtg-commander-deckbuilding
 description: Use when building or upgrading a Commander deck with rigorous, interactive swaps.
-version: 1.2.0
+version: 1.3.0
 author: guuse, P47Phoenix, Nico + Hermes Agent
 license: MIT
 metadata:
   hermes:
     emoji: "🏗️"
     tags: [mtg, commander, edh, deckbuilding, upgrades, moxfield, validation, budget]
-    related_skills: [mtg-commander-strategy, mtg-rules-citations]
+    related_skills: [mtg-commander-strategy]
 ---
 
 # MTG Commander Deckbuilding
@@ -23,7 +23,7 @@ Sources: https://github.com/guuse/claude-mtg-skills ; https://github.com/P47Phoe
 - The user asks for a complete Commander build or rebuild under a target power and budget.
 - The user needs a Commander deck diagnosis, legality evidence, or collection-aware swap plan.
 
-Do not use for a pilot guide or standalone rules question. Load `mtg-commander-strategy` or `mtg-rules-citations` instead.
+Do not use for a pilot guide; load `mtg-commander-strategy` instead. For standalone rules questions, use the MTG MCP’s card-details, rulings, and Comprehensive Rules tools directly.
 
 ## MCP Replacements and Limits
 
@@ -83,7 +83,7 @@ If the budget cannot make the deck a solid version of the requested target, say 
 1. Recount roles and confirm the agreed priority gaps improved.
 2. Run `mcp__mtg__validate_deck` with commander separate from the 99-card mainboard for deck size and singleton.
 3. Retrieve the current ban list. For every nonbasic—and unusual basic—retrieve card details to confirm Commander legality and identity within the command zone. Manually verify multi-commander compatibility, quantities, and explicit restrictions.
-4. For non-obvious interactions, use `mtg-rules-citations`; give prerequisites, ordered actions, result, and disruption point. Call a line a synergy rather than a combo if it is not deterministic.
+4. For non-obvious interactions, retrieve exact Oracle text, published rulings where useful, then the decisive Comprehensive Rule (known number: `mcp__mtg__get_rule`; unknown: `mcp__mtg__search_rules` then `get_rule`; keyword: `mcp__mtg__get_glossary_term`). Give prerequisites, ordered actions, result, disruption point, and only the evidence that decides it. Call a line a synergy rather than a combo if it is not deterministic.
 5. If a check fails, make only necessary corrections and repeat the whole gate. Do not call the deck legal until all checks pass.
 
 ## Build or Rebuild
