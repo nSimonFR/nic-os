@@ -1302,17 +1302,17 @@
     "showmycards-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784515116,
-        "narHash": "sha256-nmNMuIFNsLM9kIrzTKLQNWjmZllY4h1ZhXP6jt+0K7U=",
+        "lastModified": 1784531137,
+        "narHash": "sha256-7H/2z1qJJk+rzNpYhO5d5hw53f3YpjGMwQiqVktjdQo=",
         "owner": "showmycards",
         "repo": "showmycards",
-        "rev": "38c0019b2e63bcbf5ed5c8eee57ff5d9580ac7f0",
+        "rev": "28a976a61fadca282fea6a15f86172058a933cdc",
         "type": "github"
       },
       "original": {
         "owner": "showmycards",
         "repo": "showmycards",
-        "rev": "38c0019b2e63bcbf5ed5c8eee57ff5d9580ac7f0",
+        "rev": "28a976a61fadca282fea6a15f86172058a933cdc",
         "type": "github"
       }
     },
