@@ -80,7 +80,7 @@
     # "hash mismatch in fixed-output derivation". 67720c89 is the rev the
     # running system builds. Unpin once upstream hashes are platform-correct.
     reactive-resume-nix = {
-      url = "github:nSimonFR/reactive-resume-nix/67720c895642549444b873b8554e06b8ab592177";
+      url = "github:nSimonFR/reactive-resume-nix/770703c6bfce386a4f3e55b53f32f1d3cc3be6f2";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
