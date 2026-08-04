@@ -221,5 +221,6 @@
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true,
   "voiceEnabled": true,
-  "trustAll": true
+  "trustAll": true,
+  "model": "opus[1m]"
 }
