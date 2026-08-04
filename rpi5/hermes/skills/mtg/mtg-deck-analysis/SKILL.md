@@ -4,7 +4,7 @@ description: Use when analyzing Magic decks or Moxfield collections.
 metadata:
   hermes:
     emoji: "🃏"
-    related_skills: [mtg-commander-strategy, mtg-rules-citations]
+    related_skills: [mtg-commander-architect, mtg-commander-strategy, mtg-rules-citations]
 ---
 
 # MTG deck analysis and Moxfield exports
@@ -63,6 +63,12 @@ Artwork-specific themes require a final printings pass; deck APIs usually identi
 When the user asks for cheap upgrades, group recommendations by function: sacrifice outlets, recurring fodder, death payoffs, draw, ramp, and commander protection. Check live prices before quoting them and label them as reference prices that vary by printing, condition, and seller. Verify Commander color identity and exact Oracle text.
 
 If the user narrows the search by era or rarity, state the set range explicitly and query the intervening sets rather than treating core sets as the entire period. For sacrifice/counters decks, prioritize repeatable fodder, free sacrifice outlets, and cards that convert deaths into cards, mana, or damage. Do not recommend limited-format filler merely because it matches a keyword.
+
+## Complementary MTG skills
+
+- Load `mtg-commander-architect` for a complete new 100-card Commander brew with MCP-backed candidate discovery, legality validation, structural review, and optional budget checks.
+- Load `mtg-commander-strategy` for a read-only, deck-specific pilot guide: mulligans, sequencing, closing lines, and table play.
+- Load `mtg-rules-citations` whenever a deck recommendation rests on a non-obvious interaction. Use current MCP-backed Oracle text, rulings, and Comprehensive Rules evidence; do not cite remembered rule numbers.
 
 ## References
 
