@@ -1,0 +1,94 @@
+{
+  "timezone": "Europe/Paris",
+  "sources": [
+    {
+      "id": "robin-des-jeux",
+      "name": "Robin des Jeux",
+      "base_url": "https://robindesjeux.com",
+      "timezone": "Europe/Paris",
+      "methods": [
+        "json"
+      ],
+      "config": {
+        "url": "https://robindesjeux.com/wp-json/wp/v2/product?per_page=100",
+        "fields": {
+          "external_id": "id",
+          "title": "title.rendered",
+          "description": "content.rendered",
+          "event_url": "link",
+          "registration_url": "link",
+          "status": "status"
+        },
+        "extract": {
+          "start_at": {
+            "from": "title.rendered",
+            "regex": "((?:Lundi|Mardi|Mercredi|Jeudi|Vendredi|Samedi|Dimanche))\\s+(\\d{1,2})\\s+(janvier|février|fevrier|mars|avril|mai|juin|juillet|août|aout|septembre|octobre|novembre|décembre|decembre)",
+            "template": "{0} {1} {2} {year} · 19:30"
+          },
+          "capacity": {
+            "from": "title.rendered",
+            "regex": "(\\d+)\\s+places",
+            "template": "{0}"
+          }
+        },
+        "defaults": {
+          "venue": "Robin des Jeux",
+          "city": "Paris"
+        },
+        "required_fields": [
+          "start_at"
+        ]
+      }
+    },
+    {
+      "id": "au-bonheur-des-jeux",
+      "name": "Au Bonheur des Jeux",
+      "base_url": "https://aubonheurdesjeux.com",
+      "timezone": "Europe/Paris",
+      "methods": [
+        "json",
+        "html"
+      ],
+      "config": {
+        "url": "https://aubonheurdesjeux.com/wp-json/wp/v2/mec-events?per_page=100",
+        "fields": {
+          "external_id": "id",
+          "title": "title.rendered",
+          "event_url": "link",
+          "status": "status"
+        },
+        "event_pattern": "(?s)(<article[^>]*>.*?</article>)",
+        "field_patterns": {
+          "title": "<h[1-3][^>]*>(.*?)</h[1-3]>",
+          "event_url": "href=[\"']([^\"']+/events/[^\"']+)[\"']"
+        },
+        "ical_template": "https://aubonheurdesjeux.com/?id={external_id}&method=ical"
+      }
+    },
+    {
+      "id": "magic-corporation-animation",
+      "name": "Magic Corporation Animation",
+      "base_url": "https://animation.magiccorporation.com",
+      "timezone": "Europe/Paris",
+      "methods": [
+        "html"
+      ],
+      "config": {
+        "url": "https://animation.magiccorporation.com/",
+        "event_pattern": "(?s)(<div class=\"glass-card.*?)(?=<div class=\"glass-card|</main>)",
+        "field_patterns": {
+          "title": "<h2[^>]*>(.*?)</h2>",
+          "external_id": "/tournoi/(\\d+)",
+          "event_url": "href=\"(https://animation\\.magiccorporation\\.com/tournoi/\\d+)\"",
+          "registration_url": "href=\"(https://animation\\.magiccorporation\\.com/tournoi/\\d+)\"",
+          "start_at": "([a-zéû]+\\s+\\d+\\s+[a-zéû]+\\s+\\d{4}\\s*&middot;\\s*\\d{2}:\\d{2})",
+          "end_at": "-\\s*(\\d{2}:\\d{2})",
+          "capacity": "(\\d+\\s*/\\s*\\d+\\s+places)",
+          "remaining_seats": "(\\d+)\\s+places restantes",
+          "price": "(\\d+(?:,\\d{2})?\\s*€)",
+          "organizer": "Org\\.\\s*:\\s*([^<]+)"
+        }
+      }
+    }
+  ]
+}
