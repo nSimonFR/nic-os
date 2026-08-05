@@ -59,11 +59,14 @@ Use stable upstream numeric/product/event IDs as `external_id` whenever availabl
 - Ignore past events only after date parsing.
 - Never treat undated products/content as events merely because they came from a shop event listing.
 - For recurring/calendar-driven sources, treat ICS dates as authoritative when available.
+- An iCalendar stamp ending in `Z` is UTC: convert it into the source timezone, never relabel it.
 
 ## Reliability and State
 
 - Process sources independently; one failure must not block the digest.
 - On a source failure, retain that source's prior snapshot rather than marking all its events removed.
+- Distinguish a failure from a successful empty result: a source with no upcoming events must clear its stale events, not be treated as broken.
+- Persist the new snapshot only after the digest is delivered; committing first turns a send failure into a permanently skipped digest.
 - Exclude cosmetic content changes from `content_hash`; track only user-meaningful fields: timing, venue, registration URL, price, capacity, registration/remaining seats, and status.
 - First run establishes a baseline. Do not send a flood of pre-existing events unless explicitly requested.
 
