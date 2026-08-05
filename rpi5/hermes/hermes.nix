@@ -29,12 +29,8 @@
 #     probe hang (upstream #26489).
 #   - context_length ≥64k is required or hermes rejects the model at startup;
 #     gpt-5.6-terra (via the gate) is declared at 131072.
-#   - `fallback_providers` (top-level list of {provider, model, base_url,
-#     api_key, api_mode}) is the modern chain key; `fallback_model` is the
-#     legacy single-dict form, merged in after it (fallback_config.py
-#     get_fallback_chain). A hop MUST differ from the primary in `model`:
-#     entries sharing provider+model are skipped even when base_url differs
-#     (chat_completion_helpers.py _try_activate_fallback).
+#   - No failover is configured (see the gateModel note below): a plan-cap 429
+#     on the primary takes Hermes offline until the quota resets.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
 #     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS is the sender allowlist.
 #   - Neither Aperture nor the gate behind it needs a real credential, so
@@ -60,9 +56,8 @@ let
   #
   # Tradeoff (deliberate, reversed from the original design): Aperture is a
   # separate tailnet node, so Hermes' inference now depends on tailscaled being
-  # healthy. Both the primary and the fallback hop go through it. To revert to
-  # the loopback path, swap this back to `${tinyLlmGateUrl}/v1` and re-add
-  # tinyLlmGateUrl to the module arguments.
+  # healthy. To revert to the loopback path, swap this back to
+  # `${tinyLlmGateUrl}/v1` and re-add tinyLlmGateUrl to the module arguments.
   #
   # Aperture rejects /v1/embeddings — harmless here because memory.provider is
   # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
@@ -73,23 +68,24 @@ let
   # gpt-5.5. Bump this one line to switch.
   gateModel = "gpt-5.6-terra";
 
-  # Fallback hop. gateModel bills against the ChatGPT subscription via the
-  # gate's codex provider, which returns a hard 429 (`usage_limit_reached`) for
-  # days once the plan cap is hit — with no chain configured that took Hermes
-  # completely offline. `claude` is the gate's routable Anthropic backend
-  # (upstream claude-opus-5) on a different subscription entirely, so it stays
-  # up when the codex quota is gone.
+  # NO Anthropic fallback here, deliberately — do not re-add one without
+  # funding Extra Usage first (claude.ai/settings/usage).
   #
-  # REQUIRES FUNDED "EXTRA USAGE" (claude.ai/settings/usage). Anthropic
-  # fingerprints third-party clients: an agent-shaped payload — Hermes' system
-  # prompt or its tool set will each do it alone — is rejected with
+  # The gate's `claude` model works for other clients, but Anthropic rejects
+  # THIS one: it fingerprints third-party clients by request CONTENT, and
+  # Hermes' system prompt or its 18-tool set each trip it alone, with
   # HTTP 400 "Third-party apps now draw from your extra usage, not your plan
-  # limits." Verified 2026-08-05 against BOTH pooled OAuth accounts (acct1 team,
-  # acct2 max), so the gate's sticky-until-429 failover cannot route around it;
-  # only trivial Claude-Code-shaped requests pass on plan limits alone. The
-  # failover machinery itself is verified working — until Extra Usage is topped
-  # up this hop converts a 429 into that 400 rather than restoring service.
-  fallbackModel = "claude";
+  # limits." Verified 2026-08-05 against both pooled OAuth accounts (acct1
+  # team, acct2 max) — so the gate's sticky-until-429 failover cannot route
+  # around it — and across every transport: the OpenAI-translated `claude`
+  # route, the gate's native /v1/messages passthrough (the exact path Claude
+  # Code uses, sentinel included), and api.anthropic.com directly. Switching
+  # Hermes to `api_mode = "anthropic_messages"` therefore changes nothing;
+  # only the payload's content matters, and only trivial Claude-Code-shaped
+  # requests pass on plan limits alone.
+  #
+  # Cyrus (rpi5/cyrus.nix) shares this Anthropic path and is unaffected — it
+  # drives the real Claude Code SDK, so it is not a third-party client.
 
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
   # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
@@ -152,26 +148,7 @@ let
         base_url = gateBase;
         model = gateModel;
         api_mode = "chat";
-        # Declaring the fallback model here too gives its context window a
-        # config hit (model_metadata.py resolves per-model overrides by
-        # base_url + model), so the failover doesn't have to probe for it.
-        models = {
-          ${gateModel}.context_length = 131072;
-          ${fallbackModel}.context_length = 200000;
-        };
-      }
-    ];
-
-    # Failover chain, tried when the primary errors with a rate limit, overload
-    # or connection failure. See the fallbackModel note above for the Anthropic
-    # Extra Usage precondition.
-    fallback_providers = [
-      {
-        provider = "custom";
-        model = fallbackModel;
-        base_url = gateBase;
-        api_key = "unused";
-        api_mode = "chat";
+        models.${gateModel}.context_length = 131072;
       }
     ];
 
