@@ -81,6 +81,17 @@ let
   # survives restarts because the seed rsync below omits --delete.
   workspaceSource = ./workspace;
 
+  # Weekly tabletop events: the app lives in the seeded Hermes workspace so its
+  # SQLite snapshot persists outside the Nix store.  It runs silently when
+  # nothing changes; non-empty stdout is delivered verbatim by Hermes cron.
+  weeklyEventsScript = pkgs.writeShellScript "weekly-events" ''
+    set -euo pipefail
+    export TELEGRAM_CHAT_ID="${toString telegramChatId}"
+    cd ${hermesHome}/workspace/weekly-events
+    exec ${pkgs.python3}/bin/python3 -m weekly_events.app \
+      --config sources.json --state data/events.sqlite3 --send --log-level WARNING
+  '';
+
   # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
   # (Scryfall card search + pricing + rulings + legality, deck validation,
   # Moxfield/Archidekt deck import, EDHREC recs/combos, comprehensive rules).
@@ -286,6 +297,26 @@ in
       ExecStart = "${promoteWrapper}";
     };
   };
+  systemd.user.services.weekly-tabletop-events = {
+    Unit = {
+      Description = "Weekly tabletop events Telegram digest";
+      After = [ "network-online.target" ];
+      Wants = [ "network-online.target" ];
+    };
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${weeklyEventsScript}";
+    };
+  };
+  systemd.user.timers.weekly-tabletop-events = {
+    Unit.Description = "Weekly tabletop events digest";
+    Timer = {
+      OnCalendar = "Mon *-*-* 09:00:00 Europe/Paris";
+      Persistent = true;
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   systemd.user.timers.hermes-skill-promote = {
     Unit.Description = "Hourly promotion of Hermes self-authored skills into nic-os";
     Timer = {
