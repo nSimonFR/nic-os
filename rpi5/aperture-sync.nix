@@ -73,6 +73,13 @@ let
         app = {
           "tailscale.com/cap/aperture" = [
             { role = "admin"; }
+            # Opens the /metrics Prometheus endpoint (403 "read_metrics grant
+            # required" without it — admin does NOT imply it). Scraped by the
+            # OTel bridge so Aperture's gateway-side view (tokens, cost, request
+            # durations, active users) lands in the same pipeline as Claude
+            # Code's own OTLP telemetry. Floating capability object: it carries
+            # no `models`, so it is not tied to model access.
+            { read_metrics = true; }
           ];
         };
       }
