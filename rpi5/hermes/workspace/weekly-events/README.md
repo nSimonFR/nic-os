@@ -13,7 +13,7 @@ PYTHONPATH=. python3 -m weekly_events.app --config sources.json --state data/eve
 PYTHONPATH=. python3 -m weekly_events.app --send
 ```
 
-The first run establishes the baseline. Run it once without `--send`; subsequent runs report only changes. Failed sources retain their previous snapshot so they never generate false removals.
+The first run establishes the baseline. Run it once without `--send`; subsequent runs report only changes. Failed sources retain their previous snapshot so they never generate false removals; a source that fetches successfully but has no upcoming events does clear its stale entries. With `--send`, the snapshot is committed only after Telegram accepts the digest, so a failed delivery is retried on the next run instead of being silently swallowed.
 
 ## Components
 
@@ -28,7 +28,7 @@ The first run establishes the baseline. Run it once without `--send`; subsequent
 
 ## Source configuration
 
-Each source declares a priority-ordered `methods` list: `json`, `rss`, `ics`, `html`. The first producing events wins. JSON uses `url`, `items_path`, and `fields` (dot paths). HTML uses an `event_pattern` to segment the page plus `field_patterns` capture regexes. Add a site by adding an entry only; application code is unchanged.
+Each source declares a priority-ordered `methods` list: `json`, `rss`, `ics`, `html`. The first producing events wins; if every method parses cleanly but yields nothing, the source reports an empty result rather than a failure. JSON uses `url`, `items_path`, and `fields` (dot paths). HTML uses an `event_pattern` to segment the page plus `field_patterns` capture regexes. Add a site by adding an entry only; application code is unchanged.
 
 Required event fields are normalized to: `source_id`, `external_id`, `title`, `games`, `description`, `start_at`, `end_at`, `timezone`, `venue`, `city`, `organizer`, `price`, `capacity`, `registered`, `remaining_seats`, `registration_url`, `event_url`, `calendar_url`, `status`, `content_hash`.
 

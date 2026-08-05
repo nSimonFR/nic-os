@@ -10,7 +10,7 @@ from weekly_events.model import Event
 from weekly_events.normalize import normalize, stable_id
 from weekly_events.notify import render_digest
 from weekly_events.store import EventStore
-from weekly_events.parsers import json_events
+from weekly_events.parsers import json_events, parse_source
 
 
 class NormalizationTests(unittest.TestCase):
@@ -59,6 +59,35 @@ END:VCALENDAR
         self.assertEqual(events[0].status, "cancelled")
         self.assertEqual(events[0].city, "Paris")
 
+    def test_ics_utc_stamps_convert_instead_of_relabelling(self):
+        events = parse_ics("""BEGIN:VEVENT
+UID:utc@example.test
+SUMMARY:Draft Night
+DTSTART:20260812T173000Z
+END:VEVENT
+""", "ics-source", "Europe/Paris")
+        self.assertEqual(events[0].start_at, "2026-08-12T19:30:00+02:00")
+
+
+class SourceMethodTests(unittest.TestCase):
+    def source(self, *methods):
+        return {"id": "s", "base_url": "https://example.test", "methods": list(methods), "config": {"url": "https://example.test/f"}}
+
+    def test_successful_empty_source_is_not_a_failure(self):
+        import weekly_events.parsers as parsers
+        old = parsers.fetch
+        parsers.fetch = lambda _: "BEGIN:VCALENDAR\nEND:VCALENDAR\n"
+        try: events, method = parse_source(self.source("ics"))
+        finally: parsers.fetch = old
+        self.assertEqual((events, method), ([], "ics"))
+
+    def test_all_methods_failing_still_raises(self):
+        import weekly_events.parsers as parsers
+        old = parsers.fetch
+        parsers.fetch = lambda _: (_ for _ in ()).throw(OSError("boom"))
+        try: self.assertRaises(RuntimeError, parse_source, self.source("ics"))
+        finally: parsers.fetch = old
+
 
 class ChangeAndStoreTests(unittest.TestCase):
     def event(self, **changes):
@@ -83,6 +112,29 @@ class ChangeAndStoreTests(unittest.TestCase):
             events, runs = store.load_snapshot()
             self.assertEqual(events[event.key].title, event.title)
             self.assertEqual(runs["source"], "ok")
+
+
+class DeliveryTests(unittest.TestCase):
+    def test_failed_telegram_send_leaves_changes_pending_for_the_next_run(self):
+        import os
+        import weekly_events.app as app
+        event = normalize("source", {"external_id": "one", "title": "Modern Tournament", "start_at": "2999-08-12T19:30:00+02:00", "event_url": "https://example.test/one"}, "Europe/Paris")
+        sent = []
+        original = app.parse_source, app.telegram_send
+        app.parse_source = lambda source: ([event], "json")
+        with tempfile.TemporaryDirectory() as d:
+            config = Path(d) / "sources.json"
+            config.write_text(json.dumps({"sources": [{"id": "source"}]}))
+            state = Path(d) / "state.sqlite3"
+            os.environ["TELEGRAM_BOT_TOKEN"] = "t"; os.environ["TELEGRAM_CHAT_ID"] = "c"
+            try:
+                app.telegram_send = lambda *a: (_ for _ in ()).throw(OSError("429"))
+                self.assertRaises(OSError, app.run, config, state, True)
+                app.telegram_send = lambda token, chat, text: sent.append(text)
+                app.run(config, state, True)
+            finally:
+                app.parse_source, app.telegram_send = original
+        self.assertIn("Modern Tournament", sent[0])
 
 
 class DigestTests(unittest.TestCase):
