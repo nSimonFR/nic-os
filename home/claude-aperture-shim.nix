@@ -28,19 +28,35 @@ let
     "--set" "confdir=${stateDir}"
     "--listen-host" "127.0.0.1"
     "-p" (toString port)
+    # Intercept api.anthropic.com ONLY; blind-tunnel every other host. Without
+    # this, mitmproxy re-signs TLS for everything the session touches, and any
+    # client that doesn't read NODE_EXTRA_CA_CERTS fails: `curl` in the Bash tool,
+    # and Go/Python MCP servers (mtg-mcp → Scryfall) return 000 instead of 200.
+    #
+    # MUST be allow_hosts, not a negative-lookahead ignore_hosts: the pattern is
+    # also tested against the resolved address form (`[2607:6bc0::10]:443`), which
+    # `^(?!api\.anthropic\.com)` matches — so that spelling ignored EVERYTHING,
+    # tunnelling inference straight to Anthropic and silently bypassing Aperture
+    # while every functional check still passed.
+    "--set" ''allow_hosts=api\.anthropic\.com''
     "-s" "${./claude-aperture-shim/aperture_shim.py}"
   ];
 
   claudeGated = pkgs.writeShellScriptBin "claude-gated" ''
     set -eu
-    if [ ! -f "${caCert}" ]; then
-      echo "claude-gated: proxy CA missing at ${caCert}" >&2
-      echo "The claude-aperture-shim service generates it on first start." >&2
+    # This is the default path for interactive `claude` (see dotfiles/zsh/aliases.zsh),
+    # so a dead shim must not take the CLI down with it. Pointing HTTPS_PROXY at a
+    # port nothing is listening on makes Claude Code HANG rather than fail fast, so
+    # degrade to the plain wrapper default (Aperture direct, no Remote Control)
+    # instead — loud on stderr, still usable.
+    if [ ! -f "${caCert}" ] || ! (timeout 1 bash -c ": < /dev/tcp/127.0.0.1/${toString port}") 2>/dev/null; then
+      echo "claude-gated: shim unavailable on 127.0.0.1:${toString port} — falling back to" >&2
+      echo "  Aperture direct, WITHOUT Remote Control. Restart it with:" >&2
       ${lib.optionalString pkgs.stdenv.isDarwin
-        ''echo "Try: launchctl kickstart -k gui/$(id -u)/org.nix-community.home.claude-aperture-shim" >&2''}
+        ''echo "  launchctl kickstart -k gui/$(id -u)/org.nix-community.home.claude-aperture-shim" >&2''}
       ${lib.optionalString pkgs.stdenv.isLinux
-        ''echo "Try: systemctl --user restart claude-aperture-shim" >&2''}
-      exit 1
+        ''echo "  systemctl --user restart claude-aperture-shim" >&2''}
+      exec ${config.programs.claude-code.package}/bin/claude "$@"
     fi
     # api.anthropic.com satisfies the Remote Control guard; the proxy is what
     # actually puts the request through Aperture.

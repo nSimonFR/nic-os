@@ -18,18 +18,26 @@ alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit no
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
-# Claude Code: env vars are set by the Nix wrapper (claude.nix), including the
-# Aperture gate as ANTHROPIC_BASE_URL's default — which is why the ANTHROPIC_*
-# prefixes on the claude-local/claude-beast/claude-direct aliases below now take
-# effect (they are set explicitly, and --set-default yields to that). This is a
-# function (not an alias) so it injects our standard flags; it must be a
-# function because a same-named alias would shadow it.
-# NOTE: --remote-control only connects under claude-direct; see that alias.
+# Claude Code: routed through `claude-gated` (home/claude-aperture-shim.nix) so
+# interactive sessions get Aperture capture AND working Remote Control — the two
+# used to be mutually exclusive, since Remote Control refuses any base URL other
+# than api.anthropic.com. The shim keeps that URL and re-targets inference at
+# Aperture underneath. If the shim is down, claude-gated degrades to Aperture
+# direct (no Remote Control) rather than hanging.
+#
+# Everything else still gets the gate from the Nix wrapper's ANTHROPIC_BASE_URL
+# default (claude.nix) — headless rpi5 services, the desktop app, cron — so they
+# take on no dependency on the proxy. `command claude` bypasses this function for
+# the same reason. The ANTHROPIC_* prefixes on the aliases below win over that
+# default (--set-default yields to an explicitly set value).
+#
+# A function, not an alias, so it can inject flags; a same-named alias would
+# shadow it.
 claude() {
-  command claude --dangerously-skip-permissions --remote-control "$@"
+  command claude-gated --dangerously-skip-permissions --remote-control "$@"
 }
-cc()     { command claude --continue "$@"; }
-cr()     { command claude --resume "$@"; }
+cc()     { command claude-gated --continue "$@"; }
+cr()     { command claude-gated --resume "$@"; }
 
 # claude-local: Claude Code → oMLX on localhost:8000 (M3 Pro, MLX backend, Anthropic-native)
 # Qwen3.6-27B-4bit (~15 GB resident, reasoning model — replies via reasoning_content).
