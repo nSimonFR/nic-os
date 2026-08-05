@@ -21,8 +21,13 @@ import os
 from mitmproxy import http
 
 APERTURE_HOST = os.environ.get("APERTURE_SHIM_HOST", "ai.gate-mintaka.ts.net")
-APERTURE_PORT = int(os.environ.get("APERTURE_SHIM_PORT", "80"))
-APERTURE_SCHEME = os.environ.get("APERTURE_SHIM_SCHEME", "http")
+# https/443 rather than http/80: the inbound flow arrives over a CONNECT tunnel,
+# and rewriting scheme/port on such a flow is not honoured consistently — on the
+# rpi5 the upstream leg stayed on https/443 while the Mac followed the override to
+# http/80. Both work (Aperture serves both), but defaulting to https means the
+# hop is encrypted either way and the two hosts behave identically.
+APERTURE_PORT = int(os.environ.get("APERTURE_SHIM_PORT", "443"))
+APERTURE_SCHEME = os.environ.get("APERTURE_SHIM_SCHEME", "https")
 
 # Aperture implements the LLM inference surface only. Claude Code calls a control
 # plane on the same host (/api/claude_code/settings, /api/claude_code/policy_limits,
