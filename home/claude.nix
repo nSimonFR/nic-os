@@ -42,6 +42,17 @@ let
     value.source = "${sharedSkillsDir}/${name}/SKILL.md";
   }) claudeSlashCommandSkills);
 
+  # NOTE on ANTHROPIC_BASE_URL (below): the Aperture gate URL is injected here as
+  # a wrapper DEFAULT rather than in claude-settings.json's `env` block, where it
+  # used to live. A settings-file `env` entry is applied by Claude Code over the
+  # process environment, so it could not be overridden by a caller — not by a
+  # shell prefix and not even by `--settings`. That silently disabled Remote
+  # Control everywhere (it refuses to run unless the session talks to
+  # api.anthropic.com) and made claude-local/claude-beast/claude-direct's env
+  # prefixes no-ops. `--set-default` keeps identical coverage — every invocation,
+  # including the rpi5's headless services and the second config dir, still gets
+  # the gate — while letting an explicit `ANTHROPIC_BASE_URL=…` in front of the
+  # command win. See home/dotfiles/zsh/aliases.zsh.
   claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
     # The vendored vendor/ripgrep/arm64-linux/rg in claude-code's npm package
@@ -53,6 +64,7 @@ let
         --prefix PATH : /run/wrappers/bin \
         --prefix PATH : ${pkgs.ripgrep}/bin \
         --set USE_BUILTIN_RIPGREP 0 \
+        --set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net" \
         --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
         --set GIT_AUTHOR_NAME "nSimonFR-ai" \
         --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
