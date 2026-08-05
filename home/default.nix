@@ -11,6 +11,7 @@
     ./zsh.nix
     ./atuin.nix
     ./claude.nix
+    ./claude-mtg.nix
     ./mcp.nix
     ./ssh.nix
     ./wakatime.nix

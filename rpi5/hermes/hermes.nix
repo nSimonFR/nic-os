@@ -59,10 +59,16 @@ let
   # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
   # cron jobs depend on. These local skills moved here from the retired PicoClaw
   # module (rpi5/hermes/skills). All descend from OpenClaw's SKILL.md format.
+  #
+  # The MTG Commander pair lives in shared/mtg-skills instead: it is shared with
+  # the Mac's `claude-mtg` CLI (home/claude-mtg.nix) but must stay OUT of
+  # shared/skills, which home/claude.nix auto-wires into every general-purpose
+  # agent. Kept under mtg/ here so the runtime layout is unchanged.
   skillsSource = pkgs.runCommand "hermes-skills" { } ''
-    mkdir -p $out
+    mkdir -p $out $out/mtg
     cp -r ${../../shared/skills}/. $out/
     cp -rf ${./skills}/. $out/
+    cp -rf ${../../shared/mtg-skills}/. $out/mtg/
   '';
   documentsSource = ./documents;
 
@@ -78,33 +84,11 @@ let
   # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
   # (Scryfall card search + pricing + rulings + legality, deck validation,
   # Moxfield/Archidekt deck import, EDHREC recs/combos, comprehensive rules).
-  # All public data — no auth or API keys. Upstream ships a static (CGO-free) Go
-  # release binary, so we fetch+install it directly rather than buildGoModule
-  # (no vendorHash, no Go toolchain at build time). Hermes' built-in MCP client
+  # All public data — no auth or API keys. Hermes' built-in MCP client
   # (mcp_servers, below) launches it over stdio and registers its tools as
-  # mcp__mtg__* in every conversation.
-  mtgMcp = pkgs.stdenvNoCC.mkDerivation rec {
-    pname = "mtg-mcp";
-    version = "2.1.0";
-    src = pkgs.fetchurl {
-      url = "https://github.com/nathanmartins/mtg-mcp/releases/download/v${version}/mtg-mcp_Linux_arm64.tar.gz";
-      hash = "sha256-NajD9ADrQoVOtQiL+X0tVjA7wR5ZI+yIZQvRQM+JHN4=";
-    };
-    sourceRoot = ".";
-    dontConfigure = true;
-    dontBuild = true;
-    installPhase = ''
-      runHook preInstall
-      install -Dm755 mtg-mcp $out/bin/mtg-mcp
-      runHook postInstall
-    '';
-    meta = {
-      description = "MCP server for Magic: The Gathering Commander (Scryfall, decks, rules)";
-      homepage = "https://github.com/nathanmartins/mtg-mcp";
-      license = pkgs.lib.licenses.mit;
-      platforms = [ "aarch64-linux" ];
-    };
-  };
+  # mcp__mtg__* in every conversation. The package definition moved to
+  # pkgs/mtg-mcp.nix when the Mac's `claude-mtg` CLI started sharing it.
+  mtgMcp = pkgs.callPackage ../../pkgs/mtg-mcp.nix { };
 
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a

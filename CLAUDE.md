@@ -12,3 +12,7 @@ and wires them into every agent — just add the dir + commit, no `claude.nix` e
 Don't leave skills as loose files in `~/.claude/skills/` (unmanaged). Slash command
 too? add the name to `claudeSlashCommandSkills`. Claude-only (e.g. `telegram`) →
 `home/claude-skills/<name>/` + an explicit `home.file` line.
+
+**`shared/mtg-skills/`** is deliberately outside that auto-discovery: those
+skills belong only to the two MTG surfaces (Hermes' `~/.hermes/skills/mtg/` and
+the `claude-mtg` CLI in `home/claude-mtg.nix`), not to every agent.
