@@ -4,13 +4,13 @@
   pkgs,
   inputs,
   telegramChatId,
-  tinyLlmGateUrl,
+  apertureUrl,
   ...
 }:
 # Hermes Agent home-manager module — the rpi5 Telegram agent.
 #
-# Runs as an `nsimon` user service polling the Telegram bot and targeting the
-# local tiny-llm-gate (:4001). It succeeded PicoClaw (retired 2026-07): the
+# Runs as an `nsimon` user service polling the Telegram bot and reaching
+# tiny-llm-gate through Aperture. It succeeded PicoClaw (retired 2026-07): the
 # shared cross-agent skills, the local agent skills (./skills), the persona
 # documents (./documents) and the agenix agent-env secret all moved here when
 # the A/B ended.
@@ -29,11 +29,17 @@
 #     probe hang (upstream #26489).
 #   - context_length ≥64k is required or hermes rejects the model at startup;
 #     gpt-5.6-terra (via the gate) is declared at 131072.
+#   - `fallback_providers` (top-level list of {provider, model, base_url,
+#     api_key, api_mode}) is the modern chain key; `fallback_model` is the
+#     legacy single-dict form, merged in after it (fallback_config.py
+#     get_fallback_chain). A hop MUST differ from the primary in `model`:
+#     entries sharing provider+model are skipped even when base_url differs
+#     (chat_completion_helpers.py _try_activate_fallback).
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
 #     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS is the sender allowlist.
-#   - The gate needs no auth, so api_key="unused" is a non-secret placeholder;
-#     the only real secret (bot token) is written into .env at start (0600),
-#     never into the Nix store.
+#   - Neither Aperture nor the gate behind it needs a real credential, so
+#     api_key="unused" is a non-secret placeholder; the only real secret (bot
+#     token) is written into .env at start (0600), never into the Nix store.
 #
 # Runtime layout:
 #   ~/.hermes/config.yaml   — generated below, overwritten on restart
@@ -46,14 +52,44 @@ let
 
   hermesHome = "/home/nsimon/.hermes";
 
-  # tiny-llm-gate exposes an OpenAI-compatible API at :4001 (loopback, no auth).
-  # Reach it directly rather than via Aperture for reliability (no tailnet hop).
-  gateBase = "${tinyLlmGateUrl}/v1";
+  # Route through Aperture (tailnet) rather than the gate's loopback :4001, so
+  # Hermes' LLM usage, cost and full request/response bodies land on the
+  # observability dashboard alongside Sure and claude-cli — Hermes was the last
+  # significant client still invisible there. Aperture forwards to tiny-llm-gate
+  # and needs no real credential, so api_key stays the "unused" placeholder.
+  #
+  # Tradeoff (deliberate, reversed from the original design): Aperture is a
+  # separate tailnet node, so Hermes' inference now depends on tailscaled being
+  # healthy. Both the primary and the fallback hop go through it. To revert to
+  # the loopback path, swap this back to `${tinyLlmGateUrl}/v1` and re-add
+  # tinyLlmGateUrl to the module arguments.
+  #
+  # Aperture rejects /v1/embeddings — harmless here because memory.provider is
+  # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
+  gateBase = "${apertureUrl}/v1";
   # gpt-5.6-terra (the balanced GPT-5.6 coding tier) has a >64k context window;
   # the small gemma models don't, and hermes rejects sub-64k models at startup.
   # Alternatives on the gate: gpt-5.6-sol (flagship), gpt-5.6-luna (high-volume),
   # gpt-5.5. Bump this one line to switch.
   gateModel = "gpt-5.6-terra";
+
+  # Fallback hop. gateModel bills against the ChatGPT subscription via the
+  # gate's codex provider, which returns a hard 429 (`usage_limit_reached`) for
+  # days once the plan cap is hit — with no chain configured that took Hermes
+  # completely offline. `claude` is the gate's routable Anthropic backend
+  # (upstream claude-opus-5) on a different subscription entirely, so it stays
+  # up when the codex quota is gone.
+  #
+  # REQUIRES FUNDED "EXTRA USAGE" (claude.ai/settings/usage). Anthropic
+  # fingerprints third-party clients: an agent-shaped payload — Hermes' system
+  # prompt or its tool set will each do it alone — is rejected with
+  # HTTP 400 "Third-party apps now draw from your extra usage, not your plan
+  # limits." Verified 2026-08-05 against BOTH pooled OAuth accounts (acct1 team,
+  # acct2 max), so the gate's sticky-until-429 failover cannot route around it;
+  # only trivial Claude-Code-shaped requests pass on plan limits alone. The
+  # failover machinery itself is verified working — until Extra Usage is topped
+  # up this hop converts a 429 into that 400 rather than restoring service.
+  fallbackModel = "claude";
 
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
   # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
@@ -116,7 +152,26 @@ let
         base_url = gateBase;
         model = gateModel;
         api_mode = "chat";
-        models.${gateModel}.context_length = 131072;
+        # Declaring the fallback model here too gives its context window a
+        # config hit (model_metadata.py resolves per-model overrides by
+        # base_url + model), so the failover doesn't have to probe for it.
+        models = {
+          ${gateModel}.context_length = 131072;
+          ${fallbackModel}.context_length = 200000;
+        };
+      }
+    ];
+
+    # Failover chain, tried when the primary errors with a rate limit, overload
+    # or connection failure. See the fallbackModel note above for the Anthropic
+    # Extra Usage precondition.
+    fallback_providers = [
+      {
+        provider = "custom";
+        model = fallbackModel;
+        base_url = gateBase;
+        api_key = "unused";
+        api_mode = "chat";
       }
     ];
 
