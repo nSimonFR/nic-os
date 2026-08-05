@@ -33,11 +33,27 @@ alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit no
 #
 # A function, not an alias, so it can inject flags; a same-named alias would
 # shadow it.
-claude() {
-  command claude-gated --dangerously-skip-permissions --remote-control "$@"
+# Port and CA path mirror home/claude-aperture-shim.nix — change both together.
+_claude_shim() {
+  local ca="$HOME/.claude-aperture-shim/mitmproxy-ca-cert.pem"
+  # Probe the port: HTTPS_PROXY pointing at a closed one makes Claude Code HANG
+  # rather than fail fast, so degrade to plain Aperture instead of wedging.
+  if [[ -f $ca ]] && zmodload zsh/net/tcp 2>/dev/null && ztcp 127.0.0.1 8888 2>/dev/null; then
+    ztcp -c $REPLY 2>/dev/null
+    ANTHROPIC_BASE_URL=https://api.anthropic.com \
+    HTTPS_PROXY=http://127.0.0.1:8888 \
+    NODE_EXTRA_CA_CERTS=$ca \
+      command claude "$@"
+  else
+    print -u2 "claude: Aperture shim unavailable — continuing WITHOUT Remote Control."
+    print -u2 "  restart it: launchctl kickstart -k gui/\$(id -u)/org.nix-community.home.claude-aperture-shim"
+    command claude "$@"
+  fi
 }
-cc()     { command claude-gated --continue "$@"; }
-cr()     { command claude-gated --resume "$@"; }
+
+claude() { _claude_shim --dangerously-skip-permissions --remote-control "$@"; }
+cc()     { _claude_shim --continue "$@"; }
+cr()     { _claude_shim --resume "$@"; }
 
 # claude-local: Claude Code → oMLX on localhost:8000 (M3 Pro, MLX backend, Anthropic-native)
 # Qwen3.6-27B-4bit (~15 GB resident, reasoning model — replies via reasoning_content).
