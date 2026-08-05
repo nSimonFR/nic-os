@@ -18,9 +18,13 @@ alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit no
 alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
 alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
 
-# Claude Code: env vars are set by the Nix wrapper (claude.nix). This is a
+# Claude Code: env vars are set by the Nix wrapper (claude.nix), including the
+# Aperture gate as ANTHROPIC_BASE_URL's default — which is why the ANTHROPIC_*
+# prefixes on the claude-local/claude-beast/claude-direct aliases below now take
+# effect (they are set explicitly, and --set-default yields to that). This is a
 # function (not an alias) so it injects our standard flags; it must be a
 # function because a same-named alias would shadow it.
+# NOTE: --remote-control only connects under claude-direct; see that alias.
 claude() {
   command claude --dangerously-skip-permissions --remote-control "$@"
 }
@@ -36,9 +40,12 @@ alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=o
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
 alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=openai/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
 
-# claude-direct: CC → api.anthropic.com (no Aperture). Uses --settings, not a shell
-# ANTHROPIC_BASE_URL prefix (which CC ignores — ~/.claude/settings.json env wins).
-alias claude-direct='command claude --dangerously-skip-permissions --remote-control --settings "{\"env\":{\"ANTHROPIC_BASE_URL\":\"https://api.anthropic.com\"}}"'
+# claude-direct: CC → api.anthropic.com (no Aperture), which is also the ONLY way
+# Remote Control runs — it refuses any custom endpoint. A plain env prefix is
+# enough now that the gate is a wrapper default (home/claude.nix) instead of a
+# claude-settings.json env entry; the old --settings form could not win over that
+# entry, so this alias silently stayed on the gate and never got Remote Control.
+alias claude-direct='ANTHROPIC_BASE_URL=https://api.anthropic.com command claude --dangerously-skip-permissions --remote-control'
 
 # pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
 # All routes go through https://ai.gate-mintaka.ts.net for observability.

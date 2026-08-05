@@ -26,8 +26,10 @@ esac
 
 [ -f "$top/.claude/settings.json" ] && exit 0
 
-# Single source of truth = the real user settings' gate URL; fall back to the
-# known gate host if jq or the file is unavailable.
+# The gate URL now lives as a wrapper default in home/claude.nix, not in
+# settings.json (a settings env entry cannot be overridden, which broke Remote
+# Control). Still read settings.json first in case a host pins it there, and
+# otherwise use the known gate host — the normal path since that move.
 gate=$(jq -r '.env.ANTHROPIC_BASE_URL // empty' "$HOME/.claude/settings.json" 2>/dev/null || true)
 [ -n "$gate" ] || gate="https://ai.gate-mintaka.ts.net"
 

@@ -17,7 +17,9 @@ let
 
   settings = pkgs.writeText "claude-mtg-settings.json" (
     builtins.toJSON {
-      env.ANTHROPIC_BASE_URL = "https://ai.gate-mintaka.ts.net"; # same gate as ~/.claude
+      # No ANTHROPIC_BASE_URL: it comes from the wrapper default in
+      # home/claude.nix, which this execs — and putting it here would make it
+      # unoverridable (a settings env entry beats the process environment).
       model = "opus[1m]";
       tui = "fullscreen";
       # Bundled skills (/init, /review, /run, …) ship inside the binary, so a
