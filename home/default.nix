@@ -12,6 +12,7 @@
     ./atuin.nix
     ./claude.nix
     ./claude-mtg.nix
+    ./claude-aperture-shim.nix
     ./mcp.nix
     ./ssh.nix
     ./wakatime.nix
