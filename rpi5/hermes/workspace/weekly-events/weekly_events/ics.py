@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from .normalize import normalize
@@ -23,11 +23,16 @@ def _value(line: str):
 
 
 def _date(value: str, tz: str) -> str:
+    utc = value.endswith("Z")
     value = value.rstrip("Z")
     fmt = "%Y%m%dT%H%M%S" if len(value) >= 15 else "%Y%m%dT%H%M"
     if "T" not in value:
         fmt = "%Y%m%d"
-    return datetime.strptime(value, fmt).replace(tzinfo=ZoneInfo(tz)).isoformat()
+    stamp = datetime.strptime(value, fmt)
+    # A trailing Z means UTC: convert into the calendar's timezone instead of relabelling it.
+    if utc:
+        return stamp.replace(tzinfo=timezone.utc).astimezone(ZoneInfo(tz)).isoformat()
+    return stamp.replace(tzinfo=ZoneInfo(tz)).isoformat()
 
 
 def parse_ics(text: str, source_id: str, default_timezone: str) -> list:

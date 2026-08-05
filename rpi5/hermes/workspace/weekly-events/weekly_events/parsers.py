@@ -53,13 +53,17 @@ def html_events(source):
   out.append(normalize(source['id'],raw,source.get('timezone','Europe/Paris')))
  return out
 def parse_source(source):
- errors=[]
+ errors=[];empty=None
  for method in source.get('methods',[]):
-  try:
-   events={'json':json_events,'ics':ics_events,'html':html_events,'rss':html_events}[method](source)
-   if events:return events,method
-  except Exception as e:errors.append(f'{method}: {e}')
- raise RuntimeError('; '.join(errors) or 'no events extracted')
+  try:events={'json':json_events,'ics':ics_events,'html':html_events,'rss':html_events}[method](source)
+  except Exception as e:errors.append(f'{method}: {e}');continue
+  if events:return events,method
+  # A method that fetched and parsed but found nothing is a real "no upcoming events"
+  # answer: remember it, keep trying lower-priority methods, and fall back to it rather
+  # than raising — otherwise a quiet calendar looks like a failure and strands stale events.
+  if empty is None:empty=method
+ if empty is not None:return [],empty
+ raise RuntimeError('; '.join(errors) or 'no methods configured')
 def deduplicate(events):
  seen={}
  for e in events:seen.setdefault((e.start_at,e.title.casefold(),(e.venue or '').casefold()),e)
