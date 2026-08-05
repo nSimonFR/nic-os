@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment_env": "ANTHROPIC_BASE_URL deliberately does NOT live here. A settings-file env entry wins over the process environment and over --settings, which made the Aperture gate unoverridable and silently disabled Remote Control (it requires api.anthropic.com). It is now injected as a wrapper default in home/claude.nix, so every invocation still gets the gate but a caller can override it.",
   "env": {
-    "ANTHROPIC_BASE_URL": "https://ai.gate-mintaka.ts.net",
     "CLAUDE_CODE_ENABLE_TELEMETRY": "1"
   },
   "permissions": {
