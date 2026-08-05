@@ -4,23 +4,34 @@
 Aggregates data from multiple service APIs into simple JSON endpoints,
 refreshed once per day. Serves on 127.0.0.1:8087.
 
-Endpoints:
+Endpoints (one per homepage tile, three stats each):
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
   /openwebui — Open WebUI (models, chats, messages)
   /immich    — Immich (photos, videos, storage)
-  /karakeep  — Karakeep (bookmarks, favorites, archived, tags) — direct read-only SQLite
+  /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
+  /affine    — AFFiNE (workspaces, docs, storage) — GraphQL, summed across workspaces
+  /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
+  /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
   /papra     — Papra (documents, tags, storage) — direct read-only SQLite
   /reactiveresume — Reactive Resume (resumes, users, views) — direct Postgres query
   /grampsweb — Gramps Web (people, families, events) — direct read-only SQLite, summed across trees
   /vaultwarden — Vaultwarden (items, users, devices) — direct read-only SQLite
-  /wakapi    — Wakapi (heartbeats, languages, users) — direct read-only SQLite
+  /wakapi    — Wakapi (coding hours: today, 30 days, all time) — direct read-only SQLite
   /dawarich  — Dawarich (points, trips, visits) — direct Postgres query (superuser)
   /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
   /forgejo   — Forgejo (repositories, open issues, open PRs) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
-  /ryot      — Ryot (media, seen, reviews) — direct Postgres query (superuser)
+  /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
+
+Every homepage tile reads its stats from here rather than from the app itself,
+including the three that have a native homepage widget (Nextcloud, AFFiNE,
+Beszel). Native widgets cannot be rate-limited from homepage's config, and
+homepage's `customapi` widget defaults to refreshInterval = 10s — so the AFFiNE
+tile used to POST a GraphQL query at AFFiNE every 10 seconds. Routing everything
+through here means one fetch per day per service, and no API key or password
+sitting in services-registry.nix.
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -77,6 +88,16 @@ RXRESUME_PW_FILE = "/run/agenix/reactive-resume-db-password"
 # Vaultwarden and Wakapi: same direct-SQLite-read trick as Papra/Karakeep above.
 VAULTWARDEN_DB = "/var/lib/vaultwarden/db.sqlite3"
 WAKAPI_DB = "/var/lib/wakapi/wakapi.db"
+# Beszel's PocketBase database (rpi5/monitoring.nix). DynamicUser + StateDirectory
+# puts it under /var/lib/private, which is 0700 root — this service runs as root, so
+# the same read-only-SQLite trick applies. Reading it here replaces the native beszel
+# widget, which needed a superuser password in plaintext in services-registry.nix.
+BESZEL_DB = "/var/lib/private/beszel-hub/beszel_data/data.db"
+# AFFiNE (rpi5/affine.nix) and Nextcloud (rpi5/nextcloud.nix) are the two tiles that
+# genuinely need an HTTP API — both are always-on, so the daily poll wakes nothing.
+AFFINE_GRAPHQL_URL = "http://127.0.0.1:13010/graphql"
+AFFINE_QUERY = "{ workspaces { blobsSize docs(pagination: {first: 0}) { totalCount } } }"
+NEXTCLOUD_INFO_URL = "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json"
 # BeaverHabits (rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
 # user in habit_list.data — read-only, so polling never wakes the idle service.
 BEAVERHABITS_DB = "/var/lib/beaverhabits/habits.db"
@@ -95,20 +116,39 @@ SHOWMYCARDS_DB = "/mnt/data/showmycards/database.db"
 STATE_DIR = os.environ.get("STATE_DIRECTORY", "/var/lib/homepage-stats")
 STATE_FILE = os.path.join(STATE_DIR, "stats.json")
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
+# Bump whenever a fetcher changes WHICH fields it reports (renaming wakapi's
+# heartbeats→today, say), so the cache from the previous shape is discarded.
+# backfill_missing only re-fetches keys that are entirely absent, so without this a
+# key whose fields were renamed would keep serving the old shape — blanking its tile
+# — until the next daily refresh, up to 24h after the rebuild that changed it.
+STATS_SCHEMA = 2
 
 stats = {
     "sure": {}, "openwebui": {}, "immich": {}, "karakeep": {}, "homeassistant": {},
     "papra": {}, "reactiveresume": {}, "grampsweb": {},
     "vaultwarden": {}, "wakapi": {}, "dawarich": {}, "airtrail": {}, "forgejo": {},
     "beaverhabits": {}, "ryot": {}, "showmycards": {},
+    "nextcloud": {}, "affine": {}, "beszel": {},
 }
 stats_lock = threading.Lock()
 
 
+def env_var(name):
+    """Read a HOMEPAGE_VAR_* value out of the env file homepage-dashboard shares.
+
+    Written by the homepage-dashboard-env oneshot (rpi5/homepage.nix), so the
+    secrets live in exactly one place for both the dashboard and this aggregator.
+    """
+    with open(ENV_FILE) as f:
+        for line in f:
+            if name in line:
+                return line.split("=", 1)[1].strip()
+    raise KeyError(f"{name} not in {ENV_FILE}")
+
+
 def fetch_sure():
     try:
-        env = open(ENV_FILE).read()
-        key = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "SURE_KEY" in l][0]
+        key = env_var("SURE_KEY")
         # Sure is mounted under /sure now (RAILS_RELATIVE_URL_ROOT, see sure.nix),
         # so its API lives at /sure/api/v1/* — the root path 404s. Hit :13334
         # (socket-activate) so the daily poll wakes Puma briefly, then it sleeps.
@@ -167,6 +207,11 @@ def load_cache():
     try:
         with open(STATE_FILE) as f:
             payload = json.load(f)
+        if payload.get("_schema") != STATS_SCHEMA:
+            # Leave every key empty so backfill_missing does a full fetch, dated now.
+            print(f"cache schema {payload.get('_schema')} != {STATS_SCHEMA}, refetching all",
+                  file=sys.stderr)
+            return 0
         with stats_lock:
             for k in stats:
                 stats[k] = payload.get(k, {})
@@ -184,6 +229,7 @@ def save_cache(ts):
         with stats_lock:
             payload = {k: dict(v) for k, v in stats.items()}
             payload["_fetched_at"] = ts
+            payload["_schema"] = STATS_SCHEMA
         tmp = STATE_FILE + ".tmp"
         with open(tmp, "w") as f:
             json.dump(payload, f)
@@ -194,8 +240,7 @@ def save_cache(ts):
 
 def fetch_immich():
     try:
-        env = open(ENV_FILE).read()
-        key = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "IMMICH_KEY" in l][0]
+        key = env_var("IMMICH_KEY")
         # Hit the externally-facing port (2283) so the daily fetch goes
         # through the socket-activate proxy, wakes immich-server briefly,
         # then lets it sleep again (same pattern as fetch_sure on :13334).
@@ -215,6 +260,73 @@ def fetch_immich():
             stats["immich"]["error"] = str(e)
 
 
+def fetch_nextcloud():
+    # serverinfo's OCS API, authenticated with the NC-Token it was configured with
+    # (rpi5/nextcloud.nix enables the "serverinfo" app for exactly this). Basic auth
+    # as nsimon 401s. Replaces the native `nextcloud` homepage widget, which always
+    # renders freespace/activeusers/numfiles/numshares and only lets `fields` filter
+    # which of them survive.
+    try:
+        data = json.loads(subprocess.check_output([
+            CURL, "-sf", NEXTCLOUD_INFO_URL,
+            "-H", f"NC-Token: {env_var('NEXTCLOUD_PASSWORD')}",
+            "-H", "OCS-APIRequest: true",
+        ]))["ocs"]["data"]
+        with stats_lock:
+            stats["nextcloud"] = {
+                "users":  data["activeUsers"]["last24hours"],
+                "files":  data["nextcloud"]["storage"]["num_files"],
+                "shares": data["nextcloud"]["shares"]["num_shares"],
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["nextcloud"]["error"] = str(e)
+
+
+def fetch_affine():
+    # Summed across every workspace. The tile this replaces read workspaces[0]
+    # only, which is the 3-doc scratch workspace rather than the ~7.5k-doc main
+    # one (see project_affine_workspaces_courses) — so its numbers were both
+    # arbitrary and re-fetched every 10 seconds.
+    try:
+        data = json.loads(subprocess.check_output([
+            CURL, "-sf", AFFINE_GRAPHQL_URL,
+            "-H", "Content-Type: application/json",
+            "-H", f"Authorization: Bearer {env_var('AFFINE_TOKEN')}",
+            "-d", json.dumps({"query": AFFINE_QUERY}),
+        ]))
+        workspaces = data["data"]["workspaces"]
+        with stats_lock:
+            stats["affine"] = {
+                "workspaces": len(workspaces),
+                "docs":       sum(w["docs"]["totalCount"] for w in workspaces),
+                "storage":    sum(w["blobsSize"] for w in workspaces),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["affine"]["error"] = str(e)
+
+
+def fetch_beszel():
+    # Read-only direct SQLite query against Beszel's PocketBase DB — same trick as
+    # fetch_karakeep. `alerts.triggered` is the interesting one: it's what actually
+    # fired, not how many alert rules exist.
+    def count(sql):
+        return int(subprocess.check_output(
+            [SQLITE, "-readonly", BESZEL_DB, sql]
+        ).decode().strip() or 0)
+    try:
+        with stats_lock:
+            stats["beszel"] = {
+                "systems": count("SELECT COUNT(*) FROM systems;"),
+                "up":      count("SELECT COUNT(*) FROM systems WHERE status = 'up';"),
+                "alerts":  count("SELECT COUNT(*) FROM alerts WHERE triggered = 1;"),
+            }
+    except Exception as e:
+        with stats_lock:
+            stats["beszel"]["error"] = str(e)
+
+
 def fetch_karakeep():
     # Read-only direct SQLite query — no API key, never wakes karakeep.
     def count(sql):
@@ -226,7 +338,6 @@ def fetch_karakeep():
             stats["karakeep"] = {
                 "bookmarks": count("SELECT COUNT(*) FROM bookmarks;"),
                 "favorites": count("SELECT COUNT(*) FROM bookmarks WHERE favourited = 1;"),
-                "archived":  count("SELECT COUNT(*) FROM bookmarks WHERE archived = 1;"),
                 "tags":      count("SELECT COUNT(*) FROM bookmarkTags;"),
             }
     except Exception as e:
@@ -393,16 +504,25 @@ def fetch_vaultwarden():
 
 
 def fetch_wakapi():
-    def count(sql):
-        return int(subprocess.check_output(
-            [SQLITE, "-readonly", WAKAPI_DB, sql]
-        ).decode().strip() or 0)
+    # Coding time, not row counts: `durations` is wakapi's own precomputed
+    # heartbeat-coalescing table (the same thing its summaries are built from), and
+    # its `duration` column is NANOSECONDS — hence /3.6e12 for hours.
+    #
+    # `time` values carry a UTC offset (e.g. "…21:39:51.902+02:00"), so date() on
+    # them yields a UTC date; the 'localtime' modifier on both sides makes "today"
+    # mean the local day rather than shifting by two hours after midnight.
+    def hours(where=""):
+        ns = int(subprocess.check_output([
+            SQLITE, "-readonly", WAKAPI_DB,
+            f"SELECT COALESCE(SUM(duration), 0) FROM durations {where};",
+        ]).decode().strip() or 0)
+        return round(ns / 3.6e12, 1)
     try:
         with stats_lock:
             stats["wakapi"] = {
-                "heartbeats": count("SELECT COUNT(*) FROM heartbeats;"),
-                "languages":  count("SELECT COUNT(DISTINCT language) FROM heartbeats WHERE language IS NOT NULL AND language != '';"),
-                "users":      count("SELECT COUNT(*) FROM users;"),
+                "today":    hours("WHERE date(time, 'localtime') = date('now', 'localtime')"),
+                "last_30d": hours("WHERE time >= datetime('now', '-30 day')"),
+                "total":    hours(),
             }
     except Exception as e:
         with stats_lock:
@@ -432,29 +552,51 @@ def fetch_dawarich():
 
 
 def fetch_airtrail():
+    # flight.duration is SECONDS, not minutes: the longest flight on record is
+    # 42872, i.e. 11h54m. Dividing by 60 reported 7922 "hours" for 29 flights;
+    # the real total is 132.
     try:
         with stats_lock:
             stats["airtrail"] = {
                 "flights":   int(pg_superuser_query("airtrail", "SELECT COUNT(*) FROM flight;") or 0),
                 "countries": int(pg_superuser_query("airtrail", "SELECT COUNT(*) FROM visited_country;") or 0),
-                "hours":     round(int(pg_superuser_query("airtrail", "SELECT COALESCE(SUM(duration),0) FROM flight;") or 0) / 60),
+                "hours":     round(int(pg_superuser_query("airtrail", "SELECT COALESCE(SUM(duration),0) FROM flight;") or 0) / 3600),
             }
     except Exception as e:
         with stats_lock:
             stats["airtrail"]["error"] = str(e)
 
 
+# Hours of media actually consumed. daily_user_activity is Ryot's own per-day
+# rollup — the table its dashboard reads — and every *_duration column in it is
+# MINUTES (cross-checked: workout_duration sums to 167 against workout.duration's
+# 10026 seconds). total_duration is exactly the sum of the per-type durations.
+#
+# video_game_duration is subtracted because the Steam import (project_ryot_connectors)
+# dumps lifetime playtime onto its import date: 350736 minutes — 5846 h — all on
+# 2026-07-23, which would swamp everything else. visual_novel_duration goes with it
+# for the same reason. Subtracting from total_duration rather than adding up the
+# media columns means a media type Ryot adds later is counted automatically.
+RYOT_MEDIA_HOURS_SQL = """
+SELECT COALESCE(SUM(total_duration - video_game_duration
+                    - visual_novel_duration - workout_duration), 0)
+FROM daily_user_activity;
+"""
 def fetch_ryot():
     # Ryot (rpi5/ryot.nix) is Postgres-backed. Read its counts directly as the
     # postgres superuser — no API token, and (like the other direct-read tiles)
     # it never touches Ryot's own HTTP layer. Ryot is always-on (not socket-
     # activated), so this is purely to avoid holding an API key on the tile.
+    #
+    # "seen" counts finished consumption events (each episode of a show is its own
+    # row), NOT `metadata`, which is the 16.8k-row metadata catalogue Ryot has
+    # fetched from providers and is nothing to do with what was watched.
     try:
         with stats_lock:
             stats["ryot"] = {
-                "media":   int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM metadata;") or 0),
-                "seen":    int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM seen;") or 0),
-                "reviews": int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM review;") or 0),
+                "seen":     int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM seen WHERE state = 'completed';") or 0),
+                "hours":    round(int(pg_superuser_query("ryot", RYOT_MEDIA_HOURS_SQL) or 0) / 60),
+                "workouts": int(pg_superuser_query("ryot", "SELECT COUNT(*) FROM workout;") or 0),
             }
     except Exception as e:
         with stats_lock:
@@ -479,8 +621,7 @@ def fetch_homeassistant():
     # It's routed through this daily-cached aggregator only for consistency with
     # the other tiles — note the counts can be up to REFRESH_INTERVAL stale.
     try:
-        env = open(ENV_FILE).read()
-        token = [l.split("=", 1)[1].strip() for l in env.strip().split("\n") if "HA_TOKEN" in l][0]
+        token = env_var("HA_TOKEN")
         states = json.loads(subprocess.check_output([
             CURL, "-sf", "http://127.0.0.1:8123/api/states",
             "-H", f"Authorization: Bearer {token}", "-H", "Content-Type: application/json"
@@ -508,6 +649,9 @@ FETCHERS = {
     "sure": fetch_sure,
     "openwebui": fetch_openwebui,
     "immich": fetch_immich,
+    "nextcloud": fetch_nextcloud,
+    "affine": fetch_affine,
+    "beszel": fetch_beszel,
     "karakeep": fetch_karakeep,
     "homeassistant": fetch_homeassistant,
     "papra": fetch_papra,
@@ -575,39 +719,13 @@ def refresh(initial_fetched_at):
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
+        # One branch per service used to be spelled out here, which meant adding a
+        # widget touched three places. The stats dict already knows every key, so
+        # route straight off it; anything else (including /) serves the whole payload.
+        key = self.path.strip("/")
         with stats_lock:
-            if self.path == "/sure":
-                data = dict(stats["sure"])
-            elif self.path == "/openwebui":
-                data = dict(stats["openwebui"])
-            elif self.path == "/immich":
-                data = dict(stats["immich"])
-            elif self.path == "/karakeep":
-                data = dict(stats["karakeep"])
-            elif self.path == "/homeassistant":
-                data = dict(stats["homeassistant"])
-            elif self.path == "/papra":
-                data = dict(stats["papra"])
-            elif self.path == "/reactiveresume":
-                data = dict(stats["reactiveresume"])
-            elif self.path == "/grampsweb":
-                data = dict(stats["grampsweb"])
-            elif self.path == "/vaultwarden":
-                data = dict(stats["vaultwarden"])
-            elif self.path == "/wakapi":
-                data = dict(stats["wakapi"])
-            elif self.path == "/dawarich":
-                data = dict(stats["dawarich"])
-            elif self.path == "/airtrail":
-                data = dict(stats["airtrail"])
-            elif self.path == "/forgejo":
-                data = dict(stats["forgejo"])
-            elif self.path == "/beaverhabits":
-                data = dict(stats["beaverhabits"])
-            elif self.path == "/ryot":
-                data = dict(stats["ryot"])
-            elif self.path == "/showmycards":
-                data = dict(stats["showmycards"])
+            if key in stats:
+                data = dict(stats[key])
             else:
                 data = {k: dict(v) for k, v in stats.items()}
         self.send_response(200)
