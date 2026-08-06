@@ -1,6 +1,6 @@
 # LG 38GN950 sphere lighting — the system side of the video-sync ambient
 # daemon. The package (protocol bindings, HID codec, screencopy client) lives
-# in pkgs/lg-sphere-ambient.
+# in pkgs/rgb/lg-sphere-ambient.
 {
   lib,
   pkgs,
@@ -8,7 +8,7 @@
 }:
 
 let
-  lg-sphere-ambient = pkgs.callPackage ../../pkgs/lg-sphere-ambient { };
+  lg-sphere-ambient = pkgs.callPackage ../../pkgs/rgb/lg-sphere-ambient { };
 in
 {
   # Give the logged-in user access to /dev/hidraw11 (the sphere-lighting

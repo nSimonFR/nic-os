@@ -22,8 +22,8 @@ let
 
   # Claude models for the Anthropic passthrough — extracted from claude-code's
   # bundled binary at build time (Anthropic's /v1/models rejects OAuth tokens).
-  # See pkgs/claude-anthropic-models.nix.
-  anthropicModelsFile = pkgs.callPackage ../pkgs/claude-anthropic-models.nix {
+  # See pkgs/agents/claude-anthropic-models.nix.
+  anthropicModelsFile = pkgs.callPackage ../pkgs/agents/claude-anthropic-models.nix {
     inherit (unstablePkgs) claude-code;
   };
 

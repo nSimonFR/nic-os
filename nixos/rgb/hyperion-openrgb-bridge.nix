@@ -1,7 +1,7 @@
 { pkgs, ... }:
 
 let
-  hyperion-openrgb-bridge = pkgs.callPackage ../../pkgs/hyperion-openrgb-bridge.nix { };
+  hyperion-openrgb-bridge = pkgs.callPackage ../../pkgs/rgb/hyperion-openrgb-bridge.nix { };
 in
 {
   environment.systemPackages = [ hyperion-openrgb-bridge ];

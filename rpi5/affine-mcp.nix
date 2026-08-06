@@ -9,7 +9,7 @@
 let
   port = 7021;
 
-  affineMcpServer = pkgs.callPackage ../pkgs/affine-mcp-server.nix { };
+  affineMcpServer = pkgs.callPackage ../pkgs/agents/affine-mcp-server.nix { };
 in
 {
   # Oneshot generates the EnvironmentFile holding the AFFiNE token + the bearer

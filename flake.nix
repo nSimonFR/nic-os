@@ -124,10 +124,10 @@
     };
 
     # RTK — Rust Token Killer (rtk-ai/rtk). Source-only input (`flake = false`);
-    # pkgs/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
+    # pkgs/agents/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
     # as `pkgs.rtk` via pkgs/overlay.nix. Bumping is a 2-step edit:
     #   1. change the tag in the URL below (e.g. v0.42.4 → v0.43.0)
-    #   2. bump `version` in pkgs/rtk.nix to match
+    #   2. bump `version` in pkgs/agents/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
     rtk-src = {
       url = "github:rtk-ai/rtk/v0.42.4";
@@ -136,9 +136,9 @@
 
     # ShowMyCards — self-hosted Magic: The Gathering collection manager
     # (showmycards/showmycards). Source-only input (`flake = false`): the
-    # prebuilt image is amd64-only, so pkgs/showmycards.nix builds it from source
+    # prebuilt image is amd64-only, so pkgs/services/showmycards.nix builds it from source
     # (Go backend + SvelteKit frontend) and exposes `pkgs.showmycards` via an
-    # overlay. Bump: change the ref here + `version` in pkgs/showmycards.nix, then
+    # overlay. Bump: change the ref here + `version` in pkgs/services/showmycards.nix, then
     # `sudo nix flake lock --update-input showmycards-src` + rebuild.
     #
     # ⚠ PINNED TO A COMMIT, NOT A TAG. v0.3.0 (2026-05-27) is still upstream's

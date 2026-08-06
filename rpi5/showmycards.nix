@@ -1,7 +1,7 @@
 # rpi5/showmycards.nix
 #
 # ShowMyCards — self-hosted Magic: The Gathering collection manager
-# (showmycards/showmycards), built from source via pkgs/showmycards.nix (the
+# (showmycards/showmycards), built from source via pkgs/services/showmycards.nix (the
 # upstream image is amd64-only). Go/Fiber backend + SvelteKit (adapter-node)
 # frontend, SQLite. No containers.
 #
@@ -13,7 +13,7 @@
 #     so the browser only ever talks to the frontend — no browser CORS.
 #
 # ⚠ DISK: imports the full Scryfall `all_cards` feed but keeps only en + fr
-#   (filter in pkgs/showmycards.nix) — 171158 of 535598 objects, ~0.9 GB. The DB
+#   (filter in pkgs/services/showmycards.nix) — 171158 of 535598 objects, ~0.9 GB. The DB
 #   lives on /mnt/data, NEVER on / (~96% full — importing all_cards to / is what
 #   filled the root fs on 2026-07-26). Widening the languages means editing that
 #   filter and re-importing from a deleted DB (see below).
@@ -89,7 +89,7 @@ in
       ALLOWED_ORIGINS = origin;
       LOG_LEVEL       = "info";
       # GODEBUG=http2client=0 is baked into the package wrapper (see
-      # pkgs/showmycards.nix) so the streamed all_cards import doesn't fail.
+      # pkgs/services/showmycards.nix) so the streamed all_cards import doesn't fail.
     };
     serviceConfig = {
       ExecStart = "${pkgs.showmycards}/bin/showmycards-backend";

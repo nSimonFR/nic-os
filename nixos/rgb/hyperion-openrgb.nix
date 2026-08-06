@@ -1,7 +1,7 @@
 { pkgs, ... }:
 
 let
-  hyperion-ng-openrgb = pkgs.callPackage ../../pkgs/hyperion-ng-openrgb.nix { };
+  hyperion-ng-openrgb = pkgs.callPackage ../../pkgs/rgb/hyperion-ng-openrgb.nix { };
 in
 {
   environment.systemPackages = [ hyperion-ng-openrgb ];
