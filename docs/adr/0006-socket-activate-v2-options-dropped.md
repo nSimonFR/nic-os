@@ -4,7 +4,7 @@
 
 ## Context
 
-`rpi5/lib/socket-activate.nix` is one of the three real seams in this repo: 13
+`hosts/rpi5/lib/socket-activate.nix` is one of the three real seams in this repo: 13
 uniform callers, zero escape hatches. Two parts of its interface had no users at
 all:
 

@@ -12,7 +12,7 @@
 # on the Pi) and the journald caps are deliberate consequences of disk size, so
 # they stay host-local. `time.timeZone` is not.
 #
-# macOS (macos/configuration.nix) deliberately does NOT import this: nix-darwin's
+# macOS (hosts/nbookpro/configuration.nix) deliberately does NOT import this: nix-darwin's
 # option set only partially overlaps NixOS's, so the shared-looking options
 # (`services.openssh`, `zramSwap`, `i18n`, `users.users.*.isNormalUser`) either
 # don't exist or mean something different there. Follow shared/tailscale.nix's
@@ -26,7 +26,7 @@
 }:
 {
   # `hostname` was a specialArg on all three system configs with exactly one
-  # consumer (macos/configuration.nix); both NixOS hosts swallowed it in `...`
+  # consumer (hosts/nbookpro/configuration.nix); both NixOS hosts swallowed it in `...`
   # and hardcoded their own name. Use the argument.
   networking.hostName = hostname;
 

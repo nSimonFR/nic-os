@@ -14,7 +14,7 @@ narHash crash.
 
 ## Decision
 
-Replaced wholesale by PicoClaw. `rpi5/openclaw/` was deleted.
+Replaced wholesale by PicoClaw. `hosts/rpi5/openclaw/` was deleted.
 
 ## Consequences
 
@@ -30,7 +30,7 @@ Residue that outlived the deletion by two agent generations, all cleaned up on
   nothing
 - `home/packages.nix` — `lib.lowPrio` on `nodejs_22` and `python312`, with
   comments citing "conflict with openclaw's bundled python"
-- `rpi5/configuration.nix` — an authorized SSH key labelled `nsimon@rpi5-openclaw`
+- `hosts/rpi5/configuration.nix` — an authorized SSH key labelled `nsimon@rpi5-openclaw`
 
 **Do not resurrect.** OpenClaw's SKILL.md format is the ancestor of the format
 Hermes still uses, which is the only reason its name survives in comments.

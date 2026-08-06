@@ -15,7 +15,7 @@
 #
 # `pkgs.rtk` is supplied by the repo overlay (pkgs/overlay.nix),
 # applied to every home-manager pkgs set (standalone configs + the rpi5
-# NixOS-integrated generation via rpi5/overlays.nix).
+# NixOS-integrated generation via hosts/rpi5/overlays.nix).
 { pkgs, ... }:
 {
   home.packages = [ pkgs.rtk ];

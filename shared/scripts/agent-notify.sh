@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # agent-notify — hand one agent event to the debounced :8088 aggregator
-# (rpi5/scripts/claude-notify-aggregator.py), which owns the bot token and
+# (hosts/rpi5/scripts/claude-notify-aggregator.py), which owns the bot token and
 # decides when a batch becomes one Telegram digest. See shared/notify.nix for
 # when this is the wrong seam.
 #

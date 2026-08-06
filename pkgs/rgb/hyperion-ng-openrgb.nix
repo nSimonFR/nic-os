@@ -1,6 +1,6 @@
 # Hyperion.ng built with OpenRGB output support (-DENABLE_OPENRGB=ON).
 #
-# Service module (user unit, firewall ports): nixos/rgb/hyperion-openrgb.nix.
+# Service module (user unit, firewall ports): hosts/beast/rgb/hyperion-openrgb.nix.
 {
   hyperion-ng,
   jsoncpp,

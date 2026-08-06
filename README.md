@@ -28,7 +28,7 @@ nix-shell -p nixFlakes git
 
 ### Configuration
 
-Apply disk configuration from [hardward-configuration.nix](./nixos/hardware-configuration.nix) - or switch to [custom installation](#nixos---custom-install).
+Apply disk configuration from [hardward-configuration.nix](./hosts/beast/hardware-configuration.nix) - or switch to [custom installation](#nixos---custom-install).
 
 ### Install
 
@@ -55,7 +55,7 @@ Then, re-generate and move `hardware-configuration.nix`:
 
 ```sh
 nixos-generate-config --root /mnt
-cp /mnt/etc/nixos/hardware-configuration.nix nixos/
+cp /mnt/etc/nixos/hardware-configuration.nix hosts/beast/
 ```
 
 ### Rename variables _(Optional)_

@@ -26,7 +26,7 @@ Dropped the proxy. The gate speaks to codex directly.
   applies to this path.
 - `known_issue_codex_proxy_oauth_rotation` is obsolete.
 
-Residue cleaned up on 2026-08-06: `rpi5/home.nix` still exported
+Residue cleaned up on 2026-08-06: `hosts/rpi5/home.nix` still exported
 `sessionVariables.CODEX_PROXY_KEY = "codex-proxy-local"` — plus six lines of
 warning comment explaining a war that had already ended — for a service deleted a
 month earlier. Credential ownership for the native path is a separate concern,

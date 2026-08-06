@@ -1,7 +1,7 @@
 # Auburn Sounds Graillon FREE — live voice changer / pitch-correction plugin.
 # Redistributable binary release; ships CLAP, LV2 and VST3 for Linux x86_64.
 #
-# Consumer (systemPackages + VST3_PATH/LV2_PATH): nixos/music-production.nix.
+# Consumer (systemPackages + VST3_PATH/LV2_PATH): hosts/beast/music-production.nix.
 {
   lib,
   stdenvNoCC,

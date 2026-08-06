@@ -3,7 +3,7 @@
 # https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer
 #
 # Ships $out/share/tobii_engine; the unit copies it into a writable StateDirectory
-# because the daemon writes config.db next to its binary. See nixos/tobii-native.nix.
+# because the daemon writes config.db next to its binary. See hosts/beast/tobii-native.nix.
 {
   stdenv,
   autoPatchelfHook,

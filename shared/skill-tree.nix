@@ -4,7 +4,7 @@
 #            references/, scripts/). The directory is the unit, never just the
 #            SKILL.md — see the commit that introduced this.
 #   lineage  a directory whose immediate children are skills. Four exist:
-#            shared/skills, shared/mtg-skills, rpi5/hermes/skills,
+#            shared/skills, shared/mtg-skills, hosts/rpi5/hermes/skills,
 #            home/claude-skills.
 #   surface  an agent installation with its own skills dir.
 #

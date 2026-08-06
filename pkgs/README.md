@@ -5,7 +5,7 @@ Every derivation this repo builds itself lives here. A file in `pkgs/` answers
 *how is it run* (users, units, ports, secrets, Serve entries).
 
 `showmycards` is the reference split: `pkgs/services/showmycards.nix` builds the Go
-backend + SvelteKit frontend, `rpi5/showmycards.nix` is purely the service
+backend + SvelteKit frontend, `hosts/rpi5/showmycards.nix` is purely the service
 module.
 
 ## Layout
@@ -25,7 +25,7 @@ doesn't have to move, and related derivations sit together.
 
 `tobii/` earns its own folder by being a *set*: `opentrack-sc` consumes
 `tobii-stream-engine` and `npclient-shm-dll`, so they are wired together in
-`nixos/tobii-native.nix` rather than each standing alone.
+`hosts/beast/tobii-native.nix` rather than each standing alone.
 
 If a new package doesn't clearly belong to one of these, `services/` is the
 catch-all — but prefer adding a folder over stretching that one.
@@ -38,7 +38,7 @@ added to any host's `pkgs`.
 
 **Overlay — two or more consumers.** `pkgs/overlay.nix` exposes the package as
 `pkgs.<name>`, so every consumer resolves the same store path from one
-evaluation. Applied by `rpi5/overlays.nix`, `nixos/overlays.nix` and the
+evaluation. Applied by `hosts/rpi5/overlays.nix`, `hosts/beast/overlays.nix` and the
 `homeConfigurations` in `flake.nix`, all via `outputs.overlays.nic-os`.
 
 Move a package from the first form to the second the moment a second consumer
@@ -76,7 +76,7 @@ On the rpi5, `earlyoom` will kill a full evaluation under memory pressure
 
 ## Not (yet) here
 
-The nixos-raspberrypi bootloader chain in `rpi5/configuration.nix` — five
+The nixos-raspberrypi bootloader chain in `hosts/rpi5/configuration.nix` — five
 derivations that patch an *input flake's* source. It is the largest inline build
 left and the one most likely to brick a boot if botched, so it is deliberately a
 separate decision.

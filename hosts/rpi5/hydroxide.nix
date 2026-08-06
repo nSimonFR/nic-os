@@ -1,0 +1,82 @@
+{ config, lib, pkgs, unstablePkgs, username, ... }:
+# Hydroxide — third-party ProtonMail bridge exposing IMAP / SMTP / CardDAV.
+#
+# Pulled from nixpkgs-unstable for v0.2.31, which includes the
+# "protonmail: fix 'invalid or missing message signature' errors" series
+# (commits 8f4049b…759f6d1c). nixos-25.11 still ships 0.2.30 (pre-fix), and
+# without these patches sending to non-Proton recipients fails with Proton
+# API code [2001]. Drop the unstable pin once nixos-25.11 catches up.
+# IMAP/SMTP exposed only on tailscale0; CardDAV stays on 127.0.0.1 and is
+# proxied via Tailscale Serve (see services-registry.nix).
+#
+# FIRST-TIME SETUP (auth.json must be created interactively before the
+# daemon can serve any requests — the service will crashloop until then):
+#
+#   1. systemctl stop hydroxide
+#   2. sudo -u hydroxide -H \
+#        XDG_CONFIG_HOME=/var/lib/hydroxide/.config \
+#        hydroxide auth <user>@protonmail.com
+#      → enter Proton password, TOTP, mailbox password if prompted.
+#      → CAPTURE the printed bridge password — it cannot be recovered.
+#   3. systemctl start hydroxide
+#
+# Mail clients log in with the bridge password (NOT the Proton account
+# password). Plaintext on tailnet is fine — tailnet is encrypted.
+let
+  smtpPort    = 1025;
+  imapPort    = 1143;
+  carddavPort = 8083;  # default 8080 collides with nginx/firefly
+
+  hydroxide = unstablePkgs.hydroxide;
+in
+{
+  users.users.hydroxide  = {
+    isSystemUser = true;
+    group = "hydroxide";
+    home  = "/var/lib/hydroxide";
+  };
+  users.groups.hydroxide = {};
+
+  # The Hermes agent runs as ${username} and shells out to himalaya, which reads
+  # the bridge password at invocation time. Group membership grants read on the
+  # 0440 agenix file without changing its owner. See hosts/rpi5/hermes/skills/protonmail/.
+  users.users.${username}.extraGroups = [ "hydroxide" ];
+
+  systemd.tmpfiles.rules = [
+    "d /var/lib/hydroxide          0700 hydroxide hydroxide - -"
+    "d /var/lib/hydroxide/.config  0700 hydroxide hydroxide - -"
+  ];
+
+  systemd.services.hydroxide = {
+    description = "Hydroxide ProtonMail bridge";
+    wantedBy    = [ "multi-user.target" ];
+    after       = [ "network-online.target" ];
+    wants       = [ "network-online.target" ];
+
+    environment.XDG_CONFIG_HOME = "/var/lib/hydroxide/.config";
+
+    serviceConfig = {
+      ExecStart = lib.concatStringsSep " " [
+        "${hydroxide}/bin/hydroxide"
+        "-smtp-host"    "0.0.0.0"
+        "-smtp-port"    (toString smtpPort)
+        "-imap-host"    "0.0.0.0"
+        "-imap-port"    (toString imapPort)
+        "-carddav-host" "127.0.0.1"
+        "-carddav-port" (toString carddavPort)
+        "serve"
+      ];
+      User           = "hydroxide";
+      Group          = "hydroxide";
+      Restart        = "on-failure";
+      RestartSec     = "10";
+      ReadWritePaths = [ "/var/lib/hydroxide" ];
+      LimitNOFILE    = 65536;
+    };
+  };
+
+  networking.firewall.interfaces.tailscale0.allowedTCPPorts = [
+    imapPort
+    smtpPort
+  ];
+}
