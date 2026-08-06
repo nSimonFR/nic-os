@@ -15,7 +15,16 @@
 # dashboard widget) is a full user token, so it authenticates CalDAV writes too.
 # The mailbox is opened read-only and never mutated. Crash-loops surface via the
 # existing systemd-failed Telegram alert in monitoring.nix.
-{ pkgs, telegramChatId, tinyLlmGateUrl, tailnetFqdn, ... }:
+{ config, pkgs, telegramChatId, tinyLlmGateUrl, tailnetFqdn, ... }:
+let
+  # One-shot seam (shared/notify.nix): a booking summary is an event, not a
+  # condition that later resolves.
+  telegramSend = (import ../shared/notify.nix { inherit pkgs; }).send {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+    name = "travel-cal-sync-telegram-send";
+  };
+in
 {
   systemd.services.travel-cal-sync = {
     description = "Event-driven Proton -> Nextcloud travel-booking calendar sync";
@@ -32,7 +41,7 @@
       # daemon; e4b is fast and extracts these bookings correctly.
       MODEL = "gemma4:e4b";
       LOOKBACK_DAYS = "365";
-      TELEGRAM_CHAT_ID = toString telegramChatId;
+      TELEGRAM_SEND = "${telegramSend}";
       NEXTCLOUD_CALDAV_URL = "https://${tailnetFqdn}/nextcloud/remote.php/dav/calendars/nsimon/";
       NEXTCLOUD_PASS_FILE = "/run/agenix/nextcloud-homepage-password";
       # Calendar collection URI to write into (from `--list-calendars`): "Personal".

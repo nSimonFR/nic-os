@@ -21,7 +21,7 @@ let
     '';
   };
 
-  notifyScript = (import ../../shared/telegram-notify.nix { inherit pkgs; }) {
+  notifyScript = (import ../../shared/notify.nix { inherit pkgs; }).agent {
     name = "pi";
     source = "Pi Coding Agent";
   };
@@ -49,11 +49,11 @@ in
 
   home.sessionVariables = {
     PI_TELEGRAM_CHAT_ID = builtins.toString telegramChatId;
-    PI_TELEGRAM_NOTIFY_SCRIPT = "${notifyScript}";
+    PI_AGENT_NOTIFY_SCRIPT = "${notifyScript}";
   };
 
-  home.file.".pi/agent/extensions/telegram-notify.ts".source =
-    ./extensions/telegram-notify.ts;
+  home.file.".pi/agent/extensions/agent-notify.ts".source =
+    ./extensions/agent-notify.ts;
   home.file.".pi/agent/extensions/aperture-provider.ts".source =
     ./extensions/aperture-provider.ts;
 

@@ -31,16 +31,16 @@
 #   HERMES_SKILLS_DIR   runtime skills dir             (~/.hermes/skills)
 #   DEST_SKILLS         repo dest for new skills       (…/nic-os/shared/skills)
 #   HERMES_LOCAL_SKILLS other repo-seeded skills dir   (…/rpi5/hermes/skills)
-#   TG_CHAT_ID          Telegram chat id for the nudge (optional)
-#   TG_TOKEN_FILE       file holding the bot token     (optional)
+#   TELEGRAM_SEND       one-shot Telegram sender       (optional; the wrapped
+#                       shared/scripts/telegram-send.sh, already carrying the
+#                       token path + chat id)
 # Tools (hermes, systemctl, rsync, curl, awk, install) come from the wrapper PATH.
 set -euo pipefail
 
 HERMES_SKILLS_DIR="${HERMES_SKILLS_DIR:-$HOME/.hermes/skills}"
 DEST_SKILLS="${DEST_SKILLS:?DEST_SKILLS must be set}"
 HERMES_LOCAL_SKILLS="${HERMES_LOCAL_SKILLS:-}"
-TG_CHAT_ID="${TG_CHAT_ID:-}"
-TG_TOKEN_FILE="${TG_TOKEN_FILE:-/run/agenix/telegram-bot-token}"
+TELEGRAM_SEND="${TELEGRAM_SEND:-}"
 
 log() { echo "hermes-skill-promote: $*"; }
 
@@ -112,13 +112,11 @@ fi
 
 log "promoted:$promoted"
 
-# Best-effort Telegram nudge so the human knows to review + commit.
-if [ -n "$TG_CHAT_ID" ] && [ -r "$TG_TOKEN_FILE" ]; then
-  token="$(cat "$TG_TOKEN_FILE")"
+# Best-effort Telegram nudge so the human knows to review + commit. Goes
+# through the one-shot seam (shared/notify.nix `send`, wrapped with the token +
+# chat id by hermes.nix) rather than hand-rolling the Bot API here.
+if [ -x "$TELEGRAM_SEND" ]; then
   msg="🧠 Hermes wrote new skill(s): <b>$(printf '%s' "$promoted" | sed 's/ /, /g')</b>
 Copied to <code>shared/skills/</code> in nic-os (untracked). Review, then <code>git add</code> + commit + rebuild to version them."
-  curl -sf -X POST "https://api.telegram.org/bot$token/sendMessage" \
-    -d chat_id="$TG_CHAT_ID" \
-    -d parse_mode=HTML \
-    --data-urlencode "text=$msg" >/dev/null || log "telegram notify failed (non-fatal)"
+  "$TELEGRAM_SEND" "$msg" >/dev/null || log "telegram notify failed (non-fatal)"
 fi

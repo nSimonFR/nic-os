@@ -13,16 +13,13 @@
 # anthropic-account-healthcheck  (then journalctl -u it -n 20).
 { config, pkgs, lib, telegramChatId, ... }:
 let
-  # Same self-updating alerter monitoring.nix uses; a thin wrapper over the
-  # shared telegram-alert.sh (send-once / edit-in-place / resolve). Kept local
-  # to this module so it stays self-contained.
-  telegramAlert = pkgs.writeShellScript "telegram-alert-anthropic" ''
-    export TELEGRAM_TOKEN_FILE=${config.age.secrets.telegram-bot-token.path}
-    export TELEGRAM_CHAT_ID=${toString telegramChatId}
-    export ALERT_STATE_DIR=/var/lib/telegram-alerts
-    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.jq pkgs.coreutils ]}''${PATH:+:$PATH}
-    exec ${pkgs.bash}/bin/bash ${./scripts/telegram-alert.sh} "$@"
-  '';
+  # Same self-updating alerter monitoring.nix uses (send-once / edit-in-place /
+  # resolve), from the shared seam in shared/notify.nix.
+  telegramAlert = (import ../shared/notify.nix { inherit pkgs; }).alert {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+    name = "telegram-alert-anthropic";
+  };
 
   healthcheck = pkgs.writeShellScript "anthropic-account-healthcheck" ''
     set -u

@@ -70,16 +70,15 @@ let
     };
   };
 
-  # Direct Telegram alert for systemd job failure (the tool's own notifier
-  # handles game/captcha events). Mirrors monitoring.nix's telegramNotify.
-  telegramNotify = pkgs.writeShellScript "efg-telegram-notify" ''
-    TOKEN=$(< /run/agenix/telegram-bot-token)
-    ${pkgs.curl}/bin/curl -sf -X POST \
-      "https://api.telegram.org/bot$TOKEN/sendMessage" \
-      -d chat_id=${toString telegramChatId} \
-      -d parse_mode=HTML \
-      --data-urlencode "text=$1" >/dev/null || true
-  '';
+  # Telegram ping for systemd job failure (the tool's own notifier handles
+  # game/captcha events). One-shot seam, not the stateful alerter: a failed run
+  # has no "resolved" callback, so telegramAlert would leave a message stuck at
+  # "⚠ ongoing" — the next successful run just never mentions it.
+  telegramNotify = (import ../shared/notify.nix { inherit pkgs; }).send {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+    name = "efg-telegram-notify";
+  };
 in
 {
   users.users.epicgames-freegames = {

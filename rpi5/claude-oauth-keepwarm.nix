@@ -26,6 +26,14 @@ let
   oauthDirName = "claude-oauth${suffix}";
   oauthPath = "/run/${oauthDirName}/token";
 
+  # Batching seam (shared/notify.nix). Not a direct send: :8088 is the only
+  # thing here holding the root-only bot token, and a session cap is exactly
+  # the kind of agent event that should batch with the others.
+  agentNotify = (import ../shared/notify.nix { inherit pkgs; }).agent {
+    name = "claude-gate${suffix}";
+    source = "Claude gate";
+  };
+
   extractScript = pkgs.writeShellScript "claude-oauth-extract${suffix}" ''
     set -eu
     umask 0333  # -r--r--r-- so tiny-llm-gate (DynamicUser) can read it
@@ -71,10 +79,7 @@ let
     if printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -qiE "hit your (session|usage) limit|session limit ·|usage limit|rate.?limit"; then
       resets=$(printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -oiE "resets[^.]*" | head -1)
       msg="⚠️ Claude ${acctLabel} hit its 5h session limit — ${failoverNote}.''${resets:+ ($resets)}"
-      ${pkgs.curl}/bin/curl -sS -m 10 -X POST http://127.0.0.1:8088/notify \
-        -H 'content-type: application/json' \
-        --data-raw "$(${pkgs.jq}/bin/jq -nc --arg m "$msg" '{host:"rpi5",project:"claude-gate",message:$m,immediate:true}')" \
-        >/dev/null 2>&1 || true
+      ${agentNotify} --project claude-gate --immediate --message "$msg"
       echo "claude-token-refresh${suffix}: session cap detected, alerted" >&2
       exit 0
     fi

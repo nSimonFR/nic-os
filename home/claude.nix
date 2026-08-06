@@ -42,6 +42,21 @@ let
     value.source = "${sharedSkillsDir}/${name}/SKILL.md";
   }) claudeSlashCommandSkills);
 
+  # Batching seam (→ the :8088 aggregator). `source` is null because
+  # claude-notify.sh distinguishes "Claude Code" from "Claude PushNotification"
+  # per invocation and passes its own.
+  agentNotify = (import ../shared/notify.nix { inherit pkgs; }).agent { name = "claude"; };
+
+  # One-shot sender exposed to the `telegram` skill (home/claude-skills/telegram),
+  # so the model calls a reviewed script instead of hand-rolling authenticated
+  # HTTP with the bot token pasted into a shell command. Not notify.send: the
+  # skill targets three different chats, so --chat is per call.
+  telegramSend = pkgs.writeShellScriptBin "telegram-send" ''
+    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}''${PATH:+:$PATH}
+    export TELEGRAM_CHAT_ID=''${TELEGRAM_CHAT_ID:-${toString telegramChatId}}
+    exec ${pkgs.bash}/bin/bash ${../shared/scripts/telegram-send.sh} "$@"
+  '';
+
   # NOTE on ANTHROPIC_BASE_URL (below): the Aperture gate URL is injected here as
   # a wrapper DEFAULT rather than in claude-settings.json's `env` block, where it
   # used to live. A settings-file `env` entry is applied by Claude Code over the
@@ -77,6 +92,8 @@ let
 
 in
 {
+  # `telegram-send` on PATH is the executable half of the `telegram` skill below.
+  home.packages = [ telegramSend ];
 
   programs.claude-code = {
     enable = true;
@@ -125,13 +142,21 @@ in
     "MyDocuments/TRUSK/CLAUDE.md".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
 
-    # Unified Telegram notify gate (see home/scripts/claude-notify.sh). Wired
+    # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
     # under three hook events in claude-settings.json: UserPromptSubmit
     # (`activity`), Notification (`notification`, idle-gated), and
     # PostToolUse/PushNotification (`push`, always through). Shared with the
     # remote-control bridge via the ~/.claude-rc/hooks symlink.
+    #
+    # The script owns the idle gating only; the payload + POST to the :8088
+    # aggregator is the shared seam (shared/notify.nix `agent`), handed over as
+    # $AGENT_NOTIFY. This wrapper is the sole entry point, so that variable is
+    # always set.
     ".claude/hooks/claude-notify" = {
-      source = ./scripts/claude-notify.sh;
+      source = pkgs.writeShellScript "claude-notify" ''
+        export AGENT_NOTIFY=${agentNotify}
+        exec ${pkgs.bash}/bin/bash ${./scripts/claude-notify.sh} "$@"
+      '';
       executable = true;
     };
 

@@ -37,8 +37,8 @@ Config via env (defaults suit rpi5):
   NEXTCLOUD_USER        default nsimon
   NEXTCLOUD_PASS_FILE   default /run/agenix/travel-cal-nextcloud-password
   NEXTCLOUD_CAL         calendar collection URI (required for live writes)
-  TELEGRAM_TOKEN_FILE   default /run/agenix/telegram-bot-token
-  TELEGRAM_CHAT_ID      Telegram chat id (optional; no summary if unset)
+  TELEGRAM_SEND         the one-shot Telegram seam (shared/notify.nix `send`);
+                        no summary if unset
 """
 import base64
 import email
@@ -51,6 +51,7 @@ import json
 import os
 import re
 import socket
+import subprocess
 import sys
 import time
 import urllib.error
@@ -88,8 +89,9 @@ NC_CAL = os.environ.get("NEXTCLOUD_CAL", "")
 # https://host/nextcloud/remote.php/dav/... -> https://host/nextcloud
 NC_WEB = CALDAV_HOME.split("/remote.php")[0]
 
-TG_TOKEN_FILE = os.environ.get("TELEGRAM_TOKEN_FILE", "/run/agenix/telegram-bot-token")
-TG_CHAT = os.environ.get("TELEGRAM_CHAT_ID", "")
+# The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
+# path and chat id. See telegram() below.
+TELEGRAM_SEND = os.environ.get("TELEGRAM_SEND", "")
 
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
@@ -565,15 +567,17 @@ def list_calendars():
 
 # ── telegram ────────────────────────────────────────────────────────────────
 def telegram(msg):
-    if not TG_CHAT or not os.path.exists(TG_TOKEN_FILE):
+    """Post a one-shot booking summary through the shared sender.
+
+    Not hand-rolled here: TELEGRAM_SEND points at the one-shot seam
+    (shared/notify.nix `send`), which owns parse mode, urlencoding, timeouts and
+    best-effort failure for every one-shot sender. Unset → no-op.
+    """
+    if not TELEGRAM_SEND:
         return
     try:
-        tok = read_file(TG_TOKEN_FILE)
-        data = urllib.parse.urlencode({
-            "chat_id": TG_CHAT, "parse_mode": "HTML", "text": msg,
-        }).encode()
-        urllib.request.urlopen(
-            f"https://api.telegram.org/bot{tok}/sendMessage", data=data, timeout=15
+        subprocess.run(
+            [TELEGRAM_SEND, msg], stdout=subprocess.DEVNULL, timeout=30, check=False
         )
     except Exception as e:  # noqa: BLE001 — never let a notify failure kill the run
         log("telegram error:", e)

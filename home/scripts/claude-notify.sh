@@ -12,6 +12,13 @@
 #                 immediate so the aggregator flushes at once — this is the
 #                 channel Claude uses when it decides an interruption is worth it.
 #
+# What this script owns is the *gating* (the activity clock and the idle
+# threshold). Building the payload and POSTing it belongs to the shared
+# aggregator seam, shared/scripts/agent-notify.sh, reached via $AGENT_NOTIFY —
+# set by the writeShellScript wrapper in home/claude.nix that installs this as
+# ~/.claude/hooks/claude-notify. That is the only entry point, so the variable
+# is always set in practice; a missing one is logged rather than silently eaten.
+#
 # State (~/.claude/state) and this hooks dir are shared with the remote-control
 # bridge (~/.claude-rc symlinks both back here), so interactive and remote
 # sessions gate off the same activity clock.
@@ -45,36 +52,26 @@ if [ "$mode" = "notification" ]; then
       exit 0
     fi
   fi
+  # `.message` is where the Notification hook puts its text…
   message=$(printf '%s' "$payload" | jq -r '.message // empty' 2>/dev/null)
   source="Claude Code"
-  immediate="false"
+  set --
 elif [ "$mode" = "push" ]; then
+  # …whereas PushNotification nests it under the tool input, so neither can be
+  # left to agent-notify.sh's own `.message` default.
   message=$(printf '%s' "$payload" | jq -r '.tool_input.message // empty' 2>/dev/null)
   source="Claude PushNotification"
-  immediate="true"
+  set -- --immediate
 else
   exit 0
 fi
 
-cwd=$(printf '%s' "$payload" | jq -r '.cwd // ""' 2>/dev/null)
-project=$(basename "${cwd:-unknown}")
-host=$(uname -n)
+if [ -z "${AGENT_NOTIFY:-}" ] || [ ! -x "$AGENT_NOTIFY" ]; then
+  echo "claude-notify: AGENT_NOTIFY unset or not executable; dropping notification" >&2
+  exit 0
+fi
 
-body=$(jq -nc \
-  --arg host "$host" \
-  --arg project "$project" \
-  --arg message "$message" \
-  --arg source "$source" \
-  --argjson immediate "$immediate" \
-  '{host:$host, project:$project, message:$message, source:$source, immediate:$immediate}')
-
-# rpi5 hits the aggregator on loopback; other hosts fall back to the tailnet
-# FQDN. -m 4 bounds the wait so the hook can't hang the agent.
-for url in "http://127.0.0.1:8088/notify" "https://rpi5.gate-mintaka.ts.net:8088/notify"; do
-  if curl -fsS -m 4 -X POST "$url" \
-       -H 'Content-Type: application/json' \
-       --data-raw "$body" >/dev/null 2>&1; then
-    break
-  fi
-done
+# `cwd` is still read from the payload here rather than left to agent-notify.sh,
+# because that stdin has already been consumed above.
+printf '%s' "$payload" | "$AGENT_NOTIFY" --source "$source" --message "$message" "$@"
 exit 0
