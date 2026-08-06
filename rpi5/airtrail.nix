@@ -16,7 +16,7 @@
 #
 # The DB_URL (with password) is supplied via the agenix env file so the secret
 # never lands in the world-readable Nix store; `databaseUrl` is left null.
-{ config, pkgs, lib, pgHost, tailnetFqdn, ... }:
+{ config, lib, tailnetFqdn, ... }:
 let
   internalPort = 13341;  # airtrail Node server (real backend bind, localhost only)
   proxyPort    = 8310;   # socket-activate proxy listen; Tailscale Serve → here
@@ -24,44 +24,15 @@ let
 in
 {
   # ── PostgreSQL: airtrail database + airtrail role ─────────────────────────
-  services.postgresql = {
-    ensureDatabases = [ "airtrail" ];
-    ensureUsers = [{
-      name = "airtrail";
-      # ensureDBOwnership requires db name == username — it does here, but we
-      # still set the password + unaccent extension in airtrail-pg-setup below.
-    }];
-
-    # airtrail connects via TCP with scram-sha-256 (DB_URL host = 127.0.0.1).
-    authentication = lib.mkAfter ''
-      host  airtrail  airtrail  ${pgHost}/32  scram-sha-256
-    '';
-  };
-
-  # Set the airtrail role password (from agenix), grant DB ownership, and
-  # pre-create the `unaccent` extension. A migration issues CREATE EXTENSION
-  # which needs superuser, so we create it here as postgres (IF NOT EXISTS is
-  # idempotent). ensurePasswordFile is absent in 25.11 → oneshot instead.
-  systemd.services.airtrail-pg-setup = {
-    description = "Set airtrail PostgreSQL password + unaccent extension";
-    after    = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-      # RPi5 kernel has no user namespaces; the default PrivateUsers=true breaks
-      # the oneshot (same fix as sure-pg-setup).
-      PrivateUsers = lib.mkForce false;
-    };
-    script = ''
-      password=$(cat /run/agenix/airtrail-pg-password)
-      # psql :'pw' interpolation only works via stdin/-f, not -c (see sure-pg-setup).
-      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER airtrail WITH PASSWORD :'pw';"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE airtrail OWNER TO airtrail;"
-      ${pkgs.postgresql}/bin/psql -d airtrail -c "CREATE EXTENSION IF NOT EXISTS unaccent;"
-    '';
+  # `unaccent` is pre-created here because an airtrail migration issues CREATE
+  # EXTENSION, which needs superuser rights the airtrail role does not have.
+  services.pgRole.airtrail = {
+    db           = "airtrail";
+    user         = "airtrail";
+    passwordFile = "/run/agenix/airtrail-pg-password";
+    extensions   = [ "unaccent" ];
+    privateUsers = false;
+    description  = "Set airtrail PostgreSQL password + unaccent extension";
   };
 
   # ── AirTrail application (native Nix, via airtrail-nix flake) ─────────────

@@ -157,6 +157,7 @@ in
     raspberry-pi-5.bluetooth
     ./lib/socket-activate.nix
     ./lib/service-registration.nix
+    ./lib/pg-role.nix
     ./secrets.nix
     ./databases.nix
     ./home-assistant.nix
