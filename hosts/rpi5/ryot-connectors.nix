@@ -8,10 +8,15 @@
 #     of IGDB-resolved games, with best-effort playtime "seens". Daily.
 #   * spotify-to-ryot.service — Spotify recently-played → music listens. Hourly.
 #
-# Both are stdlib-Python (scripts/), run as the unprivileged `ryot-connector`
-# user, keep idempotency state under /var/lib/ryot-connectors (StateDirectory),
-# and read their secrets from agenix EnvironmentFiles. Pattern mirrors the
+# Both are stdlib-Python, run as the unprivileged `ryot-connector` user, keep
+# idempotency state under /var/lib/ryot-connectors (StateDirectory), and read
+# their secrets from agenix EnvironmentFiles. Pattern mirrors the
 # ryot-plex-import oneshot+timer in hosts/rpi5/ryot.nix and the scale-to-ryot shim.
+#
+# The code lives in the `nicos-scripts` package (hosts/rpi5/scripts/lib/) and is
+# invoked through its console scripts, NOT as a loose `python3 ${./script.py}`:
+# that gave a bare file in the store with no importable sibling — no shared
+# helpers, no tests. `nix flake check` now runs the connectors' pytest suite.
 #
 # IMPORTANT — the sink resolves metadata synchronously through Ryot's OWN
 # providers, so ryot-env must carry VIDEO_GAMES_TWITCH_CLIENT_ID/SECRET (IGDB,
@@ -25,14 +30,14 @@
 let
   stateDir = "/var/lib/ryot-connectors";
 
-  # A timer-driven oneshot that runs one stdlib-Python connector script.
+  # A timer-driven oneshot that runs one connector entry point from the
+  # nicos-scripts package.
   # No wantedBy: the timer (below) is the only thing that should start it — we
   # don't want a run on every boot/activation (and a mid-rebuild backend restart
   # would 502 it).
-  connector = { script, envFile }: {
+  connector = { exe, envFile }: {
     after = [ "ryot-proxy.service" "network-online.target" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.python3 ];
     environment.STATE_DIR = stateDir;
     serviceConfig = {
       Type = "oneshot";
@@ -40,7 +45,7 @@ let
       Group = "ryot-connector";
       StateDirectory = "ryot-connectors"; # creates + owns /var/lib/ryot-connectors
       EnvironmentFile = envFile;
-      ExecStart = "${pkgs.python3}/bin/python3 ${script}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/${exe}";
     };
   };
 in
@@ -52,12 +57,12 @@ in
   users.groups.ryot-connector = { };
 
   systemd.services.steam-to-ryot = connector {
-    script = ./scripts/steam-to-ryot.py;
+    exe = "steam-to-ryot";
     envFile = "/run/agenix/steam-connector-env";
   } // { description = "Steam library + playtime → Ryot"; };
 
   systemd.services.spotify-to-ryot = connector {
-    script = ./scripts/spotify-to-ryot.py;
+    exe = "spotify-to-ryot";
     envFile = "/run/agenix/spotify-connector-env";
   } // { description = "Spotify recently-played → Ryot"; };
 

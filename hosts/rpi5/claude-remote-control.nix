@@ -25,7 +25,7 @@ let
   bootResumeDryRun = false;
   bootResumeState = "/home/${username}/.claude/state/claude-rc-boot-resume";
   orgUuid = "49157a56-e1c6-4ec1-8ad4-032f3125e527";
-  bootResume = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-boot-resume.py}";
+  bootResume = "${pkgs.nicos-scripts}/bin/claude-rc-boot-resume";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
 
   # Account 1's credential stores, owner first: the BRIDGE's dir, not ~/.claude.
@@ -480,7 +480,9 @@ lib.recursiveUpdate keepWarm.nixosConfig {
 
   # Re-host previously-live sessions whenever the bridge (re)starts. Pulled in by
   # the bridge via wantedBy (fires on boot AND on every watchdog restart) and
-  # ordered after it. Validated mechanism lives in ./scripts/claude-rc-boot-resume.py.
+  # ordered after it. Validated mechanism lives in
+  # nicos_scripts/claude/boot_resume.py (hosts/rpi5/scripts/lib/), with its caps and
+  # dry-run default covered by tests/test_claude.py.
   systemd.services.claude-rc-boot-resume = {
     description = "Re-host previously-live claude-rc sessions on bridge (re)start";
     after = [ "claude-remote-control.service" "network-online.target" ];

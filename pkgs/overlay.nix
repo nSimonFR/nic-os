@@ -38,6 +38,15 @@ inputs: final: _prev: {
   # which evaluated the derivation twice with no single source of truth.
   mtg-mcp = final.callPackage ./agents/mtg-mcp.nix { };
 
+  # nicos-scripts — this repo's own Python: one package holding the shared
+  # library plus a console script per unit (bin/steam-to-ryot, bin/homepage-stats,
+  # …), with its pytest suite in checkPhase.
+  # Consumers: eleven rpi5 units (ryot-connectors, papra, moxfield-sync,
+  # travel-cal-sync, homepage, claude-remote-control, claude-notify-aggregator,
+  # scale-bridge), home/claude.nix's memory-sync hook, and
+  # `nix build .#nicos-scripts` — which is also the flake check.
+  nicos-scripts = final.callPackage ./services/nicos-scripts.nix { };
+
   # OpenRGB 1.0rc2 — the first build with working LG monitor support.
   # Consumers: hosts/beast/rgb/openrgb-lg.nix (systemPackages) and
   # hosts/beast/configuration.nix (services.hardware.openrgb.package).

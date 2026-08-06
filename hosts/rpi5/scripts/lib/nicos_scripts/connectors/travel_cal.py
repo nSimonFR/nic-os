@@ -2,9 +2,9 @@
 """travel-cal-sync — event-driven Proton → Nextcloud travel-booking calendar sync.
 
 Reads Proton over the local hydroxide IMAP bridge (same creds/pattern as
-`papra-proton-poll.py`), detects travel bookings (Airbnb / hotels / flights /
-trains) with the local `tiny-llm-gate`, and writes each as a VEVENT into a
-Nextcloud calendar over CalDAV. Each booking gets a stable UID, so the PUT is
+`nicos_scripts.papra.proton_poll`), detects travel bookings (Airbnb / hotels /
+flights / trains) with the local `tiny-llm-gate`, and writes each as a VEVENT into
+a Nextcloud calendar over CalDAV. Each booking gets a stable UID, so the PUT is
 idempotent — re-runs update in place and never create duplicates, even if the
 state file is lost.
 
@@ -40,6 +40,7 @@ Config via env (defaults suit rpi5):
   TELEGRAM_SEND         the one-shot Telegram seam (shared/notify.nix `send`);
                         no summary if unset
 """
+
 import base64
 import email
 import email.header
@@ -57,41 +58,37 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-# ── config ──────────────────────────────────────────────────────────────────
+from ..logs import logger
+from ..secrets import env_int, env_str, read_secret
+from ..state import ensure_dir, load_json, save_json
+
+# Logging goes to stderr here (unlike the other units): stdout is the --dry-run
+# report, which is meant to be read or piped.
+log = logger("travel-cal-sync", stream=lambda: sys.stderr)
+
 IMAP_HOST = "127.0.0.1"
 IMAP_PORT = 1143
-PROTON_USER = os.environ.get("PROTON_USER", "nsimon@protonmail.com")
-PROTON_PASS_FILE = os.environ.get("PROTON_PASS_FILE", "/run/agenix/protonmail-bridge-password")
-MAILBOX = os.environ.get("PROTON_MAILBOX", "All Mail")
 
-GATE = os.environ.get("TINY_LLM_GATE_URL", "http://127.0.0.1:4001").rstrip("/")
-MODEL = os.environ.get("MODEL", "auto")
+DEFAULT_PROTON_USER = "nsimon@protonmail.com"
+DEFAULT_PROTON_PASS_FILE = "/run/agenix/protonmail-bridge-password"
+DEFAULT_MAILBOX = "All Mail"
+DEFAULT_GATE = "http://127.0.0.1:4001"
+DEFAULT_MODEL = "auto"
+DEFAULT_LOOKBACK_DAYS = 365
+DEFAULT_STATE_DIR = "/var/lib/travel-cal-sync"
+DEFAULT_RESCAN_SECONDS = 1200
+DEFAULT_CALDAV_HOME = (
+    "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/"
+)
+DEFAULT_NC_PASS_FILE = "/run/agenix/travel-cal-nextcloud-password"
 
-LOOKBACK_DAYS = int(os.environ.get("LOOKBACK_DAYS", "365"))
-STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/travel-cal-sync")
-STATE_FILE = os.path.join(STATE_DIR, "state.json")
-RESCAN_SECONDS = int(os.environ.get("RESCAN_SECONDS", "1200"))
 # Socket timeout for normal IMAP commands, so a black-holed connection surfaces
 # as an error the reconnect loop can handle instead of blocking forever.
 SOCKET_TIMEOUT = 300
 IDLE_DRAIN_TIMEOUT = 60  # finite timeout for the IDLE DONE-drain
-
-CALDAV_HOME = os.environ.get(
-    "NEXTCLOUD_CALDAV_URL",
-    "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/",
-).rstrip("/") + "/"
-NC_USER = os.environ.get("NEXTCLOUD_USER", "nsimon")
-NC_PASS_FILE = os.environ.get("NEXTCLOUD_PASS_FILE", "/run/agenix/travel-cal-nextcloud-password")
-NC_CAL = os.environ.get("NEXTCLOUD_CAL", "")
-# Nextcloud web base (for calendar deep links), derived from the CalDAV URL:
-# https://host/nextcloud/remote.php/dav/... -> https://host/nextcloud
-NC_WEB = CALDAV_HOME.split("/remote.php")[0]
-
-# The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
-# path and chat id. See telegram() below.
-TELEGRAM_SEND = os.environ.get("TELEGRAM_SEND", "")
 
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
@@ -139,14 +136,6 @@ SOURCE_PLATFORMS = (
     ("britishairways.", "British Airways"), ("ba.com", "British Airways"),
 )
 
-
-def source_platform(frm):
-    frm = (frm or "").lower()
-    for sub, label in SOURCE_PLATFORMS:
-        if sub in frm:
-            return label
-    return ""
-
 SYSTEM_PROMPT = (
     "You extract TRAVEL bookings from a single email. A travel booking is "
     "lodging (hotel/Airbnb/rental), a flight, a train, a bus/coach, a ferry, or "
@@ -183,15 +172,70 @@ SYSTEM_PROMPT = (
 # and re-sent itineraries about past trips that recent mail is full of.
 PAST_GRACE_DAYS = 2
 
+# Keep the seen-set bounded but comfortably larger than any plausible
+# rescan-window (SINCE last_scan-2d) message count, so an in-window Message-ID
+# is never evicted and reprocessed. (Re-processing is idempotent anyway via
+# the stable UID, but this avoids wasted LLM/CalDAV calls.)
+SEEN_CAP = 20000
+
+
+@dataclass(frozen=True)
+class Config:
+    proton_user: str = DEFAULT_PROTON_USER
+    proton_pass_file: str = DEFAULT_PROTON_PASS_FILE
+    mailbox: str = DEFAULT_MAILBOX
+    gate: str = DEFAULT_GATE
+    model: str = DEFAULT_MODEL
+    lookback_days: int = DEFAULT_LOOKBACK_DAYS
+    state_dir: str = DEFAULT_STATE_DIR
+    rescan_seconds: int = DEFAULT_RESCAN_SECONDS
+    caldav_home: str = DEFAULT_CALDAV_HOME
+    nc_user: str = "nsimon"
+    nc_pass_file: str = DEFAULT_NC_PASS_FILE
+    nc_cal: str = ""
+    # The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
+    # path and chat id. See telegram() below.
+    telegram_send: str = ""
+    imap_host: str = IMAP_HOST
+    imap_port: int = IMAP_PORT
+
+    @classmethod
+    def from_env(cls, env=None):
+        return cls(
+            proton_user=env_str("PROTON_USER", DEFAULT_PROTON_USER, env),
+            proton_pass_file=env_str("PROTON_PASS_FILE", DEFAULT_PROTON_PASS_FILE, env),
+            mailbox=env_str("PROTON_MAILBOX", DEFAULT_MAILBOX, env),
+            gate=env_str("TINY_LLM_GATE_URL", DEFAULT_GATE, env).rstrip("/"),
+            model=env_str("MODEL", DEFAULT_MODEL, env),
+            lookback_days=env_int("LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS, env),
+            state_dir=env_str("STATE_DIR", DEFAULT_STATE_DIR, env),
+            rescan_seconds=env_int("RESCAN_SECONDS", DEFAULT_RESCAN_SECONDS, env),
+            caldav_home=env_str("NEXTCLOUD_CALDAV_URL", DEFAULT_CALDAV_HOME, env).rstrip("/") + "/",
+            nc_user=env_str("NEXTCLOUD_USER", "nsimon", env),
+            nc_pass_file=env_str("NEXTCLOUD_PASS_FILE", DEFAULT_NC_PASS_FILE, env),
+            nc_cal=env_str("NEXTCLOUD_CAL", "", env),
+            telegram_send=env_str("TELEGRAM_SEND", "", env),
+        )
+
+    @property
+    def state_file(self):
+        return os.path.join(self.state_dir, "state.json")
+
+    @property
+    def nc_web(self):
+        """Nextcloud web base (for calendar deep links), derived from the CalDAV URL:
+        https://host/nextcloud/remote.php/dav/... -> https://host/nextcloud"""
+        return self.caldav_home.split("/remote.php")[0]
+
 
 # ── small utils ─────────────────────────────────────────────────────────────
-def log(*a):
-    print(*a, file=sys.stderr, flush=True)
 
-
-def read_file(path):
-    with open(path) as fh:
-        return fh.read().strip()
+def source_platform(frm):
+    frm = (frm or "").lower()
+    for sub, label in SOURCE_PLATFORMS:
+        if sub in frm:
+            return label
+    return ""
 
 
 def decode_header(s):
@@ -205,39 +249,31 @@ def decode_header(s):
         return s
 
 
-def load_state():
-    try:
-        with open(STATE_FILE) as fh:
-            s = json.load(fh)
-    except (FileNotFoundError, ValueError):
+def load_state(cfg):
+    s = load_json(cfg.state_file, {})
+    if not isinstance(s, dict):
         s = {}
     s.setdefault("seen", [])       # processed Message-IDs
     s.setdefault("last_scan", 0)   # epoch of last successful scan
     return s
 
 
-def save_state(s):
-    os.makedirs(STATE_DIR, exist_ok=True)
-    # Keep the seen-set bounded but comfortably larger than any plausible
-    # rescan-window (SINCE last_scan-2d) message count, so an in-window Message-ID
-    # is never evicted and reprocessed. (Re-processing is idempotent anyway via
-    # the stable UID, but this avoids wasted LLM/CalDAV calls.)
-    s["seen"] = s["seen"][-20000:]
-    tmp = STATE_FILE + ".tmp"
-    with open(tmp, "w") as fh:
-        json.dump(s, fh)
-    os.replace(tmp, STATE_FILE)
+def save_state(cfg, s):
+    ensure_dir(cfg.state_dir)
+    s["seen"] = s["seen"][-SEEN_CAP:]
+    save_json(cfg.state_file, s)
 
 
 # ── IMAP ────────────────────────────────────────────────────────────────────
-def imap_connect():
-    M = imaplib.IMAP4(IMAP_HOST, IMAP_PORT)
+
+def imap_connect(cfg):
+    M = imaplib.IMAP4(cfg.imap_host, cfg.imap_port)
     M.socket().settimeout(SOCKET_TIMEOUT)  # login/select/search/fetch can't hang forever
-    M.login(PROTON_USER, read_file(PROTON_PASS_FILE))
-    mbox = f'"{MAILBOX}"' if " " in MAILBOX else MAILBOX
+    M.login(cfg.proton_user, read_secret(cfg.proton_pass_file))
+    mbox = f'"{cfg.mailbox}"' if " " in cfg.mailbox else cfg.mailbox
     typ, _ = M.select(mbox, readonly=True)
     if typ != "OK":
-        raise RuntimeError(f"cannot select mailbox {MAILBOX!r}")
+        raise RuntimeError(f"cannot select mailbox {cfg.mailbox!r}")
     return M
 
 
@@ -295,14 +331,15 @@ def _strip_html(s):
 
 
 # ── extraction via tiny-llm-gate ────────────────────────────────────────────
+
 class UpstreamDown(Exception):
     """The LLM gate / local model is unreachable (e.g. beast asleep). Signals the
     daemon to back off rather than hammer every candidate."""
 
 
-def extract_booking(text):
+def extract_booking(cfg, text, opener=None):
     body = json.dumps({
-        "model": MODEL,
+        "model": cfg.model,
         "temperature": 0,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -310,13 +347,13 @@ def extract_booking(text):
         ],
     }).encode()
     req = urllib.request.Request(
-        f"{GATE}/v1/chat/completions",
+        f"{cfg.gate}/v1/chat/completions",
         data=body,
         headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
         method="POST",
     )
     try:
-        with urllib.request.urlopen(req, timeout=120) as r:
+        with (opener or urllib.request.urlopen)(req, timeout=120) as r:
             content = json.load(r)["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
         # 502/503/504 = gate reached but the (local) model upstream is down.
@@ -329,10 +366,13 @@ def extract_booking(text):
         # Slow/asleep model host — treat like upstream-down so the daemon backs
         # off instead of skipping this message as a one-off extract error.
         raise UpstreamDown(f"gate timeout: {e}") from e
-    data = _parse_json(content)
-    # Normalise to a list of booking dicts: an email may hold several legs (a
-    # round-trip = two flights), so the model may return an array — or wrap the
-    # array under a key.
+    return normalise_bookings(_parse_json(content))
+
+
+def normalise_bookings(data):
+    """Normalise to a list of booking dicts: an email may hold several legs (a
+    round-trip = two flights), so the model may return an array — or wrap the
+    array under a key."""
     if isinstance(data, dict):
         for k in ("bookings", "results", "items", "data"):
             if isinstance(data.get(k), list):
@@ -365,6 +405,7 @@ def _parse_json(content):
 
 
 # ── iCalendar / CalDAV ──────────────────────────────────────────────────────
+
 def esc(s):
     return ((s or "").replace("\\", "\\\\").replace(";", "\\;")
             .replace(",", "\\,").replace("\r", "").replace("\n", "\\n"))
@@ -452,7 +493,7 @@ def booking_uid(b):
     return f"travelcal-{typ}-{hashlib.sha1(key.encode()).hexdigest()[:12]}@nic-os"
 
 
-def build_ics(b, uid):
+def build_ics(b, uid, now=None):
     """Build a VCALENDAR string. Raises ValueError if start/end are unparseable
     (the caller treats that as a permanent skip, not a transient write failure).
     Guarantees DTEND > DTSTART so sabre-dav/Nextcloud never rejects the event."""
@@ -484,13 +525,14 @@ def build_ics(b, uid):
     title = b.get("title") or "Travel booking"
     platform = b.get("_platform") or ""
     summary = f"{platform} · {title}" if platform and platform.lower() not in title.lower() else title
+    stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
         "PRODID:-//nic-os//travel-cal-sync//EN",
         "BEGIN:VEVENT",
         f"UID:{uid}",
-        "DTSTAMP:" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"),
+        "DTSTAMP:" + stamp,
         f"SUMMARY:{esc(summary)}",
         "DTSTART" + _fmt_dt(start, all_day),
         "DTEND" + _fmt_dt(end, all_day),
@@ -523,36 +565,43 @@ def build_ics(b, uid):
     return "\r\n".join(_fold(ln) for ln in lines) + "\r\n"
 
 
-def _nc_auth():
-    tok = base64.b64encode(f"{NC_USER}:{read_file(NC_PASS_FILE)}".encode()).decode()
+def _nc_auth(cfg):
+    tok = base64.b64encode(
+        f"{cfg.nc_user}:{read_secret(cfg.nc_pass_file)}".encode()).decode()
     return "Basic " + tok
 
 
-def caldav_put(uid, ics):
-    if not NC_CAL:
+def caldav_put(cfg, uid, ics, opener=None):
+    if not cfg.nc_cal:
         raise RuntimeError("NEXTCLOUD_CAL is not set — cannot write events")
-    url = f"{CALDAV_HOME}{NC_CAL}/{uid}.ics"
+    url = f"{cfg.caldav_home}{cfg.nc_cal}/{uid}.ics"
     req = urllib.request.Request(
         url, data=ics.encode(),
-        headers={"Authorization": _nc_auth(), "Content-Type": "text/calendar; charset=utf-8"},
+        headers={"Authorization": _nc_auth(cfg),
+                 "Content-Type": "text/calendar; charset=utf-8"},
         method="PUT",
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with (opener or urllib.request.urlopen)(req, timeout=30) as r:
         return r.status  # 201 created / 204 updated
 
 
-def list_calendars():
+def list_calendars(cfg, opener=None):
     body = (
         '<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
         "<d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>"
     )
     req = urllib.request.Request(
-        CALDAV_HOME, data=body.encode(),
-        headers={"Authorization": _nc_auth(), "Depth": "1", "Content-Type": "application/xml"},
+        cfg.caldav_home, data=body.encode(),
+        headers={"Authorization": _nc_auth(cfg), "Depth": "1",
+                 "Content-Type": "application/xml"},
         method="PROPFIND",
     )
-    with urllib.request.urlopen(req, timeout=30) as r:
+    with (opener or urllib.request.urlopen)(req, timeout=30) as r:
         xml = r.read().decode("utf-8", "replace")
+    return parse_calendar_list(xml)
+
+
+def parse_calendar_list(xml):
     out = []
     for resp in re.findall(r"(?is)<d:response>.*?</d:response>", xml):
         href = re.search(r"(?is)<d:href>(.*?)</d:href>", resp)
@@ -566,31 +615,36 @@ def list_calendars():
 
 
 # ── telegram ────────────────────────────────────────────────────────────────
-def telegram(msg):
+def telegram(cfg, msg, run=None):
     """Post a one-shot booking summary through the shared sender.
 
-    Not hand-rolled here: TELEGRAM_SEND points at the one-shot seam
+    Not hand-rolled here: cfg.telegram_send points at the one-shot seam
     (shared/notify.nix `send`), which owns parse mode, urlencoding, timeouts and
     best-effort failure for every one-shot sender. Unset → no-op.
     """
-    if not TELEGRAM_SEND:
+    if not cfg.telegram_send:
         return
     try:
-        subprocess.run(
-            [TELEGRAM_SEND, msg], stdout=subprocess.DEVNULL, timeout=30, check=False
+        (run or subprocess.run)(
+            [cfg.telegram_send, msg], stdout=subprocess.DEVNULL, timeout=30, check=False
         )
     except Exception as e:  # noqa: BLE001 — never let a notify failure kill the run
-        log("telegram error:", e)
+        log(f"telegram error: {e}")
 
 
 # ── scan ────────────────────────────────────────────────────────────────────
-def scan(M, state, dry_run):
+
+def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
     """One pass. Returns list of (booking, uid, written_bool)."""
+    extract = extract or (lambda text: extract_booking(cfg, text))
+    put = put or (lambda uid, ics: caldav_put(cfg, uid, ics))
+    now = now or datetime.now(timezone.utc)
+
     since_epoch = state["last_scan"]
     if since_epoch:
         since = datetime.fromtimestamp(since_epoch, timezone.utc) - timedelta(days=2)
     else:
-        since = datetime.now(timezone.utc) - timedelta(days=LOOKBACK_DAYS)
+        since = now - timedelta(days=cfg.lookback_days)
     typ, ids = M.search(None, "SINCE", since.strftime("%d-%b-%Y"))
     if typ != "OK":
         raise RuntimeError("IMAP SEARCH failed")
@@ -613,7 +667,8 @@ def scan(M, state, dry_run):
         # non-candidates. Both are marked seen so they aren't reprocessed.
         if NEGATIVE_SUBJECT_RE.search(subj or "") or not is_candidate(frm, subj):
             if mid:
-                seen.add(mid); state["seen"].append(mid)
+                seen.add(mid)
+                state["seen"].append(mid)
             continue
         # full fetch only for candidates
         typ, d = M.fetch(num, "(BODY.PEEK[])")
@@ -627,17 +682,17 @@ def scan(M, state, dry_run):
             recv_date = email.utils.parsedate_to_datetime(msg.get("Date")).date()
         except Exception:  # noqa: BLE001
             recv_date = None
-        recent = bool(recv_date and recv_date >= datetime.now(timezone.utc).date() - timedelta(days=60))
+        recent = bool(recv_date and recv_date >= now.date() - timedelta(days=60))
         try:
-            bookings = extract_booking(text)
+            bookings = extract(text)
         except UpstreamDown:
             # Model host (beast) is down — stop the scan and let the daemon back
             # off. This message stays unseen, so it's retried once beast is up.
             raise
         except Exception as e:  # noqa: BLE001
-            log("extract error:", e, "— subject:", subj)
+            log(f"extract error: {e} — subject: {subj}")
             continue
-        cutoff = datetime.now(timezone.utc).date() - timedelta(days=PAST_GRACE_DAYS)
+        cutoff = now.date() - timedelta(days=PAST_GRACE_DAYS)
         write_failed = False
         for b in bookings:
             if (not isinstance(b, dict) or not b.get("is_booking")
@@ -668,16 +723,16 @@ def scan(M, state, dry_run):
             try:
                 ics = build_ics(b, uid)
             except Exception as e:  # noqa: BLE001
-                log("skip malformed booking:", e, "—", b.get("title"))
+                log(f"skip malformed booking: {e} — {b.get('title')}")
                 done_uids.add(uid)
                 continue
             written = False
             if not dry_run:
                 try:
-                    caldav_put(uid, ics)
+                    put(uid, ics)
                     written = True
                 except Exception as e:  # noqa: BLE001
-                    log("caldav error:", e, "— booking:", b.get("title"))
+                    log(f"caldav error: {e} — booking: {b.get('title')}")
                     write_failed = True
             # Dedupe a UID once safely written (or in dry-run); a failed write is
             # left un-deduped so a later email for it can still succeed this scan.
@@ -688,7 +743,8 @@ def scan(M, state, dry_run):
         # transient CalDAV outage doesn't permanently drop a booking — the message
         # stays unseen and is retried on the next scan.
         if mid and not write_failed:
-            seen.add(mid); state["seen"].append(mid)
+            seen.add(mid)
+            state["seen"].append(mid)
     state["last_scan"] = int(time.time())
     return results
 
@@ -702,14 +758,24 @@ def fmt_booking(b):
     return f"{b.get('type', '?'):5} {span}  {b.get('title', '')}{loc}{code}"
 
 
-def event_link(b):
+def event_link(cfg, b):
     """Deep link into the Nextcloud Calendar app at the trip's start date (month
     view), so the Telegram message links straight to the appointment."""
     date = (b.get("start") or "")[:10] or "now"
-    return f"{NC_WEB}/apps/calendar/dayGridMonth/{date}"
+    return f"{cfg.nc_web}/apps/calendar/dayGridMonth/{date}"
+
+
+def telegram_summary(cfg, new):
+    lines = [
+        f'• {html.escape(fmt_booking(b))}\n'
+        f'  <a href="{event_link(cfg, b)}">📅 Open in calendar</a>'
+        for b, _, _ in new
+    ]
+    return "🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(lines)
 
 
 # ── IDLE ────────────────────────────────────────────────────────────────────
+
 def idle_wait(M, timeout):
     """Block until new mail (EXISTS/RECENT) or timeout. Returns True if woken."""
     tag = M._new_tag()
@@ -742,14 +808,15 @@ def idle_wait(M, timeout):
 
 
 # ── modes ───────────────────────────────────────────────────────────────────
-def run_dry_run():
+
+def run_dry_run(cfg, connect=None):
     # Fresh state (NOT the daemon's persisted state): re-evaluate the entire
     # LOOKBACK window so the review list is complete, regardless of what the
     # running daemon has already marked seen.
     state = {"seen": [], "last_scan": 0}
-    M = imap_connect()
+    M = (connect or imap_connect)(cfg)
     try:
-        results = scan(M, state, dry_run=True)
+        results = scan(cfg, M, state, dry_run=True)
     except UpstreamDown as e:
         log(f"cannot extract — LLM upstream down ({e}). Is beast awake?")
         return 2
@@ -759,65 +826,68 @@ def run_dry_run():
         except Exception:  # noqa: BLE001
             pass
     print(f"\n=== {len(results)} travel booking(s) detected "
-          f"(last {LOOKBACK_DAYS} days) ===")
+          f"(last {cfg.lookback_days} days) ===")
     for b, uid, _ in results:
         print("  " + fmt_booking(b))
     print("\n(dry-run — nothing was written to the calendar)")
     return 0
 
 
-def run_list_calendars():
-    for uri, name in list_calendars():
+def run_list_calendars(cfg):
+    for uri, name in list_calendars(cfg):
         print(f"{uri}\t{name}")
     return 0
 
 
-def run_daemon():
+def run_daemon(cfg, connect=None, sleep=time.sleep, once=False):
     log("travel-cal-sync daemon starting")
     M = None
     while True:
         try:
-            M = imap_connect()
+            M = (connect or imap_connect)(cfg)
             log("connected; running catch-up scan")
             while True:
-                state = load_state()
+                state = load_state(cfg)
                 try:
-                    results = scan(M, state, dry_run=False)
+                    results = scan(cfg, M, state, dry_run=False)
                 except UpstreamDown as e:
-                    save_state(state)  # keep partial progress
+                    save_state(cfg, state)  # keep partial progress
                     log(f"LLM upstream down ({e}); backing off 15 min")
-                    time.sleep(900)
+                    sleep(900)
+                    if once:
+                        return 0
                     continue
-                save_state(state)
+                save_state(cfg, state)
                 new = [r for r in results if r[2]]
                 if new:
                     log(f"added {len(new)} event(s)")
-                    lines = [
-                        f'• {html.escape(fmt_booking(b))}\n'
-                        f'  <a href="{event_link(b)}">📅 Open in calendar</a>'
-                        for b, _, _ in new
-                    ]
-                    telegram("🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(lines))
+                    telegram(cfg, telegram_summary(cfg, new))
+                if once:
+                    return 0
                 # trigger: block on IDLE until new mail or the safety-net timeout
-                idle_wait(M, RESCAN_SECONDS)
+                idle_wait(M, cfg.rescan_seconds)
         except Exception as e:  # noqa: BLE001
-            log("daemon error, reconnecting in 30s:", type(e).__name__, e)
+            log(f"daemon error, reconnecting in 30s: {type(e).__name__} {e}")
             try:
                 if M is not None:
                     M.logout()
             except Exception:  # noqa: BLE001
                 pass
             M = None
-            time.sleep(30)
+            if once:
+                return 1
+            sleep(30)
 
 
-def main():
-    arg = sys.argv[1] if len(sys.argv) > 1 else ""
+def main(argv=None, env=None):
+    cfg = Config.from_env(env)
+    argv = sys.argv[1:] if argv is None else argv
+    arg = argv[0] if argv else ""
     if arg == "--dry-run":
-        return run_dry_run()
+        return run_dry_run(cfg)
     if arg == "--list-calendars":
-        return run_list_calendars()
-    return run_daemon()
+        return run_list_calendars(cfg)
+    return run_daemon(cfg)
 
 
 if __name__ == "__main__":

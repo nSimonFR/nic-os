@@ -17,7 +17,7 @@
 # so the homepage tile links to https://<host><path>.
 #
 # Widget: optional homepage widget config. Every tile is a `customapi` widget
-# pointed at the homepage-stats aggregator on :8087 (hosts/rpi5/scripts/homepage-stats.py),
+# pointed at the homepage-stats aggregator on :8087 (nicos_scripts/homepage/stats.py),
 # which fetches once a day and holds whatever API key or DB path the service needs.
 # Three stats per tile, so no tile is taller than its neighbours.
 { }:

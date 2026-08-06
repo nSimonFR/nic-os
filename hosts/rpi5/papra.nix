@@ -175,7 +175,7 @@ in
       User = "papra";
       Group = "papra";
       WorkingDirectory = "/var/lib/papra";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/papra-tag-sweep.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/papra-tag-sweep";
     };
   };
   systemd.timers.papra-tag-sweep = {
@@ -199,12 +199,11 @@ in
     description = "Feed Proton 'Papra' folder attachments into Papra ingestion";
     after = [ "hydroxide.service" "network-online.target" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.python3 ];
     environment.PAPRA_PROTON_DEST = "${ingestionDir}/${personalOrg}";
     serviceConfig = {
       Type = "oneshot";
       User = "root";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/papra-proton-poll.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/papra-proton-poll";
       StateDirectory = "papra-proton-poll";
     };
   };
@@ -245,7 +244,7 @@ in
     serviceConfig = {
       User = "nextcloud";
       Group = "nextcloud";
-      ExecStart = "${pkgs.python3.withPackages (ps: [ ps.psycopg2 ])}/bin/python3 ${./scripts/papra-webhook-tagsync.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/papra-webhook-tagsync";
       Restart = "on-failure";
       RestartSec = 5;
     };

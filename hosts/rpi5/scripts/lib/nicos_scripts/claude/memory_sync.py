@@ -20,53 +20,91 @@ fresh map re-binds to existing docs without duplicating them.
 
 Always exits 0; never blocks Claude Code. Errors land in
 ~/.claude/logs/memory-sync.log.
+
+Config via environment (all optional — the defaults are the live paths):
+  MEMORY_SYNC_PROJECTS_DIR   default ~/.claude/projects
+  MEMORY_SYNC_MCP_URL        default http://127.0.0.1:7021/mcp
+  MEMORY_SYNC_TOKEN_PATH     default /run/agenix/affine-mcp-http-token
+  MEMORY_SYNC_MAP_PATH       default ~/.claude/state/memory-sync-map.json
+  MEMORY_SYNC_LOG_PATH       default ~/.claude/logs/memory-sync.log
 """
+
 import json
 import sys
 import time
 import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
-PROJECTS_DIR = Path.home() / ".claude" / "projects"
-MCP_URL = "http://127.0.0.1:7021/mcp"
-TOKEN_PATH = Path("/run/agenix/affine-mcp-http-token")
+from ..secrets import env_str
+
+DEFAULT_MCP_URL = "http://127.0.0.1:7021/mcp"
+DEFAULT_TOKEN_PATH = "/run/agenix/affine-mcp-http-token"
 PARENT_TITLE = "Claude Memory"
-STATE_DIR = Path.home() / ".claude" / "state"
-MAP_PATH = STATE_DIR / "memory-sync-map.json"
-LOG_PATH = Path.home() / ".claude" / "logs" / "memory-sync.log"
 
 
-def log(msg):
-    try:
-        LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        with LOG_PATH.open("a") as f:
-            f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}\n")
-    except Exception:
-        pass
+@dataclass(frozen=True)
+class Config:
+    projects_dir: Path = None
+    mcp_url: str = DEFAULT_MCP_URL
+    token_path: Path = None
+    map_path: Path = None
+    log_path: Path = None
+    parent_title: str = PARENT_TITLE
+
+    @classmethod
+    def from_env(cls, env=None, home=None):
+        home = Path(home or env_str("HOME", str(Path.home()), env))
+
+        def path_of(name, default):
+            return Path(env_str(name, "", env) or default)
+
+        return cls(
+            projects_dir=path_of("MEMORY_SYNC_PROJECTS_DIR", home / ".claude/projects"),
+            mcp_url=env_str("MEMORY_SYNC_MCP_URL", DEFAULT_MCP_URL, env),
+            token_path=path_of("MEMORY_SYNC_TOKEN_PATH", DEFAULT_TOKEN_PATH),
+            map_path=path_of("MEMORY_SYNC_MAP_PATH",
+                             home / ".claude/state/memory-sync-map.json"),
+            log_path=path_of("MEMORY_SYNC_LOG_PATH",
+                             home / ".claude/logs/memory-sync.log"),
+        )
 
 
-def load_map():
-    if MAP_PATH.exists():
+def make_log(cfg):
+    def log(msg):
         try:
-            data = json.loads(MAP_PATH.read_text())
+            cfg.log_path.parent.mkdir(parents=True, exist_ok=True)
+            with cfg.log_path.open("a") as f:
+                f.write(f"{time.strftime('%Y-%m-%dT%H:%M:%S')} {msg}\n")
+        except Exception:  # noqa: BLE001 — a hook must never fail on its own log
+            pass
+
+    return log
+
+
+def load_map(cfg):
+    if cfg.map_path.exists():
+        try:
+            data = json.loads(cfg.map_path.read_text())
             data.setdefault("files", {})
             return data
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
     return {"files": {}}
 
 
-def save_map(m):
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    tmp = MAP_PATH.with_suffix(".json.tmp")
+def save_map(cfg, m):
+    cfg.map_path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = cfg.map_path.with_suffix(".json.tmp")
     tmp.write_text(json.dumps(m, indent=2, sort_keys=True))
-    tmp.replace(MAP_PATH)
+    tmp.replace(cfg.map_path)
 
 
-def project_and_file(path):
-    """Return (project_slug, filename) if path is <PROJECTS>/<slug>/memory/<file>.md, else None."""
+def project_and_file(cfg, path):
+    """Return (project_slug, filename) if path is <PROJECTS>/<slug>/memory/<file>.md,
+    else None."""
     try:
-        parts = path.relative_to(PROJECTS_DIR).parts
+        parts = Path(path).relative_to(cfg.projects_dir).parts
     except ValueError:
         return None
     if len(parts) < 3 or parts[1] != "memory" or not parts[-1].endswith(".md"):
@@ -85,8 +123,15 @@ def title_for(path, content):
 
 
 class MCP:
-    def __init__(self, token):
+    """Streamable-HTTP MCP client (affine-mcp's bridge speaks SSE-framed JSON-RPC).
+
+    `opener` is the seam — tests hand it canned `data:` frames.
+    """
+
+    def __init__(self, url, token, opener=None):
+        self.url = url
         self.token = token
+        self.opener = opener or urllib.request.urlopen
         self.session = None
         self.req = 0
 
@@ -102,9 +147,9 @@ class MCP:
         if self.session:
             headers["Mcp-Session-Id"] = self.session
         req = urllib.request.Request(
-            MCP_URL, data=json.dumps(body).encode(), headers=headers, method="POST"
+            self.url, data=json.dumps(body).encode(), headers=headers, method="POST"
         )
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        with self.opener(req, timeout=30) as resp:
             sid = resp.headers.get("Mcp-Session-Id")
             if sid and not self.session:
                 self.session = sid
@@ -156,37 +201,41 @@ def find_doc_by_exact_title(client, ws_id, title):
     return None
 
 
-def ensure_parent(client, ws_id):
-    parent_id = find_doc_by_exact_title(client, ws_id, PARENT_TITLE)
+def ensure_parent(client, ws_id, parent_title=PARENT_TITLE):
+    parent_id = find_doc_by_exact_title(client, ws_id, parent_title)
     if parent_id:
         return parent_id
     res = client.call("create_doc_from_markdown", {
         "workspaceId": ws_id,
-        "title": PARENT_TITLE,
-        "markdown": f"# {PARENT_TITLE}\n\nAuto-mirrored from `~/.claude/projects/*/memory/`.\n",
+        "title": parent_title,
+        "markdown": f"# {parent_title}\n\nAuto-mirrored from `~/.claude/projects/*/memory/`.\n",
     })
     if not res.get("docId"):
-        raise RuntimeError(f"could not create '{PARENT_TITLE}' page: {res}")
+        raise RuntimeError(f"could not create '{parent_title}' page: {res}")
     return res["docId"]
 
 
-def resolve_workspace_and_parent(client, mapping):
+def resolve_workspace_and_parent(cfg, client, mapping):
     if not mapping.get("workspace_id"):
         mapping["workspace_id"] = first_workspace_id(client)
     if not mapping.get("parent_doc_id"):
-        mapping["parent_doc_id"] = ensure_parent(client, mapping["workspace_id"])
+        mapping["parent_doc_id"] = ensure_parent(client, mapping["workspace_id"],
+                                                 cfg.parent_title)
     return mapping["workspace_id"], mapping["parent_doc_id"]
 
 
-def sync(path, project_slug, file_name):
+def sync(cfg, path, project_slug, file_name, client=None, log=None):
+    log = log or make_log(cfg)
+    path = Path(path)
     content = path.read_text()
     title = title_for(path, content)
-    token = TOKEN_PATH.read_text().strip()
-    mapping = load_map()
+    mapping = load_map(cfg)
 
-    client = MCP(token)
-    client.init()
-    ws_id, parent_id = resolve_workspace_and_parent(client, mapping)
+    if client is None:
+        token = cfg.token_path.read_text().strip()
+        client = MCP(cfg.mcp_url, token)
+        client.init()
+    ws_id, parent_id = resolve_workspace_and_parent(cfg, client, mapping)
 
     map_key = f"{project_slug}/{file_name}"
     # Migrate legacy single-file keys (pre-multi-project) to namespaced keys.
@@ -208,41 +257,46 @@ def sync(path, project_slug, file_name):
         mapping["files"][map_key] = existing_id
     else:
         result = client.call("create_doc_from_markdown", {
-            "workspaceId": ws_id, "title": title, "markdown": content, "parentDocId": parent_id,
+            "workspaceId": ws_id, "title": title, "markdown": content,
+            "parentDocId": parent_id,
         })
         new_id = result.get("docId")
         log(f"CREATE  {map_key} title='{title}' docId={new_id}")
         if new_id:
             mapping["files"][map_key] = new_id
 
-    save_map(mapping)
+    save_map(cfg, mapping)
+    return mapping
 
 
-def main():
+def main(env=None, stdin=None, client=None):
+    cfg = Config.from_env(env)
+    log = make_log(cfg)
     try:
-        payload = json.load(sys.stdin)
-    except Exception as e:
+        payload = json.load(stdin or sys.stdin)
+    except Exception as e:  # noqa: BLE001
         log(f"bad-stdin: {type(e).__name__}: {e}")
-        return
+        return 0
 
     if payload.get("tool_name") not in ("Write", "Edit"):
-        return
+        return 0
 
     file_path = (payload.get("tool_input") or {}).get("file_path")
     if not file_path:
-        return
+        return 0
 
     path = Path(file_path).resolve()
-    pf = project_and_file(path)
+    pf = project_and_file(cfg, path)
     if not pf or not path.exists():
-        return
+        return 0
 
     project_slug, file_name = pf
     try:
-        sync(path, project_slug, file_name)
-    except Exception as e:
+        sync(cfg, path, project_slug, file_name, client=client, log=log)
+    except Exception as e:  # noqa: BLE001 — a hook must never block Claude Code
         log(f"FAIL {path.name}: {type(e).__name__}: {e}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

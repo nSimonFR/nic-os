@@ -305,6 +305,15 @@
           config.allowUnfree = true;
         };
 
+      # Systems we build first-party, pure-Python things for. Deliberately
+      # includes x86_64 so the script checks can run on beast (or CI) instead of
+      # on the 3.9 GB Pi.
+      checkSystems = [
+        "aarch64-linux"
+        "x86_64-linux"
+      ];
+      devSystems = checkSystems ++ [ "aarch64-darwin" ];
+
       # This repo's own packages (pkgs/) as one overlay — single source of truth
       # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
       # resolve identically in NixOS modules (via hosts/rpi5/overlays.nix and
@@ -317,6 +326,40 @@
       # overlay (DRY).
       overlays.nic-os = nicOsOverlay;
 
+      # The only automated verification in this repo. Building nicos-scripts runs
+      # its pytest suite (checkPhase), so a broken connector payload fails here
+      # instead of at 04:50 on a timer:
+      #
+      #   nix build .#checks.aarch64-linux.nicos-scripts
+      #
+      # Prefer that explicit form over bare `nix flake check`, which also forces
+      # every other output (the heavy ryot/showmycards/hermes derivations) —
+      # expensive on a 3.9 GB Pi.
+      checks = nixpkgs.lib.genAttrs checkSystems (system: {
+        inherit (self.packages.${system}) nicos-scripts;
+      });
+
+      # `nix develop` — python3 + pytest to run the script tests in-tree:
+      #   cd hosts/rpi5/scripts/lib && pytest
+      # plus shellcheck for the shell scripts under hosts/rpi5/scripts/.
+      devShells = nixpkgs.lib.genAttrs devSystems (
+        system:
+        let
+          pkgs = import nixpkgs { inherit system; };
+        in
+        {
+          default = pkgs.mkShellNoCC {
+            packages = [
+              (pkgs.python3.withPackages (ps: [ ps.pytest ]))
+              pkgs.shellcheck
+            ];
+            shellHook = ''
+              echo "nic-os dev shell — script tests: (cd hosts/rpi5/scripts/lib && pytest)"
+            '';
+          };
+        }
+      );
+
       # `nix build .#rtk` — standalone build target to isolate rtk's heavy LTO
       # compile from a full rebuild (build it alone first on the rpi5).
       #
@@ -328,13 +371,17 @@
       packages = nixpkgs.lib.recursiveUpdate
         (nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
           system:
+          let
+            pkgs = import nixpkgs {
+              inherit system;
+              config.allowUnfree = true;
+              overlays = [ nicOsOverlay ];
+            };
+          in
           {
-            rtk =
-              (import nixpkgs {
-                inherit system;
-                config.allowUnfree = true;
-                overlays = [ nicOsOverlay ];
-              }).rtk;
+            inherit (pkgs) rtk;
+            # `nix build .#nicos-scripts` — also the flake check (see `checks`).
+            inherit (pkgs) nicos-scripts;
           }
         ))
         {
