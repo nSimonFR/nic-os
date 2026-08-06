@@ -69,7 +69,14 @@ let
     };
     grants = [
       {
-        src = [ "*" ];
+        # `autogroup:member`, not `*`: `*` also matched the tag:ingress relays
+        # Tailscale runs for Funnel, owned by another user id. Every device of
+        # ours is untagged, so nothing legitimate loses admin — rpi5 included,
+        # which this module's own PUT needs. The inference grant below stays at
+        # `*` on purpose: if Aperture doesn't resolve autogroups in its own
+        # config, the failure is a rejected PUT, not a tailnet-wide loss of
+        # inference. Narrow it too once a sync is observed to succeed.
+        src = [ "autogroup:member" ];
         app = {
           "tailscale.com/cap/aperture" = [
             { role = "admin"; }
