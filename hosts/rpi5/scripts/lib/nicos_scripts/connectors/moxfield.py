@@ -36,8 +36,13 @@ Reconciliation is diff-based (add / update / delete per item) rather than
 delete-and-recreate, because ShowMyCards' /api/data/import is additive-only and has
 no replace mode: re-importing duplicates everything.
 
-Decks are DISCOVERED per user, not pinned: see discover_decks() for why
+Decks are DISCOVERED per user, not pinned: see Moxfield.discover_decks() for why
 showIllegal=true is load-bearing there.
+
+THERE IS NO SOFT-DELETE ANYWHERE IN SHOWMYCARDS. Everything destructive in here is
+guarded, and every guard has a test in tests/test_moxfield.py — the prune ceiling,
+the truncated-collection check, the private-collection check, the failed-discovery
+abort. Read those before changing this file.
 
 Env contract (all set by hosts/rpi5/moxfield-sync.nix):
   MOXFIELD_USERS            comma-separated Moxfield usernames whose decks to sync
@@ -60,6 +65,13 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from dataclasses import dataclass
+
+from ..logs import logger
+from ..secrets import env_str
+from ..state import ensure_dir, load_json, save_json
+
+log = logger("moxfield-sync")
 
 MOX_API = "https://api2.moxfield.com/v3/decks/all/"
 MOX_SEARCH = "https://api2.moxfield.com/v2/decks/search"
@@ -78,18 +90,44 @@ MAX_PRUNE = 0.30
 # Moxfield finish -> ShowMyCards treatment.
 FINISHES = {"nonFoil": "nonfoil", "foil": "foil", "etched": "etched"}
 
-USERS = [u.strip() for u in os.environ.get("MOXFIELD_USERS", "").split(",") if u.strip()]
-COLLECTION_USER = os.environ.get("MOXFIELD_COLLECTION_USER", "").strip()
-USER_AGENT = os.environ.get("MOXFIELD_USER_AGENT", "nic-os-moxfield-sync/1.0")
-SMC = os.environ.get("SMC_API", "http://127.0.0.1:8330/api").rstrip("/")
-DB = os.environ.get("SMC_DB", "/mnt/data/showmycards/database.db")
-STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/moxfield-sync")
-DRY_RUN = os.environ.get("DRY_RUN", "1") != "0"
-FORCE_PRUNE = os.environ.get("FORCE_PRUNE", "0") == "1"
+DEFAULT_SMC_API = "http://127.0.0.1:8330/api"
+DEFAULT_DB = "/mnt/data/showmycards/database.db"
+DEFAULT_STATE_DIR = "/var/lib/moxfield-sync"
+DEFAULT_USER_AGENT = "nic-os-moxfield-sync/1.0"
 
 
-def log(msg):
-    print(f"[moxfield-sync] {msg}", flush=True)
+@dataclass(frozen=True)
+class Config:
+    users: tuple = ()
+    collection_user: str = ""
+    user_agent: str = DEFAULT_USER_AGENT
+    smc_api: str = DEFAULT_SMC_API
+    db: str = DEFAULT_DB
+    state_dir: str = DEFAULT_STATE_DIR
+    # Both destructive switches default to the SAFE value, so a Config built with
+    # no arguments (a test, a hand-run) can never write and can never mass-delete.
+    dry_run: bool = True
+    force_prune: bool = False
+    max_prune: float = MAX_PRUNE
+    fetch_delay: float = FETCH_DELAY
+
+    @classmethod
+    def from_env(cls, env=None):
+        return cls(
+            users=tuple(
+                u.strip() for u in env_str("MOXFIELD_USERS", "", env).split(",") if u.strip()
+            ),
+            collection_user=env_str("MOXFIELD_COLLECTION_USER", "", env).strip(),
+            user_agent=env_str("MOXFIELD_USER_AGENT", DEFAULT_USER_AGENT, env),
+            smc_api=env_str("SMC_API", DEFAULT_SMC_API, env).rstrip("/"),
+            db=env_str("SMC_DB", DEFAULT_DB, env),
+            state_dir=env_str("STATE_DIR", DEFAULT_STATE_DIR, env),
+            dry_run=env_str("DRY_RUN", "1", env) != "0",
+            force_prune=env_str("FORCE_PRUNE", "0", env) == "1",
+        )
+
+    def state_path(self, name):
+        return os.path.join(self.state_dir, name)
 
 
 # ── HTTP ────────────────────────────────────────────────────────────────────────
@@ -112,154 +150,181 @@ class _KeepMethodRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_OPENER = urllib.request.build_opener(_KeepMethodRedirect)
+def keep_method_opener():
+    return urllib.request.build_opener(_KeepMethodRedirect).open
 
 
-def _request(url, method="GET", body=None, timeout=120, headers=None):
+def _request(url, method="GET", body=None, timeout=120, headers=None, opener=None):
     data = json.dumps(body).encode() if body is not None else None
     hdrs = {"Accept": "application/json"}
     if data:
         hdrs["Content-Type"] = "application/json"
     hdrs.update(headers or {})
     req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
-    with _OPENER.open(req, timeout=timeout) as resp:
+    with (opener or keep_method_opener())(req, timeout=timeout) as resp:
         raw = resp.read()
         return json.loads(raw) if raw else None
 
 
-def moxfield_get(url, label):
-    """GET one Moxfield URL, backing off on 429/5xx. Moxfield publishes no rate
-    limit, so be conservative: serial fetches, generous delay, exponential retry."""
-    for attempt in range(5):
-        try:
-            return _request(url, headers={"User-Agent": USER_AGENT})
-        except urllib.error.HTTPError as e:
-            if e.code in (429, 500, 502, 503, 504) and attempt < 4:
-                wait = 5 * (2 ** attempt)
-                log(f"  {label}: HTTP {e.code}, retrying in {wait}s")
-                time.sleep(wait)
-                continue
-            raise
-        except urllib.error.URLError as e:
-            if attempt < 4:
-                wait = 5 * (2 ** attempt)
-                log(f"  {label}: {e.reason}, retrying in {wait}s")
-                time.sleep(wait)
-                continue
-            raise
-    raise RuntimeError(f"unreachable: {label}")
+class Smc:
+    """The ShowMyCards REST API. Call it like the old `smc()` function.
 
-
-def discover_decks(users):
-    """-> [(public_id, name, author)] for every deck authored by any of `users`.
-
-    `showIllegal=true` is LOAD-BEARING, not a tweak. The search default hides decks
-    Moxfield considers illegal, and that silently dropped 2 of this user's 5 decks
-    — including a 94-card commander deck that is simply mid-build. A deck under
-    construction is precisely the one you want synced (it is the shopping list), so
-    the default filter is backwards for our purpose. Omitting this flag is what
-    made an earlier version of this file conclude discovery was unreliable and pin
-    deck ids by hand; it was never an index gap.
-
-    The filter matches AUTHORS, not just the creator, so a deck someone else made
-    with our user as co-author is included — which is why results are deduped by
-    publicId rather than concatenated.
+    This is the seam every destructive test hangs off: tests pass a fake with the
+    same call signature and assert on what it was (and was not) asked to write.
     """
-    seen, out = set(), []
-    for user in users:
-        page = 1
+
+    def __init__(self, base, opener=None, timeout=180):
+        self.base = base.rstrip("/")
+        self.opener = opener
+        # First call after idle wakes the socket-activated chain and waits on the
+        # ready probe, which can take ~60s -- hence the long timeout.
+        self.timeout = timeout
+
+    def __call__(self, path, method="GET", body=None):
+        # A trailing slash on a collection path (/api/inventory/, /api/lists/) is 308ed
+        # to the bare form. _KeepMethodRedirect makes that survivable, but it is still a
+        # wasted round trip on every call, so normalise it away here.
+        path = path.replace("/?", "?", 1)
+        if path.endswith("/"):
+            path = path[:-1]
+        return _request(
+            f"{self.base}{path}", method=method, body=body,
+            timeout=self.timeout, opener=self.opener,
+        )
+
+    def paged(self, path):
+        """Walk a `{data, total_pages}` envelope. Pagination is page/page_size, never
+        limit/offset, and /inventory/ caps page_size at 100."""
+        out, page = [], 1
+        sep = "&" if "?" in path else "?"
         while True:
-            q = urllib.parse.urlencode({
-                "authorUserNames": user, "pageNumber": page,
-                "pageSize": 100, "showIllegal": "true",
-            })
-            data = _request(f"{MOX_SEARCH}?{q}", headers={"User-Agent": USER_AGENT})
-            rows = data.get("data") or []
-            for d in rows:
-                pid = d.get("publicId")
-                if not pid or pid in seen:
+            resp = self(f"{path}{sep}page={page}&page_size=100")
+            out += resp.get("data") or []
+            if page >= (resp.get("total_pages") or 1):
+                return out
+            page += 1
+
+
+class Moxfield:
+    """The Moxfield read API, with the politeness policy baked in.
+
+    `sleep` is injectable so tests don't pay the 3 s inter-fetch delay.
+    """
+
+    def __init__(self, user_agent, opener=None, sleep=time.sleep, fetch_delay=FETCH_DELAY):
+        self.user_agent = user_agent
+        self.opener = opener
+        self.sleep = sleep
+        self.fetch_delay = fetch_delay
+
+    def _plain(self, url):
+        return _request(url, headers={"User-Agent": self.user_agent}, opener=self.opener)
+
+    def get(self, url, label):
+        """GET one Moxfield URL, backing off on 429/5xx. Moxfield publishes no rate
+        limit, so be conservative: serial fetches, generous delay, exponential retry."""
+        for attempt in range(5):
+            try:
+                return self._plain(url)
+            except urllib.error.HTTPError as e:
+                if e.code in (429, 500, 502, 503, 504) and attempt < 4:
+                    wait = 5 * (2 ** attempt)
+                    log(f"  {label}: HTTP {e.code}, retrying in {wait}s")
+                    self.sleep(wait)
                     continue
-                seen.add(pid)
-                out.append((pid, d.get("name") or pid,
-                            (d.get("createdByUser") or {}).get("userName") or "?"))
-            # totalPages is absent on some responses; the empty page is the real
-            # terminator, the page cap just stops a pathological loop.
-            if not rows or page >= data.get("totalPages", page) or page >= 20:
+                raise
+            except urllib.error.URLError as e:
+                if attempt < 4:
+                    wait = 5 * (2 ** attempt)
+                    log(f"  {label}: {e.reason}, retrying in {wait}s")
+                    self.sleep(wait)
+                    continue
+                raise
+        raise RuntimeError(f"unreachable: {label}")
+
+    def deck(self, public_id):
+        return self.get(MOX_API + public_id, public_id)
+
+    def discover_decks(self, users):
+        """-> [(public_id, name, author)] for every deck authored by any of `users`.
+
+        `showIllegal=true` is LOAD-BEARING, not a tweak. The search default hides decks
+        Moxfield considers illegal, and that silently dropped 2 of this user's 5 decks
+        — including a 94-card commander deck that is simply mid-build. A deck under
+        construction is precisely the one you want synced (it is the shopping list), so
+        the default filter is backwards for our purpose. Omitting this flag is what
+        made an earlier version of this file conclude discovery was unreliable and pin
+        deck ids by hand; it was never an index gap.
+
+        The filter matches AUTHORS, not just the creator, so a deck someone else made
+        with our user as co-author is included — which is why results are deduped by
+        publicId rather than concatenated.
+        """
+        seen, out = set(), []
+        for user in users:
+            page = 1
+            while True:
+                q = urllib.parse.urlencode({
+                    "authorUserNames": user, "pageNumber": page,
+                    "pageSize": 100, "showIllegal": "true",
+                })
+                data = self._plain(f"{MOX_SEARCH}?{q}")
+                rows = data.get("data") or []
+                for d in rows:
+                    pid = d.get("publicId")
+                    if not pid or pid in seen:
+                        continue
+                    seen.add(pid)
+                    out.append((pid, d.get("name") or pid,
+                                (d.get("createdByUser") or {}).get("userName") or "?"))
+                # totalPages is absent on some responses; the empty page is the real
+                # terminator, the page cap just stops a pathological loop.
+                if not rows or page >= data.get("totalPages", page) or page >= 20:
+                    break
+                page += 1
+                self.sleep(self.fetch_delay)
+            self.sleep(self.fetch_delay)
+        return out
+
+    def collection(self, user):
+        """-> [row] for the user's whole collection.
+
+        The collection id is resolved from the profile rather than hardcoded, which also
+        surfaces `collectionVisibility`: this endpoint only works while the collection is
+        public, and a flip to private must fail loudly rather than read as "the user owns
+        nothing" — that would delete the entire ShowMyCards inventory.
+        """
+        profile = self.get(MOX_USER + urllib.parse.quote(user), f"user {user}")
+        vis = profile.get("collectionVisibility")
+        cid = profile.get("collectionPublicId")
+        if vis != "public" or not cid:
+            raise RuntimeError(
+                f"collection of {user} is not publicly readable (visibility={vis!r}, "
+                f"id={cid!r}) — set it to public on Moxfield or disable the mirror")
+
+        rows, page, total = [], 1, None
+        while True:
+            q = urllib.parse.urlencode({"pageNumber": page, "pageSize": COLLECTION_PAGE})
+            data = self.get(f"{MOX_COLLECTION}{cid}?{q}", f"collection p{page}")
+            rows += data.get("data") or []
+            total = data.get("totalResults")
+            if page >= (data.get("totalPages") or 1):
                 break
             page += 1
-            time.sleep(FETCH_DELAY)
-        time.sleep(FETCH_DELAY)
-    return out
+            self.sleep(self.fetch_delay)
 
-
-def moxfield_deck(public_id):
-    return moxfield_get(MOX_API + public_id, public_id)
-
-
-def moxfield_collection(user):
-    """-> [row] for the user's whole collection.
-
-    The collection id is resolved from the profile rather than hardcoded, which also
-    surfaces `collectionVisibility`: this endpoint only works while the collection is
-    public, and a flip to private must fail loudly rather than read as "the user owns
-    nothing" — that would delete the entire ShowMyCards inventory.
-    """
-    profile = moxfield_get(MOX_USER + urllib.parse.quote(user), f"user {user}")
-    vis = profile.get("collectionVisibility")
-    cid = profile.get("collectionPublicId")
-    if vis != "public" or not cid:
-        raise RuntimeError(
-            f"collection of {user} is not publicly readable (visibility={vis!r}, "
-            f"id={cid!r}) — set it to public on Moxfield or disable the mirror")
-
-    rows, page = [], 1
-    while True:
-        q = urllib.parse.urlencode({"pageNumber": page, "pageSize": COLLECTION_PAGE})
-        data = moxfield_get(f"{MOX_COLLECTION}{cid}?{q}", f"collection p{page}")
-        rows += data.get("data") or []
-        total = data.get("totalResults")
-        if page >= (data.get("totalPages") or 1):
-            break
-        page += 1
-        time.sleep(FETCH_DELAY)
-
-    # A truncated response reads as "these cards were sold" and would prune them.
-    if total is not None and len(rows) != total:
-        raise RuntimeError(f"collection truncated: got {len(rows)} rows, expected {total}")
-    if not rows:
-        raise RuntimeError("collection came back empty — refusing to prune everything")
-    return rows
-
-
-def smc(path, method="GET", body=None):
-    # A trailing slash on a collection path (/api/inventory/, /api/lists/) is 308ed
-    # to the bare form. _KeepMethodRedirect makes that survivable, but it is still a
-    # wasted round trip on every call, so normalise it away here.
-    path = path.replace("/?", "?", 1)
-    if path.endswith("/"):
-        path = path[:-1]
-    # First call after idle wakes the socket-activated chain and waits on the
-    # ready probe, which can take ~60s -- hence the long timeout.
-    return _request(f"{SMC}{path}", method=method, body=body, timeout=180)
-
-
-def smc_paged(path):
-    """Walk a `{data, total_pages}` envelope. Pagination is page/page_size, never
-    limit/offset, and /inventory/ caps page_size at 100."""
-    out, page = [], 1
-    sep = "&" if "?" in path else "?"
-    while True:
-        resp = smc(f"{path}{sep}page={page}&page_size=100")
-        out += resp.get("data") or []
-        if page >= (resp.get("total_pages") or 1):
-            return out
-        page += 1
+        # A truncated response reads as "these cards were sold" and would prune them.
+        if total is not None and len(rows) != total:
+            raise RuntimeError(f"collection truncated: got {len(rows)} rows, expected {total}")
+        if not rows:
+            raise RuntimeError("collection came back empty — refusing to prune everything")
+        return rows
 
 
 # ── local catalogue ─────────────────────────────────────────────────────────────
 
-def open_db():
-    return sqlite3.connect(f"file:{DB}?mode=ro", uri=True)
+def open_db(cfg):
+    return sqlite3.connect(f"file:{cfg.db}?mode=ro", uri=True)
 
 
 def oracle_ids(con, scryfall_ids):
@@ -350,7 +415,7 @@ def infer_storage_type(name):
     return "Box" if "box" in (name or "").lower() else "Binder"
 
 
-def sync_storage_locations(rows):
+def sync_storage_locations(cfg, smc, rows):
     """-> {binder publicId: showmycards storage_location_id}
 
     Locations follow Moxfield instead of being declared in config. Binders get
@@ -373,13 +438,13 @@ def sync_storage_locations(rows):
         if b.get("publicId"):
             binders[b["publicId"]] = b.get("name") or b["publicId"]
 
-    state_path = os.path.join(STATE_DIR, "binders.json")
-    state = {}
-    if os.path.exists(state_path):
-        try:
-            state = json.load(open(state_path))
-        except Exception:  # noqa: BLE001 - a corrupt state file must not wedge the sync
+    state_path = cfg.state_path("binders.json")
+    # A corrupt state file must not wedge the sync: fall back to adopting by name.
+    state = load_json(state_path, None)
+    if state is None:
+        if os.path.exists(state_path):
             log("  ! binders.json unreadable — re-adopting locations by name")
+        state = {}
 
     current = {s["id"]: s for s in (smc("/storage/with-counts") or [])}
     by_name = {s["name"]: s for s in current.values()}
@@ -389,14 +454,14 @@ def sync_storage_locations(rows):
         loc = current.get(state.get(pid)) or by_name.get(name)
         if loc is None:
             typ = infer_storage_type(name)
-            if DRY_RUN:
+            if cfg.dry_run:
                 log(f"  + would create storage location {name!r} ({typ})")
                 continue
             loc = smc("/storage", "POST", {"name": name, "storage_type": typ})
             log(f"  + created storage location {name!r} ({typ})")
         elif (loc.get("name") or "") != name:
             log(f"  ~ storage location {loc['name']!r} renamed on Moxfield -> {name!r}")
-            if not DRY_RUN:
+            if not cfg.dry_run:
                 # storage_type is a non-pointer field — omitting it writes an empty
                 # value, the same trap as description on PUT /lists/:id.
                 smc(f"/storage/{loc['id']}", "PUT",
@@ -406,20 +471,19 @@ def sync_storage_locations(rows):
             state[pid] = loc["id"]
             changed = True
 
-    if changed and not DRY_RUN:
-        with open(state_path, "w") as fh:
-            json.dump(state, fh, indent=2, sort_keys=True)
+    if changed and not cfg.dry_run:
+        save_json(state_path, state, indent=2, sort_keys=True)
     return out
 
 
-def build_wanted_inventory(con, rows):
+def build_wanted_inventory(cfg, smc, con, rows):
     """-> ({(scryfall_id, treatment, location_id): qty}, stats)
 
     Collapses by summing: several Moxfield rows legitimately map to one ShowMyCards
     row, because ShowMyCards' inventory has no language and no condition column. The
     en/fr pair of one printing in one binder is exactly that case.
     """
-    locations = sync_storage_locations(rows)
+    locations = sync_storage_locations(cfg, smc, rows)
 
     # Doubles as the catalogue-membership test: oracle_ids() only returns ids that
     # exist locally with an oracle_id, and an id without one cannot be POSTed anyway.
@@ -471,13 +535,13 @@ def build_wanted_inventory(con, rows):
     return dict(wanted), stats
 
 
-def mirror_inventory(con, rows):
+def mirror_inventory(cfg, smc, con, rows):
     """Bring ShowMyCards inventory in line with the Moxfield collection.
     Returns (added, updated, removed) or None if the guard refused."""
-    wanted, stats = build_wanted_inventory(con, rows)
+    wanted, stats = build_wanted_inventory(cfg, smc, con, rows)
 
     current = collections.defaultdict(list)
-    for it in smc_paged("/inventory/"):
+    for it in smc.paged("/inventory/"):
         current[(it["scryfall_id"], it.get("treatment") or "nonfoil",
                  it.get("storage_location_id"))].append(it)
 
@@ -512,15 +576,15 @@ def mirror_inventory(con, rows):
         f" | showmycards {total_now} in {sum(len(v) for v in current.values())}"
         f" | remapped {stats['remapped']} printing(s) to their fr/en variant")
     log(f"inventory: +{len(add)} ~{len(update)} -{len(remove)}"
-        + (" [dry-run]" if DRY_RUN else ""))
+        + (" [dry-run]" if cfg.dry_run else ""))
 
-    if total_now and pruned > total_now * MAX_PRUNE and not FORCE_PRUNE:
+    if total_now and pruned > total_now * cfg.max_prune and not cfg.force_prune:
         log(f"inventory: REFUSING — would delete {pruned}/{total_now} cards "
-            f"(>{int(MAX_PRUNE * 100)}%). A renamed binder or a partial Moxfield "
+            f"(>{int(cfg.max_prune * 100)}%). A renamed binder or a partial Moxfield "
             f"collection looks exactly like this. Set FORCE_PRUNE=1 if intended.")
         return None
 
-    if DRY_RUN:
+    if cfg.dry_run:
         for it in add[:20]:
             log(f"  + would add {it['scryfall_id']} x{it['quantity']} @loc {it['storage_location_id']}")
         for cur, qty in update[:20]:
@@ -542,11 +606,11 @@ def mirror_inventory(con, rows):
             "treatment": cur.get("treatment") or "nonfoil", "quantity": qty,
             "storage_location_id": cur.get("storage_location_id"),
         })
-    delete_inventory([it["id"] for it in remove])
+    delete_inventory(smc, [it["id"] for it in remove])
     return len(add), len(update), len(remove)
 
 
-def delete_inventory(ids):
+def delete_inventory(smc, ids):
     """Batch delete, falling back to one-by-one. The batch route is a DELETE with a
     JSON body capped at 1000 ids; if that shape is rejected, the per-id route is
     slower but always available."""
@@ -592,6 +656,11 @@ def deck_fingerprint(wanted, name, inventory_fp):
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
+def inventory_fingerprint(owned):
+    return hashlib.sha256(
+        json.dumps(sorted(owned.items()), sort_keys=True).encode()).hexdigest()
+
+
 def allocate_collected(wanted, oids, owned):
     """-> {(scryfall_id,treatment): collected_qty}
 
@@ -626,14 +695,10 @@ def find_list(lists, public_id, name):
     return None
 
 
-def list_items(list_id):
-    return smc_paged(f"/lists/{list_id}/items")
-
-
-def reconcile(list_id, wanted, oids, collected_by_key):
+def reconcile(cfg, smc, list_id, wanted, oids, collected_by_key):
     """Bring one list's items in line with `wanted`. Returns (added, updated, removed)."""
     current = {}
-    for it in list_items(list_id):
+    for it in smc.paged(f"/lists/{list_id}/items"):
         current[(it["scryfall_id"], it.get("treatment") or "nonfoil")] = it
 
     add, update, remove = [], [], []
@@ -654,7 +719,7 @@ def reconcile(list_id, wanted, oids, collected_by_key):
         if key not in wanted:
             remove.append(cur)
 
-    if DRY_RUN:
+    if cfg.dry_run:
         for it in add:
             log(f"  + would add {it['scryfall_id']} x{it['desired_quantity']}")
         for _id, qty, coll, key in update:
@@ -671,7 +736,7 @@ def reconcile(list_id, wanted, oids, collected_by_key):
     # collected_quantity is forced to 0 on create, so every new item needs a
     # follow-up PUT to carry ownership.
     fresh = {(it["scryfall_id"], it.get("treatment") or "nonfoil"): it
-             for it in list_items(list_id)} if add else {}
+             for it in smc.paged(f"/lists/{list_id}/items")} if add else {}
     for it in add:
         key = (it["scryfall_id"], it["treatment"])
         collected = collected_by_key.get(key, 0)
@@ -689,22 +754,22 @@ def reconcile(list_id, wanted, oids, collected_by_key):
 
 # ── main ────────────────────────────────────────────────────────────────────────
 
-def sync_collection():
+def sync_collection(cfg, smc, mox):
     """-> True if the inventory is in a known-good state to reconcile decks against."""
-    if not COLLECTION_USER:
+    if not cfg.collection_user:
         log("no MOXFIELD_COLLECTION_USER configured — skipping collection mirror")
         return True
     try:
-        rows = moxfield_collection(COLLECTION_USER)
+        rows = mox.collection(cfg.collection_user)
     except Exception as e:  # noqa: BLE001
         # Same reasoning as deck discovery: a partial or failed read is
         # indistinguishable from "the user sold everything".
-        log(f"collection fetch FAILED for {COLLECTION_USER}: {e} — inventory untouched")
+        log(f"collection fetch FAILED for {cfg.collection_user}: {e} — inventory untouched")
         return False
-    log(f"collection: {len(rows)} rows from {COLLECTION_USER}")
-    con = open_db()
+    log(f"collection: {len(rows)} rows from {cfg.collection_user}")
+    con = open_db(cfg)
     try:
-        return mirror_inventory(con, rows) is not None
+        return mirror_inventory(cfg, smc, con, rows) is not None
     except Exception as e:  # noqa: BLE001
         log(f"collection mirror FAILED: {e} — inventory untouched")
         return False
@@ -712,98 +777,114 @@ def sync_collection():
         con.close()
 
 
-def main():
-    if not USERS:
+def sync_decks(cfg, smc, mox):
+    """Reconcile every discovered deck into a ShowMyCards list.
+
+    -> (totals, ok). `ok` is False when discovery failed outright, which must abort
+    the whole run: a partial deck list reads as "these decks were deleted on
+    Moxfield" and reconcile() would empty the surviving lists.
+    """
+    # Reopen after the mirror so this connection sees the committed writes — the
+    # backend holds the WAL writer and this one is read-only.
+    con = open_db(cfg)
+    totals = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0, "failed": 0}
+    try:
+        owned = owned_by_oracle(con)
+        inventory_fp = inventory_fingerprint(owned)
+        lists = smc("/lists/") or []
+
+        try:
+            found = mox.discover_decks(cfg.users)
+        except Exception as e:  # noqa: BLE001
+            log(f"discovery FAILED for {','.join(cfg.users)}: {e} — aborting without changes")
+            return totals, False
+        decks = [(pid, name) for pid, name, _ in found]
+        for pid, name, author in found:
+            log(f"  deck: {name} ({pid}, by {author})")
+        log(f"{len(decks)} deck(s) from {len(cfg.users)} user(s), {len(lists)} list(s) in "
+            f"ShowMyCards, dry_run={cfg.dry_run}")
+
+        for n, (public_id, _discovered_name) in enumerate(decks):
+            if n:
+                mox.sleep(cfg.fetch_delay)
+            try:
+                deck = mox.deck(public_id)
+            except Exception as e:  # noqa: BLE001 - one bad deck must not kill the run
+                log(f"{public_id}: FETCH FAILED {e}")
+                totals["failed"] += 1
+                continue
+            name = deck.get("name") or public_id
+            wanted, excluded = parse_deck(deck)
+            fp = deck_fingerprint(wanted, name, inventory_fp)
+            state = cfg.state_path(f"{public_id}.hash")
+            prev = open(state).read().strip() if os.path.exists(state) else ""
+
+            lst = find_list(lists, public_id, name)
+            if lst is None:
+                log(f"{name}: no matching list — creating")
+                if not cfg.dry_run:
+                    lst = smc("/lists/", "POST",
+                              {"name": name, "description": deck.get("publicUrl") or public_id})
+                    lists.append(lst)
+                else:
+                    log("  (dry-run: skipping create and reconcile)")
+                    continue
+            elif fp == prev:
+                log(f"{name}: unchanged on Moxfield — skipping")
+                totals["unchanged"] += 1
+                continue
+
+            # Moxfield owns the name too, and decks do get renamed — the list is matched
+            # on the publicId in its description, so a rename is silent drift otherwise.
+            if (lst.get("name") or "").strip() != name.strip():
+                log(f"{lst['name']}: renamed on Moxfield -> {name}")
+                if not cfg.dry_run:
+                    # description MUST be resent: it is a non-pointer field, so omitting
+                    # it blanks the Moxfield URL find_list matches on next run.
+                    smc(f"/lists/{lst['id']}", "PUT", {
+                        "name": name,
+                        "description": lst.get("description") or deck.get("publicUrl") or public_id,
+                    })
+
+            oids = oracle_ids(con, {sid for sid, _ in wanted})
+            collected = allocate_collected(wanted, oids, owned)
+            added, updated, removed = reconcile(cfg, smc, lst["id"], wanted, oids, collected)
+            totals["added"] += added
+            totals["updated"] += updated
+            totals["removed"] += removed
+            log(f"{name}: {sum(collected.values())}/{sum(wanted.values())} owned"
+                f" — +{added} ~{updated} -{removed}"
+                + (f"  (excluded: {excluded})" if excluded else ""))
+            if not cfg.dry_run:
+                with open(state, "w") as fh:
+                    fh.write(fp)
+    finally:
+        con.close()
+    return totals, True
+
+
+def main(env=None, opener=None, smc=None, mox=None):
+    cfg = Config.from_env(env)
+    if not cfg.users:
         log("no MOXFIELD_USERS configured — nothing to do")
         return 0
-    os.makedirs(STATE_DIR, exist_ok=True)
+    ensure_dir(cfg.state_dir)
+
+    smc = smc or Smc(cfg.smc_api, opener=opener)
+    mox = mox or Moxfield(cfg.user_agent, opener=opener, fetch_delay=cfg.fetch_delay)
 
     # Inventory first: deck ownership counts are computed from it, so mirroring
     # afterwards would report every deck against yesterday's collection.
-    mirror_ok = sync_collection()
+    mirror_ok = sync_collection(cfg, smc, mox)
 
-    # Reopen after the mirror so this connection sees the committed writes — the
-    # backend holds the WAL writer and this one is read-only.
-    con = open_db()
-    owned = owned_by_oracle(con)
-    inventory_fp = hashlib.sha256(
-        json.dumps(sorted(owned.items()), sort_keys=True).encode()).hexdigest()
-    lists = smc("/lists/") or []
-
-    try:
-        found = discover_decks(USERS)
-    except Exception as e:  # noqa: BLE001
-        # Discovery is the whole input set: a partial list would read as "these
-        # decks were deleted on Moxfield" and reconcile would empty the lists.
-        log(f"discovery FAILED for {','.join(USERS)}: {e} — aborting without changes")
+    totals, discovered = sync_decks(cfg, smc, mox)
+    if not discovered:
         return 1
-    decks = [(pid, name) for pid, name, _ in found]
-    for pid, name, author in found:
-        log(f"  deck: {name} ({pid}, by {author})")
-    log(f"{len(decks)} deck(s) from {len(USERS)} user(s), {len(lists)} list(s) in "
-        f"ShowMyCards, dry_run={DRY_RUN}")
 
-    totals = {"added": 0, "updated": 0, "removed": 0, "unchanged": 0, "failed": 0}
-    for n, (public_id, _discovered_name) in enumerate(decks):
-        if n:
-            time.sleep(FETCH_DELAY)
-        try:
-            deck = moxfield_deck(public_id)
-        except Exception as e:  # noqa: BLE001 - one bad deck must not kill the run
-            log(f"{public_id}: FETCH FAILED {e}")
-            totals["failed"] += 1
-            continue
-        name = deck.get("name") or public_id
-        wanted, excluded = parse_deck(deck)
-        fp = deck_fingerprint(wanted, name, inventory_fp)
-        state = os.path.join(STATE_DIR, f"{public_id}.hash")
-        prev = open(state).read().strip() if os.path.exists(state) else ""
-
-        lst = find_list(lists, public_id, name)
-        if lst is None:
-            log(f"{name}: no matching list — creating")
-            if not DRY_RUN:
-                lst = smc("/lists/", "POST",
-                          {"name": name, "description": deck.get("publicUrl") or public_id})
-                lists.append(lst)
-            else:
-                log("  (dry-run: skipping create and reconcile)")
-                continue
-        elif fp == prev:
-            log(f"{name}: unchanged on Moxfield — skipping")
-            totals["unchanged"] += 1
-            continue
-
-        # Moxfield owns the name too, and decks do get renamed — the list is matched
-        # on the publicId in its description, so a rename is silent drift otherwise.
-        if (lst.get("name") or "").strip() != name.strip():
-            log(f"{lst['name']}: renamed on Moxfield -> {name}")
-            if not DRY_RUN:
-                # description MUST be resent: it is a non-pointer field, so omitting
-                # it blanks the Moxfield URL find_list matches on next run.
-                smc(f"/lists/{lst['id']}", "PUT", {
-                    "name": name,
-                    "description": lst.get("description") or deck.get("publicUrl") or public_id,
-                })
-
-        oids = oracle_ids(con, {sid for sid, _ in wanted})
-        collected = allocate_collected(wanted, oids, owned)
-        added, updated, removed = reconcile(lst["id"], wanted, oids, collected)
-        totals["added"] += added
-        totals["updated"] += updated
-        totals["removed"] += removed
-        log(f"{name}: {sum(collected.values())}/{sum(wanted.values())} owned"
-            f" — +{added} ~{updated} -{removed}"
-            + (f"  (excluded: {excluded})" if excluded else ""))
-        if not DRY_RUN:
-            with open(state, "w") as fh:
-                fh.write(fp)
-
-    con.close()
     log(f"summary: decks +{totals['added']} ~{totals['updated']} -{totals['removed']} "
         f"unchanged={totals['unchanged']} failed={totals['failed']} "
         f"collection={'ok' if mirror_ok else 'FAILED'}"
-        + (" [dry-run]" if DRY_RUN else ""))
+        + (" [dry-run]" if cfg.dry_run else ""))
     return 0 if (mirror_ok and not totals["failed"]) else 1
 
 

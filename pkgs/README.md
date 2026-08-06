@@ -20,7 +20,7 @@ doesn't have to move, and related derivations sit together.
 | `desktop/` | GUI apps and plugins (BeAsT) |
 | `home-assistant/` | HA custom components and bridges |
 | `rgb/` | OpenRGB / Hyperion / monitor lighting (BeAsT) |
-| `services/` | daemons and web apps with a systemd unit behind them |
+| `services/` | daemons and web apps with a systemd unit behind them — including `nicos-scripts`, this repo's own Python (one package, a console script per unit) |
 | `tobii/` | the Tobii Eye Tracker 5 stack — 8 interdependent derivations |
 
 `tobii/` earns its own folder by being a *set*: `opentrack-sc` consumes

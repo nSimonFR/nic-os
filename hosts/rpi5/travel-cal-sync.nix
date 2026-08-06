@@ -1,6 +1,7 @@
 # Event-driven travel-booking → Nextcloud calendar sync.
 #
-# A persistent daemon (scripts/travel-cal-sync.py) reads Proton over the local
+# A persistent daemon (the `travel-cal-sync` entry point of the nicos-scripts
+# package, hosts/rpi5/scripts/lib/) reads Proton over the local
 # hydroxide IMAP bridge (same creds as papra-proton-poll), detects travel
 # bookings with the local tiny-llm-gate, and writes each as a VEVENT into a
 # Nextcloud calendar over CalDAV. It holds an IMAP IDLE connection, so a new
@@ -31,7 +32,6 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "hydroxide.service" "network-online.target" ];
     wants = [ "hydroxide.service" "network-online.target" ];
-    path = [ pkgs.python3 ];
     environment = {
       TINY_LLM_GATE_URL = tinyLlmGateUrl;
       # Local-only extraction: pin to a local model (runs on the beast GPU host,
@@ -53,7 +53,7 @@ in
       Restart = "always";
       RestartSec = 30;
       StateDirectory = "travel-cal-sync"; # -> /var/lib/travel-cal-sync
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/travel-cal-sync.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/travel-cal-sync";
     };
   };
 }

@@ -1,0 +1,45 @@
+[build-system]
+requires = [ "setuptools>=68" ]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nicos-scripts"
+version = "0.1.0"
+description = "Shared library + entry points for the nic-os rpi5 Python scripts"
+requires-python = ">=3.11"
+# Near-stdlib on purpose: these run on a 3.9 GB Pi and an undeclared third-party
+# import used to mean a failure at 04:50 on a timer. Anything added here must be a
+# real dependency in pkgs/nicos-scripts.nix too — that is the point of declaring it.
+#
+# psycopg2: papra.tag_sync writes Nextcloud systemtags straight into Postgres. It
+# is imported lazily inside connect_pg(), so the module (and its tests) still load
+# without it.
+dependencies = [ "psycopg2" ]
+
+# One console script per connector. This is the interface the systemd units use
+# (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
+# `${pkgs.python3}/bin/python3 ${./scripts/steam-to-ryot.py}` — a bare file in
+# the store with no importable sibling, hence no shared lib and no tests.
+[project.scripts]
+steam-to-ryot = "nicos_scripts.connectors.steam:main"
+spotify-to-ryot = "nicos_scripts.connectors.spotify:main"
+scale-to-ryot = "nicos_scripts.connectors.scale:main"
+moxfield-sync = "nicos_scripts.connectors.moxfield:main"
+travel-cal-sync = "nicos_scripts.connectors.travel_cal:main"
+homepage-stats = "nicos_scripts.homepage.stats:main"
+claude-notify-aggregator = "nicos_scripts.claude.notify_aggregator:main"
+claude-rc-boot-resume = "nicos_scripts.claude.boot_resume:main"
+claude-memory-sync = "nicos_scripts.claude.memory_sync:main"
+papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
+papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
+papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
+
+[tool.setuptools.packages.find]
+include = [ "nicos_scripts*" ]
+
+[tool.pytest.ini_options]
+testpaths = [ "tests" ]
+# So a bare `pytest` in this directory finds nicos_scripts without an install or
+# a PYTHONPATH export. (In the Nix build the package is installed too, and
+# pythonImportsCheck covers that copy.)
+pythonpath = [ "." ]

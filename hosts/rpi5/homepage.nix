@@ -102,7 +102,7 @@ in
       # systemd auto-creates /var/lib/homepage-stats and exports
       # STATE_DIRECTORY for the cache file.
       StateDirectory = "homepage-stats";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/homepage-stats.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/homepage-stats";
       Environment = [
         "CURL_BIN=${pkgs.curl}/bin/curl"
         "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"

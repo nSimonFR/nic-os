@@ -10,10 +10,11 @@
 #     Runs as root: node-ble talks to org.bluez over the system D-Bus, which the
 #     default BlueZ policy only grants root/at_console (same rationale as the
 #     other root-run local daemons here, e.g. travel-cal-sync).
-#   * scale-to-ryot.service — tiny stdlib-Python shim (scripts/scale-to-ryot.py)
-#     that translates that webhook into a Ryot `createOrUpdateUserMeasurement`
-#     GraphQL mutation against the backend on 127.0.0.1:13352. Runs as the
-#     unprivileged `scale-bridge` user.
+#   * scale-to-ryot.service — tiny stdlib-Python shim that translates that
+#     webhook into a Ryot `createOrUpdateUserMeasurement` GraphQL mutation
+#     against the backend on 127.0.0.1:13352. Runs as the unprivileged
+#     `scale-bridge` user. Code + tests live in the nicos-scripts package
+#     (hosts/rpi5/scripts/lib/, entry point `scale-to-ryot`).
 #
 # Bluetooth: the onboard radio is force-enabled in configuration.nix (the
 # raspberry-pi-5.bluetooth module + the mkForce toggle there). This module only
@@ -49,7 +50,6 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "ryot-backend.service" "network-online.target" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.python3 ];
     environment = {
       SHIM_PORT = toString shimPort;
       RYOT_URL = ryotUrl;
@@ -74,7 +74,7 @@ in
         echo "scale-to-ryot: timed out waiting for Ryot backend" >&2
         exit 1
       '';
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/scale-to-ryot.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/scale-to-ryot";
       Restart = "on-failure";
       RestartSec = "15";
     };

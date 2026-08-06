@@ -68,50 +68,105 @@ docs/adr/0007-claude-credentials-owner.md).
   resume    on bridge start, reconnect each recently-live session
 
 Config via environment (set by the NixOS unit); see the CRC_* defaults below.
-CRC_DRY_RUN=1 logs the planned reconnects instead of performing them.
+CRC_DRY_RUN=1 (the default) logs the planned reconnects instead of performing them.
 """
+
 import json
 import os
 import re
 import subprocess
 import sys
 import time
-import urllib.request
 import urllib.error
+import urllib.request
+from dataclasses import dataclass
 from pathlib import Path
 
-HOME = Path(os.environ.get("HOME", "/home/nsimon"))
-DRY_RUN = os.environ.get("CRC_DRY_RUN", "1") != "0"
-SESSIONS_DIR = Path(os.environ.get("CRC_SESSIONS_DIR", HOME / ".claude/sessions"))
-PROJECTS_DIR = Path(os.environ.get("CRC_PROJECTS_DIR", HOME / ".claude/projects"))
-SNAPSHOT_FILE = Path(os.environ.get("CRC_SNAPSHOT_FILE", HOME / ".claude/state/claude-rc-boot-resume/snapshot.json"))
-STATE_FILE = Path(os.environ.get("CRC_STATE_FILE", HOME / ".claude/state/claude-rc-boot-resume/handled.json"))
-CRED_FILE = Path(os.environ.get("CRC_CREDENTIALS_FILE", HOME / ".claude-rc/.credentials.json"))
-WORKTREES_DIR = Path(os.environ.get("CRC_WORKTREES_DIR", HOME / "nic-os/.claude/worktrees"))
-DEVICE_NAME = os.environ.get("CRC_DEVICE_NAME", "rpi5")
-BRIDGE_DIR = os.environ.get("CRC_BRIDGE_DIR", str(HOME / "nic-os"))
-CONFIG_DIR = Path(os.environ.get("CRC_CONFIG_DIR", HOME / ".claude-rc"))
-ORG_UUID = os.environ.get("CRC_ORG_UUID", "")
-BASE = os.environ.get("CRC_API_BASE", "https://api.anthropic.com")
-BETA = os.environ.get("CRC_ENVIRONMENTS_BETA", "environments-2025-11-01")
+from ..logs import logger
+from ..secrets import env_int, env_str, read_secret
 
-START_DELAY = int(os.environ.get("CRC_START_DELAY", "18"))     # let the bridge register its env + warm its poll loop
-DELAY = int(os.environ.get("CRC_DELAY_SECONDS", "20"))          # between reconnects (spawns a ~70-200MB worker each; rpi5 has 3.9GB)
-MAX_REVIVE = int(os.environ.get("CRC_MAX_REVIVE", "6"))         # leave headroom under bridge capacity 8
-RECENCY = int(os.environ.get("CRC_RECENCY_SECONDS", "86400"))   # only revive sessions active within 24h (matches cleanup reap window)
-COOLDOWN = int(os.environ.get("CRC_COOLDOWN_SECONDS", "600"))   # don't re-revive the same session within 10min (rapid restart loops)
-# The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
-# path and chat id. See telegram() below.
-TELEGRAM_SEND = os.environ.get("CRC_TELEGRAM_SEND", "")
+log = logger("claude-rc-boot-resume")
 
 CSE_RE = re.compile(r"bridge-(cse_[A-Za-z0-9]+)")
+OK_STATUS = (200, 201, 202, 204)
 
 
-def log(msg):
-    print(f"[claude-rc-boot-resume] {msg}", flush=True)
+@dataclass(frozen=True)
+class Config:
+    home: Path = Path("/home/nsimon")
+    # Defaults to a DRY RUN: this spawns bridge workers (~70-200 MB each) on a
+    # 3.9 GB box, so live reconnects have to be asked for explicitly.
+    dry_run: bool = True
+    sessions_dir: Path = None
+    projects_dir: Path = None
+    snapshot_file: Path = None
+    state_file: Path = None
+    cred_file: Path = None
+    worktrees_dir: Path = None
+    device_name: str = "rpi5"
+    bridge_dir: str = ""
+    config_dir: Path = None
+    org_uuid: str = ""
+    base: str = "https://api.anthropic.com"
+    beta: str = "environments-2025-11-01"
+    start_delay: int = 18   # let the bridge register its env + warm its poll loop
+    delay: int = 20         # between reconnects (each spawns a worker)
+    max_revive: int = 6     # leave headroom under bridge capacity 8
+    recency: int = 86400    # only revive sessions active within 24h
+    cooldown: int = 600     # don't re-revive the same session within 10min
+    # The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
+    # path and chat id. See telegram() below.
+    telegram_send: str = ""
+
+    @classmethod
+    def from_env(cls, env=None):
+        home = Path(env_str("HOME", "/home/nsimon", env) or "/home/nsimon")
+
+        def path_of(name, default):
+            return Path(env_str(name, "", env) or default)
+
+        bridge_dir = env_str("CRC_BRIDGE_DIR", str(home / "nic-os"), env)
+        return cls(
+            home=home,
+            dry_run=env_str("CRC_DRY_RUN", "1", env) != "0",
+            sessions_dir=path_of("CRC_SESSIONS_DIR", home / ".claude/sessions"),
+            projects_dir=path_of("CRC_PROJECTS_DIR", home / ".claude/projects"),
+            snapshot_file=path_of(
+                "CRC_SNAPSHOT_FILE",
+                home / ".claude/state/claude-rc-boot-resume/snapshot.json"),
+            state_file=path_of(
+                "CRC_STATE_FILE",
+                home / ".claude/state/claude-rc-boot-resume/handled.json"),
+            # ~/.claude-rc, NOT ~/.claude — the latter's copy goes stale.
+            cred_file=path_of("CRC_CREDENTIALS_FILE", home / ".claude-rc/.credentials.json"),
+            worktrees_dir=path_of("CRC_WORKTREES_DIR", home / "nic-os/.claude/worktrees"),
+            device_name=env_str("CRC_DEVICE_NAME", "rpi5", env),
+            bridge_dir=bridge_dir,
+            config_dir=path_of("CRC_CONFIG_DIR", home / ".claude-rc"),
+            org_uuid=env_str("CRC_ORG_UUID", "", env),
+            base=env_str("CRC_API_BASE", "https://api.anthropic.com", env),
+            beta=env_str("CRC_ENVIRONMENTS_BETA", "environments-2025-11-01", env),
+            start_delay=env_int("CRC_START_DELAY", 18, env),
+            delay=env_int("CRC_DELAY_SECONDS", 20, env),
+            max_revive=env_int("CRC_MAX_REVIVE", 6, env),
+            recency=env_int("CRC_RECENCY_SECONDS", 86400, env),
+            cooldown=env_int("CRC_COOLDOWN_SECONDS", 600, env),
+            telegram_send=env_str("CRC_TELEGRAM_SEND", "", env),
+        )
+
+    def headers(self, tok):
+        h = {
+            "Authorization": f"Bearer {tok}",
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "anthropic-beta": self.beta,
+        }
+        if self.org_uuid:
+            h["x-organization-uuid"] = self.org_uuid
+        return h
 
 
-def telegram(msg):
+def telegram(cfg, msg, run=None):
     """Post the boot-resume summary through the shared one-shot sender.
 
     --mode plain because these messages carry session names and worktree paths
@@ -119,11 +174,11 @@ def telegram(msg):
     stray "<" turns the whole notification into a 400. Unset CRC_TELEGRAM_SEND
     (running this script by hand) → no-op.
     """
-    if not TELEGRAM_SEND:
+    if not cfg.telegram_send:
         return
     try:
-        subprocess.run(
-            [TELEGRAM_SEND, "--mode", "plain", msg],
+        (run or subprocess.run)(
+            [cfg.telegram_send, "--mode", "plain", msg],
             stdout=subprocess.DEVNULL, timeout=30, check=False,
         )
     except Exception as e:  # noqa: BLE001 — best effort
@@ -150,13 +205,13 @@ def cse_from_cwd(cwd):
     return m.group(1) if m else None
 
 
-def _slug(path):
+def slug(path):
     """claude-code's project-dir slug: every non-alphanumeric char -> '-'.
     Mirrors the slugify it uses for $CLAUDE_CONFIG_DIR/projects/<slug>/."""
     return re.sub(r"[^A-Za-z0-9]", "-", str(path))
 
 
-def worktree_last_active(cwd):
+def worktree_last_active(cfg, cwd):
     """Newest conversation-JSONL mtime for a bridge worktree's session (activity
     proxy). Bridge workers run with cwd=<worktree> and
     CLAUDE_CONFIG_DIR=~/.claude-rc, whose `projects` symlink points back into
@@ -164,14 +219,15 @@ def worktree_last_active(cwd):
     PROJECTS_DIR/<slug of cwd>/<uuid>.jsonl. Its mtime is bumped on every
     user/assistant message and survives a reboot -> unlike a live worker PID, it
     still marks an idle-but-resumable session as recently active."""
-    d = PROJECTS_DIR / _slug(cwd)
+    d = cfg.projects_dir / slug(cwd)
     if not d.is_dir():
         return 0.0
     return max((p.stat().st_mtime for p in d.glob("*.jsonl")), default=0.0)
 
 
 # ---------------------------------------------------------------- snapshot ----
-def cmd_snapshot():
+
+def cmd_snapshot(cfg, now=None):
     """Record the recently-active bridge sessions so a later (restarted) instance
     knows what to revive.
 
@@ -183,16 +239,16 @@ def cmd_snapshot():
     but-resumable sessions that are the whole point of boot-resume. Bounded to the
     RECENCY window so an abandoned session ages out instead of being revived
     forever."""
-    now = time.time()
+    now = time.time() if now is None else now
     records = {}
-    for wt in sorted(WORKTREES_DIR.glob("bridge-cse_*")):
+    for wt in sorted(cfg.worktrees_dir.glob("bridge-cse_*")):
         if not wt.is_dir():
             continue
         cse = cse_from_cwd(wt.name)
         if not cse:
             continue
-        la = worktree_last_active(wt) or wt.stat().st_mtime
-        if now - la > RECENCY:
+        la = worktree_last_active(cfg, wt) or wt.stat().st_mtime
+        if now - la > cfg.recency:
             continue
         records[cse] = {
             "cseId": cse,
@@ -200,38 +256,27 @@ def cmd_snapshot():
             "localUuid": None,
             "lastActive": la,
         }
-    save_json(SNAPSHOT_FILE, {"savedAt": int(now), "sessions": list(records.values())})
-    log(f"snapshot: {len(records)} recently-active session(s) -> {SNAPSHOT_FILE}")
+    save_json(cfg.snapshot_file, {"savedAt": int(now), "sessions": list(records.values())})
+    log(f"snapshot: {len(records)} recently-active session(s) -> {cfg.snapshot_file}")
+    return records
 
 
 # ------------------------------------------------------------------ resume ----
-def oauth_token():
-    return json.load(open(CRED_FILE))["claudeAiOauth"]["accessToken"]
+
+def oauth_token(cfg):
+    return json.loads(cfg.cred_file.read_text())["claudeAiOauth"]["accessToken"]
 
 
-def _headers(tok):
-    h = {
-        "Authorization": f"Bearer {tok}",
-        "Content-Type": "application/json",
-        "anthropic-version": "2023-06-01",
-        "anthropic-beta": BETA,
-    }
-    if ORG_UUID:
-        h["x-organization-uuid"] = ORG_UUID
-    return h
-
-
-def bridge_pointer_path():
+def bridge_pointer_path(cfg):
     """$CLAUDE_CONFIG_DIR/projects/<slugified bridge dir>/bridge-pointer.json.
 
     Mirrors claude-code's own getBridgePointerPath(): join(configDir, "projects",
     dir.replace(/[^a-zA-Z0-9]/g, "-"), "bridge-pointer.json").
     """
-    slug = re.sub(r"[^a-zA-Z0-9]", "-", BRIDGE_DIR)
-    return CONFIG_DIR / "projects" / slug / "bridge-pointer.json"
+    return cfg.config_dir / "projects" / slug(cfg.bridge_dir) / "bridge-pointer.json"
 
 
-def current_env_id(tok):
+def current_env_id(cfg, tok, opener=None):
     """The environment the running bridge is actually serving.
 
     Preferred source is the bridge's own bridge-pointer.json — the same file it
@@ -241,17 +286,17 @@ def current_env_id(tok):
     so a second bridge started anywhere else on this box (say a throwaway one in
     /tmp) also matches '<device>:' and, being newer, would win.
     """
-    ptr = load_json(bridge_pointer_path(), {})
+    ptr = load_json(bridge_pointer_path(cfg), {})
     env = ptr.get("environmentId") if isinstance(ptr, dict) else None
     if env:
-        log(f"resume: environment {env} from bridge pointer {bridge_pointer_path()}")
+        log(f"resume: environment {env} from bridge pointer {bridge_pointer_path(cfg)}")
         return env
 
     log("resume: no bridge pointer; falling back to /v1/environments listing")
-    req = urllib.request.Request(f"{BASE}/v1/environments", headers=_headers(tok))
-    d = json.loads(urllib.request.urlopen(req, timeout=20).read())
+    req = urllib.request.Request(f"{cfg.base}/v1/environments", headers=cfg.headers(tok))
+    d = json.loads((opener or urllib.request.urlopen)(req, timeout=20).read())
     items = d.get("data") or d.get("environments") or (d if isinstance(d, list) else [])
-    prefix = f"{DEVICE_NAME}:{Path(BRIDGE_DIR).name}:"
+    prefix = f"{cfg.device_name}:{Path(cfg.bridge_dir).name}:"
     mine = [e for e in items if isinstance(e, dict) and str(e.get("name", "")).startswith(prefix)]
     if not mine:
         return None
@@ -259,105 +304,112 @@ def current_env_id(tok):
     return mine[0].get("id")
 
 
-def reconnect(tok, env_id, cse):
+def reconnect(cfg, tok, env_id, cse, opener=None):
     body = json.dumps({"session_id": cse}).encode()
     req = urllib.request.Request(
-        f"{BASE}/v1/environments/{env_id}/bridge/reconnect",
-        data=body, method="POST", headers=_headers(tok),
+        f"{cfg.base}/v1/environments/{env_id}/bridge/reconnect",
+        data=body, method="POST", headers=cfg.headers(tok),
     )
     try:
-        r = urllib.request.urlopen(req, timeout=20)
+        r = (opener or urllib.request.urlopen)(req, timeout=20)
         return r.status, ""
     except urllib.error.HTTPError as e:
         return e.code, e.read().decode()[:200]
 
 
-def cmd_resume():
-    if START_DELAY:
-        time.sleep(START_DELAY)
-    snap = load_json(SNAPSHOT_FILE, {})
+def cmd_resume(cfg, opener=None, sleep=time.sleep, now=None, notify=None):
+    notify = notify or (lambda msg: telegram(cfg, msg))
+    if cfg.start_delay:
+        sleep(cfg.start_delay)
+    snap = load_json(cfg.snapshot_file, {})
     sessions = snap.get("sessions", []) if isinstance(snap, dict) else []
     if not sessions:
         log("resume: empty snapshot, nothing to do")
-        return
-    state = load_json(STATE_FILE, {})
-    now = int(time.time())
+        return {"revived": 0, "stale": 0, "cooldown": 0, "failed": 0}
+    state = load_json(cfg.state_file, {})
+    now = int(time.time() if now is None else now)
 
     try:
-        tok = oauth_token()
+        tok = oauth_token(cfg)
     except Exception as e:  # noqa: BLE001
-        log(f"resume: cannot read OAuth token from {CRED_FILE}: {e}")
-        telegram(f"⚠️ claude-rc boot-resume: no OAuth token ({e}) — sessions not revived")
-        return
+        log(f"resume: cannot read OAuth token from {cfg.cred_file}: {e}")
+        notify(f"⚠️ claude-rc boot-resume: no OAuth token ({e}) — sessions not revived")
+        return None
     try:
-        env_id = current_env_id(tok)
+        env_id = current_env_id(cfg, tok, opener=opener)
     except Exception as e:  # noqa: BLE001
         log(f"resume: GET /v1/environments failed: {e}")
-        telegram(f"⚠️ claude-rc boot-resume: environment lookup failed ({e})")
-        return
+        notify(f"⚠️ claude-rc boot-resume: environment lookup failed ({e})")
+        return None
     if not env_id:
-        log(f"resume: no environment named '{DEVICE_NAME}:*' found — bridge not registered yet?")
-        return
-    log(f"resume: environment={env_id} dry_run={DRY_RUN} candidates={len(sessions)}")
+        log(f"resume: no environment named '{cfg.device_name}:*' found — bridge not registered yet?")
+        return None
+    log(f"resume: environment={env_id} dry_run={cfg.dry_run} candidates={len(sessions)}")
 
     revived = skipped_stale = skipped_cooldown = failed = 0
     done = []
     for rec in sorted(sessions, key=lambda r: r.get("lastActive", 0), reverse=True):
-        if revived >= MAX_REVIVE:
-            log(f"resume: hit MAX_REVIVE={MAX_REVIVE}; {len(sessions) - MAX_REVIVE} not revived this run")
+        if revived >= cfg.max_revive:
+            log(f"resume: hit MAX_REVIVE={cfg.max_revive}; "
+                f"{len(sessions) - cfg.max_revive} not revived this run")
             break
         cse = rec.get("cseId")
         cwd = rec.get("cwd", "")
         if not cse:
             continue
-        if now - int(rec.get("lastActive", 0)) > RECENCY:
+        if now - int(rec.get("lastActive", 0)) > cfg.recency:
             skipped_stale += 1
             continue
         key = f"{cse}:{env_id}"
-        if now - int(state.get(key, {}).get("revivedAt", 0)) < COOLDOWN:
+        if now - int(state.get(key, {}).get("revivedAt", 0)) < cfg.cooldown:
             skipped_cooldown += 1
             continue
         # NOTE: intentionally do NOT skip when the worktree is missing. A graceful
         # bridge stop deletes the worktree but keeps the session resumable, and the
         # bridge recreates the worktree from its branch on the reconnected work
         # poll. Reconnect is the right move either way; a dead session just fails.
-        if DRY_RUN:
+        if cfg.dry_run:
             log(f"DRY-RUN: would reconnect {cse} (cwd={Path(cwd).name})")
             revived += 1
             done.append(cse)
             continue
-        s, err = reconnect(tok, env_id, cse)
-        if s in (200, 201, 202, 204):
+        s, err = reconnect(cfg, tok, env_id, cse, opener=opener)
+        if s in OK_STATUS:
             log(f"reconnect {cse[:12]} -> HTTP {s} OK")
             state[key] = {"cseId": cse, "revivedAt": now}
             revived += 1
             done.append(cse)
-            if revived < MAX_REVIVE:
-                time.sleep(DELAY)
+            if revived < cfg.max_revive:
+                sleep(cfg.delay)
         else:
             log(f"reconnect {cse[:12]} -> HTTP {s} {err}")
             failed += 1
 
-    save_json(STATE_FILE, state)
-    summary = (f"{'[dry-run] ' if DRY_RUN else ''}claude-rc boot-resume: "
+    save_json(cfg.state_file, state)
+    summary = (f"{'[dry-run] ' if cfg.dry_run else ''}claude-rc boot-resume: "
                f"revived={revived} stale={skipped_stale} cooldown={skipped_cooldown} "
                f"failed={failed}")
     log(summary)
     if revived or failed:
         short = ", ".join(c[4:12] for c in done)
-        telegram(f"🔁 {summary}" + (f"\nrevived: {short}" if short else ""))
+        notify(f"🔁 {summary}" + (f"\nrevived: {short}" if short else ""))
+    return {"revived": revived, "stale": skipped_stale,
+            "cooldown": skipped_cooldown, "failed": failed}
 
 
-def main():
-    cmd = sys.argv[1] if len(sys.argv) > 1 else "resume"
+def main(argv=None, env=None):
+    cfg = Config.from_env(env)
+    argv = sys.argv[1:] if argv is None else argv
+    cmd = argv[0] if argv else "resume"
     if cmd == "snapshot":
-        cmd_snapshot()
-    elif cmd == "resume":
-        cmd_resume()
-    else:
-        print(__doc__)
-        sys.exit(2)
+        cmd_snapshot(cfg)
+        return 0
+    if cmd == "resume":
+        cmd_resume(cfg)
+        return 0
+    print(__doc__)
+    return 2
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

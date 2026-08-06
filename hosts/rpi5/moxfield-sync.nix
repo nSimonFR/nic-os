@@ -80,7 +80,6 @@ in
     description = "Mirror Moxfield collection + decks into ShowMyCards";
     after = [ "showmycards-proxy.socket" "network-online.target" ];
     wants = [ "network-online.target" ];
-    path = [ pkgs.python3 ];
     environment = {
       MOXFIELD_USERS = lib.concatStringsSep "," users;
       MOXFIELD_COLLECTION_USER = collectionUser;
@@ -98,6 +97,10 @@ in
       # the signal that the language resolution in resolve_printings() is correct.
       # Set back to "1" before changing anything about the mirror — there is no
       # soft-delete anywhere in ShowMyCards.
+      #
+      # That said, the guards now have tests: the prune ceiling, the truncated /
+      # private / empty collection checks and the language remap are all covered in
+      # hosts/rpi5/scripts/lib/tests/test_moxfield.py, which runs in `nix flake check`.
       DRY_RUN = "0";
     };
     serviceConfig = {
@@ -107,7 +110,7 @@ in
       User = "showmycards";
       Group = "showmycards";
       StateDirectory = "moxfield-sync";
-      ExecStart = "${pkgs.python3}/bin/python3 ${./scripts/moxfield-sync.py}";
+      ExecStart = "${pkgs.nicos-scripts}/bin/moxfield-sync";
     };
   };
 

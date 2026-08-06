@@ -164,10 +164,11 @@ in
     # PostToolUse hook: mirror writes under
     # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
     # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge.
-    ".claude/hooks/memory-sync" = {
-      source = ./scripts/claude-memory-sync.py;
-      executable = true;
-    };
+    # Shipped as a console script of the nicos-scripts package rather than a raw
+    # .py: a loose file relies on a `python3` happening to be on the hook's PATH
+    # and declares no dependencies. The wrapper pins its own interpreter.
+    ".claude/hooks/memory-sync".source =
+      "${pkgs.nicos-scripts}/bin/claude-memory-sync";
 
     # PostToolUse hook on Bash: register each command with atuin under a
     # separate host (ATUIN_HOST_NAME=claude-code) plus a sentinel cwd

@@ -30,67 +30,66 @@ Stdlib only. Config via environment:
 """
 
 import base64
-import json
 import os
 import sys
 import urllib.error
 import urllib.parse
-import urllib.request
+from dataclasses import dataclass
+from datetime import datetime, timezone
 
-SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID", "")
-SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET", "")
-SPOTIFY_REFRESH_TOKEN = os.environ.get("SPOTIFY_REFRESH_TOKEN", "")
-RYOT_WEBHOOK_URL = os.environ.get("RYOT_WEBHOOK_URL", "")
-STATE_DIR = os.environ.get("STATE_DIR", "/var/lib/ryot-connectors")
+from .. import ryot
+from ..httpjson import get_json, post_form
+from ..logs import logger
+from ..secrets import env_str, missing_env
+from ..state import ensure_dir, load_json, save_json
 
-CURSOR_FILE = os.path.join(STATE_DIR, "spotify-cursor.json")
+log = logger("spotify-to-ryot")
 
-
-def log(msg):
-    print(f"[spotify-to-ryot] {msg}", flush=True)
-
-
-def http_json(req, timeout=30):
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        raw = resp.read().decode()
-        return json.loads(raw) if raw else {}
-
-
-def load_json(path, default):
-    try:
-        with open(path) as f:
-            return json.load(f)
-    except (FileNotFoundError, ValueError):
-        return default
+DEFAULT_STATE_DIR = "/var/lib/ryot-connectors"
+REQUIRED_ENV = (
+    "SPOTIFY_CLIENT_ID",
+    "SPOTIFY_CLIENT_SECRET",
+    "SPOTIFY_REFRESH_TOKEN",
+    "RYOT_WEBHOOK_URL",
+)
 
 
-def save_json(path, data):
-    tmp = path + ".tmp"
-    with open(tmp, "w") as f:
-        json.dump(data, f)
-    os.replace(tmp, path)
+@dataclass(frozen=True)
+class Config:
+    client_id: str = ""
+    client_secret: str = ""
+    refresh_token: str = ""
+    webhook_url: str = ""
+    state_dir: str = DEFAULT_STATE_DIR
+
+    @classmethod
+    def from_env(cls, env=None):
+        return cls(
+            client_id=env_str("SPOTIFY_CLIENT_ID", "", env),
+            client_secret=env_str("SPOTIFY_CLIENT_SECRET", "", env),
+            refresh_token=env_str("SPOTIFY_REFRESH_TOKEN", "", env),
+            webhook_url=env_str("RYOT_WEBHOOK_URL", "", env),
+            state_dir=env_str("STATE_DIR", DEFAULT_STATE_DIR, env),
+        )
+
+    @property
+    def cursor_file(self):
+        return os.path.join(self.state_dir, "spotify-cursor.json")
 
 
-def get_access_token():
+def get_access_token(cfg, opener=None):
     creds = base64.b64encode(
-        f"{SPOTIFY_CLIENT_ID}:{SPOTIFY_CLIENT_SECRET}".encode()
+        f"{cfg.client_id}:{cfg.client_secret}".encode()
     ).decode()
-    body = urllib.parse.urlencode(
-        {"grant_type": "refresh_token", "refresh_token": SPOTIFY_REFRESH_TOKEN}
-    ).encode()
-    req = urllib.request.Request(
+    return post_form(
         "https://accounts.spotify.com/api/token",
-        data=body,
-        headers={
-            "Authorization": "Basic " + creds,
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        method="POST",
-    )
-    return http_json(req)["access_token"]
+        {"grant_type": "refresh_token", "refresh_token": cfg.refresh_token},
+        headers={"Authorization": "Basic " + creds},
+        opener=opener,
+    )["access_token"]
 
 
-def get_recently_played(token, after_ms):
+def get_recently_played(token, after_ms, opener=None):
     query = {"limit": 50}
     if after_ms:
         query["after"] = after_ms
@@ -98,30 +97,28 @@ def get_recently_played(token, after_ms):
         "https://api.spotify.com/v1/me/player/recently-played?"
         + urllib.parse.urlencode(query)
     )
-    req = urllib.request.Request(
-        url, headers={"Authorization": "Bearer " + token}
-    )
-    return http_json(req).get("items", [])
+    return get_json(
+        url, headers={"Authorization": "Bearer " + token}, opener=opener
+    ).get("items", [])
 
 
 def music_item(identifier, source_id, ended_on):
-    return {
-        "lot": "music",
-        "source": "spotify",
-        "identifier": identifier,
-        "source_id": source_id,
-        # reviews + collections are non-optional in ImportOrExportMetadataItem;
-        # omitting them makes Ryot's strict deserialize drop the whole item.
-        "reviews": [],
-        "collections": [],
-        "seen_history": [
-            {
-                "progress": 100,
-                "ended_on": ended_on,
-                "providers_consumed_on": ["Spotify"],
-            }
-        ],
-    }
+    return ryot.metadata_item(
+        "music",
+        "spotify",
+        identifier,
+        source_id,
+        [ryot.seen(ended_on, providers=["Spotify"])],
+    )
+
+
+def iso_to_ms(iso):
+    # Spotify sends RFC3339 with optional millis and a trailing Z.
+    s = iso.replace("Z", "+00:00")
+    dt = datetime.fromisoformat(s)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp() * 1000)
 
 
 def build_payload(items, after_ms, known):
@@ -150,60 +147,33 @@ def build_payload(items, after_ms, known):
         if tid not in known:
             known.add(tid)
             first_evers.append(
-                {"identifier": tid, "source_id": track.get("name", tid), "ended_on": played_at}
+                {
+                    "identifier": tid,
+                    "source_id": track.get("name", tid),
+                    "ended_on": played_at,
+                }
             )
     return metadata, newest, first_evers
 
 
-def iso_to_ms(iso):
-    # Spotify sends RFC3339 with optional millis and a trailing Z.
-    from datetime import datetime, timezone
-
-    s = iso.replace("Z", "+00:00")
-    dt = datetime.fromisoformat(s)
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return int(dt.timestamp() * 1000)
-
-
-def post_to_ryot(metadata):
-    body = json.dumps({"metadata": metadata}).encode()
-    req = urllib.request.Request(
-        RYOT_WEBHOOK_URL,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=60) as resp:
-        return resp.status, resp.read().decode()
-
-
-def main():
-    missing = [
-        k
-        for k in (
-            "SPOTIFY_CLIENT_ID",
-            "SPOTIFY_CLIENT_SECRET",
-            "SPOTIFY_REFRESH_TOKEN",
-            "RYOT_WEBHOOK_URL",
-        )
-        if not os.environ.get(k)
-    ]
+def main(env=None, opener=None):
+    cfg = Config.from_env(env)
+    missing = missing_env(REQUIRED_ENV, env)
     if missing:
         log(f"FATAL: missing env: {', '.join(missing)}")
-        sys.exit(1)
-    os.makedirs(STATE_DIR, exist_ok=True)
+        return 1
+    ensure_dir(cfg.state_dir)
 
-    state = load_json(CURSOR_FILE, {})
+    state = load_json(cfg.cursor_file, {})
     after_ms = state.get("after_ms")
     known = set(state.get("known", []))
     prev_pending = state.get("pending", [])
     try:
-        token = get_access_token()
-        items = get_recently_played(token, after_ms)
+        token = get_access_token(cfg, opener=opener)
+        items = get_recently_played(token, after_ms, opener=opener)
     except (urllib.error.URLError, KeyError) as e:
         log(f"FATAL: Spotify API failed: {e}")
-        sys.exit(1)
+        return 1
 
     new_metadata, new_cursor, first_evers = build_payload(items, after_ms, known)
 
@@ -212,33 +182,35 @@ def main():
     # place — no duplicate). Only genuinely-new tracks ever enter this list, so
     # already-completed listens of known tracks are never re-pushed/duplicated.
     repush = [
-        music_item(p["identifier"], p["source_id"], p["ended_on"]) for p in prev_pending
+        music_item(p["identifier"], p["source_id"], p["ended_on"])
+        for p in prev_pending
     ]
 
     all_meta = new_metadata + repush
     if not all_meta:
         log("no new listens and nothing to complete — nothing to push")
-        return
+        return 0
 
     log(f"pushing {len(new_metadata)} new listens + {len(repush)} completions")
     try:
-        status, resp = post_to_ryot(all_meta)
+        status, resp = ryot.post_export(cfg.webhook_url, all_meta, opener=opener)
     except urllib.error.URLError as e:
         log(f"FATAL: push to Ryot failed: {e}")
-        sys.exit(1)
-    if status not in (200, 201, 202):
+        return 1
+    if not ryot.is_ok(status):
         log(f"FATAL: Ryot returned {status}: {resp[:300]}")
-        sys.exit(1)
+        return 1
 
     save_json(
-        CURSOR_FILE,
+        cfg.cursor_file,
         {"after_ms": new_cursor, "known": sorted(known), "pending": first_evers},
     )
     log(
         f"done (Ryot {status}); cursor {new_cursor}; "
         f"{len(first_evers)} tracks pending completion next run"
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
