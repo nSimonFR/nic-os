@@ -244,6 +244,67 @@
       };
       telegramChatId = 82389391;
 
+      # ── Host facts ────────────────────────────────────────────────────────
+      # `hostname` reaches every system AND home-manager config below, but a
+      # name alone can't tell a module what a host can *do* — and the two Linux
+      # hosts are indistinguishable to `pkgs.stdenv.isDarwin`, which is all a
+      # module under home/ used to have to go on. So each row carries a
+      # capability set as well. Modules branch on the capability, never on the
+      # name, so a fourth host is a row here rather than a new string compare in
+      # every module. See docs/adr/0007-host-capabilities-over-hostnames.md.
+      hosts = {
+        ${nixconfig} = {
+          name = nixconfig;
+          # Graphical workstation: GUI editors, and the Bitwarden *desktop* app
+          # that provides the SSH agent socket home/ssh.nix points at.
+          isGraphical = true;
+          # Star Citizen launcher config + the two prefix symlinks it writes back
+          # through. The Mac is graphical but doesn't run it.
+          runsStarCitizen = true;
+          # 16K-page kernel — claude-code's vendored ripgrep ships a 4K-page
+          # jemalloc and SIGABRTs there. Only the Pi.
+          has16KPages = false;
+        };
+        ${rpiconfig} = {
+          name = rpiconfig;
+          isGraphical = false;
+          runsStarCitizen = false;
+          has16KPages = true;
+        };
+        ${macconfig} = {
+          name = macconfig;
+          isGraphical = true;
+          runsStarCitizen = false;
+          has16KPages = false;
+        };
+      };
+
+      # The argument set every config gets, spelled once instead of seven times.
+      # Spelling it out per-site is how `beastHost` came to be referenced by
+      # nixos/immich-ml.nix while never being passed to BeAsT — it only survived
+      # because the sole reference sits in a `#` comment, where Nix doesn't
+      # interpolate. Per-config extras are merged on top at each call site.
+      baseArgs = name: {
+        inherit
+          inputs
+          outputs
+          username
+          telegramChatId
+          ;
+        hostname = name;
+        host = hosts.${name};
+      };
+
+      # nixpkgs-unstable for a given system. Four of the five `unstablePkgs`
+      # spellings below were byte-identical modulo the system string; the fifth
+      # (BeAsT's home-manager config) needs an overlay and keeps its own.
+      unstableFor =
+        system:
+        import nixpkgs-unstable {
+          inherit system;
+          config.allowUnfree = true;
+        };
+
       # This repo's own packages (pkgs/) as one overlay — single source of truth
       # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
       # resolve identically in NixOS modules (via rpi5/overlays.nix and
@@ -300,11 +361,11 @@
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
-        specialArgs = {
-          inherit inputs outputs username;
-          hostname = nixconfig;
+        specialArgs = baseArgs nixconfig // {
           # beast runs the Immich ML worker; version must match the rpi5 server.
-          inherit immichVersion;
+          # `beastHost` is its own tailnet name — referenced by nixos/immich-ml.nix
+          # and previously not passed here at all.
+          inherit immichVersion beastHost;
         };
         modules = [
           ./nixos/configuration.nix
@@ -318,15 +379,10 @@
         # This is NOT the same as inputs.nixos-raspberrypi.inputs.nixpkgs.follows (which would
         # break the kernel cache).
         nixpkgs = inputs.nixpkgs;
-        specialArgs = {
-          inherit inputs outputs username telegramChatId;
+        specialArgs = baseArgs rpiconfig // {
           inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl beastHost immichVersion;
-          hostname = rpiconfig;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
-          unstablePkgs = import nixpkgs-unstable {
-            system = "aarch64-linux";
-            config.allowUnfree = true;
-          };
+          unstablePkgs = unstableFor "aarch64-linux";
         };
         modules = [
           ./rpi5/overlays.nix
@@ -344,19 +400,15 @@
               useGlobalPkgs = true;
               useUserPackages = true;
               backupFileExtension = "hm-backup";
-              extraSpecialArgs = {
-                inherit
-                  inputs
-                  outputs
-                  username
-                  telegramChatId
-                  ;
-                inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
+              extraSpecialArgs = baseArgs rpiconfig // {
+                # tailnetFqdn: home/mcp.nix. apertureUrl + tinyLlmGateUrl:
+                # rpi5/hermes/hermes.nix, which is a home-manager module even
+                # though it lives under the host dir (imported via
+                # rpi5/home.nix). beastOllamaUrl has no home-manager consumer
+                # and is passed to the system config only.
+                inherit (rpi5Params) tailnetFqdn apertureUrl tinyLlmGateUrl;
                 devSetup = false;
-                unstablePkgs = import nixpkgs-unstable {
-                  system = "aarch64-linux";
-                  config.allowUnfree = true;
-                };
+                unstablePkgs = unstableFor "aarch64-linux";
               };
               users.${username} = {
                 imports = [
@@ -373,10 +425,7 @@
 
       darwinConfigurations.${macconfig} = darwin.lib.darwinSystem rec {
         system = "aarch64-darwin";
-        specialArgs = {
-          inherit inputs outputs username;
-          hostname = macconfig;
-        };
+        specialArgs = baseArgs macconfig;
         modules = [
           ./macos/configuration.nix
         ];
@@ -392,13 +441,7 @@
             config.permittedInsecurePackages = [ "electron-39.8.10" ];
             overlays = [ nicOsOverlay ];
           };
-          extraSpecialArgs = {
-            inherit
-              inputs
-              outputs
-              username
-              telegramChatId
-              ;
+          extraSpecialArgs = baseArgs nixconfig // {
             inherit (rpi5Params) tailnetFqdn;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
@@ -433,19 +476,12 @@
             config.allowUnfree = true;
             overlays = [ nicOsOverlay ];
           };
-          extraSpecialArgs = {
-            inherit
-              inputs
-              outputs
-              username
-              telegramChatId
-              ;
-            inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl;
+          extraSpecialArgs = baseArgs rpiconfig // {
+            # Same module set as the NixOS-integrated config above, so the same
+            # hermes arguments are required.
+            inherit (rpi5Params) tailnetFqdn apertureUrl tinyLlmGateUrl;
             devSetup = false;
-            unstablePkgs = import nixpkgs-unstable {
-              system = "aarch64-linux";
-              config.allowUnfree = true;
-            };
+            unstablePkgs = unstableFor "aarch64-linux";
           };
           modules = [
             inputs.ragenix.homeManagerModules.default
@@ -460,19 +496,10 @@
             config.allowUnfree = true;
             overlays = [ nicOsOverlay ];
           };
-          extraSpecialArgs = {
-            inherit
-              inputs
-              outputs
-              username
-              telegramChatId
-              ;
+          extraSpecialArgs = baseArgs macconfig // {
             inherit (rpi5Params) tailnetFqdn;
             devSetup = true;
-            unstablePkgs = import nixpkgs-unstable {
-              system = "aarch64-darwin";
-              config.allowUnfree = true;
-            };
+            unstablePkgs = unstableFor "aarch64-darwin";
           };
           modules = [
             inputs.ragenix.homeManagerModules.default
