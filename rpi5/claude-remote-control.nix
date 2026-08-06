@@ -300,9 +300,33 @@ let
             continue
           fi
           echo "removing orphaned worktree: $wt_name"
+          # Unlock BEFORE removing. Every bridge worktree is locked at creation
+          # (so a reboot can't let prune reap a resumable session), and
+          # `worktree remove --force` REFUSES a locked worktree — it does not
+          # override the lock. Without this unlock the command failed silently,
+          # fell through to the `rm -rf`, and left the registration behind
+          # forever.
+          git -C /home/${username}/nic-os worktree unlock "$wt" 2>/dev/null || true
           git -C /home/${username}/nic-os worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
         fi
       done
+
+      # Collect registrations whose directory is already gone. `worktree prune`
+      # silently SKIPS locked entries, so any worktree that lost its directory
+      # while still locked — every one removed by the rm -rf fallback above, plus
+      # anything cleaned up by hand — stayed registered permanently. These had
+      # accumulated to 356 orphans against 52 live worktrees (28MB of
+      # .git/worktrees metadata, and 400+ branch refs kept alive because a
+      # registration pins its branch). Unlock the dead ones first so prune can
+      # actually do its job; live worktrees keep their locks.
+      # Pure shell on purpose: this script's PATH (above) carries only
+      # jq/git/procps/findutils, so awk is not guaranteed to be present.
+      git -C /home/${username}/nic-os worktree list --porcelain 2>/dev/null \
+        | while read -r wt_key wt_path; do
+            [ "$wt_key" = "worktree" ] || continue
+            [ -d "$wt_path" ] && continue
+            git -C /home/${username}/nic-os worktree unlock "$wt_path" 2>/dev/null || true
+          done
       git -C /home/${username}/nic-os worktree prune 2>/dev/null || true
     fi
 
