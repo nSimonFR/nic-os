@@ -4,7 +4,7 @@
 
 ## Context
 
-`nixos/configuration.nix` carried a `useLightdm` toggle, hard-set to `false`, and
+`hosts/beast/configuration.nix` carried a `useLightdm` toggle, hard-set to `false`, and
 kept both display-manager configurations behind it — ReGreet at `enable =
 !useLightdm`, LightDM at `enable = useLightdm`. The LightDM branch was 42 lines of
 GTK greeter theming, fonts, indicator layout and an onboard keyboard setting, all

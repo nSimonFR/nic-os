@@ -61,5 +61,5 @@ journalctl -u sure-web -n 20 --no-pager | telegram-send -m plain
   never fails its caller. Surface Telegram's `description` when `.ok` is false.
 - Galleries (2–10 photos as one `sendMediaGroup`) aren't covered; reference
   implementation is `send_album` in
-  `rpi5/hermes/skills/immich-memories/scripts/immich-on-this-day.py`.
+  `hosts/rpi5/hermes/skills/immich-memories/scripts/immich-on-this-day.py`.
 - Never echo the bot token back to the user or into logs.

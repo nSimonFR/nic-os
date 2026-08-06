@@ -3,7 +3,7 @@
 # config.ts hardcodes /data/options.json and ha.ts reads WS_URL +
 # SUPERVISOR_TOKEN from the environment; the unit supplies both.
 #
-# Service module (unit, /data bind mount, EnvironmentFile): rpi5/home-assistant.nix.
+# Service module (unit, /data bind mount, EnvironmentFile): hosts/rpi5/home-assistant.nix.
 {
   lib,
   buildNpmPackage,

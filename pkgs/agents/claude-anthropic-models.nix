@@ -8,7 +8,7 @@
 # list; if extraction ever breaks, the count guard in jq fails the build rather
 # than silently emitting an empty list.
 #
-# Consumer: rpi5/aperture-sync.nix (the Anthropic passthrough provider).
+# Consumer: hosts/rpi5/aperture-sync.nix (the Anthropic passthrough provider).
 {
   runCommand,
   gnugrep,

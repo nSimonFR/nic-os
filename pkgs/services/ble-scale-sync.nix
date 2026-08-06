@@ -2,7 +2,7 @@
 # Connects over BlueZ, decodes weight + impedance, computes body-composition
 # metrics from a user profile and POSTs them to a webhook.
 #
-# Service module (user, unit, secrets, webhook target): rpi5/scale-bridge.nix.
+# Service module (user, unit, secrets, webhook target): hosts/rpi5/scale-bridge.nix.
 {
   buildNpmPackage,
   fetchFromGitHub,

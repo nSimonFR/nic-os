@@ -5,7 +5,7 @@
 # Capture: native wlr-screencopy-unstable-v1 via pywayland (no ffmpeg).
 #
 # Service module (udev rule, OpenRGB LG-detector disable, user unit):
-# nixos/rgb/lg-sphere-ambient.nix.
+# hosts/beast/rgb/lg-sphere-ambient.nix.
 {
   stdenv,
   makeWrapper,

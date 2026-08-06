@@ -44,7 +44,7 @@
     # Hermes Agent (NousResearch/hermes-agent) — Python+Node AI agent, a full
     # flake carrying its own uv2nix stack (like beaverhabits-nix, we only pin
     # nixpkgs; forcing the pyproject/uv2nix inputs to follow breaks the build).
-    # The rpi5 Telegram agent (succeeded PicoClaw) — see rpi5/hermes/hermes.nix.
+    # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
     hermes-agent = {
       url = "github:NousResearch/hermes-agent";
@@ -96,7 +96,7 @@
 
     # BeaverHabits habit tracker — Python/NiceGUI, packaged via uv2nix. First
     # Python native app here; its flake carries the uv2nix stack itself, so we
-    # only pin nixpkgs. See rpi5/beaverhabits.nix.
+    # only pin nixpkgs. See hosts/rpi5/beaverhabits.nix.
     beaverhabits-nix = {
       url = "github:nSimonFR/beaverhabits-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -161,7 +161,7 @@
     };
 
     # Cyrus — Linear coding-agent dispatcher (cyrusagents/cyrus). Source-only
-    # input (`flake = false`): rpi5/cyrus.nix vendors it and builds with pnpm
+    # input (`flake = false`): hosts/rpi5/cyrus.nix vendors it and builds with pnpm
     # at service start. Tracks the default branch (no tag), so `nix flake
     # update` auto-bumps it; cyrus-build.service rebuilds once per rev change.
     # To pin a specific commit/tag instead, append `/<rev-or-tag>` to the URL.
@@ -222,7 +222,7 @@
 
       # Immich version — SINGLE SOURCE OF TRUTH shared by both hosts. The rpi5
       # runs the Immich *server* from nixpkgs-unstable; beast runs the ML worker
-      # (nixos/immich-ml.nix) and Immich REQUIRES server==ML version. Derive it
+      # (hosts/beast/immich-ml.nix) and Immich REQUIRES server==ML version. Derive it
       # once from the unstable package so the two can never drift: bump nixpkgs-
       # unstable and both hosts move together. (Version is a string attr; reading
       # it forces no build. x86_64 vs aarch64 is irrelevant — same package def.)
@@ -281,7 +281,7 @@
 
       # The argument set every config gets, spelled once instead of seven times.
       # Spelling it out per-site is how `beastHost` came to be referenced by
-      # nixos/immich-ml.nix while never being passed to BeAsT — it only survived
+      # hosts/beast/immich-ml.nix while never being passed to BeAsT — it only survived
       # because the sole reference sits in a `#` comment, where Nix doesn't
       # interpolate. Per-config extras are merged on top at each call site.
       baseArgs = name: {
@@ -307,13 +307,13 @@
 
       # This repo's own packages (pkgs/) as one overlay — single source of truth
       # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
-      # resolve identically in NixOS modules (via rpi5/overlays.nix and
-      # nixos/overlays.nix) and in the standalone home-manager configs below.
+      # resolve identically in NixOS modules (via hosts/rpi5/overlays.nix and
+      # hosts/beast/overlays.nix) and in the standalone home-manager configs below.
       # See pkgs/overlay.nix for what does and does not belong in it.
       nicOsOverlay = import ./pkgs/overlay.nix inputs;
     in
     {
-      # Exposed so rpi5/overlays.nix and nixos/overlays.nix pull the same
+      # Exposed so hosts/rpi5/overlays.nix and hosts/beast/overlays.nix pull the same
       # overlay (DRY).
       overlays.nic-os = nicOsOverlay;
 
@@ -343,7 +343,7 @@
           # Expose Ryot as a standalone target (`nix build .#ryot`) so its heavy
           # Rust LTO + Node build can be isolated/pinned and optionally pushed to
           # a binary cache (Cachix/attic). Built locally on the Pi by default —
-          # there is no prebuild CI cache (garnix is deprecated). See rpi5/ryot.nix.
+          # there is no prebuild CI cache (garnix is deprecated). See hosts/rpi5/ryot.nix.
           aarch64-linux.ryot =
             self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
           # ShowMyCards — `nix build .#showmycards` to isolate its Go (cgo) +
@@ -354,7 +354,7 @@
           # Hermes Agent — lean `messaging` variant. Exposed as a standalone
           # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
           # npm compile can be validated/isolated on the Pi BEFORE wiring the
-          # user service (OOM-prone; no prebuild cache). See rpi5/hermes/hermes.nix.
+          # user service (OOM-prone; no prebuild cache). See hosts/rpi5/hermes/hermes.nix.
           aarch64-linux.hermes-messaging =
             inputs.hermes-agent.packages.aarch64-linux.messaging;
         };
@@ -363,12 +363,12 @@
         system = "x86_64-linux";
         specialArgs = baseArgs nixconfig // {
           # beast runs the Immich ML worker; version must match the rpi5 server.
-          # `beastHost` is its own tailnet name — referenced by nixos/immich-ml.nix
+          # `beastHost` is its own tailnet name — referenced by hosts/beast/immich-ml.nix
           # and previously not passed here at all.
           inherit immichVersion beastHost;
         };
         modules = [
-          ./nixos/configuration.nix
+          ./hosts/beast/configuration.nix
         ];
       };
 
@@ -385,7 +385,7 @@
           unstablePkgs = unstableFor "aarch64-linux";
         };
         modules = [
-          ./rpi5/overlays.nix
+          ./hosts/rpi5/overlays.nix
           inputs.ragenix.nixosModules.default
           inputs.home-manager.nixosModules.home-manager
           inputs.sure-nix.nixosModules.sure
@@ -414,12 +414,12 @@
                 imports = [
                   inputs.ragenix.homeManagerModules.default
                   ./home
-                  ./rpi5/home.nix
+                  ./hosts/rpi5/home.nix
                 ];
               };
             };
           }
-          ./rpi5/configuration.nix
+          ./hosts/rpi5/configuration.nix
         ];
       };
 
@@ -427,7 +427,7 @@
         system = "aarch64-darwin";
         specialArgs = baseArgs macconfig;
         modules = [
-          ./macos/configuration.nix
+          ./hosts/nbookpro/configuration.nix
         ];
       };
 
@@ -466,7 +466,7 @@
           modules = [
             inputs.ragenix.homeManagerModules.default
             ./home
-            ./nixos/home.nix
+            ./hosts/beast/home.nix
           ];
         };
 
@@ -486,7 +486,7 @@
           modules = [
             inputs.ragenix.homeManagerModules.default
             ./home
-            ./rpi5/home.nix
+            ./hosts/rpi5/home.nix
           ];
         };
 
@@ -504,7 +504,7 @@
           modules = [
             inputs.ragenix.homeManagerModules.default
             ./home
-            ./macos/home.nix
+            ./hosts/nbookpro/home.nix
           ];
         };
       };

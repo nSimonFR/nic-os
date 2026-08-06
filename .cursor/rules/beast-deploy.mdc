@@ -1,6 +1,6 @@
 ---
 description: Auto-deploy BeAsT NixOS system and Home Manager configuration after changes
-globs: nixos/**/*.nix, home/**/*.nix, flake.nix
+globs: hosts/beast/**/*.nix, home/**/*.nix, flake.nix
 alwaysApply: false
 ---
 

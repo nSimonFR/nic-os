@@ -12,7 +12,7 @@ let
   mcpConfig = pkgs.writeText "claude-mtg-mcp.json" (
     builtins.toJSON {
       # `pkgs.mtg-mcp` comes from the repo overlay (pkgs/overlay.nix) — the same
-      # eval Hermes uses on the rpi5 (rpi5/hermes/hermes.nix).
+      # eval Hermes uses on the rpi5 (hosts/rpi5/hermes/hermes.nix).
       mcpServers.mtg.command = lib.getExe pkgs.mtg-mcp;
     }
   );

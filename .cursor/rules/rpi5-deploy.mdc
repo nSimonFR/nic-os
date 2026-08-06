@@ -1,6 +1,6 @@
 ---
 description: Auto-deploy RPi5 NixOS + Home Manager configuration via SSH after changes
-globs: rpi5/**/*.nix, home/**/*.nix
+globs: hosts/rpi5/**/*.nix, home/**/*.nix
 alwaysApply: false
 ---
 
@@ -28,7 +28,7 @@ home-manager switch --flake 'path:.#nsimon@rpi5'
 
 ```sh
 # 1. Sync changed files (adjust path as needed for what changed)
-rsync -av /Users/nsimon/nic-os/rpi5/ nsimon@rpi5:~/nic-os/rpi5/
+rsync -av /Users/nsimon/nic-os/hosts/rpi5/ nsimon@rpi5:~/nic-os/hosts/rpi5/
 
 # 2. System config
 ssh nsimon@rpi5 "cd ~/nic-os && sudo nixos-rebuild switch --flake path:.#rpi5 2>&1"
@@ -40,7 +40,7 @@ ssh nsimon@rpi5 "cd ~/nic-os && home-manager switch --flake path:.#nsimon@rpi5 2
 If only specific files changed, sync just those files instead of the whole directory to save time:
 
 ```sh
-rsync -av /Users/nsimon/nic-os/rpi5/some-file.nix nsimon@rpi5:~/nic-os/rpi5/some-file.nix
+rsync -av /Users/nsimon/nic-os/hosts/rpi5/some-file.nix nsimon@rpi5:~/nic-os/hosts/rpi5/some-file.nix
 ```
 
 If the build fails, read the error output and fix the Nix configuration before retrying.

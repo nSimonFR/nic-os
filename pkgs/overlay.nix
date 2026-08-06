@@ -13,16 +13,16 @@
 # Entries are lazy, so listing a package here costs nothing on a host that
 # never references it (openrgb-lg is x86-only, showmycards is built on aarch64).
 #
-# Applied by rpi5/overlays.nix, nixos/overlays.nix, and the homeConfigurations
+# Applied by hosts/rpi5/overlays.nix, hosts/beast/overlays.nix, and the homeConfigurations
 # in flake.nix — all via `outputs.overlays.nic-os`.
 inputs: final: _prev: {
   # RTK (Rust Token Killer) — built from the rtk-src flake input.
-  # Consumers: rpi5/cyrus.nix, home/, and `nix build .#rtk`.
+  # Consumers: hosts/rpi5/cyrus.nix, home/, and `nix build .#rtk`.
   rtk = final.callPackage ./agents/rtk.nix { rtk-src = inputs.rtk-src; };
 
   # ShowMyCards (MTG collection manager) — built from the showmycards-src flake
   # input; the prebuilt upstream image is amd64-only.
-  # Consumers: rpi5/showmycards.nix and `nix build .#showmycards`.
+  # Consumers: hosts/rpi5/showmycards.nix and `nix build .#showmycards`.
   showmycards = final.callPackage ./services/showmycards.nix {
     showmycards-src = inputs.showmycards-src;
     # backend/go.mod requires `go 1.26.3` and a pure build can't fetch a
@@ -33,13 +33,13 @@ inputs: final: _prev: {
   };
 
   # mtg-mcp — MCP server for Magic: The Gathering / Commander.
-  # Consumers: rpi5/hermes/hermes.nix (the Hermes agent) and home/claude-mtg.nix
+  # Consumers: hosts/rpi5/hermes/hermes.nix (the Hermes agent) and home/claude-mtg.nix
   # (the Mac's `claude-mtg` CLI). Both used to callPackage it independently,
   # which evaluated the derivation twice with no single source of truth.
   mtg-mcp = final.callPackage ./agents/mtg-mcp.nix { };
 
   # OpenRGB 1.0rc2 — the first build with working LG monitor support.
-  # Consumers: nixos/rgb/openrgb-lg.nix (systemPackages) and
-  # nixos/configuration.nix (services.hardware.openrgb.package).
+  # Consumers: hosts/beast/rgb/openrgb-lg.nix (systemPackages) and
+  # hosts/beast/configuration.nix (services.hardware.openrgb.package).
   openrgb-lg = final.callPackage ./rgb/openrgb-lg.nix { };
 }

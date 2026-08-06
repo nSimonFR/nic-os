@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Tests for the two scripted notification seams (see shared/notify.nix):
-# rpi5/scripts/telegram-alert.sh's incident lifecycle, and telegram-send.sh.
+# hosts/rpi5/scripts/telegram-alert.sh's incident lifecycle, and telegram-send.sh.
 #
 # Offline: a stub `curl` earlier on PATH logs one line per call (newlines folded
 # to '|') and replies with a canned Bot API response, so nothing reaches
@@ -39,7 +39,7 @@ count() { wc -l < "$CALL_LOG" | tr -d ' '; }
 
 echo "── telegram-alert.sh: incident lifecycle ─────────────────────────────"
 export ALERT_STATE_DIR="$tmp/state"
-alert=$here/../../../rpi5/scripts/telegram-alert.sh
+alert=$here/../../../hosts/rpi5/scripts/telegram-alert.sh
 fire() { printf '%s' "$1" | bash "$alert" disk-full "🔴 Disk full"; }
 
 fire "root 96%"

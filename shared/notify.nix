@@ -2,7 +2,7 @@
 #
 #   alert  a condition that fires and later CLEARS — one self-updating message
 #          per incident (send-once, edit-in-place, occurrence count, `since`,
-#          auto-resolve).            → rpi5/scripts/telegram-alert.sh
+#          auto-resolve).            → hosts/rpi5/scripts/telegram-alert.sh
 #   send   a one-shot event with no resolved state.
 #                                    → shared/scripts/telegram-send.sh
 #   agent  agent chatter that should batch — POSTs to rpi5's :8088 aggregator,
@@ -28,7 +28,7 @@ in
       export TELEGRAM_CHAT_ID=${toString chatId}
       export ALERT_STATE_DIR=${stateDir}
       export PATH=${path [ pkgs.curl pkgs.jq pkgs.coreutils ]}
-      exec ${pkgs.bash}/bin/bash ${../rpi5/scripts/telegram-alert.sh} "$@"
+      exec ${pkgs.bash}/bin/bash ${../hosts/rpi5/scripts/telegram-alert.sh} "$@"
     '';
 
   send =

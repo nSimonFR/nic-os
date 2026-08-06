@@ -1,0 +1,719 @@
+{
+  config,
+  lib,
+  pkgs,
+  inputs,
+  outputs,
+  username,
+  ...
+}:
+let
+  # Minimal Hyprland config for greeter session — DPMS off after 5 min idle (WOL power saving)
+  greeterHypridleConfig = pkgs.linkFarm "greeter-hypridle-config" [{
+    name = "hypr/hypridle.conf";
+    path = pkgs.writeText "hypridle.conf" ''
+      listener {
+        timeout = 180
+        on-timeout = hyprctl dispatch dpms off
+        on-resume = hyprctl dispatch dpms on
+      }
+    '';
+  }];
+  greeterHyprlandConfig = pkgs.writeText "greetd-hyprland.conf" ''
+    monitor = desc:LG Electronics 38GN950 008NTKFBE741, 3840x1600@160, 0x0, 1
+    monitor = desc:Acer Technologies GN246HL LW3EE0058532, disable
+    monitor = , preferred, auto, 1
+    misc {
+      disable_hyprland_logo = true
+      disable_splash_rendering = true
+      key_press_enables_dpms = true
+    }
+    animations {
+      enabled = false
+    }
+    exec-once = XDG_CONFIG_HOME=${greeterHypridleConfig} ${pkgs.hypridle}/bin/hypridle
+    exec-once = ${pkgs.greetd.regreet}/bin/regreet; hyprctl dispatch exit
+  '';
+
+in
+{
+  imports = [
+    ../../common/nixos.nix # baseline shared with the rpi5
+    ./hardware-configuration.nix
+    ./overlays.nix # this repo's own packages (pkgs/overlay.nix)
+    ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
+    ./rgb/hyperion-openrgb.nix # Hyperion with OpenRGB support
+    ./rgb/hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB
+    ./rgb/lg-sphere-ambient.nix # LG 38GN950 sphere lighting video-sync (wlr-screencopy → HID)
+    ./piper-autoprofile.nix
+    ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
+    ./music-production.nix # Audacity + Graillon voice plugins for alfie
+    # Tailscale client configuration
+    (import ../../shared/tailscale.nix { role = "client"; enableSSH = true; })
+    ./beszel-agent.nix
+    ./immich-ml.nix # native GPU-accelerated Immich machine-learning (CLIP) for the rpi5
+  ];
+
+  boot = {
+    loader = {
+      systemd-boot.enable = true;
+      systemd-boot.configurationLimit = 15;
+      efi.canTouchEfiVariables = true;
+      efi.efiSysMountPoint = "/boot/efi";
+    };
+
+    kernelPackages = pkgs.linuxPackages_6_18; # 6.18.19 — NTSync support (6.14+), compatible with NVIDIA 580
+
+    kernelParams = [
+      "mem_sleep_default=s2idle"
+      "nvidia.NVreg_PreserveVideoMemoryAllocations=0"
+      "nvidia.NVreg_EnableGpuSuspend=1"
+      "nvidia.NVreg_RegistryDwords=RMGpuTdr=0x7FFFFFFF" # Disable GPU TDR timeout (Star Citizen pipeline rebuild)
+      "nvidia.NVreg_EnableGpuFirmware=0" # Disable GSP firmware (fixes Vulkan pipeline compile timeouts)
+      "nvidia-drm.modeset=1" # CRITICAL: Required for NVIDIA on Wayland/Xwayland
+      "nvidia-drm.fbdev=1" # Enable framebuffer device support
+      "acpi_enforce_resources=lax" # Fix OpenRGB I2C/SMBus detection bug (GitLab issue #5059)
+      "zswap.enabled=0" # Disable zswap when using zram (Star Citizen optimization)
+      "transparent_hugepage=always" # Auto-promote 4KB→2MB pages for all processes (Star Citizen + Wine don't request madvise themselves); cuts TLB miss overhead on the 21 GB working set. Singular spelling — `transparent_hugepages` (plural) is silently ignored by the kernel.
+    ];
+
+    kernel.sysctl = {
+      "vm.max_map_count" = 16777216;
+      "fs.file-max" = 524288;
+      "vm.swappiness" = 100; # Use zram more aggressively
+      "vm.dirty_ratio" = 5; # Cap dirty pages at ~1.6GB (was 6.4GB) to avoid write bursts on DRAM-less NVMe
+      "vm.dirty_background_ratio" = 2; # Start flushing at ~640MB (was 3.2GB)
+      "vm.dirty_expire_centisecs" = 1500; # Flush dirty pages after 15s (was 30s)
+      "vm.dirty_writeback_centisecs" = 300; # Check for dirty pages every 3s (was 5s)
+      "vm.min_free_kbytes" = 262144; # Keep 256MB free to prevent emergency reclaim I/O storms
+      "vm.vfs_cache_pressure" = 50; # Default 100. Keeps dentry/inode cache around longer — helps SC's tens of thousands of small asset files re-open faster on subsequent loads
+    };
+
+    kernelModules = [
+      "ff_memless"
+      "i2c-nvidia-gpu" # NVIDIA GPU I2C for RGB control
+      "ntsync" # NT synchronization primitives for Wine/Proton (NTSync)
+    ];
+
+    supportedFilesystems = [ "ntfs3" ];
+
+    # binfmt.emulatedSystems = [ "aarch64-linux" ]; # not needed — rpi5 builds natively via --build-host
+  };
+
+  # Star Citizen / LUG: hard open file limit (GE-Proton7-14-SC & LUG manual install)
+  systemd.settings.Manager.DefaultLimitNOFILE = 524288;
+
+  # Hardware watchdog (SP5100 TCO) -- auto-recover from GPU-hang lockups.
+  # RuntimeWatchdogSec was 0, so the HW timer was unarmed at runtime and the
+  # 2026-07-15 stalled reboot never self-reset (needed a physical power-cycle).
+  # Arming it continuously lets the chipset force-reset a hard lockup on its own.
+  systemd.watchdog = {
+    runtimeTime = "120s"; # pet every 60s; hard lockup resets after 120s
+    rebootTime = "5min";  # stalled reboot force-resets after 5min
+  };
+
+  # Suspend guard: the runtime watchdog above is incompatible with s2idle sleep.
+  # During s2idle PID 1 is frozen and stops petting /dev/watchdog0, so the SP5100
+  # force-resets after 120s -- i.e. any suspend >2min = guaranteed reboot (this
+  # bit us 2026-07-17). systemd owns the watchdog fd and does NOT disarm it on
+  # sleep, but it does honour a runtime RuntimeWatchdogUSec change over D-Bus.
+  # So: disarm (=0) before sleep, re-arm (=120s) on resume. The box stays
+  # protected the whole time it's awake (a GPU hang only happens under load,
+  # never while frozen); only the brief sleep->resume window is unguarded.
+  # ExecStart runs before sleep.target is reached; ExecStop runs when it's torn
+  # down on resume (StopWhenUnneeded + WantedBy=sleep.target). The 120000000us
+  # re-arm value must stay in sync with systemd.watchdog.runtimeTime above.
+  systemd.services.watchdog-sleep-guard = {
+    description = "Disarm HW watchdog across sleep, re-arm on resume";
+    before = [ "sleep.target" ];
+    wantedBy = [ "sleep.target" ];
+    unitConfig.StopWhenUnneeded = true;
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${config.systemd.package}/bin/busctl set-property org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager RuntimeWatchdogUSec t 0";
+      ExecStop = "${config.systemd.package}/bin/busctl set-property org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager RuntimeWatchdogUSec t 120000000";
+    };
+  };
+
+  # Wake-on-LAN: allow magic-packet wake on the ethernet interface.
+  # WOL is Layer 2 only — only devices on the same physical LAN (i.e. rpi5)
+  # can send the magic packet; Tailscale and the internet cannot reach it.
+  networking.interfaces.eno1.wakeOnLan.enable = true;
+
+  # Wake-on-LAN: enable magic packet wake on the primary ethernet interface
+  systemd.network.links."50-ethernet-wol" = {
+    matchConfig.OriginalName = "eno*";
+    linkConfig.WakeOnLan = "magic";
+  };
+
+  console = {
+    # font = "Lat2-Terminus16";
+    # keyMap = "us";
+    useXkbConfig = true;
+  };
+
+  # Environment variables moved to hyprland.conf for Hyprland-specific setup
+
+  users.users.${username} = {
+    extraGroups = [
+      "wheel" # Enables 'sudo'
+      "video"
+      "audio"
+      "disk"
+      "networkmanager"
+      "systemd-journal"
+      "docker"
+      "input"
+      "seat" # Required for Wayland seat management
+      "i2c" # Required for OpenRGB monitor control
+      "libvirtd" # VM management
+      "kvm" # KVM acceleration
+    ];
+  };
+
+  # Couch user — logs in via greeter and launches Steam gamescope session.
+  # Password set manually via: sudo passwd alfie
+  users.users.alfie = {
+    isNormalUser = true;
+    home = "/home/alfie";
+    extraGroups = [
+      "video"
+      "audio"
+      "input"
+      "seat"
+    ];
+  };
+
+  # Share nsimon's Hyprland config and rofi launcher config with alfie when she logs into
+  # Hyprland (after exiting gamescope). She has no home-manager, so these are root-owned
+  # symlinks recreated on each rebuild.
+  systemd.tmpfiles.rules = [
+    "L+ /home/alfie/.config/hypr/hyprland.conf - - - - ${./dotfiles/hypr/hyprland.conf}"
+    "L+ /home/alfie/.config/rofi - - - - ${./dotfiles/rofi}"
+    # Per-user Proton prefix root for alfie (see alfie-proton-prefixes service below).
+    "d /home/alfie/proton-prefixes 0755 alfie users -"
+  ];
+
+  # umask 002 so nsimon + alfie can both read/write the shared /mnt/games tree.
+  # Why: NTFS via ntfs3 doesn't honor default ACLs, so group-write on new files
+  # depends entirely on the creating process's umask. NixOS default login.defs is
+  # UMASK 077, which made alfie's Steam create dirs as 0755 and lock nsimon out
+  # of staging dirs ("Disk write failure" on POE2 update). Both users' primary
+  # group is `users`, so g+w is enough to share access.
+  environment.shellInit = "umask 002";
+  environment.loginShellInit = "umask 002";
+  systemd.user.extraConfig = ''
+    DefaultUMask=0002
+  '';
+  security.loginDefs.settings.UMASK = "002";
+
+  # Give alfie her own Proton prefix for every game on the shared NTFS library.
+  # /mnt/games/SteamLibrary is NTFS (ntfs3, uid=1000), so every game's Proton prefix
+  # under steamapps/compatdata/<appid> reads as owned by nsimon (uid 1000). Wine refuses
+  # a prefix that "is not owned by you", so EVERY Proton game launched and instantly died
+  # ONLY for alfie (uid 1001), while nsimon's worked (native games are unaffected — no
+  # prefix). The fix is a per-game Steam launch option that redirects STEAM_COMPAT_DATA_PATH
+  # into alfie's home (ext4, real ownership), so Proton builds a fresh prefix she owns.
+  # Steam keeps launch options across restarts, but they live in alfie's home and are not
+  # declarative; this oneshot re-asserts them idempotently at boot (before display-manager,
+  # so Steam is not running) so the fix survives a Steam config reset, covers newly-installed
+  # games on the next boot, and is reproducible from this config. See
+  # ./ensure-alfie-proton-prefixes.sh.
+  systemd.services.alfie-proton-prefixes = {
+    description = "Ensure alfie's per-game Proton prefix redirects (shared NTFS games drive workaround)";
+    before = [ "display-manager.service" ];
+    wantedBy = [ "multi-user.target" ];
+    path = with pkgs; [ bash gawk gnugrep procps coreutils ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "alfie";
+      ExecStart = "${pkgs.bash}/bin/bash ${./ensure-alfie-proton-prefixes.sh}";
+    };
+  };
+
+  environment.systemPackages = with pkgs; [
+    cage
+    ddcutil
+    ethtool # verify WoL: ethtool eno1 | grep Wake
+    dmenu
+    rofi # app launcher (SUPER+Space) for alfie — same one nsimon gets via home-manager
+    inputs.zen-browser.packages.${pkgs.stdenv.hostPlatform.system}.twilight # zen browser for alfie (nsimon's comes from home-manager)
+    feh
+    gamescope
+    regreet
+    i2c-tools
+    kdePackages.kwallet
+    kdePackages.kwalletmanager
+    libvirt # virsh CLI for VM management
+    ntfs3g
+    piper # GUI for Logitech G502 configuration (DPI, buttons, RGB)
+    input-remapper # Remap keys/mouse buttons for games
+    usbutils
+    vim
+    vulkan-tools
+    vulkan-loader
+    vulkan-validation-layers
+    dxvk
+    wayland
+    wayland-protocols
+    wget
+    gamemode
+
+    # WiFi utilities (available in PATH, no auto-connect)
+    wpa_supplicant # wpa_passphrase, wpa_cli, wpa_supplicant
+    iw             # modern wireless config (iw dev, iw scan …)
+    wirelesstools  # iwconfig, iwlist, iwscan
+    dhcpcd         # dhcp client for manual wifi sessions
+
+    smartmontools  # smartctl for ad-hoc disk inspection
+  ];
+
+  programs.kdeconnect.enable = true; # Enables KWallet D-Bus service
+
+  # Enable PAM integration for KDE Wallet to auto-unlock on login
+  security.pam.services.lightdm.enableKwallet = true;
+
+  services.printing.enable = true;
+
+  services.flatpak.enable = true;
+
+  programs.hyprland.enable = true;
+
+  xdg.portal = {
+    enable = true;
+    extraPortals = [
+      pkgs.xdg-desktop-portal-hyprland
+      pkgs.xdg-desktop-portal-gtk
+    ];
+    config.common.default = [
+      "hyprland"
+      "gtk"
+    ];
+  };
+  programs.nix-ld = {
+    enable = true;
+    # Enable 32-bit support for pressure-vessel/Steam runtime
+    libraries = with pkgs; [
+      # 32-bit libraries for Steam/Proton/pressure-vessel
+      pkgsi686Linux.glibc
+    ];
+  };
+
+  # Symlink 32-bit dynamic linker for pressure-vessel compatibility
+  environment.etc."ld-linux.so.2".source = "${pkgs.pkgsi686Linux.glibc}/lib/ld-linux.so.2";
+
+  security.polkit.enable = true;
+
+  security.polkit.extraConfig = ''
+    polkit.addRule(function(action, subject) {
+      if (action.id.indexOf("com.feralinteractive.GameMode") === 0 && subject.isInGroup("users")) {
+        return polkit.Result.YES;
+      }
+    });
+    polkit.addRule(function(action, subject) {
+      if (action.id === "org.freedesktop.systemd1.manage-units" &&
+          (action.lookup("unit") === "ollama.service" ||
+           action.lookup("unit") === "immich-machine-learning.service") &&
+          subject.isInGroup("users")) {
+        return polkit.Result.YES;
+      }
+    });
+  '';
+
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true;
+  };
+
+  hardware.nvidia = {
+    open = false; # Proprietary modules: open modules have Vulkan pipeline compilation timeout bug (Xid 109)
+    package = config.boot.kernelPackages.nvidiaPackages.production; # 580.119.02 — 590.x has Vulkan pipeline timeout
+
+    modesetting.enable = true;
+    nvidiaSettings = true;
+
+    powerManagement = {
+      enable = false;
+      finegrained = false;
+    };
+
+    # Enable explicit sync for better Wayland support (requires driver >= 560)
+    # This helps with Xwayland applications like games
+    # Uncomment if you experience issues:
+    forceFullCompositionPipeline = false;
+  };
+
+  services.xserver.videoDrivers = [ "nvidia" ];
+
+  programs.regreet = {
+    enable = true;
+    theme = {
+      package = pkgs.flat-remix-gtk;
+      name = "Flat-Remix-GTK-Grey-Darkest";
+    };
+    settings = {
+      background = {
+        fit = "Cover";
+        path = "/home/${username}/wallpaper.png";
+      };
+      GTK = {
+        application_prefer_dark_theme = true;
+      };
+    };
+  };
+
+  # Use Hyprland instead of cage for greeter — enables hypridle DPMS (power saving after WOL)
+  services.greetd.settings.default_session.command = lib.mkForce
+    "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
+
+  users.users.greeter = {
+    isSystemUser = true;
+    group = "greeter";
+  };
+  users.groups.greeter = { };
+
+  # X server enabled for the NVIDIA driver stack (services.xserver.videoDrivers
+  # above) and Xwayland; the sessions themselves are Wayland. NOT for a display
+  # manager — the greeter is ReGreet under Hyprland (see ADR 0005).
+  services.xserver = {
+    enable = true;
+  };
+
+  # Enable libinput for proper mouse/touchpad support on Wayland
+  services.libinput = {
+    enable = true;
+    mouse = {
+      accelProfile = "flat";
+      middleEmulation = false;
+    };
+  };
+
+  services.displayManager.sessionPackages = [
+  ];
+
+  environment.etc = {
+    "dbus-1/system.conf".source = "${pkgs.dbus}/etc/dbus-1/system.conf";
+    "dbus-1/session.conf".source = "${pkgs.dbus}/etc/dbus-1/session.conf";
+  };
+
+  security.pam.services.hyprlock = {
+    allowNullPassword = false;
+  };
+
+  services.pipewire = {
+    enable = true;
+    pulse.enable = true;
+  };
+
+  # Disable audio card power save to prevent crackling when waking from sleep
+  # boot.extraModprobeConfig = ''
+  #   options snd-hda-intel power_save=0 power_save_controller=N
+  # '';
+
+  programs.steam = {
+    enable = true;
+    remotePlay.openFirewall = true;
+    dedicatedServer.openFirewall = true;
+    extest.enable = false; # Disabled due to 32-bit/64-bit library conflicts
+    gamescopeSession.enable = true;
+    localNetworkGameTransfers.openFirewall = true;
+    extraCompatPackages = [ pkgs.proton-ge-bin ];
+    # platformOptimizations.enable = true;
+
+    # Make gamemode available to Steam games
+    package = pkgs.steam.override {
+      extraLibraries = pkgs: [ pkgs.gamemode ];
+    };
+  };
+
+  programs.gamemode = {
+    enable = true;
+    enableRenice = true;
+    settings = {
+      general = {
+        renice = 10;
+        desiredgov = "performance";
+        softrealtime = "auto";
+        ioprio = 0;
+      };
+      gpu = {
+        apply_gpu_optimisations = "accept-responsibility";
+        gpu_device = 0;
+        nv_powermizer_mode = 1;
+      };
+      custom = {
+        start = toString (pkgs.writeShellScript "gamemode-start" ''
+          ${pkgs.libnotify}/bin/notify-send 'GameMode started'
+          # Free VRAM for the game: stop the LLM and Immich ML services. Immich
+          # ML jobs the rpi5 dispatches queue in BullMQ and drain on end.
+          ${pkgs.systemd}/bin/systemctl stop ollama immich-machine-learning || true
+        '');
+        end = toString (pkgs.writeShellScript "gamemode-end" ''
+          ${pkgs.libnotify}/bin/notify-send 'GameMode ended'
+          ${pkgs.systemd}/bin/systemctl start ollama immich-machine-learning
+        '');
+      };
+    };
+  };
+
+  # Gamescope is installed as a regular package to avoid wrapper issues
+  # programs.gamescope = {
+  #   enable = true;
+  #   capSysNice = false;
+  # };
+
+  hardware.steam-hardware.enable = true;
+
+  services.ananicy = {
+    enable = true;
+    package = pkgs.ananicy-cpp;
+    rulesProvider = pkgs.ananicy-cpp;
+    extraRules = [
+      {
+        "name" = "gamescope";
+        "nice" = -20;
+      }
+    ];
+  };
+
+  # Override hardware-configuration.nix to disable atime writes on /. SC reads tens of
+  # thousands of asset files; relatime still issues writes on first read each day per file.
+  # noatime drops them entirely.
+  fileSystems."/".options = [ "noatime" ];
+
+  fileSystems."/mnt/games" = {
+    device = "/dev/disk/by-label/Games\\x20SSD";
+    fsType = "ntfs3";
+    options = [
+      "uid=1000"
+      "gid=100"
+      "umask=0000"
+      "force"
+      "nofail"
+      "x-systemd.automount"
+      "noauto"
+    ];
+  };
+
+  fileSystems."/mnt/games-linux" = {
+    device = "/dev/disk/by-label/Games-Linux";
+    fsType = "ext4";
+    options = [
+      "nofail"
+      "x-systemd.automount"
+      "noauto"
+    ];
+  };
+
+  fileSystems."/mnt/media" = {
+    device = "/dev/disk/by-label/Media\\x20HDD";
+    fsType = "ntfs3";
+    options = [
+      "uid=1000"
+      "gid=100"
+      "umask=0000"
+      "force"
+      "nofail"
+      "x-systemd.automount"
+      "noauto"
+    ];
+  };
+
+  # Disk swap disabled - using zram only for better performance
+  swapDevices = [ ];
+
+  zramSwap = {
+    memoryPercent = 100; # 32GB zram = ~64-96GB effective with compression
+    algorithm = "lz4hc"; # ~3x faster decompression than zstd — less page-fault stutter in Star Citizen at cost of ~3GB effective RAM
+  };
+
+  services.udev = {
+    extraRules = ''
+      # Input device access for seat management
+      SUBSYSTEM=="input", GROUP="input", MODE="0660"
+      KERNEL=="event*", GROUP="input", MODE="0660"
+      KERNEL=="mouse*", GROUP="input", MODE="0660"
+
+      # DualSense controller
+      KERNEL=="hidraw*", ATTRS{idVendor}=="054c", ATTRS{idProduct}=="0ce6", MODE="0666", TAG+="uaccess"
+
+      # VKB devices for Star Citizen
+      # Covers all VKB-Sim devices (Gladiator EVO L SEM, Gladiator EVO R, etc.)
+      # TAG+="uaccess" on event/js nodes is required for Flatpak sandbox access
+      # (group membership is lost in the Flatpak namespace, uaccess logind ACL is not)
+      KERNEL=="hidraw*", ATTRS{idVendor}=="231d", ATTRS{idProduct}=="*", MODE="0660", TAG+="uaccess"
+      KERNEL=="event*", ATTRS{idVendor}=="231d", TAG+="uaccess"
+      KERNEL=="js*", ATTRS{idVendor}=="231d", TAG+="uaccess"
+
+      # OpenRGB USB HID device access for RGB keyboards/mice/devices
+      # Drevo Calibur RGB Keyboard
+      SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="0483", ENV{ID_MODEL_ID}=="4010", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{idVendor}=="0483", ATTRS{idProduct}=="4010", MODE="0666", TAG+="uaccess"
+
+      # ASUS AURA LED Controller (motherboard RGB headers for fans)
+      SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="0b05", ENV{ID_MODEL_ID}=="19af", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{idVendor}=="0b05", ATTRS{idProduct}=="19af", MODE="0666", TAG+="uaccess"
+
+      # Logitech G502 RGB Mouse
+      SUBSYSTEM=="usb", ENV{ID_VENDOR_ID}=="046d", TAG+="uaccess"
+      KERNEL=="hidraw*", ATTRS{idVendor}=="046d", MODE="0666", TAG+="uaccess"
+
+      # General OpenRGB USB access
+      SUBSYSTEM=="hidraw", TAG+="uaccess"
+      SUBSYSTEM=="usb", ATTRS{idVendor}=="0483", TAG+="uaccess"
+      SUBSYSTEM=="usb", ATTRS{idVendor}=="0b05", TAG+="uaccess"
+      SUBSYSTEM=="usb", ATTRS{idVendor}=="046d", TAG+="uaccess"
+
+      # Tobii Eye Tracker 5 - Native Linux + VM passthrough with autosuspend disabled
+      # Disable power management to ensure stable passthrough and adequate power delivery
+      ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2104", ATTR{idProduct}=="0313", ATTR{power/control}="on", ATTR{power/autosuspend}="-1", MODE="0666", TAG+="uaccess"
+    '';
+
+    packages = [ pkgs.game-devices-udev-rules ];
+  };
+
+  #system.activationScripts.applyWineDualsenseFix.text = builtins.readFile ./scripts/wine-dualsense-fix.sh;
+
+  networking.firewall = rec {
+    allowedTCPPortRanges = [
+      {
+        from = 1714;
+        to = 1764;
+      }
+    ];
+    allowedUDPPortRanges = allowedTCPPortRanges;
+    allowedUDPPorts = [ 4242 ]; # opentrack UDP from Tobii VM
+  };
+
+  virtualisation.docker = {
+    enable = true;
+    package = pkgs.docker_29; # docker_28 unmaintained/insecure on 25.11 nixpkgs (2026-06)
+  };
+
+  # Libvirt/QEMU for Tobii Eye Tracker VM passthrough
+  virtualisation.libvirtd = {
+    enable = true;
+    qemu = {
+      swtpm.enable = true; # TPM emulation for Windows 11
+      vhostUserPackages = [ pkgs.virtiofsd ]; # Required for virtiofs
+    };
+  };
+  virtualisation.spiceUSBRedirection.enable = true;
+  programs.virt-manager.enable = true;
+
+  # Ollama - local LLM inference with CUDA (RTX 3080 Ti)
+  # Gemma 4 26B-A4B: MoE with 3.8B active params, fits in 12GB VRAM at Q4, Arena ELO 1441
+  # Qwen3.6-35B-A3B: MoE with 3B active params, highest benchmarks (85.3 MMLU-Pro), RAM offload
+  services.ollama = {
+    enable = true;
+    package = (import inputs.nixpkgs-unstable {
+      system = "x86_64-linux";
+      config.allowUnfree = true;
+      config.cudaSupport = true;
+    }).ollama-cuda;
+    host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
+    loadModels = [ "gemma4:26b" "gemma4:e4b" "qwen3.6:35b-a3b" ];
+    environmentVariables = {
+      OLLAMA_GPU_OVERHEAD = "1073741824"; # Reserve 1GB VRAM for Hyprland/Ghostty (prevents VRAM OOM → terminal crash)
+      OLLAMA_FLASH_ATTENTION = "1"; # Reduce VRAM usage during inference via flash attention
+      OLLAMA_KV_CACHE_TYPE = "q8_0"; # Quantize KV cache to further reduce VRAM (vs default f16)
+    };
+  };
+
+  services.hardware.openrgb = {
+    enable = true;
+    package = pkgs.openrgb-lg; # Use custom build with LG monitor support
+    server.port = 6742; # Enable SDK server for screen-reactive effects
+  };
+
+  # Apply purple breathing RGB colors on startup
+  # systemd.services.openrgb-colors = {
+  #   description = "Apply OpenRGB color profile on startup";
+  #   after = [ "openrgb.service" ];
+  #   wants = [ "openrgb.service" ];
+  #   wantedBy = [ "multi-user.target" ];
+  #   serviceConfig = {
+  #     Type = "oneshot";
+  #     ExecStart = pkgs.writeShellScript "openrgb-apply-colors" ''
+  #       # Wait for OpenRGB server to be fully ready
+  #       sleep 3
+
+  #       # Apply purple colors to all devices
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 0 --mode direct --color FF00FF
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 1 --mode direct --color FF00FF
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 2 --mode static --color FF00FF
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 3 --mode breathing --speed 80 --color FF00FF
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 4 --mode breathing --speed 80 --color FF00FF
+  #       ${pkgs.openrgb-lg}/bin/openrgb --device 5 --mode direct --color FF00FF
+  #     '';
+  #     RemainAfterExit = true;
+  #   };
+  # };
+
+  # Enable DDC/CI for monitor control
+  hardware.i2c.enable = true;
+
+  services.dbus = {
+    enable = true;
+    implementation = "broker";
+    packages = [ pkgs.dbus ];
+  };
+
+  hardware.uinput.enable = true;
+
+  # Enable seat management for Wayland (critical for input device access)
+  services.seatd = {
+    enable = true;
+    group = "seat";
+  };
+
+  # ── DNS: use RPi5 blocky (ad/tracker/malware blocking) ──────────────
+  # Primary = Tailscale (works everywhere), Fallback = LAN (home network)
+  # Last-resort fallback to Cloudflare if RPi5 is completely unreachable
+  networking.nameservers = [
+    "100.122.54.2"   # RPi5 – Tailscale
+  ];
+
+  services.resolved = {
+    fallbackDns = [
+      "1.1.1.1"        # Cloudflare – last resort if RPi5 is down
+      "9.9.9.9"        # Quad9 – last resort
+    ];
+    # Don't let DHCP override our DNS settings
+    dnsovertls = "opportunistic";
+  };
+
+  hardware.bluetooth.enable = true;
+  services.blueman.enable = true;
+
+  # Required for Piper (mouse configuration GUI)
+  services.ratbagd.enable = true;
+
+  # stateVersion, experimental-features, auto-optimise-store, and the nix.gc
+  # schedule come from ../../common/nixos.nix.
+  nix.settings = {
+    # NOT [ "root" username ]: nix.settings.trusted-users already carries "root"
+    # by default, so spelling it again rendered `trusted-users = root root nsimon`
+    # into nix.conf. The rpi5 states only [ username ] and ends up with exactly
+    # the same effective set — the two hosts never actually diverged here.
+    trusted-users = [ username ];
+    substituters = [
+      "https://nix-citizen.cachix.org"
+    ];
+    trusted-public-keys = [
+      "nix-citizen.cachix.org-1:lPMkWc2X8XD4/7YPEEwXKKBg+SVbYTVrAaLA2wQTKCo="
+    ];
+    download-buffer-size = 536870912;
+  };
+
+  # 171 GB of NVMe and a 15-generation boot menu — a month of roots is affordable
+  # here in a way it isn't on the Pi (7d, see hosts/rpi5/configuration.nix).
+  nix.gc.options = "--delete-older-than 30d";
+
+  # Limit journal size to 200MB
+  services.journald.extraConfig = ''
+    SystemMaxUse=200M
+  '';
+
+}

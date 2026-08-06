@@ -9,7 +9,7 @@
 # the ABI of the HA binary — the caller passes
 # config.services.home-assistant.package.python3Packages.
 #
-# Wired into services.home-assistant.customComponents: rpi5/home-assistant.nix.
+# Wired into services.home-assistant.customComponents: hosts/rpi5/home-assistant.nix.
 {
   buildHomeAssistantComponent,
   fetchFromGitHub,

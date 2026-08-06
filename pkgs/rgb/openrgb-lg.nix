@@ -2,8 +2,8 @@
 # with working LG monitor support.
 #
 # Exposed as `pkgs.openrgb-lg` via the repo overlay (see pkgs/overlay.nix)
-# because it has two consumers: nixos/rgb/openrgb-lg.nix (systemPackages) and
-# nixos/configuration.nix (services.hardware.openrgb.package).
+# because it has two consumers: hosts/beast/rgb/openrgb-lg.nix (systemPackages) and
+# hosts/beast/configuration.nix (services.hardware.openrgb.package).
 {
   openrgb-with-all-plugins,
   fetchFromGitLab,

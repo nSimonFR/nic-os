@@ -3,7 +3,7 @@
 #
 # Only used for the NPClient64.dll it installs into /libexec/opentrack — the
 # opentrack binary actually run at runtime is the AppImage
-# (pkgs/tobii/opentrack-tobii.nix). Service module: nixos/tobii-native.nix.
+# (pkgs/tobii/opentrack-tobii.nix). Service module: hosts/beast/tobii-native.nix.
 {
   lib,
   stdenv,
@@ -52,7 +52,7 @@ stdenv.mkDerivation {
   # NOTE: the heredoc body starts at column 0, so Nix strips ZERO indentation
   # from this string. The `cat` line's 6-space indent is therefore part of the
   # (harmless) shell command — keep it exactly as-is so the derivation hash is
-  # unchanged by the move out of nixos/tobii-native.nix.
+  # unchanged by the move out of hosts/beast/tobii-native.nix.
   postPatch = ''
       cat > tracker-tobii/CMakeLists.txt <<'EOF'
 if(WIN32)

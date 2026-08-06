@@ -1,7 +1,7 @@
 # Bridge between Hyperion and OpenRGB: receives UDP packets from Hyperion and
 # forwards the averaged colour to the OpenRGB SDK server.
 #
-# Service module (user unit, firewall port 19446): nixos/rgb/hyperion-openrgb-bridge.nix.
+# Service module (user unit, firewall port 19446): hosts/beast/rgb/hyperion-openrgb-bridge.nix.
 {
   python312,
   writeTextDir,
