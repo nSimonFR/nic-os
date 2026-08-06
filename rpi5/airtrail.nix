@@ -26,7 +26,7 @@ in
   # ── PostgreSQL: airtrail database + airtrail role ─────────────────────────
   # `unaccent` is pre-created here because an airtrail migration issues CREATE
   # EXTENSION, which needs superuser rights the airtrail role does not have.
-  services.pgRole.airtrail = {
+  nic.pgRole.airtrail = {
     db           = "airtrail";
     user         = "airtrail";
     passwordFile = "/run/agenix/airtrail-pg-password";

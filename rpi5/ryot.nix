@@ -87,7 +87,7 @@ let
 in
 {
   # ── PostgreSQL: ryot database + ryot role ─────────────────────────────────
-  services.pgRole.ryot = {
+  nic.pgRole.ryot = {
     db           = "ryot";
     user         = "ryot";
     passwordFile = "/run/agenix/ryot-pg-password";

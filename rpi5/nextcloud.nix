@@ -92,7 +92,7 @@ let
 in
 {
   # ── PostgreSQL: nextcloud_production database + nextcloud_user ─────────────
-  services.pgRole.nextcloud = {
+  nic.pgRole.nextcloud = {
     db           = "nextcloud_production";
     user         = "nextcloud_user";
     passwordFile = "/run/agenix/nextcloud-pg-password";

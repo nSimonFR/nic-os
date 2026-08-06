@@ -43,7 +43,7 @@ in
 
 
   # ── PostgreSQL: sure_production database + sure_user ──────────────────────
-  services.pgRole.sure = {
+  nic.pgRole.sure = {
     db           = "sure_production";
     user         = "sure_user";
     passwordFile = "/run/agenix/sure-pg-password";
