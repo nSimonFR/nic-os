@@ -179,4 +179,12 @@ in
       timeoutSec   = 120;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.reactive-resume = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "reactive_resume" ];
+    heavyUnits        = [ "reactive-resume.service" ];
+    heavyPriority     = 30;
+  };
 }

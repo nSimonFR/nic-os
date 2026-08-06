@@ -48,4 +48,12 @@ in
       timeoutSec   = 60;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.beaverhabits = {
+    backup        = [ "unit" ];
+    backupUnits   = [ "beaverhabits-backup.service" ];   # backups.nix
+    heavyUnits    = [ "beaverhabits.service" ];
+    heavyPriority = 100;
+  };
 }

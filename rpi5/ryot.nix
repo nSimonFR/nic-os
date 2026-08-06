@@ -177,4 +177,12 @@ in
       Persistent = true;              # catch up a missed run if the Pi was off
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.ryot = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "ryot" ];
+    heavyUnits        = [ "ryot-backend.service" "ryot-frontend.service" ];
+    heavyPriority     = 90;
+  };
 }

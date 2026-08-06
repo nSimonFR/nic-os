@@ -434,4 +434,12 @@ in
       echo "[mail-setup] Mail-app account seeded"
     '';
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # No heavyUnits: Nextcloud runs as php-fpm behind nginx, and nginx is infra
+  # that nixos-rebuild-safe deliberately leaves up.
+  nic.services.nextcloud = {
+    backup            = [ "postgres" "mnt-data" ];
+    postgresDatabases = [ "nextcloud_production" ];
+  };
 }

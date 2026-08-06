@@ -114,4 +114,11 @@ in {
     timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
   };
 
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.wakapi = {
+    backup        = [ "unit" ];
+    backupUnits   = [ "wakapi-backup.service" ];   # declared just above
+    heavyUnits    = [ "wakapi.service" ];
+    heavyPriority = 140;
+  };
 }

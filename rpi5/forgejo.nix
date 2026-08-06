@@ -90,9 +90,6 @@ in
   systemd.services.forgejo.serviceConfig.MemoryMax = "256M";
   systemd.services.forgejo.environment.GOMEMLIMIT = "200MiB";
 
-  # ── PostgreSQL backup (appends to list in backups.nix) ─────────────────
-  services.postgresqlBackup.databases = [ "forgejo" ];
-
   # ── Forgejo state backup (secrets, config, avatars) ────────────────────
   # The repos live on /mnt/data/repositories and the DB is dumped by
   # postgresqlBackup — both already reach Storj via restic. What was NOT
@@ -238,5 +235,17 @@ in
       OnCalendar = "*-*-* 03:30:00";
       Persistent = true;
     };
+  };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # All three mechanisms, and the reason each exists is spelled out above: the
+  # DB dump carries the data, the state tarball carries the secret_key that
+  # makes the dump decryptable, and the repositories are already on the HDD.
+  nic.services.forgejo = {
+    backup            = [ "postgres" "unit" "mnt-data" ];
+    postgresDatabases = [ "forgejo" ];
+    backupUnits       = [ "forgejo-state-backup.service" ];
+    heavyUnits        = [ "forgejo.service" ];
+    heavyPriority     = 130;
   };
 }

@@ -277,4 +277,11 @@ in
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
 
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.home-assistant = {
+    backup        = [ "unit" ];
+    backupUnits   = [ "hass-backup.service" ];   # backups.nix
+    heavyUnits    = [ "home-assistant.service" ];
+    heavyPriority = 20;
+  };
 }

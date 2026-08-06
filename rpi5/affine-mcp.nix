@@ -127,4 +127,12 @@ in
       SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.affine-mcp = {
+    backup        = [ "none" ];
+    backupNote    = "stateless bridge — every document it serves lives in AFFiNE's Postgres";
+    heavyUnits    = [ "affine-mcp.service" ];
+    heavyPriority = 60;
+  };
 }

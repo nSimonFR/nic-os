@@ -289,4 +289,14 @@ in
       timeoutSec   = 120;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # Two mechanisms: the libSQL metadata DB is dumped by papra-backup, the
+  # document files already sit on the HDD under /mnt/data/papra/documents.
+  nic.services.papra = {
+    backup        = [ "unit" "mnt-data" ];
+    backupUnits   = [ "papra-backup.service" ];   # backups.nix
+    heavyUnits    = [ "papra.service" ];
+    heavyPriority = 120;
+  };
 }

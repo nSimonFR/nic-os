@@ -3,22 +3,21 @@
 { pkgs, ... }:
 {
   # ── PostgreSQL (built-in NixOS module) ─────────────────────────────────
+  # `databases` is NOT listed here. It is derived from
+  # `nic.services.<name>.postgresDatabases` (rpi5/lib/service-registration.nix),
+  # declared in each service's own module.
+  #
+  # The hand-maintained list this replaced had drifted in both directions: it
+  # dumped `ghostfolio`, left over from a service no module in the repo defines
+  # any more, while Karakeep — which does have state — was absent because SQLite
+  # services had no representation here at all. Dropping ghostfolio stops the
+  # nightly dump; the database itself is still live (25 MB, effectively static)
+  # and its last dump stays on /mnt/data, exactly as paperless_production's did
+  # when that service was retired. Drop the database when you're satisfied
+  # nothing wants it.
   services.postgresqlBackup = {
     enable = true;
     location = "/mnt/data/backups/postgresql";
-    # forgejo adds itself in forgejo.nix; immich dumps its own DB to
-    # /mnt/data/immich/backups. Everything else with a Postgres DB is listed
-    # here so the nightly dump lands on /mnt/data and reaches Storj via restic.
-    databases = [
-      "affine"
-      "dawarich"
-      "sure_production"
-      "nextcloud_production"
-      "airtrail"
-      "ghostfolio"
-      "reactive_resume"
-      "ryot"
-    ];
     compression = "gzip";
     startAt = "*-*-* 03:00:00";
   };
@@ -30,6 +29,7 @@
     "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
     "d /mnt/data/backups/papra 0750 papra papra -"
     "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
+    "d /mnt/data/backups/karakeep 0750 karakeep karakeep -"
   ];
 
   systemd.services.hass-backup = {
@@ -94,6 +94,41 @@
     description = "Daily BeaverHabits backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
+  };
+
+  # ── Karakeep (SQLite + assets) ─────────────────────────────────────────
+  # Karakeep keeps everything under /var/lib/karakeep on the SSD — outside
+  # /mnt/data, so restic (storj-backup.nix, which backs up /mnt/data only) never
+  # saw it. Bookmarks, tags and AI summaries were unbacked from the day the
+  # service landed; `nic.services.karakeep.backup` now pins this unit as the
+  # answer, and lib/service-registration.nix asserts the unit exists.
+  #
+  # db.db holds the bookmarks; assets/ holds crawled favicons and images (the
+  # local Chromium archiver is disabled, so this stays small). queue.db is the
+  # job queue — regenerable, but 56 KB, so not worth the special case.
+  # Runs as karakeep so it reads the 0600 DB whether or not the socket-idle
+  # stack is awake; .backup only touches the file, not the running server.
+  systemd.services.karakeep-backup = {
+    description = "Karakeep database + assets backup";
+    serviceConfig = { Type = "oneshot"; User = "karakeep"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/karakeep
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/karakeep/db.db ".backup '$OUT/karakeep-$STAMP.db'"
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/karakeep/queue.db ".backup '$OUT/karakeep-queue-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "$OUT/karakeep-$STAMP.db" "$OUT/karakeep-queue-$STAMP.db"
+      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks.
+      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
+        -cf "$OUT/karakeep-assets-$STAMP.tar.gz" -C /var/lib/karakeep assets
+      ${pkgs.findutils}/bin/find "$OUT" -type f -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.karakeep-backup = {
+    description = "Daily Karakeep backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────

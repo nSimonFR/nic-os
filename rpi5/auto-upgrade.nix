@@ -4,8 +4,8 @@
 #   1. `nix flake update` on the live checkout (/home/nsimon/nic-os), run AS
 #      nsimon so the rewritten flake.lock stays user-owned and git's
 #      dubious-ownership guard is satisfied (the repo is nsimon's).
-#   2. Stops the heavy userspace services (shared OOM guard — see
-#      ./lib/heavy-services.nix) so the memory-tight Pi has build headroom and
+#   2. Stops the heavy userspace services (shared OOM guard — `nic.heavyServices`,
+#      see ./lib/service-registration.nix) so the memory-tight Pi has build headroom and
 #      doesn't zram-thrash into a watchdog reset.
 #   3. `nixos-rebuild switch` against the (now dirty) working tree. On failure
 #      the script aborts BEFORE the reboot line, the new generation is not
@@ -31,7 +31,7 @@
 let
   flakeDir = "/home/nsimon/nic-os";
   owner = "nsimon";
-  heavyServices = import ./lib/heavy-services.nix;
+  heavyServices = config.nic.heavyServices;
   tokenFile = config.age.secrets.telegram-bot-token.path;
 in
 {

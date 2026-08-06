@@ -69,4 +69,12 @@ in
     };
     workers."gramps-web-celery.service".policy = "sleepWith";
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.gramps-web = {
+    backup        = [ "unit" ];
+    backupUnits   = [ "gramps-web-backup.service" ];   # backups.nix — trees + media
+    heavyUnits    = [ "gramps-web.service" "gramps-web-celery.service" ];
+    heavyPriority = 80;
+  };
 }
