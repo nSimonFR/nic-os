@@ -96,12 +96,21 @@ let
   # the Mac's `claude-mtg` CLI (home/claude-mtg.nix) but must stay OUT of
   # shared/skills, which home/claude.nix auto-wires into every general-purpose
   # agent. Kept under mtg/ here so the runtime layout is unchanged.
-  skillsSource = pkgs.runCommand "hermes-skills" { } ''
-    mkdir -p $out $out/mtg
-    cp -r ${../../shared/skills}/. $out/
-    cp -rf ${./skills}/. $out/
-    cp -rf ${../../shared/mtg-skills}/. $out/mtg/
-  '';
+  #
+  # This list is the single declaration of what the repo seeds into
+  # ~/.hermes/skills; hermes-skill-promote below derives its exclusion set from
+  # it, so the two cannot drift.
+  skillTree = import ../../shared/skill-tree.nix { inherit lib; };
+  skillLineages = [
+    { source = ../../shared/skills; }
+    { source = ./skills; }
+    { source = ../../shared/mtg-skills; prefix = "mtg"; }
+  ];
+  skillsSource = skillTree.tree {
+    inherit pkgs;
+    name = "hermes-skills";
+    lineages = skillLineages;
+  };
   documentsSource = ./documents;
 
   # Workspace scripts the cron jobs shell out to (daily pending digest, weekly
@@ -286,7 +295,9 @@ let
     export HOME="/home/nsimon"
     export HERMES_SKILLS_DIR="${hermesHome}/skills"
     export DEST_SKILLS="${nicosRepo}/shared/skills"
-    export HERMES_LOCAL_SKILLS="${nicosRepo}/rpi5/hermes/skills"
+    # From skillLineages above, so the exclusion set covers every lineage —
+    # mtg-skills and its `mtg/` dir included, which the old listing missed.
+    export SEEDED_SKILL_NAMES="${lib.concatStringsSep ":" (skillTree.names skillLineages)}"
     export TELEGRAM_SEND="${promoteNotify}"
     export PATH="${
       lib.makeBinPath [

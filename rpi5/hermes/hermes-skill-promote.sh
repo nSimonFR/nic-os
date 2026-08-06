@@ -18,10 +18,11 @@
 # from the repo from ones Hermes authored itself — both are `local`. So we can't
 # key off Source alone. Instead:
 #   promote = (on-disk skills) − (repo-seeded dirs) − (builtins)
-# where repo-seeded dirs are excluded by DIRECTORY name ($DEST_SKILLS +
-# $HERMES_LOCAL_SKILLS, which we copy verbatim so dir names line up) and builtins by
-# frontmatter `name:`. We map each runtime DIRECTORY to its `name:` (dir != name,
-# e.g. dir `tavily-search` has name `tavily`) before the builtin check.
+# where repo-seeded dirs are excluded by DIRECTORY name ($SEEDED_SKILL_NAMES,
+# computed in Nix from the SAME lineage list that seeds the runtime dir, plus a
+# live listing of $DEST_SKILLS) and builtins by frontmatter `name:`. We map each
+# runtime DIRECTORY to its `name:` (dir != name, e.g. dir `tavily-search` has
+# name `tavily`) before the builtin check.
 #
 # Promote-once: a skill already present in $DEST_SKILLS is left alone, so a
 # review edit you make before committing is never clobbered by a later run.
@@ -30,7 +31,9 @@
 # Env (all set by the systemd unit wrapper):
 #   HERMES_SKILLS_DIR   runtime skills dir             (~/.hermes/skills)
 #   DEST_SKILLS         repo dest for new skills       (…/nic-os/shared/skills)
-#   HERMES_LOCAL_SKILLS other repo-seeded skills dir   (…/rpi5/hermes/skills)
+#   SEEDED_SKILL_NAMES  colon-separated dir names the repo seeds, from
+#                       hermes.nix's skillLineages (required — see the
+#                       fail-safe below)
 #   TELEGRAM_SEND       one-shot Telegram sender       (optional; the wrapped
 #                       shared/scripts/telegram-send.sh, already carrying the
 #                       token path + chat id)
@@ -39,7 +42,7 @@ set -euo pipefail
 
 HERMES_SKILLS_DIR="${HERMES_SKILLS_DIR:-$HOME/.hermes/skills}"
 DEST_SKILLS="${DEST_SKILLS:?DEST_SKILLS must be set}"
-HERMES_LOCAL_SKILLS="${HERMES_LOCAL_SKILLS:-}"
+SEEDED_SKILL_NAMES="${SEEDED_SKILL_NAMES:-}"
 TELEGRAM_SEND="${TELEGRAM_SEND:-}"
 
 log() { echo "hermes-skill-promote: $*"; }
@@ -69,10 +72,22 @@ if [ -z "$builtinNames" ]; then
   exit 0
 fi
 
-# seededDirs = DIRECTORY names we seed from the repo (shared/skills + hermes local
-# skills). These are already versioned, so exclude them by dir name. DEST_SKILLS
-# doubles as a seed source, so anything already promoted is excluded here too.
-seededDirs="$( { [ -d "$DEST_SKILLS" ] && ls -1 "$DEST_SKILLS"; [ -n "$HERMES_LOCAL_SKILLS" ] && [ -d "$HERMES_LOCAL_SKILLS" ] && ls -1 "$HERMES_LOCAL_SKILLS"; } 2>/dev/null | sort -u)"
+# seededNames = repo-seeded DIRECTORY names, excluded because they are already
+# versioned. Fail SAFE like the builtin set above: with no seeded names every
+# repo-seeded skill reads as agent-authored and Hermes' private skills get
+# auto-published to every general agent.
+if [ -z "$SEEDED_SKILL_NAMES" ]; then
+  log "WARNING: SEEDED_SKILL_NAMES is empty — aborting (fail-safe; see hermes.nix skillLineages)"
+  exit 0
+fi
+# Unioned with a live $DEST_SKILLS listing, which catches skills promoted by an
+# earlier run but not yet committed — Nix evaluates from the git index.
+seededNames="$(
+  {
+    printf '%s\n' "$SEEDED_SKILL_NAMES" | tr ':' '\n'
+    [ -d "$DEST_SKILLS" ] && ls -1 "$DEST_SKILLS"
+  } 2>/dev/null | sed '/^[[:space:]]*$/d' | sort -u
+)"
 
 promoted=""
 while IFS= read -r skdir; do
@@ -82,7 +97,7 @@ while IFS= read -r skdir; do
   [ -f "$smd" ] || continue
 
   # Skip skills we seed from the repo (matched by directory name).
-  printf '%s\n' "$seededDirs" | grep -qxF "$d" && continue
+  printf '%s\n' "$seededNames" | grep -qxF "$d" && continue
 
   # Directory -> frontmatter name (first `name:` in the leading --- block).
   name="$(awk -F: '/^name:/ { sub(/^name:[ \t]*/, "", $0); gsub(/^[ \t]+|[ \t]+$/, "", $0); gsub(/["'"'"']/, "", $0); print; exit }' "$smd")"
