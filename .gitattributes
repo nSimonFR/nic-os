@@ -1,0 +1,14 @@
+# Git LFS — large binary assets.
+#
+# Scoped to the one file that actually warrants it (13 MB, 93% of nixos/dotfiles/
+# by bytes) rather than a blanket *.png rule: the small vendored waybar assets
+# under nixos/dotfiles/waybar/.github/ are ~20-130 KB each and gain nothing from
+# LFS while adding pointer churn to every diff.
+#
+# ⚠️  This file is read by Nix as a plain path — nixos/home.nix does
+#     `home.file."wallpaper.png".source = ./dotfiles/wallpaper.png`. If the
+#     working tree holds an unsmudged LFS pointer (git-lfs not set up, or a
+#     GitHub tarball fetch via `github:` rather than a real clone), Nix will
+#     happily deploy the 130-byte pointer and the greeter/hyprpaper background
+#     silently breaks. See "Git LFS" in README.md.
+nixos/dotfiles/wallpaper.png filter=lfs diff=lfs merge=lfs -text
