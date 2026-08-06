@@ -38,6 +38,7 @@ let
 in
 {
   imports = [
+    ../common/nixos.nix # baseline shared with the rpi5
     ./hardware-configuration.nix
     ./overlays.nix # this repo's own packages (pkgs/overlay.nix)
     ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
@@ -52,8 +53,6 @@ in
     ./beszel-agent.nix
     ./immich-ml.nix # native GPU-accelerated Immich machine-learning (CLIP) for the rpi5
   ];
-
-  nixpkgs.config.allowUnfree = true;
 
   boot = {
     loader = {
@@ -137,24 +136,15 @@ in
     };
   };
 
-  networking.hostName = "BeAsT";
-
   # Wake-on-LAN: allow magic-packet wake on the ethernet interface.
   # WOL is Layer 2 only — only devices on the same physical LAN (i.e. rpi5)
   # can send the magic packet; Tailscale and the internet cannot reach it.
   networking.interfaces.eno1.wakeOnLan.enable = true;
 
-  time.timeZone = "Europe/Paris";
-
   # Wake-on-LAN: enable magic packet wake on the primary ethernet interface
   systemd.network.links."50-ethernet-wol" = {
     matchConfig.OriginalName = "eno*";
     linkConfig.WakeOnLan = "magic";
-  };
-
-  i18n = {
-    defaultLocale = "en_US.UTF-8";
-    #extraLocales = [ "fr_FR.utf8" ];
   };
 
   console = {
@@ -165,13 +155,7 @@ in
 
   # Environment variables moved to hyprland.conf for Hyprland-specific setup
 
-  security.sudo.wheelNeedsPassword = false;
-
-  programs.zsh.enable = true;
-  users.defaultUserShell = pkgs.zsh;
-
   users.users.${username} = {
-    isNormalUser = true;
     extraGroups = [
       "wheel" # Enables 'sudo'
       "video"
@@ -185,11 +169,6 @@ in
       "i2c" # Required for OpenRGB monitor control
       "libvirtd" # VM management
       "kvm" # KVM acceleration
-    ];
-    home = "/home/${username}";
-
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZ7wzLFXmWeZ52SWjvsfXSZr+LbvpZYt/EE/tzVZnFd"
     ];
   };
 
@@ -295,15 +274,7 @@ in
   # Enable PAM integration for KDE Wallet to auto-unlock on login
   security.pam.services.lightdm.enableKwallet = true;
 
-  programs.gnupg.agent = {
-    enable = true;
-    enableSSHSupport = false;
-    pinentryPackage = pkgs.pinentry-curses;
-  };
-
   services.printing.enable = true;
-
-  services.openssh.enable = true;
 
   services.flatpak.enable = true;
 
@@ -553,7 +524,6 @@ in
   swapDevices = [ ];
 
   zramSwap = {
-    enable = true;
     memoryPercent = 100; # 32GB zram = ~64-96GB effective with compression
     algorithm = "lz4hc"; # ~3x faster decompression than zstd — less page-fault stutter in Star Citizen at cost of ~3GB effective RAM
   };
@@ -706,7 +676,6 @@ in
   ];
 
   services.resolved = {
-    enable = true;
     fallbackDns = [
       "1.1.1.1"        # Cloudflare – last resort if RPi5 is down
       "9.9.9.9"        # Quad9 – last resort
@@ -721,8 +690,8 @@ in
   # Required for Piper (mouse configuration GUI)
   services.ratbagd.enable = true;
 
-  system.stateVersion = "25.11"; # DO NOT UPDATE UNLESS YOU KNOW WHAT YOU'RE DOING
-
+  # stateVersion, experimental-features, auto-optimise-store, and the nix.gc
+  # schedule come from ../common/nixos.nix.
   nix.settings = {
     trusted-users = [
       "root"
@@ -734,19 +703,12 @@ in
     trusted-public-keys = [
       "nix-citizen.cachix.org-1:lPMkWc2X8XD4/7YPEEwXKKBg+SVbYTVrAaLA2wQTKCo="
     ];
-    experimental-features = [
-      "nix-command"
-      "flakes"
-    ];
     download-buffer-size = 536870912;
-    auto-optimise-store = true;
   };
 
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 30d";
-  };
+  # 171 GB of NVMe and a 15-generation boot menu — a month of roots is affordable
+  # here in a way it isn't on the Pi (7d, see rpi5/configuration.nix).
+  nix.gc.options = "--delete-older-than 30d";
 
   # Limit journal size to 200MB
   services.journald.extraConfig = ''

@@ -155,6 +155,7 @@ in
     raspberry-pi-5.base
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
+    ../common/nixos.nix # baseline shared with BeAsT
     ./lib/socket-activate.nix
     ./lib/service-registration.nix
     ./lib/pg-role.nix
@@ -216,9 +217,6 @@ in
       advertiseRoutes = [ "34.117.84.152/32" "10.7.0.1/32" ];
     })
   ];
-
-  nixpkgs.config.allowUnfree = true;
-
 
   boot.loader.raspberry-pi.bootloader = "kernel";
 
@@ -295,14 +293,11 @@ in
   boot.blacklistedKernelModules = [ "vc4" ];
 
   networking = {
-    hostName = "rpi5";
     useNetworkd = true;
     wireless.iwd = {
       enable = false;
     };
   };
-
-  services.resolved.enable = true;
 
   # Cyrus — Linear coding-agent. Placeholder secrets are committed (cyrus
   # itself will reject Linear OAuth until they're replaced), but the build +
@@ -319,17 +314,9 @@ in
     RuntimeMaxUse=20M
   '';
 
-  time.timeZone = "Europe/Paris";
-
-  i18n.defaultLocale = "en_US.UTF-8";
-
-  programs.zsh.enable = true;
-  users.defaultUserShell = pkgs.zsh;
-
   users.users.root.hashedPassword = "$6$2l0dzdBCwOb5a4c7$zKxnFzxOblPypU4F5c2PYMETNxedNyqvTA8u2KOpmpJ9Iwtw7B0.UMZFL7LNDlExhyjSbGWKQnEIn8ja2ZfTi.";
 
   users.users.${username} = {
-    isNormalUser = true;
     extraGroups = [
       "wheel"
       "video"
@@ -340,11 +327,11 @@ in
       # terminate-user), not just a nixos-rebuild switch.
       "nextcloud"
     ];
-    home = "/home/${username}";
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZ7wzLFXmWeZ52SWjvsfXSZr+LbvpZYt/EE/tzVZnFd"
-      # Comment field only — labelled for the retired OpenClaw agent (ADR 0001);
-      # the key itself is unchanged and still in use.
+    # The shared key comes from ../common/nixos.nix; this one is Pi-only, and
+    # mkAfter keeps it second in authorized_keys as it has always been.
+    # Comment field only — labelled for the retired OpenClaw agent (ADR 0001);
+    # the key itself is unchanged and still in use.
+    openssh.authorizedKeys.keys = lib.mkAfter [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIoO5ICofBCfox+M2Uz91qBRF794BwHhQJBL/9dSZahr nsimon@rpi5-agent"
     ];
   };
@@ -357,15 +344,7 @@ in
     fi
   '';
 
-  security.sudo = {
-    enable = true;
-    wheelNeedsPassword = false;
-  };
-
-  services.openssh = {
-    enable = true;
-    settings.PermitRootLogin = "prohibit-password";
-  };
+  services.openssh.settings.PermitRootLogin = "prohibit-password";
 
 
   environment.systemPackages = with pkgs; [
@@ -386,11 +365,8 @@ in
 
 
 
-  programs.gnupg.agent = {
-    enable = true;
-    enableSSHSupport = true;
-    pinentryPackage = pkgs.pinentry-curses;
-  };
+  # Headless box: gpg-agent doubles as the SSH agent (BeAsT uses Bitwarden's).
+  programs.gnupg.agent.enableSSHSupport = true;
 
   # Onboard Bluetooth: enabled for the BLE scale bridge (see scale-bridge.nix).
   # The raspberry-pi-5.bluetooth module enables it without mkDefault, so keep an
@@ -428,13 +404,12 @@ in
 
 
   zramSwap = {
-    enable = true;
     memoryPercent = 200; # 200% of 4 GiB ≈ 8 GiB virtual; actual RAM bounded by zstd compression (~3-4x)
     memoryMax = 10 * 1024 * 1024 * 1024;
   };
 
-  system.stateVersion = "25.11";
-
+  # stateVersion, experimental-features (the base two), auto-optimise-store, and
+  # the nix.gc schedule come from ../common/nixos.nix.
   nix.settings = {
     # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; everything
     # else comes from cache.nixos.org or is built locally on the Pi.
@@ -448,9 +423,11 @@ in
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
     ];
-    experimental-features = [
-      "nix-command"
-      "flakes"
+    # mkAfter so this lands behind common/nixos.nix's [ "nix-command" "flakes" ]
+    # rather than in front of it: the list is rendered verbatim into nix.conf, so
+    # the order is part of the system derivation even though nix treats the
+    # features as a set.
+    experimental-features = lib.mkAfter [
       # crates.io's /api/v1/.../download endpoint now 403s the default
       # curl/X.Y.Z User-Agent. fetchurl lists NIX_CURL_FLAGS in its
       # impureEnvVars, but nix 2.31 only honours `impure-env` from
@@ -462,7 +439,6 @@ in
     # `--option value` so the whole UA token survives parsing.
     impure-env = "NIX_CURL_FLAGS=--user-agent=nixpkgs-fetchurl";
     trusted-users = [ username ];
-    auto-optimise-store = true;
     # Keep the build-time closure of live GC roots (the running system) alive so
     # GC never evicts the expensive-to-rebuild inputs of our custom flake
     # packages — chiefly reactive-resume's pnpm-deps FOD, but also airtrail /
@@ -481,11 +457,10 @@ in
   # 0755 (not 1777): nix's build-dir security check rejects a world-writable dir.
   systemd.tmpfiles.rules = [ "d /mnt/data/nix-build 0755 root root -" ];
 
-  nix.gc = {
-    automatic = true;
-    dates = "weekly";
-    options = "--delete-older-than 7d";
-  };
+  # A week, not BeAsT's month: the 171 GB root disk here also holds every custom
+  # flake's build closure (keep-outputs/keep-derivations above), so old
+  # generations are the first thing that has to go.
+  nix.gc.options = "--delete-older-than 7d";
 
 
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
