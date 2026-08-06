@@ -4,7 +4,7 @@
 #
 # Two native systemd services:
 #   * ble-scale-sync.service — third-party Node BLE bridge (KristianP26/ble-scale-sync),
-#     packaged in pkgs/ble-scale-sync.nix. Connects to the QN scale over BlueZ (onboard
+#     packaged in pkgs/services/ble-scale-sync.nix. Connects to the QN scale over BlueZ (onboard
 #     hci0), decodes weight + impedance, computes 10 body-composition metrics
 #     from the user profile, and POSTs them as JSON to the local shim's webhook.
 #     Runs as root: node-ble talks to org.bluez over the system D-Bus, which the
@@ -30,7 +30,7 @@ let
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
   ryotUrl = "http://127.0.0.1:13352/graphql"; # ryot-backend (see ryot.nix)
 
-  bleScaleSync = pkgs.callPackage ../pkgs/ble-scale-sync.nix { };
+  bleScaleSync = pkgs.callPackage ../pkgs/services/ble-scale-sync.nix { };
 in
 {
   # hci0 up at boot (enable itself is toggled in configuration.nix).

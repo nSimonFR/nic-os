@@ -9,7 +9,7 @@
   ...
 }:
 let
-  blogwatcherPkg = pkgs.callPackage ../pkgs/blogwatcher.nix { };
+  blogwatcherPkg = pkgs.callPackage ../pkgs/cli/blogwatcher.nix { };
 
   # Shared with the weekly auto-upgrade (auto-upgrade.nix): the heavy userspace
   # services stopped before a build to give the memory-tight Pi build headroom.

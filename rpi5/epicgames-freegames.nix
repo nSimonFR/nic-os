@@ -29,7 +29,7 @@ let
   portalPort = 3211;
   portalUrl = "https://${tailnetFqdn}:3750";
 
-  epicgames-freegames = pkgs.callPackage ../pkgs/epicgames-freegames-node.nix { };
+  epicgames-freegames = pkgs.callPackage ../pkgs/services/epicgames-freegames-node.nix { };
 
   # Telegram ping for systemd job failure (the tool's own notifier handles
   # game/captcha events). One-shot seam, not the stateful alerter: a failed run

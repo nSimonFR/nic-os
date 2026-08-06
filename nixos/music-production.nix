@@ -1,6 +1,6 @@
 { pkgs, ... }:
 let
-  graillonFree = pkgs.callPackage ../pkgs/graillon-free.nix { };
+  graillonFree = pkgs.callPackage ../pkgs/desktop/graillon-free.nix { };
 in
 {
   environment.systemPackages = [

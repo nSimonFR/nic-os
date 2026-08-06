@@ -4,7 +4,7 @@
 # (Upstream added multi-arch amd64+arm64 CI in 51d7268c, but that landed after
 # v0.3.0 and no release has been cut since, so no arm64 image exists yet. Once
 # one ships, this whole from-source build may become unnecessary — re-evaluate.)
-# Same local-vendoring model as pkgs/rtk.nix — a `flake = false`
+# Same local-vendoring model as pkgs/agents/rtk.nix — a `flake = false`
 # source input (showmycards-src, pinned in flake.nix) built here and exposed as
 # `pkgs.showmycards` via an overlay.
 #

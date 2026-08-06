@@ -12,9 +12,9 @@ let
   # The two custom components take HA's own python set so their deps match the
   # ABI of the HA binary — hence the explicit python3Packages argument.
   haPython = config.services.home-assistant.package.python3Packages;
-  haVoltalis = pkgs.callPackage ../pkgs/ha-voltalis.nix { python3Packages = haPython; };
-  haIntratone = pkgs.callPackage ../pkgs/ha-intratone.nix { python3Packages = haPython; };
-  haLinky = pkgs.callPackage ../pkgs/ha-linky.nix { };
+  haVoltalis = pkgs.callPackage ../pkgs/home-assistant/ha-voltalis.nix { python3Packages = haPython; };
+  haIntratone = pkgs.callPackage ../pkgs/home-assistant/ha-intratone.nix { python3Packages = haPython; };
+  haLinky = pkgs.callPackage ../pkgs/home-assistant/ha-linky.nix { };
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
   # configuration.yaml. Kept as a writeText file so the activation script can
