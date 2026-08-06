@@ -4,6 +4,7 @@
   lib,
   unstablePkgs,
   telegramChatId,
+  host,
   ...
 }:
 let
@@ -61,25 +62,35 @@ let
   # including the rpi5's headless services and the second config dir, still gets
   # the gate — while letting an explicit `ANTHROPIC_BASE_URL=…` in front of the
   # command win. See home/dotfiles/zsh/aliases.zsh.
-  claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
-    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+  # Built as a list rather than one backslash-continued heredoc so a host-gated
+  # flag can be dropped without leaving a dangling continuation behind.
+  claudeWrapperFlags =
+    [ "--prefix PATH : /run/wrappers/bin" ]
     # The vendored vendor/ripgrep/arm64-linux/rg in claude-code's npm package
     # ships a jemalloc compiled for 4K pages and SIGABRTs on the rpi5's 16K-page
     # kernel ("<jemalloc>: Unsupported system page size"). Force cli.js onto the
-    # system rg via USE_BUILTIN_RIPGREP=0 + PATH prefix.
+    # system rg. This is a workaround for one host's kernel, so it is applied on
+    # that host — BeAsT and the Mac are 4K-page and run the vendored binary
+    # upstream ships and tests.
+    ++ lib.optionals host.has16KPages [
+      "--prefix PATH : ${pkgs.ripgrep}/bin"
+      "--set USE_BUILTIN_RIPGREP 0"
+    ]
+    ++ [
+      ''--set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net"''
+      ''--set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none"''
+      ''--set GIT_AUTHOR_NAME "nSimonFR-ai"''
+      ''--set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
+      ''--set GIT_COMMITTER_NAME "nSimonFR-ai"''
+      ''--set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
+      "--run 'export GH_TOKEN=\"$(gh auth token --user nSimonFR-ai 2>/dev/null || true)\"'"
+      ''--set GITHUB_TOKEN ""''
+    ];
+
+  claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
+    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
     postFixup = (old.postFixup or "") + ''
-      wrapProgram $out/bin/claude \
-        --prefix PATH : /run/wrappers/bin \
-        --prefix PATH : ${pkgs.ripgrep}/bin \
-        --set USE_BUILTIN_RIPGREP 0 \
-        --set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net" \
-        --set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none" \
-        --set GIT_AUTHOR_NAME "nSimonFR-ai" \
-        --set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
-        --set GIT_COMMITTER_NAME "nSimonFR-ai" \
-        --set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com" \
-        --run 'export GH_TOKEN="$(gh auth token --user nSimonFR-ai 2>/dev/null || true)"' \
-        --set GITHUB_TOKEN ""
+      wrapProgram $out/bin/claude ${lib.concatStringsSep " " claudeWrapperFlags}
     '';
   });
 
@@ -122,14 +133,6 @@ in
     # Baseline: home/dotfiles/claude-keybindings.json
     ".claude/keybindings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-keybindings.json";
-
-    # Trusk infra notes — scoped to ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by
-    # walking UP the directory tree from cwd, so this file loads for every Trusk
-    # repo/subfolder and nowhere else (keeps ~6k tokens out of non-Trusk sessions).
-    # Writable out-of-store symlink so the "keep it fresh" workflow edits the repo
-    # file live, no rebuild needed.
-    "MyDocuments/TRUSK/CLAUDE.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
 
     # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
     # under three hook events in claude-settings.json: UserPromptSubmit
@@ -188,6 +191,10 @@ in
     # loads for every Trusk repo/subfolder and nowhere else. Gated off the Linux
     # hosts (BeAsT/rpi5), where it would otherwise create a stray/dangling symlink.
     # Writable out-of-store symlink so the "keep it fresh" workflow edits live.
+    #
+    # NB: the same entry also used to sit ungated in the base set above, and `//`
+    # takes the right operand — so on Linux the base definition simply survived
+    # and this gate did nothing. Removed there; this is now the only definition.
     "MyDocuments/TRUSK/CLAUDE.md".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
   };

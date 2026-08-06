@@ -1,4 +1,4 @@
-{ config, pkgs, ... }:
+{ config, pkgs, tailnetFqdn, ... }:
 let
   secretsPath = config.age.secrets.mcp-secrets.path;
 
@@ -18,7 +18,17 @@ let
   # AFFiNE MCP — write-capable. tiny-llm-gate exposes an SSE bridge at
   # tailnet :7020 that proxies to affine-mcp.service (DAWNCR0W) on the rpi5.
   # See rpi5/affine-mcp.nix and rpi5/tiny-llm-gate.nix.
-  affineMcpUrl = "https://rpi5.gate-mintaka.ts.net:7020/sse";
+  #
+  # `tailnetFqdn` is the rpi5's MagicDNS name and is passed to all three
+  # home-manager configs (it was previously passed and never read here, with the
+  # name spelled out as a literal instead). Note this stays the *public* tailnet
+  # URL even on the rpi5 itself, where it means the box reaches its own MCP by
+  # going out to its own name and back: the :7020 listener is a `tailscale serve`
+  # mapping (rpi5/services-registry.nix), so it is bound on the tailnet address
+  # only and has no loopback equivalent at that port. Short-circuiting it means
+  # pointing at tiny-llm-gate's backend route directly — a behaviour change worth
+  # its own commit, not a side effect of this one.
+  affineMcpUrl = "https://${tailnetFqdn}:7020/sse";
 
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
