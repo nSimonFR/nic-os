@@ -14,8 +14,8 @@
 #
 # v1 is intentionally constrained:
 #   - exactly one `listen` entry per service (option type lifts later)
-#   - no TLS, no warmupSchedule (option name reserved)
-#   - workers may only specify policy = sleepWith | keepAwake
+#   - no TLS, no pre-warm schedule
+#   - workers may only specify policy = sleepWith
 { config, lib, pkgs, ... }:
 
 let
@@ -98,14 +98,18 @@ let
       workers = lib.mkOption {
         type = lib.types.attrsOf (lib.types.submodule {
           options.policy = lib.mkOption {
-            type = lib.types.enum [ "sleepWith" "keepAwake" ];
+            type = lib.types.enum [ "sleepWith" ];
             description = ''
               sleepWith → wantedBy = realUnit + partOf = realUnit. Worker
                           starts with the web tier and stops alongside it.
                           Use for Sidekiq / Celery queue workers.
-              keepAwake → module emits nothing for the worker; existing
-                          lifecycle preserved. Use for cron-like schedulers
-                          (Celery beat) where missed ticks are unacceptable.
+
+              Unary today, deliberately kept an enum: a second policy for
+              cron-like schedulers (Celery beat, where a missed tick is
+              unacceptable) is plausible, and an enum leaves room to add one
+              without a breaking change. See ADR 0006 — the previous
+              "keepAwake" value emitted nothing at all, so it was a documented
+              no-op rather than a behaviour.
             '';
           };
         });
@@ -118,16 +122,6 @@ let
           {
             "sure-worker.service".policy = "sleepWith";
           }
-        '';
-      };
-
-      warmupSchedule = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = ''
-          RESERVED for v2 — OnCalendar spec for predictable pre-warm curls.
-          Not yet implemented; option name claimed so v2 stays backwards-
-          compatible with v1 configs.
         '';
       };
     };
@@ -227,6 +221,9 @@ in {
         (name:
           let c = enabled.${name}; in
           lib.mapAttrsToList
+            # The policy match is redundant while the enum is unary, but kept so
+            # a future second policy defaults to emitting nothing rather than
+            # silently inheriting sleepWith semantics.
             (unit: w:
               if w.policy == "sleepWith" then {
                 ${unitKey unit} = {

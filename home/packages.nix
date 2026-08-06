@@ -46,13 +46,17 @@
       less
       nano
       nixfmt-rfc-style
-      (lib.lowPrio nodejs_22) # lowPrio to avoid conflict with openclaw
+      # lowPrio so a package that vendors its own node (claude-code, hermes, …)
+      # wins the profile collision instead of erroring. Originally added for
+      # OpenClaw (retired — ADR 0001); kept because the hazard outlived it.
+      (lib.lowPrio nodejs_22)
       nodePackages.node-gyp
       nmap
       openssh
       p7zip
       poppler-utils
-      # Use lowPrio to avoid conflict with openclaw's bundled python
+      # Same rationale as nodejs_22 above: lowPrio yields to any package that
+      # ships its own python interpreter.
       (lib.lowPrio (
         python312.withPackages (
           ps: with ps; [
