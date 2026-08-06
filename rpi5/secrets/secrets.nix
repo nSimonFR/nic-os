@@ -38,9 +38,10 @@ in {
   "cyrus-linear-client-secret.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "cyrus-linear-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "cyrus-github-webhook-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
-  "terradex-convex-prod.age".publicKeys      = [ nsimon-age nsimon-ed25519 ];
-  "terradex-convex-dev.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "reactive-resume-encryption-secret.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "reactive-resume-auth-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "reactive-resume-db-password.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  "beaverhabits-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "epicgames-account-email.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "scale-bridge-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];

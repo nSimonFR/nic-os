@@ -8,9 +8,6 @@
   ...
 }:
 let
-  # Toggle between LightDM (true) and ReGreet (false)
-  useLightdm = false;
-
   # Minimal Hyprland config for greeter session — DPMS off after 5 min idle (WOL power saving)
   greeterHypridleConfig = pkgs.linkFarm "greeter-hypridle-config" [{
     name = "hypr/hypridle.conf";
@@ -378,7 +375,7 @@ in
   services.xserver.videoDrivers = [ "nvidia" ];
 
   programs.regreet = {
-    enable = !useLightdm;
+    enable = true;
     theme = {
       package = pkgs.flat-remix-gtk;
       name = "Flat-Remix-GTK-Grey-Darkest";
@@ -404,51 +401,9 @@ in
   };
   users.groups.greeter = { };
 
-  # Use LightDM instead - supports both X11 and Wayland sessions
-  services.xserver.displayManager.lightdm = {
-    enable = useLightdm;
-    greeters.gtk = {
-      enable = true;
-      theme = {
-        package = pkgs.flat-remix-gtk;
-        name = "Flat-Remix-GTK-Grey-Darkest";
-      };
-      iconTheme = {
-        package = pkgs.papirus-icon-theme;
-        name = "Papirus-Dark";
-      };
-      cursorTheme = {
-        package = pkgs.bibata-cursors;
-        name = "Bibata-Modern-Classic";
-        size = 16;
-      };
-      extraConfig = ''
-        # Appearance
-        font-name = Fira Code Nerd Font 11
-        indicators = ~host;~spacer;~clock;~spacer;~session;~a11y;~power
-        clock-format = %a %b %d, %H:%M
-
-        # Background
-        background = /home/${username}/wallpaper.png
-
-        # Enable dark theme
-        theme-name = Flat-Remix-GTK-Grey-Darkest
-        icon-theme-name = Papirus-Dark
-        cursor-theme-name = Bibata-Modern-Classic
-        cursor-theme-size = 16
-
-        # Colors and styling
-        active-monitor = #cursor
-        default-user-image = #avatar-default-symbolic
-        hide-user-image = false
-
-        # Keyboard
-        keyboard = onboard
-      '';
-    };
-  };
-
-  # X server required for LightDM (but we use Wayland sessions)
+  # X server enabled for the NVIDIA driver stack (services.xserver.videoDrivers
+  # above) and Xwayland; the sessions themselves are Wayland. NOT for a display
+  # manager — the greeter is ReGreet under Hyprland (see ADR 0005).
   services.xserver = {
     enable = true;
   };
