@@ -2,6 +2,13 @@
 let
   sessionName = "claude-rc";
   telegramTokenFile = "/run/agenix/telegram-bot-token";
+  # One-shot seam (shared/notify.nix): "resumed N sessions after boot" is an
+  # event, not a condition that later clears.
+  telegramSend = (import ../shared/notify.nix { inherit pkgs; }).send {
+    tokenFile = telegramTokenFile;
+    chatId = telegramChatId;
+    name = "claude-rc-telegram-send";
+  };
 
   # Boot/restart auto-resume: when the bridge (re)starts, re-host the sessions
   # that were live before, so a reboot or watchdog restart doesn't leave every
@@ -449,8 +456,7 @@ lib.recursiveUpdate keepWarm.nixosConfig {
         "CRC_CONFIG_DIR=${configDir}"
         "CRC_ORG_UUID=${orgUuid}"
         "CRC_RECENCY_SECONDS=${maxInactivitySec}"
-        "CRC_TELEGRAM_TOKEN_FILE=${telegramTokenFile}"
-        "CRC_TELEGRAM_CHAT_ID=${toString telegramChatId}"
+        "CRC_TELEGRAM_SEND=${telegramSend}"
       ];
     };
   };

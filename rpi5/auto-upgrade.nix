@@ -15,9 +15,11 @@
 #      +1 min so this unit exits cleanly first. The weekly reboot is
 #      unconditional (user's choice) and also clears memory-leak buildup.
 #
-# The reboot ping is a plain fire-and-forget sendMessage (NOT the stateful
-# telegramAlert helper — that is for open/resolve incidents); telegram being
-# down never fails the unit.
+# The reboot ping goes through the one-shot seam (shared/notify.nix `send`),
+# NOT the stateful telegramAlert helper — that is for open/resolve incidents —
+# and NOT the :8088 aggregator, which would debounce it for up to 15 min and so
+# lose it across the reboot scheduled one minute later. Telegram being down
+# never fails the unit.
 #
 # Notes / risks:
 #   - `nix flake update` bumps ALL inputs (nixpkgs, nixos-raspberrypi, sure-nix,
@@ -33,6 +35,11 @@ let
   owner = "nsimon";
   heavyServices = config.nic.heavyServices;
   tokenFile = config.age.secrets.telegram-bot-token.path;
+  telegramSend = (import ../shared/notify.nix { inherit pkgs; }).send {
+    inherit tokenFile;
+    chatId = telegramChatId;
+    name = "auto-upgrade-telegram-send";
+  };
 in
 {
   systemd.services.nixos-auto-upgrade = {
@@ -97,12 +104,7 @@ in
 Weekly flake update + rebuild done.
 New system: <code>$NEWGEN</code>
 Rebooting in ~1 min."
-      curl -sf -m 20 -X POST \
-        "https://api.telegram.org/bot$(< ${lib.escapeShellArg tokenFile})/sendMessage" \
-        -d chat_id=${toString telegramChatId} \
-        -d parse_mode=HTML \
-        -d disable_web_page_preview=true \
-        --data-urlencode "text=$MSG" >/dev/null || true
+      ${telegramSend} "$MSG" >/dev/null || true
 
       shutdown -r +1 "nixos-auto-upgrade: weekly reboot after flake update + rebuild"
     '';

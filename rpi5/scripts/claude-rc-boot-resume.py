@@ -71,6 +71,7 @@ CRC_DRY_RUN=1 logs the planned reconnects instead of performing them.
 import json
 import os
 import re
+import subprocess
 import sys
 import time
 import urllib.request
@@ -97,8 +98,9 @@ DELAY = int(os.environ.get("CRC_DELAY_SECONDS", "20"))          # between reconn
 MAX_REVIVE = int(os.environ.get("CRC_MAX_REVIVE", "6"))         # leave headroom under bridge capacity 8
 RECENCY = int(os.environ.get("CRC_RECENCY_SECONDS", "86400"))   # only revive sessions active within 24h (matches cleanup reap window)
 COOLDOWN = int(os.environ.get("CRC_COOLDOWN_SECONDS", "600"))   # don't re-revive the same session within 10min (rapid restart loops)
-TG_TOKEN_FILE = os.environ.get("CRC_TELEGRAM_TOKEN_FILE", "")
-TG_CHAT_ID = os.environ.get("CRC_TELEGRAM_CHAT_ID", "")
+# The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
+# path and chat id. See telegram() below.
+TELEGRAM_SEND = os.environ.get("CRC_TELEGRAM_SEND", "")
 
 CSE_RE = re.compile(r"bridge-(cse_[A-Za-z0-9]+)")
 
@@ -108,16 +110,20 @@ def log(msg):
 
 
 def telegram(msg):
-    if not (TG_TOKEN_FILE and TG_CHAT_ID and os.path.exists(TG_TOKEN_FILE)):
+    """Post the boot-resume summary through the shared one-shot sender.
+
+    --mode plain because these messages carry session names and worktree paths
+    that are not HTML-escaped; asking Telegram to parse them as HTML is how a
+    stray "<" turns the whole notification into a 400. Unset CRC_TELEGRAM_SEND
+    (running this script by hand) → no-op.
+    """
+    if not TELEGRAM_SEND:
         return
     try:
-        token = Path(TG_TOKEN_FILE).read_text().strip()
-        data = json.dumps({"chat_id": TG_CHAT_ID, "text": msg}).encode()
-        req = urllib.request.Request(
-            f"https://api.telegram.org/bot{token}/sendMessage",
-            data=data, headers={"Content-Type": "application/json"},
+        subprocess.run(
+            [TELEGRAM_SEND, "--mode", "plain", msg],
+            stdout=subprocess.DEVNULL, timeout=30, check=False,
         )
-        urllib.request.urlopen(req, timeout=10).read()
     except Exception as e:  # noqa: BLE001 — best effort
         log(f"telegram notify failed: {e}")
 

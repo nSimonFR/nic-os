@@ -193,21 +193,18 @@ API so you get HTML formatting and clickable links — don't rely on Hermes' pla
 channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is in
 `$TELEGRAM_CHAT_ID` (exported for the service).
 
-Use `parse_mode=HTML`. The header and each place name are **links** into Dawarich (deep links
-from the section above) — those links are the only navigation; do **not** attach inline-keyboard
-buttons. Build the message body in a file (avoids `$(...)`), then POST:
+The header and each place name are **links** into Dawarich (deep links from the section above) —
+those links are the only navigation; do **not** attach inline-keyboard buttons. Build the message
+body in a file (avoids `$(...)`), then send it with `telegram-send`, which owns the token lookup,
+HTML parse mode, and link-preview suppression:
 
 ```bash
 # ...after writing $work/message.html ...
-TOKEN=$(cat /run/agenix/telegram-bot-token)
-curl --max-time 15 -fsS -X POST "https://api.telegram.org/bot${TOKEN}/sendMessage" \
-  -d chat_id="$TELEGRAM_CHAT_ID" \
-  -d parse_mode=HTML \
-  -d link_preview_options='{"is_disabled":true}' \
-  --data-urlencode text@"$work/message.html"
+telegram-send --chat "$TELEGRAM_CHAT_ID" < "$work/message.html"
 ```
 
-Add `--max-time 15` to every `curl` in the send script — the exec tool kills a command after
+Do not hand-roll `curl https://api.telegram.org/...` — see `shared/scripts/telegram-send.sh`.
+Keep `--max-time 15` on every other `curl` in the send script: the exec tool kills a command after
 ~60s, and a few API calls + formatting can approach that on a slow day.
 
 ### Layout — one bullet list

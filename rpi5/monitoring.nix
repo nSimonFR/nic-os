@@ -5,16 +5,13 @@ let
 
   # Self-updating Telegram alerter. Usage:
   #   printf '%s' "$body" | ''${telegramAlert} <state-key> "<title>"
-  # An empty body means "cleared". See rpi5/telegram-alert.sh for the
-  # send-once / edit-in-place / resolve behaviour. This thin wrapper only
-  # injects the Nix-provided token, chat id, state dir, and tool PATH.
-  telegramAlert = pkgs.writeShellScript "telegram-alert" ''
-    export TELEGRAM_TOKEN_FILE=${config.age.secrets.telegram-bot-token.path}
-    export TELEGRAM_CHAT_ID=${toString telegramChatId}
-    export ALERT_STATE_DIR=/var/lib/telegram-alerts
-    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.jq pkgs.coreutils ]}''${PATH:+:$PATH}
-    exec ${pkgs.bash}/bin/bash ${./scripts/telegram-alert.sh} "$@"
-  '';
+  # An empty body means "cleared". See shared/notify.nix for the seam and
+  # rpi5/scripts/telegram-alert.sh for the send-once / edit-in-place / resolve
+  # behaviour.
+  telegramAlert = (import ../shared/notify.nix { inherit pkgs; }).alert {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+  };
 in
 {
   # ── Beszel Hub ───────────────────────────────────────────────────────────────

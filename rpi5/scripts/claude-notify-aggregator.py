@@ -12,7 +12,8 @@ gets a periodic digest instead of being starved). Each new event *resets* the
 quiet timer, so a flurry of sessions refreshing/finishing collapses into one
 message.
 
-This replaces the old per-machine /tmp coalescing (shared/telegram-notify.nix),
+This replaces the old per-machine /tmp coalescing (shared/agent-notify.nix, then
+still named telegram-notify.nix),
 which fired immediately on the first event in a 60s window and could not pool
 across hosts — the source of the thousands-of-messages-a-day spam.
 """

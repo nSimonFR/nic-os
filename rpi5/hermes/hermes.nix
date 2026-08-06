@@ -273,13 +273,21 @@ let
   # git — a human reviews and commits. Logic lives in hermes-skill-promote.sh
   # (kept out of Nix per the repo's no-inline-scripts convention).
   nicosRepo = "/home/nsimon/nic-os";
+  # One-shot seam (shared/notify.nix). Note this is the *agenix* bot token, not
+  # the one in $HERMES_HOME/.env that Hermes itself runs on: this nudge is
+  # nic-os telling a human to review a promoted skill, not Hermes talking.
+  # Hardcoded path because this is a home-manager module — no age.secrets here.
+  promoteNotify = (import ../../shared/notify.nix { inherit pkgs; }).send {
+    tokenFile = "/run/agenix/telegram-bot-token";
+    chatId = telegramChatId;
+    name = "hermes-skill-promote-notify";
+  };
   promoteWrapper = pkgs.writeShellScript "hermes-skill-promote-wrapper" ''
     export HOME="/home/nsimon"
     export HERMES_SKILLS_DIR="${hermesHome}/skills"
     export DEST_SKILLS="${nicosRepo}/shared/skills"
     export HERMES_LOCAL_SKILLS="${nicosRepo}/rpi5/hermes/skills"
-    export TG_CHAT_ID="${toString telegramChatId}"
-    export TG_TOKEN_FILE="/run/agenix/telegram-bot-token"
+    export TELEGRAM_SEND="${promoteNotify}"
     export PATH="${
       lib.makeBinPath [
         hermes
