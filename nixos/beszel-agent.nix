@@ -9,13 +9,18 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     path = [ pkgs.smartmontools ];
+    # Condition* directives are [Unit] directives. Setting this under
+    # `serviceConfig` put it in [Service], where systemd ignores it (it warns and
+    # carries on), so the unit started with no env file, failed on the missing
+    # EnvironmentFile, and restart-looped instead of staying inactive. The rpi5's
+    # copy of this module has always had it right — see rpi5/monitoring.nix.
+    unitConfig.ConditionPathExists = "/etc/beszel/agent.env";
     serviceConfig = {
       ExecStart = "${pkgs.beszel}/bin/beszel-agent";
       DynamicUser = true;
       EnvironmentFile = "/etc/beszel/agent.env";
       Restart = "on-failure";
       RestartSec = "10s";
-      ConditionPathExists = "/etc/beszel/agent.env";
       Environment = [
         "PORT=${toString beszelAgentPort}"
         "FILESYSTEM=/dev/nvme0n1p2,/dev/nvme1n1p3,/dev/sda2,/dev/sdc2"
