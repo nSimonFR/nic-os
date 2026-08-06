@@ -2,6 +2,7 @@
   pkgs,
   lib,
   config,
+  host,
   ...
 }:
 {
@@ -44,14 +45,21 @@
 
   # Editors (VS Code, Cursor, Zed, Vim) live in ./editors.nix.
 
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
-    ./dotfiles/star-citizen/launcher.cfg;
+  # Star Citizen (Flatpak RSI launcher) — BeAsT only. This module is imported by
+  # every host, so without the gate the headless Pi and the Mac both got a
+  # launcher config plus two symlinks into a Wine prefix that does not exist
+  # there (the two mkOutOfStoreSymlinks are dangling on those hosts by
+  # construction — nothing ever creates the prefix).
+  home.file = lib.optionalAttrs host.runsStarCitizen {
+    ".var/app/io.github.mactan_sc.RSILauncher/config/starcitizen-lug/launcher.cfg".source =
+      ./dotfiles/star-citizen/launcher.cfg;
 
-  # SC-writable files: symlinked directly to the repo via mkOutOfStoreSymlink so
-  # SC writes back to the versioned files. Just git commit after SC updates them.
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user.cfg".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/user.cfg";
+    # SC-writable files: symlinked directly to the repo via mkOutOfStoreSymlink so
+    # SC writes back to the versioned files. Just git commit after SC updates them.
+    ".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user.cfg".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/user.cfg";
 
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user/client/0/controls/mappings/layout_NICO_exported.xml".source =
-    config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/layout_NICO_exported.xml";
+    ".var/app/io.github.mactan_sc.RSILauncher/data/prefix/drive_c/Program Files/Roberts Space Industries/StarCitizen/LIVE/user/client/0/controls/mappings/layout_NICO_exported.xml".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/star-citizen/layout_NICO_exported.xml";
+  };
 }
