@@ -29,7 +29,7 @@
 # metadata details"), breaking imports AND live Plex tracking. Fix: supply a free
 # TMDB v4 "API Read Access Token" (themoviedb.org/settings/api) via this env var
 # (env prefix MOVIES_AND_SHOWS_TMDB_, field access_token — see ryot config crate).
-{ config, pkgs, lib, pgHost, tailnetFqdn, ... }:
+{ config, pkgs, lib, tailnetFqdn, ... }:
 let
   backendPort  = 13352; # Rust backend (localhost)
   frontendPort = 13351; # React-Router SSR (localhost)
@@ -87,37 +87,11 @@ let
 in
 {
   # ── PostgreSQL: ryot database + ryot role ─────────────────────────────────
-  services.postgresql = {
-    ensureDatabases = [ "ryot" ];
-    ensureUsers = [{ name = "ryot"; }];
-
-    # ryot connects via TCP with scram-sha-256 (DATABASE_URL host = 127.0.0.1).
-    authentication = lib.mkAfter ''
-      host  ryot  ryot  ${pgHost}/32  scram-sha-256
-    '';
-  };
-
-  # Set the ryot role password (from agenix) + grant DB ownership.
-  # ensurePasswordFile is absent in 25.11 → oneshot instead (pattern shared with
-  # airtrail-pg-setup). Must order after postgresql-setup (which runs ensureUsers).
-  systemd.services.ryot-pg-setup = {
-    description = "Set ryot PostgreSQL password + DB ownership";
-    after    = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-      # RPi5 kernel has no user namespaces; default PrivateUsers=true breaks it.
-      PrivateUsers = lib.mkForce false;
-    };
-    script = ''
-      password=$(cat /run/agenix/ryot-pg-password)
-      # psql :'pw' interpolation only works via stdin/-f, not -c.
-      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER ryot WITH PASSWORD :'pw';"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE ryot OWNER TO ryot;"
-    '';
+  services.pgRole.ryot = {
+    db           = "ryot";
+    user         = "ryot";
+    passwordFile = "/run/agenix/ryot-pg-password";
+    privateUsers = false;
   };
 
   # ── Ryot application (native Nix, via ryot-nix flake) ─────────────────────

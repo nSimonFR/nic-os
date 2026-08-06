@@ -19,7 +19,7 @@
 #
 # Migrations self-apply on boot inside the app (apps/server/src/startup/checks.ts),
 # so there is no migrate oneshot — the app just needs a reachable DB.
-{ config, lib, pkgs, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
+{ config, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
 let
   osUser = "reactive-resume"; # systemd/service identity (hyphen per convention)
   dbUser = "reactive_resume"; # postgres role == db name (no hyphen quoting needed)
@@ -38,40 +38,17 @@ let
 in
 {
   # ── PostgreSQL: reactive_resume database + role ───────────────────────────
-  services.postgresql = {
-    ensureDatabases = [ dbName ];
-    ensureUsers = [{ name = dbUser; }];
-    # Password auth over TCP for the app (matches sure.nix). Peer auth over the
-    # socket is avoided so DATABASE_URL stays a plain postgres:// TCP URL.
-    authentication = lib.mkAfter ''
-      host  ${dbName}  ${dbUser}  ${pgHost}/32  scram-sha-256
-    '';
-  };
-
-  # Set the role password + DB ownership from agenix (ensurePasswordFile is not in
-  # NixOS 25.11). MUST order after postgresql-setup.service (which runs ensureUsers)
-  # or it races with "role does not exist" on first boot.
-  systemd.services.reactive-resume-pg-setup = {
-    description = "Set reactive_resume PostgreSQL password + ownership";
-    after = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    # Rerun ALTER USER when the password rotates. Without this, the RemainAfterExit
-    # oneshot stays "active" and Postgres keeps the OLD password, while
-    # reactive-resume-env + the app pick up the NEW one → auth failure on restart.
-    # The app's After=reactive-resume-pg-setup ordering ensures this reruns first.
+  # restartTriggers: rerun ALTER USER when the password rotates. Without it the
+  # RemainAfterExit oneshot stays "active" and Postgres keeps the OLD password
+  # while reactive-resume-env + the app pick up the NEW one → auth failure on
+  # restart. The app's After=reactive-resume-pg-setup ordering makes this rerun
+  # first.
+  services.pgRole.reactive-resume = {
+    db              = dbName;
+    user            = dbUser;
+    passwordFile    = "/run/agenix/reactive-resume-db-password";
     restartTriggers = [ config.age.secrets.reactive-resume-db-password.file ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-    };
-    script = ''
-      password=$(cat /run/agenix/reactive-resume-db-password)
-      # :'pw' interpolation only works via stdin/-f, not -c.
-      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER ${dbUser} WITH PASSWORD :'pw';"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE ${dbName} OWNER TO ${dbUser};"
-    '';
+    description     = "Set reactive_resume PostgreSQL password + ownership";
   };
 
   # ── Runtime env file (DATABASE_URL with password + AUTH_SECRET) ───────────

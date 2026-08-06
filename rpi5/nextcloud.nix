@@ -92,38 +92,11 @@ let
 in
 {
   # ── PostgreSQL: nextcloud_production database + nextcloud_user ─────────────
-  services.postgresql = {
-    ensureDatabases = [ "nextcloud_production" ];
-    ensureUsers = [{
-      name = "nextcloud_user";
-      # ensureDBOwnership requires db name == username; granted in
-      # nextcloud-pg-setup below (same caveat as sure/airtrail).
-    }];
-
-    authentication = lib.mkAfter ''
-      host  nextcloud_production  nextcloud_user  ${pgHost}/32  scram-sha-256
-    '';
-  };
-
-  systemd.services.nextcloud-pg-setup = {
-    description = "Set nextcloud_user PostgreSQL password + DB ownership";
-    # postgresql-setup.service is the unit that runs ensureUsers/ensureDatabases;
-    # ordering only after postgresql.service races it and finds no role.
-    after    = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-      PrivateUsers = lib.mkForce false; # RPi5 has no user namespaces
-    };
-    script = ''
-      password=$(cat /run/agenix/nextcloud-pg-password)
-      # psql -v interpolation requires stdin; -c silently drops :'pw'.
-      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER nextcloud_user WITH PASSWORD :'pw';"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE nextcloud_production OWNER TO nextcloud_user;"
-    '';
+  services.pgRole.nextcloud = {
+    db           = "nextcloud_production";
+    user         = "nextcloud_user";
+    passwordFile = "/run/agenix/nextcloud-pg-password";
+    privateUsers = false;
   };
 
   # ── Nextcloud (native nixpkgs module) ──────────────────────────────────────

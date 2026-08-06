@@ -43,40 +43,11 @@ in
 
 
   # ── PostgreSQL: sure_production database + sure_user ──────────────────────
-  services.postgresql = {
-    ensureDatabases = [ "sure_production" ];
-    ensureUsers = [{
-      name = "sure_user";
-      # ensureDBOwnership requires db name == username; we grant ownership in sure-pg-setup
-    }];
-
-    # Allow sure_user to connect via TCP with scram-sha-256 password auth
-    authentication = lib.mkAfter ''
-      host  sure_production  sure_user  ${pgHost}/32  scram-sha-256
-    '';
-  };
-
-  # Set sure_user password and DB ownership from agenix secret (ensurePasswordFile not
-  # available in NixOS 25.11; use a oneshot service instead).
-  systemd.services.sure-pg-setup = {
-    description = "Set sure_user PostgreSQL password";
-    # Wait for postgresql-setup.service so ensureUsers has created sure_user
-    # before we ALTER it (otherwise: race; "role does not exist" on first boot).
-    after    = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-    };
-    script = ''
-      password=$(cat /run/agenix/sure-pg-password)
-      # psql variable interpolation (:'pw') requires stdin/-f input; it is silently
-      # skipped with -c, producing "syntax error at or near :". Pipe via stdin.
-      ${pkgs.postgresql}/bin/psql -v pw="$password" <<< "ALTER USER sure_user WITH PASSWORD :'pw';"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE sure_production OWNER TO sure_user;"
-    '';
+  services.pgRole.sure = {
+    db           = "sure_production";
+    user         = "sure_user";
+    passwordFile = "/run/agenix/sure-pg-password";
+    description  = "Set sure_user PostgreSQL password";
   };
 
   # ── Sure application (native Nix, via sure-nix flake) ─────────────────────

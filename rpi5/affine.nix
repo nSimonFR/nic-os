@@ -138,26 +138,18 @@ let
 in
 {
   # ── PostgreSQL: database + pgvector extension ──────────────────────────
-  services.postgresql = {
-    ensureUsers = [{ name = dbUser; ensureClauses.login = true; }];
-    ensureDatabases = [ dbName ];
-    extensions = ps: with ps; [ pgvector ];
-  };
+  # pgvector is not in the contrib set, so the shared library has to be added to
+  # the server package itself — that stays here; pgRole only issues the SQL
+  # CREATE EXTENSION. No passwordFile: AFFiNE connects over the Unix socket
+  # (dbUrl carries ?host=/run/postgresql), so it needs no pg_hba TCP rule.
+  services.postgresql.extensions = ps: with ps; [ pgvector ];
 
-  systemd.services.affine-pg-setup = {
+  services.pgRole.affine = {
+    db          = dbName;
+    user        = dbUser;
+    login       = true;
+    extensions  = [ "vector" ];
     description = "AFFiNE PostgreSQL setup";
-    after = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      User = "postgres";
-    };
-    script = ''
-      ${pkgs.postgresql}/bin/psql -d ${dbName} -c "CREATE EXTENSION IF NOT EXISTS vector;"
-      ${pkgs.postgresql}/bin/psql -c "ALTER DATABASE ${dbName} OWNER TO ${dbUser};"
-    '';
   };
 
   # ── Prisma migrations ─────────────────────────────────────────────────
