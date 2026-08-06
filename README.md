@@ -36,14 +36,6 @@ Apply disk configuration from [hardward-configuration.nix](./nixos/hardware-conf
 nixos-install --flake github:nSimonFR/nic-os#BeAsT
 ```
 
-> ⚠️ A `github:` flake ref is fetched as a **tarball**, and GitHub tarballs do not
-> expand Git LFS pointers. `nixos/dotfiles/wallpaper.png` is LFS-tracked, so this
-> path deploys a 133-byte pointer instead of the image and the greeter/hyprpaper
-> background comes up broken. Everything else installs correctly. To get the real
-> wallpaper, clone first (see [custom install](#nixos---custom-install)) and build
-> with `path:.#BeAsT`, or copy the file over by hand afterwards. See
-> [Git LFS](#git-lfs).
-
 ## NixOS - Custom install
 
 Make sure you're [started correctly](#start) !
@@ -53,7 +45,6 @@ Make sure you're [started correctly](#start) !
 ```
 git clone git@github.com:nSimonFR/nic-os.git
 cd nic-os
-git lfs install --skip-repo && git lfs pull   # see "Git LFS" below
 ```
 
 ### Mount disk / hardware configuration
@@ -122,43 +113,6 @@ Boot the Pi from the SD card, connect via SSH, then:
 ```sh
 sudo nixos-rebuild switch --flake 'path:.#rpi5'
 ```
-
-## Git LFS
-
-`nixos/dotfiles/wallpaper.png` (13 MB) is tracked with [Git LFS](https://git-lfs.com/).
-It is the only LFS-tracked file — see [`.gitattributes`](./.gitattributes) for why the
-rule is scoped to that one path rather than `*.png`.
-
-`git-lfs` ships in the profile (`home/packages.nix`), but the git **filter** is
-per-user config, so a fresh clone needs it once:
-
-```sh
-git lfs install --skip-repo   # configures the filter; --skip-repo leaves hooks alone
-git lfs pull                  # fetch the actual bytes
-```
-
-`--skip-repo` matters on a machine running the Claude Remote Control bridge:
-plain `git lfs install` overwrites `.git/hooks/post-checkout`, which is a
-Nix-managed symlink from `claude-remote-control.nix`.
-
-Check it worked — the file should be ~13 MB, not ~133 bytes:
-
-```sh
-ls -l nixos/dotfiles/wallpaper.png
-```
-
-### Caveats, stated plainly
-
-- **`github:` flake refs get a pointer, not the image.** GitHub serves tarballs,
-  which don't expand LFS. Affects `nixos-install --flake github:nSimonFR/nic-os#BeAsT`.
-  Build from a clone with `path:.#BeAsT` instead.
-- **Nix reads the working tree, not the index.** If the file is an unsmudged
-  pointer, Nix deploys the pointer and the greeter background breaks silently —
-  no build error. The `ls -l` above is the only check.
-- **Existing clones did not shrink.** The 13 MB blob is still in history; LFS only
-  changes how *future* revisions are stored. Actually reclaiming it needs
-  `git lfs migrate import --everything`, which rewrites history — deliberately not
-  done, since `main` is protected and shared.
 
 ## Commit messages
 
