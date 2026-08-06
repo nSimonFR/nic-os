@@ -4,7 +4,7 @@
 #
 # Two native systemd services:
 #   * ble-scale-sync.service — third-party Node BLE bridge (KristianP26/ble-scale-sync),
-#     packaged from source below. Connects to the QN scale over BlueZ (onboard
+#     packaged in pkgs/ble-scale-sync.nix. Connects to the QN scale over BlueZ (onboard
 #     hci0), decodes weight + impedance, computes 10 body-composition metrics
 #     from the user profile, and POSTs them as JSON to the local shim's webhook.
 #     Runs as root: node-ble talks to org.bluez over the system D-Bus, which the
@@ -24,42 +24,13 @@
 # webhook secret), and the body-composition profile USER_HEIGHT / USER_BIRTH_DATE
 # / USER_GENDER. The profile is PII and this repo is public, so config.yaml is
 # rendered at activation from that secret into /etc (never the Nix store / git).
-{ config, pkgs, lib, ... }:
+{ config, pkgs, ... }:
 let
   shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only (8347 taken by papra-webhook)
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
   ryotUrl = "http://127.0.0.1:13352/graphql"; # ryot-backend (see ryot.nix)
 
-  bleScaleSync = pkgs.buildNpmPackage rec {
-    pname = "ble-scale-sync";
-    version = "1.21.0";
-    src = pkgs.fetchFromGitHub {
-      owner = "KristianP26";
-      repo = "ble-scale-sync";
-      rev = "2965b2ed09fdb0b53244bd731cbb37a52637343f";
-      hash = "sha256-eziNlpDcs3w17ca8pokabrzLo8AFTH+spOreiyYSPqQ=";
-    };
-    npmDepsHash = "sha256-MRXV0tsZq9zf7iH2RXbQ1+LySO98l6uQBgyAcaHa2uY=";
-    nodejs = pkgs.nodejs_22;
-    # @abandonware/noble + bluetooth-hci-socket native addons need node-gyp
-    # (python) and libudev.
-    nativeBuildInputs = [ pkgs.python3 pkgs.pkg-config pkgs.makeWrapper ];
-    buildInputs = [ pkgs.systemdLibs ];
-    # The app runs straight from TypeScript source via tsx (main = src/index.ts);
-    # there is no compiled dist, so skip the `tsc` build.
-    dontNpmBuild = true;
-    installPhase = ''
-      runHook preInstall
-      mkdir -p $out/lib/ble-scale-sync $out/bin
-      cp -r . $out/lib/ble-scale-sync/
-      makeWrapper ${pkgs.nodejs_22}/bin/node $out/bin/ble-scale-sync \
-        --add-flags "$out/lib/ble-scale-sync/node_modules/tsx/dist/cli.mjs" \
-        --add-flags "$out/lib/ble-scale-sync/src/index.ts" \
-        --chdir "$out/lib/ble-scale-sync"
-      runHook postInstall
-    '';
-    meta.mainProgram = "ble-scale-sync";
-  };
+  bleScaleSync = pkgs.callPackage ../pkgs/ble-scale-sync.nix { };
 in
 {
   # hci0 up at boot (enable itself is toggled in configuration.nix).
