@@ -251,7 +251,7 @@
       # module under home/ used to have to go on. So each row carries a
       # capability set as well. Modules branch on the capability, never on the
       # name, so a fourth host is a row here rather than a new string compare in
-      # every module. See docs/adr/0007-host-capabilities-over-hostnames.md.
+      # every module. See docs/adr/0008-host-capabilities-over-hostnames.md.
       hosts = {
         ${nixconfig} = {
           name = nixconfig;
