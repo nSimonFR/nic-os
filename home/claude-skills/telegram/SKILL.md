@@ -8,7 +8,7 @@ metadata:
 # Telegram
 
 Post messages and photos to Telegram from the rpi using the bot's HTTP API.
-**Outbound only** — picoclaw owns incoming messages.
+**Outbound only** — Hermes owns incoming messages.
 
 ## Auth
 
@@ -30,7 +30,7 @@ TOKEN=$(cat /run/agenix/telegram-bot-token)
 | group | `-1003356011841` | Group "nSimon, ServaTilis and Alfie" (Nico + Alfie + bot) |
 
 Default to **Nico's DM** unless told otherwise. The **group is shared with Alfie** —
-only post there when both should see it. (The group is set to trigger picoclaw only
+only post there when both should see it. (The group is set to trigger Hermes only
 when the bot is @mentioned, so a plain post won't start an agent turn.)
 
 ## Send a text message
@@ -79,7 +79,7 @@ curl -s "https://api.telegram.org/bot${TOKEN}/sendPhoto" \
 For 2–10 photos as one grouped gallery, use `sendMediaGroup` (a `media` JSON array
 of `{type:"photo", media:"attach://fileN"}` with the caption on item 0, plus the
 files as `-F fileN=@...`). A working stdlib reference implementation lives in the
-immich skill: `rpi5/picoclaw/skills/immich-memories/scripts/immich-on-this-day.py`
+immich skill: `rpi5/hermes/skills/immich-memories/scripts/immich-on-this-day.py`
 (`send_album`).
 
 ## Notes
@@ -87,5 +87,5 @@ immich skill: `rpi5/picoclaw/skills/immich-memories/scripts/immich-on-this-day.p
 - Always check the response: `{"ok":true,...}` on success; on failure Telegram
   returns `{"ok":false,"description":"..."}` — surface that description.
 - Never echo the token back to the user or embed it in logs.
-- This bot is the same one picoclaw runs; sending here does not go through
-  picoclaw's agent (it's a direct API call).
+- This bot is the same one Hermes runs; sending here does not go through
+  Hermes' agent (it's a direct API call).

@@ -9,7 +9,7 @@ metadata: {"openclaw":{"emoji":"📸","requires":{"bins":["python3"]},"agenix":[
 
 Downloads today's on-this-day photos as JPGs and posts them to Telegram as **one
 media group (a gallery)**, with a summary caption on the first photo. The script
-sends the gallery itself via the Telegram Bot API — picoclaw can't build albums
+sends the gallery itself via the Telegram Bot API — Hermes can't build albums
 (it would send each photo as a separate message).
 
 ## When to use
@@ -22,13 +22,13 @@ sends the gallery itself via the Telegram Bot API — picoclaw can't build album
 
 Run it plainly — the script reads the Immich key from `/run/agenix/immich-api-key`,
 the bot token from `/run/agenix/telegram-bot-token`, and the chat from
-`$TELEGRAM_CHAT_ID` (exported for the picoclaw service), all by itself:
+`$TELEGRAM_CHAT_ID` (exported for the agent service), all by itself:
 
 ```bash
 python3 {baseDir}/scripts/immich-on-this-day.py --send-album
 ```
 
-Do **not** prefix it with `IMMICH_API_KEY=$(cat ...)` or similar: picoclaw's exec
+Do **not** prefix it with `IMMICH_API_KEY=$(cat ...)` or similar: the agent's exec
 safety guard blocks any `$(...)` command substitution, so that form fails. The
 script's built-in file reads avoid the substitution entirely.
 

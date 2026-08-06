@@ -16,7 +16,7 @@ ProtonMail bridge running as a system service that exposes IMAP on `127.0.0.1:11
 on `127.0.0.1:1025`. Both authenticate with the bridge password at
 `/run/agenix/protonmail-bridge-password` (group-readable by `hydroxide`, which `nsimon` is a
 member of). The himalaya config at `~/.config/himalaya/config.toml` is Nix-managed in
-`rpi5/picoclaw/picoclaw.nix` — do **not** hand-edit. Edit the Nix module instead.
+`rpi5/hermes/hermes.nix` — do **not** hand-edit. Edit the Nix module instead.
 
 ## References
 
@@ -241,7 +241,7 @@ RUST_LOG=trace RUST_BACKTRACE=1 himalaya envelope list
 - **Auth fails** → bridge password lives at `/run/agenix/protonmail-bridge-password`
   (mode `0440 hydroxide:hydroxide`). `nsimon` must be in the `hydroxide` group;
   `id nsimon` should list it. The agenix file changes path on rebuild — restart
-  picoclaw (`systemctl --user restart picoclaw`) if it has stale env.
+  the agent (`systemctl --user restart hermes`) if it has stale env.
 - **Bridge offline** → `systemctl status hydroxide` and `journalctl -u hydroxide -e`.
   Hydroxide can crashloop after a rotation of `~/.config/hydroxide/auth.json`; re-auth
   via the FIRST-TIME SETUP block at the top of `rpi5/hydroxide.nix`.

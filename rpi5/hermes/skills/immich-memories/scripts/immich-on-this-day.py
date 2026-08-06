@@ -3,7 +3,7 @@
 
 The primary mode (--send-album) downloads today's photos as JPGs and posts them as
 a single Telegram media group (album/gallery) via the Bot API, with the caption on
-the first photo. picoclaw can't build albums (it sends one file per message), so the
+the first photo. Hermes can't build albums (it sends one file per message), so the
 script talks to Telegram directly. --download just fetches + prints a JSON manifest
 (no send); text/--json modes are kept for ad-hoc "what's on this day?" queries.
 
@@ -184,7 +184,7 @@ def french_date(d):
 def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     """Download up to `max_total` photo JPGs (skip videos) and build a manifest.
 
-    Returns the JSON-serialisable manifest dict consumed by picoclaw.
+    Returns the JSON-serialisable manifest dict consumed by Hermes.
     """
     total_memories = len(memories)
     shown = sorted(memories, key=lambda m: len(m["assets"]), reverse=True)[:top]
@@ -345,7 +345,7 @@ def main():
     if not api_key:
         # Read the agenix key file directly so the skill can run as a plain
         # `python3 ... --download` with no `IMMICH_API_KEY=$(cat ...)` prefix —
-        # picoclaw's exec safety guard blocks any `$(...)` command substitution.
+        # the agent's exec safety guard blocks any `$(...)` command substitution.
         key_file = os.environ.get("IMMICH_API_KEY_FILE", "/run/agenix/immich-api-key")
         try:
             with open(key_file) as f:
