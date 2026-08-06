@@ -693,10 +693,11 @@ in
   # stateVersion, experimental-features, auto-optimise-store, and the nix.gc
   # schedule come from ../common/nixos.nix.
   nix.settings = {
-    trusted-users = [
-      "root"
-      username
-    ];
+    # NOT [ "root" username ]: nix.settings.trusted-users already carries "root"
+    # by default, so spelling it again rendered `trusted-users = root root nsimon`
+    # into nix.conf. The rpi5 states only [ username ] and ends up with exactly
+    # the same effective set — the two hosts never actually diverged here.
+    trusted-users = [ username ];
     substituters = [
       "https://nix-citizen.cachix.org"
     ];
