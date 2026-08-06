@@ -1,7 +1,8 @@
 # `pkgs/` — package definitions
 
 Every derivation this repo builds itself lives here. A file in `pkgs/` answers
-*how is this thing built*; the matching module under `rpi5/` or `nixos/` answers
+*how is this thing built*; the matching module under `hosts/rpi5/` or
+`hosts/beast/` answers
 *how is it run* (users, units, ports, secrets, Serve entries).
 
 `showmycards` is the reference split: `pkgs/services/showmycards.nix` builds the Go
