@@ -114,29 +114,11 @@ Boot the Pi from the SD card, connect via SSH, then:
 sudo nixos-rebuild switch --flake 'path:.#rpi5'
 ```
 
-## Commit message linting
+## Commit messages
 
-This repository uses [commitlint](https://commitlint.js.org/) to enforce Conventional Commits.
-
-### One-time local setup (git hook)
-
-```sh
-git config core.hooksPath .githooks
-```
-
-### Run commitlint locally
-
-Validate a commit message file:
-
-```sh
-pnpm dlx @commitlint/cli --config commitlint.config.cjs --edit .git/COMMIT_EDITMSG
-```
-
-Validate the latest commit message:
-
-```sh
-git log -1 --pretty=%B | pnpm dlx @commitlint/cli --config commitlint.config.cjs
-```
+This repository follows [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, …) by convention, not by tooling.
+There is no commit hook — see `docs/adr/0004-no-commitlint.md`.
 
 ## Apply updates
 
