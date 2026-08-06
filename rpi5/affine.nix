@@ -144,7 +144,7 @@ in
   # (dbUrl carries ?host=/run/postgresql), so it needs no pg_hba TCP rule.
   services.postgresql.extensions = ps: with ps; [ pgvector ];
 
-  services.pgRole.affine = {
+  nic.pgRole.affine = {
     db          = dbName;
     user        = dbUser;
     login       = true;

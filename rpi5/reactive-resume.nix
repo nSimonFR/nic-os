@@ -43,7 +43,7 @@ in
   # while reactive-resume-env + the app pick up the NEW one → auth failure on
   # restart. The app's After=reactive-resume-pg-setup ordering makes this rerun
   # first.
-  services.pgRole.reactive-resume = {
+  nic.pgRole.reactive-resume = {
     db              = dbName;
     user            = dbUser;
     passwordFile    = "/run/agenix/reactive-resume-db-password";

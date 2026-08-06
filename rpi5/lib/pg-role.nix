@@ -29,7 +29,7 @@
 #
 # Usage:
 #
-#   services.pgRole.airtrail = {
+#   nic.pgRole.airtrail = {
 #     db           = "airtrail";
 #     user         = "airtrail";
 #     passwordFile = "/run/agenix/airtrail-pg-password";
@@ -39,10 +39,15 @@
 # emits services.postgresql.{ensureDatabases,ensureUsers,authentication} plus
 # an `airtrail-pg-setup.service` oneshot. Downstream units then order on
 # `<name>-pg-setup.service` exactly as before.
+#
+# Lives under `nic.*` alongside `nic.services` (lib/service-registration.nix),
+# the namespace this repo uses for options it invents; `services.*` stays for
+# upstream NixOS ones. `services.socketActivate` predates that split and is the
+# remaining outlier.
 { config, lib, pkgs, pgHost, ... }:
 
 let
-  cfg = config.services.pgRole;
+  cfg = config.nic.pgRole;
 
   roleModule = lib.types.submodule ({ name, config, ... }: {
     options = {
@@ -199,12 +204,12 @@ let
 
 in
 {
-  options.services.pgRole = lib.mkOption {
+  options.nic.pgRole = lib.mkOption {
     type = lib.types.attrsOf roleModule;
     default = { };
     description = ''
       Per-service Postgres roles on the shared cluster. The attribute name is
-      the unit prefix: `services.pgRole.sure` produces `sure-pg-setup.service`.
+      the unit prefix: `nic.pgRole.sure` produces `sure-pg-setup.service`.
       See rpi5/lib/pg-role.nix for the ordering and psql-quoting caveats.
     '';
   };
