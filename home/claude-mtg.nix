@@ -33,6 +33,9 @@ let
   );
 in
 {
+  # Whole-directory symlink, NOT the skill-tree builder: a store-dir symlink
+  # already delivers each skill's references/, so there is no defect to fix here
+  # and nothing needs to write into this dir.
   home.file.".claude-mtg/skills".source = ../shared/mtg-skills;
 
   home.packages = [

@@ -7,35 +7,28 @@
   ...
 }:
 let
-  # Shared skills live under ../shared/skills/ and are auto-discovered so
-  # adding a new one is just a directory. Each skill is wired into all
-  # four agents' skill loaders: Claude Code (~/.claude/skills/), Codex
-  # (~/.codex/skills/), pi-coding-agent (~/.pi/agent/skills/), and the
-  # Hermes agent (rpi5/hermes/hermes.nix copies them into ~/.hermes/skills/).
+  # Which skills reach which surface (shared/skill-tree.nix defines skill /
+  # lineage / surface). shared/skills is auto-discovered, so adding one is still
+  # just a directory; Hermes selects the same lineage in rpi5/hermes/hermes.nix.
+  # claude-skills is Claude-Code-only — the Hermes agent already IS the Telegram
+  # bot. shared/mtg-skills is in neither, deliberately: MTG surfaces only.
+  skillTree = import ../shared/skill-tree.nix { inherit lib; };
   sharedSkillsDir = ../shared/skills;
-  sharedSkillNames = lib.attrNames (
-    lib.filterAttrs (_: t: t == "directory") (builtins.readDir sharedSkillsDir)
-  );
 
   # Skills that should ALSO be exposed as Claude Code slash commands
   # (`/wiki-ingest`, etc.). The SKILL.md frontmatter is benign for
   # Claude Code, which only reads the `description` field.
   claudeSlashCommandSkills = [ "wiki-ingest" "wiki-process" "wiki-lint" ];
 
-  sharedSkillFiles = lib.listToAttrs (lib.concatMap (name: [
-    {
-      name = ".claude/skills/${name}/SKILL.md";
-      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+  sharedSkillFiles =
+    skillTree.homeFiles {
+      targets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ];
+      lineages = [ { source = sharedSkillsDir; } ];
     }
-    {
-      name = ".codex/skills/${name}/SKILL.md";
-      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
-    }
-    {
-      name = ".pi/agent/skills/${name}/SKILL.md";
-      value.source = "${sharedSkillsDir}/${name}/SKILL.md";
-    }
-  ]) sharedSkillNames);
+    // skillTree.homeFiles {
+      targets = [ ".claude/skills" ];
+      lineages = [ { source = ./claude-skills; } ];
+    };
 
   claudeCommandFiles = lib.listToAttrs (map (name: {
     name = ".claude/commands/${name}.md";
@@ -105,15 +98,11 @@ in
     # Baseline: home/dotfiles/claude-settings.json
   };
 
-  # All home-managed files are merged into one set: shared skills (auto-
-  # discovered from shared/skills/), Claude slash commands (curated
-  # subset), and Claude Code's own settings/hooks. The Hermes agent picks up
-  # the same shared skills via rpi5/hermes/hermes.nix.
+  # All home-managed files are merged into one set: the skill lineages selected
+  # above (shared + Claude-only), Claude slash commands (curated subset), and
+  # Claude Code's own settings/hooks. The Hermes agent picks up the same shared
+  # lineage via rpi5/hermes/hermes.nix.
   home.file = sharedSkillFiles // claudeCommandFiles // {
-    # Claude-Code-only skill (NOT shared with codex/pi/hermes — the Hermes agent
-    # already *is* the Telegram bot): how to post messages/photos via the bot.
-    ".claude/skills/telegram/SKILL.md".source = ./claude-skills/telegram/SKILL.md;
-
     # Writable settings.json — symlinked to the repo checkout so /voice etc.
     # can update it at runtime.
     ".claude/settings.json".source =
