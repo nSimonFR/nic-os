@@ -104,4 +104,12 @@ in
       timeoutSec   = 300;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.airtrail = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "airtrail" ];
+    heavyUnits        = [ "airtrail.service" ];
+    heavyPriority     = 110;
+  };
 }

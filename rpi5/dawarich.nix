@@ -62,4 +62,12 @@ in
     "/run/agenix/dawarich-geoapify";
   systemd.services.dawarich-sidekiq-all.serviceConfig.EnvironmentFile =
     "/run/agenix/dawarich-geoapify";
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.dawarich = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "dawarich" ];
+    heavyUnits        = [ "dawarich-sidekiq-all.service" "dawarich-web.service" ];
+    heavyPriority     = 40;
+  };
 }

@@ -208,4 +208,11 @@ in
     '';
   };
 
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.sure = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "sure_production" ];
+    heavyUnits        = [ "sure-worker.service" "sure-web.service" ];
+    heavyPriority     = 70;
+  };
 }

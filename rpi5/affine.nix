@@ -275,4 +275,15 @@ in
 
   # Make update script available system-wide
   environment.systemPackages = [ (pkgs.writeShellScriptBin "affine-update" (builtins.readFile updateScript)) ];
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # Doc content lives in Postgres, which is dumped nightly. Worth knowing:
+  # attachment blobs under /var/lib/affine/storage are on the SSD, outside restic's
+  # /mnt/data scope — pre-existing, not addressed here.
+  nic.services.affine = {
+    backup            = [ "postgres" ];
+    postgresDatabases = [ "affine" ];
+    heavyUnits        = [ "affine.service" ];
+    heavyPriority     = 50;
+  };
 }

@@ -175,4 +175,12 @@ in
       }
     ];
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.homepage = {
+    backup        = [ "none" ];
+    backupNote    = "dashboard config is generated from services-registry.nix; the stats aggregator only caches";
+    heavyUnits    = [ "homepage-dashboard.service" "homepage-stats.service" ];
+    heavyPriority = 160;
+  };
 }

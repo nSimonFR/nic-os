@@ -64,4 +64,12 @@ in {
       timeoutSec   = 30;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  nic.services.vaultwarden = {
+    backup        = [ "unit" ];
+    backupUnits   = [ "vaultwarden-backup.service" ];   # backups.nix
+    heavyUnits    = [ "vaultwarden.service" ];
+    heavyPriority = 150;
+  };
 }

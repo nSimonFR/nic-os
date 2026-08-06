@@ -13,7 +13,9 @@ let
 
   # Shared with the weekly auto-upgrade (auto-upgrade.nix): the heavy userspace
   # services stopped before a build to give the memory-tight Pi build headroom.
-  heavyServices = import ./lib/heavy-services.nix;
+  # Derived from `nic.services.*.heavyUnits` (lib/service-registration.nix) —
+  # each service names its own units, so a new one cannot be forgotten here.
+  heavyServices = config.nic.heavyServices;
 
   # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
   # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs
@@ -24,7 +26,7 @@ let
     name = "nixos-rebuild-safe";
     runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
     text = ''
-      # The heavy userspace services (list lives in ./lib/heavy-services.nix,
+      # The heavy userspace services (derived from nic.services.*.heavyUnits,
       # shared with the weekly auto-upgrade). Socket-activated ones free their
       # RSS here and re-activate on demand; always-on ones are restarted by the
       # activation phase of nixos-rebuild switch. Infra (tailscaled, nginx,
@@ -154,6 +156,7 @@ in
     raspberry-pi-5.page-size-16k
     raspberry-pi-5.bluetooth
     ./lib/socket-activate.nix
+    ./lib/service-registration.nix
     ./secrets.nix
     ./databases.nix
     ./home-assistant.nix

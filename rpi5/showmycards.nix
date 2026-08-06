@@ -174,4 +174,15 @@ in
       timeoutSec   = 60;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # database.db and the Scryfall cache both live under /mnt/data/showmycards,
+  # so restic covers them with no dump step. The units were missing from the
+  # heavy list, so a rebuild left the SvelteKit frontend and the Go backend
+  # resident — fixed by declaring them here.
+  nic.services.showmycards = {
+    backup        = [ "mnt-data" ];
+    heavyUnits    = [ "showmycards-frontend.service" "showmycards-backend.service" ];
+    heavyPriority = 155;
+  };
 }

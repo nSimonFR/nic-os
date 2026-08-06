@@ -120,4 +120,16 @@ in
       timeoutSec   = 60;
     };
   };
+
+  # ── Service registration (rpi5/lib/service-registration.nix) ──────────────
+  # library + upload live on the HDD under /mnt/data/immich, so restic covers
+  # the photos directly. Worth knowing: Immich's own database dumps go to
+  # /mnt/data/immich/backups, which is a bind mount of the SSD — restic's
+  # --one-file-system (storj-backup.nix) does not cross it, so the dumps
+  # themselves stay local. Not addressed here.
+  nic.services.immich = {
+    backup        = [ "mnt-data" ];
+    heavyUnits    = [ "immich-server.service" ];
+    heavyPriority = 10;
+  };
 }
