@@ -125,7 +125,7 @@
 
     # RTK — Rust Token Killer (rtk-ai/rtk). Source-only input (`flake = false`);
     # pkgs/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
-    # as `pkgs.rtk` via outputs.overlays.rtk. Bumping is a 2-step edit:
+    # as `pkgs.rtk` via pkgs/overlay.nix. Bumping is a 2-step edit:
     #   1. change the tag in the URL below (e.g. v0.42.4 → v0.43.0)
     #   2. bump `version` in pkgs/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
@@ -244,32 +244,17 @@
       };
       telegramChatId = 82389391;
 
-      # RTK package overlay — single source of truth so `pkgs.rtk` resolves
-      # identically in NixOS modules (via rpi5/overlays.nix) and standalone
-      # home-manager configs (the homeConfigurations pkgs below). Builds from
-      # the rtk-src flake input; see pkgs/rtk.nix.
-      rtkOverlay = final: _prev: {
-        rtk = final.callPackage ./pkgs/rtk.nix { rtk-src = inputs.rtk-src; };
-      };
-
-      # ShowMyCards package overlay — exposes `pkgs.showmycards`, built from the
-      # showmycards-src flake input. Reused in rpi5/overlays.nix (DRY) so NixOS
-      # modules and the standalone build target resolve the same derivation.
-      showmycardsOverlay = final: _prev: {
-        showmycards = final.callPackage ./pkgs/showmycards.nix {
-          showmycards-src = inputs.showmycards-src;
-          # backend/go.mod requires `go 1.26.3` and a pure build can't fetch a
-          # toolchain (no network in the sandbox), so pass one that already
-          # satisfies it: the default `go` is 1.25.10, too old. go_1_26 is
-          # 1.26.4 here, matching upstream's golang:1.26-alpine build image.
-          go = final.go_1_26;
-        };
-      };
+      # This repo's own packages (pkgs/) as one overlay — single source of truth
+      # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
+      # resolve identically in NixOS modules (via rpi5/overlays.nix and
+      # nixos/overlays.nix) and in the standalone home-manager configs below.
+      # See pkgs/overlay.nix for what does and does not belong in it.
+      nicOsOverlay = import ./pkgs/overlay.nix inputs;
     in
     {
-      # Exposed so rpi5/overlays.nix can pull the same overlay (DRY).
-      overlays.rtk = rtkOverlay;
-      overlays.showmycards = showmycardsOverlay;
+      # Exposed so rpi5/overlays.nix and nixos/overlays.nix pull the same
+      # overlay (DRY).
+      overlays.nic-os = nicOsOverlay;
 
       # `nix build .#rtk` — standalone build target to isolate rtk's heavy LTO
       # compile from a full rebuild (build it alone first on the rpi5).
@@ -287,7 +272,7 @@
               (import nixpkgs {
                 inherit system;
                 config.allowUnfree = true;
-                overlays = [ rtkOverlay ];
+                overlays = [ nicOsOverlay ];
               }).rtk;
           }
         ))
@@ -405,7 +390,7 @@
             # VSCode bundles electron-39.8.10, flagged insecure on 25.11
             # (2026-06) nixpkgs. Permit it so the HM switch (notify hook) builds.
             config.permittedInsecurePackages = [ "electron-39.8.10" ];
-            overlays = [ rtkOverlay ];
+            overlays = [ nicOsOverlay ];
           };
           extraSpecialArgs = {
             inherit
@@ -446,7 +431,7 @@
           pkgs = import nixpkgs {
             system = "aarch64-linux";
             config.allowUnfree = true;
-            overlays = [ rtkOverlay ];
+            overlays = [ nicOsOverlay ];
           };
           extraSpecialArgs = {
             inherit
@@ -473,7 +458,7 @@
           pkgs = import nixpkgs {
             system = "aarch64-darwin";
             config.allowUnfree = true;
-            overlays = [ rtkOverlay ];
+            overlays = [ nicOsOverlay ];
           };
           extraSpecialArgs = {
             inherit

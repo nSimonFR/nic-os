@@ -42,6 +42,7 @@ in
 {
   imports = [
     ./hardware-configuration.nix
+    ./overlays.nix # this repo's own packages (pkgs/overlay.nix)
     ./rgb/openrgb-lg.nix # OpenRGB with LG monitor support
     ./rgb/hyperion-openrgb.nix # Hyperion with OpenRGB support
     ./rgb/hyperion-openrgb-bridge.nix # Bridge between Hyperion and OpenRGB

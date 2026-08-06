@@ -22,19 +22,10 @@ let
 
   # Claude models for the Anthropic passthrough — extracted from claude-code's
   # bundled binary at build time (Anthropic's /v1/models rejects OAuth tokens).
-  # claude-code 2.1.x ships as a single wrapped binary at bin/.claude-wrapped;
-  # earlier versions exposed the JS as lib/node_modules/.../cli.js. Bumping
-  # claude-code auto-updates the list; if extraction breaks, the count guard
-  # in jq fails the rebuild.
-  anthropicModelsFile = pkgs.runCommand "claude-anthropic-models.json" { } ''
-    ${pkgs.gnugrep}/bin/grep -aoE '"claude-(opus|sonnet|haiku|fable|mythos)-[a-z0-9-]+"' \
-      ${unstablePkgs.claude-code}/bin/.claude-wrapped \
-      | ${pkgs.gnused}/bin/sed 's/"//g; /-$/d' \
-      | sort -u \
-      | ${pkgs.jq}/bin/jq -R . \
-      | ${pkgs.jq}/bin/jq -s 'if length < 5 then error("aperture-sync: only \(length) claude models extracted, expected >=5") else . end' \
-      > $out
-  '';
+  # See pkgs/claude-anthropic-models.nix.
+  anthropicModelsFile = pkgs.callPackage ../pkgs/claude-anthropic-models.nix {
+    inherit (unstablePkgs) claude-code;
+  };
 
   # Always include the newest Claude models that ship faster than the
   # claude-code binary pinned via nixpkgs-unstable can track:

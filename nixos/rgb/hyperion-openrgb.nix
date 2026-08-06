@@ -1,22 +1,7 @@
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
+{ pkgs, ... }:
 
 let
-  # Build Hyperion with OpenRGB support
-  hyperion-ng-openrgb = pkgs.hyperion-ng.overrideAttrs (oldAttrs: {
-    cmakeFlags = oldAttrs.cmakeFlags ++ [
-      "-DENABLE_OPENRGB=ON"
-    ];
-
-    buildInputs = oldAttrs.buildInputs ++ [
-      pkgs.jsoncpp
-    ];
-  });
-
+  hyperion-ng-openrgb = pkgs.callPackage ../../pkgs/hyperion-ng-openrgb.nix { };
 in
 {
   environment.systemPackages = [ hyperion-ng-openrgb ];

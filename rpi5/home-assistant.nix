@@ -1,6 +1,5 @@
 {
   config,
-  lib,
   pkgs,
   inputs,
   ...
@@ -9,81 +8,13 @@ let
   # pkgs.home-assistant and pkgs.buildHomeAssistantComponent are both overridden
   # in overlays.nix to use nixpkgs-unstable, keeping HA current and preventing
   # the "cannot downgrade" startup failure when .HA_VERSION > binary version.
-  # ppaglier/voltalis-homeassistant: fuller-featured Voltalis integration than
-  # the previous jdelahayes/ha-voltalis (sensor-only). Adds climate/thermostat
-  # control, water-heater, per-device preset/switch and global program selects.
-  # Same domain "voltalis" → this is a drop-in source swap. Config-entry data
-  # schema differs: ppaglier reads entry.data["username"] (jdelahayes stored
-  # "email") — the existing config entry must be migrated out-of-band (HA
-  # stopped; .storage/core.config_entries is HA-owned and rewritten at runtime,
-  # so it can't be patched from an activation script) or re-added via the UI.
-  # manifest requirements: aiohttp (HA core) + pydantic (>=2.12.2; HA ships 2.12.x).
-  haVoltalis = pkgs.buildHomeAssistantComponent rec {
-    owner = "ppaglier";
-    domain = "voltalis";
-    version = "0.6.6";
-    src = pkgs.fetchFromGitHub {
-      owner = "ppaglier";
-      repo = "voltalis-homeassistant";
-      rev = version;
-      hash = "sha256-uliKbPrgTYSJ8J+Mv9z3hLzdVz/dNJolNChjPNKroBE=";
-    };
-    dependencies = with config.services.home-assistant.package.python3Packages; [
-      aiohttp
-      pydantic
-    ];
-  };
-
-  # ha-intratone: reverse-engineered integration for the Intratone (Cogelec)
-  # cloud intercom. Goal here is on-demand remote door open via the "Clé mobile"
-  # / mobipass access locks (pure REST, POST /api/access/open/clemobil) — the
-  # visiophone audio/video path (go2rtc + ffmpeg) is left off (video opt-in,
-  # default false). Python deps are pulled from HA's own (unstable-overridden)
-  # python set so they match the ABI of the HA binary.
-  haIntratone = pkgs.buildHomeAssistantComponent rec {
-    owner = "GuiHash";
-    domain = "intratone";
-    version = "0.3.2";
-    src = pkgs.fetchFromGitHub {
-      owner = "GuiHash";
-      repo = "ha-intratone";
-      rev = "v${version}";
-      hash = "sha256-BkvdaY1oacmZM+bqTzxBf36G1jTkYK0wbxJRb4oIonY=";
-    };
-    dependencies = with config.services.home-assistant.package.python3Packages; [
-      firebase-messaging
-      voip-utils
-    ];
-  };
-
-  # ha-linky: TypeScript/Node.js Linky → Home Assistant bridge.
-  # config.ts hardcodes /data/options.json; the service uses BindReadOnlyPaths
-  # to mount /etc/home-assistant/ha-linky at /data inside the unit's namespace.
-  # ha.ts reads WS_URL + SUPERVISOR_TOKEN from environment (EnvironmentFile).
-  haLinky = pkgs.buildNpmPackage rec {
-    pname = "ha-linky";
-    version = "1.7.0";
-    src = pkgs.fetchFromGitHub {
-      owner = "bokub";
-      repo = "ha-linky";
-      rev = version;
-      hash = "sha256-x8W/kR/L3uJ317MAayv3mUlPW3yw+Tnj4iD2c6CEnOQ=";
-    };
-    npmDepsHash = "sha256-y/64htlLa5RGemCIqXp9nxDgAK8zyVOq8kdW4azhY64=";
-    # npm run build = tsc → dist/
-    # Skip the default `npm install -g` install phase; we install manually.
-    dontNpmInstall = true;
-    nativeBuildInputs = [ pkgs.makeWrapper ];
-    installPhase = ''
-      runHook preInstall
-      mkdir -p $out/{bin,lib/ha-linky}
-      # node_modules must live next to dist/ for ESM relative-path resolution
-      cp -r dist node_modules $out/lib/ha-linky/
-      makeWrapper ${lib.getExe pkgs.nodejs} $out/bin/ha-linky \
-        --add-flags "$out/lib/ha-linky/dist/index.js"
-      runHook postInstall
-    '';
-  };
+  #
+  # The two custom components take HA's own python set so their deps match the
+  # ABI of the HA binary — hence the explicit python3Packages argument.
+  haPython = config.services.home-assistant.package.python3Packages;
+  haVoltalis = pkgs.callPackage ../pkgs/ha-voltalis.nix { python3Packages = haPython; };
+  haIntratone = pkgs.callPackage ../pkgs/ha-intratone.nix { python3Packages = haPython; };
+  haLinky = pkgs.callPackage ../pkgs/ha-linky.nix { };
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
   # configuration.yaml. Kept as a writeText file so the activation script can

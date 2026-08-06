@@ -130,8 +130,9 @@ let
   # All public data — no auth or API keys. Hermes' built-in MCP client
   # (mcp_servers, below) launches it over stdio and registers its tools as
   # mcp__mtg__* in every conversation. The package definition moved to
-  # pkgs/mtg-mcp.nix when the Mac's `claude-mtg` CLI started sharing it.
-  mtgMcp = pkgs.callPackage ../../pkgs/mtg-mcp.nix { };
+  # pkgs/mtg-mcp.nix when the Mac's `claude-mtg` CLI started sharing it, and is
+  # now exposed as `pkgs.mtg-mcp` (pkgs/overlay.nix) so both share one eval.
+  mtgMcp = pkgs.mtg-mcp;
 
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a

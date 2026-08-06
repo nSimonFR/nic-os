@@ -13,7 +13,7 @@
 # their own NixOS modules. They all rely on `rtk` being on PATH, which this
 # module's home.packages entry provides for the interactive user.
 #
-# `pkgs.rtk` is supplied by the rtk overlay (flake.nix outputs.overlays.rtk),
+# `pkgs.rtk` is supplied by the repo overlay (pkgs/overlay.nix),
 # applied to every home-manager pkgs set (standalone configs + the rpi5
 # NixOS-integrated generation via rpi5/overlays.nix).
 { pkgs, ... }:
