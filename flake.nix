@@ -449,9 +449,9 @@
               backupFileExtension = "hm-backup";
               extraSpecialArgs = baseArgs rpiconfig // {
                 # tailnetFqdn: home/mcp.nix. apertureUrl + tinyLlmGateUrl:
-                # rpi5/hermes/hermes.nix, which is a home-manager module even
+                # hosts/rpi5/hermes/hermes.nix, which is a home-manager module even
                 # though it lives under the host dir (imported via
-                # rpi5/home.nix). beastOllamaUrl has no home-manager consumer
+                # hosts/rpi5/home.nix). beastOllamaUrl has no home-manager consumer
                 # and is passed to the system config only.
                 inherit (rpi5Params) tailnetFqdn apertureUrl tinyLlmGateUrl;
                 devSetup = false;
