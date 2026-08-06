@@ -27,7 +27,17 @@ let
   orgUuid = "49157a56-e1c6-4ec1-8ad4-032f3125e527";
   bootResume = "${pkgs.python3}/bin/python3 ${./scripts/claude-rc-boot-resume.py}";
   claudeRc = "/home/${username}/.claude/bin/claude-rc";
-  credentialsFile = "/home/${username}/.claude/.credentials.json";
+
+  # Account 1's credential stores, owner first: the BRIDGE's dir, not ~/.claude.
+  # `claude` replaces credentials.json on refresh rather than rewriting it, which
+  # severs prepConfigScript's symlink and leaves ~/.claude blanked. ~/.claude is
+  # kept as a fallback (a `claude /login` in a plain shell writes there).
+  # ADR 0007 has the measurement.
+  credentialsFiles = [
+    "${configDir}/.credentials.json"
+    "/home/${username}/.claude/.credentials.json"
+  ];
+
   sessionsDir = "/home/${username}/.claude/sessions";
   projectsDir = "/home/${username}/.claude/projects";
   worktreesDir = "/home/${username}/nic-os/.claude/worktrees";
@@ -42,22 +52,27 @@ let
   # URL globally, and settings.json `env` outranks process env, so the bridge
   # tripped the guard and exited 0 on every start (masked as active by
   # RemainAfterExit; respawned every 5min by the watchdog). We shadow the real
-  # config here: symlink all state so OAuth, sessions/projects, skills, and the
-  # credentials.json that claude-oauth-extract watches stay authoritative in
-  # ~/.claude, and generate a settings.json whose only change is the base URL
-  # forced to direct Anthropic — the same escape the `claude-direct` shell alias
-  # already uses. Sessions the bridge spawns inherit this dir (direct Anthropic,
-  # bypassing the gate) which matches that established choice.
+  # config here: symlink all state so sessions/projects, skills, plugins and
+  # settings.local.json stay authoritative in ~/.claude, and generate a
+  # settings.json whose only change is the base URL forced to direct Anthropic —
+  # the same escape the `claude-direct` shell alias already uses. Sessions the
+  # bridge spawns inherit this dir (direct Anthropic, bypassing the gate) which
+  # matches that established choice.
+  #
+  # credentials.json is the ONE exception to "authoritative in ~/.claude": it
+  # cannot survive as a symlink, so this dir owns it. See credentialsFiles above.
   configDir = "/home/${username}/.claude-rc";
 
   # OAuth keep-warm sidecar (token-refresh timer + extract-to-/run unit) for
-  # this account. The long-running claude-remote-control process keeps
+  # this account. The long-running claude-remote-control process keeps its
   # credentials.json fresh by refreshing the token during normal session
   # activity; the refresh timer below covers idle stretches. See
   # claude-oauth-keepwarm.nix (shared with the account-2 gate-only spare in
-  # claude-oauth-2.nix).
+  # claude-oauth-2.nix). configDir is passed so the refresh query rotates the
+  # owning store; without it the timer ran against the blanked ~/.claude and
+  # failed on every fire.
   keepWarm = import ./claude-oauth-keepwarm.nix { inherit pkgs username; } {
-    inherit credentialsFile;
+    inherit credentialsFiles configDir;
     extractAfter = [ "claude-remote-control.service" ];
   };
 
@@ -102,15 +117,31 @@ let
     src="/home/${username}/.claude"
     dst="${configDir}"
     mkdir -p "$dst"
-    # Mirror every real config entry as a symlink (credentials, sessions,
-    # projects, skills, plugins, settings.local.json, ...) except settings.json,
-    # which is generated below. Keeps all state authoritative in ~/.claude.
+    # Mirror every real config entry as a symlink (sessions, projects, skills,
+    # plugins, settings.local.json, ...) except settings.json, which is generated
+    # below, and .credentials.json, handled after this loop. Keeps all other state
+    # authoritative in ~/.claude.
     for entry in "$src"/* "$src"/.[!.]*; do
       [ -e "$entry" ] || continue
       name="$(basename "$entry")"
       [ "$name" = "settings.json" ] && continue
+      [ "$name" = ".credentials.json" ] && continue
       ln -sfn "$entry" "$dst/$name"
     done
+
+    # .credentials.json: SEED, never link. Relinking it here destroyed the live
+    # tokens on every bridge restart — $dst owns them (credentialsFiles above,
+    # ADR 0007), so only fill $dst when it has no usable token of its own.
+    has_token() {
+      [ -r "$1" ] || return 1
+      [ -n "$(jq -r '.claudeAiOauth.accessToken // empty' "$1" 2>/dev/null)" ]
+    }
+    if ! has_token "$dst/.credentials.json" && has_token "$src/.credentials.json"; then
+      rm -f "$dst/.credentials.json"
+      cp "$src/.credentials.json" "$dst/.credentials.json"
+      chmod 0600 "$dst/.credentials.json"
+      echo "seeded $dst/.credentials.json from $src (bridge store had no live token)" >&2
+    fi
     # Account/org state lives at $HOME/.claude.json (outside .claude); Remote
     # Control needs it to resolve org eligibility.
     ln -sfn "/home/${username}/.claude.json" "$dst/.claude.json"

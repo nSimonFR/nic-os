@@ -14,8 +14,11 @@
   # CLAUDE_CONFIG_DIR override. null means the default ~/.claude (no env
   # var needed — that's where a bare `claude` invocation already reads from).
   configDir ? null,
-  # Path to the credentials.json this account's extractor watches/reads.
-  credentialsFile,
+  # This account's credential stores, owner first. Normally one entry; a LIST
+  # because two config dirs for one account diverge — `claude` replaces
+  # credentials.json on refresh, severing any symlink between them and blanking
+  # the loser (same JSON shape, accessToken=""). ADR 0007.
+  credentialsFiles,
   # Stagger boot-time refreshes across accounts so they don't race.
   onBootSec ? "15min",
   # Extra `after`/`wants` for the extract service (e.g. the primary account's
@@ -38,11 +41,33 @@ let
     set -eu
     umask 0333  # -r--r--r-- so tiny-llm-gate (DynamicUser) can read it
     dest="$RUNTIME_DIRECTORY/token"
-    token=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.accessToken // empty' ${credentialsFile})
+
+    # Live store = the candidate with a non-empty accessToken and the furthest
+    # expiry. A blanked store parses fine, so presence is not evidence.
+    best_exp=-1
+    token=""
+    src=""
+    for f in ${pkgs.lib.escapeShellArgs credentialsFiles}; do
+      [ -r "$f" ] || continue
+      tok=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.accessToken // empty' "$f" 2>/dev/null || true)
+      [ -n "$tok" ] || continue
+      exp=$(${pkgs.jq}/bin/jq -r '.claudeAiOauth.expiresAt // 0' "$f" 2>/dev/null || echo 0)
+      exp="''${exp%%.*}"  # ms integer; strip any fractional part before -gt
+      if [ "$exp" -gt "$best_exp" ]; then
+        best_exp="$exp"
+        token="$tok"
+        src="$f"
+      fi
+    done
+
     if [ -z "$token" ]; then
-      echo "no accessToken in credentials file" >&2
+      echo "no live accessToken in any candidate store: ${
+        pkgs.lib.concatStringsSep ", " credentialsFiles
+      }" >&2
       exit 1
     fi
+    echo "token resolved from $src (expiresAt=$best_exp)" >&2
+
     tmp="$dest.new"
     printf '%s' "$token" > "$tmp"
     mv "$tmp" "$dest"
@@ -138,7 +163,8 @@ in
       description = "Watch Claude credentials.json for OAuth token changes";
       wantedBy = [ "multi-user.target" ];
       pathConfig = {
-        PathChanged = credentialsFile;
+        # Every candidate, not just the owner — a refresh can land in either dir.
+        PathChanged = credentialsFiles;
         Unit = "claude-oauth-extract${suffix}.service";
         TriggerLimitIntervalSec = 0;
       };
