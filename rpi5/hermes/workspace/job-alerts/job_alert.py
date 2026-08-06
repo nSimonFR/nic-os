@@ -9,7 +9,7 @@ Weekly job alert fetcher.
   - linear_single: one readable Linear/Ashby job page
   - generic_page: basic availability/fallback scanner
 
-Output is plain text, suitable for Telegram/picoclaw scheduled command output.
+Output is plain text, suitable for Telegram/Hermes scheduled command output.
 """
 from __future__ import annotations
 

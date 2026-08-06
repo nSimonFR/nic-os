@@ -3,7 +3,7 @@
 
 The list is the doc titled "Courses" inside the **Burgie Land** workspace. We
 talk to it through the local affine-mcp server (DAWNCR0W) that already runs on
-127.0.0.1:7021 and is wired into picoclaw — no AFFiNE token plumbing needed
+127.0.0.1:7021 and is wired into Hermes — no AFFiNE token plumbing needed
 here, only the MCP bearer (a world-readable 0444 agenix file).
 
 Subcommands:
@@ -15,7 +15,7 @@ Subcommands:
     clear-done           Delete every ticked (bought) item.
 
 Matching is case-insensitive substring. Output is plain text on stdout for
-picoclaw to relay; the script never messages Telegram itself.
+Hermes to relay; the script never messages Telegram itself.
 
 No external dependencies (stdlib urllib only).
 

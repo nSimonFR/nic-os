@@ -33,7 +33,7 @@ Reuse `"${AUTH[@]}"` in every request below. `DAWARICH_BASE_URL` is loopback and
 reachable from rpi5 — never put it in a message. Links you send the user must use
 `DAWARICH_WEB_URL` (the Tailscale Serve URL, reachable from their phone on the tailnet).
 
-> **Exec-guard note:** picoclaw's exec safety guard blocks any `$(...)` command
+> **Exec-guard note:** the agent's exec safety guard blocks any `$(...)` command
 > substitution, so never inline `$(date …)` or `KEY=$(cat …)`. When you need a date,
 > run `date -I -d yesterday` (and `date -I`) as their **own** commands first, read the
 > printed value, then paste the literal date (e.g. `2026-07-19`) into the URL. Env-var
@@ -189,7 +189,7 @@ curl -fsS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
 ## Sending the daily message to Telegram (rich)
 
 When this runs as the daily job (channel `telegram`), send the recap yourself via the Bot
-API so you get HTML formatting and clickable links — don't rely on picoclaw's plain-text
+API so you get HTML formatting and clickable links — don't rely on Hermes' plain-text
 channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is in
 `$TELEGRAM_CHAT_ID` (exported for the service).
 

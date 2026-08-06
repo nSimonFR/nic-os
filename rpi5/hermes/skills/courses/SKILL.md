@@ -10,11 +10,11 @@ metadata: {"openclaw":{"emoji":"🛒","requires":{"bins":["python3"]}}}
 Read and edit the household shopping list stored in **AFFiNE**. The list is the
 doc titled **"Courses"** inside the **Burgie Land** workspace (shared space).
 The script talks to the local `affine-mcp` server (already running on
-`127.0.0.1:7021` and wired into picoclaw), so there is no token to set up — it
+`127.0.0.1:7021` and wired into Hermes), so there is no token to set up — it
 reads the world-readable MCP bearer from `/run/agenix/affine-mcp-http-token`
 itself.
 
-Picoclaw reads the script's stdout and relays it to the user; the script never
+Hermes reads the script's stdout and relays it to the user; the script never
 sends Telegram messages on its own.
 
 ## When to use
