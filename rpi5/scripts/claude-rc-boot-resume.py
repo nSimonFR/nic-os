@@ -58,8 +58,10 @@ kept only for the case where the pointer is missing; it is strictly worse, since
 any other bridge on this box matches that prefix too.
 
 The OAuth token is read from the bridge's own config dir (~/.claude-rc), which
-`claude` keeps fresh — NOT ~/.claude, whose copy goes stale (see the
-credentials-symlink-divergence note).
+`claude` keeps fresh — NOT ~/.claude, whose copy is left blanked once a refresh
+severs the symlink between them. That dir is now the declared owner repo-wide
+(claude-remote-control.nix `credentialsFiles`,
+docs/adr/0007-claude-credentials-owner.md).
 
 ## Subcommands
   snapshot  record currently-live sdk-cli sessions -> snapshot.json (atomic)

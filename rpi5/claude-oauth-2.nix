@@ -13,7 +13,9 @@ let
   keepWarm = import ./claude-oauth-keepwarm.nix { inherit pkgs username; } {
     suffix = "-2";
     configDir = "/home/${username}/.claude-secondary";
-    credentialsFile = "/home/${username}/.claude-secondary/.credentials.json";
+    # One store: nothing shadows this config dir, so it owns its own credentials
+    # outright (unlike account 1 — see claude-remote-control.nix).
+    credentialsFiles = [ "/home/${username}/.claude-secondary/.credentials.json" ];
     onBootSec = "20min"; # offset from the account-1 timer's 15min
   };
 in

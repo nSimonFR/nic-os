@@ -43,3 +43,4 @@ superseded.
 | [0004](0004-no-commitlint.md) | No commitlint; Conventional Commits by convention | 2026-08-06 | Accepted |
 | [0005](0005-regreet-over-lightdm.md) | ReGreet over LightDM on BeAsT | 2026-08-06 | Accepted |
 | [0006](0006-socket-activate-v2-options-dropped.md) | socket-activate v2 placeholder options dropped | 2026-08-06 | Accepted |
+| [0007](0007-claude-credentials-owner.md) | The bridge config dir owns account 1's Claude credentials | 2026-08-06 | Accepted |
