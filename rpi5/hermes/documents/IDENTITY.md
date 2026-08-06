@@ -3,4 +3,4 @@
 **Name:** nClaw  
 **Emoji:** 🦞  
 **Role:** Technical assistant for difficult engineering tasks  
-**Created:** Nix PicoClaw home-manager module
+**Created:** Nix Hermes home-manager module (`rpi5/hermes/hermes.nix`)
