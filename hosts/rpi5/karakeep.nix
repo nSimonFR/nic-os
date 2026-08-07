@@ -23,7 +23,8 @@
 let
   webPort   = 13200;   # karakeep-web PORT (real backend bind)
   proxyPort = 8210;    # socket-activate proxy listen; Tailscale Serve points here
-  servePort = 3500;    # external tailnet HTTPS port (see services-registry.nix)
+  # External tailnet HTTPS port: declared once in nic.services.karakeep.public
+  # below, which also derives publicUrl for NEXTAUTH_URL.
 in
 {
   services.karakeep = {
@@ -40,7 +41,7 @@ in
       HOSTNAME = "127.0.0.1";
 
       # Public URL behind the Tailscale Serve proxy — used for NextAuth callbacks.
-      NEXTAUTH_URL = "https://${tailnetFqdn}:${toString servePort}";
+      NEXTAUTH_URL = config.nic.services.karakeep.public.publicUrl;
 
       DISABLE_NEW_RELEASE_CHECK = "true";
 
@@ -121,5 +122,30 @@ in
       "meilisearch.service"
     ];
     heavyPriority = 125;
+
+    public = {
+      order   = 70;   # 60 = the retired Open WebUI slot
+      port    = 3500;
+      backend = "http://127.0.0.1:8210";
+      tile = {
+        name        = "Karakeep";
+        icon        = "karakeep.svg";
+        category    = "Apps";
+        description = "Bookmarks + read-later (AI-tagged)";
+        # Stats via homepage-stats.py reading karakeep's SQLite read-only (no API
+        # key, never wakes karakeep → preserves idle-sleep). NOT the native
+        # `karakeep` widget, which would poll the API and keep it awake.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/karakeep";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "bookmarks"; label = "Bookmarks"; format = "number"; }
+            { field = "favorites"; label = "Favorites"; format = "number"; }
+            { field = "tags";      label = "Tags";      format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

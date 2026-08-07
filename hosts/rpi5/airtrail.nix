@@ -20,7 +20,8 @@
 let
   internalPort = 13341;  # airtrail Node server (real backend bind, localhost only)
   proxyPort    = 8310;   # socket-activate proxy listen; Tailscale Serve → here
-  servePort    = 3600;   # external tailnet HTTPS port (see services-registry.nix)
+  # External tailnet HTTPS port: declared once in nic.services.airtrail.public
+  # below, which also derives publicUrl for `origin`.
 in
 {
   # ── PostgreSQL: airtrail database + airtrail role ─────────────────────────
@@ -40,7 +41,7 @@ in
     enable          = true;
     host            = "127.0.0.1";
     port            = internalPort;
-    origin          = "https://${tailnetFqdn}:${toString servePort}";
+    origin          = config.nic.services.airtrail.public.publicUrl;
     environmentFile = "/run/agenix/airtrail-env";  # provides DB_URL (with password)
     # databaseUrl intentionally null — comes from environmentFile above.
   };
@@ -82,5 +83,29 @@ in
     postgresDatabases = [ "airtrail" ];
     heavyUnits        = [ "airtrail.service" ];
     heavyPriority     = 110;
+
+    public = {
+      order   = 120;
+      port    = 3600;
+      backend = "http://127.0.0.1:${toString proxyPort}";
+      tile = {
+        name        = "AirTrail";
+        # AirTrail isn't in dashboard-icons, so point at its favicon.svg via
+        # jsdelivr (pinned tag).
+        icon        = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.11.1/static/favicon.svg";
+        category    = "Apps";
+        description = "Personal flight tracker";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/airtrail";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "flights"; label = "Flights"; format = "number"; }
+            { field = "countries"; label = "Countries"; format = "number"; }
+            { field = "hours"; label = "Hours"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

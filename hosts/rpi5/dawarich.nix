@@ -69,5 +69,29 @@ in
     postgresDatabases = [ "dawarich" ];
     heavyUnits        = [ "dawarich-sidekiq-all.service" "dawarich-web.service" ];
     heavyPriority     = 40;
+
+    public = {
+      order   = 110;
+      port    = 3900;
+      backend = "http://127.0.0.1:13900";
+      tile = {
+        name        = "Dawarich";
+        icon        = "dawarich.svg";
+        category    = "Apps";
+        description = "Location history";
+        # Postgres read as superuser via the aggregator — no native widget, and no
+        # role password on the tile.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/dawarich";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "points"; label = "Points"; format = "number"; }
+            { field = "trips"; label = "Trips"; format = "number"; }
+            { field = "visits"; label = "Visits"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

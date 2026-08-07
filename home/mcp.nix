@@ -24,7 +24,7 @@ let
   # name spelled out as a literal instead). Note this stays the *public* tailnet
   # URL even on the rpi5 itself, where it means the box reaches its own MCP by
   # going out to its own name and back: the :7020 listener is a `tailscale serve`
-  # mapping (hosts/rpi5/services-registry.nix), so it is bound on the tailnet address
+  # mapping (nic.services.affine-mcp.public), so it is bound on the tailnet address
   # only and has no loopback equivalent at that port. Short-circuiting it means
   # pointing at tiny-llm-gate's backend route directly — a behaviour change worth
   # its own commit, not a side effect of this one.

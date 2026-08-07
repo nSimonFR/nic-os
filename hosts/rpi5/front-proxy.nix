@@ -18,9 +18,9 @@
 #                                            lands at the domain root; redirect to Nextcloud)
 #
 # AFFiNE is NOT here anymore — its SPA router insists on root paths, so it runs at the
-# root of its own 8443 Funnel (see affine.nix / services-registry.nix). Reuses the nginx
+# root of its own 8443 Funnel (see affine.nix). Reuses the nginx
 # instance the Nextcloud module already runs (no extra process). The funnel entry that
-# targets :8092 lives in services-registry.nix (Infrastructure category); Nextcloud +
+# targets :8092 is nic.services.front-proxy.public, declared below; Nextcloud +
 # Cyrus entries carry `proxied = true` so tailscale-serve.nix emits no direct
 # serve/funnel command for them — this vhost fronts them instead.
 { ... }:
@@ -151,6 +151,33 @@ in
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
+    };
+  };
+
+  # Every OTHER location above that proxies is claimed by a service's
+  # public.muxPath, and lib/service-registration.nix asserts the pairing both
+  # ways — so a deleted service can't leave a live location proxying to a dead
+  # port. /backend/ is the one genuine exception: it belongs to Ryot, but Ryot's
+  # browser-side GraphQL client hardcodes `${window.location.origin}/backend`,
+  # which ignores the /ryot/ basename, so the location has to sit at the domain
+  # root where no muxPath can claim it. The pure `return 301` redirects need no
+  # entry here — they carry no proxyPass.
+  nic.frontProxy.unclaimed = [ "/backend/" ];
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  nic.services.front-proxy = {
+    backup     = [ "none" ];
+    backupNote = "stateless — this is an nginx vhost generated from the config above";
+    # nginx is infra that nixos-rebuild-safe deliberately leaves up.
+    heavyUnits = [ ];
+
+    # No tile: the mux is how other services are reached, not a destination.
+    # This is the single public 443 funnel that fronts every `proxied` service.
+    public = {
+      order   = 240;
+      port    = 443;
+      backend = "http://127.0.0.1:8092";
+      funnel  = true;
     };
   };
 }

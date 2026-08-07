@@ -106,5 +106,13 @@ in
     backupNote    = "stateless bridge — every document it serves lives in AFFiNE's Postgres";
     heavyUnits    = [ "affine-mcp.service" ];
     heavyPriority = 60;
+
+    # No tile: an internal MCP gateway, not user-facing. Backend is the
+    # tiny-llm-gate mount rather than the service's own bind.
+    public = {
+      order   = 210;
+      port    = 7020;
+      backend = "http://127.0.0.1:4001/mcp/affine";
+    };
   };
 }

@@ -1,17 +1,17 @@
-{ pkgs, lib, tailnetFqdn, ... }:
+{ config, pkgs, lib, ... }:
 let
-  registry = import ./services-registry.nix { };
-
   ts = "${pkgs.tailscale}/bin/tailscale";
 
-  isFunnel  = e: e ? funnel && e.funnel;
+  # Every service that declared a public face, in `public.order`
+  # (hosts/rpi5/lib/service-registration.nix). Was services-registry.nix.
+  entries = config.nic.publicEntries;
+
   # `proxied` entries are fronted by the nginx path-mux (front-proxy.nix) behind the
   # single Front Proxy funnel on 443 — they must NOT get their own serve/funnel command
   # (a second bind on 443 would conflict). They still appear as homepage tiles.
-  isProxied = e: e ? proxied && e.proxied;
-  directEntries = builtins.filter (e: !(isProxied e)) registry.entries;
-  serveEntries  = builtins.filter (e: !(isFunnel e)) directEntries;
-  funnelEntries = builtins.filter isFunnel directEntries;
+  directEntries = builtins.filter (e: !e.proxied) entries;
+  serveEntries  = builtins.filter (e: !e.funnel) directEntries;
+  funnelEntries = builtins.filter (e: e.funnel) directEntries;
 
   serveUp   = lib.concatMapStringsSep "\n  " (e: "${ts} serve   --bg --https=${toString e.port} ${e.backend}") serveEntries;
   funnelUp  = lib.concatMapStringsSep "\n  " (e: "${ts} funnel  --bg --https=${toString e.port} ${e.backend}") funnelEntries;

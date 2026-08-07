@@ -15,7 +15,8 @@
 let
   internalPort = 13342;  # gunicorn bind (real backend, localhost only)
   proxyPort    = 8320;   # socket-activate proxy listen; Tailscale Serve → here
-  servePort    = 3650;   # external tailnet HTTPS port (see services-registry.nix)
+  # External tailnet HTTPS port: declared once in nic.services.beaverhabits.public
+  # below, which also derives publicUrl for APP_URL.
 in
 {
   services.beaverhabits = {
@@ -24,7 +25,7 @@ in
     port            = internalPort;
     environmentFile = "/run/agenix/beaverhabits-env";  # NICEGUI_STORAGE_SECRET, JWT_SECRET, RESET_PASSWORD_TOKEN_SECRET
     settings = {
-      APP_URL = "https://${tailnetFqdn}:${toString servePort}";
+      APP_URL = config.nic.services.beaverhabits.public.publicUrl;
       # Single-user instance: don't let anyone else self-register.
       MAX_USER_COUNT = "1";
     };
@@ -55,5 +56,31 @@ in
     backupUnits   = [ "beaverhabits-backup.service" ];   # backups.nix
     heavyUnits    = [ "beaverhabits.service" ];
     heavyPriority = 100;
+
+    # Kept last in Apps so the tile sits at the end of the group.
+    public = {
+      order   = 180;
+      port    = 3650;
+      backend = "http://127.0.0.1:${toString proxyPort}";
+      tile = {
+        name        = "BeaverHabits";
+        # BeaverHabits isn't in dashboard-icons, so point at its apple-touch-icon
+        # via jsdelivr (pinned tag).
+        icon        = "https://cdn.jsdelivr.net/gh/daya0576/beaverhabits@v0.9.1/statics/images/apple-touch-icon.png";
+        category    = "Apps";
+        description = "Habit tracker";
+        # Reads habits.db (JSON blob) directly, so the daily poll never wakes it.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/beaverhabits";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "habits"; label = "Habits"; format = "number"; }
+            { field = "done_today"; label = "Done today"; format = "number"; }
+            { field = "checkins"; label = "Check-ins"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

@@ -277,4 +277,30 @@ in
       ];
     };
   };
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  nic.services.tiny-llm-gate = {
+    backup     = [ "none" ];
+    backupNote =
+      "the only state is /var/lib/tiny-llm-gate/codex-credentials.json, a "
+      + "self-rotating ChatGPT OAuth credential. It cannot be restored from a "
+      + "backup usefully — a stale copy is already invalid — so recovery is "
+      + "re-seeding it from a fresh ChatGPT refresh token. Everything else the "
+      + "gate serves is config from the store.";
+    # Deliberately NOT heavy: the gate is what every agent on this box reaches
+    # inference through, including whatever is driving the rebuild.
+    heavyUnits = [ ];
+
+    public = {
+      order   = 200;
+      port    = 4001;
+      backend = "http://127.0.0.1:4001";
+      tile = {
+        name        = "tiny-llm-gate";
+        icon        = "mdi-brain";
+        category    = "Backend";
+        description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)";
+      };
+    };
+  };
 }

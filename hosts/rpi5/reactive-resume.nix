@@ -163,5 +163,35 @@ in
     postgresDatabases = [ "reactive_resume" ];
     heavyUnits        = [ "reactive-resume.service" ];
     heavyPriority     = 30;
+
+    # Prefix STRIPPED by front-proxy.nix — the server is root-native; the SPA is
+    # built with Vite base=/rxresume/ so the browser requests everything under
+    # /rxresume/, and the server's browser-facing URLs carry it via APP_URL.
+    public = {
+      order   = 170;
+      port    = 443;
+      backend = "http://127.0.0.1:13336";
+      proxied = true;
+      muxPath = basePath;
+      tile = {
+        name        = "Reactive Resume";
+        icon        = "reactive-resume.svg";
+        category    = "Apps";
+        description = "Resume builder";
+        # Queries Reactive Resume's Postgres directly (scram auth via agenix
+        # password). Postgres isn't socket-activated, so this never wakes the Node
+        # service either.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/reactiveresume";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "resumes"; label = "Resumes"; format = "number"; }
+            { field = "users"; label = "Users"; format = "number"; }
+            { field = "views"; label = "Views"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

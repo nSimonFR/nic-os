@@ -9,7 +9,7 @@
 # Not behind the 443 front-proxy path-mux (front-proxy.nix): Gramps Web's SPA
 # hardcodes absolute API paths and its service worker needs root scope, so it
 # can't be reliably served from a subpath (gramps-web#531). Like AFFiNE, it keeps
-# its own origin — a dedicated Tailscale Serve port (5050, see services-registry.nix).
+# its own origin — a dedicated Tailscale Serve port (5050, see nic.services below).
 #
 # Socket-activated lazy-start (hosts/rpi5/lib/socket-activate.nix): gunicorn binds
 # 127.0.0.1:15051 and a proxy on 127.0.0.1:15050 (the Tailscale Serve backend for
@@ -76,5 +76,32 @@ in
     backupUnits   = [ "gramps-web-backup.service" ];   # backups.nix — trees + media
     heavyUnits    = [ "gramps-web.service" "gramps-web-celery.service" ];
     heavyPriority = 80;
+
+    # NOT behind the 443 path-mux: the SPA hardcodes absolute API paths and its
+    # service worker needs root scope (gramps-web#531), so it keeps its own
+    # Tailscale Serve port — same call as AFFiNE on 8443.
+    public = {
+      order   = 130;
+      port    = 5050;
+      backend = "http://127.0.0.1:15050";
+      tile = {
+        name        = "Gramps Web";
+        icon        = "gramps.svg";
+        category    = "Apps";
+        description = "Genealogy";
+        # Reads the per-tree SQLite directly, summed across trees, so the daily
+        # poll never wakes the service.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/grampsweb";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "people"; label = "People"; format = "number"; }
+            { field = "families"; label = "Families"; format = "number"; }
+            { field = "events"; label = "Events"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

@@ -43,9 +43,10 @@ let
   internalPort = 13343;  # SvelteKit node server (real frontend bind, localhost only)
   proxyPort    = 8330;   # socket-activate proxy listen; moxfield-sync writes here
   roPort       = 8331;   # nginx read-only guard; Tailscale Serve → here (see below)
-  servePort    = 3550;   # external tailnet HTTPS port (see services-registry.nix)
+  # External tailnet HTTPS port: declared once in nic.services.showmycards.public
+  # below, which also derives publicUrl for `origin`.
   dataDir      = "/mnt/data/showmycards";
-  origin       = "https://${tailnetFqdn}:${toString servePort}";
+  origin       = config.nic.services.showmycards.public.publicUrl;
 in
 {
   users.users.showmycards = {
@@ -129,7 +130,7 @@ in
   #
   # The filter sits in FRONT of the socket-activate proxy rather than on it, because
   # :8330 is also how moxfield-sync writes. Tailscale Serve points at this vhost
-  # (see services-registry.nix), so browsers get read-only while the sync — which
+  # (nic.services.showmycards.public.backend), so browsers get read-only while the sync — which
   # talks to 127.0.0.1:8330 directly, and is not reachable from the tailnet — keeps
   # full access. Read-only is therefore a property of the ROUTE, not the service.
   services.nginx.virtualHosts."showmycards-ro" = {
@@ -184,5 +185,38 @@ in
     backup        = [ "mnt-data" ];
     heavyUnits    = [ "showmycards-frontend.service" "showmycards-backend.service" ];
     heavyPriority = 155;
+
+    # backend is :8331 (the nginx read-only guard), NOT :8330 (the socket-activate
+    # proxy): Moxfield is the single writer, so an edit made through the tailnet
+    # would be reverted by the next daily sync. moxfield-sync itself still writes
+    # via :8330, which the tailnet cannot reach.
+    public = {
+      order   = 190;
+      port    = 3550;
+      backend = "http://127.0.0.1:8331";
+      tile = {
+        name        = "ShowMyCards";
+        icon        = "mdi-cards-playing-outline";
+        category    = "Apps";
+        description = "Magic: The Gathering collection";
+        # Reads ShowMyCards' SQLite directly rather than its HTTP API: :8330 is the
+        # only thing that wakes the service, so an API-backed widget would pin it
+        # awake permanently.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/showmycards";
+          refreshInterval = 3600000;
+          # "value" is EUR, computed foil-aware from the Scryfall prices in the local
+          # catalogue (which self-updates daily at 03:00) — NOT ShowMyCards' own
+          # total_collection_value, which is a different currency or blend and could
+          # not be reproduced.
+          mappings = [
+            { field = "cards"; label = "Cards"; format = "number"; }
+            { field = "decks"; label = "Decks"; format = "number"; }
+            { field = "value"; label = "Value"; format = "float"; prefix = "€"; }
+          ];
+        };
+      };
+    };
   };
 }
