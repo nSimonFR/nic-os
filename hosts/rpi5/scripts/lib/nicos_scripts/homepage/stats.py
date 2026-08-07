@@ -31,7 +31,7 @@ Beszel). Native widgets cannot be rate-limited from homepage's config, and
 homepage's `customapi` widget defaults to refreshInterval = 10s — so the AFFiNE
 tile used to POST a GraphQL query at AFFiNE every 10 seconds. Routing everything
 through here means one fetch per day per service, and no API key or password
-sitting in services-registry.nix.
+sitting in the dashboard config.
 
 Refresh cadence: 86400s (daily). Sure is socket-activated (hosts/rpi5/sure.nix)
 with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
@@ -108,7 +108,7 @@ class Config:
     # Beszel's PocketBase database (hosts/rpi5/monitoring.nix). DynamicUser + StateDirectory
     # puts it under /var/lib/private, which is 0700 root — this service runs as root, so
     # the same read-only-SQLite trick applies. Reading it here replaces the native beszel
-    # widget, which needed a superuser password in plaintext in services-registry.nix.
+    # widget, which needed a superuser password in plaintext in the tile config.
     beszel_db: str = "/var/lib/private/beszel-hub/beszel_data/data.db"
     # BeaverHabits (hosts/rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
     # user in habit_list.data — read-only, so polling never wakes the idle service.

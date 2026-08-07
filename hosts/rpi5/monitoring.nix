@@ -265,4 +265,47 @@ in
       Persistent = true;
     };
   };
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  # Beszel's public face lived in services-registry.nix while its state never
+  # answered the backup question at all — this closes both.
+  nic.services.beszel = {
+    backup     = [ "none" ];
+    backupNote =
+      "monitoring history only. The PocketBase DB sits under "
+      + "/var/lib/private/beszel-hub (DynamicUser + StateDirectory), outside "
+      + "restic's /mnt/data scope, and is deliberately not dumped: a fresh hub "
+      + "re-registers the agent and starts collecting again.";
+    # Not in the heavy list today, and left that way here so this registration
+    # changes no behaviour. The hub idles small; the agent must keep running to
+    # collect during a rebuild anyway.
+    heavyUnits = [ ];
+
+    public = {
+      order   = 90;
+      port    = 3000;
+      backend = "http://127.0.0.1:${toString beszelHubPort}";
+      tile = {
+        name        = "Beszel";
+        icon        = "beszel.svg";
+        category    = "Apps";
+        description = "System monitoring";
+        # Was the native `beszel` widget, which needed a Beszel superuser password
+        # in plaintext in the registry (and could only render two stats without
+        # pinning the tile to one systemId). The aggregator reads Beszel's
+        # PocketBase SQLite read-only instead — the homepage@nic-os.local
+        # superuser created above is no longer used by this tile.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/beszel";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "systems"; label = "Systems"; format = "number"; }
+            { field = "up";      label = "Up";      format = "number"; }
+            { field = "alerts";  label = "Alerts";  format = "number"; }
+          ];
+        };
+      };
+    };
+  };
 }

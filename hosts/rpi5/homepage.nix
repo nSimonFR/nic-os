@@ -1,20 +1,24 @@
 { config, lib, pkgs, tailnetFqdn, apertureUrl, ... }:
 let
-  registry = import ./services-registry.nix { };
-  allEntries = registry.entries;
+  # Every service that declared a public face, in `public.order`
+  # (hosts/rpi5/lib/service-registration.nix). Was services-registry.nix.
+  #
+  # A service with no `tile` is routed but renders nothing — the front proxy, the
+  # MCP gateway, the notify aggregator, the Epic captcha portal, and homepage
+  # itself. That used to be spelled as `category = "Infrastructure"` and enforced
+  # three times over (a name test for "Homepage", a category test, and omission
+  # from categoryOrder below), none of which said "hidden".
+  visibleEntries = builtins.filter (e: e.tile != null) config.nic.publicEntries;
 
-  # Hide Homepage and Infrastructure from the dashboard
-  visibleEntries = builtins.filter (e: e.name != "Homepage" && e.category != "Infrastructure") allEntries;
-
-  # Ordered category list (controls display order on the dashboard)
-  # Tile order within each category is determined by list order in services-registry.nix.
+  # Ordered category list (controls display order on the dashboard).
+  # Tile order within each category comes from `public.order`.
   categoryOrder = [
     "Apps"
     "Backend"
   ];
 
   entriesForCategory = cat:
-    builtins.filter (e: e.category == cat) visibleEntries;
+    builtins.filter (e: e.tile.category == cat) visibleEntries;
 
   # Build tile config, including widget if the entry has one.
   #
@@ -25,17 +29,15 @@ let
   # Liveness is Beszel's job; the tiles are links plus a daily stat.
   mkTile = e:
     let
-      # Port 443 is the bare-URL funnel (Front Proxy path-mux) — omit the :port
-      # suffix and append the entry's path (e.g. /affine, /nextcloud) if it has one.
-      url = "https://${tailnetFqdn}"
-            + lib.optionalString (e.port != 443) ":${toString e.port}"
-            + (e.path or "");
+      # publicUrl already folds in the port rule (omitted on 443, the bare-URL
+      # funnel) and the path-mux prefix. deepLink is the cosmetic tail — only
+      # Home Assistant sets one, to land on its "Mine" dashboard.
       base = {
-        icon = e.icon;
-        href = url;
-        inherit (e) description;
+        icon = e.tile.icon;
+        href = e.publicUrl + lib.optionalString (e.tile.deepLink != null) e.tile.deepLink;
+        inherit (e.tile) description;
       };
-      widgetAttr = if e ? widget then { inherit (e) widget; } else {};
+      widgetAttr = lib.optionalAttrs (e.tile.widget != null) { inherit (e.tile) widget; };
     in base // widgetAttr;
 
   # Build the services list: one attrset per category, each containing service tiles
@@ -45,7 +47,7 @@ let
       in if entries == [] then null
       else {
         "${cat}" = map (e: {
-          "${e.name}" = mkTile e;
+          "${e.tile.name}" = mkTile e;
         }) entries;
       }
     ) categoryOrder
@@ -179,8 +181,15 @@ in
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.homepage = {
     backup        = [ "none" ];
-    backupNote    = "dashboard config is generated from services-registry.nix; the stats aggregator only caches";
+    backupNote    = "dashboard config is generated from nic.services.*.public; the stats aggregator only caches";
     heavyUnits    = [ "homepage-dashboard.service" "homepage-stats.service" ];
     heavyPriority = 160;
+
+    # No tile: the dashboard does not link to itself.
+    public = {
+      order   = 250;
+      port    = 8082;
+      backend = "http://127.0.0.1:8082";
+    };
   };
 }

@@ -71,5 +71,30 @@ in {
     backupUnits   = [ "vaultwarden-backup.service" ];   # backups.nix
     heavyUnits    = [ "vaultwarden.service" ];
     heavyPriority = 150;
+
+    public = {
+      order   = 100;
+      port    = 8222;
+      backend = "http://127.0.0.1:8222";
+      tile = {
+        name        = "Vaultwarden";
+        icon        = "vaultwarden.svg";
+        category    = "Apps";
+        description = "Password manager";
+        # No native homepage widget exists, so this reads Vaultwarden's SQLite
+        # directly — the daily poll never wakes the socket-activated service and
+        # needs no API key.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/vaultwarden";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "items"; label = "Items"; format = "number"; }
+            { field = "users"; label = "Users"; format = "number"; }
+            { field = "devices"; label = "Devices"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

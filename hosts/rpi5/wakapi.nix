@@ -120,5 +120,29 @@ in {
     backupUnits   = [ "wakapi-backup.service" ];   # declared just above
     heavyUnits    = [ "wakapi.service" ];
     heavyPriority = 140;
+
+    public = {
+      order   = 150;
+      port    = 3030;
+      backend = "http://127.0.0.1:3030";
+      tile = {
+        name        = "Wakapi";
+        icon        = "wakatime.svg";
+        category    = "Apps";
+        description = "Coding stats (WakaTime-compatible)";
+        # Coding hours, from wakapi's own `durations` table — heartbeat/language/user
+        # row counts said nothing about how much was actually coded.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/wakapi";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "today";    label = "Today";    format = "float"; suffix = "h"; }
+            { field = "last_30d"; label = "30 days";  format = "float"; suffix = "h"; }
+            { field = "total";    label = "All time"; format = "float"; suffix = "h"; }
+          ];
+        };
+      };
+    };
   };
 }

@@ -33,8 +33,10 @@
 let
   backendPort  = 13352; # Rust backend (localhost)
   frontendPort = 13351; # React-Router SSR (localhost)
-  proxyPort    = 13350; # Caddy entrypoint; Tailscale Serve → here
-  servePort    = 3700;  # external tailnet HTTPS port (see services-registry.nix)
+  proxyPort    = 13350; # Caddy entrypoint; the 443 path-mux → here
+  # No servePort: Ryot has no port of its own. It sits behind the 443 path-mux at
+  # /ryot (nic.services.ryot.public below). A `servePort = 3700` lingered here
+  # long after that move — a port that no longer existed, read by nothing.
 
   # Ryot's SPA is now built with a /ryot/ base (ryot-nix frontend.nix basename +
   # vite base), so it lives under /ryot/ *everywhere*. Re-root Caddy's path-mux
@@ -158,5 +160,36 @@ in
     postgresDatabases = [ "ryot" ];
     heavyUnits        = [ "ryot-backend.service" "ryot-frontend.service" ];
     heavyPriority     = 90;
+
+    # Prefix KEPT (no strip): the SSR frontend is built with a /ryot/ base and
+    # basename, and Caddy is re-rooted to mux under /ryot, so front-proxy.nix
+    # forwards /ryot/* verbatim. This also makes the Plex webhook (…/ryot/_i/<id>)
+    # publicly reachable.
+    public = {
+      order   = 160;
+      port    = 443;
+      backend = "http://127.0.0.1:${toString proxyPort}";
+      proxied = true;
+      muxPath = "/ryot";
+      tile = {
+        name        = "Ryot";
+        icon        = "ryot.svg";
+        category    = "Apps";
+        description = "Media & life tracker";
+        # Reads Ryot's Postgres directly (daily-cached, superuser) — no API token
+        # on the tile. "Hours" excludes video-game playtime; see
+        # RYOT_MEDIA_HOURS_SQL for why.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/ryot";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "seen";     label = "Media seen"; format = "number"; }
+            { field = "hours";    label = "Hours seen"; format = "number"; suffix = "h"; }
+            { field = "workouts"; label = "Workouts";   format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

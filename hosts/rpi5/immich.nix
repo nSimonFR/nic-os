@@ -131,5 +131,28 @@ in
     backup        = [ "mnt-data" ];
     heavyUnits    = [ "immich-server.service" ];
     heavyPriority = 10;
+
+    public = {
+      order   = 40;
+      port    = 10000;
+      backend = "http://127.0.0.1:2283";
+      funnel  = true;
+      tile = {
+        name        = "Immich";
+        icon        = "immich.svg";
+        category    = "Apps";
+        description = "Photo management";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/immich";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "photos"; label = "Photos"; format = "number"; }
+            { field = "videos"; label = "Videos"; format = "number"; }
+            { field = "usage";  label = "Storage"; format = "bytes"; }
+          ];
+        };
+      };
+    };
   };
 }

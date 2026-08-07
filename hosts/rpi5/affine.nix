@@ -201,7 +201,7 @@ in
       AFFINE_SERVER_HOST = "127.0.0.1";
       AFFINE_SERVER_PORT = toString port;
       # AFFiNE runs at the ROOT of its own Tailscale Funnel on :8443 (see
-      # services-registry.nix). No NestJS global prefix — its SPA router insists
+      # nic.services.affine.public below). No NestJS global prefix — its SPA router insists
       # on root paths (a /affine sub-path made the client navigate to root
       # /workspace/… and never held the base), so serving at root is the only
       # clean option. Internal callers on :13010 hit routes at root (/graphql,
@@ -277,5 +277,33 @@ in
     postgresDatabases = [ "affine" ];
     heavyUnits        = [ "affine.service" ];
     heavyPriority     = 50;
+
+    # NOT behind the 443 path-mux: AFFiNE's SPA router insists on root paths, so
+    # it runs at the root of its own 8443 funnel.
+    public = {
+      order   = 20;
+      port    = 8443;
+      backend = "http://127.0.0.1:13010";
+      funnel  = true;
+      tile = {
+        name        = "AFFiNE";
+        icon        = "affine.svg";
+        category    = "Apps";
+        description = "Collaborative docs";
+        # Was a customapi POSTing GraphQL straight at AFFiNE every 10s, and it read
+        # workspaces[0] — the 3-doc scratch workspace, not the main one. The
+        # aggregator sums all four workspaces and asks once a day.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/affine";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "workspaces"; label = "Workspaces"; format = "number"; }
+            { field = "docs";       label = "Docs";       format = "number"; }
+            { field = "storage";    label = "Storage";    format = "bytes"; }
+          ];
+        };
+      };
+    };
   };
 }

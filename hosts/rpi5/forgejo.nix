@@ -247,5 +247,29 @@ in
     backupUnits       = [ "forgejo-state-backup.service" ];
     heavyUnits        = [ "forgejo.service" ];
     heavyPriority     = 130;
+
+    # externalPort is also the socket-activate listen (see below), so the literal
+    # stays local; only the URL shape is derived.
+    public = {
+      order   = 140;
+      port    = externalPort;
+      backend = "http://127.0.0.1:${toString externalPort}";
+      tile = {
+        name        = "Forgejo";
+        icon        = "forgejo.svg";
+        category    = "Apps";
+        description = "Git hosting";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/forgejo";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "repositories"; label = "Repos"; format = "number"; }
+            { field = "issues"; label = "Issues"; format = "number"; }
+            { field = "pulls"; label = "PRs"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

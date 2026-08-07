@@ -7,7 +7,7 @@
 # without these patches sending to non-Proton recipients fails with Proton
 # API code [2001]. Drop the unstable pin once nixos-25.11 catches up.
 # IMAP/SMTP exposed only on tailscale0; CardDAV stays on 127.0.0.1 and is
-# proxied via Tailscale Serve (see services-registry.nix).
+# proxied via Tailscale Serve (see nic.services.hydroxide.public below).
 #
 # FIRST-TIME SETUP (auth.json must be created interactively before the
 # daemon can serve any requests — the service will crashloop until then):
@@ -79,4 +79,29 @@ in
     imapPort
     smtpPort
   ];
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  nic.services.hydroxide = {
+    backup     = [ "none" ];
+    backupNote =
+      "the only state is the Proton bridge auth under /var/lib/hydroxide/.config "
+      + "(0700), which is re-obtained by re-running `hydroxide auth` — see the "
+      + "header. No mail is stored here; it is a bridge, not a mailbox.";
+    heavyUnits = [ ];
+
+    public = {
+      # Moved 8443 → 8083 (matching its backend port) to free the 8443 funnel
+      # slot; AFFiNE took it, since it needs a root origin. Devices using
+      # …:8443/.well-known/carddav must update to :8083.
+      order   = 220;
+      port    = 8083;
+      backend = "http://127.0.0.1:8083";
+      tile = {
+        name        = "Hydroxide";
+        icon        = "mdi-email-outline";
+        category    = "Backend";
+        description = "ProtonMail bridge (SMTP + CardDAV)";
+      };
+    };
+  };
 }

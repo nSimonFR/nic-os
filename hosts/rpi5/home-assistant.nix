@@ -214,5 +214,36 @@ in
     backupUnits   = [ "hass-backup.service" ];   # backups.nix
     heavyUnits    = [ "home-assistant.service" ];
     heavyPriority = 20;
+
+    public = {
+      order   = 80;
+      port    = 8123;
+      backend = "http://127.0.0.1:8123";
+      tile = {
+        name        = "Home Assistant";
+        icon        = "home-assistant.svg";
+        category    = "Apps";
+        description = "Home automation";
+        # Deep-link the tile straight to the "Mine" Lovelace dashboard (url_path
+        # "mine-dashboard" above) instead of HA's root. Cosmetic only — HA is not
+        # behind the path-mux, so this is not a muxPath.
+        deepLink    = "/mine-dashboard/";
+        # Routed through the homepage-stats aggregator (:8087, daily-cached) like the
+        # other tiles rather than the native `homeassistant` widget that polls HA
+        # every 60s. Counts can be up to the aggregator's REFRESH_INTERVAL (24h)
+        # stale — acceptable for a glanceable tile; the aggregator holds the HA
+        # token, so no key is exposed here.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/homeassistant";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "people_home"; label = "Home";     format = "number"; }
+            { field = "lights_on";   label = "Lights";   format = "number"; }
+            { field = "switches_on"; label = "Switches"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

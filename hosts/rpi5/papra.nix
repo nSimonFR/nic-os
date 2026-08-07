@@ -297,5 +297,29 @@ in
     backupUnits   = [ "papra-backup.service" ];   # backups.nix
     heavyUnits    = [ "papra.service" ];
     heavyPriority = 120;
+
+    public = {
+      order   = 50;
+      port    = 3450;
+      backend = "http://127.0.0.1:8220";
+      tile = {
+        name        = "Papra";
+        icon        = "papra.svg";
+        category    = "Apps";
+        description = "Document archive (bills, invoices)";
+        # Reads Papra's SQLite directly (:8087/papra), not Papra's HTTP API, so the
+        # daily poll never wakes the socket-activated service.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/papra";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "documents"; label = "Documents"; format = "number"; }
+            { field = "tags"; label = "Tags"; format = "number"; }
+            { field = "size"; label = "Storage"; format = "bytes"; }
+          ];
+        };
+      };
+    };
   };
 }

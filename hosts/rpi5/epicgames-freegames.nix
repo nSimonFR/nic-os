@@ -14,7 +14,7 @@
 #   the session is then persisted under the state dir (device-auths.json + cookies)
 #   and refreshed automatically on later runs. If Epic occasionally forces an
 #   hCaptcha, the tool spins up a portal (loopback :3211, exposed tailnet-only on
-#   :3750 — see services-registry.nix) and sends you a link to solve it.
+#   :3750 — see nic.services.epicgames-freegames.public below) and sends you a link.
 { config, pkgs, lib, telegramChatId, tailnetFqdn, ... }:
 let
   # ── Tunables ───────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ let
   configFile = "${stateDir}/config.json";
 
   # Device/captcha web portal: bound to loopback here, exposed tailnet-only via
-  # Tailscale Serve in services-registry.nix (external 3750 → 127.0.0.1:3211).
+  # nic.services.epicgames-freegames below (external 3750 → 127.0.0.1:3211).
   portalPort = 3211;
   portalUrl = "https://${tailnetFqdn}:3750";
 
@@ -142,6 +142,27 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = ''${telegramNotify} "⚠️ epicgames-freegames run failed on rpi5 — check: journalctl -u epicgames-freegames -e"'';
+    };
+  };
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  nic.services.epicgames-freegames = {
+    backup     = [ "none" ];
+    backupNote =
+      "${stateDir} holds a generated config.json plus an Epic device-auth "
+      + "session. The config is rendered from the store on every run, and the "
+      + "session refreshes itself every 48h (hence the daily timer) — a restored "
+      + "copy would already be expired. Recovery is re-authenticating via the "
+      + "captcha portal.";
+    heavyUnits = [ ];
+
+    # No tile: the portal only listens during a run, and only when Epic demands
+    # an interactive solve. Tailnet-only serve so the Telegram captcha link
+    # resolves from a phone.
+    public = {
+      order   = 270;
+      port    = 3750;
+      backend = "http://127.0.0.1:${toString portalPort}";
     };
   };
 }

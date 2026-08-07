@@ -414,5 +414,35 @@ in
   nic.services.nextcloud = {
     backup            = [ "postgres" "mnt-data" ];
     postgresDatabases = [ "nextcloud_production" ];
+
+    # The main human-facing app on the 443 funnel; front-proxy.nix redirects the
+    # bare URL here. Prefix stripped before forwarding — NC routes at its vhost
+    # root, and overwritewebroot only rewrites the links it generates.
+    public = {
+      order    = 10;
+      port     = 443;
+      backend  = "http://127.0.0.1:8091";
+      proxied  = true;
+      muxPath  = "/nextcloud";
+      tile = {
+        name        = "Nextcloud";
+        icon        = "nextcloud.svg";
+        category    = "Apps";
+        description = "Files + Contacts + Calendar (DAV)";
+        # Was the native `nextcloud` widget, which always renders four stats
+        # (freespace/activeusers/numfiles/numshares) and re-authenticates against
+        # serverinfo on every page load. The aggregator holds the NC-Token instead.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/nextcloud";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "users";  label = "Active users"; format = "number"; }
+            { field = "files";  label = "Files";        format = "number"; }
+            { field = "shares"; label = "Shares";       format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }

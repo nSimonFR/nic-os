@@ -121,4 +121,38 @@ in
       timeoutSec   = 120;
     };
   };
+
+  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  # DISABLED 2026-06-15 (venv crash-loop, exit 126). This whole module is not
+  # imported by configuration.nix; re-enable it there and this registration comes
+  # back with it — including the dashboard tile, which used to be carried in
+  # services-registry.nix as a commented-out block and is preserved here instead.
+  # `order = 60` is the gap left for it between Papra (50) and Karakeep (70).
+  nic.services.open-webui = {
+    backup     = [ "none" ];
+    backupNote = "chat history in /var/lib/private/open-webui was never backed up; re-verify before re-enabling";
+    heavyUnits = [ "open-webui.service" ];
+
+    public = {
+      order   = 60;
+      port    = externalPort;
+      backend = "http://127.0.0.1:${toString externalPort}";
+      tile = {
+        name        = "Open WebUI";
+        icon        = "open-webui.svg";
+        category    = "Apps";
+        description = "LLM chat interface";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/openwebui";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "models"; label = "Models"; format = "number"; }
+            { field = "chats"; label = "Chats"; format = "number"; }
+            { field = "messages"; label = "Messages"; format = "number"; }
+          ];
+        };
+      };
+    };
+  };
 }

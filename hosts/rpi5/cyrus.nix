@@ -706,5 +706,36 @@ in
           done
         '';
     };
+
+    # ── Service registration (hosts/rpi5/lib/service-registration.nix) ────────────
+    nic.services.cyrus = {
+      backup     = [ "none" ];
+      backupNote =
+        "everything under /var/lib/cyrus is rebuildable: src/ + .pnpm are a "
+        + "vendored build keyed on .built-rev, .cyrus/config.json is regenerated "
+        + "from this module on every rebuild, and ~/.config/gh holds the "
+        + "nSimonFR-ai PAT, which is re-obtained by `gh auth login`. Issue state "
+        + "lives in Linear.";
+      # Not in the heavy list today, and left that way: cyrus-build is the
+      # expensive part and it is a oneshot keyed on the source rev.
+      heavyUnits = [ ];
+
+      # Fronted by the 443 path-mux at /cyrus, prefix STRIPPED: cyrus mounts
+      # /callback, /linear-webhook and /github-webhook at its root and knows its
+      # public base only via CYRUS_BASE_URL.
+      public = {
+        order   = 230;
+        port    = 443;
+        backend = "http://127.0.0.1:${toString cfg.port}";
+        proxied = true;
+        muxPath = "/cyrus";
+        tile = {
+          name        = "Cyrus";
+          icon        = "mdi-robot-outline";
+          category    = "Backend";
+          description = "Linear coding-agent (cyrusagents/cyrus)";
+        };
+      };
+    };
   };
 }

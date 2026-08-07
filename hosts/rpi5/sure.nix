@@ -185,5 +185,33 @@ in
     postgresDatabases = [ "sure_production" ];
     heavyUnits        = [ "sure-worker.service" "sure-web.service" ];
     heavyPriority     = 70;
+
+    # Passed through the path-mux UNCHANGED (no prefix strip): config.ru mounts
+    # the app under RAILS_RELATIVE_URL_ROOT=/sure via Rack::URLMap, which does the
+    # SCRIPT_NAME strip itself. Backend is the socket-activate port, so a request
+    # wakes Puma.
+    public = {
+      order   = 30;
+      port    = 443;
+      backend = "http://127.0.0.1:13334";
+      proxied = true;
+      muxPath = "/sure";
+      tile = {
+        name        = "Sure";
+        icon        = "maybe.svg";
+        category    = "Apps";
+        description = "Personal finance";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/sure";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
+            { field = "accounts"; label = "Accounts"; format = "number"; }
+            { field = "transactions"; label = "Transactions"; format = "number"; }
+          ];
+        };
+      };
+    };
   };
 }
