@@ -60,14 +60,32 @@ let
     };
     grants = [
       {
-        # `autogroup:member`, not `*`: `*` also matched the tag:ingress relays
-        # Tailscale runs for Funnel, owned by another user id. Every device of
-        # ours is untagged, so nothing legitimate loses admin — rpi5 included,
-        # which this module's own PUT needs. The inference grant below stays at
-        # `*` on purpose: if Aperture doesn't resolve autogroups in its own
-        # config, the failure is a rejected PUT, not a tailnet-wide loss of
-        # inference. Narrow it too once a sync is observed to succeed.
-        src = [ "autogroup:member" ];
+        # The owner identity, not `*` and not `autogroup:member`.
+        #
+        # `*` also matched the tag:ingress relays Tailscale runs for Funnel,
+        # owned by another user id — that is what we are narrowing away from.
+        #
+        # `autogroup:member` was the first attempt and Aperture rejects it
+        # outright, with HTTP 403:
+        #
+        #   config would remove admin role:admin for you (nSimonFR@github)
+        #
+        # Aperture refuses any config that would strip the *calling* identity's
+        # admin, and it does not expand autogroups when evaluating that guard —
+        # so a lone `autogroup:member` reads to it as "removes your admin" even
+        # though every device of ours is untagged and therefore a member. The
+        # syntax itself is fine: `[ "*" "autogroup:member" ]` is accepted,
+        # because `*` satisfies the guard. Only the sole-autogroup form fails.
+        #
+        # Naming the identity directly satisfies the guard and is *tighter*
+        # than the autogroup: it covers every device authenticating as this
+        # user (rpi5 included, which this module's own PUT needs) and excludes
+        # the tagged relays. Verified live against the Aperture API — this form
+        # PUTs 200 where `[ "autogroup:member" ]` PUTs 403.
+        #
+        # The inference grant below deliberately stays at `*`; narrowing it is
+        # a separate change with a tailnet-wide blast radius.
+        src = [ "nSimonFR@github" ];
         app = {
           "tailscale.com/cap/aperture" = [
             { role = "admin"; }
