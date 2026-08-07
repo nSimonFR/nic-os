@@ -46,8 +46,23 @@
     # nixpkgs; forcing the pyproject/uv2nix inputs to follow breaks the build).
     # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
+    #
+    # ⚠ PINNED TO A REV. Upstream tracks its default branch, and `nix flake
+    #   update` walked it to c7b4b4e1 (2026-08-02), whose nix/lib.nix builds a
+    #   `nodejs_26_npm_12` out of `pkgs.nodejs_26`. Our nixpkgs is release-25.11,
+    #   which tops out at nodejs_24, so the rpi5 config stopped EVALUATING
+    #   entirely — not just hermes:
+    #     error: Function called without required argument "nodejs_26" …
+    #   toplevel forces the package (hermes.nix puts it in home.packages), so
+    #   `nixos-rebuild` could not even start. ebab890a is the last rev that
+    #   builds against 25.11.
+    #
+    #   Do NOT "fix" this by aliasing nodejs_26 → nodejs_24: upstream moved to
+    #   node 26 deliberately and the runtime may depend on it. Unpin when either
+    #   nixpkgs 26.05 lands (it carries nodejs_26) or upstream relaxes the
+    #   requirement.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent";
+      url = "github:NousResearch/hermes-agent/ebab890ae5676fc297461b6e069df5b54cbbefce";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
