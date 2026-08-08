@@ -33,6 +33,14 @@
       file = ./secrets/immich-api-key.age;
       owner = "nsimon";
     };
+    # The same key, decrypted a second time for the immich user. The CLIP tools
+    # (immich-clip.nix) must run as `immich` to reach smart_search over the
+    # Postgres socket under peer auth, and so cannot read the nsimon-owned 0400
+    # copy above. Same plaintext, different owner — no re-encryption needed.
+    immich-clip-api-key = {
+      file = ./secrets/immich-api-key.age;
+      owner = "immich";
+    };
     sure-app-env = {
       file = ./secrets/sure-app-env.age;
       # root-readable; sure-nix reads via EnvironmentFile

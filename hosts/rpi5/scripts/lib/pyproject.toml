@@ -33,6 +33,9 @@ claude-memory-sync = "nicos_scripts.claude.memory_sync:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
+immich-clip-filter = "nicos_scripts.immich.clip_filter:main"
+immich-clip-profile = "nicos_scripts.immich.profile:main"
+immich-clip-backfill = "nicos_scripts.immich.backfill:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

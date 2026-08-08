@@ -166,6 +166,7 @@ in
     ./blocky.nix
     ./monitoring.nix
     ./immich.nix
+    ./immich-clip.nix
     ./sure.nix
     ./papra.nix
     ./karakeep.nix

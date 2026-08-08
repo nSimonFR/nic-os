@@ -48,3 +48,17 @@ def post_json(url, payload, headers=None, timeout=60, opener=None):
     )
     with _urlopen(opener)(req, timeout=timeout) as resp:
         return resp.status, resp.read().decode()
+
+
+def put_json(url, payload, headers=None, timeout=60, opener=None):
+    """PUT a JSON body, decode the JSON reply.
+
+    Immich's album membership endpoint is a PUT that answers with a per-id result
+    list rather than a bare status, so unlike post_json this one decodes.
+    """
+    hdrs = {"Content-Type": "application/json"}
+    hdrs.update(headers or {})
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(), headers=hdrs, method="PUT"
+    )
+    return http_json(req, timeout=timeout, opener=opener)

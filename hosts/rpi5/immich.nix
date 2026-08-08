@@ -38,6 +38,10 @@ in
       };
     };
 
+    # External workflow plugins (IMMICH_ALLOW_EXTERNAL_PLUGINS + the install
+    # folder) are switched on from immich-clip.nix, which owns the one plugin we
+    # ship. `environment` merges across modules, so nothing about it lives here.
+
     # Use the shared Redis (databases.nix) on DB 1 via TCP instead of a
     # dedicated redis-immich instance. Saves ~7 MB RAM + one systemd unit.
     redis = {

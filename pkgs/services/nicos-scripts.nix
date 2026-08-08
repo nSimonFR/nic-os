@@ -56,6 +56,10 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.papra.tag_sweep"
     "nicos_scripts.papra.proton_poll"
     "nicos_scripts.papra.tag_sync"
+    "nicos_scripts.immich.api"
+    "nicos_scripts.immich.clip_filter"
+    "nicos_scripts.immich.profile"
+    "nicos_scripts.immich.backfill"
   ];
 
   meta = {
