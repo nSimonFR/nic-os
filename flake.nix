@@ -62,7 +62,7 @@
     #   nixpkgs 26.05 lands (it carries nodejs_26) or upstream relaxes the
     #   requirement.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/ebab890ae5676fc297461b6e069df5b54cbbefce";
+      url = "github:NousResearch/hermes-agent/2389564d83f5e31a293727f471631dab46601e2b";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
