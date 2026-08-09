@@ -46,8 +46,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from ..logs import logger
 from ..secrets import env_int, env_str, read_secret_env
-from . import api, queue
-from .store import ProfileError, connect_pg, distance_to, load_profile
+from . import api, exclusions, queue
+from .store import ProfileError, connect_pg, load_profile, score
 
 DEFAULT_PROFILE_DIR = "/var/lib/immich-clip/profiles"
 DEFAULT_QUEUE_DB = "/var/lib/immich-clip/pending.sqlite"
@@ -134,7 +134,7 @@ def classify(cfg, req, connect=None, sleep=None, monotonic=None):
         conn.autocommit = True
         cur = conn.cursor()
         while True:
-            distance = distance_to(cur, asset_id, profile["vector"])
+            distance = score(cur, asset_id, profile)
             waited = round(clock() - started, 1)
             if distance is not None:
                 return {
@@ -207,13 +207,25 @@ def handle(cfg, req, classify_fn=None, queue_conn=None, add_assets=None, now=Non
                 conn.close()
 
     if result.get("match") and album_ids:
+        conn, owned = (queue_conn, False)
         try:
+            if conn is None:
+                conn, owned = queue.connect(cfg.queue_db), True
+            # A photo taken out of this album by hand is never filed back into
+            # it — see exclusions.py.
+            wanted = exclusions.allowed(conn, req["assetId"], album_ids)
+            skipped = len(album_ids) - len(wanted)
             result = dict(result, filed=file_into_albums(
-                cfg, album_ids, req["assetId"], add_assets=add_assets))
+                cfg, wanted, req["assetId"], add_assets=add_assets))
+            if skipped:
+                result = dict(result, excluded=skipped)
         except Exception as e:  # noqa: BLE001
             # The verdict stands even if filing failed; immich-clip-backfill
             # will pick it up. Do not turn this into a false negative.
             result = dict(result, filed=0, fileError=str(e))
+        finally:
+            if owned and conn is not None:
+                conn.close()
     return result
 
 

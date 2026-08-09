@@ -36,14 +36,14 @@ from dataclasses import dataclass, field
 from ..logs import logger
 from ..secrets import env_int, env_str, read_secret_env
 from ..state import load_json, save_json
-from . import api, queue
+from . import api, exclusions, queue
 from .clip_filter import file_into_albums
 from .store import (
     ProfileError,
     connect_pg,
-    distance_to,
     existing_asset_ids,
     load_profile,
+    score,
 )
 
 DEFAULT_PROFILE_DIR = "/var/lib/immich-clip/profiles"
@@ -137,6 +137,13 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
         conn.autocommit = True
         cur = conn.cursor()
 
+        # Learn any hand-removals before filing anything, so a photo taken out
+        # of the album since it was queued is not put straight back.
+        learned = exclusions.sync_from_audit(
+            conn_q, cur, sorted({a for i in items for a in i["albumIds"]}), now)
+        if learned:
+            log(f"learned {len(learned)} new hand-removals — they will not be refiled")
+
         alive = existing_asset_ids(cur, [i["assetId"] for i in items])
         gone = queue.drop_missing(conn_q, alive, [i["assetId"] for i in items])
         if gone:
@@ -155,7 +162,7 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
             if profile is None:
                 continue
 
-            distance = distance_to(cur, item["assetId"], profile["vector"])
+            distance = score(cur, item["assetId"], profile)
             if distance is None:
                 waiting.append(item["assetId"])
                 queue.bump(conn_q, item["assetId"], item["profile"])
@@ -163,9 +170,10 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
 
             decided += 1
             match = distance <= item["threshold"]
-            if match and item["albumIds"]:
+            wanted = exclusions.allowed(conn_q, item["assetId"], item["albumIds"])
+            if match and wanted:
                 if cfg.apply:
-                    filed += file_into_albums(cfg, item["albumIds"], item["assetId"])
+                    filed += file_into_albums(cfg, wanted, item["assetId"])
                 else:
                     filed += 1  # counted, not written
             log(f"{item['assetId']} d={distance:.4f} "

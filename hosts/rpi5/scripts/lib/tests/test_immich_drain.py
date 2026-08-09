@@ -12,7 +12,7 @@ import json
 import pytest
 from conftest import FakeOpener, json_reply
 
-from nicos_scripts.immich import api, clip_filter, drain, queue, store
+from nicos_scripts.immich import api, clip_filter, drain, exclusions, queue, store
 
 ASSET = "0a342213-0aca-4f8a-abc1-7260fbff30a1"
 OTHER = "fba7dd29-623c-47c7-92db-65fb252614a8"
@@ -270,8 +270,9 @@ def test_a_now_embedded_match_is_filed_and_leaves_the_queue(tmp_path, q, monkeyp
     a_profile(tmp_path)
     queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
     conn = FakeConn(FakeCursor([
+        [],           # exclusions.sync_from_audit
         [(ASSET,)],   # existing_asset_ids
-        [(0.12,)],    # distance_to
+        [(0.12,)],    # score
     ]))
     filed = []
     monkeypatch.setattr(drain, "file_into_albums",
@@ -288,7 +289,7 @@ def test_a_now_embedded_no_match_also_leaves_the_queue(tmp_path, q):
     # Decided is decided — leaving it queued would re-check it forever.
     a_profile(tmp_path)
     queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
-    conn = FakeConn(FakeCursor([[(ASSET,)], [(0.9,)]]))
+    conn = FakeConn(FakeCursor([[], [(ASSET,)], [(0.9,)]]))
 
     drain.run(drain_cfg(tmp_path, apply=True), connect=lambda c: conn,
               opener=FakeOpener([json_reply({})]), queue_conn=q, now=2000)
@@ -299,7 +300,7 @@ def test_a_now_embedded_no_match_also_leaves_the_queue(tmp_path, q):
 def test_a_still_unembedded_asset_stays_queued_and_counts_an_attempt(tmp_path, q):
     a_profile(tmp_path)
     queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
-    conn = FakeConn(FakeCursor([[(ASSET,)], []]))
+    conn = FakeConn(FakeCursor([[], [(ASSET,)], []]))
 
     drain.run(drain_cfg(tmp_path, apply=True), connect=lambda c: conn,
               opener=FakeOpener([json_reply({})]), queue_conn=q, now=2000)
@@ -311,7 +312,7 @@ def test_a_still_unembedded_asset_stays_queued_and_counts_an_attempt(tmp_path, q
 def test_a_dry_run_writes_nothing_and_says_so(tmp_path, q, capsys):
     a_profile(tmp_path)
     queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
-    conn = FakeConn(FakeCursor([[(ASSET,)], [(0.12,)]]))
+    conn = FakeConn(FakeCursor([[], [(ASSET,)], [(0.12,)]]))
 
     drain.run(drain_cfg(tmp_path), connect=lambda c: conn,
               opener=FakeOpener([json_reply({})]), queue_conn=q, now=2000)
@@ -325,7 +326,7 @@ def test_an_unusable_profile_leaves_its_entries_queued(tmp_path, q, capsys):
     # park the work rather than filing noise or discarding it.
     store.save_profile(tmp_path, "food", "old-model", [1.0, 0.0], {}, now=0)
     queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
-    conn = FakeConn(FakeCursor([[(ASSET,)]]))
+    conn = FakeConn(FakeCursor([[], [(ASSET,)]]))
 
     drain.run(drain_cfg(tmp_path, apply=True), connect=lambda c: conn,
               opener=FakeOpener([json_reply({})]), queue_conn=q, now=2000)
@@ -421,3 +422,61 @@ def test_the_drain_config_cannot_write_without_being_told_to():
     # empty environment is inert.
     assert drain.Config.from_env({}).apply is False
     assert drain.Config.from_env({"IMMICH_CLIP_DRAIN_APPLY": "true"}).apply is True
+
+
+# ── hand-removals are remembered ─────────────────────────────────────────────
+def test_a_removal_learned_from_immichs_audit_is_never_refiled(q):
+    # Immich records every album removal in album_asset_audit but prunes it after
+    # 31 days, so it is copied into our own table, which is not pruned.
+    # (second result set = current album membership, for the re-add check)
+    cur = FakeCursor([[(ALBUM, ASSET)], []])
+    learned = exclusions.sync_from_audit(q, cur, [ALBUM], now=1000)
+    assert learned == [(ALBUM, ASSET)]
+    assert exclusions.for_album(q, ALBUM) == {ASSET}
+    assert exclusions.allowed(q, ASSET, [ALBUM, "other"]) == ["other"]
+
+
+def test_learning_the_same_removal_twice_reports_it_once(q):
+    exclusions.sync_from_audit(q, FakeCursor([[(ALBUM, ASSET)], []]), [ALBUM], now=1000)
+    again = exclusions.sync_from_audit(q, FakeCursor([[(ALBUM, ASSET)], []]), [ALBUM], now=2000)
+    assert again == []
+
+
+def test_an_asset_removed_from_one_album_is_still_filed_into_another(q):
+    exclusions.sync_from_audit(q, FakeCursor([[(ALBUM, ASSET)], []]), [ALBUM], now=1000)
+    assert exclusions.allowed(q, OTHER, [ALBUM]) == [ALBUM]
+
+
+def test_putting_a_photo_back_by_hand_clears_its_exclusion(q):
+    # Otherwise one accidental removal bans the photo for good and the only cure
+    # is editing a SQLite file.
+    exclusions.sync_from_audit(q, FakeCursor([[(ALBUM, ASSET)], []]), [ALBUM], now=1000)
+    assert exclusions.for_album(q, ALBUM) == {ASSET}
+    # now it is back in the album
+    exclusions.sync_from_audit(q, FakeCursor([[(ALBUM, ASSET)], [(ALBUM, ASSET)]]),
+                               [ALBUM], now=2000)
+    assert exclusions.for_album(q, ALBUM) == set()
+
+
+def test_with_no_state_nothing_is_excluded():
+    assert exclusions.allowed(None, ASSET, [ALBUM]) == [ALBUM]
+
+
+def test_the_drainer_does_not_refile_a_photo_taken_out_by_hand(tmp_path, q, monkeypatch):
+    a_profile(tmp_path)
+    queue.enqueue(q, ASSET, "food", 0.3, [ALBUM], now=1000)
+    conn = FakeConn(FakeCursor([
+        [(ALBUM, ASSET)],   # audit: it was removed from this album by hand
+        [],                 # and is not back in the album
+        [(ASSET,)],         # still exists
+        [(0.12,)],          # and still matches
+    ]))
+    filed = []
+    monkeypatch.setattr(drain, "file_into_albums",
+                        lambda cfg, albums, aid: filed.append(aid) or 1)
+
+    drain.run(drain_cfg(tmp_path, apply=True), connect=lambda c: conn,
+              opener=FakeOpener([json_reply({})]), queue_conn=q, now=2000)
+
+    assert filed == []          # matched, but not put back
+    assert queue.count(q) == 0  # and still resolved, not left to retry forever

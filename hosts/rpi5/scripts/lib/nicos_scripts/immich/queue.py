@@ -32,6 +32,16 @@ CREATE TABLE IF NOT EXISTS pending (
     attempts   INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (assetId, profile)
 );
+
+-- Not the queue, but the same state database, and one place should own the
+-- schema. See exclusions.py: (album, asset) pairs the user took OUT of an album
+-- by hand, which nothing may ever file back in.
+CREATE TABLE IF NOT EXISTS excluded (
+    albumId TEXT NOT NULL,
+    assetId TEXT NOT NULL,
+    since   INTEGER NOT NULL,
+    PRIMARY KEY (albumId, assetId)
+);
 """
 
 

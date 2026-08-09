@@ -23,7 +23,12 @@ def headers(cfg):
 
 
 def system_config(cfg, opener=None):
-    return get_json(f"{cfg.immich_url}/api/system-config", headers(cfg), opener=opener)
+    # Long timeout on purpose: Immich is socket-activated with a 1800s idle timer
+    # (hosts/rpi5/immich.nix), so this is usually the call that WAKES it, and a
+    # cold NestJS boot on the Pi takes well past the 30s default.
+    return get_json(
+        f"{cfg.immich_url}/api/system-config", headers(cfg), timeout=120, opener=opener
+    )
 
 
 def clip_model(cfg, opener=None):

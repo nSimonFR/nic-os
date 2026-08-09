@@ -61,6 +61,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.immich.profile"
     "nicos_scripts.immich.backfill"
     "nicos_scripts.immich.queue"
+    "nicos_scripts.immich.exclusions"
     "nicos_scripts.immich.drain"
   ];
 

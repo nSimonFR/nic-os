@@ -27,11 +27,18 @@ from dataclasses import dataclass, field
 
 from ..logs import logger
 from ..secrets import env_str, read_secret_env
-from . import api
-from .store import ProfileError, album_id_by_name, connect_pg, load_profile
+from . import api, exclusions, queue
+from .store import (
+    ProfileError,
+    album_id_by_name,
+    connect_pg,
+    load_profile,
+    seed_ids,
+)
 from .vectors import format_vector
 
 DEFAULT_PROFILE_DIR = "/var/lib/immich-clip/profiles"
+DEFAULT_QUEUE_DB = "/var/lib/immich-clip/pending.sqlite"
 DEFAULT_KEY_FILE = "/run/agenix/immich-clip-api-key"
 log = logger("immich-clip-backfill")
 
@@ -43,6 +50,7 @@ class Config:
     ml_url: str = ""
     model: str = ""
     profile_dir: str = DEFAULT_PROFILE_DIR
+    queue_db: str = DEFAULT_QUEUE_DB
     pg: dict = field(default_factory=lambda: {"dbname": "immich"})
 
     @classmethod
@@ -53,6 +61,7 @@ class Config:
             ml_url=env_str("IMMICH_ML_URL", "", env).rstrip("/"),
             model=env_str("IMMICH_CLIP_MODEL", "", env),
             profile_dir=env_str("IMMICH_CLIP_PROFILE_DIR", DEFAULT_PROFILE_DIR, env),
+            queue_db=env_str("IMMICH_CLIP_QUEUE_DB", DEFAULT_QUEUE_DB, env),
             pg={
                 "dbname": env_str("IMMICH_PG_DB", "immich", env),
                 "host": env_str("IMMICH_PG_HOST", "", env),
@@ -75,7 +84,39 @@ class Config:
 # to serve, so the plan is a plain Seq Scan; the sort then happens outside on an
 # ordinary float column. Exact, and independent of planner GUCs. A few thousand
 # rows is cheap.
-SCAN_SQL = """
+
+# Shared tail: what is eligible at all. `<> ALL(...)` carries the hand-removals
+# (exclusions.py) — an asset taken out of this album by hand is not a candidate
+# again, which is the difference between a removal sticking and not.
+FILTERS = """
+  AND a."deletedAt" IS NULL
+  AND a.type = 'IMAGE'
+  AND a.visibility NOT IN ('hidden', 'locked')
+  AND sc.asset_id <> ALL(%s::uuid[])
+  AND NOT EXISTS (
+    SELECT 1 FROM album_asset aa WHERE aa."assetId" = sc.asset_id AND aa."albumId" = %s
+  )
+ORDER BY sc.d
+"""
+
+# Scored against the NEAREST seed, not their average — see
+# store.nearest_seed_distance for why the centroid lets an Eiffel Tower in. Seed
+# embeddings are read live from the asset ids the profile records.
+SCAN_SEEDS_SQL = """
+WITH seeds AS (
+    SELECT embedding AS e FROM smart_search WHERE "assetId" = ANY(%s::uuid[])
+), scored AS MATERIALIZED (
+    SELECT s."assetId" AS asset_id, MIN(s.embedding <=> seeds.e) AS d
+    FROM smart_search s CROSS JOIN seeds
+    GROUP BY s."assetId"
+)
+SELECT sc.asset_id, a."originalFileName", sc.d
+FROM scored sc
+JOIN asset a ON a.id = sc.asset_id
+WHERE TRUE
+""" + FILTERS
+
+SCAN_CENTROID_SQL = """
 WITH scored AS MATERIALIZED (
     SELECT s."assetId" AS asset_id, s.embedding <=> %s::vector AS d
     FROM smart_search s
@@ -83,18 +124,22 @@ WITH scored AS MATERIALIZED (
 SELECT sc.asset_id, a."originalFileName", sc.d
 FROM scored sc
 JOIN asset a ON a.id = sc.asset_id
-WHERE a."deletedAt" IS NULL
-  AND a.type = 'IMAGE'
-  AND a.visibility NOT IN ('hidden', 'locked')
-  AND NOT EXISTS (
-    SELECT 1 FROM album_asset aa WHERE aa."assetId" = sc.asset_id AND aa."albumId" = %s
-  )
-ORDER BY sc.d
-"""
+WHERE TRUE
+""" + FILTERS
 
 
-def scan(cur, vector, album_id):
-    cur.execute(SCAN_SQL, (format_vector(vector), album_id))
+def scan(cur, profile, album_id, excluded=()):
+    """Every candidate asset with its distance, nearest first.
+
+    A text profile has no seeds, so it still scores against its single vector.
+    """
+    ids = seed_ids(profile)
+    if ids:
+        cur.execute(SCAN_SEEDS_SQL, (ids, list(excluded), album_id))
+    else:
+        cur.execute(
+            SCAN_CENTROID_SQL, (format_vector(profile["vector"]), list(excluded), album_id)
+        )
     return [(str(r[0]), r[1], float(r[2])) for r in cur.fetchall()]
 
 
@@ -114,7 +159,7 @@ def histogram(rows, width=0.05, bars=48):
     return out
 
 
-def run(cfg, args, connect=None, opener=None):
+def run(cfg, args, connect=None, opener=None, state=None):
     model = api.clip_model(cfg, opener=opener)
     try:
         profile = load_profile(cfg.profile_dir, args.profile, model)
@@ -142,13 +187,28 @@ def run(cfg, args, connect=None, opener=None):
                 # excludes nothing from the scan, which is the right answer for
                 # an album that does not exist yet.
                 log(f"album {args.album!r} does not exist yet — --apply would create it")
-        rows = scan(cur, profile["vector"], album_id)
+        st, owned = (state, False)
+        try:
+            if st is None:
+                st, owned = queue.connect(cfg.queue_db), True
+            learned = exclusions.sync_from_audit(st, cur, [album_id] if album_id else [])
+            if learned:
+                log(f"learned {len(learned)} hand-removals from this album — not refiling them")
+            skip = exclusions.for_album(st, album_id) if album_id else set()
+        finally:
+            if owned and st is not None:
+                st.close()
+        rows = scan(cur, profile, album_id, excluded=sorted(skip))
         conn.rollback()
     finally:
         conn.close()
 
-    log(f"scored {len(rows)} candidate assets against profile {args.profile!r} "
-        f"(built from {profile.get('built_from')})")
+    built = profile.get("built_from") or {}
+    origin = (f"text {built.get('text')!r}" if built.get("kind") == "text"
+              else f"{built.get('assets')} seeds"
+                   + (f" from album {built['album']!r}" if built.get("album") else "")
+                   + ", scored against the nearest one")
+    log(f"scored {len(rows)} candidate assets against profile {args.profile!r} ({origin})")
     for line in histogram(rows):
         print(line)
 
@@ -182,12 +242,12 @@ def parse_args(argv):
     return ap.parse_args(argv)
 
 
-def main(argv=None, env=None, connect=None, opener=None):
+def main(argv=None, env=None, connect=None, opener=None, state=None):
     args = parse_args(sys.argv[1:] if argv is None else argv)
     cfg = Config.from_env(env)
     if args.apply and not cfg.api_key:
         raise SystemExit("no Immich API key — set IMMICH_API_KEY_FILE")
-    return run(cfg, args, connect=connect, opener=opener)
+    return run(cfg, args, connect=connect, opener=opener, state=state)
 
 
 if __name__ == "__main__":

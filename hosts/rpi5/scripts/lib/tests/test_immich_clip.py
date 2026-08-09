@@ -12,7 +12,7 @@ import json
 import pytest
 from conftest import FakeOpener, json_reply
 
-from nicos_scripts.immich import api, backfill, clip_filter, profile, store, vectors
+from nicos_scripts.immich import api, backfill, clip_filter, profile, queue, store, vectors
 
 ASSET = "0a342213-0aca-4f8a-abc1-7260fbff30a1"
 OTHER = "fba7dd29-623c-47c7-92db-65fb252614a8"
@@ -486,6 +486,66 @@ def test_a_profile_needs_some_source():
 
 
 # ── backfill ─────────────────────────────────────────────────────────────────
+def st(tmp_path):
+    """A throwaway state DB (pending queue + exclusions) for a backfill run."""
+    return queue.connect(str(tmp_path / "state.sqlite"))
+
+
+def a_seed_profile(ids=("s1",)):
+    return {"vector": [1.0, 0.0], "scoring": "nearest",
+            "built_from": {"kind": "seed", "assetIds": list(ids)}}
+
+
+def a_text_profile():
+    return {"vector": [1.0, 0.0], "built_from": {"kind": "text", "text": "food"}}
+
+
+def test_scoring_mode_is_per_profile_not_global():
+    # The two live profiles want opposite answers. `food` is 19 photos of
+    # different subjects: averaging leaves only the shared context, which is how
+    # an Eiffel Tower scored 0.277. `burgie` is 118 photos of ONE toy in many
+    # places: there the average isolates the toy, while nearest-seed matched the
+    # SCENE of whichever seed was closest (river selfies, interiors, a fan).
+    diverse = {"vector": [1.0, 0.0],
+               "built_from": {"kind": "seed", "assetIds": ["s1"]}, "scoring": "nearest"}
+    one_subject = {"vector": [1.0, 0.0],
+                   "built_from": {"kind": "seed", "assetIds": ["s1"]}, "scoring": "centroid"}
+    assert store.seed_ids(diverse) == ["s1"]
+    assert store.seed_ids(one_subject) == []   # -> centroid path
+
+
+def test_a_profile_records_its_scoring_mode(tmp_path):
+    p = store.save_profile(tmp_path, "burgie", "m", [1.0], {"kind": "seed"},
+                           now=0, scoring="centroid")
+    assert p["scoring"] == "centroid"
+    assert store.load_profile(tmp_path, "burgie", "m")["scoring"] == "centroid"
+
+
+def test_a_seed_profile_scores_against_the_nearest_seed_not_the_mean():
+    # The centroid of a diverse seed set drifts toward the middle of the library
+    # and drags ordinary photos in — an Eiffel Tower measured 0.277 from the mean
+    # while sitting 0.367 from the nearest actual food photo.
+    cur = FakeCursor([])
+    backfill.scan(cur, a_seed_profile(["s1", "s2"]), "album-1")
+    sql, params = cur.sql[0]
+    assert "MIN(s.embedding <=> seeds.e)" in sql
+    assert params[0] == ["s1", "s2"]
+
+
+def test_a_text_profile_still_scores_against_its_single_vector():
+    cur = FakeCursor([])
+    backfill.scan(cur, a_text_profile(), "album-1")
+    assert "<=> %s::vector" in cur.sql[0][0]
+
+
+def test_hand_removals_are_excluded_from_the_scan():
+    cur = FakeCursor([])
+    backfill.scan(cur, a_seed_profile(), "album-1", excluded=["gone-1"])
+    sql, params = cur.sql[0]
+    assert "sc.asset_id <> ALL(%s::uuid[])" in sql
+    assert params[1] == ["gone-1"]
+
+
 def test_the_backfill_scan_is_exact_not_approximate():
     # smart_search.embedding carries a vchordrq (ANN) index which answers
     # `ORDER BY embedding <=> const` approximately, and errors with
@@ -494,21 +554,21 @@ def test_the_backfill_scan_is_exact_not_approximate():
     # sort happens outside on a plain float. enable_indexscan=off does NOT work
     # here — the EXPLAIN itself still errors.
     cur = FakeCursor([])
-    backfill.scan(cur, [1.0, 0.0], "album-1")
+    backfill.scan(cur, a_text_profile(), "album-1")
     sql = cur.sql[0][0]
-    assert "WITH scored AS MATERIALIZED" in sql
+    assert "AS MATERIALIZED" in sql
     assert sql.index("<=>") < sql.index("ORDER BY")
     assert "ORDER BY sc.d" in sql
 
 
 def test_the_backfill_scan_skips_assets_already_in_the_album():
     cur = FakeCursor([])
-    backfill.scan(cur, [1.0, 0.0], "album-1")
+    backfill.scan(cur, a_text_profile(), "album-1")
     sql, params = cur.sql[0]
     assert "NOT EXISTS" in sql and "album_asset" in sql
     assert "a.type = 'IMAGE'" in sql
     assert "NOT IN ('hidden', 'locked')" in sql
-    assert params[1] == "album-1"
+    assert params[2] == "album-1"
 
 
 def test_the_histogram_buckets_the_distances():
@@ -521,10 +581,10 @@ def test_a_dry_run_writes_nothing(tmp_path, capsys):
     cfg = backfill.Config(profile_dir=str(tmp_path), model="m", api_key="k")
     store.save_profile(tmp_path, "food", "m", [1.0, 0.0], {}, now=0)
     op = FakeOpener([json_reply([{"id": "album-1", "albumName": "Food"}])])
-    conn = FakeConn(FakeCursor([[("album-1",)], [(ASSET, "a.jpg", 0.1), (OTHER, "b.jpg", 0.9)]]))
+    conn = FakeConn(FakeCursor([[("album-1",)], [], [(ASSET, "a.jpg", 0.1), (OTHER, "b.jpg", 0.9)]]))
     args = backfill.parse_args(["--profile", "food", "--album", "Food"])
 
-    backfill.run(cfg, args, connect=lambda c: conn, opener=op)
+    backfill.run(cfg, args, connect=lambda c: conn, opener=op, state=st(tmp_path))
 
     assert all(r.get_method() == "GET" for r in op.requests)
     assert "1 of 2 at or under threshold" in capsys.readouterr().out
@@ -537,10 +597,10 @@ def test_apply_adds_only_the_assets_under_the_threshold(tmp_path):
         json_reply([{"id": "album-1", "albumName": "Food"}]),
         json_reply([{"id": ASSET, "success": True}]),
     ])
-    conn = FakeConn(FakeCursor([[("album-1",)], [(ASSET, "a.jpg", 0.1), (OTHER, "b.jpg", 0.9)]]))
+    conn = FakeConn(FakeCursor([[("album-1",)], [], [(ASSET, "a.jpg", 0.1), (OTHER, "b.jpg", 0.9)]]))
     args = backfill.parse_args(["--profile", "food", "--album", "Food", "--apply"])
 
-    backfill.run(cfg, args, connect=lambda c: conn, opener=op)
+    backfill.run(cfg, args, connect=lambda c: conn, opener=op, state=st(tmp_path))
 
     put = op.requests[-1]
     assert put.get_method() == "PUT"
@@ -554,7 +614,7 @@ def test_a_missing_album_is_refused_unless_creation_was_asked_for(tmp_path):
     op = FakeOpener([json_reply([])])
     args = backfill.parse_args(["--profile", "food", "--album", "Food"])
     with pytest.raises(SystemExit) as e:
-        backfill.run(cfg, args, connect=lambda c: FakeConn(), opener=op)
+        backfill.run(cfg, args, connect=lambda c: FakeConn(), opener=op, state=st(tmp_path))
     assert "--create-album" in str(e.value)
 
 
@@ -563,10 +623,10 @@ def test_a_dry_run_does_not_create_the_album_even_when_asked_to(tmp_path, capsys
     cfg = backfill.Config(profile_dir=str(tmp_path), model="m", api_key="k")
     store.save_profile(tmp_path, "food", "m", [1.0, 0.0], {}, now=0)
     op = FakeOpener([json_reply([])])
-    conn = FakeConn(FakeCursor([[], [(ASSET, "a.jpg", 0.1)]]))
+    conn = FakeConn(FakeCursor([[], [], [(ASSET, "a.jpg", 0.1)]]))
     args = backfill.parse_args(["--profile", "food", "--album", "Food", "--create-album"])
 
-    backfill.run(cfg, args, connect=lambda c: conn, opener=op)
+    backfill.run(cfg, args, connect=lambda c: conn, opener=op, state=st(tmp_path))
 
     assert op.requests == []
     assert "--apply would create it" in capsys.readouterr().out
@@ -591,7 +651,7 @@ def test_a_backfill_against_a_stale_profile_refuses_before_scanning(tmp_path):
         raise AssertionError("must not open the database for a stale profile")
 
     with pytest.raises(SystemExit) as e:
-        backfill.run(cfg, args, connect=explode, opener=FakeOpener([json_reply([])]))
+        backfill.run(cfg, args, connect=explode, opener=FakeOpener([json_reply([])]), state=st(tmp_path))
     assert "rebuild" in str(e.value)
 
 

@@ -168,10 +168,11 @@ def build(cfg, args, connect=None, opener=None):
         log(f"averaged {len(vectors)} seed embeddings")
 
     payload = save_profile(
-        cfg.profile_dir, args.name, model, l2_normalize(vector), built_from
+        cfg.profile_dir, args.name, model, l2_normalize(vector), built_from,
+        scoring=getattr(args, "scoring", "nearest"),
     )
     log(f"wrote {profile_path(cfg.profile_dir, args.name)} "
-        f"(dim {payload['dim']}, model {model})")
+        f"(dim {payload['dim']}, model {model}, scoring {payload['scoring']})")
     return payload
 
 
@@ -181,6 +182,10 @@ def parse_args(argv):
     ap.add_argument("--seed-album", help="use every embedded asset in this album")
     ap.add_argument("--seed-asset", action="append", help="repeatable asset uuid")
     ap.add_argument("--text", help="build from a text prompt instead (needs the ML server)")
+    ap.add_argument("--scoring", choices=("nearest", "centroid"), default="nearest",
+                    help="score against the nearest seed (default; right when the "
+                         "seeds share no subject) or against their average (right "
+                         "when they all show the SAME thing in different places)")
     ap.add_argument("--force", action="store_true", help="overwrite an existing profile")
     args = ap.parse_args(argv)
     if not (args.seed_album or args.seed_asset or args.text):
