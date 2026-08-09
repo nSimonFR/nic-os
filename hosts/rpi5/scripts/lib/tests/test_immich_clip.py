@@ -327,6 +327,17 @@ def test_a_seed_profile_is_the_normalised_centroid_of_its_seeds(tmp_path):
     assert payload["model"] == "ViT-H-14"
 
 
+def test_a_profile_records_the_seed_ids_so_it_can_be_rebuilt(tmp_path):
+    # Recording only the COUNT made a hand-picked profile unreproducible, which
+    # would have made the "this directory is only a cache" backup note false.
+    cfg = profile.Config(profile_dir=str(tmp_path), model="m")
+    args = profile.parse_args(["--name", "food", "--seed-asset", ASSET,
+                               "--seed-asset", OTHER])
+    conn = FakeConn(FakeCursor([[(ASSET, "[1.0,0.0]"), (OTHER, "[0.0,1.0]")]]))
+    payload = profile.build(cfg, args, connect=lambda c: conn)
+    assert payload["built_from"]["assetIds"] == [ASSET, OTHER]
+
+
 def test_a_seed_album_is_resolved_by_name_then_expanded_to_its_assets(tmp_path):
     cfg = profile.Config(profile_dir=str(tmp_path), model="ViT-H-14")
     args = profile.parse_args(["--name", "food", "--seed-album", "Burgiiiiiiie"])
@@ -339,7 +350,8 @@ def test_a_seed_album_is_resolved_by_name_then_expanded_to_its_assets(tmp_path):
     ]))
     payload = profile.build(cfg, args, connect=lambda c: conn)
     assert payload["built_from"] == {"kind": "seed", "album": "Burgiiiiiiie",
-                                     "assets": 2, "requested": 2}
+                                     "assets": 2, "requested": 2,
+                                     "assetIds": [ASSET, OTHER]}
 
 
 def test_a_seed_album_that_does_not_exist_is_an_error(tmp_path):

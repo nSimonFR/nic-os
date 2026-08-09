@@ -131,10 +131,11 @@ in
   nic.services.immich-clip = {
     backup = [ "none" ];
     backupNote = ''
-      Only a CLIP centroid cache in ${profileDir}. Every profile is rebuilt from
-      its recorded seed album or prompt with immich-clip-profile, and the
-      embeddings it is derived from live in the immich database, which Immich's
-      own backup covers. Nothing here is a source of truth.
+      Only a CLIP centroid cache in ${profileDir}. Each profile records what it
+      was built from — the prompt, or the exact seed asset ids — so
+      immich-clip-profile reproduces it byte for byte, and the embeddings it
+      averages live in the immich database, which Immich's own backup covers.
+      Nothing here is a source of truth.
     '';
   };
 }

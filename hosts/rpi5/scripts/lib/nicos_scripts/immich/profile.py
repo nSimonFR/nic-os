@@ -153,6 +153,11 @@ def build(cfg, args, connect=None, opener=None):
             "album": args.seed_album,
             "assets": len(vectors),
             "requested": len(asset_ids),
+            # The exact seed list, not just its size. Without this a profile
+            # assembled by hand-picking assets cannot be rebuilt once the file is
+            # gone — which is the whole basis for calling the profile directory a
+            # cache rather than state (see nic.services.immich-clip.backupNote).
+            "assetIds": asset_ids,
         }
         log(f"averaged {len(vectors)} seed embeddings")
 
