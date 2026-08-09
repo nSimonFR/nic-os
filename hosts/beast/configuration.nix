@@ -170,6 +170,28 @@ in
       "libvirtd" # VM management
       "kvm" # KVM acceleration
     ];
+
+    # rpi5's agent key, so the Pi can reach BeAsT over plain sshd.
+    #
+    # Why this is needed at all: `ssh beast` from the Pi normally works through
+    # Tailscale SSH *identity*, and this tailnet runs it with an ACL
+    # `action: "check"` — after BeAsT has been offline a while the cached check
+    # expires and the next connection prints
+    # `https://login.tailscale.com/a/<token>` and waits for a BROWSER login.
+    # That is not completable headlessly, and BeAsT's own sshd did not trust any
+    # Pi key, so there was no way in at all: waking BeAsT, powering it down, or
+    # any automated job touching it all stalled on a human with a browser.
+    # (Observed 2026-08-09: two held connections died unapproved, one at the
+    # 15-minute timeout and one with `tailscale: failed to fetch next SSH
+    # action`, before a manual approval let a poweroff through.)
+    #
+    # Same literal as the Pi's own entry in hosts/rpi5/configuration.nix, and
+    # mkAfter for the same reason: the shared key from common/nixos.nix stays
+    # first. Nothing is granted that Tailscale SSH did not already grant — it
+    # only removes the interactive step in front of it.
+    openssh.authorizedKeys.keys = lib.mkAfter [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIoO5ICofBCfox+M2Uz91qBRF794BwHhQJBL/9dSZahr nsimon@rpi5-agent"
+    ];
   };
 
   # Couch user — logs in via greeter and launches Steam gamescope session.
