@@ -50,6 +50,40 @@ def ml_url(cfg, opener=None):
     return urls[0].rstrip("/")
 
 
+def ml_healthy(cfg, opener=None):
+    """Is the ML server up? Same probe Immich uses: GET {url}/ping.
+
+    Returns False rather than raising — "beast is off again" is the normal state
+    here, not an error, and the caller simply tries on the next tick.
+    """
+    try:
+        url = ml_url(cfg, opener=opener)
+    except SystemExit:
+        return False
+    try:
+        get_json(f"{url}/ping", timeout=10, opener=opener)
+        return True
+    except Exception:  # noqa: BLE001 - any failure means "not reachable"
+        return False
+
+
+def start_job(cfg, name, force=False, opener=None):
+    """Kick one of Immich's job queues.
+
+    Used for `smartSearch` with force=False, i.e. "embed the assets that have no
+    embedding". Immich never does this on its own — handleNightlyJobs queues
+    missing THUMBNAILS and face clustering but not missing CLIP embeddings, so a
+    SmartSearch job that failed while the ML server was down stays failed
+    forever. This is the only thing that clears that backlog.
+    """
+    return put_json(
+        f"{cfg.immich_url}/api/jobs/{name}",
+        {"command": "start", "force": force},
+        headers(cfg),
+        opener=opener,
+    )
+
+
 def create_album(cfg, name, description="", opener=None):
     status, body = post_json(
         f"{cfg.immich_url}/api/albums",

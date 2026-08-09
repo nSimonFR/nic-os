@@ -60,6 +60,8 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.immich.clip_filter"
     "nicos_scripts.immich.profile"
     "nicos_scripts.immich.backfill"
+    "nicos_scripts.immich.queue"
+    "nicos_scripts.immich.drain"
   ];
 
   meta = {

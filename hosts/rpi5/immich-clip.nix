@@ -27,10 +27,14 @@
 #     rather than running a second inference pass. That means no duplicate GPU
 #     work and no decoding HEIC originals on the Pi.
 #
-# The cost of that choice is honest and worth stating: a freshly uploaded asset
-# is not embedded yet, so the step waits (bounded) and treats "still not ready"
-# as no-match. Nothing retries it automatically. `immich-clip-backfill` is the
-# manual catch-up, and also how the threshold gets calibrated in the first place.
+# beast is usually OFF, so a freshly uploaded photo normally has no embedding
+# when the workflow fires. That is treated as *undecided*, not as "not food":
+# the asset goes on a pending queue and immich-clip-drain (below) finishes it
+# once the embedding exists. Same shape as Immich's own ML offload — the work
+# waits for the GPU host instead of being lost.
+#
+# `immich-clip-backfill` remains the by-hand full sweep, and is how the threshold
+# gets calibrated in the first place.
 { config, lib, pkgs, ... }:
 
 let
@@ -38,6 +42,7 @@ let
   sidecarUrl = "http://127.0.0.1:${toString port}/classify";
   stateDir = "/var/lib/immich-clip";
   profileDir = "${stateDir}/profiles";
+  queueDb = "${stateDir}/pending.sqlite";
 
   # Single consumer (this module), so it stays a callPackage at the use site
   # rather than an entry in pkgs/overlay.nix — see the rule at the top of that file.
@@ -80,6 +85,8 @@ in
       LISTEN_PORT = toString port;
       IMMICH_PG_DB = "immich";
       IMMICH_CLIP_PROFILE_DIR = profileDir;
+      IMMICH_CLIP_QUEUE_DB = queueDb;
+      IMMICH_API_KEY_FILE = config.age.secrets.immich-clip-api-key.path;
       # Derived, never typed twice: a centroid built against one CLIP model is
       # meaningless under another, and the sidecar refuses a profile whose
       # recorded model does not match this.
@@ -113,6 +120,60 @@ in
       RestrictNamespaces = true;
       RestrictRealtime = true;
       SystemCallArchitectures = "native";
+    };
+  };
+
+  # ── The deferred half ───────────────────────────────────────────────────────
+  # beast holds the GPU and is usually off, so most uploads have no embedding
+  # when the workflow fires. Those are parked on a queue rather than answered
+  # "not food", and this drains them once Immich has caught up.
+  #
+  # It also kicks Immich's `smartSearch` queue with force=false when assets are
+  # still waiting. That is not belt-and-braces: `handleNightlyJobs` re-queues
+  # missing THUMBNAILS and face clustering but NOT missing CLIP embeddings, so a
+  # SmartSearch job that failed while beast was down stays failed forever — as of
+  # writing ~2000 of this library's assets had a preview and no embedding. Without
+  # the kick, a queued asset would wait indefinitely no matter how patient this
+  # timer is. Rate-limited by IMMICH_CLIP_REQUEUE_EVERY because the job queues
+  # every unembedded asset in the library, not just the ones we care about.
+  systemd.services.immich-clip-drain = {
+    description = "Finish CLIP verdicts parked while the ML server was offline";
+    after = [ "postgresql.service" "network-online.target" ];
+    wants = [ "network-online.target" ];
+
+    environment = {
+      IMMICH_PG_DB = "immich";
+      IMMICH_CLIP_PROFILE_DIR = profileDir;
+      IMMICH_CLIP_QUEUE_DB = queueDb;
+      IMMICH_CLIP_STATE_DIR = stateDir;
+      IMMICH_CLIP_MODEL = config.services.immich.settings.machineLearning.clip.modelName;
+      IMMICH_API_KEY_FILE = config.age.secrets.immich-clip-api-key.path;
+      IMMICH_CLIP_MAX_AGE_DAYS = "30";
+      IMMICH_CLIP_REQUEUE_EVERY = "3600";
+      # The scripts default to dry-run so that a Config built from an empty
+      # environment cannot write. The unit is where that is opted out of.
+      IMMICH_CLIP_DRAIN_APPLY = "true";
+    };
+
+    serviceConfig = {
+      Type = "oneshot";
+      User = "immich";
+      Group = "immich";
+      ExecStart = "${pkgs.nicos-scripts}/bin/immich-clip-drain";
+      StateDirectory = "immich-clip";
+      StateDirectoryMode = "0750";
+    };
+  };
+
+  systemd.timers.immich-clip-drain = {
+    description = "Periodic drain of parked CLIP verdicts";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "8min";
+      OnUnitActiveSec = "15min";
+      # So a pass that was due while the Pi was down still happens on the next
+      # boot rather than waiting a full interval.
+      Persistent = true;
     };
   };
 

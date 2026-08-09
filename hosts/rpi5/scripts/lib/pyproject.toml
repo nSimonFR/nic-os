@@ -36,6 +36,7 @@ papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
 immich-clip-filter = "nicos_scripts.immich.clip_filter:main"
 immich-clip-profile = "nicos_scripts.immich.profile:main"
 immich-clip-backfill = "nicos_scripts.immich.backfill:main"
+immich-clip-drain = "nicos_scripts.immich.drain:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

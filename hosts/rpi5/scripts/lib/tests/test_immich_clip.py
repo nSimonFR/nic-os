@@ -200,13 +200,15 @@ def test_the_sidecar_waits_for_an_embedding_that_is_not_ready_yet(tmp_path):
     assert len(sleeps) == 2
 
 
-def test_an_embedding_that_never_arrives_fails_closed(tmp_path):
+def test_an_embedding_that_never_arrives_is_undecided_not_a_no(tmp_path):
+    # NOT the same as "too far away". CLIP runs on beast and beast is usually
+    # off, so this is the common case; the caller queues it (see
+    # test_immich_drain.py) instead of losing the decision.
     cfg = a_profile(tmp_path)
     result, _ = classify(cfg, {"assetId": ASSET, "profile": "food",
                                "threshold": 0.28, "waitSec": 3}, results=[])
     assert result["match"] is False
-    assert "no embedding" in result["reason"]
-    assert "backfill" in result["reason"]  # tells the operator how to recover
+    assert result["undecided"] is True
 
 
 def test_a_step_cannot_ask_to_wait_longer_than_the_server_cap(tmp_path):

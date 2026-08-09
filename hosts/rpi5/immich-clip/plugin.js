@@ -2,11 +2,9 @@
 //
 // Immich 3.1's core plugin can filter on filename, EXIF, type, date and
 // location, but not on what is actually IN the picture. This adds that step, so
-// a workflow can read:
+// a workflow is just:
 //
-//   AssetMetadataExtraction -> assetTypeFilter(IMAGE)
-//                           -> nic-clip#clipFilter(profile=food)
-//                           -> assetAddToAlbums(Food)
+//   AssetMetadataExtraction -> nic-clip#clipFilter(profile=food, albumIds=[…])
 //
 // It does NOT do the inference itself, and cannot: the `httpRequest` host
 // function returns `body: await res.text()` (see
@@ -14,7 +12,7 @@
 // multipart can go out. All this does is hand the asset id to the sidecar
 // (nicos_scripts.immich.clip_filter) and act on its verdict.
 //
-// ⚠️ WHY THIS STEP ALSO DOES THE ALBUM ADD, instead of being a pure filter with
+// ⚠️ WHY THIS IS ONE STEP that carries albumIds, instead of a pure filter with
 // `immich-plugin-core#assetAddToAlbums` chained after it:
 //
 //   Immich 3.1's `WorkflowRepository.getForWorkflowRun` selects workflow_step
@@ -25,17 +23,20 @@
 //   verdict; observed, not theorised. So a filter step cannot reliably gate a
 //   later action step on this version, and the only safe workflow is one step.
 //
-//   Hence: this step checks the asset type itself, asks for the verdict, and
-//   files the asset via the `addAssetsToAlbums` host function. It still returns
-//   workflow.continue, so chaining works again once upstream orders the query.
+//   Hence: this step checks the asset type itself and hands albumIds to the
+//   sidecar, which does the filing. It still returns workflow.continue, so
+//   chaining works again once upstream orders the query.
 //
-// Fail-closed on purpose: sidecar down, ML server down, embedding not ready, bad
-// JSON — every one of those means "not food", so the asset simply stays out of
-// the album. The alternative (fail-open) would file the whole camera roll.
-// Anything that isn't a clean verdict gets logged; extism wires console.log to
-// the Immich logger, so it surfaces as `Plugin:nic-clip@<version>`.
+// Fail-closed on purpose: sidecar down, bad JSON, unknown profile — each means
+// "do not file", because a false positive files the whole camera roll while a
+// false negative loses one photo. The one case that is NOT a no is an asset with
+// no embedding yet (beast, the ML host, is usually off): the sidecar queues
+// those and immich-clip-drain files them later, so nothing is silently lost.
+//
+// Everything gets logged; extism wires console.log to the Immich logger, so it
+// surfaces as `Plugin:nic-clip@<version>`.
 
-const { httpRequest, addAssetsToAlbums } = Host.getFunctions();
+const { httpRequest } = Host.getFunctions();
 
 const DEFAULTS = {
   profile: "food",
@@ -72,11 +73,16 @@ function clipFilter() {
     return halt("asset type " + asset.type + " is not in " + JSON.stringify(types));
   }
 
+  // albumIds goes TO the sidecar rather than being acted on here: the sidecar
+  // owns filing for both the immediate path and the deferred one (an asset with
+  // no embedding yet is queued and filed later by immich-clip-drain), so there
+  // is one implementation instead of two, and it is testable in Python.
   const body = JSON.stringify({
     assetId: asset.id,
     profile: config.profile || DEFAULTS.profile,
     threshold: config.threshold != null ? config.threshold : DEFAULTS.threshold,
     waitSec: config.waitSec != null ? config.waitSec : DEFAULTS.waitSec,
+    albumIds: config.albumIds || [],
   });
 
   // The host wrapper expects {authToken, args} and applies `fetch(...args)`,
@@ -117,28 +123,17 @@ function clipFilter() {
   }
 
   if (verdict.match !== true) {
-    return halt(verdict.reason || "distance " + verdict.distance + " over threshold");
+    // `undecided` is not a no: the asset simply has no embedding yet, because
+    // CLIP runs on beast and beast is usually off. The sidecar has queued it and
+    // immich-clip-drain will file it once Immich catches up. Halting here is
+    // still right — there is nothing more this run can do.
+    return halt(verdict.queued
+      ? "queued until the ML server catches up"
+      : verdict.reason || "distance " + verdict.distance + " over threshold");
   }
 
-  const albumIds = config.albumIds || [];
-  if (albumIds.length > 0) {
-    const call = JSON.stringify({
-      authToken: (payload.workflow || {}).authToken,
-      args: [{ albumIds: albumIds, assetIds: [asset.id] }],
-    });
-    try {
-      const off = addAssetsToAlbums(Memory.fromString(call).offset);
-      const added = JSON.parse(Memory.find(off).readString());
-      if (!added.success) {
-        // Not fatal: DUPLICATE simply means it was already filed.
-        console.log("album add returned " + (added.message || JSON.stringify(added.response)));
-      }
-    } catch (e) {
-      console.log("album add threw: " + e);
-    }
-  }
-
-  console.log("match: " + asset.id + " at distance " + verdict.distance);
+  console.log("match: " + asset.id + " at distance " + verdict.distance +
+              " (filed into " + (verdict.filed || 0) + " album(s))");
   Host.outputString(JSON.stringify({ workflow: { continue: true } }));
 }
 

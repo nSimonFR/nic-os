@@ -113,6 +113,22 @@ def album_asset_ids(cur, album_id):
     return [str(r[0]) for r in cur.fetchall()]
 
 
+def existing_asset_ids(cur, asset_ids):
+    """Which of these assets still exist and are not deleted.
+
+    The drainer uses this to retire queue entries for photos deleted since they
+    were queued — otherwise they sit there forever, keeping the "still waiting
+    on embeddings" condition true and re-kicking the ML backlog job for nothing.
+    """
+    if not asset_ids:
+        return set()
+    cur.execute(
+        'SELECT id FROM asset WHERE id = ANY(%s::uuid[]) AND "deletedAt" IS NULL',
+        (list(asset_ids),),
+    )
+    return {str(r[0]) for r in cur.fetchall()}
+
+
 def distance_to(cur, asset_id, vector):
     """Cosine distance between one asset's embedding and `vector`, or None.
 

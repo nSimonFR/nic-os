@@ -13,10 +13,8 @@ declare module "main" {
 
 declare module "extism:host" {
   interface user {
+    // The only host function this plugin needs. Filing is done by the sidecar
+    // (which also owns the deferred path), not by addAssetsToAlbums here.
     httpRequest(ptr: I64): I64;
-    // Used instead of chaining immich-plugin-core#assetAddToAlbums: 3.1 runs
-    // workflow steps in an unordered query, so a later action step is not
-    // reliably later. See the comment in plugin.js.
-    addAssetsToAlbums(ptr: I64): I64;
   }
 }
