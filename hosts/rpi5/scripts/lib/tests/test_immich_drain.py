@@ -359,6 +359,25 @@ def test_ml_health_uses_the_same_ping_immich_does():
     assert op.last.full_url == "http://beast:3003/ping"
 
 
+def test_a_healthy_ml_server_is_recognised_from_its_non_json_pong():
+    # /ping answers with the bare string `pong`. Parsing that as JSON raises, and
+    # because any failure means "unreachable", a perfectly healthy beast was
+    # reported as down — the drainer then never kicked the embedding backlog.
+    from conftest import FakeResponse
+
+    cfg = drain.Config(ml_url="http://beast:3003")
+    op = FakeOpener([lambda: FakeResponse(b"pong")])
+    assert api.ml_healthy(cfg, opener=op) is True
+
+
+def test_a_non_2xx_ping_is_not_healthy():
+    from conftest import FakeResponse
+
+    cfg = drain.Config(ml_url="http://beast:3003")
+    op = FakeOpener([lambda: FakeResponse(b"nope", status=503)])
+    assert api.ml_healthy(cfg, opener=op) is False
+
+
 def test_the_drain_config_cannot_write_without_being_told_to():
     # Same rule as every other destructive script here: a Config built from an
     # empty environment is inert.

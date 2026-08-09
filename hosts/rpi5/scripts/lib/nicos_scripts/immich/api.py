@@ -11,6 +11,7 @@ the chance of the two drifting apart.
 """
 
 import json
+import urllib.request
 
 from ..httpjson import get_json, post_json, put_json
 
@@ -53,6 +54,10 @@ def ml_url(cfg, opener=None):
 def ml_healthy(cfg, opener=None):
     """Is the ML server up? Same probe Immich uses: GET {url}/ping.
 
+    ⚠️ /ping answers with the bare string `pong`, NOT JSON. Parsing it as JSON
+    raises, and since any failure here means "not reachable", that silently
+    reported a perfectly healthy beast as down. Status code only.
+
     Returns False rather than raising — "beast is off again" is the normal state
     here, not an error, and the caller simply tries on the next tick.
     """
@@ -60,9 +65,10 @@ def ml_healthy(cfg, opener=None):
         url = ml_url(cfg, opener=opener)
     except SystemExit:
         return False
+    req = urllib.request.Request(f"{url}/ping")
     try:
-        get_json(f"{url}/ping", timeout=10, opener=opener)
-        return True
+        with (opener or urllib.request.urlopen)(req, timeout=10) as resp:
+            return 200 <= resp.status < 300
     except Exception:  # noqa: BLE001 - any failure means "not reachable"
         return False
 

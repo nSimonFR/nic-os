@@ -113,9 +113,15 @@ def encode_text(cfg, text, model, opener=None):
     with (opener or urllib.request.urlopen)(req, timeout=120) as resp:
         payload = json.loads(resp.read().decode())
     vector = payload.get("clip")
-    if not isinstance(vector, list) or not vector:
+    if vector is None:
         raise SystemExit(f"ML server returned no clip embedding: {str(payload)[:200]}")
-    return [float(x) for x in vector]
+    # The live server hands this back as a pgvector LITERAL STRING
+    # ("[-0.0327,0.0078,…]"), not a JSON array — Immich passes it straight into
+    # an INSERT so it never has to care. parse_vector accepts either form.
+    try:
+        return parse_vector(vector)
+    except ValueError as e:
+        raise SystemExit(f"unparseable clip embedding from the ML server: {e}")
 
 
 def build(cfg, args, connect=None, opener=None):

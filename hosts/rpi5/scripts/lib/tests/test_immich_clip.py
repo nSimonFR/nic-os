@@ -386,6 +386,18 @@ def test_text_mode_sends_immichs_own_ml_request_shape(tmp_path):
     assert payload["vector"] == pytest.approx([0.6, 0.8])
 
 
+def test_text_mode_accepts_the_pgvector_string_the_ml_server_actually_returns(tmp_path):
+    # Not hypothetical: beast returns {"clip": "[-0.0327,0.0078,…]"} — a pgvector
+    # literal string, not a JSON array. Immich never notices because it passes
+    # the value straight into an INSERT. An isinstance(list) check rejected it.
+    cfg = profile.Config(profile_dir=str(tmp_path), model="ViT-H-14",
+                         ml_url="http://beast:3003")
+    args = profile.parse_args(["--name", "food", "--text", "a plate of food"])
+    op = FakeOpener([json_reply({"clip": "[3.0,4.0]"})])
+    payload = profile.build(cfg, args, opener=op)
+    assert payload["vector"] == pytest.approx([0.6, 0.8])
+
+
 def test_text_mode_refuses_when_immich_has_no_ml_server_configured(tmp_path):
     cfg = profile.Config(profile_dir=str(tmp_path), model="m")
     args = profile.parse_args(["--name", "food", "--text", "food"])
