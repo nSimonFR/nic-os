@@ -493,3 +493,51 @@ def test_a_seed_album_rule_parks_enough_to_be_re_decided_later(q):
     assert row["profile"] == "album:Cats"
     assert row["seedAlbum"] == "Cats"
     assert row["scoring"] == "centroid"
+
+
+def test_a_removal_is_honoured_on_the_LIVE_path_not_just_the_drain_tick(tmp_path, q):
+    """Regression: exclusions were learned only by drain/backfill.
+
+    `sync_from_audit` ran on the 15-minute drain tick, so a photo taken out of an
+    album by hand could be refiled by the workflow in the meantime — observed
+    while verifying the 1.0.0 bump: a gelato removed and immediately re-triggered
+    came straight back. Immich writes the audit row synchronously with the
+    removal, so the live path reads it too.
+    """
+    cfg = clip_filter.Config(profile_dir=str(tmp_path), model="m", api_key="k")
+    # Postgres says: this asset was removed from this album by hand, and is not
+    # currently in it.
+    pg = FakeConn(FakeCursor([[(ALBUM, ASSET)], []]))
+    filed = []
+
+    result = clip_filter.handle(
+        cfg, {"assetId": ASSET, "albumIds": [ALBUM]},
+        classify_fn=lambda r: {"match": True, "distance": 0.1},
+        queue_conn=q,
+        connect=lambda c: pg,
+        add_assets=lambda *a, **k: filed.append(a) or 1,
+        now=1000)
+
+    assert result["match"] is True      # the verdict is unchanged
+    assert filed == []                  # but it is not put back
+    assert result.get("excluded") == 1
+    assert exclusions.for_album(q, ALBUM) == {ASSET}   # and it was learned
+
+
+def test_a_failure_to_refresh_exclusions_does_not_block_filing(tmp_path, q):
+    # A stale exclusion set is a much smaller problem than a rule that stops
+    # filing; the drain pass catches up either way.
+    cfg = clip_filter.Config(profile_dir=str(tmp_path), model="m", api_key="k")
+    filed = []
+
+    def refuse(_cfg):
+        raise OSError("postgres is down")
+
+    result = clip_filter.handle(
+        cfg, {"assetId": ASSET, "albumIds": [ALBUM]},
+        classify_fn=lambda r: {"match": True, "distance": 0.1},
+        queue_conn=q, connect=refuse,
+        add_assets=lambda *a, **k: filed.append(a) or 1, now=1000)
+
+    assert result["filed"] == 1
+    assert len(filed) == 1

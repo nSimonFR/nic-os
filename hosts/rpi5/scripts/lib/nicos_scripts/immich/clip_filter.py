@@ -177,7 +177,8 @@ def file_into_albums(cfg, album_ids, asset_id, add_assets=None):
     return filed
 
 
-def handle(cfg, req, classify_fn=None, queue_conn=None, add_assets=None, now=None):
+def handle(cfg, req, classify_fn=None, queue_conn=None, add_assets=None, now=None,
+           connect=None):
     """One /classify request: decide, then file or queue.
 
     `queue_conn` is for tests. In production each call opens its own SQLite
@@ -218,8 +219,23 @@ def handle(cfg, req, classify_fn=None, queue_conn=None, add_assets=None, now=Non
         try:
             if conn is None:
                 conn, owned = queue.connect(cfg.queue_db), True
-            # A photo taken out of this album by hand is never filed back into
-            # it — see exclusions.py.
+            # Learn removals HERE, not just on the drain tick. `excluded` is
+            # populated by sync_from_audit, which used to run only in
+            # drain/backfill — so a photo taken out by hand could be refiled by
+            # the live workflow for up to 15 minutes afterwards. Immich's audit
+            # row is written synchronously with the removal, so reading it here
+            # closes that window. One extra connection per MATCH only, which is
+            # a few percent of uploads.
+            try:
+                pg = (connect or connect_pg)(cfg)
+                try:
+                    pg.autocommit = True
+                    exclusions.sync_from_audit(conn, pg.cursor(), album_ids, now)
+                finally:
+                    pg.close()
+            except Exception as e:  # noqa: BLE001 - a stale exclusion set must
+                # not block filing; the drain pass will catch up.
+                log(f"could not refresh exclusions: {e}")
             wanted = exclusions.allowed(conn, req["assetId"], album_ids)
             skipped = len(album_ids) - len(wanted)
             result = dict(result, filed=file_into_albums(
