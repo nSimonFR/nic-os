@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS pending (
     albumIds   TEXT NOT NULL,
     enqueuedAt INTEGER NOT NULL,
     attempts   INTEGER NOT NULL DEFAULT 0,
+    seedAlbum  TEXT NOT NULL DEFAULT '',
+    scoring    TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (assetId, profile)
 );
 
@@ -81,10 +83,25 @@ def connect(path):
     conn.executescript(SCHEMA)
     conn.commit()
     _migrate(conn)
+    _ensure_columns(conn)
     return conn
 
 
-def enqueue(conn, asset_id, profile, threshold, album_ids, now):
+def _ensure_columns(conn):
+    """Add the seedAlbum/scoring columns to a queue created before they existed.
+
+    A parked verdict has to carry enough to be re-decided later, and a rule that
+    names a seed album is not reconstructable from a profile name alone.
+    """
+    have = {r[1] for r in conn.execute("PRAGMA table_info(pending)").fetchall()}
+    for col in ("seedAlbum", "scoring"):
+        if col not in have:
+            conn.execute(f"ALTER TABLE pending ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
+    conn.commit()
+
+
+def enqueue(conn, asset_id, profile, threshold, album_ids, now,
+            seed_album="", scoring=""):
     """Record an undecidable asset. Idempotent on (assetId, profile).
 
     A re-trigger of the same asset (a metadata refresh, say) must not create a
@@ -93,19 +110,24 @@ def enqueue(conn, asset_id, profile, threshold, album_ids, now):
     asset is a separate row, not an overwrite.
     """
     conn.execute(
-        """INSERT INTO pending (assetId, profile, threshold, albumIds, enqueuedAt)
-           VALUES (?, ?, ?, ?, ?)
+        """INSERT INTO pending
+             (assetId, profile, threshold, albumIds, enqueuedAt, seedAlbum, scoring)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
            ON CONFLICT(assetId, profile) DO UPDATE SET
              threshold=excluded.threshold,
-             albumIds=excluded.albumIds""",
-        (asset_id, profile, float(threshold), json.dumps(list(album_ids)), int(now)),
+             albumIds=excluded.albumIds,
+             seedAlbum=excluded.seedAlbum,
+             scoring=excluded.scoring""",
+        (asset_id, profile, float(threshold), json.dumps(list(album_ids)), int(now),
+         seed_album, scoring),
     )
     conn.commit()
 
 
 def pending(conn, limit=1000):
     rows = conn.execute(
-        """SELECT assetId, profile, threshold, albumIds, enqueuedAt, attempts
+        """SELECT assetId, profile, threshold, albumIds, enqueuedAt, attempts,
+                  seedAlbum, scoring
            FROM pending ORDER BY enqueuedAt LIMIT ?""",
         (limit,),
     ).fetchall()
@@ -117,6 +139,8 @@ def pending(conn, limit=1000):
             "albumIds": json.loads(r[3]),
             "enqueuedAt": r[4],
             "attempts": r[5],
+            "seedAlbum": r[6],
+            "scoring": r[7],
         }
         for r in rows
     ]

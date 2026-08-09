@@ -32,8 +32,7 @@ from .store import (
     ProfileError,
     album_id_by_name,
     connect_pg,
-    load_profile,
-    seed_ids,
+    resolve_rule,
 )
 from .vectors import format_vector
 
@@ -116,6 +115,19 @@ JOIN asset a ON a.id = sc.asset_id
 WHERE TRUE
 """ + FILTERS
 
+SCAN_ALBUM_CENTROID_SQL = """
+WITH c AS (
+    SELECT AVG(embedding) v FROM smart_search WHERE "assetId" = ANY(%s::uuid[])
+), scored AS MATERIALIZED (
+    SELECT s."assetId" AS asset_id, s.embedding <=> (SELECT v FROM c) AS d
+    FROM smart_search s
+)
+SELECT sc.asset_id, a."originalFileName", sc.d
+FROM scored sc
+JOIN asset a ON a.id = sc.asset_id
+WHERE TRUE
+""" + FILTERS
+
 SCAN_CENTROID_SQL = """
 WITH scored AS MATERIALIZED (
     SELECT s."assetId" AS asset_id, s.embedding <=> %s::vector AS d
@@ -131,11 +143,16 @@ WHERE TRUE
 def scan(cur, profile, album_id, excluded=()):
     """Every candidate asset with its distance, nearest first.
 
-    A text profile has no seeds, so it still scores against its single vector.
+    Three shapes, matching what the sidecar will actually do: nearest-of-N,
+    the live average of N, or a single stored vector (a text profile).
     """
-    ids = seed_ids(profile)
-    if ids:
+    ids = profile.get("seedIds") or []
+    if ids and (profile.get("scoring") or "nearest") == "nearest":
         cur.execute(SCAN_SEEDS_SQL, (ids, list(excluded), album_id))
+    elif ids:
+        # Centroid over live members — AVG(vector) is a real pgvector aggregate,
+        # so a seed ALBUM needs nothing precomputed.
+        cur.execute(SCAN_ALBUM_CENTROID_SQL, (ids, list(excluded), album_id))
     else:
         cur.execute(
             SCAN_CENTROID_SQL, (format_vector(profile["vector"]), list(excluded), album_id)
@@ -161,15 +178,21 @@ def histogram(rows, width=0.05, bars=48):
 
 def run(cfg, args, connect=None, opener=None, state=None):
     model = api.clip_model(cfg, opener=opener)
-    try:
-        profile = load_profile(cfg.profile_dir, args.profile, model)
-    except ProfileError as e:
-        raise SystemExit(str(e))
 
     conn = (connect or connect_pg)(cfg)
     try:
         conn.autocommit = False
         cur = conn.cursor()
+        # Same resolution the sidecar does, so calibration measures exactly what
+        # the live rule will measure.
+        try:
+            profile = resolve_rule(cur, cfg.profile_dir, model, {
+                "profile": args.profile,
+                "seedAlbum": getattr(args, "seed_album", ""),
+                "scoring": getattr(args, "scoring", ""),
+            })
+        except ProfileError as e:
+            raise SystemExit(str(e))
         album_id = album_id_by_name(cur, args.album)
         if not album_id:
             if not args.create_album:
@@ -203,12 +226,10 @@ def run(cfg, args, connect=None, opener=None, state=None):
     finally:
         conn.close()
 
-    built = profile.get("built_from") or {}
-    origin = (f"text {built.get('text')!r}" if built.get("kind") == "text"
-              else f"{built.get('assets')} seeds"
-                   + (f" from album {built['album']!r}" if built.get("album") else "")
-                   + ", scored against the nearest one")
-    log(f"scored {len(rows)} candidate assets against profile {args.profile!r} ({origin})")
+    origin = (f"{len(profile.get('seedIds') or [])} examples"
+              if profile.get("seedIds") else "a stored vector")
+    log(f"scored {len(rows)} candidates against {profile['name']!r} "
+        f"({origin}, {profile.get('scoring') or 'centroid'} scoring)")
     for line in histogram(rows):
         print(line)
 
@@ -232,14 +253,20 @@ def run(cfg, args, connect=None, opener=None, state=None):
 
 def parse_args(argv):
     ap = argparse.ArgumentParser(prog="immich-clip-backfill")
-    ap.add_argument("--profile", required=True)
+    ap.add_argument("--profile", default="", help="a profile built with immich-clip-profile")
+    ap.add_argument("--seed-album", default="", help="calibrate a rule that learns from this album instead")
+    ap.add_argument("--scoring", choices=("nearest", "centroid"), default="",
+                    help="only with --seed-album; defaults to nearest")
     ap.add_argument("--album", required=True)
     ap.add_argument("--threshold", type=float, default=0.28)
     ap.add_argument("--top", type=int, default=40, help="how many nearest to list")
     ap.add_argument("--create-album", action="store_true")
     # The safe default: a run with no flags reports and writes nothing.
     ap.add_argument("--apply", action="store_true", help="actually add the matches")
-    return ap.parse_args(argv)
+    args = ap.parse_args(argv)
+    if not (args.profile or args.seed_album):
+        ap.error("give --profile or --seed-album")
+    return args
 
 
 def main(argv=None, env=None, connect=None, opener=None, state=None):

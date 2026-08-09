@@ -224,14 +224,13 @@ def test_a_step_cannot_ask_to_wait_longer_than_the_server_cap(tmp_path):
     assert result["waitedSec"] <= 6
 
 
-def test_an_unknown_profile_fails_closed_without_touching_the_database(tmp_path):
+def test_an_unknown_rule_fails_closed(tmp_path):
+    # The rule is resolved AGAINST the database now (a rule may name a seed
+    # album, whose members are read live), so unlike the malformed-input checks
+    # below this one does open a connection first. It must still fail closed.
     cfg = a_profile(tmp_path)
-
-    def explode(_cfg):
-        raise AssertionError("must not connect before the profile resolves")
-
     result, _ = classify(cfg, {"assetId": ASSET, "profile": "nope",
-                               "threshold": 0.28, "waitSec": 1}, connect=explode)
+                               "threshold": 0.28, "waitSec": 1}, results=[])
     assert result["match"] is False
     assert "no profile" in result["reason"]
 
@@ -492,12 +491,16 @@ def st(tmp_path):
 
 
 def a_seed_profile(ids=("s1",)):
-    return {"vector": [1.0, 0.0], "scoring": "nearest",
-            "built_from": {"kind": "seed", "assetIds": list(ids)}}
+    return {"name": "food", "vector": [1.0, 0.0], "scoring": "nearest",
+            "seedIds": list(ids)}
+
+
+def an_album_rule(ids=("s1", "s2")):
+    return {"name": "album:Cats", "seedIds": list(ids), "scoring": "centroid"}
 
 
 def a_text_profile():
-    return {"vector": [1.0, 0.0], "built_from": {"kind": "text", "text": "food"}}
+    return {"name": "prompt", "vector": [1.0, 0.0], "seedIds": []}
 
 
 def test_scoring_mode_is_per_profile_not_global():
@@ -536,6 +539,16 @@ def test_a_text_profile_still_scores_against_its_single_vector():
     cur = FakeCursor([])
     backfill.scan(cur, a_text_profile(), "album-1")
     assert "<=> %s::vector" in cur.sql[0][0]
+
+
+def test_an_album_rule_averages_its_members_live():
+    # AVG(vector) in SQL is what lets a rule name a seed ALBUM and stay correct
+    # as photos are added to it — nothing precomputed, no file, no shell.
+    cur = FakeCursor([])
+    backfill.scan(cur, an_album_rule(), "album-1")
+    sql, params = cur.sql[0]
+    assert "AVG(embedding)" in sql
+    assert params[0] == ["s1", "s2"]
 
 
 def test_hand_removals_are_excluded_from_the_scan():
@@ -646,12 +659,9 @@ def test_a_backfill_against_a_stale_profile_refuses_before_scanning(tmp_path):
     cfg = backfill.Config(profile_dir=str(tmp_path), model="new-model", api_key="k")
     store.save_profile(tmp_path, "food", "old-model", [1.0], {}, now=0)
     args = backfill.parse_args(["--profile", "food", "--album", "Food"])
-
-    def explode(_cfg):
-        raise AssertionError("must not open the database for a stale profile")
-
     with pytest.raises(SystemExit) as e:
-        backfill.run(cfg, args, connect=explode, opener=FakeOpener([json_reply([])]), state=st(tmp_path))
+        backfill.run(cfg, args, connect=lambda c: FakeConn(), opener=FakeOpener([json_reply([])]),
+                     state=st(tmp_path))
     assert "rebuild" in str(e.value)
 
 

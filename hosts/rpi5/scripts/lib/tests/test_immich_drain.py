@@ -66,6 +66,7 @@ def test_an_undecidable_asset_round_trips_through_the_queue(q):
     assert queue.pending(q) == [{
         "assetId": ASSET, "profile": "food", "threshold": 0.3,
         "albumIds": [ALBUM], "enqueuedAt": 1000, "attempts": 0,
+        "seedAlbum": "", "scoring": "",
     }]
 
 
@@ -104,7 +105,8 @@ def test_a_legacy_assetid_keyed_queue_is_migrated_without_losing_rows(tmp_path):
     # failure the queue exists to prevent.
     assert queue.pending(conn) == [{
         "assetId": "a-1", "profile": "food", "threshold": 0.3,
-        "albumIds": ["x"], "enqueuedAt": 1000, "attempts": 2}]
+        "albumIds": ["x"], "enqueuedAt": 1000, "attempts": 2,
+        "seedAlbum": "", "scoring": ""}]
 
 
 def test_requeuing_the_same_asset_updates_it_rather_than_duplicating(q):
@@ -480,3 +482,14 @@ def test_the_drainer_does_not_refile_a_photo_taken_out_by_hand(tmp_path, q, monk
 
     assert filed == []          # matched, but not put back
     assert queue.count(q) == 0  # and still resolved, not left to retry forever
+
+
+def test_a_seed_album_rule_parks_enough_to_be_re_decided_later(q):
+    # A rule that learns from an album is not reconstructable from a profile
+    # name, so the album and scoring ride along with the parked verdict.
+    queue.enqueue(q, ASSET, "album:Cats", 0.3, [ALBUM], now=1000,
+                  seed_album="Cats", scoring="centroid")
+    row = queue.pending(q)[0]
+    assert row["profile"] == "album:Cats"
+    assert row["seedAlbum"] == "Cats"
+    assert row["scoring"] == "centroid"

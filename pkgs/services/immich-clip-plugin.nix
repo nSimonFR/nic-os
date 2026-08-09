@@ -66,7 +66,7 @@ let
       {
         name = "clipFilter";
         title = "Filter by content (CLIP)";
-        description = "Add the asset to an album when its CLIP embedding is within the given cosine distance of a named profile, and halt the workflow otherwise.";
+        description = "Add the asset to an album when it looks like the examples in another album (or a named profile), and halt the workflow otherwise.";
         types = [ "AssetV1" ];
         # Needed for httpRequest; without it the host hands the plugin a stub
         # that throws, and the method also loads into the worker pool instead.
@@ -75,13 +75,27 @@ let
         uiHints = [ "Filter" ];
         schema = {
           type = "object";
-          required = [ "profile" "threshold" ];
+          # Not `profile`: a rule may name a seed album instead.
+          required = [ "threshold" ];
           properties = {
+            seedAlbum = {
+              type = "string";
+              title = "Learn from this album";
+              description = "Name of an Immich album holding example photos. The rule is built from its members LIVE, so adding photos to that album sharpens it immediately — nothing to rebuild, and no shell needed. Leave empty to use a named profile instead.";
+              default = "";
+            };
+            scoring = {
+              type = "string";
+              title = "How to compare";
+              enum = [ "nearest" "centroid" ];
+              description = "nearest: closest single example — right when the examples share a THEME but not a subject (food). centroid: their average — right when they all show the SAME thing in different places (one toy). Thresholds do not carry between the two.";
+              default = "nearest";
+            };
             profile = {
               type = "string";
-              title = "Profile";
-              description = "Name of a profile built with immich-clip-profile, e.g. food.";
-              default = "food";
+              title = "Profile (alternative to the album above)";
+              description = "Name of a profile built with immich-clip-profile. Needed only for text-prompt rules or hand-picked seed sets; ignored when an album is given.";
+              default = "";
             };
             threshold = {
               type = "number";

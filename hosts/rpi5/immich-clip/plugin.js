@@ -4,7 +4,10 @@
 // location, but not on what is actually IN the picture. This adds that step, so
 // a workflow is just:
 //
-//   AssetMetadataExtraction -> nic-clip#clipFilter(profile=food, albumIds=[…])
+//   AssetMetadataExtraction -> nic-clip#clipFilter(seedAlbum="Food seeds", albumIds=[…])
+//
+// A rule can name a seed ALBUM, whose members the sidecar reads live, so a whole
+// rule is definable in the Immich UI with no shell involved.
 //
 // It does NOT do the inference itself, and cannot: the `httpRequest` host
 // function returns `body: await res.text()` (see
@@ -39,7 +42,9 @@
 const { httpRequest } = Host.getFunctions();
 
 const DEFAULTS = {
-  profile: "food",
+  // No default rule: a step names either a seedAlbum or a profile, and guessing
+  // "food" here would silently apply the wrong rule to a half-filled config.
+  profile: "",
   threshold: 0.28,
   waitSec: 60,
   sidecar: "http://127.0.0.1:8351/classify",
@@ -83,6 +88,10 @@ function clipFilter() {
     threshold: config.threshold != null ? config.threshold : DEFAULTS.threshold,
     waitSec: config.waitSec != null ? config.waitSec : DEFAULTS.waitSec,
     albumIds: config.albumIds || [],
+    // Both optional; the sidecar prefers seedAlbum when set, which is what lets
+    // a whole rule be defined in the Immich UI with no shell involved.
+    seedAlbum: config.seedAlbum || "",
+    scoring: config.scoring || "",
   });
 
   // The host wrapper expects {authToken, args} and applies `fetch(...args)`,

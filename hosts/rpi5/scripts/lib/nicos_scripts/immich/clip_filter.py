@@ -47,7 +47,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from ..logs import logger
 from ..secrets import env_int, env_str, read_secret_env
 from . import api, exclusions, queue
-from .store import ProfileError, connect_pg, load_profile, score
+from .store import ProfileError, connect_pg, resolve_rule, score_rule
 
 DEFAULT_PROFILE_DIR = "/var/lib/immich-clip/profiles"
 DEFAULT_QUEUE_DB = "/var/lib/immich-clip/pending.sqlite"
@@ -120,11 +120,6 @@ def classify(cfg, req, connect=None, sleep=None, monotonic=None):
     wait_sec = min(max(int(req.get("waitSec") or 0), 0), cfg.max_wait_sec)
 
     try:
-        profile = load_profile(cfg.profile_dir, req.get("profile") or "", cfg.model or None)
-    except ProfileError as e:
-        return no(str(e))
-
-    try:
         conn = do_connect(cfg)
     except Exception as e:  # noqa: BLE001 - a DB outage must not 500 the workflow
         return no(f"database unreachable: {e}")
@@ -133,15 +128,22 @@ def classify(cfg, req, connect=None, sleep=None, monotonic=None):
     try:
         conn.autocommit = True
         cur = conn.cursor()
+        # Resolved against the DB because a rule may name a seed ALBUM, whose
+        # membership is read live — that is what makes a rule definable purely
+        # in the Immich UI.
+        try:
+            rule = resolve_rule(cur, cfg.profile_dir, cfg.model or None, req)
+        except ProfileError as e:
+            return no(str(e))
         while True:
-            distance = score(cur, asset_id, profile)
+            distance = score_rule(cur, asset_id, rule)
             waited = round(clock() - started, 1)
             if distance is not None:
                 return {
                     "match": distance <= threshold,
                     "distance": round(distance, 4),
                     "waitedSec": waited,
-                    "profile": profile["name"],
+                    "profile": rule["name"],
                     **({} if distance <= threshold else {"reason": "over threshold"}),
                 }
             if waited >= wait_sec:
@@ -149,6 +151,7 @@ def classify(cfg, req, connect=None, sleep=None, monotonic=None):
                     "not embedded yet — queued until the ML server catches up",
                     undecided=True,
                     waitedSec=waited,
+                    profile=rule["name"],
                 )
             do_sleep(cfg.poll_sec)
     except Exception as e:  # noqa: BLE001
@@ -194,10 +197,14 @@ def handle(cfg, req, classify_fn=None, queue_conn=None, add_assets=None, now=Non
             queue.enqueue(
                 conn,
                 req["assetId"],
-                req.get("profile") or "",
+                # The RULE identity, which for a seed-album rule is "album:<name>"
+                # rather than a profile filename.
+                result.get("profile") or req.get("profile") or "",
                 req.get("threshold") or 0,
                 album_ids,
                 now if now is not None else time.time(),
+                seed_album=req.get("seedAlbum") or "",
+                scoring=req.get("scoring") or "",
             )
             return dict(result, queued=True)
         except Exception as e:  # noqa: BLE001 - failing to queue must not 500

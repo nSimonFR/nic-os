@@ -162,24 +162,80 @@ def nearest_seed_distance(cur, asset_id, ids):
     return None if row is None or row[0] is None else float(row[0])
 
 
-def score(cur, asset_id, profile):
-    """Distance from one asset to a profile. None means "not embedded yet"."""
-    ids = seed_ids(profile)
+def centroid_distance(cur, asset_id, ids):
+    """Distance to the live average of those assets' embeddings.
+
+    `AVG(vector)` is a real pgvector aggregate, so the centroid never has to be
+    precomputed into a file — which is what lets a rule name a seed ALBUM and
+    stay correct as photos are added to it. The mean is not unit-length, but
+    cosine distance is scale-invariant, so `<=>` does not care.
+    """
+    cur.execute(
+        'SELECT s.embedding <=> (SELECT AVG(embedding) FROM smart_search '
+        'WHERE "assetId" = ANY(%s::uuid[])) FROM smart_search s WHERE s."assetId" = %s',
+        (list(ids), asset_id),
+    )
+    row = cur.fetchone()
+    return None if row is None or row[0] is None else float(row[0])
+
+
+def score_rule(cur, asset_id, rule):
+    """Distance from one asset to a resolved rule. None means "not embedded yet"."""
+    ids = rule.get("seedIds") or []
     if not ids:
-        return distance_to(cur, asset_id, profile["vector"])
+        return distance_to(cur, asset_id, rule["vector"])
 
     # Split so that "this asset has no embedding" (undecided, queue it) stays
-    # distinguishable from "the seeds have no embeddings" (a broken profile).
+    # distinguishable from "the seeds have no embeddings" (a broken rule).
     cur.execute('SELECT 1 FROM smart_search WHERE "assetId" = %s', (asset_id,))
     if cur.fetchone() is None:
         return None
 
-    nearest = nearest_seed_distance(cur, asset_id, ids)
-    if nearest is None:
-        # Every seed lost its embedding. Fall back to the stored centroid rather
-        # than parking the asset forever on a profile that will never resolve.
-        return distance_to(cur, asset_id, profile["vector"])
-    return nearest
+    if (rule.get("scoring") or "nearest") == "centroid":
+        d = centroid_distance(cur, asset_id, ids)
+    else:
+        d = nearest_seed_distance(cur, asset_id, ids)
+    if d is None and rule.get("vector"):
+        # Every seed lost its embedding. Fall back to a stored centroid rather
+        # than parking the asset forever on a rule that will never resolve.
+        return distance_to(cur, asset_id, rule["vector"])
+    return d
+
+
+def resolve_rule(cur, profile_dir, model, req):
+    """Turn a workflow step's config into something scorable.
+
+    Two sources, on purpose:
+
+    * `seedAlbum` — an Immich album, resolved LIVE. This is what makes a rule
+      definable entirely in the Immich UI: make an album, drop examples in it,
+      point a workflow at it. Adding photos to that album sharpens the rule
+      immediately, with nothing to rebuild.
+    * `profile` — a file from immich-clip-profile. Still needed for text-mode
+      rules (no album exists) and for hand-picked seed sets.
+    """
+    album = (req.get("seedAlbum") or "").strip()
+    if album:
+        album_id = album_id_by_name(cur, album)
+        if not album_id:
+            raise ProfileError(f"no album named {album!r} to seed from")
+        ids = album_asset_ids(cur, album_id)
+        if not ids:
+            raise ProfileError(f"seed album {album!r} is empty")
+        return {
+            "name": f"album:{album}",
+            "seedIds": ids,
+            "scoring": (req.get("scoring") or "nearest"),
+        }
+
+    profile = load_profile(profile_dir, req.get("profile") or "", model)
+    scoring = profile.get("scoring") or "nearest"
+    return {
+        "name": profile["name"],
+        "seedIds": seed_ids(profile),
+        "scoring": scoring,
+        "vector": profile["vector"],
+    }
 
 
 def existing_asset_ids(cur, asset_ids):

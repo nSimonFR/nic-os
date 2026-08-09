@@ -42,8 +42,8 @@ from .store import (
     ProfileError,
     connect_pg,
     existing_asset_ids,
-    load_profile,
-    score,
+    resolve_rule,
+    score_rule,
 )
 
 DEFAULT_PROFILE_DIR = "/var/lib/immich-clip/profiles"
@@ -154,15 +154,21 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
             name = item["profile"]
             if name not in profiles:
                 try:
-                    profiles[name] = load_profile(cfg.profile_dir, name, cfg.model or None)
+                    # Rebuilt from what was parked with the verdict: a seed-album
+                    # rule is not reconstructable from a profile name alone.
+                    profiles[name] = resolve_rule(cur, cfg.profile_dir, cfg.model or None, {
+                        "profile": name,
+                        "seedAlbum": item.get("seedAlbum") or "",
+                        "scoring": item.get("scoring") or "",
+                    })
                 except ProfileError as e:
                     profiles[name] = None
-                    log(f"profile {name!r} unusable, leaving its entries queued: {e}")
+                    log(f"rule {name!r} unusable, leaving its entries queued: {e}")
             profile = profiles[name]
             if profile is None:
                 continue
 
-            distance = score(cur, item["assetId"], profile)
+            distance = score_rule(cur, item["assetId"], profile)
             if distance is None:
                 waiting.append(item["assetId"])
                 queue.bump(conn_q, item["assetId"], item["profile"])
