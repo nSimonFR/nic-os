@@ -46,7 +46,14 @@ let
   );
 
   # What goes IN the manifest — fixed, for the upsert reason above.
-  manifestVersion = "0.1.0";
+  #
+  # ⚠️ Changing this is NOT free. The upsert conflicts on (name, version) while
+  # the table also has UNIQUE(name), so a new version is an INSERT that trips the
+  # name constraint and the import fails outright. Bumping requires deleting the
+  # `plugin` row first, which cascades through plugin_method to workflow_step —
+  # i.e. every workflow using this plugin loses its steps and must have them
+  # recreated. Back the step configs up before touching it.
+  manifestVersion = "1.0.0";
 
   # Nested schema properties REQUIRE title and description — in
   # dtos/json-schema.dto.js only the top level makes them optional, so omitting
