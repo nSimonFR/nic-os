@@ -17,16 +17,51 @@ pass never blocks a live classify.
 import json
 import sqlite3
 
+# The key is (assetId, profile), NOT assetId. More than one workflow can be
+# watching the same library — a `food` rule and a `burgie` rule, say — and both
+# park the same undecidable asset. Under an assetId-only primary key the second
+# enqueue silently overwrote the first, so one of the two verdicts was lost with
+# nothing to show for it.
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS pending (
-    assetId    TEXT PRIMARY KEY,
+    assetId    TEXT NOT NULL,
     profile    TEXT NOT NULL,
     threshold  REAL NOT NULL,
     albumIds   TEXT NOT NULL,
     enqueuedAt INTEGER NOT NULL,
-    attempts   INTEGER NOT NULL DEFAULT 0
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (assetId, profile)
 );
 """
+
+
+def _migrate(conn):
+    """Move an assetId-keyed table onto the composite key, keeping its rows.
+
+    SQLite cannot alter a primary key in place, so this is copy-and-swap. Rows
+    are preserved rather than dropped: they are undecided verdicts, and throwing
+    them away is exactly the failure the queue exists to prevent.
+    """
+    row = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='pending'"
+    ).fetchone()
+    if not row or "PRIMARY KEY (assetId, profile)" in row[0]:
+        return False
+    conn.executescript(
+        """
+        ALTER TABLE pending RENAME TO pending_old;
+        """
+        + SCHEMA
+        + """
+        INSERT OR IGNORE INTO pending
+            (assetId, profile, threshold, albumIds, enqueuedAt, attempts)
+        SELECT assetId, profile, threshold, albumIds, enqueuedAt, attempts
+        FROM pending_old;
+        DROP TABLE pending_old;
+        """
+    )
+    conn.commit()
+    return True
 
 
 def connect(path):
@@ -35,21 +70,22 @@ def connect(path):
     conn.execute("PRAGMA busy_timeout=30000")
     conn.executescript(SCHEMA)
     conn.commit()
+    _migrate(conn)
     return conn
 
 
 def enqueue(conn, asset_id, profile, threshold, album_ids, now):
-    """Record an undecidable asset. Idempotent on assetId.
+    """Record an undecidable asset. Idempotent on (assetId, profile).
 
     A re-trigger of the same asset (a metadata refresh, say) must not create a
     second row, but it should refresh the config — the workflow's threshold or
-    target album may have been edited since.
+    target album may have been edited since. A DIFFERENT profile for the same
+    asset is a separate row, not an overwrite.
     """
     conn.execute(
         """INSERT INTO pending (assetId, profile, threshold, albumIds, enqueuedAt)
            VALUES (?, ?, ?, ?, ?)
-           ON CONFLICT(assetId) DO UPDATE SET
-             profile=excluded.profile,
+           ON CONFLICT(assetId, profile) DO UPDATE SET
              threshold=excluded.threshold,
              albumIds=excluded.albumIds""",
         (asset_id, profile, float(threshold), json.dumps(list(album_ids)), int(now)),
@@ -80,15 +116,24 @@ def count(conn):
     return conn.execute("SELECT count(*) FROM pending").fetchone()[0]
 
 
-def resolve(conn, asset_id):
-    """Drop a decided asset. Called for match AND no-match alike — the queue
-    holds undecided work, not unfiled work."""
-    conn.execute("DELETE FROM pending WHERE assetId = ?", (asset_id,))
+def resolve(conn, asset_id, profile):
+    """Drop one decided (asset, profile) pair.
+
+    Called for match AND no-match alike — the queue holds undecided work, not
+    unfiled work. Scoped to the profile so resolving a `food` verdict does not
+    also discard a still-pending `burgie` one for the same photo.
+    """
+    conn.execute(
+        "DELETE FROM pending WHERE assetId = ? AND profile = ?", (asset_id, profile)
+    )
     conn.commit()
 
 
-def bump(conn, asset_id):
-    conn.execute("UPDATE pending SET attempts = attempts + 1 WHERE assetId = ?", (asset_id,))
+def bump(conn, asset_id, profile):
+    conn.execute(
+        "UPDATE pending SET attempts = attempts + 1 WHERE assetId = ? AND profile = ?",
+        (asset_id, profile),
+    )
     conn.commit()
 
 

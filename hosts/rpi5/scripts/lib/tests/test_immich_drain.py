@@ -69,6 +69,44 @@ def test_an_undecidable_asset_round_trips_through_the_queue(q):
     }]
 
 
+def test_two_profiles_park_the_same_asset_independently(q):
+    # A `food` rule and a `burgie` rule both watch the library. Under the old
+    # assetId-only primary key the second enqueue overwrote the first and one
+    # verdict vanished.
+    queue.enqueue(q, ASSET, "food", 0.30, [ALBUM], now=1000)
+    queue.enqueue(q, ASSET, "burgie", 0.22, ["burgie-album"], now=1000)
+    rows = {r["profile"]: r for r in queue.pending(q)}
+    assert set(rows) == {"food", "burgie"}
+    assert rows["burgie"]["albumIds"] == ["burgie-album"]
+
+    # Resolving one must not discard the other.
+    queue.resolve(q, ASSET, "food")
+    assert [r["profile"] for r in queue.pending(q)] == ["burgie"]
+
+
+def test_a_legacy_assetid_keyed_queue_is_migrated_without_losing_rows(tmp_path):
+    import sqlite3
+    db = str(tmp_path / "legacy.sqlite")
+    old = sqlite3.connect(db)
+    old.executescript("""
+        CREATE TABLE pending (
+            assetId TEXT PRIMARY KEY, profile TEXT NOT NULL, threshold REAL NOT NULL,
+            albumIds TEXT NOT NULL, enqueuedAt INTEGER NOT NULL,
+            attempts INTEGER NOT NULL DEFAULT 0);
+        INSERT INTO pending VALUES ('a-1','food',0.3,'["x"]',1000,2);
+    """)
+    old.commit(); old.close()
+
+    conn = queue.connect(db)
+    assert "PRIMARY KEY (assetId, profile)" in conn.execute(
+        "SELECT sql FROM sqlite_master WHERE name='pending'").fetchone()[0]
+    # The parked verdict survives the migration — dropping it is the exact
+    # failure the queue exists to prevent.
+    assert queue.pending(conn) == [{
+        "assetId": "a-1", "profile": "food", "threshold": 0.3,
+        "albumIds": ["x"], "enqueuedAt": 1000, "attempts": 2}]
+
+
 def test_requeuing_the_same_asset_updates_it_rather_than_duplicating(q):
     # A metadata refresh re-fires the workflow; the row must not double, but an
     # edited threshold or target album should take effect.
@@ -88,7 +126,7 @@ def test_the_queue_is_drained_oldest_first(q):
 
 def test_resolving_removes_the_entry(q):
     queue.enqueue(q, ASSET, "food", 0.3, [], now=1000)
-    queue.resolve(q, ASSET)
+    queue.resolve(q, ASSET, "food")
     assert queue.count(q) == 0
 
 

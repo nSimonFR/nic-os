@@ -119,5 +119,14 @@ def add_assets(cfg, album_id, asset_ids, opener=None, log=print):
         )
         ok = sum(1 for r in results if r.get("success"))
         added += ok
-        log(f"batch {i // BATCH + 1}: {ok}/{len(chunk)} added")
+        # Say WHY the rest were refused. The common one is `no_permission`:
+        # a shared library contains other people's assets, and the API key can
+        # only put its own owner's photos into its own owner's album. Reporting
+        # a bare "53/78" made that look like a failure rather than a boundary.
+        reasons = {}
+        for r in results:
+            if not r.get("success"):
+                reasons[r.get("error", "unknown")] = reasons.get(r.get("error", "unknown"), 0) + 1
+        detail = "".join(f", {n} {why}" for why, n in sorted(reasons.items()))
+        log(f"batch {i // BATCH + 1}: {ok}/{len(chunk)} added{detail}")
     return added

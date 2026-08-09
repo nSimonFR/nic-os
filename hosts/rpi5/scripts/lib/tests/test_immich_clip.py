@@ -446,6 +446,17 @@ def test_a_deleted_album_does_not_resolve():
     assert '"deletedAt" IS NULL' in cur.sql[0][0]
 
 
+def test_a_refused_add_is_reported_with_its_reason():
+    # In a shared library the API key can only file its OWNER's assets. A bare
+    # "53/78 added" read as a failure; it is a permission boundary.
+    cfg = backfill.Config(immich_url="http://immich", api_key="k")
+    op = FakeOpener([json_reply([{"id": ASSET, "success": True},
+                                 {"id": OTHER, "success": False, "error": "no_permission"}])])
+    lines = []
+    api.add_assets(cfg, "album-1", [ASSET, OTHER], opener=op, log=lines.append)
+    assert "1/2 added, 1 no_permission" in lines[0]
+
+
 def test_assets_are_added_in_batches_and_only_successes_counted():
     cfg = backfill.Config(immich_url="http://immich", api_key="k")
     op = FakeOpener([json_reply([{"id": ASSET, "success": True},

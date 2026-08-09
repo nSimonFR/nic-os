@@ -158,7 +158,7 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
             distance = distance_to(cur, item["assetId"], profile["vector"])
             if distance is None:
                 waiting.append(item["assetId"])
-                queue.bump(conn_q, item["assetId"])
+                queue.bump(conn_q, item["assetId"], item["profile"])
                 continue
 
             decided += 1
@@ -171,7 +171,7 @@ def run(cfg, connect=None, opener=None, queue_conn=None, now=None):
             log(f"{item['assetId']} d={distance:.4f} "
                 f"{'MATCH' if match else 'no'}{'' if cfg.apply else ' (dry run)'}")
             if cfg.apply:
-                queue.resolve(conn_q, item["assetId"])
+                queue.resolve(conn_q, item["assetId"], item["profile"])
     finally:
         conn.close()
 
