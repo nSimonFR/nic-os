@@ -88,14 +88,24 @@
     };
 
     # Reactive Resume — self-hosted resume builder (rxresu.me), packaged like
-    # sure-nix / airtrail-nix. Held at the last rev whose pnpm-deps FOD hash is
-    # correct for aarch64. Upstream 770703c6 (reactive-resume 5.2.3) ships a
-    # pnpm-deps hash recomputed by x86 Renovate CI, but pnpm pulls
-    # platform-specific binaries so the aarch64 build hashes differently ->
-    # "hash mismatch in fixed-output derivation". 67720c89 is the rev the
-    # running system builds. Unpin once upstream hashes are platform-correct.
+    # sure-nix / airtrail-nix.
+    #
+    # Unpinned as of 5.2.3. It was held at 67720c89 on the theory that upstream's
+    # Renovate-recomputed pnpm-deps hash was x86_64-only — the defect airtrail-nix
+    # really did have. That was measured and is NOT true here: nixpkgs'
+    # fetchPnpmDeps runs `pnpm install --force`, which per its own comment "allows
+    # us to fetch all dependencies including ones that aren't meant for our host
+    # platform", and the FOD lands on the SAME store path on both arches:
+    #   aarch64 (rpi5)  -> /nix/store/xck2n5ir…-reactive-resume-pnpm-deps
+    #   x86_64  (beast) -> /nix/store/xck2n5ir…-reactive-resume-pnpm-deps
+    #
+    # What the pin was ACTUALLY holding back was patches/base-path-support.patch:
+    # 5.2.3 deleted the `Access-Control-Allow-Origin` line its uploads.ts hunk
+    # targets, so the patch stopped applying. Fixed upstream in
+    # reactive-resume-nix#8 (the hunk is obsolete, not misplaced — it is dropped,
+    # not re-anchored), which is what this unpins onto.
     reactive-resume-nix = {
-      url = "github:nSimonFR/reactive-resume-nix/67720c895642549444b873b8554e06b8ab592177";
+      url = "github:nSimonFR/reactive-resume-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
