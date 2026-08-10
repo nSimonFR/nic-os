@@ -127,12 +127,24 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   # library + upload live on the HDD under /mnt/data/immich, so restic covers
-  # the photos directly. Worth knowing: Immich's own database dumps go to
-  # /mnt/data/immich/backups, which is a bind mount of the SSD — restic's
-  # --one-file-system (storj-backup.nix) does not cross it, so the dumps
-  # themselves stay local. Not addressed here.
+  # the photos directly.
+  #
+  # The database is a different story, and it took a 34-day outage to notice.
+  # Immich's own nightly dump goes to /mnt/data/immich/backups, which is a bind
+  # mount of the SSD — restic's --one-file-system (storj-backup.nix) does not
+  # cross it, so those dumps never leave the machine. That job had ALSO been
+  # failing every night since 2026-07-09 (pg_dump denied on postgres-owned tables
+  # left behind by a face re-merge), and Immich's own job-queue counter reported
+  # `backupDatabase: failed 0` throughout.
+  #
+  # So the photos were covered and the database that indexes them was not, by two
+  # independent failures at once. `postgres` here puts it in
+  # services.postgresqlBackup, whose dumps land on the HDD and DO reach Storj —
+  # a path that does not depend on Immich's own job working, or on anyone
+  # noticing that it has stopped.
   nic.services.immich = {
-    backup        = [ "mnt-data" ];
+    backup            = [ "mnt-data" "postgres" ];
+    postgresDatabases = [ "immich" ];
     heavyUnits    = [ "immich-server.service" ];
     heavyPriority = 10;
 

@@ -734,11 +734,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786369614,
-        "narHash": "sha256-q2AqnZvMX9HEEld2VJxzcujwU3E7xiEsyMOA0NQPtCg=",
+        "lastModified": 1786378648,
+        "narHash": "sha256-Ms2Qzl46iobyHpbqRkFMS2e82VRtuylbJjBYQzyLdKA=",
         "owner": "nSimonFR",
         "repo": "immich-clip-filter",
-        "rev": "986cc110e8ffda4f3a4ea3d671b1dee54489b4cd",
+        "rev": "ace1bea677bf4f84fc9c3a82851021f7d4e93623",
         "type": "github"
       },
       "original": {
