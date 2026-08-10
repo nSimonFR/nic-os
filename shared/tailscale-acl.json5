@@ -14,11 +14,44 @@
 //   gh workflow run "Sync Tailscale ACL" --ref <branch> -f action=apply
 // (or the Actions UI -> Run workflow -> pick branch + action).
 {
+	// beast is tagged so that rpi5 can SSH to it unattended. That is the ONLY
+	// reason: Tailscale evaluates ssh rules most-restrictive-first, so a `check`
+	// rule beats an `accept` rule REGARDLESS of definition order — adding an
+	// accept rule alongside the check below would have done nothing at all. The
+	// only way to reach the accept is to stop matching the check, and the check's
+	// dst is `autogroup:self`, which by documentation "does not apply to tagged
+	// devices". Tagging beast is what takes it out of that rule.
+	//
+	// ⚠️ That same exclusion is why the acls/nodeAttrs sections below grow explicit
+	// tag:beast entries: a tagged device is not user-owned, so anything written in
+	// terms of autogroup:member/self may no longer cover it. Tailscale's own docs
+	// are explicit about autogroup:self and SILENT about autogroup:member, so the
+	// rules are written to be correct either way rather than on an assumption that
+	// could only be tested by breaking rpi5 -> beast:3003 (the Immich ML server).
+	"tagOwners": {
+		"tag:beast": ["autogroup:member"],
+	},
 	"acls": [
 		{
 			"action": "accept",
 			"src":    ["autogroup:member"],
 			"dst":    ["autogroup:member:*"],
+		},
+		{
+			// Explicit because beast is tagged. The rule above is written in terms
+			// of autogroup:member, which may not cover a tagged device — and if it
+			// does not, rpi5 loses beast:3003 and Immich's CLIP/face jobs stop with
+			// no obvious cause. Cheap insurance; a duplicate accept costs nothing.
+			"action": "accept",
+			"src":    ["autogroup:member"],
+			"dst":    ["tag:beast:*"],
+		},
+		{
+			// The return direction, for the same reason: beast reaching the tailnet
+			// (Immich callbacks, the Pi's services, the internet via the exit node).
+			"action": "accept",
+			"src":    ["tag:beast"],
+			"dst":    ["*:*"],
 		},
 		{
 			"action": "accept",
@@ -55,6 +88,25 @@
 	],
 	"ssh": [
 		{
+			// beast, unattended. `check` sends the first connection after downtime
+			// to a login.tailscale.com URL and waits for a BROWSER login, which no
+			// automated job can complete — waking beast, powering it down, or any
+			// scheduled task touching it all stalled on a human. (2026-08-09: two
+			// held connections died unapproved, one at the 15-minute timeout and one
+			// with `tailscale: failed to fetch next SSH action`, before a manual
+			// approval let a poweroff through.)
+			//
+			// This grants nothing the network ACL above did not already grant; it
+			// removes the interactive gate in front of it. Scoped to beast as the
+			// DESTINATION rather than to rpi5 as the source, deliberately — see the
+			// note in tagOwners about why rpi5 itself must not be tagged.
+			"action": "accept",
+			"src":    ["autogroup:member"],
+			"dst":    ["tag:beast"],
+			"users":  ["autogroup:nonroot", "root"],
+		},
+		{
+			// Everything else keeps the interactive check.
 			"action":      "check",
 			"src":         ["autogroup:member"],
 			"dst":         ["autogroup:self"],
@@ -65,6 +117,13 @@
 	"nodeAttrs": [
 		{
 			"target": ["autogroup:member"],
+			"attr":   ["funnel", "drive:share", "drive:access", "exit-node"],
+		},
+		{
+			// Same list, restated for the tag: node attributes are granted to a
+			// target, and a tagged device is no longer a member. Without this beast
+			// would silently lose drive access and the ability to use an exit node.
+			"target": ["tag:beast"],
 			"attr":   ["funnel", "drive:share", "drive:access", "exit-node"],
 		},
 	],
