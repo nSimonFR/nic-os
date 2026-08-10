@@ -25,6 +25,9 @@
 #   fetched dependencies, so they change whenever the pinned source's go.sum or
 #   frontend deps move. After bumping showmycards-src, set the changed one back
 #   to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
+#   The two frontend FOD hashes are PER-SYSTEM (see `depsHashes` below) — recompute
+#   them on the platform you are building for, and never copy one arch's value
+#   into another arch's slot.
 #
 # ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout, adds an en+fr
 #   language filter (see the call site), and lowers go.mod's toolchain floor (see
@@ -137,11 +140,45 @@ let
       inherit outputHash;
     };
 
+  # The two hashes above are PER-SYSTEM, hence this attrset rather than two bare
+  # literals. `npm install` materialises only the optional deps whose package.json
+  # `os`/`cpu` match the host (@rollup/rollup-linux-{arm64,x64}-gnu,
+  # @esbuild/linux-*, lightningcss-*), so the recursive hash of the node_modules
+  # tree differs between aarch64 and x86_64 and a hash recorded on one arch can
+  # never validate on the other.
+  #
+  # This is NOT the case for the npmDepsHash packages elsewhere in pkgs/ (ha-linky,
+  # ble-scale-sync, affine-mcp-server, epicgames-freegames-node): buildNpmPackage's
+  # fetchNpmDeps walks package-lock.json with prefetch-npm-deps, whose Package
+  # struct carries only name/resolved/integrity — it downloads every entry
+  # regardless of os/cpu, so that FOD is arch-independent. The difference is that
+  # this package has no package-lock.json to walk (upstream ships bun.lock only),
+  # so we hash a real installed tree instead.
+  #
+  # Only aarch64-linux is recorded: the rpi5 is the only host that builds this
+  # (see the header — the published image is amd64, which is why we build from
+  # source at all). Adding x86_64-linux means BUILDING it there and pasting the
+  # `got:` hash — do not copy the aarch64 value across, that just moves the
+  # breakage. Same shape, and the same fix, as airtrail-nix's `depsHashes`.
+  depsHashes = {
+    aarch64-linux = {
+      depsBuild = "sha256-VkyhZ+0vqEpzRsTyen4jeVBXenOzS1CkuBV3yctFJq4=";
+      depsProd = "sha256-rRC6hQkeHLzv7o9LV3R5GZzc7hp7vb4F5Ogw+lDPy5Y=";
+    };
+  };
+
+  hashes =
+    depsHashes.${stdenv.hostPlatform.system} or (throw
+      "showmycards: no frontend npm dependency hashes recorded for ${stdenv.hostPlatform.system}. "
+      + "`npm install` resolves arch-specific optional deps, so the hash is per-system: "
+      + "set both to lib.fakeHash, build on that platform, and add the reported `got:` "
+      + "hashes as a new depsHashes.${stdenv.hostPlatform.system} entry.");
+
   # Full tree (dev + prod) used to run `vite build`.
   depsBuild = mkNpmModules {
     name = "deps-build";
     npmArgs = "";
-    outputHash = "sha256-VkyhZ+0vqEpzRsTyen4jeVBXenOzS1CkuBV3yctFJq4=";
+    outputHash = hashes.depsBuild;
   };
 
   # Production-only tree shipped at runtime. adapter-node keeps `dependencies`
@@ -149,7 +186,7 @@ let
   depsProd = mkNpmModules {
     name = "deps-prod";
     npmArgs = "--omit=dev";
-    outputHash = "sha256-rRC6hQkeHLzv7o9LV3R5GZzc7hp7vb4F5Ogw+lDPy5Y=";
+    outputHash = hashes.depsProd;
   };
 
 in
