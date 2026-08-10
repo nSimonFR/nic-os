@@ -32,11 +32,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1784138089,
-        "narHash": "sha256-isxyhywLgr714Ah8hJYW2O/KW02/z7vyRb8eC3M5q48=",
+        "lastModified": 1786350258,
+        "narHash": "sha256-iD/MugX/Z1oeY+MT7qOLqpdyDRiOX4b+Wsf2ObphpxY=",
         "owner": "nSimonFR",
         "repo": "airtrail-nix",
-        "rev": "0b3b44f74de111fb99e77a70cd21165799ff76a7",
+        "rev": "08eea313f3a4f321473ebb6d13e33afa39cc6519",
         "type": "github"
       },
       "original": {
