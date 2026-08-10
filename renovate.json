@@ -13,5 +13,13 @@
   },
   "lockFileMaintenance": {
     "enabled": true
-  }
+  },
+  "packageRules": [
+    {
+      "description": "gramps-web-nix is pinned on purpose: a3f86d5 (gramps-web-api 3.17.0) fails pythonRuntimeDepsCheck against our nixpkgs — needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/gramps-gedcom7/flask-smorest. See the comment on the input in flake.nix. Renovate proposed it as #438, it was merged, and it broke main. Re-enable once gramps-web-nix carries those deps.",
+      "matchManagers": ["nix"],
+      "matchPackageNames": ["gramps-web-nix"],
+      "enabled": false
+    }
+  ]
 }
