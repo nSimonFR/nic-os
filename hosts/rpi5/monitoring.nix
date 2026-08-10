@@ -308,4 +308,55 @@ in
       };
     };
   };
+
+  # ── Alert: backup freshness ──────────────────────────────────────────────────
+  # Immich's database backup failed every night for 34 days and nobody noticed.
+  # Two separate things hid it, and neither is fixed by watching harder:
+  #
+  #   * the failure was inside an APPLICATION job, not a systemd unit, so
+  #     systemd-failed-alert above could not see it;
+  #   * Immich's own status counter reported `backupDatabase: failed 0` the whole
+  #     time — the counter was not merely unhelpful, it was wrong.
+  #
+  # So this watches the ARTEFACT rather than any job. A dump that is missing or
+  # stale is a broken backup whatever the cause: unit failed, unit never
+  # scheduled, ran but wrote nothing, or wrote somewhere else entirely.
+  #
+  # The Postgres list is DERIVED from services.postgresqlBackup.databases (itself
+  # derived from nic.services.<name>.postgresDatabases), so a service added to the
+  # registry is monitored the same day. backups.nix already records what a
+  # hand-maintained list costs — that one had drifted in both directions, dumping
+  # a database no module defines any more while missing one that had real state.
+  systemd.services.backup-freshness-alert = {
+    description = "Alert on missing or stale backup artefacts";
+    serviceConfig = {
+      Type = "oneshot";
+      # Runs as root deliberately: /mnt/data/backups/postgresql is 0750 and the
+      # per-service SQLite dirs are 0700. As anyone else `find` returns nothing
+      # and every artefact reads as "no backup found" — a false alarm that would
+      # train you to ignore this alert, which is the one failure mode it cannot
+      # afford.
+      ExecStart = pkgs.writeShellScript "backup-freshness-alert" ''
+        BODY=$(${pkgs.bash}/bin/bash ${./scripts/backup-freshness.sh} 48 \
+          ${lib.escapeShellArgs (
+            (map (db: "${db}=/mnt/data/backups/postgresql/${db}.sql.gz")
+              config.services.postgresqlBackup.databases)
+            ++ (map (d: "${d}=/mnt/data/backups/${d}/*")
+              [ "hass" "vaultwarden" "gramps-web" "papra" "beaverhabits" "karakeep" ])
+          )})
+        printf '%s' "$BODY" | ${telegramAlert} backup-freshness "Backups missing or stale on rpi5"
+      '';
+    };
+  };
+  systemd.timers.backup-freshness-alert = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Six-hourly rather than daily: the threshold is 48h, so this is not about
+      # catching a stale dump sooner — it is so a FIXED one clears the alert
+      # within hours instead of the next morning.
+      OnBootSec = "15m";
+      OnUnitActiveSec = "6h";
+      Persistent = true;
+    };
+  };
 }
