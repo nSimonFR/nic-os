@@ -127,6 +127,17 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # CLIP content filter for Immich Workflows — the sidecar, the WASM plugin and
+    # the drainer that used to live in this repo. Extracted so it is installable
+    # by anyone (Docker first, Nix second) and testable against a real Immich:
+    # 169 unit tests, plus a contract suite that asserts Immich's internal schema
+    # and REST routes still match, which is the early warning for an upgrade.
+    # Same pattern as sure-nix / airtrail-nix / ryot-nix.
+    immich-clip-filter = {
+      url = "github:nSimonFR/immich-clip-filter";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete CLI tools: bump with
     #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
     gogcli-src = {
@@ -457,6 +468,7 @@
           inputs.gramps-web-nix.nixosModules.gramps-web
           inputs.beaverhabits-nix.nixosModules.beaverhabits
           inputs.ryot-nix.nixosModules.ryot
+          inputs.immich-clip-filter.nixosModules.default
           {
             home-manager = {
               useGlobalPkgs = true;
