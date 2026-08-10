@@ -114,8 +114,18 @@
     # which needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/
     # gramps-gedcom7/flask-smorest — none satisfied by our nixpkgs — so its
     # pythonRuntimeDepsCheck fails. Unpin once gramps-web-nix is compatible.
+    #
+    # This is not theoretical: Renovate proposed exactly that bump (#438), it was
+    # merged 2026-08-10, and `system.build.toplevel` stopped building —
+    #   Checking runtime dependencies for gramps_webapi-3.17.0-py3-none-any.whl
+    #     - gramps<6.1.0,>=6.0.4 not satisfied by version 6.0.3
+    #     - pillow<12.0.0,>=9.1.0 not satisfied by version 12.2.0
+    #     - sifts>=1.1.0 not satisfied by version 1.0.0
+    #     - yclade / authlib / gramps-gedcom7 / flask-smorest not installed
+    # — so the bump is now disabled in renovate.json rather than left to be
+    # re-proposed and re-merged against this warning.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/a3f86d5d557118ce2db08a2ff20e840cdff316f1";
+      url = "github:nSimonFR/gramps-web-nix/4e1740a1fdb7cccf3244d3152e26e2ce4dcab027";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
