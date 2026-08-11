@@ -7,6 +7,10 @@
 # Used by both hosts/rpi5/hermes/hermes.nix and home/claude-mtg.nix — hence the
 # per-platform table. Bump: change `version`, then refresh each hash with
 #   nix store prefetch-file https://github.com/nathanmartins/mtg-mcp/releases/download/v<ver>/mtg-mcp_<asset>.tar.gz
+#
+# Deliberately NOT given a `# renovate:` comment (see renovate.json): four
+# per-platform hashes to refresh by hand makes a version-only bump PR more
+# misleading than useful. This recipe is the supported path.
 let
   version = "2.1.0";
   assets = {

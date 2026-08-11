@@ -15,12 +15,13 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "AFFiNE is installed from a container image rather than a flake input, so the tag it pins lives in a Nix let-binding that no built-in manager reads. hosts/rpi5/affine.nix carries the matching `# renovate:` comment, and affine-sync.service installs whatever the binding says.",
+      "description": "Version pins that no built-in manager reads: AFFiNE's container tag in a Nix let-binding (hosts/rpi5/affine.nix, installed by affine-sync.service), and the hand-pinned from-source packages under pkgs/. Opt-in per package via a `# renovate:` comment directly above the version, so adding a package here is a deliberate act and the ones left out stay out. Each excluded package says why in its own file.",
       "managerFilePatterns": [
-        "hosts/rpi5/affine.nix"
+        "hosts/rpi5/affine.nix",
+        "pkgs/**/*.nix"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+version = \"(?<currentValue>[^\"]+)\";"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+version = \"(?<currentValue>[^\"]+)\";"
       ],
       "versioningTemplate": "semver"
     }
@@ -39,6 +40,15 @@
       "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",
       "matchDepNames": ["ghcr.io/toeverything/affine"],
       "ignoreUnstable": true
+    },
+    {
+      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise.",
+      "matchFileNames": ["pkgs/**"],
+      "prBodyNotes": [
+        "⚠️ **Does not build as-is.** Renovate cannot recompute Nix fixed-output hashes — the `hash` / `npmDepsHash` / `vendorHash` beside this `version` are still the old ones, and the build will fail with a hash mismatch.",
+        "To finish it: set each stale hash to `lib.fakeHash`, run `nix build .#nixosConfigurations.rpi5.config.system.build.toplevel` (or build the package directly), and copy the `got:` value from each error in turn.",
+        "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
+      ]
     }
   ]
 }

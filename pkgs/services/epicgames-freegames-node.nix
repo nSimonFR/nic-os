@@ -16,6 +16,10 @@
 # master carries ~2 years of Epic-API fixes since. Bump rev + both hashes to update.
 buildNpmPackage {
   pname = "epicgames-freegames-node";
+  # Deliberately NOT given a `# renovate:` comment (see renovate.json). This is
+  # pinned PAST the newest tag — upstream's latest release is still v5.1.0, and
+  # this commit is six months of fixes ahead of it. Wiring the tag datasource up
+  # would have Renovate propose v5.1.0 as an "upgrade", i.e. a downgrade.
   version = "5.1.0-unstable-2026-06-21";
   src = fetchFromGitHub {
     owner = "claabs";
