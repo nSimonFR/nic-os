@@ -15,7 +15,7 @@
 buildNpmPackage rec {
   pname = "ha-linky";
   # renovate: datasource=github-releases depName=bokub/ha-linky
-  version = "1.7.0";
+  version = "1.8.0";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
     # See .cursor/rules/fixed-output-names.mdc.
