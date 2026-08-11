@@ -50,6 +50,19 @@ branches:
   - name: main
     protection:
       required_pull_request_reviews: null
+      # Deliberately still null — flip it on once .github/workflows/nix.yml has
+      # had one green run and you can confirm the context names GitHub actually
+      # reports. Requiring a context that never arrives blocks main permanently,
+      # and enforce_admins: true below means not even the owner could merge past
+      # it. The four the workflow is expected to publish:
+      #
+      #   required_status_checks:
+      #     strict: false          # rebase-only merges; don't force a re-run per push to main
+      #     contexts:
+      #       - eval rpi5
+      #       - eval BeAsT
+      #       - eval nBookPro
+      #       - scripts
       required_status_checks: null
       enforce_admins: true
       restrictions: null

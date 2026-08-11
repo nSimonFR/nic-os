@@ -123,10 +123,6 @@
       file = ./secrets/affine-mcp-http-token.age;
       mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
     };
-    tavily-api-key = {
-      file = ./secrets/tavily-api-key.age;
-      mode = "0444"; # DynamicUser (open-webui) needs to read it
-    };
     dawarich-geoapify = {
       file  = ./secrets/dawarich-geoapify.age;
       owner = "dawarich";

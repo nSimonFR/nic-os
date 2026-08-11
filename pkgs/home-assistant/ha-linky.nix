@@ -17,6 +17,8 @@ buildNpmPackage rec {
   # renovate: datasource=github-releases depName=bokub/ha-linky
   version = "1.7.0";
   src = fetchFromGitHub {
+    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    name = "${pname}-${version}-source";
     owner = "bokub";
     repo = "ha-linky";
     rev = version;

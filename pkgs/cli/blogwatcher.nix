@@ -6,6 +6,8 @@ buildGoModule rec {
   version = "0.0.2";
 
   src = fetchFromGitHub {
+    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    name = "${pname}-${version}-source";
     owner = "Hyaxia";
     repo = "blogwatcher";
     rev = "v${version}";

@@ -7,7 +7,6 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
   /sure      — Sure (accounts, transactions, net worth)
-  /openwebui — Open WebUI (models, chats, messages)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -94,7 +93,6 @@ class Config:
 
     env_file: str = "/run/homepage-dashboard/env"
 
-    owui_db: str = "/var/lib/private/open-webui/data/webui.db"
     # Read karakeep's SQLite directly (read-only) instead of its HTTP API: no API
     # key needed, and — crucially — it never wakes karakeep, so the socket-activated
     # idle-sleep (hosts/rpi5/karakeep.nix) is preserved. -readonly avoids creating
@@ -144,7 +142,6 @@ class Config:
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
     sure_url: str = "http://127.0.0.1:13334/sure"
     immich_url: str = "http://127.0.0.1:2283"
-    gate_url: str = "http://127.0.0.1:4001"
     hass_url: str = "http://127.0.0.1:8123"
 
     state_dir: str = DEFAULT_STATE_DIR
@@ -162,7 +159,6 @@ class Config:
             psql=s("PSQL_BIN", "psql"),
             runuser=s("RUNUSER_BIN", "runuser"),
             env_file=s("HOMEPAGE_ENV_FILE", "/run/homepage-dashboard/env"),
-            owui_db=s("OWUI_DB", cls.owui_db),
             karakeep_db=s("KARAKEEP_DB", cls.karakeep_db),
             papra_db=s("PAPRA_DB", cls.papra_db),
             gramps_trees_glob=s("GRAMPS_TREES_GLOB", cls.gramps_trees_glob),
@@ -196,7 +192,7 @@ class Stats:
     """The published payload. Was a module-level dict plus a bare lock."""
 
     KEYS = (
-        "sure", "openwebui", "immich", "karakeep", "homeassistant",
+        "sure", "immich", "karakeep", "homeassistant",
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
@@ -297,16 +293,6 @@ def fetch_sure(cfg, run):
         "accounts": accts.get("pagination", {}).get("total_count", 0),
         "transactions": txns.get("pagination", {}).get("total_count", 0),
         "net_worth": round(assets - liabilities),
-    }
-
-
-def fetch_openwebui(cfg, run):
-    models = curl_json(cfg, run, f"{cfg.gate_url}/v1/models")
-    return {
-        "models": len(models.get("data", [])),
-        "chats": int(run([cfg.sqlite, cfg.owui_db, "SELECT COUNT(*) FROM chat;"]).strip()),
-        "messages": int(run([cfg.sqlite, cfg.owui_db,
-                             "SELECT COUNT(*) FROM chat_message;"]).strip()),
     }
 
 
@@ -627,7 +613,6 @@ def fetch_homeassistant(cfg, run):
 # a newly added widget cannot be wired into one and forgotten in the other.
 FETCHERS = {
     "sure": fetch_sure,
-    "openwebui": fetch_openwebui,
     "immich": fetch_immich,
     "nextcloud": fetch_nextcloud,
     "affine": fetch_affine,
