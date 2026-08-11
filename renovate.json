@@ -6,11 +6,25 @@
   "separateMajorMinor": true,
   "enabledManagers": [
     "nix",
-    "github-actions"
+    "github-actions",
+    "custom.regex"
   ],
   "nix": {
     "enabled": true
   },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "AFFiNE is installed from a container image rather than a flake input, so the tag it pins lives in a Nix let-binding that no built-in manager reads. hosts/rpi5/affine.nix carries the matching `# renovate:` comment, and affine-sync.service installs whatever the binding says.",
+      "managerFilePatterns": [
+        "hosts/rpi5/affine.nix"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+version = \"(?<currentValue>[^\"]+)\";"
+      ],
+      "versioningTemplate": "semver"
+    }
+  ],
   "lockFileMaintenance": {
     "enabled": true
   },
@@ -20,6 +34,11 @@
       "matchManagers": ["nix"],
       "matchPackageNames": ["gramps-web-nix"],
       "enabled": false
+    },
+    {
+      "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",
+      "matchDepNames": ["ghcr.io/toeverything/affine"],
+      "ignoreUnstable": true
     }
   ]
 }

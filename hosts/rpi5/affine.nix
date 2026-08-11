@@ -1,6 +1,11 @@
 { pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, tinyLlmGateUrl, ... }:
 let
-  version = "0.26.6";
+  # The pinned upstream image tag, and the only place the version is written.
+  # affine-sync below installs whatever this says, so a Renovate bump of this
+  # line is a real upgrade rather than a comment change. Beta tags (AFFiNE cuts
+  # one most days) are filtered out in renovate.json.
+  # renovate: datasource=docker depName=ghcr.io/toeverything/affine
+  version = "0.27.3";
   port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
   dataDir = "/var/lib/affine";
   appDir = "${dataDir}/app";
@@ -71,35 +76,56 @@ let
   dbUser = "affine";
   dbUrl = "postgresql://${dbUser}@localhost:${toString pgPort}/${dbName}?host=/run/postgresql";
 
+  # skopeo refuses to pull without a trust policy and looks for one only under
+  # $HOME and /etc/containers, neither of which NixOS populates. This worked by
+  # hand purely because the original install left a policy.json in nsimon's
+  # dotfiles in April; as a service running as root it found nothing and died.
+  # Ship the policy instead of depending on that file — it is the same
+  # accept-anything default a distro would install, and the pull is a pinned tag
+  # over TLS from ghcr.
+  skopeoPolicy = pkgs.writeText "affine-skopeo-policy.json" (builtins.toJSON {
+    default = [ { type = "insecureAcceptAnything"; } ];
+  });
+
   # Update script: pulls arm64 image, extracts app layer, patches binaries for NixOS
   updateScript = pkgs.writeShellScript "affine-update" ''
     set -euo pipefail
-    export PATH="${lib.makeBinPath [ pkgs.skopeo pkgs.jq pkgs.gnutar pkgs.gzip pkgs.coreutils pkgs.patchelf pkgs.findutils ]}"
+    export PATH="${lib.makeBinPath [ pkgs.skopeo pkgs.jq pkgs.gnutar pkgs.gzip pkgs.coreutils pkgs.patchelf pkgs.findutils pkgs.gnugrep ]}"
     export SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
 
-    TAG="''${1:-stable}"
+    # Defaults to the pinned version, not `stable` — otherwise `version` above
+    # and what actually lands in ${appDir} drift apart silently, which is how
+    # the pin sat at 0.26.6 while claiming to be the source of truth.
+    TAG="''${1:-${version}}"
     WORK=$(mktemp -d)
     trap 'rm -rf "$WORK"' EXIT
 
     echo "Pulling ghcr.io/toeverything/affine:$TAG (arm64)..."
-    skopeo copy --override-arch arm64 \
+    skopeo copy --policy ${skopeoPolicy} --override-arch arm64 \
       "docker://ghcr.io/toeverything/affine:$TAG" \
       "dir:$WORK/image"
 
-    # Find the app layer (largest layer, contains /app)
-    APP_LAYER=$(ls -S "$WORK/image"/*.* 2>/dev/null | head -1)
-    # More robust: parse manifest for layers, find the one with /app
+    # Find the app layer by asking each one whether it holds the entrypoint.
+    #
+    # The subshell drops pipefail for the duration: `grep -q` exits at the
+    # first match and SIGPIPEs `tar`, so under pipefail the pipeline reports
+    # failure precisely when it succeeds. That, plus grep missing from PATH
+    # above, is why this loop never once matched and the "largest layer"
+    # fallback it used to seed was quietly doing all the work. The fallback is
+    # gone rather than fixed: it turned an unidentifiable image into a
+    # confusing tar error several steps downstream.
+    APP_LAYER=""
     MANIFEST="$WORK/image/manifest.json"
     for digest in $(jq -r '.layers[].digest' "$MANIFEST"); do
       BLOB="$WORK/image/$(echo "$digest" | cut -d: -f2)"
-      if tar tzf "$BLOB" 2>/dev/null | grep -q "^app/dist/main.js$"; then
+      if ( set +o pipefail; tar tzf "$BLOB" 2>/dev/null | grep -q "^app/dist/main.js$" ); then
         APP_LAYER="$BLOB"
         break
       fi
     done
 
     if [ -z "$APP_LAYER" ]; then
-      echo "ERROR: could not find app layer in image"
+      echo "ERROR: no layer in ghcr.io/toeverything/affine:$TAG contains app/dist/main.js" >&2
       exit 1
     fi
 
@@ -131,6 +157,11 @@ let
     mv "${appDir}.new" "${appDir}"
     rm -rf "${appDir}.old"
 
+    # The layer unpacks as root; the service runs as ${dbUser}. tmpfiles' `Z`
+    # rule fixes this at activation, but affine-sync can run after that point,
+    # so don't rely on the ordering.
+    chown -R ${dbUser}:${dbUser} "${appDir}"
+
     VERSION=$(jq -r .version "${appDir}/package.json")
     echo "AFFiNE $VERSION installed. Restart the service:"
     echo "  sudo systemctl restart affine-migrate affine"
@@ -152,11 +183,44 @@ in
     description = "AFFiNE PostgreSQL setup";
   };
 
+  # ── Version reconciliation ────────────────────────────────────────────
+  # What turns a Renovate bump of `version` into an actual upgrade: compare the
+  # installed bundle against the pin on every activation and re-run the updater
+  # when they differ. Matching versions cost one jq call and no network.
+  #
+  # The unit text embeds `version`, so a bump changes the unit and systemd
+  # restarts it on switch; an unchanged version leaves RemainAfterExit=true
+  # holding, and nothing re-runs.
+  #
+  # `wants`, not `requires`, downstream: if ghcr is unreachable the pull fails,
+  # systemd-failed-alert fires, and AFFiNE keeps serving the version already on
+  # disk instead of being held down by a network hiccup.
+  systemd.services.affine-sync = {
+    description = "Reconcile installed AFFiNE with the pinned version";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    script = ''
+      INSTALLED=$(${pkgs.jq}/bin/jq -re .version ${appDir}/package.json 2>/dev/null || echo none)
+      if [ "$INSTALLED" = "${version}" ]; then
+        echo "AFFiNE ${version} already installed"
+        exit 0
+      fi
+      echo "AFFiNE $INSTALLED installed, pinned at ${version} — updating"
+      exec ${updateScript} ${version}
+    '';
+  };
+
   # ── Prisma migrations ─────────────────────────────────────────────────
   systemd.services.affine-migrate = {
     description = "AFFiNE database migrations";
-    after = [ "affine-pg-setup.service" ];
+    after = [ "affine-pg-setup.service" "affine-sync.service" ];
     requires = [ "affine-pg-setup.service" ];
+    wants = [ "affine-sync.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
@@ -232,10 +296,23 @@ in
       RESULT="''${RESULT//@GCAL_CLIENT_SECRET@/$CSE}"
       echo "$RESULT" > "$CONF"
 
-      # Patch hardcoded cloud worker URLs in client JS bundle.
-      # The desktop app (Electron) does not override these fallback
-      # endpoints via DI, so link-preview/image-proxy requests go to
-      # the cloud worker instead of our local server.
+      # ── Bundle patches ──────────────────────────────────────────────
+      # Both rewrite minified JS, so nothing anchors them but esbuild's
+      # output, and both re-run on every start (the swap in affine-sync
+      # drops an unpatched bundle in place). Each therefore asserts its
+      # own post-condition rather than its match count: applying cleanly
+      # and having-been-applied-already are both success, a pattern that
+      # no longer matches is a hard failure.
+      #
+      # This is not hypothetical. 0.26.6 → 0.27.3 renamed the minifier's
+      # locals in the origin check (`if(!n&&!a)` → `if(!a&&!n)`), which
+      # the old fixed-string sed would have skipped in silence, leaving
+      # the desktop app's images broken with the unit reporting healthy.
+
+      # Cloud worker URL → our own origin. The desktop app (Electron)
+      # does not override these fallback endpoints via DI, so
+      # link-preview/image-proxy requests would otherwise go to the
+      # cloud worker instead of our local server.
       CLOUD="https://affine-worker.toeverything.workers.dev"
       SELF="https://${tailnetFqdn}/affine"
       for f in ${appDir}/static/js/*.js; do
@@ -243,13 +320,27 @@ in
           ${pkgs.gnused}/bin/sed -i "s|$CLOUD|$SELF|g" "$f"
         fi
       done
+      if grep -rq "$CLOUD" ${appDir}/static/js/ 2>/dev/null; then
+        echo "affine: cloud worker URL survived patching — check static/js" >&2
+        exit 1
+      fi
 
       # Allow image-proxy requests with no Origin/Referer header.
       # Electron <img> tags don't send either header, causing the
       # server to reject with "Invalid header". Change the check
       # from "reject if neither matches" to "reject only if a
       # header is present but doesn't match".
-      ${pkgs.gnused}/bin/sed -i 's#if(!n&&!a)throw this.logger.error("Invalid Origin","ERROR"#if(!n\&\&!a\&\&(o||i))throw this.logger.error("Invalid Origin","ERROR"#' ${appDir}/dist/main.js
+      #
+      # The two header locals are read back out of the error payload
+      # (`{origin:…,referer:…}`) instead of being hardcoded, so the
+      # patch survives a reshuffle of the minifier's names. Only the
+      # image-proxy site carries the "ERROR" argument; the link-preview
+      # check next to it is deliberately left alone.
+      ${pkgs.gnused}/bin/sed -E -i 's#if\(!([A-Za-z0-9_$]+)&&!([A-Za-z0-9_$]+)\)throw this\.logger\.error\("Invalid Origin","ERROR",\{origin:([A-Za-z0-9_$]+),referer:([A-Za-z0-9_$]+)\}#if(!\1\&\&!\2\&\&(\3||\4))throw this.logger.error("Invalid Origin","ERROR",{origin:\3,referer:\4}#g' ${appDir}/dist/main.js
+      if ! grep -qE 'if\(!([A-Za-z0-9_$]+)&&!([A-Za-z0-9_$]+)&&\(([A-Za-z0-9_$]+)\|\|([A-Za-z0-9_$]+)\)\)throw this\.logger\.error\("Invalid Origin","ERROR"' ${appDir}/dist/main.js; then
+        echo "affine: image-proxy origin check did not match — the ${version} bundle changed shape" >&2
+        exit 1
+      fi
 
       exec ${nodejs}/bin/node ${appDir}/dist/main.js
     '';
