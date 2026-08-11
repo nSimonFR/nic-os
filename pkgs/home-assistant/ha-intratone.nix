@@ -20,7 +20,7 @@ buildHomeAssistantComponent rec {
   owner = "GuiHash";
   domain = "intratone";
   # renovate: datasource=github-releases depName=GuiHash/ha-intratone extractVersion=^v(?<version>.+)$
-  version = "0.3.2";
+  version = "0.9.3";
   src = fetchFromGitHub {
     owner = "GuiHash";
     repo = "ha-intratone";
