@@ -3,7 +3,7 @@
 buildGoModule rec {
   pname = "blogwatcher";
   # renovate: datasource=github-releases depName=Hyaxia/blogwatcher extractVersion=^v(?<version>.+)$
-  version = "0.0.2";
+  version = "0.0.3";
 
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
