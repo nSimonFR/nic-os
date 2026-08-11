@@ -14,7 +14,7 @@
 
 # Pinned to master HEAD (2026-06-21): the tagged v5.1.0 release is from 2024;
 # master carries ~2 years of Epic-API fixes since. Bump rev + both hashes to update.
-buildNpmPackage {
+buildNpmPackage rec {
   pname = "epicgames-freegames-node";
   # Deliberately NOT given a `# renovate:` comment (see renovate.json). This is
   # pinned PAST the newest tag — upstream's latest release is still v5.1.0, and
@@ -22,6 +22,10 @@ buildNpmPackage {
   # would have Renovate propose v5.1.0 as an "upgrade", i.e. a downgrade.
   version = "5.1.0-unstable-2026-06-21";
   src = fetchFromGitHub {
+    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # This one is pinned to a bare commit, which is exactly the case that used to
+    # go silent: `rev` moves, `version` moves with it, and the FOD path did not.
+    name = "${pname}-${version}-source";
     owner = "claabs";
     repo = "epicgames-freegames-node";
     rev = "53fde0c27477338296ef3657658f5c63f1e5c380";

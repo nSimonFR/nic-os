@@ -42,7 +42,7 @@
       "ignoreUnstable": true
     },
     {
-      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise.",
+      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise. The `src` half of that promise only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'. Drop the `name` and a stale src hash goes back to silently reusing the old tree.",
       "matchFileNames": ["pkgs/**"],
       "prBodyNotes": [
         "⚠️ **Does not build as-is.** Renovate cannot recompute Nix fixed-output hashes — the `hash` / `npmDepsHash` / `vendorHash` beside this `version` are still the old ones, and the build will fail with a hash mismatch.",

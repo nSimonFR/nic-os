@@ -28,15 +28,21 @@
 let
   aruco = callPackage "${path}/pkgs/by-name/op/opentrack/aruco.nix" { };
   xplaneSdk = fetchzip {
+    # The SDK version lives in the URL's basename but fetchzip names itself
+    # "source" regardless, so bumping to XPSDK412 with a stale `hash` would
+    # silently reuse 411. See pkgs/README.md, "Fixed-output names".
+    name = "xplane-sdk-411-source";
     url = "https://developer.x-plane.com/wp-content/plugins/code-sample-generation/sdk_zip_files/XPSDK411.zip";
     hash = "sha256-zay5QrHJctllVFl+JhlyTDzH68h5UoxncEt+TpW3UgI=";
   };
 in
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "opentrack-sc";
   version = "2024.1.1-sc";
 
   src = fetchFromGitHub {
+    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    name = "${pname}-${version}-source";
     owner = "Priton-CE";
     repo = "opentrack-StarCitizen";
     rev = "4dd97af0f139f3ddc8f34a24ee961a1046015d3f";

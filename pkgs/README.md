@@ -56,6 +56,45 @@ nothing. Several are single-platform in practice — `tobii/*`, `rgb/*` and
 `services/ble-scale-sync` are built on the rpi5 (aarch64). Where upstream
 declares it, that constraint is in the derivation's `meta.platforms`.
 
+## Fixed-output names
+
+**Every `fetchFromGitHub` / `fetchzip` / `fetchurl` here passes an explicit
+`name` containing the version.** Not cosmetic — it is what makes a wrong hash
+fail.
+
+A fixed-output derivation's store path is keyed on `(outputHash, name)` and
+nothing else. `fetchFromGitHub` and `fetchzip` default `name` to the constant
+string `"source"`, so two different `rev`s with the same stale `hash` resolve to
+the *same* path. If that path is already in the store, Nix never fetches: the
+build succeeds and ships the old tree. `sure-0.7.3` ran as v0.7.2 for a day
+exactly this way.
+
+`fetchurl` inherits the URL's basename instead, which is safe *when the basename
+carries the version* — `tobii-stream-engine-4.24.0-linux-x86_64.tar.gz` is fine
+and needs no `name`. `mtg-mcp_Linux_arm64.tar.gz` is not, and does.
+
+So:
+
+```nix
+src = fetchFromGitHub {
+  name = "${pname}-${version}-source";   # ← without this, a stale hash is silent
+  owner = "…";
+  rev = "v${version}";
+  hash = "sha256-…";
+};
+```
+
+This matters most for the packages Renovate touches. Renovate rewrites `version`
+(and `rev` with it) but cannot recompute a Nix fixed-output hash, so every such
+PR arrives with a stale `hash` beside a new `rev` — the exact input that used to
+go silent. `npmDepsHash` and `vendorHash` were always safe here: their
+derivation names already embed `pname-version`, which is why those failed loudly
+while `src` did not.
+
+Sources that come from a `flake = false` input (`rtk`, `gogcli`, `goplaces`,
+`showmycards`) need none of this — `flake.lock` pins them by `narHash`, so there
+is no hash for a bump to leave behind.
+
 ## Verifying a move
 
 Moving a derivation should not change what gets built. The check is store-path

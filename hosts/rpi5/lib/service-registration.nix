@@ -91,6 +91,12 @@ let
 
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
 
+  # Sorted so the derivation is stable across evals; `unique` because nothing
+  # stops two services from naming one shared dump unit.
+  allBackupUnits =
+    lib.sort (a: b: a < b)
+      (lib.unique (lib.concatMap (s: s.backupUnits) (lib.attrValues cfg)));
+
   # Every service with a public face, ascending by `order`, each entry carrying
   # its attr name so consumers key on the same string every other seam does.
   # Ties break on name so the list is stable even if the uniqueness assertion is
@@ -393,6 +399,20 @@ in
       sorted by `heavyPriority`. Consumed by `nixos-rebuild-safe`
       (configuration.nix) and `auto-upgrade.nix`. Read-only — add units to the
       owning service's module.
+    '';
+  };
+
+  options.nic.backupUnits = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    readOnly = true;
+    default = allBackupUnits;
+    description = ''
+      Derived: every `nic.services.*.backupUnits` entry, deduplicated and
+      sorted. Consumed by `storj-backup.nix`, which orders restic `After=` all
+      of them — restic used to run on a 03:00 timer with an hour of jitter
+      while these dumped between 03:00 and 04:15, so it could read a `.gz`
+      mid-write and always shipped the late ones a day stale. Read-only — add
+      units to the owning service's module.
     '';
   };
 

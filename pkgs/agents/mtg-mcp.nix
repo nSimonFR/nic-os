@@ -27,6 +27,11 @@ stdenvNoCC.mkDerivation {
   inherit version;
 
   src = fetchurl {
+    # fetchurl names itself after the URL's basename, and this asset's basename
+    # carries the platform but NOT the version — so all four hashes would key on
+    # a constant name and a stale one would silently reuse the old binary.
+    # See pkgs/README.md, "Fixed-output names".
+    name = "mtg-mcp-${version}-${target.asset}.tar.gz";
     url = "https://github.com/nathanmartins/mtg-mcp/releases/download/v${version}/mtg-mcp_${target.asset}.tar.gz";
     inherit (target) hash;
   };

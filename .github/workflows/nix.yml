@@ -1,0 +1,76 @@
+# Evaluate every host and run the script tests, on every PR.
+#
+# Until now nothing did. garnix went away on 2026-07-15 (docs/adr — see the
+# known-issue note) and took the only build/eval feedback with it, so a PR that
+# broke evaluation merged clean and was discovered by hand. That matters more
+# here than in most repos: auto-upgrade.nix runs `nix flake update` + rebuild +
+# reboot unattended every Sunday at 05:00 on a headless Pi whose documented
+# recovery path is a physical power-cycle.
+#
+# Eval, not build. `system.build.toplevel.drvPath` forces the whole module tree —
+# every module imported, every option merged, every `assertions` entry checked —
+# without building a single derivation. That is the class of breakage worth
+# catching (a bad flake input, a renamed option, a failed assertion, a typo'd
+# path) and it costs a couple of minutes instead of an hour of ARM compilation.
+#
+# Everything runs on aarch64. The rpi5 config *needs* it: aperture-sync.nix reads
+# the model list out of the claude-code binary with `builtins.readFile`, which is
+# import-from-derivation — evaluating it builds an aarch64 derivation, so an
+# x86_64 runner would need QEMU. `ubuntu-24.04-arm` is a native ARM runner, free
+# for public repos. The other two configs evaluate fine there too (evaluating an
+# x86_64 or a Darwin system is architecture-independent as long as no IFD is in
+# the way, and neither has any), so one runner label covers all three.
+name: Nix
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A force-push should cancel the run it superseded rather than queue behind it.
+concurrency:
+  group: nix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    name: eval ${{ matrix.host }}
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      # One broken host should still report on the other two — the usual reason
+      # a config breaks is a shared module, and knowing whether it took all
+      # three down or just one is most of the diagnosis.
+      fail-fast: false
+      matrix:
+        include:
+          - host: rpi5
+            output: nixosConfigurations
+          - host: BeAsT
+            output: nixosConfigurations
+          - host: nBookPro
+            output: darwinConfigurations
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+      # --accept-flake-config: the flake declares nixos-raspberrypi.cachix.org,
+      # which is what keeps the rpi5 job from building its inputs from source.
+      - name: Evaluate ${{ matrix.host }}
+        run: |
+          nix eval --accept-flake-config --raw \
+            ".#${{ matrix.output }}.${{ matrix.host }}.config.system.build.toplevel.drvPath"
+
+  scripts:
+    name: scripts
+    # x86_64 on purpose: nicos-scripts is pure Python and its checks are meant to
+    # be runnable off the Pi. This is the exact command CLAUDE.md documents.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+      - name: Run the nicos-scripts test suite
+        run: nix build --accept-flake-config --print-build-logs .#checks.x86_64-linux.nicos-scripts

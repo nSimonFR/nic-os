@@ -10,7 +10,7 @@
 # Postgres). So:
 #   * the metadata DB lives on the SSD at /var/lib/papra/db.sqlite (StateDirectory)
 #     and is backed up via a nightly sqlite `.backup` timer in backups.nix
-#     (lands on /mnt/data → restic → Storj), exactly like hass / open-webui.
+#     (lands on /mnt/data → restic → Storj), exactly like hass / vaultwarden.
 #   * document files live on the HDD at /mnt/data/papra/documents so restic backs
 #     them up directly (restic only covers /mnt/data — see storj-backup.nix).
 #

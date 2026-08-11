@@ -49,7 +49,7 @@ class FakeRun:
 CFG = hs.Config(
     curl="CURL", sqlite="SQLITE", psql="PSQL", runuser="RUNUSER",
     beszel_db="/db/beszel", karakeep_db="/db/karakeep", papra_db="/db/papra",
-    vaultwarden_db="/db/vw", wakapi_db="/db/wakapi", owui_db="/db/owui",
+    vaultwarden_db="/db/vw", wakapi_db="/db/wakapi",
     beaverhabits_db="/db/habits", showmycards_db="/db/smc",
     gramps_trees_glob="/db/gramps/*/sqlite.db",
 )

@@ -13,13 +13,15 @@
   systemdLibs,
 }:
 
-buildNpmPackage {
+buildNpmPackage rec {
   pname = "ble-scale-sync";
   # Deliberately NOT given a `# renovate:` comment (see renovate.json): `rev` is
   # a bare commit, so `version` is only a label and bumping it would move
   # nothing. Upstream is at v1.22.1; picking it up means changing `rev` too.
   version = "1.21.0";
   src = fetchFromGitHub {
+    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    name = "${pname}-${version}-source";
     owner = "KristianP26";
     repo = "ble-scale-sync";
     rev = "2965b2ed09fdb0b53244bd731cbb37a52637343f";

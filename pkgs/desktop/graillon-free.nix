@@ -16,6 +16,10 @@ stdenvNoCC.mkDerivation rec {
   version = "3.2";
 
   src = fetchzip {
+    # fetchzip's default name is the constant "source", so without this a bumped
+    # `url` beside a stale `hash` would silently reuse the old unpacked tree.
+    # See pkgs/README.md, "Fixed-output names".
+    name = "${pname}-${version}-source";
     url = "https://www.auburnsounds.com/downloads/Graillon-FREE-3.2.zip";
     hash = "sha256-dtbVv3FubdgkcojUnuhbhqfb86hKwtfsV6yEM1lvtcg=";
     stripRoot = false;
