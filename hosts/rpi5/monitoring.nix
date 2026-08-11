@@ -310,53 +310,42 @@ in
   };
 
   # ── Alert: backup freshness ──────────────────────────────────────────────────
-  # Immich's database backup failed every night for 34 days and nobody noticed.
-  # Two separate things hid it, and neither is fixed by watching harder:
+  # Immich's database backup produced nothing for 34 days and nothing noticed:
+  # systemd-failed-alert only sees units and the failure was inside an app job,
+  # while Immich's own counter reported `failed 0` throughout. So watch the
+  # ARTEFACT — missing or stale is broken however it broke.
   #
-  #   * the failure was inside an APPLICATION job, not a systemd unit, so
-  #     systemd-failed-alert above could not see it;
-  #   * Immich's own status counter reported `backupDatabase: failed 0` the whole
-  #     time — the counter was not merely unhelpful, it was wrong.
+  # The Postgres list is DERIVED from services.postgresqlBackup.databases (in turn
+  # from nic.services.<name>.postgresDatabases), so a new service is covered the
+  # same day. backups.nix records what the hand-maintained list cost: it drifted
+  # both ways, dumping a database no module defines and missing one with state.
   #
-  # So this watches the ARTEFACT rather than any job. A dump that is missing or
-  # stale is a broken backup whatever the cause: unit failed, unit never
-  # scheduled, ran but wrote nothing, or wrote somewhere else entirely.
-  #
-  # The Postgres list is DERIVED from services.postgresqlBackup.databases (itself
-  # derived from nic.services.<name>.postgresDatabases), so a service added to the
-  # registry is monitored the same day. backups.nix already records what a
-  # hand-maintained list costs — that one had drifted in both directions, dumping
-  # a database no module defines any more while missing one that had real state.
+  # Root, because /mnt/data/backups is 0750 and the SQLite dirs are 0700 — as any
+  # other user find returns nothing and EVERY artefact reads as missing, which is
+  # the false alarm that teaches you to ignore the alert.
   systemd.services.backup-freshness-alert = {
     description = "Alert on missing or stale backup artefacts";
     serviceConfig = {
       Type = "oneshot";
-      # Runs as root deliberately: /mnt/data/backups/postgresql is 0750 and the
-      # per-service SQLite dirs are 0700. As anyone else `find` returns nothing
-      # and every artefact reads as "no backup found" — a false alarm that would
-      # train you to ignore this alert, which is the one failure mode it cannot
-      # afford.
       ExecStart = pkgs.writeShellScript "backup-freshness-alert" ''
-        BODY=$(${pkgs.bash}/bin/bash ${./scripts/backup-freshness.sh} 48 \
-          ${lib.escapeShellArgs (
-            (map (db: "${db}=/mnt/data/backups/postgresql/${db}.sql.gz")
-              config.services.postgresqlBackup.databases)
-            ++ (map (d: "${d}=/mnt/data/backups/${d}/*")
-              [ "hass" "vaultwarden" "gramps-web" "papra" "beaverhabits" "karakeep" ])
-          )})
-        printf '%s' "$BODY" | ${telegramAlert} backup-freshness "Backups missing or stale on rpi5"
+        for spec in ${lib.escapeShellArgs (
+          (map (db: "${db}=/mnt/data/backups/postgresql/${db}.sql.gz")
+            config.services.postgresqlBackup.databases)
+          ++ (map (d: "${d}=/mnt/data/backups/${d}")
+            [ "hass" "vaultwarden" "gramps-web" "papra" "beaverhabits" "karakeep" ])
+        )}; do
+          # -type f handles both forms: a dump named outright, or a directory
+          # whose newest file is what matters. No hit within 48h = broken.
+          [ -n "$(find "''${spec#*=}" -type f -mtime -2 -print -quit 2>/dev/null)" ] \
+            || echo "<b>''${spec%%=*}</b> — no backup newer than 48h"
+        done | ${telegramAlert} backup-freshness "Backups missing or stale on rpi5"
       '';
     };
   };
+  # Six-hourly, not daily: the threshold is 48h, so this is about a FIXED backup
+  # clearing the alert within hours rather than catching staleness sooner.
   systemd.timers.backup-freshness-alert = {
     wantedBy = [ "timers.target" ];
-    timerConfig = {
-      # Six-hourly rather than daily: the threshold is 48h, so this is not about
-      # catching a stale dump sooner — it is so a FIXED one clears the alert
-      # within hours instead of the next morning.
-      OnBootSec = "15m";
-      OnUnitActiveSec = "6h";
-      Persistent = true;
-    };
+    timerConfig = { OnBootSec = "15m"; OnUnitActiveSec = "6h"; Persistent = true; };
   };
 }
