@@ -23,6 +23,7 @@
 buildHomeAssistantComponent rec {
   owner = "ppaglier";
   domain = "voltalis";
+  # renovate: datasource=github-releases depName=ppaglier/voltalis-homeassistant
   version = "0.6.6";
   src = fetchFromGitHub {
     owner = "ppaglier";

@@ -15,6 +15,9 @@
 
 buildNpmPackage {
   pname = "ble-scale-sync";
+  # Deliberately NOT given a `# renovate:` comment (see renovate.json): `rev` is
+  # a bare commit, so `version` is only a label and bumping it would move
+  # nothing. Upstream is at v1.22.1; picking it up means changing `rev` too.
   version = "1.21.0";
   src = fetchFromGitHub {
     owner = "KristianP26";

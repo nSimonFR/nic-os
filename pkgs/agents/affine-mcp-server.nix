@@ -9,6 +9,7 @@
 
 buildNpmPackage rec {
   pname = "affine-mcp-server";
+  # renovate: datasource=github-releases depName=DAWNCR0W/affine-mcp-server extractVersion=^v(?<version>.+)$
   version = "1.13.0";
 
   src = fetchFromGitHub {
