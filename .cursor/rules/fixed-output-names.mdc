@@ -1,0 +1,74 @@
+---
+description: Every fetcher in pkgs/ must pass a version-bearing `name`, or a stale hash silently ships the old version
+globs: pkgs/**/*.nix
+alwaysApply: false
+---
+
+# Fixed-output names
+
+Every `fetchFromGitHub` / `fetchFromGitLab` / `fetchzip` / `fetchurl` in `pkgs/`
+**must pass an explicit `name` that changes with the version.**
+
+```nix
+src = fetchFromGitHub {
+  name = "${pname}-${version}-source";   # ← without this, a stale hash is silent
+  owner = "…";
+  rev = "v${version}";
+  hash = "sha256-…";
+};
+```
+
+## Why — this is the failure that does not announce itself
+
+A fixed-output derivation's store path is keyed on `(outputHash, name)` and
+nothing else. `fetchFromGitHub`, `fetchFromGitLab` and `fetchzip` default `name`
+to the constant string `"source"`.
+
+So if `rev` moves and `hash` does not, both versions resolve to the **same store
+path**. If that path is already in the store, Nix never fetches: the build
+**succeeds**, against the old source tree. `sure-0.7.3` ran as v0.7.2 for a day
+exactly this way.
+
+`npmDepsHash` and `vendorHash` never had this problem — their derivation names
+already embed `pname-version`, so a mismatch fails loudly. Only `src` was silent.
+
+This is not an edge case. Renovate rewrites `version` (and `rev` with it) on
+`pkgs/` packages and **cannot** recompute a Nix fixed-output hash, so *every*
+such PR arrives with a new `rev` beside a stale `hash`. Whether that fails loudly
+or passes silently comes down to this one attribute.
+
+## What counts as version-bearing
+
+- `"${pname}-${version}-source"` — the default; use it unless something prevents it.
+- A literal version, where no `version` attr is in scope: `"xplane-sdk-411-source"`,
+  `"openrgb-${version}-source"` after hoisting `version` into a `let`.
+- For a plain file, keep the extension: `"${pname}-${version}.pkg.tar.zst"`.
+
+`fetchurl` names itself after the URL's basename, which *often* carries the
+version — don't rely on that. Name it explicitly like everything else.
+
+## When adding `name` to an existing fetcher
+
+Renaming a fixed-output derivation changes its store path, which forces a
+re-fetch and re-verifies the declared hash against upstream. **Verify before you
+commit**, or a hash that is already stale turns into a build failure someone else
+has to diagnose:
+
+```sh
+# unpacked (fetchFromGitHub / fetchFromGitLab / fetchzip)
+nix-prefetch-url --unpack "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+nix hash to-sri --type sha256 <base32-from-above>
+
+# flat file (fetchurl)
+nix store prefetch-file --hash-type sha256 "<url>"
+```
+
+## Exceptions
+
+A source that comes from a `flake = false` input (`rtk`, `gogcli`, `goplaces`,
+`showmycards`) needs none of this — `flake.lock` pins it by `narHash`, so there
+is no fetcher call and no hash for a bump to leave behind.
+
+An upstream that genuinely has no versions (a file tracked off `master`, like the
+Forgejo theme in `hosts/rpi5/forgejo.nix`) cannot satisfy the rule. Say so in a
+comment on the fetcher rather than leaving it looking like an oversight.

@@ -15,7 +15,11 @@ repository:
   allow_merge_commit: false
   allow_rebase_merge: true
   delete_branch_on_merge: false
-  allow_auto_merge: false
+  # Lets a PR be armed with "auto-merge" and land itself once its gates pass —
+  # the required review below plus the four required status checks. Repo-level
+  # permission only: it never merges anything on its own, someone still has to
+  # arm each PR (the button, or `gh pr merge --auto --rebase`).
+  allow_auto_merge: true
 
 labels:
   - name: bug
@@ -49,20 +53,35 @@ labels:
 branches:
   - name: main
     protection:
-      required_pull_request_reviews: null
-      # Deliberately still null — flip it on once .github/workflows/nix.yml has
-      # had one green run and you can confirm the context names GitHub actually
-      # reports. Requiring a context that never arrives blocks main permanently,
-      # and enforce_admins: true below means not even the owner could merge past
-      # it. The four the workflow is expected to publish:
+      # One approval, so an armed auto-merge waits for a human as well as CI.
+      # Workable only because of the two-account split in CLAUDE.md: PRs are
+      # authored by nSimonFR-ai and approved by nSimonFR. GitHub does not let an
+      # account approve its own PR, so a PR opened by nSimonFR directly cannot be
+      # approved by anyone and will not merge — author as nSimonFR-ai.
+      required_pull_request_reviews:
+        required_approving_review_count: 1
+        # A push after approval re-opens the gate. With auto-merge armed that is
+        # the difference between "a human approved this" and "a human approved
+        # something this used to be".
+        dismiss_stale_reviews: true
+        require_code_owner_reviews: false
+      # The four jobs of .github/workflows/nix.yml. These are the context names
+      # GitHub actually reported on green runs of that workflow, not names derived
+      # from the YAML — a context that never arrives would block main permanently,
+      # and `enforce_admins: true` below means not even the owner could merge past
+      # it to fix the typo.
       #
-      #   required_status_checks:
-      #     strict: false          # rebase-only merges; don't force a re-run per push to main
-      #     contexts:
-      #       - eval rpi5
-      #       - eval BeAsT
-      #       - eval nBookPro
-      #       - scripts
-      required_status_checks: null
+      # So: if you rename a job in nix.yml, rename it here in the same commit.
+      #
+      # strict is false on purpose. `true` additionally requires a branch to be
+      # up to date with main before merging, which on a rebase-only repo means
+      # re-running all four checks after every unrelated merge.
+      required_status_checks:
+        strict: false
+        contexts:
+          - eval rpi5
+          - eval BeAsT
+          - eval nBookPro
+          - scripts
       enforce_admins: true
       restrictions: null

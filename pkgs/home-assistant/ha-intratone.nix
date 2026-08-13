@@ -22,7 +22,8 @@ buildHomeAssistantComponent rec {
   # renovate: datasource=github-releases depName=GuiHash/ha-intratone extractVersion=^v(?<version>.+)$
   version = "0.3.2";
   src = fetchFromGitHub {
-    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # Version in the name so a stale `hash` fails loudly.
+    # See .cursor/rules/fixed-output-names.mdc.
     name = "ha-${domain}-${version}-source";
     owner = "GuiHash";
     repo = "ha-intratone";

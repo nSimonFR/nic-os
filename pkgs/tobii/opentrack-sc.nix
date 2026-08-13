@@ -30,7 +30,7 @@ let
   xplaneSdk = fetchzip {
     # The SDK version lives in the URL's basename but fetchzip names itself
     # "source" regardless, so bumping to XPSDK412 with a stale `hash` would
-    # silently reuse 411. See pkgs/README.md, "Fixed-output names".
+    # silently reuse 411. See .cursor/rules/fixed-output-names.mdc.
     name = "xplane-sdk-411-source";
     url = "https://developer.x-plane.com/wp-content/plugins/code-sample-generation/sdk_zip_files/XPSDK411.zip";
     hash = "sha256-zay5QrHJctllVFl+JhlyTDzH68h5UoxncEt+TpW3UgI=";
@@ -41,7 +41,8 @@ stdenv.mkDerivation rec {
   version = "2024.1.1-sc";
 
   src = fetchFromGitHub {
-    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # Version in the name so a stale `hash` fails loudly.
+    # See .cursor/rules/fixed-output-names.mdc.
     name = "${pname}-${version}-source";
     owner = "Priton-CE";
     repo = "opentrack-StarCitizen";

@@ -20,7 +20,8 @@ buildNpmPackage rec {
   # nothing. Upstream is at v1.22.1; picking it up means changing `rev` too.
   version = "1.21.0";
   src = fetchFromGitHub {
-    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # Version in the name so a stale `hash` fails loudly.
+    # See .cursor/rules/fixed-output-names.mdc.
     name = "${pname}-${version}-source";
     owner = "KristianP26";
     repo = "ble-scale-sync";

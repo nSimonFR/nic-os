@@ -14,11 +14,15 @@
   zstd,
 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "tobii-engine";
   version = "0.1.6.193rc";
 
   src = fetchurl {
+    # fetchurl names itself after the URL's basename, which carries the
+    # version here — but rely on it explicitly, not incidentally.
+    # See .cursor/rules/fixed-output-names.mdc.
+    name = "${pname}-${version}.pkg.tar.zst";
     url = "https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer/releases/download/v1/tobii_engine_linux-0.1.6.193rc-1-x86_64.pkg.tar.zst";
     hash = "sha256-duCqFXZk7grNIsRK/4vu4EAkCZAmkYtcUrk8pKh9QcE=";
   };

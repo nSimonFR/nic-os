@@ -9,10 +9,17 @@
   fetchFromGitLab,
 }:
 
-openrgb-with-all-plugins.overrideAttrs (_: {
+let
+  # Hoisted out of the override so `src.name` can interpolate it — the fetch and
+  # the version it claims to be must move together.
+  # See .cursor/rules/fixed-output-names.mdc.
   version = "1.0rc2";
+in
+openrgb-with-all-plugins.overrideAttrs (_: {
+  inherit version;
 
   src = fetchFromGitLab {
+    name = "openrgb-${version}-source";
     owner = "CalcProgrammer1";
     repo = "OpenRGB";
     # Use release candidate 1.0rc2 - stable with LG monitor support

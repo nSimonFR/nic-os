@@ -7,11 +7,15 @@
   fetchurl,
 }:
 
-stdenv.mkDerivation {
+stdenv.mkDerivation rec {
   pname = "tobii-stream-engine";
   version = "4.24.0";
 
   src = fetchurl {
+    # fetchurl names itself after the URL's basename, which carries the
+    # version here — but rely on it explicitly, not incidentally.
+    # See .cursor/rules/fixed-output-names.mdc.
+    name = "${pname}-${version}.tar.gz";
     url = "https://raw.githubusercontent.com/megagtrwrath/tobii_eye_tracker_linux_installer/master/tobii-stream-engine-4.24.0-linux-x86_64.tar.gz";
     hash = "sha256-dItQCNLAkau14zL/dvpifynWrNc8HIVRM0O4+oFY6zA=";
   };
