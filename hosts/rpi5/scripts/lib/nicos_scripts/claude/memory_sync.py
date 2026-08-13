@@ -182,7 +182,16 @@ class MCP:
             "method": "tools/call",
             "params": {"name": name, "arguments": args},
         })
-        return json.loads(res["content"][0]["text"])
+        text = res["content"][0]["text"]
+        # A tool-level failure comes back as isError with the message as PLAIN TEXT,
+        # not JSON — "You must sign in first to access this resource." Blindly
+        # json.loads()ing that turned every real error into
+        # `JSONDecodeError: Expecting value: line 1 column 1 (char 0)`, which is what
+        # the log said for the two days AFFiNE 0.27.3's token removal had this dead:
+        # the cause was in the response the whole time and we threw it away.
+        if res.get("isError"):
+            raise RuntimeError(f"{name}: {text}")
+        return json.loads(text)
 
 
 def first_workspace_id(client):

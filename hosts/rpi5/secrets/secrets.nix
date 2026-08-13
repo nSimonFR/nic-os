@@ -21,7 +21,7 @@ in {
   "spotify-connector-env.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "vaultwarden-admin-token.age".publicKeys  = [ nsimon-age nsimon-ed25519 ];
   "restic-password.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
-  "affine-token.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "affine-mcp-cookie.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "affine-mcp-http-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
