@@ -10,7 +10,7 @@ Endpoints (one per homepage tile, three stats each):
   /openwebui — Open WebUI (models, chats, messages)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
-  /affine    — AFFiNE (workspaces, docs, storage) — GraphQL, summed across workspaces
+  /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
   /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
   /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
@@ -46,6 +46,11 @@ but unlike Sure/Immich their stats come from reading their database directly
 their HTTP API, so polling never wakes them at all and no per-app API key or
 role password is needed.
 
+AFFiNE reads its database for the second reason: it is always-on, so waking was
+never the concern, but the API token its fetcher used no longer exists in AFFiNE
+0.27.3 and cannot be re-minted. A credential that can expire under you is a
+liability for a dashboard number — see fetch_affine.
+
 State file: $STATE_DIRECTORY/stats.json (set by systemd StateDirectory=).
 Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
 
@@ -77,8 +82,6 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
 STATS_SCHEMA = 2
-
-AFFINE_QUERY = "{ workspaces { blobsSize docs(pagination: {first: 0}) { totalCount } } }"
 
 
 @dataclass(frozen=True)
@@ -130,10 +133,13 @@ class Config:
     rxresume_role: str = "reactive_resume"
     rxresume_pw_file: str = "/run/agenix/reactive-resume-db-password"
 
-    # AFFiNE (hosts/rpi5/affine.nix) and Nextcloud (hosts/rpi5/nextcloud.nix) are the two tiles
-    # that genuinely need an HTTP API — both are always-on, so the daily poll wakes
-    # nothing.
-    affine_graphql_url: str = "http://127.0.0.1:13010/graphql"
+    # AFFiNE's own Postgres (hosts/rpi5/affine.nix). Read as the postgres superuser
+    # over the Unix socket, same as forgejo/dawarich — AFFiNE connects over that
+    # socket with no password role of its own.
+    affine_db: str = "affine"
+
+    # Nextcloud (hosts/rpi5/nextcloud.nix) is the one tile left that genuinely needs
+    # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
     sure_url: str = "http://127.0.0.1:13334/sure"
@@ -168,7 +174,7 @@ class Config:
             rxresume_db=s("RXRESUME_DB", cls.rxresume_db),
             rxresume_role=s("RXRESUME_ROLE", cls.rxresume_role),
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
-            affine_graphql_url=s("AFFINE_GRAPHQL_URL", cls.affine_graphql_url),
+            affine_db=s("AFFINE_DB", cls.affine_db),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
             # STATE_DIRECTORY is set by systemd StateDirectory=.
             state_dir=s("STATE_DIRECTORY", DEFAULT_STATE_DIR),
@@ -335,19 +341,32 @@ def fetch_nextcloud(cfg, run):
 
 
 def fetch_affine(cfg, run):
-    # Summed across every workspace. The tile this replaces read workspaces[0]
-    # only, which is the 3-doc scratch workspace rather than the ~7.5k-doc main
-    # one (see project_affine_workspaces_courses) — so its numbers were both
-    # arbitrary and re-fetched every 10 seconds.
-    data = curl_json(cfg, run, cfg.affine_graphql_url,
-                     "-H", "Content-Type: application/json",
-                     "-H", f"Authorization: Bearer {env_var(cfg, 'AFFINE_TOKEN')}",
-                     "-d", json.dumps({"query": AFFINE_QUERY}))
-    workspaces = data["data"]["workspaces"]
+    # Reads AFFiNE's Postgres, NOT its GraphQL — deliberately tokenless. This used
+    # to POST `{ workspaces { blobsSize docs { totalCount } } }` with the `ut_…`
+    # Bearer token in HOMEPAGE_VAR_AFFINE_TOKEN, and AFFiNE 0.27.3 removed user
+    # access tokens from its API surface altogether (of the token mutations only
+    # createMcpCredential survives, and that one is workspace-scoped to AFFiNE's own
+    # /mcp endpoint — it cannot authenticate a GraphQL query). Every request 401ed
+    # from the 0.27.3 upgrade onward, and because a failed fetcher keeps publishing
+    # its last good numbers the tile showed two-day-old counts. There is no token to
+    # rotate back in, so the dependency is gone instead.
+    #
+    # Summed across every workspace: the tile before that read workspaces[0], which
+    # is the 3-doc scratch workspace rather than the ~7.5k-doc main one (see
+    # project_affine_workspaces_courses).
+    def count(sql):
+        return int(pg_superuser(cfg, run, cfg.affine_db, sql) or 0)
+
     return {
-        "workspaces": len(workspaces),
-        "docs": sum(w["docs"]["totalCount"] for w in workspaces),
-        "storage": sum(w["blobsSize"] for w in workspaces),
+        "workspaces": count("SELECT COUNT(*) FROM workspaces;"),
+        # workspace_pages is AFFiNE's registry of actual docs. `snapshots` holds a
+        # few more rows — one Yjs doc per workspace for the doc list itself — which
+        # are not docs anyone would count on a dashboard.
+        "docs": count("SELECT COUNT(*) FROM workspace_pages;"),
+        # deleted_at IS NULL reproduced GraphQL's blobsSize to the byte
+        # (558516275); summing every row instead over-reports by the tombstones.
+        "storage": count(
+            "SELECT COALESCE(SUM(size), 0) FROM blobs WHERE deleted_at IS NULL;"),
     }
 
 
@@ -634,17 +653,26 @@ FETCHERS = {
 # test_homepage_stats.py rather than an import-time assert.
 
 
-def run_fetcher(cfg, run, stats, key):
+def run_fetcher(cfg, run, stats, key, log=None):
     """Run one fetcher, recording either its result or its error.
 
     This is the single copy of what used to be nineteen identical
     `try/except → stats[key]["error"] = str(e)` blocks.
+
+    The failure is logged as well as recorded because Stats.error() MERGES into the
+    existing entry: a broken fetcher keeps publishing its last good numbers, and the
+    tile renders them with nothing to say they are frozen. That is how the AFFiNE
+    tile served two-day-old counts after the 0.27.3 upgrade killed its token — the
+    payload said `error` and nothing anywhere said it out loud. `journalctl -u
+    homepage-stats | grep 'fetch failed'` is now the answer to "is a tile lying?".
     """
     try:
         stats.set(key, FETCHERS[key](cfg, run))
         return True
     except Exception as e:  # noqa: BLE001 — one broken service must not stop the rest
         stats.error(key, str(e))
+        if log:
+            log(f"{key} fetch failed: {e}")
         return False
 
 
@@ -704,7 +732,7 @@ def backfill_missing(cfg, run, stats, fetched_at, log=None):
         return fetched_at
     log(f"backfilling: {', '.join(missing)}")
     for key in missing:
-        run_fetcher(cfg, run, stats, key)
+        run_fetcher(cfg, run, stats, key, log=log)
     ts = fetched_at or time.time()
     save_cache(cfg, stats, ts)
     return ts
@@ -722,7 +750,7 @@ def refresh(cfg, run, stats, initial_fetched_at, sleep=time.sleep, once=False, l
             sleep(wait)
         try:
             for key in FETCHERS:
-                run_fetcher(cfg, run, stats, key)
+                run_fetcher(cfg, run, stats, key, log=log)
             last_fetched = time.time()
             save_cache(cfg, stats, last_fetched)
         except Exception as e:  # noqa: BLE001
