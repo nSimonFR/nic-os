@@ -110,10 +110,11 @@
       file  = ./secrets/gramps-web-secret.age;
       owner = "gramps-web";
     };
-    affine-token = {
-      file = ./secrets/affine-token.age;
-      mode = "0444"; # DynamicUser (tiny-llm-gate MCP bridge, affine-mcp) needs to read it
-    };
+    # AFFiNE session cookie for affine-mcp. Replaces affine-token.age, which held a
+    # `ut_…` user access token — a credential type AFFiNE 0.27.3 deleted outright, so
+    # it 401ed everywhere and could not be re-minted. Read only by the root-run
+    # affine-mcp-env oneshot, hence no world-readable mode.
+    affine-mcp-cookie.file = ./secrets/affine-mcp-cookie.age;
     affine-gcal-oauth = {
       file = ./secrets/affine-gcal-oauth.age;
       owner = "affine";

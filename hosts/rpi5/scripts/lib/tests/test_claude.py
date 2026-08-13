@@ -782,3 +782,27 @@ def test_an_mcp_error_frame_becomes_an_exception():
     client = ms.MCP("http://mcp", "tok", opener=lambda req, timeout=None: Resp())
     with pytest.raises(RuntimeError):
         client.call("list_workspaces", {})
+
+
+def test_a_tool_level_error_surfaces_its_message_not_a_json_parse_error():
+    # affine-mcp reports a failed tool as isError with the message in PLAIN TEXT.
+    # json.loads() on that raised "Expecting value: line 1 column 1 (char 0)", so for
+    # two days the log blamed a parse bug while AFFiNE was really saying the token
+    # 0.27.3 had removed no longer authenticated anything.
+    class Resp:
+        headers = {}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def read(self):
+            return (b'data: {"jsonrpc":"2.0","id":1,"result":{"isError":true,"content":'
+                    b'[{"type":"text","text":"You must sign in first to access this '
+                    b'resource."}]}}\n')
+
+    client = ms.MCP("http://mcp", "tok", opener=lambda req, timeout=None: Resp())
+    with pytest.raises(RuntimeError, match="must sign in first"):
+        client.call("search_docs", {})
