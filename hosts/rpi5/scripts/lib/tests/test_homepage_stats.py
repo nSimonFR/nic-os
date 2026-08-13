@@ -117,6 +117,27 @@ def test_one_broken_service_does_not_stop_the_others():
     assert stats.get("karakeep")["bookmarks"] == 7
 
 
+def test_a_failed_fetcher_is_logged_not_only_recorded():
+    # Recording alone is invisible: the entry keeps its last good numbers, the tile
+    # renders them, and the `error` beside them is read by nobody. The AFFiNE token
+    # died at the 0.27.3 upgrade and the journal had not one line about it.
+    stats = hs.Stats()
+    stats.set("affine", {"docs": 7867})
+    lines = []
+
+    def explode(cfg, run):
+        raise RuntimeError("You must sign in first")
+
+    original = hs.FETCHERS["affine"]
+    hs.FETCHERS["affine"] = explode
+    try:
+        hs.run_fetcher(CFG, FakeRun(), stats, "affine", log=lines.append)
+    finally:
+        hs.FETCHERS["affine"] = original
+    assert lines == ["affine fetch failed: You must sign in first"]
+    assert stats.get("affine") == {"docs": 7867, "error": "You must sign in first"}
+
+
 def test_snapshot_is_a_copy():
     stats = hs.Stats()
     stats.set("papra", {"documents": 1})
@@ -385,17 +406,28 @@ def test_forgejo_separates_issues_from_pull_requests():
         "repositories": 31, "issues": 7, "pulls": 2}
 
 
-def test_affine_sums_across_every_workspace(tmp_path):
-    # The tile this replaced read workspaces[0] — the 3-doc scratch workspace.
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_AFFINE_TOKEN=t\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file))
-    reply = json.dumps({"data": {"workspaces": [
-        {"blobsSize": 100, "docs": {"totalCount": 3}},
-        {"blobsSize": 900, "docs": {"totalCount": 7500}},
-    ]}})
-    assert hs.fetch_affine(cfg, FakeRun([("graphql", reply)])) == {
-        "workspaces": 2, "docs": 7503, "storage": 1000}
+def test_affine_counts_docs_and_live_blobs_only():
+    def answer(cmd):
+        if "workspace_pages" in cmd:
+            return "7503"
+        if "FROM workspaces" in cmd:
+            return "4"
+        return "1000"  # blobs
+
+    assert hs.fetch_affine(CFG, FakeRun([("PSQL", answer)])) == {
+        "workspaces": 4, "docs": 7503, "storage": 1000}
+
+
+def test_affine_needs_no_token_and_never_calls_the_api():
+    # The regression this replaces: AFFiNE 0.27.3 deleted user access tokens, so the
+    # GraphQL POST 401ed and the tile served two-day-old numbers. A fetcher that
+    # holds no credential cannot break that way — assert it stays that way, and that
+    # `size` is summed only over blobs that are not tombstoned.
+    run = FakeRun([("PSQL", "1")])
+    hs.fetch_affine(CFG, run)
+    assert not any("CURL" in c for c in run.commands)
+    assert not any("Bearer" in c for c in run.commands)
+    assert any("deleted_at IS NULL" in c for c in run.commands)
 
 
 def test_home_assistant_counts_entities_by_state(tmp_path):
