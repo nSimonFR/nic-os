@@ -26,7 +26,8 @@ buildHomeAssistantComponent rec {
   # renovate: datasource=github-releases depName=ppaglier/voltalis-homeassistant
   version = "0.6.6";
   src = fetchFromGitHub {
-    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # Version in the name so a stale `hash` fails loudly.
+    # See .cursor/rules/fixed-output-names.mdc.
     name = "ha-${domain}-${version}-source";
     owner = "ppaglier";
     repo = "voltalis-homeassistant";

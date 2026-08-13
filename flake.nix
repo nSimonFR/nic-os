@@ -372,7 +372,7 @@
       # overlay (DRY).
       overlays.nic-os = nicOsOverlay;
 
-      # The only automated verification in this repo. Building nicos-scripts runs
+      # Run by .github/workflows/nix.yml on every PR. Building nicos-scripts runs
       # its pytest suite (checkPhase), so a broken connector payload fails here
       # instead of at 04:50 on a timer:
       #

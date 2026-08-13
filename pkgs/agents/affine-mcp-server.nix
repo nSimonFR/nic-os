@@ -13,9 +13,9 @@ buildNpmPackage rec {
   version = "1.13.0";
 
   src = fetchFromGitHub {
-    # `name` embeds the version on purpose — see pkgs/README.md, "Fixed-output
-    # names". Without it the fetch is keyed on (hash, "source"), so a bumped
-    # `rev` beside a stale `hash` silently reuses the old tree.
+    # `name` embeds the version on purpose: without it the fetch is keyed on
+    # (hash, "source"), so a bumped `rev` beside a stale `hash` silently reuses
+    # the old tree. See .cursor/rules/fixed-output-names.mdc.
     name = "${pname}-${version}-source";
     owner = "DAWNCR0W";
     repo = "affine-mcp-server";

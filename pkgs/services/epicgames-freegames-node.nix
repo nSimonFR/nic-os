@@ -22,7 +22,8 @@ buildNpmPackage rec {
   # would have Renovate propose v5.1.0 as an "upgrade", i.e. a downgrade.
   version = "5.1.0-unstable-2026-06-21";
   src = fetchFromGitHub {
-    # Version in the name so a stale `hash` fails loudly — see pkgs/README.md.
+    # Version in the name so a stale `hash` fails loudly.
+    # See .cursor/rules/fixed-output-names.mdc.
     # This one is pinned to a bare commit, which is exactly the case that used to
     # go silent: `rev` moves, `version` moves with it, and the FOD path did not.
     name = "${pname}-${version}-source";
