@@ -50,6 +50,16 @@ labels:
     color: ffffff
     description: This will not be worked on
 
+# probot/settings reconciles this file on push to the default branch, so nothing
+# below takes effect until the PR carrying it merges — and between merges the
+# live settings can drift from what is written here (a toggle in the web UI is
+# not reverted until the next push that touches this file). If you are comparing
+# `gh api repos/nSimonFR/nic-os/branches/main/protection` against this and they
+# disagree, that is the likely reason, not a broken app.
+#
+# One footgun worth knowing: `null` here means "do not manage", not "remove".
+# 00fd1e9 set `required_pull_request_reviews: null` expecting it to drop the
+# review requirement; the requirement is still live today.
 branches:
   - name: main
     protection:
@@ -67,9 +77,8 @@ branches:
         require_code_owner_reviews: false
       # The four jobs of .github/workflows/nix.yml. These are the context names
       # GitHub actually reported on green runs of that workflow, not names derived
-      # from the YAML — a context that never arrives would block main permanently,
-      # and `enforce_admins: true` below means not even the owner could merge past
-      # it to fix the typo.
+      # from the YAML — a context that never arrives leaves every PR waiting
+      # forever on a check that will not come.
       #
       # So: if you rename a job in nix.yml, rename it here in the same commit.
       #
@@ -83,5 +92,14 @@ branches:
           - eval BeAsT
           - eval nBookPro
           - scripts
-      enforce_admins: true
+      # Off, deliberately, and this is a change from what this file used to
+      # declare. It is the escape hatch: with a required review and four required
+      # checks, `true` means a CI outage — a runner incident, a bad flake input,
+      # a rate-limited substituter — locks main until CI recovers, including
+      # locking the PR that would fix it. On a single-maintainer repo that is a
+      # worse failure than the one it prevents.
+      #
+      # It does not weaken the normal path: the gates still apply, an override is
+      # a deliberate act.
+      enforce_admins: false
       restrictions: null
