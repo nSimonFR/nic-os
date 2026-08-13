@@ -1,0 +1,54 @@
+# Arm auto-merge on every PR, so nobody has to remember to click the button.
+#
+# `allow_auto_merge` in .github/settings.yml only grants the repo *permission* to
+# auto-merge; GitHub has no setting for "arm it by default". Each PR has to be
+# armed individually, which in practice means it gets forgotten and the PR sits
+# green and unmerged. This does it on open.
+#
+# Arming is not merging. Once armed, GitHub merges the PR only when the gates in
+# the branch protection are satisfied — one approving review, and the four checks
+# from nix.yml. So the effective rule is "merges itself once reviewed and green",
+# and the review is still a human being.
+#
+# Drafts are skipped: a draft is the one way left to say "not yet" now that every
+# ready PR arms itself. `ready_for_review` picks it up when you undraft.
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Never race two arm attempts on the same PR.
+concurrency:
+  group: auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  arm:
+    name: arm auto-merge
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge (rebase)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # --rebase because the repo allows only rebase merges (settings.yml).
+        # Re-arming an already-armed PR is a no-op, which is why `synchronize`
+        # can be in the trigger list: it re-arms a PR that lost auto-merge to a
+        # conflict once the conflict is pushed away.
+        run: |
+          gh pr merge --auto --rebase \
+            --repo "${{ github.repository }}" \
+            "${{ github.event.pull_request.number }}" \
+          || {
+            echo "::error::Could not arm auto-merge. The usual cause is that the"
+            echo "::error::repository does not allow it — check that"
+            echo "::error::allow_auto_merge is actually true on the repo, not just"
+            echo "::error::in .github/settings.yml, which is only applied if the"
+            echo "::error::probot/settings app is installed and connected."
+            exit 1
+          }
