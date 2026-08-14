@@ -45,4 +45,5 @@ in {
   "gramps-web-secret.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "epicgames-account-email.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "scale-bridge-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
+  "wealthfolio-env.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
 }

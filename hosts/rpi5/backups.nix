@@ -30,6 +30,7 @@
     "d /mnt/data/backups/papra 0750 papra papra -"
     "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
     "d /mnt/data/backups/karakeep 0750 karakeep karakeep -"
+    "d /mnt/data/backups/wealthfolio 0750 wealthfolio wealthfolio -"
   ];
 
   systemd.services.hass-backup = {
@@ -94,6 +95,34 @@
     description = "Daily BeaverHabits backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
+  };
+
+  # ── Wealthfolio (SQLite — the server edition is SQLite-only) ────────────
+  # Everything lives at /var/lib/wealthfolio on the SSD, outside /mnt/data, so
+  # restic (storj-backup.nix, which backs up /mnt/data and nothing else) would
+  # never see it. This atomic .backup is the only path the portfolio takes to
+  # Storj; nic.services.wealthfolio.backup pins it as the answer and
+  # lib/service-registration.nix asserts the unit exists.
+  #
+  # The WAL matters here: the server holds the DB open continuously (it is not
+  # socket-idle), so a plain file copy could catch a torn page. `.backup` is the
+  # online-backup API and is safe against the live writer.
+  systemd.services.wealthfolio-backup = {
+    description = "Wealthfolio database backup";
+    serviceConfig = { Type = "oneshot"; User = "wealthfolio"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/wealthfolio/wealthfolio.db ".backup '/mnt/data/backups/wealthfolio/wealthfolio-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/wealthfolio/wealthfolio-$STAMP.db"
+      ${pkgs.findutils}/bin/find /mnt/data/backups/wealthfolio -name "wealthfolio-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.wealthfolio-backup = {
+    description = "Daily Wealthfolio backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
   };
 
   # ── Karakeep (SQLite + assets) ─────────────────────────────────────────

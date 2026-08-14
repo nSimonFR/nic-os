@@ -172,6 +172,7 @@ in
     ./karakeep.nix
     ./airtrail.nix
     ./beaverhabits.nix
+    ./wealthfolio.nix
     ./showmycards.nix
     ./moxfield-sync.nix
     ./nextcloud.nix

@@ -63,6 +63,13 @@
       owner = "beaverhabits"; # EnvironmentFile for beaverhabits.service (signing secrets)
       mode = "0400";
     };
+    wealthfolio-env = {
+      file = ./secrets/wealthfolio-env.age;
+      # EnvironmentFile for wealthfolio.service: WF_SECRET_KEY (encrypts stored
+      # broker credentials) + WF_AUTH_PASSWORD_HASH (argon2id login).
+      owner = "wealthfolio";
+      mode = "0400";
+    };
     ryot-env = {
       file = ./secrets/ryot-env.age;
       owner = "ryot"; # EnvironmentFile for ryot-backend/ryot-frontend (DATABASE_URL + tokens)
