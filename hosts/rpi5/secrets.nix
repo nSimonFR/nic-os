@@ -70,6 +70,13 @@
       owner = "wealthfolio";
       mode = "0400";
     };
+    wealthfolio-sync-env = {
+      file = ./secrets/wealthfolio-sync-env.age;
+      # WF_PASSWORD for the Sure -> Wealthfolio mirror. Root-owned: the sync
+      # runs as root so it can `runuser -u postgres` into Sure's database.
+      owner = "root";
+      mode = "0400";
+    };
     ryot-env = {
       file = ./secrets/ryot-env.age;
       owner = "ryot"; # EnvironmentFile for ryot-backend/ryot-frontend (DATABASE_URL + tokens)
