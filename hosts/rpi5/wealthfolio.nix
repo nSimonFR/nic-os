@@ -61,6 +61,13 @@ in
       # binary with the real env before this landed; without it the unit would
       # have crash-looped on the first rebuild.
       WF_CORS_ALLOW_ORIGINS = config.nic.services.wealthfolio.public.publicUrl;
+      # Default is 60 minutes. There is no refresh token — instead the cookie is
+      # re-issued on any request past half the TTL, so an open tab never
+      # expires, but the installed PWA (the only way onto this from a phone;
+      # the native iOS app cannot point at a self-hosted server) hits a hard
+      # 401 after an hour of not being opened. 30 days turns "log in every
+      # time" into "log in monthly". No upper bound in config.rs.
+      WF_AUTH_TOKEN_TTL_MINUTES = "43200";
     };
 
     serviceConfig = {
@@ -104,7 +111,10 @@ in
     public = {
       order = 125; # next to AirTrail (120) in Apps
       port = 3700;
-      backend = "http://127.0.0.1:${toString internalPort}";
+      # The read-only nginx vhost from wealthfolio-sync.nix, NOT the app's own
+      # port: everything reachable from the tailnet goes through the write
+      # refusal. The sync connects to internalPort directly.
+      backend = "http://127.0.0.1:13346";
       tile = {
         name = "Wealthfolio";
         icon = "https://cdn.jsdelivr.net/gh/wealthfolio/wealthfolio@v3.6.3/apps/frontend/public/logo.svg";

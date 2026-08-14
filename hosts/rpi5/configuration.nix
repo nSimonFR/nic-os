@@ -173,6 +173,7 @@ in
     ./airtrail.nix
     ./beaverhabits.nix
     ./wealthfolio.nix
+    ./wealthfolio-sync.nix
     ./showmycards.nix
     ./moxfield-sync.nix
     ./nextcloud.nix
