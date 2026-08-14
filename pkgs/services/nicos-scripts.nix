@@ -49,6 +49,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.scale"
     "nicos_scripts.connectors.moxfield"
     "nicos_scripts.connectors.travel_cal"
+    "nicos_scripts.connectors.wealthfolio"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
     "nicos_scripts.claude.boot_resume"
