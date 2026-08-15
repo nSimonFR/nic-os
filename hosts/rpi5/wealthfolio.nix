@@ -120,6 +120,23 @@ in
         icon = "https://cdn.jsdelivr.net/gh/wealthfolio/wealthfolio@v3.6.3/apps/frontend/public/logo.svg";
         category = "Apps";
         description = "Investment portfolio tracker";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/wealthfolio";
+          refreshInterval = 3600000;
+          # No gain AMOUNT here on purpose. In HOLDINGS tracking mode — which
+          # is what the Sure mirror uses — Wealthfolio returns
+          # `amountStatus: "unavailable"`, because external cash flows are
+          # inferred from snapshot deltas rather than observed, and a transfer
+          # out of an account is indistinguishable from a loss. Deriving one
+          # anyway produced -€21k for a month that returned +3.75%. The percent
+          # is the app's own `returns.valueReturn` and is trustworthy.
+          mappings = [
+            { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
+            { field = "investments"; label = "Invested"; format = "number"; prefix = "€"; }
+            { field = "month_return"; label = "Month"; format = "percent"; }
+          ];
+        };
       };
     };
   };

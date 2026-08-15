@@ -90,6 +90,11 @@ in
       HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.agent-env.path} | cut -d= -f2)
       HOMEPAGE_VAR_HA_TOKEN=$(grep HA_TOKEN ${config.age.secrets.agent-env.path} | cut -d= -f2)
       HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=$(tr -d '\r\n' < ${config.age.secrets.nextcloud-homepage-password.path})
+      # Wealthfolio has no API key, only a session cookie behind a password —
+      # the same one the Sure mirror logs in with, so it is read from that
+      # secret rather than stored a second time. The single quotes are stripped
+      # here because this file is parsed by the fetcher, not by systemd.
+      HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=$(grep WF_PASSWORD ${config.age.secrets.wealthfolio-sync-env.path} | cut -d= -f2- | tr -d "'\"")
       ENVEOF
     '';
   };
