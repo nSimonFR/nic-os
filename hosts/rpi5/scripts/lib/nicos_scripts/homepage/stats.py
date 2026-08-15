@@ -6,8 +6,8 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (budget left, spendable cash, transactions this month) — direct Postgres
-  /wealthfolio — Wealthfolio (invested cost basis, net worth, 30-day return)
+  /sure      — Sure (spendable cash, month spend, month budget) — direct Postgres
+  /wealthfolio — Wealthfolio (net worth, invested cost basis, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 4
+STATS_SCHEMA = 5
 
 
 @dataclass(frozen=True)
@@ -314,18 +314,10 @@ def fetch_sure(cfg, run):
         SELECT COALESCE(round(sum(balance)::numeric, 2), 0) FROM accounts
         WHERE accountable_type = 'Depository' AND status <> 'draft'
     """)
-    # Every transaction this month, transfers included — this is an activity
-    # count, not a spending figure, so the `kind` filter above does not apply.
-    month_txns = pg_superuser(cfg, run, "sure_production", """
-        SELECT count(*) FROM entries e
-        JOIN transactions t ON t.id = e.entryable_id AND e.entryable_type = 'Transaction'
-        JOIN accounts a ON a.id = e.account_id
-        WHERE e.date >= date_trunc('month', CURRENT_DATE) AND a.status <> 'draft'
-    """)
     return {
-        "budget_left": round(float(budget or 0) - float(spend or 0)),
         "cash": round(float(cash or 0)),
-        "transactions_month": int(month_txns or 0),
+        "spend": round(float(spend or 0)),
+        "budget": round(float(budget or 0)),
     }
 
 
@@ -388,12 +380,19 @@ def fetch_wealthfolio(cfg, run):
         FROM daily_account_valuation
         WHERE valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
     """) or 0)
+    # Returned as a PRE-FORMATTED STRING in percentage points ("2.24"), which
+    # is not fussiness. homepage's `percent` format is
+    # `Intl.NumberFormat({style:"percent"}).format(value / 100)` — it divides by
+    # 100 and then the percent style multiplies by 100 again, so it renders the
+    # number unchanged at maximumFractionDigits 0. Feeding it the API's 0.0224
+    # displayed "0%". `float` keeps decimals but drops trailing zeros (2.20 ->
+    # "2.2"), so the only way to guarantee two places is to format here and let
+    # the tile render it as text with a "%" suffix.
     value_return = (perf.get("returns") or {}).get("valueReturn")
     return {
-        "invested": round(invested),
         "net_worth": round(assets - liabilities),
-        # A ratio from the API; the tile formats it as a percentage.
-        "return_30d": round(float(value_return), 4) if value_return is not None else None,
+        "invested": round(invested),
+        "return_30d": f"{float(value_return) * 100:.2f}" if value_return is not None else None,
     }
 
 

@@ -131,10 +131,16 @@ in
           # out of an account is indistinguishable from a loss. Deriving one
           # anyway produced -€21k for a month that returned +3.75%. The percent
           # is the app's own `returns.valueReturn` and is trustworthy.
+          #
+          # `format = "text"` and NOT "percent": homepage's percent formatter is
+          # Intl percent-style applied to (value / 100), so the two cancel and it
+          # renders the number unchanged at zero decimal places — the API's
+          # 0.0224 displayed as "0%". The fetcher formats to two places and the
+          # suffix supplies the sign.
           mappings = [
-            { field = "invested"; label = "Invested"; format = "number"; prefix = "€"; }
             { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
-            { field = "return_30d"; label = "30d"; format = "percent"; }
+            { field = "invested"; label = "Invested"; format = "number"; prefix = "€"; }
+            { field = "return_30d"; label = "30d"; format = "text"; suffix = "%"; }
           ];
         };
       };

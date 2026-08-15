@@ -210,9 +210,9 @@ in
           # number is actually complete. This tile answers what Sure is for:
           # what is left to spend, and how much has moved this month.
           mappings = [
-            { field = "budget_left"; label = "Budget left"; format = "number"; prefix = "€"; }
             { field = "cash"; label = "Cash"; format = "number"; prefix = "€"; }
-            { field = "transactions_month"; label = "Txns (month)"; format = "number"; }
+            { field = "spend"; label = "Spent"; format = "number"; prefix = "€"; }
+            { field = "budget"; label = "Budget"; format = "number"; prefix = "€"; }
           ];
         };
       };
