@@ -7,7 +7,7 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
   /sure      — Sure (spendable cash, month spend, month budget) — direct Postgres
-  /wealthfolio — Wealthfolio (net worth, invested cost basis, 30-day return)
+  /wealthfolio — Wealthfolio (net worth, invested + unrealized gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 5
+STATS_SCHEMA = 6
 
 
 @dataclass(frozen=True)
@@ -375,11 +375,17 @@ def fetch_wealthfolio(cfg, run):
     # are holdings-tracked. Cost basis is only known for what Sure knew a basis
     # for — the securities — so the ~€940 of crypto contributes market value
     # with no cost, which understates this slightly rather than inventing one.
-    invested = float(sqlite_scalar(cfg, run, cfg.wealthfolio_db, """
-        SELECT COALESCE(round(sum(CAST(cost_basis_base AS REAL)), 2), 0)
+    #
+    # Market value comes from the same row so the gain below is a difference
+    # between two numbers calculated on the same date, rather than one from the
+    # API and one from the table.
+    basis_row = sqlite_scalar(cfg, run, cfg.wealthfolio_db, """
+        SELECT COALESCE(round(sum(CAST(cost_basis_base AS REAL)), 2), 0) || '|' ||
+               COALESCE(round(sum(CAST(investment_market_value_base AS REAL)), 2), 0)
         FROM daily_account_valuation
         WHERE valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
-    """) or 0)
+    """)
+    invested, market_value = (float(x) for x in (basis_row or "0|0").split("|"))
     # Returned as a PRE-FORMATTED STRING in percentage points ("2.24"), which
     # is not fussiness. homepage's `percent` format is
     # `Intl.NumberFormat({style:"percent"}).format(value / 100)` — it divides by
@@ -389,9 +395,17 @@ def fetch_wealthfolio(cfg, run):
     # "2.2"), so the only way to guarantee two places is to format here and let
     # the tile render it as text with a "%" suffix.
     value_return = (perf.get("returns") or {}).get("valueReturn")
+    # Unrealized gain: what the holdings are worth now against what they cost.
+    # This is a POSITION gain, not a 30-day one — the 30-day AMOUNT is the
+    # figure the app declines to state (see above), whereas market value minus
+    # cost basis is exact and always available. Pre-formatted with its sign and
+    # brackets because homepage renders an additionalField next to the value
+    # with no punctuation of its own.
+    gain = market_value - invested
     return {
         "net_worth": round(assets - liabilities),
         "invested": round(invested),
+        "gain": f"({'+' if gain >= 0 else '-'}€{abs(gain):,.0f})",
         "return_30d": f"{float(value_return) * 100:.2f}" if value_return is not None else None,
     }
 
