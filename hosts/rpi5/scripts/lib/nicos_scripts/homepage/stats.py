@@ -6,8 +6,8 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (accounts, transactions, month spend vs budget)
-  /wealthfolio — Wealthfolio (net worth, investments, month return)
+  /sure      — Sure (budget left, spendable cash, transactions this month) — direct Postgres
+  /wealthfolio — Wealthfolio (invested cost basis, net worth, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -33,15 +33,17 @@ tile used to POST a GraphQL query at AFFiNE every 10 seconds. Routing everything
 through here means one fetch per day per service, and no API key or password
 sitting in the dashboard config.
 
-Refresh cadence: 86400s (daily). Sure is socket-activated (hosts/rpi5/sure.nix)
-with a 600s idle timer; the daily poll wakes it briefly (~10 min), then
-it sleeps for the next ~23h50m. The stats are written to disk after each
-refresh so a service restart preserves the last good values rather than
-serving an empty payload until the next nightly refresh.
+Refresh cadence: 86400s (daily). The stats are written to disk after each
+refresh so a service restart preserves the last good values rather than serving
+an empty payload until the next nightly refresh.
+
+Sure used to be the exception here: socket-activated with a 600s idle timer, and
+its fetcher called the REST API, so the daily poll woke Puma for ten minutes to
+read three numbers. It reads Postgres now like the rest, so nothing wakes it.
 
 Papra, Reactive Resume, Gramps Web, Vaultwarden, Wakapi, Dawarich, AirTrail
 and Forgejo are also socket-activated (except Dawarich, which is always-on),
-but unlike Sure/Immich their stats come from reading their database directly
+and their stats likewise come from reading their database directly
 (SQLite, or Postgres as the postgres superuser via peer auth) rather than
 their HTTP API, so polling never wakes them at all and no per-app API key or
 role password is needed.
@@ -82,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 3
+STATS_SCHEMA = 4
 
 
 @dataclass(frozen=True)
@@ -145,6 +147,9 @@ class Config:
     sure_url: str = "http://127.0.0.1:13334/sure"
     # The app's own bind, not the read-only :3700 vhost — see fetch_wealthfolio.
     wealthfolio_url: str = "http://127.0.0.1:13345"
+    # Cost basis is not exposed by any endpoint, only by this table. Read-only,
+    # and this service runs as root so the 0700 state dir is reachable.
+    wealthfolio_db: str = "/var/lib/wealthfolio/wealthfolio.db"
     immich_url: str = "http://127.0.0.1:2283"
     hass_url: str = "http://127.0.0.1:8123"
 
@@ -276,31 +281,19 @@ def curl_json(cfg, run, *args):
 # ── fetchers ─────────────────────────────────────────────────────────────────
 
 def fetch_sure(cfg, run):
-    key = env_var(cfg, "SURE_KEY")
-    # Sure is mounted under /sure now (RAILS_RELATIVE_URL_ROOT, see sure.nix),
-    # so its API lives at /sure/api/v1/* — the root path 404s. Hit :13334
-    # (socket-activate) so the daily poll wakes Puma briefly, then it sleeps.
-    accts = curl_json(cfg, run, f"{cfg.sure_url}/api/v1/accounts",
-                      "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json")
-    txns = curl_json(cfg, run, f"{cfg.sure_url}/api/v1/transactions?per_page=1",
-                     "-H", f"X-Api-Key: {key}", "-H", "Accept: application/json")
-    accounts = accts.get("accounts", [])
+    """This month against its budget, spendable cash, and activity.
 
-    def parse_bal(s):
-        num = re.sub(r"[^\d.\-]", "", s.replace(",", ""))
-        return float(num) if num else 0
+    Everything comes from Postgres now, which changed the shape of this fetcher
+    for the better: it used to call /api/v1/accounts and /api/v1/transactions,
+    and Sure is socket-activated with a 600s idle timer, so the daily poll woke
+    Puma for ten minutes to read three numbers. Reading the database directly
+    means it never wakes at all — the same trick papra/karakeep/vaultwarden
+    already use — and no SURE_KEY is needed.
 
-    # Net worth moved to the Wealthfolio tile, which is the thing that actually
-    # models property and the mortgage; this tile is now about the month's
-    # spending against its budget.
-    #
-    # Read from Postgres, not the REST API: /api/v1/budgets 401s (the API key
-    # scope does not cover it) and there is no budget endpoint to fall back on.
-    #
-    # `kind = 'standard'` is the whole filter, and it is load-bearing. The other
-    # kind present is `funds_movement` — transfers between the user's own
-    # accounts — which is not spending: including it put €2350 of internal
-    # moves into a €2500 budget and read as almost the whole month gone.
+    Net worth is deliberately absent: it moved to the Wealthfolio tile, which
+    is the thing that models the flat and the mortgage and is therefore the
+    only place the number is complete.
+    """
     spend = pg_superuser(cfg, run, "sure_production", """
         SELECT COALESCE(round(sum(e.amount)::numeric, 2), 0)
         FROM entries e
@@ -314,11 +307,25 @@ def fetch_sure(cfg, run):
         WHERE start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
         ORDER BY start_date DESC LIMIT 1
     """)
+    # Spendable cash: depositories only. Credit cards are liabilities and
+    # investment/crypto accounts are not cash, so neither belongs in "what is
+    # left to spend".
+    cash = pg_superuser(cfg, run, "sure_production", """
+        SELECT COALESCE(round(sum(balance)::numeric, 2), 0) FROM accounts
+        WHERE accountable_type = 'Depository' AND status <> 'draft'
+    """)
+    # Every transaction this month, transfers included — this is an activity
+    # count, not a spending figure, so the `kind` filter above does not apply.
+    month_txns = pg_superuser(cfg, run, "sure_production", """
+        SELECT count(*) FROM entries e
+        JOIN transactions t ON t.id = e.entryable_id AND e.entryable_type = 'Transaction'
+        JOIN accounts a ON a.id = e.account_id
+        WHERE e.date >= date_trunc('month', CURRENT_DATE) AND a.status <> 'draft'
+    """)
     return {
-        "accounts": accts.get("pagination", {}).get("total_count", 0),
-        "transactions": txns.get("pagination", {}).get("total_count", 0),
-        "spend": round(float(spend or 0)),
-        "budget": round(float(budget or 0)),
+        "budget_left": round(float(budget or 0) - float(spend or 0)),
+        "cash": round(float(cash or 0)),
+        "transactions_month": int(month_txns or 0),
     }
 
 
@@ -326,8 +333,8 @@ def today():
     return datetime.date.today().isoformat()
 
 
-def month_start():
-    return datetime.date.today().replace(day=1).isoformat()
+def days_ago(n):
+    return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
 
 
 def fetch_wealthfolio(cfg, run):
@@ -364,23 +371,29 @@ def fetch_wealthfolio(cfg, run):
         "-H", "Content-Type: application/json",
         "-d", json.dumps({
             "itemType": "account", "itemId": "TOTAL", "filter": {"type": "all"},
-            "startDate": month_start(), "endDate": today(),
+            "startDate": days_ago(30), "endDate": today(),
         }),
     ]))
 
     assets = float(net.get("assets", {}).get("total") or 0)
     liabilities = float(net.get("liabilities", {}).get("total") or 0)
-    investments = next(
-        (float(b.get("value") or 0) for b in net.get("assets", {}).get("breakdown", [])
-         if b.get("category") == "investments"),
-        0,
-    )
+    # What the positions cost, i.e. the money originally put in. NOT
+    # net_contribution, which is the obvious-looking field and is flat ZERO
+    # here: contributions are a transaction-mode concept, and these accounts
+    # are holdings-tracked. Cost basis is only known for what Sure knew a basis
+    # for — the securities — so the ~€940 of crypto contributes market value
+    # with no cost, which understates this slightly rather than inventing one.
+    invested = float(sqlite_scalar(cfg, run, cfg.wealthfolio_db, """
+        SELECT COALESCE(round(sum(CAST(cost_basis_base AS REAL)), 2), 0)
+        FROM daily_account_valuation
+        WHERE valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
+    """) or 0)
     value_return = (perf.get("returns") or {}).get("valueReturn")
     return {
+        "invested": round(invested),
         "net_worth": round(assets - liabilities),
-        "investments": round(investments),
         # A ratio from the API; the tile formats it as a percentage.
-        "month_return": round(float(value_return), 4) if value_return is not None else None,
+        "return_30d": round(float(value_return), 4) if value_return is not None else None,
     }
 
 
