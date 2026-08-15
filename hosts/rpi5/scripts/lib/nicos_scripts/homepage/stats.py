@@ -6,7 +6,8 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (accounts, transactions, net worth)
+  /sure      — Sure (accounts, transactions, month spend vs budget)
+  /wealthfolio — Wealthfolio (net worth, investments, month return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -59,6 +60,7 @@ substitute, which is what makes 19 fetchers checkable without the services they
 read from.
 """
 
+import datetime
 import glob
 import http.server
 import json
@@ -80,7 +82,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 2
+STATS_SCHEMA = 3
 
 
 @dataclass(frozen=True)
@@ -141,6 +143,8 @@ class Config:
     nextcloud_info_url: str = (
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
     sure_url: str = "http://127.0.0.1:13334/sure"
+    # The app's own bind, not the read-only :3700 vhost — see fetch_wealthfolio.
+    wealthfolio_url: str = "http://127.0.0.1:13345"
     immich_url: str = "http://127.0.0.1:2283"
     hass_url: str = "http://127.0.0.1:8123"
 
@@ -192,7 +196,7 @@ class Stats:
     """The published payload. Was a module-level dict plus a bare lock."""
 
     KEYS = (
-        "sure", "immich", "karakeep", "homeassistant",
+        "sure", "wealthfolio", "immich", "karakeep", "homeassistant",
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
@@ -286,13 +290,97 @@ def fetch_sure(cfg, run):
         num = re.sub(r"[^\d.\-]", "", s.replace(",", ""))
         return float(num) if num else 0
 
-    assets = sum(parse_bal(a["balance"]) for a in accounts if a["classification"] == "asset")
-    liabilities = sum(parse_bal(a["balance"]) for a in accounts
-                      if a["classification"] == "liability")
+    # Net worth moved to the Wealthfolio tile, which is the thing that actually
+    # models property and the mortgage; this tile is now about the month's
+    # spending against its budget.
+    #
+    # Read from Postgres, not the REST API: /api/v1/budgets 401s (the API key
+    # scope does not cover it) and there is no budget endpoint to fall back on.
+    #
+    # `kind = 'standard'` is the whole filter, and it is load-bearing. The other
+    # kind present is `funds_movement` — transfers between the user's own
+    # accounts — which is not spending: including it put €2350 of internal
+    # moves into a €2500 budget and read as almost the whole month gone.
+    spend = pg_superuser(cfg, run, "sure_production", """
+        SELECT COALESCE(round(sum(e.amount)::numeric, 2), 0)
+        FROM entries e
+        JOIN transactions t ON t.id = e.entryable_id AND e.entryable_type = 'Transaction'
+        JOIN accounts a ON a.id = e.account_id
+        WHERE e.date >= date_trunc('month', CURRENT_DATE)
+          AND e.amount > 0 AND t.kind = 'standard' AND a.status <> 'draft'
+    """)
+    budget = pg_superuser(cfg, run, "sure_production", """
+        SELECT COALESCE(budgeted_spending, 0) FROM budgets
+        WHERE start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
+        ORDER BY start_date DESC LIMIT 1
+    """)
     return {
         "accounts": accts.get("pagination", {}).get("total_count", 0),
         "transactions": txns.get("pagination", {}).get("total_count", 0),
+        "spend": round(float(spend or 0)),
+        "budget": round(float(budget or 0)),
+    }
+
+
+def today():
+    return datetime.date.today().isoformat()
+
+
+def month_start():
+    return datetime.date.today().replace(day=1).isoformat()
+
+
+def fetch_wealthfolio(cfg, run):
+    """Net worth and month-to-date return, from Wealthfolio's own numbers.
+
+    Everything here is what the app computes, not what this script derives.
+    That matters most for the month figure: Wealthfolio is running in HOLDINGS
+    tracking mode (the accounts are mirrored from Sure, which is balance- not
+    trade-tracked), and in that mode it explicitly REFUSES to state a gain
+    amount — `summary.amountStatus` comes back "unavailable", because external
+    cash flows are inferred from snapshot deltas rather than observed. Deriving
+    the amount here anyway gives -€21k for a month that returned +3.75%, since
+    a cash transfer out of an account is indistinguishable from a loss. So the
+    tile shows the PERCENT, which the app does compute (`returns.valueReturn`),
+    and no amount at all.
+
+    Talks to the loopback bind, deliberately: :3700 is the read-only nginx
+    vhost, and while every call here is a read, /performance/summary is a POST
+    and would have to be re-allowed there for no reason.
+    """
+    password = env_var(cfg, "WEALTHFOLIO_PASSWORD")
+    jar = os.path.join(cfg.state_dir, "wealthfolio-cookies.txt")
+    # Session lives in an HttpOnly cookie; there is no bearer-token option.
+    run([cfg.curl, "-sf", "-c", jar, "-X", "POST", f"{cfg.wealthfolio_url}/api/v1/auth/login",
+         "-H", "Content-Type: application/json",
+         "-d", json.dumps({"password": password})])
+
+    net = json.loads(run([cfg.curl, "-sf", "-b", jar,
+                          f"{cfg.wealthfolio_url}/api/v1/net-worth",
+                          "-H", "Accept: application/json"]))
+    perf = json.loads(run([
+        cfg.curl, "-sf", "-b", jar, "-X", "POST",
+        f"{cfg.wealthfolio_url}/api/v1/performance/summary",
+        "-H", "Content-Type: application/json",
+        "-d", json.dumps({
+            "itemType": "account", "itemId": "TOTAL", "filter": {"type": "all"},
+            "startDate": month_start(), "endDate": today(),
+        }),
+    ]))
+
+    assets = float(net.get("assets", {}).get("total") or 0)
+    liabilities = float(net.get("liabilities", {}).get("total") or 0)
+    investments = next(
+        (float(b.get("value") or 0) for b in net.get("assets", {}).get("breakdown", [])
+         if b.get("category") == "investments"),
+        0,
+    )
+    value_return = (perf.get("returns") or {}).get("valueReturn")
+    return {
         "net_worth": round(assets - liabilities),
+        "investments": round(investments),
+        # A ratio from the API; the tile formats it as a percentage.
+        "month_return": round(float(value_return), 4) if value_return is not None else None,
     }
 
 
@@ -613,6 +701,7 @@ def fetch_homeassistant(cfg, run):
 # a newly added widget cannot be wired into one and forgotten in the other.
 FETCHERS = {
     "sure": fetch_sure,
+    "wealthfolio": fetch_wealthfolio,
     "immich": fetch_immich,
     "nextcloud": fetch_nextcloud,
     "affine": fetch_affine,
