@@ -374,24 +374,107 @@ def test_beaverhabits_sums_across_users():
         "habits": 2, "done_today": 2, "checkins": 2}
 
 
-def test_sure_net_worth_is_assets_minus_liabilities(tmp_path):
+def test_sure_reports_the_month_against_its_budget(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
     cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
 
-    accounts = json.dumps({
-        "accounts": [
-            {"balance": "€1,234.90", "classification": "asset"},
-            {"balance": "300.00", "classification": "liability"},
-            {"balance": "", "classification": "asset"},
-        ],
-        "pagination": {"total_count": 3},
-    })
-    run = FakeRun([("accounts", accounts),
-                   ("transactions", json.dumps({"pagination": {"total_count": 3501}}))])
-    # The currency symbol, the thousands separator and an empty balance all parse.
+    run = FakeRun([
+        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 20}})),
+        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 3501}})),
+        ("FROM entries", "1928.56"),
+        ("FROM budgets", "2500.0000"),
+    ])
     assert hs.fetch_sure(cfg, run) == {
-        "accounts": 3, "transactions": 3501, "net_worth": 935}
+        "accounts": 20, "transactions": 3501, "spend": 1929, "budget": 2500}
+
+
+def test_sure_spend_excludes_transfers_between_own_accounts(tmp_path):
+    """funds_movement is money moving between the user's own accounts.
+
+    Counting it put EUR 2350 of internal moves into a EUR 2500 budget, so a
+    month that had really spent 1928 read as almost entirely gone.
+    """
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
+    cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
+    run = FakeRun([
+        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 1}})),
+        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 1}})),
+        ("FROM entries", "10"),
+        ("FROM budgets", "20"),
+    ])
+    hs.fetch_sure(cfg, run)
+    entries_query = next(c for c in run.commands if "FROM entries" in c)
+    assert "t.kind = 'standard'" in entries_query
+
+
+def test_sure_no_longer_reports_net_worth(tmp_path):
+    """It moved to the Wealthfolio tile, which models the flat and the mortgage."""
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
+    cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
+    run = FakeRun([
+        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 1}})),
+        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 1}})),
+        ("FROM entries", "1"),
+        ("FROM budgets", "2"),
+    ])
+    assert "net_worth" not in hs.fetch_sure(cfg, run)
+
+
+NET_WORTH_JSON = json.dumps({
+    "assets": {"total": 380779.95, "breakdown": [
+        {"category": "properties", "value": 338531.0},
+        {"category": "investments", "value": 35608.4},
+        {"category": "cash", "value": 6640.5},
+    ]},
+    "liabilities": {"total": 314229.0},
+})
+
+
+def wealthfolio_run(perf):
+    return FakeRun([
+        ("auth/login", ""),
+        ("net-worth", NET_WORTH_JSON),
+        ("performance/summary", perf),
+    ])
+
+
+def test_wealthfolio_nets_liabilities_off_assets(tmp_path):
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
+    cfg = hs.Config(curl="CURL", env_file=str(env_file),
+                    wealthfolio_url="http://wf", state_dir=str(tmp_path))
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.03751719}}))
+    assert hs.fetch_wealthfolio(cfg, run) == {
+        "net_worth": 66551, "investments": 35608, "month_return": 0.0375}
+
+
+def test_wealthfolio_reports_no_month_return_when_the_app_cannot_compute_one(tmp_path):
+    """In HOLDINGS mode the API returns null rather than a wrong number.
+
+    A tile field of None renders empty; inventing one from the value delta gave
+    -21k for a month that returned +3.75%, because a transfer out of an account
+    is indistinguishable from a loss.
+    """
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
+    cfg = hs.Config(curl="CURL", env_file=str(env_file),
+                    wealthfolio_url="http://wf", state_dir=str(tmp_path))
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": None}}))
+    assert hs.fetch_wealthfolio(cfg, run)["month_return"] is None
+
+
+def test_wealthfolio_uses_the_app_port_not_the_read_only_vhost(tmp_path):
+    """:3700 is the write-refusing nginx front; /performance/summary is a POST."""
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
+    cfg = hs.Config(curl="CURL", env_file=str(env_file),
+                    wealthfolio_url="http://127.0.0.1:13345", state_dir=str(tmp_path))
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.01}}))
+    hs.fetch_wealthfolio(cfg, run)
+    assert all(":3700" not in c for c in run.commands)
 
 
 def test_forgejo_separates_issues_from_pull_requests():
