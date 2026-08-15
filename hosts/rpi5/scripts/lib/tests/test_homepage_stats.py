@@ -374,107 +374,120 @@ def test_beaverhabits_sums_across_users():
         "habits": 2, "done_today": 2, "checkins": 2}
 
 
-def test_sure_reports_the_month_against_its_budget(tmp_path):
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
+SURE_ROWS = [("SELECT count(*)", "29"),
+             ("e.amount > 0", "1928.56"),
+             ("FROM budgets", "2500.0000"),
+             ("accountable_type = 'Depository'", "6640.47")]
 
-    run = FakeRun([
-        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 20}})),
-        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 3501}})),
-        ("FROM entries", "1928.56"),
-        ("FROM budgets", "2500.0000"),
-    ])
+
+def test_sure_reports_what_is_left_of_the_budget_not_what_was_spent():
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
     assert hs.fetch_sure(cfg, run) == {
-        "accounts": 20, "transactions": 3501, "spend": 1929, "budget": 2500}
+        "budget_left": 571, "cash": 6640, "transactions_month": 29}
 
 
-def test_sure_spend_excludes_transfers_between_own_accounts(tmp_path):
+def test_sure_spend_excludes_transfers_between_own_accounts():
     """funds_movement is money moving between the user's own accounts.
 
     Counting it put EUR 2350 of internal moves into a EUR 2500 budget, so a
     month that had really spent 1928 read as almost entirely gone.
     """
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
-    run = FakeRun([
-        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 1}})),
-        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 1}})),
-        ("FROM entries", "10"),
-        ("FROM budgets", "20"),
-    ])
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
     hs.fetch_sure(cfg, run)
-    entries_query = next(c for c in run.commands if "FROM entries" in c)
-    assert "t.kind = 'standard'" in entries_query
+    spend_query = next(c for c in run.commands if "e.amount > 0" in c)
+    assert "t.kind = 'standard'" in spend_query
 
 
-def test_sure_no_longer_reports_net_worth(tmp_path):
-    """It moved to the Wealthfolio tile, which models the flat and the mortgage."""
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_SURE_KEY=k\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file), sure_url="http://sure")
-    run = FakeRun([
-        ("api/v1/accounts", json.dumps({"accounts": [], "pagination": {"total_count": 1}})),
-        ("api/v1/transactions", json.dumps({"pagination": {"total_count": 1}})),
-        ("FROM entries", "1"),
-        ("FROM budgets", "2"),
-    ])
-    assert "net_worth" not in hs.fetch_sure(cfg, run)
+def test_sure_counts_every_transaction_this_month_including_transfers():
+    """The activity count is not a spending figure, so `kind` must NOT filter it."""
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
+    hs.fetch_sure(cfg, run)
+    count_query = next(c for c in run.commands if "SELECT count(*)" in c)
+    assert "kind" not in count_query
+
+
+def test_sure_cash_is_depositories_only():
+    """Credit cards are liabilities; investment accounts are not spendable cash."""
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
+    hs.fetch_sure(cfg, run)
+    cash_query = next(c for c in run.commands if "accountable_type" in c)
+    assert "'Depository'" in cash_query and "CreditCard" not in cash_query
+
+
+def test_sure_never_wakes_the_socket_activated_app():
+    """It used to call the REST API, waking Puma for ten minutes a day."""
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER", curl="CURL")
+    run = FakeRun(SURE_ROWS)
+    hs.fetch_sure(cfg, run)
+    assert all("CURL" not in c for c in run.commands)
 
 
 NET_WORTH_JSON = json.dumps({
     "assets": {"total": 380779.95, "breakdown": [
         {"category": "properties", "value": 338531.0},
         {"category": "investments", "value": 35608.4},
-        {"category": "cash", "value": 6640.5},
     ]},
     "liabilities": {"total": 314229.0},
 })
 
 
-def wealthfolio_run(perf):
+def wealthfolio_run(perf, cost_basis="25827.35"):
     return FakeRun([
         ("auth/login", ""),
         ("net-worth", NET_WORTH_JSON),
         ("performance/summary", perf),
+        ("cost_basis_base", cost_basis),
     ])
 
 
-def test_wealthfolio_nets_liabilities_off_assets(tmp_path):
+def wealthfolio_cfg(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file),
-                    wealthfolio_url="http://wf", state_dir=str(tmp_path))
-    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.03751719}}))
-    assert hs.fetch_wealthfolio(cfg, run) == {
-        "net_worth": 66551, "investments": 35608, "month_return": 0.0375}
+    return hs.Config(curl="CURL", sqlite="SQLITE", env_file=str(env_file),
+                     wealthfolio_url="http://wf", state_dir=str(tmp_path))
 
 
-def test_wealthfolio_reports_no_month_return_when_the_app_cannot_compute_one(tmp_path):
+def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
+    """net_contribution is the obvious field and is flat ZERO in holdings mode."""
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
+        "invested": 25827, "net_worth": 66551, "return_30d": 0.0224}
+
+
+def test_wealthfolio_asks_for_a_thirty_day_window(tmp_path):
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.01}}))
+    hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
+    body = next(c for c in run.commands if "performance/summary" in c)
+    assert hs.days_ago(30) in body and hs.today() in body
+
+
+def test_wealthfolio_reports_no_return_when_the_app_cannot_compute_one(tmp_path):
     """In HOLDINGS mode the API returns null rather than a wrong number.
 
     A tile field of None renders empty; inventing one from the value delta gave
     -21k for a month that returned +3.75%, because a transfer out of an account
     is indistinguishable from a loss.
     """
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file),
-                    wealthfolio_url="http://wf", state_dir=str(tmp_path))
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": None}}))
-    assert hs.fetch_wealthfolio(cfg, run)["month_return"] is None
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"] is None
 
 
 def test_wealthfolio_uses_the_app_port_not_the_read_only_vhost(tmp_path):
     """:3700 is the write-refusing nginx front; /performance/summary is a POST."""
-    env_file = tmp_path / "env"
-    env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file),
-                    wealthfolio_url="http://127.0.0.1:13345", state_dir=str(tmp_path))
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.01}}))
-    hs.fetch_wealthfolio(cfg, run)
+    hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
     assert all(":3700" not in c for c in run.commands)
+
+
+def test_wealthfolio_reads_its_database_read_only(tmp_path):
+    """Writing -wal/-shm as root would break the wealthfolio-owned service."""
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.01}}))
+    hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
+    assert any("-readonly" in c for c in run.commands if "cost_basis_base" in c)
 
 
 def test_forgejo_separates_issues_from_pull_requests():
