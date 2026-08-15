@@ -212,7 +212,11 @@ in
           mappings = [
             { field = "cash"; label = "Cash"; format = "number"; prefix = "€"; }
             { field = "spend"; label = "Spent"; format = "number"; prefix = "€"; }
-            { field = "budget"; label = "Budget"; format = "number"; prefix = "€"; }
+            {
+              field = "budget"; label = "Budget"; format = "number"; prefix = "€";
+              # What is still unspent; negative means over budget.
+              additionalField = { field = "budget_left"; format = "text"; };
+            }
           ];
         };
       };

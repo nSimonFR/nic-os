@@ -383,7 +383,15 @@ def test_sure_reports_cash_spend_and_the_month_budget():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
     run = FakeRun(SURE_ROWS)
     assert hs.fetch_sure(cfg, run) == {
-        "cash": 6640, "spend": 1929, "budget": 2500}
+        "cash": 6640, "spend": 1929, "budget": 2500, "budget_left": "(+€571)"}
+
+
+def test_overspending_the_month_shows_a_negative_remainder():
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun([("e.amount > 0", "3100.00"),
+                   ("FROM budgets", "2500.0000"),
+                   ("accountable_type = 'Depository'", "6640.47")])
+    assert hs.fetch_sure(cfg, run)["budget_left"] == "(-€600)"
 
 
 def test_sure_spend_excludes_transfers_between_own_accounts():
