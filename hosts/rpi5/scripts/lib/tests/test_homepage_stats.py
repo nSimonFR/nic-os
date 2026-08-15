@@ -374,17 +374,16 @@ def test_beaverhabits_sums_across_users():
         "habits": 2, "done_today": 2, "checkins": 2}
 
 
-SURE_ROWS = [("SELECT count(*)", "29"),
-             ("e.amount > 0", "1928.56"),
+SURE_ROWS = [("e.amount > 0", "1928.56"),
              ("FROM budgets", "2500.0000"),
              ("accountable_type = 'Depository'", "6640.47")]
 
 
-def test_sure_reports_what_is_left_of_the_budget_not_what_was_spent():
+def test_sure_reports_cash_spend_and_the_month_budget():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
     run = FakeRun(SURE_ROWS)
     assert hs.fetch_sure(cfg, run) == {
-        "budget_left": 571, "cash": 6640, "transactions_month": 29}
+        "cash": 6640, "spend": 1929, "budget": 2500}
 
 
 def test_sure_spend_excludes_transfers_between_own_accounts():
@@ -398,15 +397,6 @@ def test_sure_spend_excludes_transfers_between_own_accounts():
     hs.fetch_sure(cfg, run)
     spend_query = next(c for c in run.commands if "e.amount > 0" in c)
     assert "t.kind = 'standard'" in spend_query
-
-
-def test_sure_counts_every_transaction_this_month_including_transfers():
-    """The activity count is not a spending figure, so `kind` must NOT filter it."""
-    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
-    run = FakeRun(SURE_ROWS)
-    hs.fetch_sure(cfg, run)
-    count_query = next(c for c in run.commands if "SELECT count(*)" in c)
-    assert "kind" not in count_query
 
 
 def test_sure_cash_is_depositories_only():
@@ -455,7 +445,21 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     """net_contribution is the obvious field and is flat ZERO in holdings mode."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
-        "invested": 25827, "net_worth": 66551, "return_30d": 0.0224}
+        "net_worth": 66551, "invested": 25827, "return_30d": "2.24"}
+
+
+def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path):
+    """homepage's `percent` format divides by 100 and then Intl multiplies back,
+    so it renders the raw number at zero decimals — 0.0224 showed as "0%".
+    `float` keeps decimals but drops trailing zeros, so a flat 2.2% would lose a
+    place. Formatting here is the only way to guarantee exactly two."""
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.022}}))
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"] == "2.20"
+
+
+def test_a_negative_month_keeps_its_sign(tmp_path):
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.0151}}))
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"] == "-1.51"
 
 
 def test_wealthfolio_asks_for_a_thirty_day_window(tmp_path):
