@@ -207,13 +207,12 @@ in
           refreshInterval = 3600000;
           # Net worth moved to the Wealthfolio tile — that is the one that
           # models the flat and the mortgage, so it is the only place the
-          # number is actually complete. This tile answers the question Sure is
-          # for: how much of this month's budget is gone.
+          # number is actually complete. This tile answers what Sure is for:
+          # what is left to spend, and how much has moved this month.
           mappings = [
-            { field = "spend"; label = "Spent"; format = "number"; prefix = "€"; }
-            { field = "budget"; label = "Budget"; format = "number"; prefix = "€"; }
-            { field = "accounts"; label = "Accounts"; format = "number"; }
-            { field = "transactions"; label = "Transactions"; format = "number"; }
+            { field = "budget_left"; label = "Budget left"; format = "number"; prefix = "€"; }
+            { field = "cash"; label = "Cash"; format = "number"; prefix = "€"; }
+            { field = "transactions_month"; label = "Txns (month)"; format = "number"; }
           ];
         };
       };

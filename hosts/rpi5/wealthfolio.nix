@@ -109,7 +109,7 @@ in
     heavyPriority = 90;
 
     public = {
-      order = 125; # next to AirTrail (120) in Apps
+      order = 35; # immediately after Sure (30) — the two finance tiles read together
       port = 3700;
       # The read-only nginx vhost from wealthfolio-sync.nix, NOT the app's own
       # port: everything reachable from the tailnet goes through the write
@@ -132,9 +132,9 @@ in
           # anyway produced -€21k for a month that returned +3.75%. The percent
           # is the app's own `returns.valueReturn` and is trustworthy.
           mappings = [
+            { field = "invested"; label = "Invested"; format = "number"; prefix = "€"; }
             { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
-            { field = "investments"; label = "Invested"; format = "number"; prefix = "€"; }
-            { field = "month_return"; label = "Month"; format = "percent"; }
+            { field = "return_30d"; label = "30d"; format = "percent"; }
           ];
         };
       };
