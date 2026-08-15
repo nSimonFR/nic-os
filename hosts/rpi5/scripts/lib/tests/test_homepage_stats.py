@@ -425,12 +425,12 @@ NET_WORTH_JSON = json.dumps({
 })
 
 
-def wealthfolio_run(perf, cost_basis="25827.35"):
+def wealthfolio_run(perf, basis_row="25827.35|35610.24"):
     return FakeRun([
         ("auth/login", ""),
         ("net-worth", NET_WORTH_JSON),
         ("performance/summary", perf),
-        ("cost_basis_base", cost_basis),
+        ("cost_basis_base", basis_row),
     ])
 
 
@@ -445,7 +445,14 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     """net_contribution is the obvious field and is flat ZERO in holdings mode."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
-        "net_worth": 66551, "invested": 25827, "return_30d": "2.24"}
+        "net_worth": 66551, "invested": 25827, "gain": "(+€9,783)",
+        "return_30d": "2.24"}
+
+
+def test_a_loss_is_shown_with_a_minus_not_a_negative_inside_the_brackets(tmp_path):
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.02}}),
+                          basis_row="30000.00|27500.00")
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["gain"] == "(-€2,500)"
 
 
 def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path):
