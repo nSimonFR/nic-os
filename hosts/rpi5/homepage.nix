@@ -99,6 +99,16 @@ in
     '';
   };
 
+  # The upstream module writes services.yaml via environment.etc, which does NOT
+  # restart the service — so homepage kept serving the PREVIOUS tile config
+  # while the stats API already served the new field names, and every renamed
+  # field rendered as "NaN" until something happened to restart it. Nothing
+  # rebuilds a widget's mappings more often than a dashboard, so tie the two
+  # together explicitly.
+  systemd.services.homepage-dashboard.restartTriggers = [
+    config.environment.etc."homepage-dashboard/services.yaml".source
+  ];
+
   # Tiny stats aggregation API for homepage widgets that need data from multiple endpoints
   systemd.services.homepage-stats = {
     description = "Homepage stats aggregation (JSON on :8087)";

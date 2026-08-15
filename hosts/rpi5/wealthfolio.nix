@@ -139,7 +139,12 @@ in
           # suffix supplies the sign.
           mappings = [
             { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
-            { field = "invested"; label = "Invested"; format = "number"; prefix = "€"; }
+            {
+              field = "invested"; label = "Invested"; format = "number"; prefix = "€";
+              # Rendered next to the value by homepage, hence the brackets and
+              # sign live in the string the fetcher produces.
+              additionalField = { field = "gain"; format = "text"; };
+            }
             { field = "return_30d"; label = "30d"; format = "text"; suffix = "%"; }
           ];
         };
