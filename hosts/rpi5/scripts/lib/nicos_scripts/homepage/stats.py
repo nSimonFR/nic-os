@@ -6,7 +6,7 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (spendable cash, month spend, month budget) — direct Postgres
+  /sure      — Sure (spendable cash, month spend, month budget + what is left) — direct Postgres
   /wealthfolio — Wealthfolio (net worth, invested + unrealized gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 6
+STATS_SCHEMA = 7
 
 
 @dataclass(frozen=True)
@@ -314,10 +314,18 @@ def fetch_sure(cfg, run):
         SELECT COALESCE(round(sum(balance)::numeric, 2), 0) FROM accounts
         WHERE accountable_type = 'Depository' AND status <> 'draft'
     """)
+    spend_eur = round(float(spend or 0))
+    budget_eur = round(float(budget or 0))
+    # What is left of the month's budget, shown in brackets beside it. Same
+    # pre-formatted shape as Wealthfolio's gain, for the same reason: homepage
+    # renders an additionalField adjacent to the value with no punctuation of
+    # its own. The sign carries the meaning — negative is overspent.
+    left = budget_eur - spend_eur
     return {
         "cash": round(float(cash or 0)),
-        "spend": round(float(spend or 0)),
-        "budget": round(float(budget or 0)),
+        "spend": spend_eur,
+        "budget": budget_eur,
+        "budget_left": f"({'+' if left >= 0 else '-'}€{abs(left):,.0f})",
     }
 
 
