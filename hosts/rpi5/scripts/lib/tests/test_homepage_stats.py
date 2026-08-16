@@ -386,7 +386,7 @@ def test_sure_reports_cash_spend_and_the_month_budget():
     assert hs.fetch_sure(cfg, run) == {
         "cash": "€6,640 (240€)",
         "spend": "€1,929 (+571€)",
-        "food": "€300 (66€)"}
+        "food": "€66 (+234€)"}
 
 
 def test_the_cash_bracket_leaves_out_the_livret_a():
@@ -633,3 +633,12 @@ def test_deleted_accounts_are_excluded_from_the_valuation_sums(tmp_path):
     hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
     query = next(c for c in run.commands if "cost_basis_base" in c)
     assert query.count("EXISTS (SELECT 1 FROM accounts") >= 2
+
+
+def test_an_overspent_food_envelope_reads_negative():
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun([("WITH food AS", "300.00|412.40"),
+                   ("accountable_type = 'Depository'", "6640.47|240.47"),
+                   ("e.amount > 0", "1928.56"),
+                   ("FROM budgets", "2500.0000")])
+    assert hs.fetch_sure(cfg, run)["food"] == "€412 (-112€)"
