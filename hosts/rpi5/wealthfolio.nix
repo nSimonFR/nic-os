@@ -109,7 +109,7 @@ in
     heavyPriority = 90;
 
     public = {
-      order = 35; # immediately after Sure (30) — the two finance tiles read together
+      order = 15; # between Sure (10) and Immich (20)
       port = 3700;
       # The read-only nginx vhost from wealthfolio-sync.nix, NOT the app's own
       # port: everything reachable from the tailnet goes through the write
@@ -142,7 +142,9 @@ in
           # 0.0224 displayed as "0%". The fetcher formats to two places and the
           # suffix supplies the sign.
           mappings = [
-            { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
+            # Carries the investments total — net worth is mostly the flat, so
+            # the bracket says how much of it is actually market-exposed.
+            { field = "net_worth"; label = "Net Worth"; format = "text"; }
             # Carries "(+€9,783)" — market value less cost basis.
             { field = "invested"; label = "Invested"; format = "text"; }
             # Carries "2.24% (+€881)" — the euro figure is that percentage
