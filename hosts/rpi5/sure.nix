@@ -191,7 +191,7 @@ in
     # SCRIPT_NAME strip itself. Backend is the socket-activate port, so a request
     # wakes Puma.
     public = {
-      order   = 30;
+      order   = 10;
       port    = 443;
       backend = "http://127.0.0.1:13334";
       proxied = true;
@@ -214,10 +214,14 @@ in
           # number is actually complete. This tile answers what Sure is for:
           # what is left to spend, and how much has moved this month.
           mappings = [
-            { field = "cash"; label = "Cash"; format = "number"; prefix = "€"; }
-            { field = "spend"; label = "Spent"; format = "number"; prefix = "€"; }
-            # Carries "(+€571)" — what is still unspent, negative when over.
-            { field = "budget"; label = "Budget"; format = "text"; }
+            # Every value is pre-formatted text, brackets included — see the
+            # display note above for why they cannot be additionalFields.
+            #   Cash   total, then what is not tied up in the Livret A
+            #   Spent  the month so far, then what is left of the budget
+            #   Food   the envelope, then what has gone from it
+            { field = "cash"; label = "Cash"; format = "text"; }
+            { field = "spend"; label = "Spent"; format = "text"; }
+            { field = "food"; label = "Food"; format = "text"; }
           ];
         };
       };

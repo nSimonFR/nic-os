@@ -6,8 +6,8 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (spendable cash, month spend, month budget + what is left) — direct Postgres
-  /wealthfolio — Wealthfolio (net worth, invested + unrealized gain, 30-day return)
+  /sure      — Sure (cash + spendable, spend + budget left, food envelope) — direct Postgres
+  /wealthfolio — Wealthfolio (net worth + investments, invested + gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 8
+STATS_SCHEMA = 9
 
 
 @dataclass(frozen=True)
@@ -310,24 +310,60 @@ def fetch_sure(cfg, run):
     # Spendable cash: depositories only. Credit cards are liabilities and
     # investment/crypto accounts are not cash, so neither belongs in "what is
     # left to spend".
+    #
+    # The bracketed half excludes the Livret A, which is nearly all of the
+    # balance (EUR 6,400 of EUR 6,716) and is savings rather than money to
+    # spend this month — so the headline figure flatters what is actually
+    # available. Matched on name because Sure has no "savings" flag on a
+    # depository.
     cash = pg_superuser(cfg, run, "sure_production", """
-        SELECT COALESCE(round(sum(balance)::numeric, 2), 0) FROM accounts
+        SELECT COALESCE(round(sum(balance)::numeric, 2), 0) || '|' ||
+               COALESCE(round(sum(balance) FILTER (
+                 WHERE name NOT ILIKE '%livret%')::numeric, 2), 0)
+        FROM accounts
         WHERE accountable_type = 'Depository' AND status <> 'draft'
+    """)
+    # The food envelope, and what has gone from it. Sure budgets on the parent
+    # category and books spend against its children, so both levels count.
+    food = pg_superuser(cfg, run, "sure_production", """
+        WITH food AS (
+          SELECT id FROM categories WHERE name = '1 - Food'
+          UNION SELECT id FROM categories
+                WHERE parent_id IN (SELECT id FROM categories WHERE name = '1 - Food')
+        )
+        SELECT COALESCE((SELECT round(bc.budgeted_spending::numeric, 2)
+                         FROM budget_categories bc
+                         JOIN budgets b ON b.id = bc.budget_id
+                         JOIN categories c ON c.id = bc.category_id
+                         WHERE c.name = '1 - Food'
+                           AND b.start_date <= CURRENT_DATE AND b.end_date >= CURRENT_DATE
+                         LIMIT 1), 0) || '|' ||
+               COALESCE((SELECT round(sum(e.amount)::numeric, 2)
+                         FROM entries e
+                         JOIN transactions t ON t.id = e.entryable_id
+                                            AND e.entryable_type = 'Transaction'
+                         JOIN accounts a ON a.id = e.account_id
+                         WHERE e.date >= date_trunc('month', CURRENT_DATE)
+                           AND e.amount > 0 AND t.kind = 'standard'
+                           AND a.status <> 'draft'
+                           AND t.category_id IN (SELECT id FROM food)), 0)
     """)
     spend_eur = round(float(spend or 0))
     budget_eur = round(float(budget or 0))
+    cash_total, cash_spendable = (float(x) for x in (cash or "0|0").split("|"))
+    food_budget, food_spend = (float(x) for x in (food or "0|0").split("|"))
     # What is left of the month's budget, shown in brackets beside it. Same
     # pre-formatted shape as Wealthfolio's gain, for the same reason: homepage
     # renders an additionalField adjacent to the value with no punctuation of
     # its own. The sign carries the meaning — negative is overspent.
     left = budget_eur - spend_eur
+    # Every bracketed figure is folded into its value rather than carried as an
+    # additionalField: homepage only renders those in `display: list`, and the
+    # default block renderer drops them silently.
     return {
-        "cash": round(float(cash or 0)),
-        "spend": spend_eur,
-        # The remainder is folded into the value rather than carried as an
-        # additionalField: homepage only renders those in `display: list`, and
-        # the default block renderer drops them silently.
-        "budget": f"€{budget_eur:,.0f} ({eur(left)})",
+        "cash": f"€{cash_total:,.0f} ({eur(cash_spendable, signed=False)})",
+        "spend": f"€{spend_eur:,.0f} ({eur(left)})",
+        "food": f"€{food_budget:,.0f} ({eur(food_spend, signed=False)})",
     }
 
 
@@ -335,9 +371,15 @@ def today():
     return datetime.date.today().isoformat()
 
 
-def eur(amount):
-    """A signed euro amount for display: +EUR 9,783 / -EUR 600."""
-    return f"{'+' if amount >= 0 else '-'}€{abs(amount):,.0f}"
+def eur(amount, signed=True):
+    """A euro amount for the bracketed half of a tile value.
+
+    Sign leads, symbol trails ("+9,783€", "316€) — the main half of the value
+    keeps the leading € it has always had; only what is in brackets is written
+    the French way round.
+    """
+    sign = ("+" if amount >= 0 else "-") if signed else ""
+    return f"{sign}{abs(amount):,.0f}€"
 
 
 def days_ago(n):
@@ -445,7 +487,7 @@ def fetch_wealthfolio(cfg, run):
         pct = float(value_return) * 100
         return_30d = f"{pct:.2f}% ({eur(float(value_return) * start_value)})"
     return {
-        "net_worth": round(assets - liabilities),
+        "net_worth": f"€{assets - liabilities:,.0f} ({eur(market_value, signed=False)})",
         "invested": f"€{invested:,.0f} ({eur(gain)})",
         "return_30d": return_30d,
     }

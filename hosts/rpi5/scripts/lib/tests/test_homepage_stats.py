@@ -374,24 +374,47 @@ def test_beaverhabits_sums_across_users():
         "habits": 2, "done_today": 2, "checkins": 2}
 
 
-SURE_ROWS = [("e.amount > 0", "1928.56"),
-             ("FROM budgets", "2500.0000"),
-             ("accountable_type = 'Depository'", "6640.47")]
+SURE_ROWS = [("WITH food AS", "300.00|66.20"),
+             ("accountable_type = 'Depository'", "6640.47|240.47"),
+             ("e.amount > 0", "1928.56"),
+             ("FROM budgets", "2500.0000")]
 
 
 def test_sure_reports_cash_spend_and_the_month_budget():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
     run = FakeRun(SURE_ROWS)
     assert hs.fetch_sure(cfg, run) == {
-        "cash": 6640, "spend": 1929, "budget": "€2,500 (+€571)"}
+        "cash": "€6,640 (240€)",
+        "spend": "€1,929 (+571€)",
+        "food": "€300 (66€)"}
+
+
+def test_the_cash_bracket_leaves_out_the_livret_a():
+    """The Livret A is savings, and it is nearly the whole balance — EUR 6,400
+    of EUR 6,716 — so the headline figure badly flatters what is spendable."""
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
+    hs.fetch_sure(cfg, run)
+    cash_query = next(c for c in run.commands if "accountable_type" in c)
+    assert "livret" in cash_query.lower()
+
+
+def test_food_spend_includes_the_categorys_children():
+    """Sure budgets on '1 - Food' but books spend against Groceries etc."""
+    cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
+    run = FakeRun(SURE_ROWS)
+    hs.fetch_sure(cfg, run)
+    food_query = next(c for c in run.commands if "WITH food AS" in c)
+    assert "parent_id IN" in food_query
 
 
 def test_overspending_the_month_shows_a_negative_remainder():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
-    run = FakeRun([("e.amount > 0", "3100.00"),
-                   ("FROM budgets", "2500.0000"),
-                   ("accountable_type = 'Depository'", "6640.47")])
-    assert hs.fetch_sure(cfg, run)["budget"] == "€2,500 (-€600)"
+    run = FakeRun([("WITH food AS", "300.00|66.20"),
+                   ("accountable_type = 'Depository'", "6640.47|240.47"),
+                   ("e.amount > 0", "3100.00"),
+                   ("FROM budgets", "2500.0000")])
+    assert hs.fetch_sure(cfg, run)["spend"] == "€3,100 (-600€)"
 
 
 def test_sure_spend_excludes_transfers_between_own_accounts():
@@ -453,17 +476,17 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     """net_contribution is the obvious field and is flat ZERO in holdings mode."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
-        "net_worth": 66551,
-        "invested": "€25,827 (+€9,783)",
-        "return_30d": "2.24% (+€881)"}
+        "net_worth": "€66,551 (35,610€)",
+        "invested": "€25,827 (+9,783€)",
+        "return_30d": "2.24% (+881€)"}
 
 
 def test_a_loss_is_shown_with_a_minus_not_a_negative_inside_the_brackets(tmp_path):
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.02}}),
                           basis_row="30000.00|27500.00|39316.91")
     got = hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
-    assert got["invested"] == "€30,000 (-€2,500)"
-    assert got["return_30d"] == "-2.00% (-€786)"
+    assert got["invested"] == "€30,000 (-2,500€)"
+    assert got["return_30d"] == "-2.00% (-786€)"
 
 
 def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path):
