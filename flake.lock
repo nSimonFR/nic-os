@@ -1214,11 +1214,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786878099,
-        "narHash": "sha256-2sf8VQ5WRzSJbjKSjKWb5armw5Z/cPjGRS0lSL0q3n8=",
+        "lastModified": 1786885490,
+        "narHash": "sha256-8ACLfjy2c/nyC+6x9ySQVrReYzraE34KOx3r8kdwjws=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "a849cb3b9c0c56e1c9619563df576a9a30d009a2",
+        "rev": "5b2b905a0ec323a3a544047c7886cd1e1c8de1f2",
         "type": "github"
       },
       "original": {
