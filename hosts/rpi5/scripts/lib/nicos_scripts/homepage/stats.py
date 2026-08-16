@@ -6,7 +6,7 @@ refreshed once per day. Serves on 127.0.0.1:8087.
 
 Endpoints (one per homepage tile, three stats each):
   /          — all stats
-  /sure      — Sure (cash + spendable, spend + budget left, food envelope) — direct Postgres
+  /sure      — Sure (cash + spendable, spend + budget left, food + food left) — direct Postgres
   /wealthfolio — Wealthfolio (net worth + investments, invested + gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 9
+STATS_SCHEMA = 10
 
 
 @dataclass(frozen=True)
@@ -363,7 +363,9 @@ def fetch_sure(cfg, run):
     return {
         "cash": f"€{cash_total:,.0f} ({eur(cash_spendable, signed=False)})",
         "spend": f"€{spend_eur:,.0f} ({eur(left)})",
-        "food": f"€{food_budget:,.0f} ({eur(food_spend, signed=False)})",
+        # Same shape as Spent above: what has gone, then what is left of the
+        # envelope. Negative once the envelope is blown.
+        "food": f"€{food_spend:,.0f} ({eur(food_budget - food_spend)})",
     }
 
 
