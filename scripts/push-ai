@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Push as nSimonFR-ai, not as whoever owns the default credential.
+#
+# WHY THIS EXISTS. Branch protection on main sets require_last_push_approval,
+# which refuses an approving review from whoever pushed last. Commit authorship
+# does not enter into it — GitHub looks at the pusher. So a branch pushed over
+# the default credential (nSimonFR) can never be approved by nSimonFR, and the
+# PR sits green, approved and unmergeable, looking like the rule is broken
+# rather than like the push came from the wrong account.
+#
+# WHY A HEADER AND NOT `gh`. `gh auth token --user nSimonfr-ai` prints a token
+# but does not switch the credential helper's active account, so git would
+# still authenticate as nSimonFR. The remote also *looks* like SSH
+# (git@github.com:…) while a global `url.https://github.com/.insteadof
+# git@github.com:` rewrites it to HTTPS — which is why an HTTP header works at
+# all, and why swapping SSH keys would not.
+#
+# Usage: ./scripts/push-ai [any git push arguments]
+#            ./scripts/push-ai                       # push the current branch
+#            ./scripts/push-ai -u origin HEAD        # first push of a branch
+#            ./scripts/push-ai --force-with-lease
+#
+# A plain `git push` is still correct when a human is the one pushing: nSimonFR
+# being the last pusher is only a problem when nSimonFR also has to approve.
+set -euo pipefail
+
+if ! command -v gh >/dev/null 2>&1; then
+  echo "push-ai: gh is not on PATH — needed to mint the nSimonFR-ai token" >&2
+  exit 1
+fi
+
+if ! token=$(gh auth token --user nSimonfr-ai 2>/dev/null) || [ -z "$token" ]; then
+  echo "push-ai: no token for nSimonfr-ai. Run: gh auth login --user nSimonfr-ai" >&2
+  exit 1
+fi
+
+# base64 -w0 keeps the header on one line; GNU coreutils only, which is what
+# every host in this repo runs.
+auth=$(printf 'x-access-token:%s' "$token" | base64 -w0)
+
+git -c http.extraheader="AUTHORIZATION: basic ${auth}" push "$@"
