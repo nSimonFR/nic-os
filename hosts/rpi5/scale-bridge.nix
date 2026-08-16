@@ -12,7 +12,8 @@
 #     other root-run local daemons here, e.g. travel-cal-sync).
 #   * scale-to-ryot.service — tiny stdlib-Python shim that translates that
 #     webhook into a Ryot `createOrUpdateUserMeasurement` GraphQL mutation
-#     against the backend on 127.0.0.1:13352. Runs as the unprivileged
+#     against Ryot's socket-activation listener on 127.0.0.1:13350 (which wakes
+#     it — see ryotUrl below). Runs as the unprivileged
 #     `scale-bridge` user. Code + tests live in the nicos-scripts package
 #     (hosts/rpi5/scripts/lib/, entry point `scale-to-ryot`).
 #
@@ -29,7 +30,13 @@
 let
   shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only (8347 taken by papra-webhook)
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
-  ryotUrl = "http://127.0.0.1:13352/graphql"; # ryot-backend (see ryot.nix)
+  # Ryot's socket-activation listener + the /ryot/backend route Caddy strips —
+  # NOT ryot-backend's own 13352. Ryot sleeps when idle (ryot.nix), and a weigh-in
+  # arrives exactly when nobody has been using it, so hitting the backend port
+  # directly would connection-refuse against a stopped unit and drop the reading.
+  # Going through 13350 wakes the stack and the mutation is queued behind the
+  # readyProbe instead.
+  ryotUrl = "http://127.0.0.1:13350/ryot/backend/graphql";
 
   bleScaleSync = pkgs.callPackage ../../pkgs/services/ble-scale-sync.nix { };
 in
@@ -48,7 +55,11 @@ in
   systemd.services.scale-to-ryot = {
     description = "scale-to-ryot: webhook → Ryot measurement shim";
     wantedBy = [ "multi-user.target" ];
-    after = [ "ryot-backend.service" "network-online.target" ];
+    # Deliberately NOT ordered against ryot-backend any more. Ryot is socket
+    # activated, so it is normally stopped; the shim needs it only at the moment a
+    # weigh-in arrives, and reaching 13350 then wakes it. Ordering after it here
+    # bought nothing and cost a wake on every boot.
+    after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     environment = {
       SHIM_PORT = toString shimPort;
@@ -61,19 +72,13 @@ in
       Group = "scale-bridge";
       # SHIM_KEY + RYOT_TOKEN come from the agenix secret.
       EnvironmentFile = "/run/agenix/scale-bridge-env";
-      # Wait for the Ryot backend to actually answer before serving.
-      ExecStartPre = pkgs.writeShellScript "wait-for-ryot" ''
-        for _ in $(${pkgs.coreutils}/bin/seq 1 60); do
-          if ${pkgs.curl}/bin/curl -fsS --connect-timeout 2 -o /dev/null \
-              -X POST -H 'Content-Type: application/json' \
-              --data '{"query":"{__typename}"}' ${ryotUrl}; then
-            exit 0
-          fi
-          ${pkgs.coreutils}/bin/sleep 2
-        done
-        echo "scale-to-ryot: timed out waiting for Ryot backend" >&2
-        exit 1
-      '';
+      # No wait-for-Ryot ExecStartPre. It used to poll ryotUrl for up to 120s
+      # before serving, which under socket activation is actively wrong twice
+      # over: the poll itself WAKES Ryot, so the shim dragged all three tiers up
+      # on every boot and restart; and a cold wake is gated by a 180s readyProbe,
+      # so the 120s budget could not be met and the unit failed with
+      # result 'timeout' (seen on the switch that introduced this). The shim binds
+      # its own port and needs Ryot only when a measurement actually arrives.
       ExecStart = "${pkgs.nicos-scripts}/bin/scale-to-ryot";
       Restart = "on-failure";
       RestartSec = "15";
