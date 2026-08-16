@@ -15,6 +15,7 @@ source saying so:
 """
 
 import json
+import time
 
 import pytest
 
@@ -642,3 +643,51 @@ def test_an_overspent_food_envelope_reads_negative():
                    ("e.amount > 0", "1928.56"),
                    ("FROM budgets", "2500.0000")])
     assert hs.fetch_sure(cfg, run)["food"] == "€412 (-112€)"
+
+
+def test_a_key_holding_only_an_error_counts_as_missing():
+    """An errored tile used to freeze for 24h: the error dict is truthy, so
+    backfill skipped it and the daily tick was the next attempt."""
+    stats = hs.Stats()
+    stats.error("wealthfolio", "connection refused")
+    assert "wealthfolio" in stats.missing()
+
+
+def test_an_error_beside_good_values_does_not_count_as_missing():
+    """The last-good-values behaviour must survive — a tile with data and a
+    stale error still renders its data, and refetching it every loop would
+    hammer a service that is merely flaky."""
+    stats = hs.Stats()
+    stats.set("wealthfolio", {"net_worth": "€1"})
+    stats.error("wealthfolio", "transient")
+    assert "wealthfolio" not in stats.missing()
+
+
+def test_a_key_still_empty_after_backfill_is_retried_not_left_for_a_day(tmp_path):
+    """The recurring case: a rebuild restarts homepage-stats and the service it
+    reads together, the fetch loses the race, and the tile shows an error for
+    24h. The loser of that race is up seconds later."""
+    stats = hs.Stats()
+    for key in hs.Stats.KEYS:
+        stats.set(key, {"ok": 1})
+    stats.error("wealthfolio", "connection refused")
+    stats._data["wealthfolio"] = {"error": "connection refused"}
+
+    attempts, slept = [], []
+    def fake_fetcher(cfg, run, stats_, key, log=None):
+        attempts.append(key)
+        if len(attempts) == 1:                  # loses the race, as on a rebuild
+            stats_.error(key, "connection refused")
+            return False
+        stats_.set(key, {"net_worth": "€1"})    # up seconds later
+        return True
+
+    orig = hs.run_fetcher
+    hs.run_fetcher = fake_fetcher
+    try:
+        hs.refresh(hs.Config(state_dir=str(tmp_path)), None, stats, time.time(),
+                   sleep=slept.append, once=True, log=lambda m: None)
+    finally:
+        hs.run_fetcher = orig
+    assert "wealthfolio" in attempts
+    assert hs.RETRY_INTERVAL in slept

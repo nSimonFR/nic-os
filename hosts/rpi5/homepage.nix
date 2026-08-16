@@ -113,7 +113,12 @@ in
   systemd.services.homepage-stats = {
     description = "Homepage stats aggregation (JSON on :8087)";
     wantedBy = [ "multi-user.target" ];
-    after = [ "homepage-dashboard-env.service" ];
+    # Ordered after wealthfolio because a rebuild restarts both, and its fetcher
+    # logs in over HTTP — losing that race writes a connection-refused error
+    # into the daily cache. Ordering is not a guarantee (systemd starts, it does
+    # not wait for the port), which is why an errored key is now retried rather
+    # than frozen; this just makes the race rare instead of routine.
+    after = [ "homepage-dashboard-env.service" "wealthfolio.service" ];
     serviceConfig = {
       Type = "simple";
       Restart = "on-failure";

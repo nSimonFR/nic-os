@@ -78,6 +78,7 @@ from ..secrets import env_int, env_str
 
 DEFAULT_STATE_DIR = "/var/lib/homepage-stats"
 REFRESH_INTERVAL = 86400  # seconds — see module docstring
+RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 
 # Bump whenever a fetcher changes WHICH fields it reports (renaming wakapi's
 # heartbeats→today, say), so the cache from the previous shape is discarded.
@@ -236,8 +237,17 @@ class Stats:
                 self._data[k] = dict(payload.get(k, {}))
 
     def missing(self):
+        """Keys with no usable values — empty, or carrying only an error.
+
+        An errored key counts as missing. It used to not, and the consequence
+        was a tile frozen for 24h: a fetcher that failed once (wealthfolio
+        losing a race with its own service restart, say) wrote {"error": ...}
+        into the cache, which is truthy, so backfill skipped it and the daily
+        tick was the next attempt. Three times that needed clearing by hand.
+        """
         with self._lock:
-            return [k for k, v in self._data.items() if not v]
+            return [k for k, v in self._data.items()
+                    if not v or set(v) == {"error"}]
 
     def __contains__(self, key):
         return key in self._data
@@ -929,6 +939,14 @@ def refresh(cfg, run, stats, initial_fetched_at, sleep=time.sleep, once=False, l
     log = log or (lambda m: print(m, file=sys.stderr))
     last_fetched = backfill_missing(cfg, run, stats, initial_fetched_at, log=log)
     while True:
+        # A key that is STILL empty after the backfill gets another go in a
+        # minute rather than tomorrow. The case that keeps happening: a rebuild
+        # restarts homepage-stats and the service it reads from together, the
+        # fetch loses the race, and the tile then shows an error for 24h. One
+        # retry is enough — the loser of that race is up seconds later.
+        if stats.missing():
+            sleep(RETRY_INTERVAL)
+            backfill_missing(cfg, run, stats, last_fetched, log=log)
         next_due = last_fetched + cfg.refresh_interval
         wait = max(0, next_due - time.time())
         if wait:
