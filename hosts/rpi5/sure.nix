@@ -218,7 +218,7 @@ in
             # display note above for why they cannot be additionalFields.
             #   Cash   total, then what is not tied up in the Livret A
             #   Spent  the month so far, then what is left of the budget
-            #   Food   the envelope, then what has gone from it
+            #   Food   what has gone from the envelope, then what is left
             { field = "cash"; label = "Cash"; format = "text"; }
             { field = "spend"; label = "Spent"; format = "text"; }
             { field = "food"; label = "Food"; format = "text"; }
