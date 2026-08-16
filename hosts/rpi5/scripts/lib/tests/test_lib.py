@@ -1,5 +1,6 @@
 """Tests for the shared helpers (nicos_scripts.*)."""
 
+import inspect
 import io
 import json
 import urllib.request
@@ -181,3 +182,18 @@ def test_graphql_raises_on_graphql_level_errors():
     op = FakeOpener([json_reply({"errors": [{"message": "nope"}]})])
     with pytest.raises(RuntimeError, match="nope"):
         ryot.graphql("http://ryot/graphql", "tok", "q", {}, opener=op)
+
+
+def test_ryot_clients_outwait_a_socket_activation_cold_start():
+    # Ryot is socket-activated, and every caller of these two runs from a timer —
+    # so the first request after an idle period is answered only once the stack
+    # has started, gated by ryot.nix's 180s readyProbe. A client that gives up
+    # before then turns a cold start into a silently lost push. Guard the margin:
+    # a future edit lowering either default back under the probe fails here
+    # rather than in production, where the symptom is a missing scrobble.
+    readyprobe_budget = 180
+    assert ryot.RYOT_WAKE_TIMEOUT > readyprobe_budget
+
+    for fn in (ryot.post_export, ryot.graphql):
+        default = inspect.signature(fn).parameters["timeout"].default
+        assert default == ryot.RYOT_WAKE_TIMEOUT, fn.__name__
