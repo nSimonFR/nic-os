@@ -1,12 +1,33 @@
 {
   "_comment_mcp": "Repo-scoped Claude Code settings for nic-os. Trims per-session context: claude.ai account connectors load into EVERY project regardless of relevance, and Figma (27 tools) + Slite (39) + Slack (19) together outweigh all ~35 built-in tools. Their schemas are the fattest because of internal duplication — Slite inlines the whole sliteml 'Core rules' paragraph in create-note/append-blocks/modify-block/modify-range/update-note and twice inside edit-document's oneOf (~7 copies); Slack inlines the full Canvas-markdown spec in both slack_create_canvas and slack_update_canvas. None of the three is callable work in a NixOS config repo. Denied here rather than in home/dotfiles/claude-settings.json (user scope) so they stay available in the Trusk repos. deniedMcpServers merges across every settings scope and a deny at any level wins. Deliberately NOT disableClaudeAiConnectors: that is any-source-true and would also drop 'claude.ai Claude Code Remote', which the bridge depends on. serverName must match ~/.claude.json claudeAiMcpEverConnected verbatim (real names have spaces; mcp__claude_ai_* is only the sanitised tool prefix).",
   "deniedMcpServers": [
-    { "serverName": "claude.ai Figma" },
-    { "serverName": "claude.ai Slack" },
-    { "serverName": "claude.ai Slite" }
+    {
+      "serverName": "claude.ai Figma"
+    },
+    {
+      "serverName": "claude.ai Slack"
+    },
+    {
+      "serverName": "claude.ai Slite"
+    }
   ],
   "_comment_plugins": "The slack plugin ships 8 skills plus its own MCP server (mcp__plugin_slack_slack) — dead weight once the Slack connector is denied. It is enabled at user scope in home/dotfiles/claude-settings.json; settings precedence is user < project < local, so false here disables it for nic-os only and leaves it on elsewhere.",
   "enabledPlugins": {
     "slack@claude-plugins-official": false
+  },
+  "_comment_hooks": "Credential guards, added after nic-os#524 went wrong in three ways: a plain `git push` made nSimonFR the pusher, which under require_last_push_approval made their approval unusable; then `gh pr review --approve` recorded four approvals AS the human on the agent's own work (submitted reviews cannot be deleted); then the raw merge API succeeded where `gh pr merge` refused, because enforce_admins=false — the admin bypass d889ca0 deliberately dropped, reached by another door. Discipline failed at each step, so these are mechanical: a PreToolUse hook denies the call before it runs rather than relying on remembering a rule. `gh pr merge` without --admin stays allowed (it respects protection), as does anything routed through scripts/push-ai.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "cmd=$(jq -r '.tool_input.command // \"\"')\nd(){ jq -n --arg r \"$1\" '{hookSpecificOutput:{hookEventName:\"PreToolUse\",permissionDecision:\"deny\",permissionDecisionReason:$r}}'; exit 0; }\n# Match only at COMMAND POSITIONS — the start of each shell segment. Matching the\n# raw string anywhere also blocks merely WRITING about these commands: the first\n# version of this hook rejected the very commit that introduced it, because the\n# commit message documents the commands it forbids. A guard that stops you\n# describing the rule is a guard that gets switched off.\nsegs=$(printf '%s' \"$cmd\" | sed 's/&&/\\n/g; s/||/\\n/g; s/|/\\n/g; s/;/\\n/g')\nm(){ printf '%s' \"$segs\" | grep -qE \"$1\"; }\nhas(){ printf '%s' \"$cmd\" | grep -qE -- \"$1\"; }\n\nm '^[[:space:]]*gh +pr +review( |$)' && has '[-][-]approve' && d \"BLOCKED: the active gh account is nSimonFR — the human. Approving records a false approval AS them, on your own work, and submitted reviews cannot be deleted. Open the PR and hand it over; approval is theirs to give.\"\n\nm '^[[:space:]]*gh +pr +merge( |$)' && has '[-][-]admin' && d \"BLOCKED: admin bypass. nic-os dropped it deliberately (d889ca0). If a merge genuinely needs a bypass, say so and let the user decide.\"\n\nm '^[[:space:]]*gh +api( |$)' && has '/merge([^a-z]|$)' && d \"BLOCKED: raw merge API. enforce_admins=false, so this merges as nSimonFR even when gh pr merge refuses on BLOCKED — the same admin bypass by another door. Report the block instead of routing around it.\"\n\nm '^[[:space:]]*git +(-[^ ]+ +[^ ]+ +)*push( |$)' && ! has 'push-ai' && d \"BLOCKED: use ./scripts/push-ai. Branch protection sets require_last_push_approval and GitHub looks at the PUSHER, not commit authorship — a plain git push makes nSimonFR the pusher, so their approval becomes unusable and the PR sits green, approved and unmergeable.\"\n\nexit 0",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }
