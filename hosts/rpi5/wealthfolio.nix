@@ -124,6 +124,11 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/wealthfolio";
           refreshInterval = 3600000;
+          # display=list, NOT the default block: homepage's block renderer draws
+          # `<Block label value />` and ignores additionalField entirely — the
+          # bracketed figures simply never appeared. Only the list branch of
+          # customapi/component.jsx renders a mapping's additionalField.
+          display = "list";
           # No gain AMOUNT here on purpose. In HOLDINGS tracking mode — which
           # is what the Sure mirror uses — Wealthfolio returns
           # `amountStatus: "unavailable"`, because external cash flows are
