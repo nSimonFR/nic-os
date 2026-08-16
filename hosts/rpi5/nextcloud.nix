@@ -419,7 +419,7 @@ in
     # bare URL here. Prefix stripped before forwarding — NC routes at its vhost
     # root, and overwritewebroot only rewrites the links it generates.
     public = {
-      order    = 10;
+      order    = 25;
       port     = 443;
       backend  = "http://127.0.0.1:8091";
       proxied  = true;
