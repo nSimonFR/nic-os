@@ -100,6 +100,148 @@ ACCOUNT_TYPES = {
 # is a table that drifts from it.
 SYMBOL_OVERRIDES = {}
 
+# The single goal mirrored into Wealthfolio, funded by EVERY account it holds.
+#
+# One, not five, and that is forced rather than chosen: Wealthfolio caps an
+# account's allocation across all goals at 100%, so a goal that takes the whole
+# portfolio leaves nothing for a second. Sure keeps the finer-grained goals —
+# they are mostly funded from the Livret A, which is not mirrored here anyway —
+# and Wealthfolio answers the one question it is placed to answer: how far along
+# is everything, together.
+GOAL_TITLE = "Millionaire"
+
+# Stamped on every goal this sync creates, and the ONLY thing that makes one
+# safe to delete. Goals are writable from the UI (the read-only proxy lets
+# /goals through precisely so they can be), so pruning on "not in my list"
+# would silently eat a goal made by hand between two runs.
+MIRRORED_MARK = "Mirrored from Sure"
+
+# Sure account name -> the Wealthfolio account it is folded into.
+#
+# Sure models a crypto wallet as one account PER TOKEN, so a single Ledger
+# address shows up four times (ETH, Stader, Stader ETHx, the staking position)
+# and the portfolio reads as seven wallets when there are two. Grouping is by
+# custodian, which is the thing that actually exists.
+#
+# The address is the evidence: 0x38...b5b7 appears in four of these names, so
+# they are provably one wallet. The Ledger/Kraken split for the rest, and which
+# custodian holds bc1q...k6aq, came from nSimon — Sure records neither, and it
+# truncates the Bitcoin address past the character that would distinguish his
+# two bc1q wallets.
+WALLET_GROUPS = {
+    "Bitcoin (bc1q...k6aq)": "Ledger",
+    "Ethereum (0x38...b5b7)": "Ledger",
+    "Stader (0x38...b5b7)": "Ledger",
+    "Stader ETHx (0x38...b5b7)": "Ledger",
+    "ETH (Stader Staking)": "Ledger",
+    "Ledger Staking": "Ledger",
+    "Ethereum (0x21...756F)": "Kraken",
+}
+
+
+# Cost basis nSimon reconstructed from his own exchange exports, for positions
+# where Sure has none. Keyed (grouped account, symbol) -> total paid IN THE
+# POSITION'S OWN QUOTE CURRENCY; the per-unit avgCost is derived from whatever
+# quantity is held, so it stays right as the position moves.
+#
+# Quote currency, NOT euros, and that bit is easy to get wrong: avgCost is
+# denominated in the position's currency, so feeding a EUR figure to a USD-quoted
+# pair had Wealthfolio read €195 as $195 and report a €13 loss on a position
+# that is actually up. Converted once, at the rate on each purchase date, rather
+# than at today's — the receipts are euros and the euros were spent then.
+#
+# NOT in Sure, deliberately. Sure only ever writes cost_basis_source
+# 'calculated' — a hand-written 'manual' row is a value its own code does not
+# produce, and its next CoinStats resync would recompute over it with nothing
+# reporting the loss. Here it is versioned, reviewed and survives.
+#
+# BTC €195 = two purchases, both later withdrawn to a self-custody wallet:
+#   2024-06-24  0.00076430 BTC  €45.00   } Finary export, account emptied
+#   2024-06-25  0.00086848 BTC  €50.00   } 2024-09-21, reconciles to 1.4e-7
+#   2024-06-01  0.00151000 BTC  €100.00    second platform (recurring buy)
+# Acquired 0.00314474 against 0.00287313 held; the 0.00027 gap is network fees,
+# which are part of the cost, so the full €195 stands. In USD, at EURUSD on the
+# day of each purchase: €100 x 1.08354 (2024-06-01) + €95 x 1.06878 (2024-06-24
+# and -25) = $209.88.
+COST_BASIS_OVERRIDES = {
+    ("Ledger", "BTC-USD"): 209.88,
+    # ETH is NOT here. Only 0.111 of the 0.481 held is accounted for (€328), and
+    # 0.4001 of the remainder is the staking position, whose origin is not in
+    # any export seen so far. A basis covering 23% of a holding would render as
+    # a ~4x gain — a confident wrong number where the blank was honest.
+}
+
+
+def wallet_group(name):
+    """The account a Sure account is folded into — itself, if ungrouped."""
+    return WALLET_GROUPS.get(name, name)
+
+
+def group_accounts(accounts):
+    """Sure accounts keyed by the Wealthfolio account they become.
+
+    A group's currency is the one MOST of its members use, not the first one
+    seen: five of the six Ledger accounts are USD and "Ledger Staking" is EUR,
+    so picking arbitrarily would flip the whole wallet's denomination depending
+    on sort order. The positions carry their own currency regardless — this is
+    only what the account is labelled in.
+    """
+    groups = {}
+    for a in accounts:
+        groups.setdefault(wallet_group(a["name"]), []).append(a)
+    out = {}
+    for name, members in groups.items():
+        counts = {}
+        for m in members:
+            counts[m["currency"]] = counts.get(m["currency"], 0) + 1
+        currency = max(sorted(counts), key=lambda c: counts[c])
+        out[name] = {**members[0], "name": name, "currency": currency}
+    return out
+
+
+def apply_cost_basis_overrides(account, rows):
+    """Fill in a basis Sure does not have, from COST_BASIS_OVERRIDES.
+
+    Only ever fills a GAP — a position Sure already prices keeps Sure's number,
+    so this cannot quietly diverge from the source of truth.
+    """
+    for pos in rows:
+        total = COST_BASIS_OVERRIDES.get((account, pos["symbol"]))
+        qty = float(pos["quantity"] or 0)
+        if total is None or "avgCost" in pos or not qty:
+            continue
+        pos["avgCost"] = f"{total / qty:.8f}"
+    return rows
+
+
+def merge_positions(rows):
+    """Sum positions that share a symbol after grouping.
+
+    Necessary, not defensive: a Ledger wallet holds ETH at the 0x38 address AND
+    ETH via Ledger Staking, which are two Sure accounts and one holding. Left
+    unmerged the snapshot carries the symbol twice and the second silently wins.
+
+    Cost basis is summed as MONEY (quantity x avgCost) and re-divided, so the
+    result is a weighted average rather than the average of two averages. A
+    position missing avgCost makes the whole merged basis unknown — averaging
+    over the ones that have it would understate what was paid.
+    """
+    merged = {}
+    for pos in rows:
+        cur = merged.get(pos["symbol"])
+        if cur is None:
+            merged[pos["symbol"]] = dict(pos)
+            continue
+        qty = float(cur["quantity"]) + float(pos["quantity"])
+        if "avgCost" in cur and "avgCost" in pos:
+            cost = (float(cur["quantity"]) * float(cur["avgCost"])
+                    + float(pos["quantity"]) * float(pos["avgCost"]))
+            cur["avgCost"] = f"{cost / qty:.8f}" if qty else cur["avgCost"]
+        else:
+            cur.pop("avgCost", None)
+        cur["quantity"] = f"{qty:.8f}"
+    return list(merged.values())
+
 # Wealthfolio's own default_group_for_account_type, restated so the sidebar
 # groups match what the app would have chosen by hand.
 GROUPS = {
@@ -228,8 +370,9 @@ def sure_positions(cfg, run, since):
         # Wealthfolio resolves the real MIC from the symbol suffix on its own
         # (.DE -> XETR, verified against /snapshots/import/check), which is
         # strictly better than anything Sure can tell us.
-        out.setdefault((name.strip(), date), []).append(pos)
-    return out
+        out.setdefault((wallet_group(name.strip()), date), []).append(pos)
+    # k is (account, date) — the override is keyed on the account alone.
+    return {k: apply_cost_basis_overrides(k[0], merge_positions(v)) for k, v in out.items()}
 
 
 def sure_trades(cfg, run):
@@ -255,7 +398,7 @@ def sure_trades(cfg, run):
     out = {}
     for name, ticker, date, qty, price, ccy in rows:
         symbol = map_symbol(ticker)
-        out.setdefault(name.strip(), []).append({
+        out.setdefault(wallet_group(name.strip()), []).append({
             "symbol": symbol, "date": date, "quantity": qty, "price": price,
             "currency": "USD" if is_crypto_pair(symbol) else ccy,
         })
@@ -263,15 +406,37 @@ def sure_trades(cfg, run):
 
 
 def sure_goals(cfg, run):
-    """Active savings goals. Sure's `state` is the lifecycle; archived ones stay put."""
+    """Active goals, each with the accounts Sure funds it from.
+
+    Only GOAL_TITLE is mirrored, and its `accounts` are ignored in favour of
+    every account this sync holds — see sync_goals. What is carried over from
+    Sure is the TARGET; the funding is "all of it", which is the whole point of
+    a single combined goal.
+
+    One row per (goal, account) and grouped here, rather than string_agg with a
+    delimiter. The obvious delimiter is an ASCII record separator, and it is a
+    trap: pg() splits rows with str.splitlines(), which treats \x1c, \x1d and
+    \x1e as line boundaries — so a goal with four accounts came back as four
+    rows of one field each.
+    """
     rows = pg(cfg, run, """
-        SELECT name, target_amount, currency, COALESCE(target_date::text, '')
-        FROM goals WHERE state = 'active' ORDER BY created_at
-    """)
-    return [
-        {"title": n.strip(), "target": float(t), "currency": c, "target_date": d or None}
-        for n, t, c, d in rows
-    ]
+        SELECT g.name, g.target_amount, g.currency, COALESCE(g.target_date::text, ''),
+               COALESCE(a.name, '')
+        FROM goals g
+        LEFT JOIN goal_accounts ga ON ga.goal_id = g.id
+        LEFT JOIN accounts a ON a.id = ga.account_id AND a.status <> 'draft'
+        WHERE g.state = 'active' AND g.name = %s
+        ORDER BY g.name, a.name
+    """.replace("%s", "'" + GOAL_TITLE.replace("'", "''") + "'"))
+    goals = {}
+    for name, target, ccy, date, account in rows:
+        goal = goals.setdefault(name.strip(), {
+            "title": name.strip(), "target": float(target), "currency": ccy,
+            "target_date": date or None, "accounts": [],
+        })
+        if account.strip():
+            goal["accounts"].append(account.strip())
+    return list(goals.values())
 
 
 def sure_alternatives(cfg, run):
@@ -473,26 +638,64 @@ def sync_portfolios(wf, log, members, dry_run):
         log(f"created portfolio {name} ({len(account_ids)} accounts)")
 
 
-def sync_goals(wf, log, goals, dry_run):
-    """Mirror Sure's goals. Matched on title, because neither side has a shared id."""
+def sync_goals(wf, log, goals, account_ids, dry_run):
+    """Mirror Sure's goals, each funded by the accounts Sure funds it from.
+
+    A goal whose accounts are ALL unmirrored is skipped rather than created
+    empty. Most of these are funded from the Livret A, and cash accounts are
+    deliberately not mirrored — so an empty goal here would show a target with
+    permanently zero progress, which is worse than its absence.
+    """
     existing = {g["title"]: g for g in (wf.call("GET", "/goals") or [])}
+
+    # An account's shares across ALL goals must sum to <= 100% — Wealthfolio
+    # rejects the excess ("Account X is overallocated"). Sure has no such rule:
+    # PEA funds both Millionaire and PEA Maxed, in full, in both. So the split
+    # is per ACCOUNT, not per goal — an account used by two goals gives 50% to
+    # each — which keeps every goal pointing at something without inventing a
+    # weighting Sure never expressed.
+    # Anything else in Wealthfolio is a goal this sync no longer mirrors, and
+    # everything here is derived, so it is pruned rather than left to rot. This
+    # also frees the allocations: an account already committed to an old goal
+    # cannot give 100% to the combined one.
+    for title, g in existing.items():
+        if title == GOAL_TITLE or g.get("description") != MIRRORED_MARK:
+            continue  # yours, or the one we mirror — either way, not ours to drop
+        if dry_run:
+            log(f"DRY would delete goal {title}")
+            continue
+        wf.call("DELETE", f"/goals/{g['id']}")
+        log(f"deleted goal {title} — no longer mirrored")
+
     for goal in goals:
+        # Every mirrored account, at 100% each: one goal over the whole
+        # portfolio. Sure's per-goal account links are deliberately not used —
+        # they point mostly at the Livret A, which is not mirrored.
+        funded = sorted(account_ids.items())
+        if not funded:
+            log(f"skipped goal {goal['title']} — no mirrored accounts to fund it")
+            continue
         body = {
             "goalType": "SAVINGS", "title": goal["title"],
             "targetAmount": goal["target"], "currency": goal["currency"],
             "targetDate": goal["target_date"],
-            "description": "Mirrored from Sure",
+            "description": MIRRORED_MARK,
         }
         if goal["title"] in existing:
             if dry_run:
                 continue
             wf.call("PUT", "/goals", {**existing[goal["title"]], **body})
+            goal_id = existing[goal["title"]]["id"]
+        elif dry_run:
+            log(f"DRY would create goal {goal['title']} ({goal['target']:,.0f} "
+                f"{goal['currency']}) funded by {len(funded)} account(s)")
             continue
-        if dry_run:
-            log(f"DRY would create goal {goal['title']} ({goal['target']:,.0f} {goal['currency']})")
-            continue
-        wf.call("POST", "/goals", body)
-        log(f"created goal {goal['title']}")
+        else:
+            goal_id = wf.call("POST", "/goals", body)["id"]
+            log(f"created goal {goal['title']} funded by {len(funded)} account(s)")
+
+        wf.call("PUT", f"/goals/{goal_id}/funding",
+                [{"accountId": aid, "sharePercent": 100.0} for _, aid in funded])
 
 
 def post_activity(wf, body):
@@ -572,7 +775,7 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         log(f"FATAL login failed: {exc.code}")
         return 1
 
-    accounts = {a["name"]: a for a in sure_accounts(cfg, run)}
+    accounts = group_accounts(sure_accounts(cfg, run))
     positions = sure_positions(cfg, run, cfg.backfill_from)
     trades = sure_trades(cfg, run)
 
@@ -594,6 +797,7 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
 
     imported = 0
     members = {}
+    account_ids = {}
     for name, snapshots in sorted(by_account.items()):
         if name in by_trade:
             continue  # handled below, from its real trades
@@ -612,6 +816,7 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         if not account_id:
             continue
         members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
+        account_ids[name] = account_id
         imported += import_snapshots(wf, log, account_id, snapshots, cfg.dry_run)
 
     # Accounts with a full set of real trades: TRANSACTIONS mode, real dates,
@@ -628,10 +833,11 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         )
         if account_id:
             members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
+            account_ids[name] = account_id
             imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
 
     sync_portfolios(wf, log, members, cfg.dry_run)
-    sync_goals(wf, log, sure_goals(cfg, run), cfg.dry_run)
+    sync_goals(wf, log, sure_goals(cfg, run), account_ids, cfg.dry_run)
     sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run)
 
     if not cfg.dry_run:

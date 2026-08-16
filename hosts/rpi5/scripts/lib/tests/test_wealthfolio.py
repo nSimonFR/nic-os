@@ -9,6 +9,8 @@ successful sync. Each of those has a test here.
 import io
 import json
 
+import pytest
+
 from nicos_scripts.connectors import wealthfolio as wf
 from tests.conftest import FakeOpener, FakeResponse, json_reply
 
@@ -335,29 +337,36 @@ def test_a_transaction_tracked_account_is_created_in_transactions_mode(logged):
 
 def test_goals_are_matched_on_title_and_not_duplicated(logged):
     _, log = logged
-    opener = FakeOpener([
-        json_reply([{"id": "g1", "title": "Marriage", "targetAmount": 15000.0}]),
-        json_reply({}),
-    ])
+    opener = FakeOpener([json_reply([{"id": "g1", "title": "Marriage",
+                                     "targetAmount": 15000.0}]), json_reply([])])
     client = wf.Wealthfolio("http://wf", opener=opener)
     wf.sync_goals(client, log, [
-        {"title": "Marriage", "target": 20000.0, "currency": "EUR", "target_date": "2030-06-12"},
-    ], dry_run=False)
+        {"title": "Marriage", "target": 20000.0, "currency": "EUR",
+         "target_date": "2030-06-12", "accounts": ["PEA"]},
+    ], {"PEA": "a1"}, dry_run=False)
     # Updated in place, not created alongside.
-    assert opener.last.get_method() == "PUT"
-    assert opener.body_of(-1)["targetAmount"] == 20000.0
-    assert opener.body_of(-1)["id"] == "g1"
+    put = next(json.loads(r.data.decode()) for r in opener.requests
+               if r.get_full_url().endswith("/goals") and r.get_method() == "PUT")
+    assert put["targetAmount"] == 20000.0 and put["id"] == "g1"
 
 
-def test_a_new_goal_is_created(logged):
+def test_a_new_goal_is_created_and_funded(logged):
     _, log = logged
-    opener = FakeOpener([json_reply([]), json_reply({"id": "g2"})])
+    opener = FakeOpener([json_reply([]), json_reply({"id": "g2"}), json_reply([])])
     client = wf.Wealthfolio("http://wf", opener=opener)
     wf.sync_goals(client, log, [
-        {"title": "Millionaire", "target": 1000000.0, "currency": "EUR", "target_date": None},
-    ], dry_run=False)
-    assert opener.last.get_method() == "POST"
-    assert opener.body_of(-1)["goalType"] == "SAVINGS"
+        {"title": "Millionaire", "target": 1000000.0, "currency": "EUR",
+         "target_date": None, "accounts": ["PEA", "TRUSK PEI"]},
+    ], {"PEA": "a1", "TRUSK PEI": "a2"}, dry_run=False)
+    assert opener.body_of(1)["goalType"] == "SAVINGS"
+    # A goal must point at something, and the split is even because Sure
+    # records WHICH accounts fund a goal, not in what proportion.
+    assert opener.last.get_full_url().endswith("/goals/g2/funding")
+    # One goal over the whole portfolio: every account gives it 100%.
+    assert json.loads(opener.last.data.decode()) == [
+        {"accountId": "a1", "sharePercent": 100.0},
+        {"accountId": "a2", "sharePercent": 100.0},
+    ]
 
 
 def test_only_active_goals_are_mirrored():
@@ -440,3 +449,200 @@ def test_updating_a_portfolio_sends_the_id_in_the_body_too(logged):
     assert opener.last.get_method() == "PUT"
     assert opener.body_of(-1)["id"] == "p1"
     assert opener.body_of(-1)["accountIds"] == ["a1", "a2"]
+
+
+def test_a_goal_with_several_accounts_stays_one_goal():
+    """string_agg with an ASCII record separator looked right and was not:
+    pg() splits rows with str.splitlines(), which breaks on \\x1e, so a goal
+    with four accounts came back as four rows of one field each."""
+    rows = [
+        ["Millionaire", "1000000.0", "EUR", "2050-01-01", "PEA"],
+        ["Millionaire", "1000000.0", "EUR", "2050-01-01", "TRUSK PEI"],
+        ["PEA Maxed", "150000.0", "EUR", "2050-01-01", "PEA"],
+    ]
+    got = wf.sure_goals(cfg(), fake_run({"FROM goals": rows}))
+    assert len(got) == 2
+    assert sorted(got[0]["accounts"]) == ["PEA", "TRUSK PEI"]
+
+
+def test_a_goal_with_no_accounts_still_parses():
+    rows = [["Orphan", "100.0", "EUR", "", ""]]
+    got = wf.sure_goals(cfg(), fake_run({"FROM goals": rows}))
+    assert got[0]["accounts"] == [] and got[0]["target_date"] is None
+
+
+
+
+def test_the_combined_goal_is_funded_by_every_account_not_sures_links(logged):
+    """Sure links Millionaire to three accounts; Wealthfolio gets all of them,
+    because the point of one combined goal is the whole portfolio."""
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"id": "g1"}), json_reply([])])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_goals(client, log, [
+        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
+         "target_date": None, "accounts": ["PEA"]},
+    ], {"PEA": "a1", "Bitcoin": "a2", "TRUSK PEI": "a3"}, dry_run=False)
+    assert json.loads(opener.last.data.decode()) == [
+        {"accountId": "a2", "sharePercent": 100.0},   # Bitcoin
+        {"accountId": "a1", "sharePercent": 100.0},   # PEA
+        {"accountId": "a3", "sharePercent": 100.0},   # TRUSK PEI
+    ]
+
+
+def test_goals_this_sync_no_longer_mirrors_are_deleted(logged):
+    """An account already committed to an old goal cannot give 100% to the
+    combined one, so stale goals are pruned rather than left to rot."""
+    lines, log = logged
+    opener = FakeOpener([
+        json_reply([{"id": "old", "title": "PEA Maxed",
+                     "description": wf.MIRRORED_MARK},
+                    {"id": "g1", "title": "Millionaire"}]),
+        json_reply({}),
+    ])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_goals(client, log, [
+        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
+         "target_date": None, "accounts": []},
+    ], {"PEA": "a1"}, dry_run=False)
+    assert any(r.get_method() == "DELETE" and r.get_full_url().endswith("/goals/old")
+               for r in opener.requests)
+    assert any("deleted goal PEA Maxed" in line for line in lines)
+
+
+def test_only_the_combined_goal_is_read_from_sure():
+    seen = {}
+
+    def run(cmd):
+        seen["sql"] = cmd[-1]
+        return ""
+
+    wf.sure_goals(cfg(), run)
+    assert f"g.name = '{wf.GOAL_TITLE}'" in seen["sql"]
+
+
+# ── wallet grouping ──────────────────────────────────────────────────────────
+
+def test_the_four_accounts_sharing_one_address_group_together():
+    """Sure models a wallet as one account PER TOKEN, so address 0x38...b5b7
+    appears four times and the portfolio reads as seven wallets when it is two."""
+    for name in ("Ethereum (0x38...b5b7)", "Stader (0x38...b5b7)",
+                 "Stader ETHx (0x38...b5b7)", "ETH (Stader Staking)",
+                 "Ledger Staking", "Bitcoin (bc1q...k6aq)"):
+        assert wf.wallet_group(name) == "Ledger"
+    assert wf.wallet_group("Ethereum (0x21...756F)") == "Kraken"
+
+
+def test_an_ungrouped_account_keeps_its_own_name():
+    assert wf.wallet_group("PEA") == "PEA"
+
+
+def test_the_same_symbol_from_two_wallets_is_summed():
+    """A Ledger wallet holds ETH at 0x38 AND ETH via staking — two Sure
+    accounts, one holding. Unmerged, the snapshot carries ETH twice and the
+    second silently wins."""
+    got = wf.merge_positions([
+        {"symbol": "ETH-USD", "quantity": "0.04406929", "currency": "USD"},
+        {"symbol": "ETH-USD", "quantity": "0.40010000", "currency": "USD"},
+        {"symbol": "BTC-USD", "quantity": "0.00287313", "currency": "USD"},
+    ])
+    by_symbol = {p["symbol"]: p for p in got}
+    assert len(got) == 2
+    assert float(by_symbol["ETH-USD"]["quantity"]) == pytest.approx(0.44416929)
+
+
+def test_merged_cost_basis_is_weighted_by_quantity():
+    got = wf.merge_positions([
+        {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
+        {"symbol": "ETH-USD", "quantity": "3", "avgCost": "200"},
+    ])
+    # (1*100 + 3*200) / 4 = 175 — not (100+200)/2.
+    assert float(got[0]["avgCost"]) == pytest.approx(175.0)
+
+
+def test_one_missing_basis_makes_the_merged_basis_unknown():
+    """Averaging over only the priced half would understate what was paid."""
+    got = wf.merge_positions([
+        {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
+        {"symbol": "ETH-USD", "quantity": "3"},
+    ])
+    assert "avgCost" not in got[0]
+    assert float(got[0]["quantity"]) == pytest.approx(4.0)
+
+
+def test_a_groups_currency_is_the_majority_not_the_first_seen():
+    """Five Ledger accounts are USD and "Ledger Staking" is EUR — picking
+    arbitrarily would flip the wallet's denomination on sort order."""
+    got = wf.group_accounts([
+        {"name": "Ledger Staking", "kind": "Crypto", "currency": "EUR", "id": "1"},
+        {"name": "Bitcoin (bc1q...k6aq)", "kind": "Crypto", "currency": "USD", "id": "2"},
+        {"name": "Ethereum (0x38...b5b7)", "kind": "Crypto", "currency": "USD", "id": "3"},
+        {"name": "PEA", "kind": "Investment", "currency": "EUR", "id": "4"},
+    ])
+    assert got["Ledger"]["currency"] == "USD"
+    assert got["Ledger"]["kind"] == "Crypto"
+    assert got["PEA"]["currency"] == "EUR"   # ungrouped, untouched
+
+
+def test_a_goal_you_made_by_hand_is_never_pruned(logged):
+    """/goals is writable through the read-only proxy precisely so goals can be
+    created in the UI. Pruning on "not in my list" would eat one made between
+    two runs; only the sync's own stamp makes a goal safe to delete."""
+    _, log = logged
+    opener = FakeOpener([
+        json_reply([{"id": "mine", "title": "House deposit", "description": "hand-made"},
+                    {"id": "g1", "title": "Millionaire", "description": wf.MIRRORED_MARK}]),
+        json_reply({}),
+    ])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_goals(client, log, [
+        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
+         "target_date": None, "accounts": []},
+    ], {"PEA": "a1"}, dry_run=False)
+    assert not any(r.get_method() == "DELETE" for r in opener.requests)
+
+
+# ── cost basis overrides ─────────────────────────────────────────────────────
+
+def test_an_override_fills_a_basis_sure_does_not_have():
+    rows = wf.apply_cost_basis_overrides("Ledger", [
+        {"symbol": "BTC-USD", "quantity": "0.00287313"},
+    ])
+    # EUR 195 over the held quantity, not over what was originally acquired —
+    # so it stays right as the position moves.
+    assert float(rows[0]["avgCost"]) == pytest.approx(209.88 / 0.00287313)
+
+
+def test_an_override_never_overwrites_sures_own_basis():
+    """Sure is the source of truth; the override only ever fills a gap."""
+    rows = wf.apply_cost_basis_overrides("Ledger", [
+        {"symbol": "BTC-USD", "quantity": "0.00287313", "avgCost": "1.0"},
+    ])
+    assert rows[0]["avgCost"] == "1.0"
+
+
+def test_eth_has_no_override_because_the_data_is_incomplete():
+    """0.111 of 0.481 ETH is accounted for; a basis over 23% of a holding would
+    render as a ~4x gain — a confident wrong number where blank was honest."""
+    assert ("Ledger", "ETH-USD") not in wf.COST_BASIS_OVERRIDES
+    rows = wf.apply_cost_basis_overrides("Ledger", [
+        {"symbol": "ETH-USD", "quantity": "0.44416929"},
+    ])
+    assert "avgCost" not in rows[0]
+
+
+def test_a_zero_quantity_position_does_not_divide_by_zero():
+    rows = wf.apply_cost_basis_overrides("Ledger", [
+        {"symbol": "BTC-USD", "quantity": "0"},
+    ])
+    assert "avgCost" not in rows[0]
+
+
+def test_the_override_reaches_positions_read_from_sure():
+    """sure_positions keys on (account, date); passing the whole tuple as the
+    account made every lookup miss silently and the basis stayed empty."""
+    rows = [["Bitcoin (bc1q...k6aq)", "2026-08-16", "CRYPTO:BTC", "0.00287313",
+             "USD", "", ""]]
+    got = wf.sure_positions(cfg(), fake_run({"FROM holdings": rows}), "")
+    pos = got[("Ledger", "2026-08-16")][0]
+    assert float(pos["avgCost"]) == pytest.approx(209.88 / 0.00287313)
