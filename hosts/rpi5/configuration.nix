@@ -167,6 +167,7 @@ in
     ./monitoring.nix
     ./immich.nix
     ./immich-clip.nix
+    ./immich-album-archive.nix
     ./sure.nix
     ./papra.nix
     ./karakeep.nix
