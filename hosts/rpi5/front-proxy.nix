@@ -17,6 +17,24 @@
 #     /.well-known/{caldav,carddav} → 301 → /nextcloud/remote.php/dav/  (DAV auto-discovery
 #                                            lands at the domain root; redirect to Nextcloud)
 #
+# PWA manifests are a recurring trap on this vhost and are NOT fixable here. An app's
+# web app manifest names its own `start_url`/`scope`/icon `src`s, and apps that assume
+# they own the domain root hardcode "/" — so an installed home-screen app is scoped to,
+# and launches at, whatever else lives at the root (usually Nextcloud), while its icons
+# 404. Same for root-absolute `<link rel="manifest">`/`apple-touch-icon` hrefs and
+# service-worker registrations. Rewriting those in nginx would mean sub_filter-ing each
+# app's HTML and JSON, so every muxed app instead carries the fix in its own -nix flake,
+# derived from the prefix it is already built with:
+#   Sure      — sure-nix patches/base/pwa-relative-url-root.patch (root_path + a
+#               `app-base-path` meta tag the service worker registration reads)
+#   Ryot      — ryot-nix frontend.nix postPatch (root.tsx <link>s + public/manifest.json)
+#   RxResume  — reactive-resume-nix package.nix postPatch (id/start_url/scope from
+#               appBasePath; Vite already re-roots index.html's hrefs)
+#   Nextcloud — nothing to do: overwritewebroot=/nextcloud already re-roots the manifest
+#               the theming app generates.
+# Cyrus is webhook-only and has no PWA surface. When adding a muxed app, check
+# `curl -H 'Host: …' http://127.0.0.1:8092/<prefix>/` for a manifest link and follow it.
+#
 # AFFiNE is NOT here anymore — its SPA router insists on root paths, so it runs at the
 # root of its own 8443 Funnel (see affine.nix). Reuses the nginx
 # instance the Nextcloud module already runs (no extra process). The funnel entry that
