@@ -125,10 +125,7 @@ in
     public = {
       order = 15; # between Sure (10) and Immich (20)
       port = 3700;
-      # The read-only nginx vhost from wealthfolio-sync.nix, NOT the app's own
-      # port: everything reachable from the tailnet goes through the write
-      # refusal. The sync connects to internalPort directly.
-      backend = "http://127.0.0.1:13346";
+      backend = "http://127.0.0.1:${toString internalPort}";
       tile = {
         name = "Wealthfolio";
         icon = "https://cdn.jsdelivr.net/gh/wealthfolio/wealthfolio@v3.6.3/apps/frontend/public/logo.svg";
