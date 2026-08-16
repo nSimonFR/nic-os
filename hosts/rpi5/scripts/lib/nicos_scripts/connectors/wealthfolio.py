@@ -244,6 +244,48 @@ def sure_cash(cfg, run, since):
     return {(n.strip(), d): {c: bal} for n, d, bal, c in rows}
 
 
+def sure_trades(cfg, run):
+    """Sure's real buys — actual dates, actual prices, no inference.
+
+    There are only a handful (Sure's investment accounts are balance-tracked),
+    but they are REAL, which the snapshot path's prices are not: those are
+    whatever the position was worth on the day Sure started watching it. An
+    account whose every position has a trade can therefore be tracked by
+    TRANSACTIONS instead of HOLDINGS, and Wealthfolio will compute TWR and IRR
+    for it — both of which it refuses in holdings mode, because it has no
+    observed cash flows to compute them from.
+    """
+    rows = pg(cfg, run, """
+        SELECT a.name, s.ticker, e.date, t.qty, t.price, t.currency
+        FROM trades t
+        JOIN entries e ON e.entryable_id = t.id AND e.entryable_type = 'Trade'
+        JOIN accounts a ON a.id = e.account_id
+        JOIN securities s ON s.id = t.security_id
+        WHERE a.status <> 'draft' AND t.qty > 0
+        ORDER BY e.date
+    """)
+    out = {}
+    for name, ticker, date, qty, price, ccy in rows:
+        symbol = map_symbol(ticker)
+        out.setdefault(name.strip(), []).append({
+            "symbol": symbol, "date": date, "quantity": qty, "price": price,
+            "currency": "USD" if is_crypto_pair(symbol) else ccy,
+        })
+    return out
+
+
+def sure_goals(cfg, run):
+    """Active savings goals. Sure's `state` is the lifecycle; archived ones stay put."""
+    rows = pg(cfg, run, """
+        SELECT name, target_amount, currency, COALESCE(target_date::text, '')
+        FROM goals WHERE state = 'active' ORDER BY created_at
+    """)
+    return [
+        {"title": n.strip(), "target": float(t), "currency": c, "target_date": d or None}
+        for n, t, c, d in rows
+    ]
+
+
 def sure_alternatives(cfg, run):
     """Property and Loan accounts — Wealthfolio alternative assets, not accounts."""
     rows = pg(cfg, run, """
@@ -314,13 +356,14 @@ class Wealthfolio:
         return self.call("GET", "/accounts") or []
 
 
-def ensure_account(wf, log, name, account_type, currency, group, dry_run):
+def ensure_account(wf, log, name, account_type, currency, group, dry_run,
+                   tracking_mode="HOLDINGS"):
     """Create the account if absent; return its id (None when dry and absent)."""
     for a in wf.accounts():
         if a["name"] == name:
             return a["id"]
     if dry_run:
-        log(f"DRY would create account {name} ({account_type}/{currency})")
+        log(f"DRY would create account {name} ({account_type}/{currency}, {tracking_mode})")
         return None
     created = wf.call("POST", "/accounts", {
         "name": name, "accountType": account_type, "group": group,
@@ -332,7 +375,7 @@ def ensure_account(wf, log, name, account_type, currency, group, dry_run):
         # accounts cannot use HOLDINGS tracking mode", accounts_model.rs:305) —
         # they hold a balance, never positions. NOT_SET leaves the balance to
         # come from the snapshot's cashBalances like any other cash account.
-        "trackingMode": "NOT_SET" if account_type == "CREDIT_CARD" else "HOLDINGS",
+        "trackingMode": "NOT_SET" if account_type == "CREDIT_CARD" else tracking_mode,
     })
     log(f"created account {name} -> {created['id'][:8]}")
     return created["id"]
@@ -432,6 +475,67 @@ def build_snapshots(positions, cash):
     return by_account
 
 
+def sync_goals(wf, log, goals, dry_run):
+    """Mirror Sure's goals. Matched on title, because neither side has a shared id."""
+    existing = {g["title"]: g for g in (wf.call("GET", "/goals") or [])}
+    for goal in goals:
+        body = {
+            "goalType": "SAVINGS", "title": goal["title"],
+            "targetAmount": goal["target"], "currency": goal["currency"],
+            "targetDate": goal["target_date"],
+            "description": "Mirrored from Sure",
+        }
+        if goal["title"] in existing:
+            if dry_run:
+                continue
+            wf.call("PUT", "/goals", {**existing[goal["title"]], **body})
+            continue
+        if dry_run:
+            log(f"DRY would create goal {goal['title']} ({goal['target']:,.0f} {goal['currency']})")
+            continue
+        wf.call("POST", "/goals", body)
+        log(f"created goal {goal['title']}")
+
+
+def import_trades(wf, log, account_id, trades, dry_run):
+    """Real buys, at their real dates and prices.
+
+    A DEPOSIT precedes them covering the total cost: in TRANSACTIONS mode a BUY
+    with no cash behind it drives the account's cash negative, and Sure does not
+    model the transfer that funded the purchase. Dated the day before the first
+    buy so it never lands after the money is spent.
+    """
+    if dry_run:
+        log(f"DRY would import {len(trades)} trade(s)")
+        return 0
+
+    first = min(t["date"] for t in trades)
+    funding = sum(float(t["quantity"]) * float(t["price"]) for t in trades)
+    wf.call("POST", "/activities", {
+        "accountId": account_id, "activityType": "DEPOSIT",
+        "activityDate": f"{first}T00:00:00Z", "amount": round(funding, 2),
+        "currency": trades[0]["currency"], "isDraft": False,
+        "comment": "Opening balance imported from Sure",
+    })
+    n = 0
+    for t in trades:
+        wf.call("POST", "/activities", {
+            "accountId": account_id,
+            "asset": {
+                "symbol": t["symbol"],
+                "kind": "CRYPTO" if is_crypto_pair(t["symbol"]) else "SECURITY",
+                "quoteMode": "MARKET", "quoteCcy": t["currency"],
+                "providerId": "YAHOO", "providerSymbol": t["symbol"],
+            },
+            "activityType": "BUY", "activityDate": f"{t['date']}T00:00:00Z",
+            "quantity": t["quantity"], "unitPrice": t["price"],
+            "currency": t["currency"], "fee": "0", "isDraft": False,
+            "comment": "Imported from Sure",
+        })
+        n += 1
+    return n
+
+
 def main(argv=None, env=None, opener=None, run=None, today=None):
     log = logger(TAG)
     cfg = Config.from_env(env)
@@ -456,11 +560,28 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
     accounts = {a["name"]: a for a in sure_accounts(cfg, run)}
     positions = sure_positions(cfg, run, cfg.backfill_from)
     cash = sure_cash(cfg, run, cfg.backfill_from)
+    trades = sure_trades(cfg, run)
+
+    # An account is transaction-tracked only when EVERY position it holds has a
+    # real trade behind it. Mixing the two inside one account would be worse
+    # than either: the positions without a trade would read as though they had
+    # never been bought, i.e. as pure gain.
+    latest = max((d for _, d in positions), default=None)
+    held = {}
+    for (name, date), pos in positions.items():
+        if date == latest or cfg.backfill_from:
+            held.setdefault(name, set()).update(p["symbol"] for p in pos)
+    by_trade = {
+        name: rows for name, rows in trades.items()
+        if held.get(name) and held[name] <= {r["symbol"] for r in rows}
+    }
 
     by_account = build_snapshots(positions, cash)
 
     imported = 0
     for name, snapshots in sorted(by_account.items()):
+        if name in by_trade:
+            continue  # handled below, from its real trades
         src = accounts.get(name)
         if not src:
             log(f"WARN {name} has holdings but no account row — skipped")
@@ -477,6 +598,22 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             continue
         imported += import_snapshots(wf, log, account_id, snapshots, cfg.dry_run)
 
+    # Accounts with a full set of real trades: TRANSACTIONS mode, real dates,
+    # real prices — which is what makes TWR and IRR computable at all.
+    for name, rows in sorted(by_trade.items()):
+        src = accounts.get(name)
+        if not src:
+            continue
+        account_type = ACCOUNT_TYPES.get(src["kind"], "SECURITIES")
+        account_id = ensure_account(
+            wf, log, name, account_type, src["currency"],
+            GROUPS.get(account_type, "Investments"), cfg.dry_run,
+            tracking_mode="TRANSACTIONS",
+        )
+        if account_id:
+            imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
+
+    sync_goals(wf, log, sure_goals(cfg, run), cfg.dry_run)
     sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run)
 
     if not cfg.dry_run:
