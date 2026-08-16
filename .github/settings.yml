@@ -74,6 +74,14 @@ branches:
         # the difference between "a human approved this" and "a human approved
         # something this used to be".
         dismiss_stale_reviews: true
+        # And the approver may not be whoever pushed last. dismiss_stale_reviews
+        # above already re-opens the gate on a new push, so this is the narrower
+        # case it does not cover: an approval standing while the person who
+        # approved is also the person who put the final commit there. On a repo
+        # whose whole review model is the two-account split — nSimonFR-ai
+        # authors, nSimonFR approves — that split is worth enforcing rather than
+        # trusting.
+        require_last_push_approval: true
         require_code_owner_reviews: false
       # The four jobs of .github/workflows/nix.yml. These are the context names
       # GitHub actually reported on green runs of that workflow, not names derived
