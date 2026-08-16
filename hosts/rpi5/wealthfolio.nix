@@ -124,11 +124,10 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/wealthfolio";
           refreshInterval = 3600000;
-          # display=list, NOT the default block: homepage's block renderer draws
-          # `<Block label value />` and ignores additionalField entirely — the
-          # bracketed figures simply never appeared. Only the list branch of
-          # customapi/component.jsx renders a mapping's additionalField.
-          display = "list";
+          # display stays BLOCK. homepage only renders a mapping's
+          # additionalField in its list branch, so the bracketed figures are
+          # folded into the value string by the fetcher instead — which keeps
+          # these tiles looking like every other one.
           # No gain AMOUNT here on purpose. In HOLDINGS tracking mode — which
           # is what the Sure mirror uses — Wealthfolio returns
           # `amountStatus: "unavailable"`, because external cash flows are
@@ -144,13 +143,12 @@ in
           # suffix supplies the sign.
           mappings = [
             { field = "net_worth"; label = "Net Worth"; format = "number"; prefix = "€"; }
-            {
-              field = "invested"; label = "Invested"; format = "number"; prefix = "€";
-              # Rendered next to the value by homepage, hence the brackets and
-              # sign live in the string the fetcher produces.
-              additionalField = { field = "gain"; format = "text"; };
-            }
-            { field = "return_30d"; label = "30d"; format = "text"; suffix = "%"; }
+            # Carries "(+€9,783)" — market value less cost basis.
+            { field = "invested"; label = "Invested"; format = "text"; }
+            # Carries "2.24% (+€881)" — the euro figure is that percentage
+            # restated against the portfolio value 30 days ago, not a separate
+            # claim. See fetch_wealthfolio.
+            { field = "return_30d"; label = "30d"; format = "text"; }
           ];
         };
       };
