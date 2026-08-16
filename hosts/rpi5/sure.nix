@@ -205,11 +205,10 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/sure";
           refreshInterval = 3600000;
-          # display=list, NOT the default block: homepage's block renderer draws
-          # `<Block label value />` and ignores additionalField entirely — the
-          # bracketed figures simply never appeared. Only the list branch of
-          # customapi/component.jsx renders a mapping's additionalField.
-          display = "list";
+          # display stays BLOCK. homepage only renders a mapping's
+          # additionalField in its list branch, so the bracketed figures are
+          # folded into the value string by the fetcher instead — which keeps
+          # these tiles looking like every other one.
           # Net worth moved to the Wealthfolio tile — that is the one that
           # models the flat and the mortgage, so it is the only place the
           # number is actually complete. This tile answers what Sure is for:
@@ -217,11 +216,8 @@ in
           mappings = [
             { field = "cash"; label = "Cash"; format = "number"; prefix = "€"; }
             { field = "spend"; label = "Spent"; format = "number"; prefix = "€"; }
-            {
-              field = "budget"; label = "Budget"; format = "number"; prefix = "€";
-              # What is still unspent; negative means over budget.
-              additionalField = { field = "budget_left"; format = "text"; };
-            }
+            # Carries "(+€571)" — what is still unspent, negative when over.
+            { field = "budget"; label = "Budget"; format = "text"; }
           ];
         };
       };

@@ -383,7 +383,7 @@ def test_sure_reports_cash_spend_and_the_month_budget():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
     run = FakeRun(SURE_ROWS)
     assert hs.fetch_sure(cfg, run) == {
-        "cash": 6640, "spend": 1929, "budget": 2500, "budget_left": "(+€571)"}
+        "cash": 6640, "spend": 1929, "budget": "€2,500 (+€571)"}
 
 
 def test_overspending_the_month_shows_a_negative_remainder():
@@ -391,7 +391,7 @@ def test_overspending_the_month_shows_a_negative_remainder():
     run = FakeRun([("e.amount > 0", "3100.00"),
                    ("FROM budgets", "2500.0000"),
                    ("accountable_type = 'Depository'", "6640.47")])
-    assert hs.fetch_sure(cfg, run)["budget_left"] == "(-€600)"
+    assert hs.fetch_sure(cfg, run)["budget"] == "€2,500 (-€600)"
 
 
 def test_sure_spend_excludes_transfers_between_own_accounts():
@@ -433,7 +433,7 @@ NET_WORTH_JSON = json.dumps({
 })
 
 
-def wealthfolio_run(perf, basis_row="25827.35|35610.24"):
+def wealthfolio_run(perf, basis_row="25827.35|35610.24|39316.91"):
     return FakeRun([
         ("auth/login", ""),
         ("net-worth", NET_WORTH_JSON),
@@ -453,14 +453,17 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     """net_contribution is the obvious field and is flat ZERO in holdings mode."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
-        "net_worth": 66551, "invested": 25827, "gain": "(+€9,783)",
-        "return_30d": "2.24"}
+        "net_worth": 66551,
+        "invested": "€25,827 (+€9,783)",
+        "return_30d": "2.24% (+€881)"}
 
 
 def test_a_loss_is_shown_with_a_minus_not_a_negative_inside_the_brackets(tmp_path):
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.02}}),
-                          basis_row="30000.00|27500.00")
-    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["gain"] == "(-€2,500)"
+                          basis_row="30000.00|27500.00|39316.91")
+    got = hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
+    assert got["invested"] == "€30,000 (-€2,500)"
+    assert got["return_30d"] == "-2.00% (-€786)"
 
 
 def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path):
@@ -469,12 +472,12 @@ def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path
     `float` keeps decimals but drops trailing zeros, so a flat 2.2% would lose a
     place. Formatting here is the only way to guarantee exactly two."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.022}}))
-    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"] == "2.20"
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"].startswith("2.20%")
 
 
 def test_a_negative_month_keeps_its_sign(tmp_path):
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.0151}}))
-    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"] == "-1.51"
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"].startswith("-1.51%")
 
 
 def test_wealthfolio_asks_for_a_thirty_day_window(tmp_path):
@@ -596,3 +599,14 @@ def test_every_tile_has_its_own_endpoint_and_the_root_serves_everything():
     assert "nope" not in stats
     assert stats.get("papra") == {"documents": 384}
     assert set(stats.snapshot()) == set(hs.Stats.KEYS)
+
+
+def test_deleted_accounts_are_excluded_from_the_valuation_sums(tmp_path):
+    """Deleting an account in Wealthfolio does NOT cascade to
+    daily_account_valuation — 19 removed accounts left 6163 rows behind, worth
+    EUR 23,626 of phantom investment value on every historical date. A bare
+    sum read 57,850 where the truth was 34,224."""
+    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.01}}))
+    hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
+    query = next(c for c in run.commands if "cost_basis_base" in c)
+    assert query.count("EXISTS (SELECT 1 FROM accounts") >= 2
