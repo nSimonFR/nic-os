@@ -14,9 +14,24 @@
 #                             → backend /webhooks/integrations. Tailscale Serve
 #                             (external :3700) points here.
 #
-# Always-on (NOT socket-activated like airtrail/gramps): the Plex/Jellyfin push
-# integrations must be awake to receive webhooks, and a 3-process app makes
-# cold-start wake fragile. Steady-state RAM is modest (backend idles low).
+# Socket-activated (hosts/rpi5/lib/socket-activate.nix) as of this commit; it used
+# to be deliberately always-on. The two reasons that justified that are handled,
+# not gone:
+#
+#   * Plex/Jellyfin push webhooks (…/ryot/_i/<id>) land on the socket, which wakes
+#     the stack and forwards — the request is queued, not refused. What a webhook
+#     now costs is LATENCY: a cold wake is backend boot + SSR boot, and Plex does
+#     not retry a webhook it considers timed out. idleSec is therefore 1800, not
+#     the usual 600, so a normal evening's viewing keeps it warm after the first
+#     event. If watch history starts going missing, this is the first suspect.
+#   * "3-process cold start is fragile" is exactly what readyProbe exists for: no
+#     traffic is forwarded until Caddy → frontend SSR → backend answers 200 end to
+#     end, so a slow boot delays a request instead of 502-ing it.
+#
+# NOTE the entry is keyed `ryot-mux`, not `ryot`. The module derives its unit names
+# as <name>-proxy, and ryot-nix already ships a unit called ryot-proxy (the Caddy
+# above) — keying it `ryot` would silently merge the socket-proxy service INTO
+# Caddy's unit and produce a hybrid with two ExecStarts that Requires/After itself.
 #
 # The DATABASE_URL (with password), SERVER_ADMIN_ACCESS_TOKEN and SESSION_SECRET
 # come from the agenix env file so secrets never enter the world-readable Nix
@@ -33,7 +48,13 @@
 let
   backendPort  = 13352; # Rust backend (localhost)
   frontendPort = 13351; # React-Router SSR (localhost)
-  proxyPort    = 13350; # Caddy entrypoint; the 443 path-mux → here
+  # externalPort is what everything OUTSIDE Ryot talks to — the 443 path-mux, and
+  # scripts/ryot-plex-import.sh, which hardcodes 13350. It is now the
+  # socket-activation listener, so a connection there wakes the stack. Caddy itself
+  # moved off it to proxyPort; that split is the whole mechanism, so if you collapse
+  # these back into one port you get EADDRINUSE between the socket and Caddy.
+  externalPort = 13350;
+  proxyPort    = 13353; # Caddy entrypoint, now BEHIND the socket proxy
   # No servePort: Ryot has no port of its own. It sits behind the 443 path-mux at
   # /ryot (nic.services.ryot.public below). A `servePort = 3700` lingered here
   # long after that move — a port that no longer existed, read by nothing.
@@ -118,6 +139,34 @@ in
   systemd.services.ryot-proxy.serviceConfig.ExecStart =
     lib.mkForce "${pkgs.caddy}/bin/caddy run --adapter caddyfile --config ${caddyfile}";
 
+  # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ──────────
+  # realUnit is Caddy, the entrypoint; the two heavy tiers ride along as workers
+  # (sleepWith → wantedBy + partOf Caddy), so all three wake and sleep together.
+  # Caddy is cheap and starts instantly, which is why the readyProbe has to go
+  # THROUGH it rather than trusting systemd's "active": /ryot/auth is rendered by
+  # the SSR frontend, whose loader queries the backend, so a 200 there is the only
+  # single check that proves the whole chain is up. /ryot/ itself 302s to it, so
+  # probing the root would pass while the frontend was still warming.
+  services.socketActivate.ryot-mux = {
+    enable   = true;
+    realUnit = "ryot-proxy.service";
+    listen   = [ "127.0.0.1:${toString externalPort}" ];
+    backend  = "127.0.0.1:${toString proxyPort}";
+    # 30 min, vs the 600s used elsewhere — see the webhook-latency note in the
+    # header. Cold waking on every Plex event would risk dropped watch history.
+    idleSec  = 1800;
+    readyProbe = {
+      url          = "http://127.0.0.1:${toString proxyPort}/ryot/auth";
+      expectStatus = 200;
+      # Rust backend boot (it self-applies migrations) + Node SSR boot on a Pi.
+      timeoutSec   = 180;
+    };
+    workers = {
+      "ryot-backend.service".policy  = "sleepWith";
+      "ryot-frontend.service".policy = "sleepWith";
+    };
+  };
+
   # SSR loaders reach the backend through the re-rooted Caddy /ryot/backend route
   # (module default is the stock /backend, which no longer exists in our Caddyfile).
   systemd.services.ryot-frontend.environment.API_URL =
@@ -168,7 +217,10 @@ in
     public = {
       order   = 160;
       port    = 443;
-      backend = "http://127.0.0.1:${toString proxyPort}";
+      # externalPort, NOT proxyPort: the path-mux must land on the socket so a
+      # request wakes the stack. Pointing this at Caddy directly would work only
+      # while Ryot happened to be awake, and 502 the rest of the time.
+      backend = "http://127.0.0.1:${toString externalPort}";
       proxied = true;
       muxPath = "/ryot";
       tile = {

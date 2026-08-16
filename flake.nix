@@ -92,18 +92,25 @@
     #
     # Unpinned as of 5.2.3. It was held at 67720c89 on the theory that upstream's
     # Renovate-recomputed pnpm-deps hash was x86_64-only — the defect airtrail-nix
-    # really did have. That was measured and is NOT true here: nixpkgs'
-    # fetchPnpmDeps runs `pnpm install --force`, which per its own comment "allows
-    # us to fetch all dependencies including ones that aren't meant for our host
-    # platform", and the FOD lands on the SAME store path on both arches:
-    #   aarch64 (rpi5)  -> /nix/store/xck2n5ir…-reactive-resume-pnpm-deps
-    #   x86_64  (beast) -> /nix/store/xck2n5ir…-reactive-resume-pnpm-deps
+    # really did have. What the pin was ACTUALLY holding back was
+    # patches/base-path-support.patch: 5.2.3 deleted the
+    # `Access-Control-Allow-Origin` line its uploads.ts hunk targets, so the patch
+    # stopped applying. Fixed upstream in reactive-resume-nix#8 (the hunk is
+    # obsolete, not misplaced — it is dropped, not re-anchored).
     #
-    # What the pin was ACTUALLY holding back was patches/base-path-support.patch:
-    # 5.2.3 deleted the `Access-Control-Allow-Origin` line its uploads.ts hunk
-    # targets, so the patch stopped applying. Fixed upstream in
-    # reactive-resume-nix#8 (the hunk is obsolete, not misplaced — it is dropped,
-    # not re-anchored), which is what this unpins onto.
+    # The arch theory was, however, only WRONG AT THE TIME. This comment used to
+    # record a measurement that both arches landed on one
+    # /nix/store/xck2n5ir…-reactive-resume-pnpm-deps, because fetchPnpmDeps runs
+    # `pnpm install --force`, which nixpkgs documents as fetching "all dependencies
+    # including ones that aren't meant for our host platform". True through pnpm
+    # 11.10.0. 5.2.5 moved package.json's `packageManager` to pnpm@11.18.0, which
+    # prunes the store it materialises to the host platform — the two arches now
+    # ship different native bindings (@rolldown/binding-linux-x64-gnu vs
+    # -arm64-gnu) and hash differently. So the airtrail defect DID eventually
+    # arrive here; reactive-resume-nix#10 handles it by selecting the pnpmDeps hash
+    # on stdenv.hostPlatform.system. Renovate only ever computes the x86_64 one, so
+    # a version bump still needs the aarch64 hash added BY HAND, on aarch64 — a
+    # bump that does not is a bump that cannot build on the Pi.
     reactive-resume-nix = {
       url = "github:nSimonFR/reactive-resume-nix";
       inputs.nixpkgs.follows = "nixpkgs";
