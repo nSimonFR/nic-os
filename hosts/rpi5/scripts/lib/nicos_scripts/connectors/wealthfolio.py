@@ -57,6 +57,8 @@ Env contract (all set by hosts/rpi5/wealthfolio-sync.nix):
                   deliberately bypasses the read-only nginx allowlist on :3700.
   WF_PASSWORD     login password (agenix)
   SURE_DB         Sure's PostgreSQL database name
+  (Cash, savings and the credit card are NOT mirrored — that is Sure's job, and
+  a second copy is a second place for the same number to be slightly wrong in.)
   BACKFILL_FROM   "" (default) syncs the latest date only; "2025-04-01" walks
                   history from there. Set once for the initial load.
   STATE_DIR       systemd StateDirectory
@@ -84,11 +86,13 @@ DEFAULT_PSQL = "psql"
 # Sure's accountable_type -> Wealthfolio account type. Wealthfolio has exactly
 # four (accounts_constants.rs), so Property and Loan are NOT here: they are not
 # accounts at all on that side, they are alternative assets. See sync_alternatives.
+# Investments only. Depository and CreditCard are deliberately absent: current
+# accounts, savings and the card are Sure's job, and duplicating them here bought
+# a second place for the same numbers to be slightly wrong in. Wealthfolio holds
+# what it is good at — positions, and the property/loan pair.
 ACCOUNT_TYPES = {
     "Investment": "SECURITIES",
     "Crypto": "CRYPTOCURRENCY",
-    "Depository": "CASH",
-    "CreditCard": "CREDIT_CARD",
 }
 
 # Only for symbols the CRYPTO: rule below gets wrong. Empty on purpose — every
@@ -228,22 +232,6 @@ def sure_positions(cfg, run, since):
     return out
 
 
-def sure_cash(cfg, run, since):
-    """Latest cash balance per depository/credit-card account, per date."""
-    bound = f"AND b.date >= DATE '{since}'" if since else """
-        AND b.date = (SELECT max(date) FROM balances b2 WHERE b2.account_id = b.account_id)
-    """
-    rows = pg(cfg, run, f"""
-        SELECT a.name, b.date, b.balance, a.currency
-        FROM balances b
-        JOIN accounts a ON a.id = b.account_id
-        WHERE a.accountable_type IN ('Depository', 'CreditCard')
-          AND a.status <> 'draft' {bound}
-        ORDER BY a.name, b.date
-    """)
-    return {(n.strip(), d): {c: bal} for n, d, bal, c in rows}
-
-
 def sure_trades(cfg, run):
     """Sure's real buys — actual dates, actual prices, no inference.
 
@@ -368,14 +356,9 @@ def ensure_account(wf, log, name, account_type, currency, group, dry_run,
     created = wf.call("POST", "/accounts", {
         "name": name, "accountType": account_type, "group": group,
         "currency": currency, "isDefault": False, "isActive": True,
-        # HOLDINGS, not TRANSACTIONS: this account's positions are stated by
-        # the sync, never derived from a trade history it does not have.
-        #
-        # Credit cards are the one type the server refuses it for ("Credit card
-        # accounts cannot use HOLDINGS tracking mode", accounts_model.rs:305) —
-        # they hold a balance, never positions. NOT_SET leaves the balance to
-        # come from the snapshot's cashBalances like any other cash account.
-        "trackingMode": "NOT_SET" if account_type == "CREDIT_CARD" else tracking_mode,
+        # HOLDINGS unless the caller has real trades to offer. TRANSACTIONS on
+        # an account with no trade history would silently zero every position.
+        "trackingMode": tracking_mode,
     })
     log(f"created account {name} -> {created['id'][:8]}")
     return created["id"]
@@ -446,33 +429,48 @@ def sync_alternatives(wf, log, alternatives, today, dry_run):
         log("linked liability -> property")
 
 
-def build_snapshots(positions, cash):
-    """Merge the two reads into one snapshot list per account.
+def build_snapshots(positions):
+    """One snapshot list per account, sorted by date.
 
-    A snapshot is the WHOLE state of an account on a date, so positions and
-    cash for the same (account, date) have to end up in the SAME entry — one
-    keyed union, not two passes. Two passes is what the first version did, with
-    an `if name not in by_account` guard that let exactly one cash date through
-    per account and silently dropped the rest: every cash account ended up
-    showing whichever balance happened to sort first, which for a savings
-    account read as a five-figure negative.
+    cashBalances stays empty: cash accounts are not mirrored at all, and an
+    investment account's cash sleeve is not something Sure tracks separately.
     """
-    dates = {}
-    for (name, date), pos in positions.items():
-        dates.setdefault((name, date), {})["positions"] = pos
-    for (name, date), balances in cash.items():
-        dates.setdefault((name, date), {})["cashBalances"] = balances
-
     by_account = {}
-    for (name, date), parts in dates.items():
+    for (name, date), pos in positions.items():
         by_account.setdefault(name, []).append({
-            "date": date,
-            "positions": parts.get("positions", []),
-            "cashBalances": parts.get("cashBalances", {}),
+            "date": date, "positions": pos, "cashBalances": {},
         })
     for snapshots in by_account.values():
         snapshots.sort(key=lambda s: s["date"])
     return by_account
+
+
+def sync_portfolios(wf, log, members, dry_run):
+    """One portfolio per account group, so the app has the same split as the sidebar.
+
+    Derived rather than configured: the grouping already exists (GROUPS), and a
+    second hand-maintained list of which account belongs where is a list that
+    drifts. A portfolio with no accounts is rejected by the server, so empty
+    groups are skipped rather than created and left dangling.
+    """
+    existing = {p["name"]: p for p in (wf.call("GET", "/portfolios") or [])}
+    for name, account_ids in sorted(members.items()):
+        if not account_ids:
+            continue
+        body = {"name": name, "accountIds": sorted(account_ids),
+                "description": "Mirrored from Sure"}
+        if name in existing:
+            if not dry_run:
+                # `id` in the BODY as well as the path — the handler
+                # deserialises a full Portfolio and 422s without it.
+                wf.call("PUT", f"/portfolios/{existing[name]['id']}",
+                        {**body, "id": existing[name]["id"]})
+            continue
+        if dry_run:
+            log(f"DRY would create portfolio {name} ({len(account_ids)} accounts)")
+            continue
+        wf.call("POST", "/portfolios", body)
+        log(f"created portfolio {name} ({len(account_ids)} accounts)")
 
 
 def sync_goals(wf, log, goals, dry_run):
@@ -497,13 +495,31 @@ def sync_goals(wf, log, goals, dry_run):
         log(f"created goal {goal['title']}")
 
 
+def post_activity(wf, body):
+    """POST one activity, treating "already there" as success.
+
+    Activities are NOT upserted the way snapshots are. The server detects a
+    duplicate and answers 400, so the second run of a timer would abort the
+    whole account on its first re-post. That 400 IS the idempotency guarantee —
+    it means the row exists and matches — so it is swallowed rather than
+    guarded against with a read-then-write race.
+    """
+    try:
+        wf.call("POST", "/activities", body)
+        return True
+    except urllib.error.HTTPError as exc:
+        if exc.code == 400 and "Duplicate activity" in exc.read().decode(errors="replace"):
+            return False
+        raise
+
+
 def import_trades(wf, log, account_id, trades, dry_run):
     """Real buys, at their real dates and prices.
 
     A DEPOSIT precedes them covering the total cost: in TRANSACTIONS mode a BUY
     with no cash behind it drives the account's cash negative, and Sure does not
-    model the transfer that funded the purchase. Dated the day before the first
-    buy so it never lands after the money is spent.
+    model the transfer that funded the purchase. Dated on the first buy so it
+    never lands after the money is spent.
     """
     if dry_run:
         log(f"DRY would import {len(trades)} trade(s)")
@@ -511,7 +527,7 @@ def import_trades(wf, log, account_id, trades, dry_run):
 
     first = min(t["date"] for t in trades)
     funding = sum(float(t["quantity"]) * float(t["price"]) for t in trades)
-    wf.call("POST", "/activities", {
+    post_activity(wf, {
         "accountId": account_id, "activityType": "DEPOSIT",
         "activityDate": f"{first}T00:00:00Z", "amount": round(funding, 2),
         "currency": trades[0]["currency"], "isDraft": False,
@@ -519,7 +535,7 @@ def import_trades(wf, log, account_id, trades, dry_run):
     })
     n = 0
     for t in trades:
-        wf.call("POST", "/activities", {
+        n += post_activity(wf, {
             "accountId": account_id,
             "asset": {
                 "symbol": t["symbol"],
@@ -532,7 +548,6 @@ def import_trades(wf, log, account_id, trades, dry_run):
             "currency": t["currency"], "fee": "0", "isDraft": False,
             "comment": "Imported from Sure",
         })
-        n += 1
     return n
 
 
@@ -559,7 +574,6 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
 
     accounts = {a["name"]: a for a in sure_accounts(cfg, run)}
     positions = sure_positions(cfg, run, cfg.backfill_from)
-    cash = sure_cash(cfg, run, cfg.backfill_from)
     trades = sure_trades(cfg, run)
 
     # An account is transaction-tracked only when EVERY position it holds has a
@@ -576,9 +590,10 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         if held.get(name) and held[name] <= {r["symbol"] for r in rows}
     }
 
-    by_account = build_snapshots(positions, cash)
+    by_account = build_snapshots(positions)
 
     imported = 0
+    members = {}
     for name, snapshots in sorted(by_account.items()):
         if name in by_trade:
             continue  # handled below, from its real trades
@@ -596,6 +611,7 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         )
         if not account_id:
             continue
+        members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
         imported += import_snapshots(wf, log, account_id, snapshots, cfg.dry_run)
 
     # Accounts with a full set of real trades: TRANSACTIONS mode, real dates,
@@ -611,8 +627,10 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             tracking_mode="TRANSACTIONS",
         )
         if account_id:
+            members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
             imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
 
+    sync_portfolios(wf, log, members, cfg.dry_run)
     sync_goals(wf, log, sure_goals(cfg, run), cfg.dry_run)
     sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run)
 
