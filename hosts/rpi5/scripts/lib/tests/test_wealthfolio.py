@@ -120,8 +120,8 @@ def test_without_backfill_only_the_latest_date_is_read():
 
 
 def test_property_and_loan_become_alternative_assets():
-    rows = [["Maison", "Property", "EUR", "338531.0"],
-            ["Prêt", "Loan", "EUR", "314229.0"]]
+    rows = [["Maison", "Property", "EUR", "338531.0", "2025-02-14", "325000.0"],
+            ["Prêt", "Loan", "EUR", "314229.0", "2025-03-01", "325000.0"]]
     got = wf.sure_alternatives(cfg(), fake_run({"'Property', 'Loan'": rows}))
     assert [a["kind"] for a in got] == ["property", "liability"]
 
@@ -335,51 +335,6 @@ def test_a_transaction_tracked_account_is_created_in_transactions_mode(logged):
     assert opener.body_of(-1)["trackingMode"] == "TRANSACTIONS"
 
 
-def test_goals_are_matched_on_title_and_not_duplicated(logged):
-    _, log = logged
-    opener = FakeOpener([json_reply([{"id": "g1", "title": "Marriage",
-                                     "targetAmount": 15000.0}]), json_reply([])])
-    client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_goals(client, log, [
-        {"title": "Marriage", "target": 20000.0, "currency": "EUR",
-         "target_date": "2030-06-12", "accounts": ["PEA"]},
-    ], {"PEA": "a1"}, dry_run=False)
-    # Updated in place, not created alongside.
-    put = next(json.loads(r.data.decode()) for r in opener.requests
-               if r.get_full_url().endswith("/goals") and r.get_method() == "PUT")
-    assert put["targetAmount"] == 20000.0 and put["id"] == "g1"
-
-
-def test_a_new_goal_is_created_and_funded(logged):
-    _, log = logged
-    opener = FakeOpener([json_reply([]), json_reply({"id": "g2"}), json_reply([])])
-    client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_goals(client, log, [
-        {"title": "Millionaire", "target": 1000000.0, "currency": "EUR",
-         "target_date": None, "accounts": ["PEA", "TRUSK PEI"]},
-    ], {"PEA": "a1", "TRUSK PEI": "a2"}, dry_run=False)
-    assert opener.body_of(1)["goalType"] == "SAVINGS"
-    # A goal must point at something, and the split is even because Sure
-    # records WHICH accounts fund a goal, not in what proportion.
-    assert opener.last.get_full_url().endswith("/goals/g2/funding")
-    # One goal over the whole portfolio: every account gives it 100%.
-    assert json.loads(opener.last.data.decode()) == [
-        {"accountId": "a1", "sharePercent": 100.0},
-        {"accountId": "a2", "sharePercent": 100.0},
-    ]
-
-
-def test_only_active_goals_are_mirrored():
-    seen = {}
-
-    def run(cmd):
-        seen["sql"] = cmd[-1]
-        return ""
-
-    wf.sure_goals(cfg(), run)
-    assert "state = 'active'" in seen["sql"]
-
-
 def test_portfolios_follow_the_account_groups(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"id": "p1"})])
@@ -451,76 +406,6 @@ def test_updating_a_portfolio_sends_the_id_in_the_body_too(logged):
     assert opener.body_of(-1)["accountIds"] == ["a1", "a2"]
 
 
-def test_a_goal_with_several_accounts_stays_one_goal():
-    """string_agg with an ASCII record separator looked right and was not:
-    pg() splits rows with str.splitlines(), which breaks on \\x1e, so a goal
-    with four accounts came back as four rows of one field each."""
-    rows = [
-        ["Millionaire", "1000000.0", "EUR", "2050-01-01", "PEA"],
-        ["Millionaire", "1000000.0", "EUR", "2050-01-01", "TRUSK PEI"],
-        ["PEA Maxed", "150000.0", "EUR", "2050-01-01", "PEA"],
-    ]
-    got = wf.sure_goals(cfg(), fake_run({"FROM goals": rows}))
-    assert len(got) == 2
-    assert sorted(got[0]["accounts"]) == ["PEA", "TRUSK PEI"]
-
-
-def test_a_goal_with_no_accounts_still_parses():
-    rows = [["Orphan", "100.0", "EUR", "", ""]]
-    got = wf.sure_goals(cfg(), fake_run({"FROM goals": rows}))
-    assert got[0]["accounts"] == [] and got[0]["target_date"] is None
-
-
-
-
-def test_the_combined_goal_is_funded_by_every_account_not_sures_links(logged):
-    """Sure links Millionaire to three accounts; Wealthfolio gets all of them,
-    because the point of one combined goal is the whole portfolio."""
-    _, log = logged
-    opener = FakeOpener([json_reply([]), json_reply({"id": "g1"}), json_reply([])])
-    client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_goals(client, log, [
-        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
-         "target_date": None, "accounts": ["PEA"]},
-    ], {"PEA": "a1", "Bitcoin": "a2", "TRUSK PEI": "a3"}, dry_run=False)
-    assert json.loads(opener.last.data.decode()) == [
-        {"accountId": "a2", "sharePercent": 100.0},   # Bitcoin
-        {"accountId": "a1", "sharePercent": 100.0},   # PEA
-        {"accountId": "a3", "sharePercent": 100.0},   # TRUSK PEI
-    ]
-
-
-def test_goals_this_sync_no_longer_mirrors_are_deleted(logged):
-    """An account already committed to an old goal cannot give 100% to the
-    combined one, so stale goals are pruned rather than left to rot."""
-    lines, log = logged
-    opener = FakeOpener([
-        json_reply([{"id": "old", "title": "PEA Maxed",
-                     "description": wf.MIRRORED_MARK},
-                    {"id": "g1", "title": "Millionaire"}]),
-        json_reply({}),
-    ])
-    client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_goals(client, log, [
-        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
-         "target_date": None, "accounts": []},
-    ], {"PEA": "a1"}, dry_run=False)
-    assert any(r.get_method() == "DELETE" and r.get_full_url().endswith("/goals/old")
-               for r in opener.requests)
-    assert any("deleted goal PEA Maxed" in line for line in lines)
-
-
-def test_only_the_combined_goal_is_read_from_sure():
-    seen = {}
-
-    def run(cmd):
-        seen["sql"] = cmd[-1]
-        return ""
-
-    wf.sure_goals(cfg(), run)
-    assert f"g.name = '{wf.GOAL_TITLE}'" in seen["sql"]
-
-
 # ── wallet grouping ──────────────────────────────────────────────────────────
 
 def test_the_four_accounts_sharing_one_address_group_together():
@@ -584,24 +469,6 @@ def test_a_groups_currency_is_the_majority_not_the_first_seen():
     assert got["PEA"]["currency"] == "EUR"   # ungrouped, untouched
 
 
-def test_a_goal_you_made_by_hand_is_never_pruned(logged):
-    """/goals is writable through the read-only proxy precisely so goals can be
-    created in the UI. Pruning on "not in my list" would eat one made between
-    two runs; only the sync's own stamp makes a goal safe to delete."""
-    _, log = logged
-    opener = FakeOpener([
-        json_reply([{"id": "mine", "title": "House deposit", "description": "hand-made"},
-                    {"id": "g1", "title": "Millionaire", "description": wf.MIRRORED_MARK}]),
-        json_reply({}),
-    ])
-    client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_goals(client, log, [
-        {"title": "Millionaire", "target": 1e6, "currency": "EUR",
-         "target_date": None, "accounts": []},
-    ], {"PEA": "a1"}, dry_run=False)
-    assert not any(r.get_method() == "DELETE" for r in opener.requests)
-
-
 # ── cost basis overrides ─────────────────────────────────────────────────────
 
 def test_an_override_fills_a_basis_sure_does_not_have():
@@ -646,3 +513,60 @@ def test_the_override_reaches_positions_read_from_sure():
     got = wf.sure_positions(cfg(), fake_run({"FROM holdings": rows}), "")
     pos = got[("Ledger", "2026-08-16")][0]
     assert float(pos["avgCost"]) == pytest.approx(209.88 / 0.00287313)
+
+
+def test_alternatives_carry_where_they_started():
+    """Without the origin the flat and the mortgage are numbers with no
+    history — the app cannot say the property is up or the loan part-repaid."""
+    rows = [["Maison", "Property", "EUR", "338531.0", "2025-02-14", "325000.0"]]
+    got = wf.sure_alternatives(cfg(), fake_run({"'Property', 'Loan'": rows}))
+    assert got[0]["start_date"] == "2025-02-14"
+    assert got[0]["start_value"] == "325000.0"
+
+
+def test_a_new_alternative_sends_its_purchase_date_and_price(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"assetId": "p1"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_alternatives(client, log, [
+        {"name": "Maison", "kind": "property", "currency": "EUR",
+         "value": "338531.0", "start_date": "2025-02-14", "start_value": "325000.0"},
+    ], "2026-08-16", dry_run=False)
+    body = opener.body_of(-1)
+    assert body["purchaseDate"] == "2025-02-14"
+    assert body["purchasePrice"] == "325000.0"
+    assert body["currentValue"] == "338531.0"
+
+
+def test_an_alternative_with_no_history_omits_the_purchase_fields(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"assetId": "p2"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_alternatives(client, log, [
+        {"name": "Thing", "kind": "other", "currency": "EUR", "value": "1.0",
+         "start_date": None, "start_value": None},
+    ], "2026-08-16", dry_run=False)
+    assert "purchaseDate" not in opener.body_of(-1)
+
+def test_the_loans_origin_is_restored_after_linking(logged):
+    """link-liability REPLACES the metadata object rather than merging, so the
+    purchase price and date are collateral — the link returns 204 and the origin
+    is silently gone."""
+    _, log = logged
+    opener = FakeOpener([
+        json_reply([]),                        # GET /alternative-holdings
+        json_reply({"assetId": "loan"}),       # POST liability
+        json_reply({"assetId": "prop"}),       # POST property
+        json_reply({}),                        # POST link-liability
+        json_reply({}),                        # PUT metadata
+    ])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_alternatives(client, log, [
+        {"name": "Prêt", "kind": "liability", "currency": "EUR", "value": "314229",
+         "start_date": "2025-03-01", "start_value": "325000"},
+        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
+         "start_date": "2025-02-14", "start_value": "325000"},
+    ], "2026-08-16", dry_run=False)
+    assert opener.last.get_full_url().endswith("/alternative-assets/loan/metadata")
+    assert json.loads(opener.last.data.decode())["metadata"] == {
+        "purchase_price": "325000", "purchase_date": "2025-03-01"}

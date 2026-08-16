@@ -46,6 +46,12 @@ one shows up. Everything else passes through untouched — the Paris/Frankfurt
 listings and the three Morningstar `0P...F` employee-savings funds all resolve
 on Yahoo as-is.
 
+GOALS ARE NOT MIRRORED. They were, briefly, and it did not survive contact:
+Wealthfolio caps an account's allocation across all goals at 100%, so the
+mirrored goal and the one nSimon made in the app fought over the same five
+accounts and one of them was always broken. Goals are his, owned in Wealthfolio,
+and Sure's stay in Sure. Nothing here touches /goals.
+
 ALTERNATIVE ASSETS. Sure's Property and Loan have no account type in
 Wealthfolio (it has only SECURITIES/CASH/CREDIT_CARD/CRYPTOCURRENCY), but they
 do have an asset kind. They go in via `/alternative-assets`, and the loan is
@@ -99,22 +105,6 @@ ACCOUNT_TYPES = {
 # crypto in the data maps correctly by rule, and a table that restates the rule
 # is a table that drifts from it.
 SYMBOL_OVERRIDES = {}
-
-# The single goal mirrored into Wealthfolio, funded by EVERY account it holds.
-#
-# One, not five, and that is forced rather than chosen: Wealthfolio caps an
-# account's allocation across all goals at 100%, so a goal that takes the whole
-# portfolio leaves nothing for a second. Sure keeps the finer-grained goals —
-# they are mostly funded from the Livret A, which is not mirrored here anyway —
-# and Wealthfolio answers the one question it is placed to answer: how far along
-# is everything, together.
-GOAL_TITLE = "Millionaire"
-
-# Stamped on every goal this sync creates, and the ONLY thing that makes one
-# safe to delete. Goals are writable from the UI (the read-only proxy lets
-# /goals through precisely so they can be), so pruning on "not in my list"
-# would silently eat a goal made by hand between two runs.
-MIRRORED_MARK = "Mirrored from Sure"
 
 # Sure account name -> the Wealthfolio account it is folded into.
 #
@@ -405,52 +395,38 @@ def sure_trades(cfg, run):
     return out
 
 
-def sure_goals(cfg, run):
-    """Active goals, each with the accounts Sure funds it from.
+def sure_alternatives(cfg, run):
+    """Property and Loan — Wealthfolio alternative assets, not accounts.
 
-    Only GOAL_TITLE is mirrored, and its `accounts` are ignored in favour of
-    every account this sync holds — see sync_goals. What is carried over from
-    Sure is the TARGET; the funding is "all of it", which is the whole point of
-    a single combined goal.
+    Carries the ORIGIN as well as the current value: the earliest balance Sure
+    recorded, and its amount. Without it the flat and the mortgage each show a
+    number with no history, so the app cannot say the property is up EUR 13.5k
+    or that EUR 10.8k of the loan is repaid — which is most of why they are
+    worth mirroring at all.
 
-    One row per (goal, account) and grouped here, rather than string_agg with a
-    delimiter. The obvious delimiter is an ASCII record separator, and it is a
-    trap: pg() splits rows with str.splitlines(), which treats \x1c, \x1d and
-    \x1e as line boundaries — so a goal with four accounts came back as four
-    rows of one field each.
+    Sure has no purchase_price/purchase_date column on either (properties has
+    year_built and an AVM provider; loans has initial_balance, but only the
+    loan). The first balance row is the same fact recorded differently, and it
+    exists for both.
     """
     rows = pg(cfg, run, """
-        SELECT g.name, g.target_amount, g.currency, COALESCE(g.target_date::text, ''),
-               COALESCE(a.name, '')
-        FROM goals g
-        LEFT JOIN goal_accounts ga ON ga.goal_id = g.id
-        LEFT JOIN accounts a ON a.id = ga.account_id AND a.status <> 'draft'
-        WHERE g.state = 'active' AND g.name = %s
-        ORDER BY g.name, a.name
-    """.replace("%s", "'" + GOAL_TITLE.replace("'", "''") + "'"))
-    goals = {}
-    for name, target, ccy, date, account in rows:
-        goal = goals.setdefault(name.strip(), {
-            "title": name.strip(), "target": float(target), "currency": ccy,
-            "target_date": date or None, "accounts": [],
-        })
-        if account.strip():
-            goal["accounts"].append(account.strip())
-    return list(goals.values())
-
-
-def sure_alternatives(cfg, run):
-    """Property and Loan accounts — Wealthfolio alternative assets, not accounts."""
-    rows = pg(cfg, run, """
-        SELECT name, accountable_type, currency, balance
-        FROM accounts
-        WHERE accountable_type IN ('Property', 'Loan') AND status <> 'draft'
-        ORDER BY accountable_type
+        SELECT a.name, a.accountable_type, a.currency, a.balance,
+               (SELECT b.date::text FROM balances b WHERE b.account_id = a.id
+                ORDER BY b.date LIMIT 1),
+               (SELECT b.balance::text FROM balances b WHERE b.account_id = a.id
+                ORDER BY b.date LIMIT 1)
+        FROM accounts a
+        WHERE a.accountable_type IN ('Property', 'Loan') AND a.status <> 'draft'
+        ORDER BY a.accountable_type
     """)
     kinds = {"Property": "property", "Loan": "liability"}
     return [
-        {"name": n.strip(), "kind": kinds[t], "currency": c, "value": bal}
-        for n, t, c, bal in rows
+        {
+            "name": n.strip(), "kind": kinds[t], "currency": c, "value": bal,
+            "start_date": first_date or None,
+            "start_value": first_amount or None,
+        }
+        for n, t, c, bal, first_date, first_amount in rows
     ]
 
 
@@ -581,16 +557,31 @@ def sync_alternatives(wf, log, alternatives, today, dry_run):
         if dry_run:
             log(f"DRY would create {alt['kind']} {alt['name']} = {alt['value']} {alt['currency']}")
             continue
-        created = wf.call("POST", "/alternative-assets", {
+        body = {
             "kind": alt["kind"], "name": alt["name"], "currency": alt["currency"],
             "currentValue": alt["value"], "valueDate": today,
-        })
+        }
+        if alt.get("start_value") and alt.get("start_date"):
+            body["purchasePrice"] = alt["start_value"]
+            body["purchaseDate"] = alt["start_date"]
+        created = wf.call("POST", "/alternative-assets", body)
         ids[alt["kind"]] = created["assetId"]
         log(f"created {alt['kind']} {alt['name']}")
 
     if not dry_run and "liability" in ids and "property" in ids:
         wf.call("POST", f"/alternative-assets/{ids['liability']}/link-liability",
                 {"targetAssetId": ids["property"]})
+        # link-liability REPLACES the asset's metadata object rather than
+        # merging into it, so purchase_price/purchase_date are collateral: the
+        # link returns 204 and the origin is silently gone. Verified against the
+        # running server — metadata goes from {purchase_date, purchase_price} to
+        # {linked_asset_id}. Putting them back afterwards sticks, and the link
+        # survives it.
+        origin = next((a for a in alternatives if a["kind"] == "liability"), None)
+        if origin and origin.get("start_value") and origin.get("start_date"):
+            wf.call("PUT", f"/alternative-assets/{ids['liability']}/metadata",
+                    {"metadata": {"purchase_price": origin["start_value"],
+                                  "purchase_date": origin["start_date"]}})
         log("linked liability -> property")
 
 
@@ -636,66 +627,6 @@ def sync_portfolios(wf, log, members, dry_run):
             continue
         wf.call("POST", "/portfolios", body)
         log(f"created portfolio {name} ({len(account_ids)} accounts)")
-
-
-def sync_goals(wf, log, goals, account_ids, dry_run):
-    """Mirror Sure's goals, each funded by the accounts Sure funds it from.
-
-    A goal whose accounts are ALL unmirrored is skipped rather than created
-    empty. Most of these are funded from the Livret A, and cash accounts are
-    deliberately not mirrored — so an empty goal here would show a target with
-    permanently zero progress, which is worse than its absence.
-    """
-    existing = {g["title"]: g for g in (wf.call("GET", "/goals") or [])}
-
-    # An account's shares across ALL goals must sum to <= 100% — Wealthfolio
-    # rejects the excess ("Account X is overallocated"). Sure has no such rule:
-    # PEA funds both Millionaire and PEA Maxed, in full, in both. So the split
-    # is per ACCOUNT, not per goal — an account used by two goals gives 50% to
-    # each — which keeps every goal pointing at something without inventing a
-    # weighting Sure never expressed.
-    # Anything else in Wealthfolio is a goal this sync no longer mirrors, and
-    # everything here is derived, so it is pruned rather than left to rot. This
-    # also frees the allocations: an account already committed to an old goal
-    # cannot give 100% to the combined one.
-    for title, g in existing.items():
-        if title == GOAL_TITLE or g.get("description") != MIRRORED_MARK:
-            continue  # yours, or the one we mirror — either way, not ours to drop
-        if dry_run:
-            log(f"DRY would delete goal {title}")
-            continue
-        wf.call("DELETE", f"/goals/{g['id']}")
-        log(f"deleted goal {title} — no longer mirrored")
-
-    for goal in goals:
-        # Every mirrored account, at 100% each: one goal over the whole
-        # portfolio. Sure's per-goal account links are deliberately not used —
-        # they point mostly at the Livret A, which is not mirrored.
-        funded = sorted(account_ids.items())
-        if not funded:
-            log(f"skipped goal {goal['title']} — no mirrored accounts to fund it")
-            continue
-        body = {
-            "goalType": "SAVINGS", "title": goal["title"],
-            "targetAmount": goal["target"], "currency": goal["currency"],
-            "targetDate": goal["target_date"],
-            "description": MIRRORED_MARK,
-        }
-        if goal["title"] in existing:
-            if dry_run:
-                continue
-            wf.call("PUT", "/goals", {**existing[goal["title"]], **body})
-            goal_id = existing[goal["title"]]["id"]
-        elif dry_run:
-            log(f"DRY would create goal {goal['title']} ({goal['target']:,.0f} "
-                f"{goal['currency']}) funded by {len(funded)} account(s)")
-            continue
-        else:
-            goal_id = wf.call("POST", "/goals", body)["id"]
-            log(f"created goal {goal['title']} funded by {len(funded)} account(s)")
-
-        wf.call("PUT", f"/goals/{goal_id}/funding",
-                [{"accountId": aid, "sharePercent": 100.0} for _, aid in funded])
 
 
 def post_activity(wf, body):
@@ -837,7 +768,6 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
 
     sync_portfolios(wf, log, members, cfg.dry_run)
-    sync_goals(wf, log, sure_goals(cfg, run), account_ids, cfg.dry_run)
     sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run)
 
     if not cfg.dry_run:
