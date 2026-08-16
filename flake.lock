@@ -1214,11 +1214,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786376864,
-        "narHash": "sha256-gYbJLRCkPBR0Qn8bTukKowlDbAZN9e+AAcv4uRpoI7g=",
+        "lastModified": 1786878099,
+        "narHash": "sha256-2sf8VQ5WRzSJbjKSjKWb5armw5Z/cPjGRS0lSL0q3n8=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "dd60d58ef37a9f407008faa8e48f90713fdae578",
+        "rev": "a849cb3b9c0c56e1c9619563df576a9a30d009a2",
         "type": "github"
       },
       "original": {
@@ -1326,11 +1326,11 @@
         "rust-overlay": "rust-overlay_2"
       },
       "locked": {
-        "lastModified": 1784667791,
-        "narHash": "sha256-j4j8sB0S1N2/Re/Bbxp+UMeIDMyjenYEC1QuQFEwmIo=",
+        "lastModified": 1786876996,
+        "narHash": "sha256-LFsw2+qXiChTXd6CdsZhWWICBAWF8R2FE/Z/bTfnw5U=",
         "owner": "nSimonFR",
         "repo": "ryot-nix",
-        "rev": "0d9572ffc776ffb28e1d3deed872168a717a49b4",
+        "rev": "a87e92b2fe9dda6fd7e021cea8a516dba12d23d3",
         "type": "github"
       },
       "original": {
@@ -1364,11 +1364,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1786443667,
-        "narHash": "sha256-vsrcfd9oytNGq+u+uneUFb1DuYFBIo5JMaxZpaLkbes=",
+        "lastModified": 1786877423,
+        "narHash": "sha256-2feuxDR7bWwVoIfhKg8IUfTJFAjcgjDVE9+egnEAZ+Y=",
         "owner": "nSimonFR",
         "repo": "sure-nix",
-        "rev": "0e50d5a5a10405877d0567ab149144bc427204dc",
+        "rev": "1c0c7899b6e4adcd78f67bcaf232248efae79e6e",
         "type": "github"
       },
       "original": {
