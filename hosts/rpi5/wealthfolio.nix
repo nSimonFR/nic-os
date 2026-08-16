@@ -68,6 +68,20 @@ in
       # 401 after an hour of not being opened. 30 days turns "log in every
       # time" into "log in monthly". No upper bound in config.rs.
       WF_AUTH_TOKEN_TTL_MINUTES = "43200";
+      # Agent access: the /mcp endpoint, off by default. Guarded by its own
+      # bearer PAT with its own scope set — a session cookie is rejected there
+      # and a PAT is rejected on /api/v1, so this grants nothing to the browser
+      # and nothing to the sync.
+      #
+      # The PAT is minted READ-ONLY (accounts/holdings/performance/activities/
+      # planning/health/classification). Sure is the writer; an agent that could
+      # write here would be writing to a mirror that the next sync overwrites.
+      WF_MCP_ENABLED = "true";
+      # Host validation off: rmcp's default allowlist is loopback-only and
+      # Hermes reaches this through the tailnet name. Safe because /mcp is
+      # PAT-guarded, and browsers cannot attach an Authorization header
+      # cross-site, so DNS rebinding buys nothing.
+      WF_MCP_AUDIT_ENABLED = "true";
     };
 
     serviceConfig = {

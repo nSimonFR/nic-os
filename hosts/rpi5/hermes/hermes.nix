@@ -169,6 +169,24 @@ let
     # `mcp` Python package, which the hermes-agent env already bundles.
     mcp_servers.mtg.command = "${mtgMcp}/bin/mtg-mcp";
 
+    # Wealthfolio over HTTP rather than stdio — it is a running service, not a
+    # subprocess. Talks to the app's own bind, NOT the :3700 read-only vhost:
+    # /mcp is a POST and that vhost refuses every write method, so it would 403
+    # the whole transport. Safe, because the PAT itself is the read-only half.
+    #
+    # The token is scoped read-only (accounts/holdings/performance/activities/
+    # planning/health/classification) and deliberately not writable: Sure is the
+    # source of truth, so anything written here is overwritten by the next
+    # mirror run — an agent that could write would be writing to a mirror.
+    #
+    # @WEALTHFOLIO_MCP_TOKEN@ is substituted at start time by setupScript. It
+    # cannot be interpolated here: this attrset becomes a file in the
+    # world-readable Nix store.
+    mcp_servers.wealthfolio = {
+      url = "http://127.0.0.1:13345/mcp";
+      headers.Authorization = "Bearer @WEALTHFOLIO_MCP_TOKEN@";
+    };
+
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
     # single-chat-ID Telegram allowlist, not workspace isolation).
@@ -223,7 +241,11 @@ let
   setupScript = pkgs.writeShellScript "hermes-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome} ${hermesHome}/workspace ${hermesHome}/skills
-    ${pkgs.coreutils}/bin/install -m 0644 ${configFile} ${hermesHome}/config.yaml
+    # 0600, not 0644: the Wealthfolio PAT is substituted into this file below,
+    # so it stops being a public document.
+    ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
+    wf_tok="$(${pkgs.gnused}/bin/sed -n 's/^WEALTHFOLIO_MCP_TOKEN=//p' /run/agenix/wealthfolio-mcp-token)"
+    ${pkgs.gnused}/bin/sed -i "s|@WEALTHFOLIO_MCP_TOKEN@|$wf_tok|" ${hermesHome}/config.yaml
 
     # .env — bot token (secret) + sender allowlist. TELEGRAM_BOT_TOKEN presence
     # auto-enables the Telegram platform. Allowlist = nSimon + Alfie.
