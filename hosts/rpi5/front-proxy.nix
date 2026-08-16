@@ -158,12 +158,20 @@ in
       # frontend) — window.location.origin is host-only, so it ignores the /ryot/
       # basename and posts to the domain ROOT /backend/*. Ryot is designed to own
       # the root; under our subpath the SSR uses /ryot/backend but the client can't.
-      # Route root /backend/* straight to the backend (trailing slash strips the
-      # prefix → backend serves /graphql, /upload). Without this every client-side
-      # query/mutation in the web UI 404s.
+      # Route root /backend/* to Ryot's socket-activation listener under the
+      # /ryot/backend route Caddy strips, so /backend/graphql lands on the backend's
+      # /graphql. It used to go straight to ryot-backend on 13352; since Ryot sleeps
+      # (ryot.nix) that would 502 for a tab left open past the idle timeout — the SSR
+      # navigation that woke it is long finished, and this path would never wake it
+      # again. Through 13350 the stale tab wakes the stack like any other request.
       "/backend/" = {
-        proxyPass = "http://127.0.0.1:13352/";
-        extraConfig = fwdHeaders;
+        proxyPass = "http://127.0.0.1:13350/ryot/backend/";
+        extraConfig = ''
+          ${fwdHeaders}
+          # A cold wake is gated by the 180s readyProbe; outlast nginx's 60s default
+          # so the first query after an idle-stop waits instead of 504-ing.
+          proxy_read_timeout 300s;
+        '';
       };
 
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
