@@ -50,10 +50,20 @@ in
         "http://127.0.0.1:${toString internalPort}";
       "= /api/v1/market-data/quotes/latest".proxyPass =
         "http://127.0.0.1:${toString internalPort}";
-      # Pure simulations — the retirement/save-up planners take no state.
-      "~ ^/api/v1/goals/(save-up/preview|retirement/)".proxyPass =
-        "http://127.0.0.1:${toString internalPort}";
-      "~ ^/api/v1/allocation-targets/.*/(drift|calculate)$".proxyPass =
+      # WRITABLE, deliberately — the two things the mirror does not own.
+      #
+      # Allocation targets are not in Sure at all, so nothing here can overwrite
+      # them. Goals are mirrored, but the sync only prunes goals it created
+      # (matched on the "Mirrored from Sure" description), so one made by hand
+      # in the UI survives every run. Everything else on /api/v1 stays read-only:
+      # a holding edited here would live until the next sync and then vanish.
+      #
+      # Addons are here too, so they can be installed from the UI. An addon is
+      # arbitrary JavaScript running in the session, which sounds worse than it
+      # is HERE: it is confined to a sandboxed iframe, and its API calls go back
+      # through this same proxy — so an addon cannot write a holding either. It
+      # gets exactly the surface below, no more.
+      "~ ^/api/v1/(allocation-targets|goals|addons)".proxyPass =
         "http://127.0.0.1:${toString internalPort}";
 
       # portfolio/update fires unprompted on every authenticated page load and
