@@ -70,6 +70,13 @@
       owner = "wealthfolio";
       mode = "0400";
     };
+    wealthfolio-mcp-token = {
+      file = ./secrets/wealthfolio-mcp-token.age;
+      # Read-only agent PAT (wfp_…) for Hermes' Wealthfolio MCP server. Owned by
+      # nsimon because hermes.service runs as that user.
+      owner = "nsimon";
+      mode = "0400";
+    };
     wealthfolio-sync-env = {
       file = ./secrets/wealthfolio-sync-env.age;
       # WF_PASSWORD for the Sure -> Wealthfolio mirror. Root-owned: the sync
