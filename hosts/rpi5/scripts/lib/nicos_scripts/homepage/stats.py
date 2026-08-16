@@ -84,7 +84,7 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 7
+STATS_SCHEMA = 8
 
 
 @dataclass(frozen=True)
@@ -324,13 +324,20 @@ def fetch_sure(cfg, run):
     return {
         "cash": round(float(cash or 0)),
         "spend": spend_eur,
-        "budget": budget_eur,
-        "budget_left": f"({'+' if left >= 0 else '-'}€{abs(left):,.0f})",
+        # The remainder is folded into the value rather than carried as an
+        # additionalField: homepage only renders those in `display: list`, and
+        # the default block renderer drops them silently.
+        "budget": f"€{budget_eur:,.0f} ({eur(left)})",
     }
 
 
 def today():
     return datetime.date.today().isoformat()
+
+
+def eur(amount):
+    """A signed euro amount for display: +EUR 9,783 / -EUR 600."""
+    return f"{'+' if amount >= 0 else '-'}€{abs(amount):,.0f}"
 
 
 def days_ago(n):
@@ -387,13 +394,29 @@ def fetch_wealthfolio(cfg, run):
     # Market value comes from the same row so the gain below is a difference
     # between two numbers calculated on the same date, rather than one from the
     # API and one from the table.
+    #
+    # The EXISTS clause is not belt-and-braces. Deleting an account in
+    # Wealthfolio does NOT cascade to daily_account_valuation: 19 accounts
+    # removed during bring-up left 6163 valuation rows behind, which added
+    # EUR 23,626 of phantom investment value to every historical date. The app's
+    # own queries scope to live accounts and were unaffected; a bare sum over
+    # this table is not, and read 57,850 where the truth was 34,224.
     basis_row = sqlite_scalar(cfg, run, cfg.wealthfolio_db, """
-        SELECT COALESCE(round(sum(CAST(cost_basis_base AS REAL)), 2), 0) || '|' ||
-               COALESCE(round(sum(CAST(investment_market_value_base AS REAL)), 2), 0)
-        FROM daily_account_valuation
-        WHERE valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
+        SELECT COALESCE(round(sum(CAST(v.cost_basis_base AS REAL)), 2), 0) || '|' ||
+               COALESCE(round(sum(CAST(v.investment_market_value_base AS REAL)), 2), 0) || '|' ||
+               COALESCE((SELECT round(sum(CAST(v2.total_value_base AS REAL)), 2)
+                         FROM daily_account_valuation v2
+                         WHERE EXISTS (SELECT 1 FROM accounts a WHERE a.id = v2.account_id)
+                           AND v2.valuation_date = (
+                             SELECT max(valuation_date) FROM daily_account_valuation
+                             WHERE valuation_date <= date((SELECT max(valuation_date)
+                                                           FROM daily_account_valuation), '-30 day'))), 0)
+        FROM daily_account_valuation v
+        WHERE EXISTS (SELECT 1 FROM accounts a WHERE a.id = v.account_id)
+          AND v.valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
     """)
-    invested, market_value = (float(x) for x in (basis_row or "0|0").split("|"))
+    invested, market_value, start_value = (
+        float(x) for x in (basis_row or "0|0|0").split("|"))
     # Returned as a PRE-FORMATTED STRING in percentage points ("2.24"), which
     # is not fussiness. homepage's `percent` format is
     # `Intl.NumberFormat({style:"percent"}).format(value / 100)` — it divides by
@@ -410,11 +433,21 @@ def fetch_wealthfolio(cfg, run):
     # brackets because homepage renders an additionalField next to the value
     # with no punctuation of its own.
     gain = market_value - invested
+    # The euro figure beside the percentage is that PERCENTAGE RESTATED, not an
+    # independently derived amount: the app's own return applied to the app's
+    # own portfolio value 30 days ago. Deriving it instead from the value delta
+    # minus inferred flows is what produced -EUR 21k for a month that gained
+    # 3.75%, because a transfer out of a cash account is indistinguishable from
+    # a loss when flows are inferred rather than observed.
+    if value_return is None:
+        return_30d = None
+    else:
+        pct = float(value_return) * 100
+        return_30d = f"{pct:.2f}% ({eur(float(value_return) * start_value)})"
     return {
         "net_worth": round(assets - liabilities),
-        "invested": round(invested),
-        "gain": f"({'+' if gain >= 0 else '-'}€{abs(gain):,.0f})",
-        "return_30d": f"{float(value_return) * 100:.2f}" if value_return is not None else None,
+        "invested": f"€{invested:,.0f} ({eur(gain)})",
+        "return_30d": return_30d,
     }
 
 
