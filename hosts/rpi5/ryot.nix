@@ -18,15 +18,28 @@
 # to be deliberately always-on. The two reasons that justified that are handled,
 # not gone:
 #
-#   * Plex/Jellyfin push webhooks (…/ryot/_i/<id>) land on the socket, which wakes
-#     the stack and forwards — the request is queued, not refused. What a webhook
-#     now costs is LATENCY: a cold wake is backend boot + SSR boot, and Plex does
-#     not retry a webhook it considers timed out. idleSec is therefore 1800, not
-#     the usual 600, so a normal evening's viewing keeps it warm after the first
-#     event. If watch history starts going missing, this is the first suspect.
+#   * "Plex/Jellyfin push webhooks must be awake." Checked rather than assumed, and
+#     it does not hold. A plex_sink integration IS configured, but its
+#     last_finished_at is 2026-07-21 — it has not fired in weeks, because Plex's
+#     webhook sink needs Plex Pass, which is exactly why ryot-plex-import.timer
+#     exists to re-import nightly instead. The only sinks actually receiving
+#     pushes are the two generic_json ones, and both are LOCAL systemd timers on
+#     this host: spotify-to-ryot (hourly at :17) and steam-to-ryot (daily 04:50),
+#     posting to RYOT_WEBHOOK_URL=…:13350/ryot/_i/<id>. Nothing remote can time
+#     out, so there is no latency budget to protect and idleSec is the standard
+#     600. Spotify also skips the POST entirely when there are no new listens, so
+#     it does not hold the stack awake hourly for nothing.
 #   * "3-process cold start is fragile" is exactly what readyProbe exists for: no
 #     traffic is forwarded until Caddy → frontend SSR → backend answers 200 end to
 #     end, so a slow boot delays a request instead of 502-ing it.
+#
+# Every consumer must be able to OUTWAIT that probe — the socket accepts instantly
+# and holds the connection while the stack boots, so a client that gives up first
+# turns a cold start into a silently lost push. The three timer units are
+# Type=oneshot (TimeoutStartSec=infinity) and ryot-plex-import.sh's curl has no
+# --max-time, so those are fine; the Python clients were NOT, at 60s for the sink
+# and 15s for GraphQL. Both now use nicos_scripts.ryot.RYOT_WAKE_TIMEOUT (240s),
+# pinned against this probe by a test in tests/test_lib.py.
 #
 # NOTE the entry is keyed `ryot-mux`, not `ryot`. The module derives its unit names
 # as <name>-proxy, and ryot-nix already ships a unit called ryot-proxy (the Caddy
@@ -152,9 +165,10 @@ in
     realUnit = "ryot-proxy.service";
     listen   = [ "127.0.0.1:${toString externalPort}" ];
     backend  = "127.0.0.1:${toString proxyPort}";
-    # 30 min, vs the 600s used elsewhere — see the webhook-latency note in the
-    # header. Cold waking on every Plex event would risk dropped watch history.
-    idleSec  = 1800;
+    # Standard 600, same as every other socket-activated service here. The longer
+    # value this started with was protecting a Plex push path that turns out not
+    # to be running at all — see the header.
+    idleSec  = 600;
     readyProbe = {
       url          = "http://127.0.0.1:${toString proxyPort}/ryot/auth";
       expectStatus = 200;
