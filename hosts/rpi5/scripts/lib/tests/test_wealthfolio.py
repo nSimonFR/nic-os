@@ -289,3 +289,85 @@ def test_every_cash_date_survives_the_merge():
     cash = {("Livret A", d): {"EUR": "1"} for d in ("2026-08-12", "2026-08-13", "2026-08-14")}
     got = wf.build_snapshots({}, cash)
     assert len(got["Livret A"]) == 3
+
+
+# ── trades and goals ─────────────────────────────────────────────────────────
+
+TRADE_ROWS = [
+    ["PEA", "ESE.PA", "2025-04-01", "269.0", "26.96", "EUR"],
+    ["Bitcoin", "CRYPTO:BTC", "2026-06-15", "0.00287", "66538.47", "USD"],
+]
+
+
+def test_trades_carry_their_real_date_and_price():
+    got = wf.sure_trades(cfg(), fake_run({"FROM trades": TRADE_ROWS}))
+    assert got["PEA"][0] == {
+        "symbol": "ESE.PA", "date": "2025-04-01",
+        "quantity": "269.0", "price": "26.96", "currency": "EUR"}
+    # Crypto tickers map the same way they do for snapshots.
+    assert got["Bitcoin"][0]["symbol"] == "BTC-USD"
+
+
+def test_a_deposit_precedes_the_buys_so_cash_never_goes_negative(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply({"id": "a"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    n = wf.import_trades(client, log, "acct", [
+        {"symbol": "ESE.PA", "date": "2025-04-01", "quantity": "269", "price": "26.96",
+         "currency": "EUR"},
+    ], dry_run=False)
+    assert n == 1
+    bodies = [opener.body_of(i) for i in range(len(opener.requests))]
+    assert bodies[0]["activityType"] == "DEPOSIT"
+    assert bodies[0]["amount"] == 7252.24        # 269 * 26.96
+    assert bodies[0]["activityDate"] == "2025-04-01T00:00:00Z"
+    assert bodies[1]["activityType"] == "BUY"
+    assert bodies[1]["unitPrice"] == "26.96"     # the REAL price, not a snapshot value
+
+
+def test_a_transaction_tracked_account_is_created_in_transactions_mode(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"id": "new"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.ensure_account(client, log, "PEA", "SECURITIES", "EUR", "Investments", False,
+                      tracking_mode="TRANSACTIONS")
+    # TRANSACTIONS is what makes TWR/IRR computable; HOLDINGS refuses both.
+    assert opener.body_of(-1)["trackingMode"] == "TRANSACTIONS"
+
+
+def test_goals_are_matched_on_title_and_not_duplicated(logged):
+    _, log = logged
+    opener = FakeOpener([
+        json_reply([{"id": "g1", "title": "Marriage", "targetAmount": 15000.0}]),
+        json_reply({}),
+    ])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_goals(client, log, [
+        {"title": "Marriage", "target": 20000.0, "currency": "EUR", "target_date": "2030-06-12"},
+    ], dry_run=False)
+    # Updated in place, not created alongside.
+    assert opener.last.get_method() == "PUT"
+    assert opener.body_of(-1)["targetAmount"] == 20000.0
+    assert opener.body_of(-1)["id"] == "g1"
+
+
+def test_a_new_goal_is_created(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"id": "g2"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_goals(client, log, [
+        {"title": "Millionaire", "target": 1000000.0, "currency": "EUR", "target_date": None},
+    ], dry_run=False)
+    assert opener.last.get_method() == "POST"
+    assert opener.body_of(-1)["goalType"] == "SAVINGS"
+
+
+def test_only_active_goals_are_mirrored():
+    seen = {}
+
+    def run(cmd):
+        seen["sql"] = cmd[-1]
+        return ""
+
+    wf.sure_goals(cfg(), run)
+    assert "state = 'active'" in seen["sql"]
