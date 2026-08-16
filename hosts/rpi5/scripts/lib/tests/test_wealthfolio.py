@@ -6,6 +6,7 @@ that imports anyway reads as a sale, and a dry run that posts reads as a
 successful sync. Each of those has a test here.
 """
 
+import io
 import json
 
 from nicos_scripts.connectors import wealthfolio as wf
@@ -271,24 +272,21 @@ def test_the_session_cookie_is_carried_by_hand_not_by_a_jar():
     assert opener.last.get_header("Cookie") == "wf_session=tok-123"
 
 
-def test_positions_and_cash_for_one_date_land_in_one_snapshot():
-    """The earlier version emitted cash in a second pass guarded by
-    `if name not in by_account`, so exactly one cash date per account survived
-    and every other balance was dropped — a savings account read as a
-    five-figure negative."""
-    positions = {("PEA", "2026-08-14"): [{"symbol": "ESE.PA", "quantity": "269"}]}
-    cash = {("PEA", "2026-08-14"): {"EUR": "50"}, ("PEA", "2026-08-13"): {"EUR": "40"}}
-    got = wf.build_snapshots(positions, cash)
+def test_snapshots_are_sorted_by_date():
+    positions = {
+        ("PEA", "2026-08-14"): [{"symbol": "ESE.PA", "quantity": "269"}],
+        ("PEA", "2026-08-13"): [{"symbol": "ESE.PA", "quantity": "269"}],
+    }
+    got = wf.build_snapshots(positions)
     assert [s["date"] for s in got["PEA"]] == ["2026-08-13", "2026-08-14"]
-    latest = got["PEA"][-1]
-    assert latest["positions"][0]["symbol"] == "ESE.PA"
-    assert latest["cashBalances"] == {"EUR": "50"}
 
 
-def test_every_cash_date_survives_the_merge():
-    cash = {("Livret A", d): {"EUR": "1"} for d in ("2026-08-12", "2026-08-13", "2026-08-14")}
-    got = wf.build_snapshots({}, cash)
-    assert len(got["Livret A"]) == 3
+def test_cash_accounts_are_not_mirrored_at_all():
+    """Current accounts, savings and the card stay in Sure — mirroring them
+    created a second place for the same balance to be slightly wrong in."""
+    assert "Depository" not in wf.ACCOUNT_TYPES
+    assert "CreditCard" not in wf.ACCOUNT_TYPES
+    assert not hasattr(wf, "sure_cash")
 
 
 # ── trades and goals ─────────────────────────────────────────────────────────
@@ -371,3 +369,74 @@ def test_only_active_goals_are_mirrored():
 
     wf.sure_goals(cfg(), run)
     assert "state = 'active'" in seen["sql"]
+
+
+def test_portfolios_follow_the_account_groups(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"id": "p1"})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_portfolios(client, log, {"Crypto": ["a2", "a1"]}, dry_run=False)
+    body = opener.body_of(-1)
+    assert body["name"] == "Crypto"
+    assert body["accountIds"] == ["a1", "a2"]
+
+
+def test_an_empty_group_is_skipped_not_created(logged):
+    """The server rejects a portfolio with no accounts."""
+    _, log = logged
+    opener = FakeOpener([json_reply([])])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_portfolios(client, log, {"Crypto": []}, dry_run=False)
+    assert len(opener.requests) == 1  # the GET only
+
+
+def test_a_duplicate_activity_is_not_an_error(logged):
+    """Activities are not upserted like snapshots — the server answers 400 on a
+    re-post. That 400 IS the idempotency guarantee, so a second timer run must
+    treat it as "already there" rather than aborting the account."""
+    import urllib.error
+
+    def duplicate(req, timeout=None):
+        raise urllib.error.HTTPError(
+            req.full_url, 400, "Bad Request", {},
+            io.BytesIO(b'{"code":400,"message":"Duplicate activity detected."}'))
+
+    _, log = logged
+    client = wf.Wealthfolio("http://wf", opener=duplicate)
+    assert wf.import_trades(client, log, "acct", [
+        {"symbol": "ESE.PA", "date": "2025-04-01", "quantity": "269",
+         "price": "26.96", "currency": "EUR"},
+    ], dry_run=False) == 0
+
+
+def test_a_real_error_still_raises(logged):
+    import urllib.error
+
+    def boom(req, timeout=None):
+        raise urllib.error.HTTPError(
+            req.full_url, 400, "Bad Request", {},
+            io.BytesIO(b'{"code":400,"message":"Invalid symbol"}'))
+
+    _, log = logged
+    client = wf.Wealthfolio("http://wf", opener=boom)
+    try:
+        wf.import_trades(client, log, "acct", [
+            {"symbol": "NOPE", "date": "2025-04-01", "quantity": "1",
+             "price": "1", "currency": "EUR"}], dry_run=False)
+    except urllib.error.HTTPError:
+        return
+    raise AssertionError("a non-duplicate 400 must propagate")
+
+
+def test_updating_a_portfolio_sends_the_id_in_the_body_too(logged):
+    """The handler deserialises a full Portfolio; path-only id 422s."""
+    _, log = logged
+    opener = FakeOpener([
+        json_reply([{"id": "p1", "name": "Crypto", "accountIds": ["a1"]}]),
+        json_reply({}),
+    ])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_portfolios(client, log, {"Crypto": ["a1", "a2"]}, dry_run=False)
+    assert opener.last.get_method() == "PUT"
+    assert opener.body_of(-1)["id"] == "p1"
+    assert opener.body_of(-1)["accountIds"] == ["a1", "a2"]
