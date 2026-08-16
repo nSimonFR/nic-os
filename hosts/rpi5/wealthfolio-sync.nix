@@ -9,81 +9,25 @@
 # sync and then vanish, which is the worst kind of data loss because it looks
 # like it worked.
 #
-# TWO PORTS, TWO POSTURES. wealthfolio.service binds 127.0.0.1:13345. Until now
-# `tailscale serve` pointed 3700 straight at it; it now points at an nginx vhost
-# that DENIES writes, and the sync connects to 13345 directly. Enforcement for
-# the browser, full access for the syncer, and no second credential to manage.
+# WRITABLE, on purpose. There used to be an nginx allowlist on :13346 that
+# default-denied every write method, so the mirror was the only writer and the
+# UI could not edit anything it owned. That has been removed at nSimon's
+# request: `tailscale serve` points straight at the app again.
 #
-# The allowlist is an ALLOWLIST, not a denylist. There are ~130 non-GET routes
-# under /api/v1, and enumerating them to deny is both fragile and fails OPEN on
-# upgrade — which matters here because the pinned image is 3.6.3 while upstream
-# is already past 3.7. Default-deny every write method, then re-admit the
-# handful of POSTs that are reads wearing a POST (search and `/query` endpoints
-# that take a filter body). Anything upstream adds later is denied until
-# someone looks at it.
+# What that costs, stated once so it is not a surprise: THE SYNC STILL WINS on
+# anything it mirrors. Snapshots are upserted by (account, date), so a holding
+# edited by hand is replaced at 06:23 the next morning. Accounts, positions,
+# quantities and cost basis all come from Sure and go back to coming from Sure.
 #
-# The allowed set was taken from an actual SPA session against the running
-# server, not from reading the frontend and hoping.
+# What survives an edit: allocation targets (not in Sure at all), goals made by
+# hand (only goals stamped "Mirrored from Sure" are pruned), addons, settings,
+# and anything else the sync never writes.
 { config, pkgs, lib, ... }:
 let
   stateDir = "/var/lib/wealthfolio-sync";
   internalPort = 13345; # wealthfolio.service — see wealthfolio.nix
-  proxyPort = 13346; # nginx read-only vhost; tailscale serve → here
 in
 {
-  # ── The read-only front ────────────────────────────────────────────────────
-  services.nginx.virtualHosts."wealthfolio-readonly" = {
-    listen = [ { addr = "127.0.0.1"; port = proxyPort; } ];
-
-    locations = {
-      # Login and logout must work, or nobody can read anything.
-      "= /api/v1/auth/login".proxyPass = "http://127.0.0.1:${toString internalPort}";
-      "= /api/v1/auth/logout".proxyPass = "http://127.0.0.1:${toString internalPort}";
-
-      # POST-shaped reads. These take a filter/date-range body, which is why
-      # they are POSTs at all; none of them mutates.
-      "~ ^/api/v1/.*/query$".proxyPass = "http://127.0.0.1:${toString internalPort}";
-      "~ ^/api/v1/(activities|spending/cash-activities)/search$".proxyPass =
-        "http://127.0.0.1:${toString internalPort}";
-      "~ ^/api/v1/performance/".proxyPass = "http://127.0.0.1:${toString internalPort}";
-      "~ ^/api/v1/spending/(report|insight|event-spending-summaries)$".proxyPass =
-        "http://127.0.0.1:${toString internalPort}";
-      "= /api/v1/market-data/quotes/latest".proxyPass =
-        "http://127.0.0.1:${toString internalPort}";
-      # WRITABLE, deliberately — the two things the mirror does not own.
-      #
-      # Allocation targets are not in Sure at all, so nothing here can overwrite
-      # them. Goals are mirrored, but the sync only prunes goals it created
-      # (matched on the "Mirrored from Sure" description), so one made by hand
-      # in the UI survives every run. Everything else on /api/v1 stays read-only:
-      # a holding edited here would live until the next sync and then vanish.
-      #
-      # Addons are here too, so they can be installed from the UI. An addon is
-      # arbitrary JavaScript running in the session, which sounds worse than it
-      # is HERE: it is confined to a sandboxed iframe, and its API calls go back
-      # through this same proxy — so an addon cannot write a holding either. It
-      # gets exactly the surface below, no more.
-      "~ ^/api/v1/(allocation-targets|goals|addons)".proxyPass =
-        "http://127.0.0.1:${toString internalPort}";
-
-      # portfolio/update fires unprompted on every authenticated page load and
-      # only enqueues a quote fetch — it rewrites derived valuation tables, never
-      # a holding. Allowed, so prices stay live between syncs; denying it would
-      # leave the UI showing yesterday's marks until the 06:23 timer.
-      "= /api/v1/portfolio/update".proxyPass = "http://127.0.0.1:${toString internalPort}";
-
-      # Everything else: reads pass, writes are refused.
-      "/" = {
-        proxyPass = "http://127.0.0.1:${toString internalPort}";
-        extraConfig = ''
-          limit_except GET HEAD OPTIONS {
-            deny all;
-          }
-        '';
-      };
-    };
-  };
-
   # ── The sync ───────────────────────────────────────────────────────────────
   users.users.wealthfolio-sync = {
     isSystemUser = true;
@@ -100,8 +44,6 @@ in
     # every activation would race a mid-rebuild wealthfolio restart.
 
     environment = {
-      # 13345 directly, NOT the :13346 read-only vhost — the syncer is the one
-      # writer this whole arrangement exists to permit.
       WF_URL = "http://127.0.0.1:${toString internalPort}";
       SURE_DB = "sure_production";
       STATE_DIR = stateDir;
