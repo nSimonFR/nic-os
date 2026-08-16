@@ -47,4 +47,5 @@ in {
   "scale-bridge-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wealthfolio-env.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "wealthfolio-sync-env.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
+  "wealthfolio-mcp-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
 }
