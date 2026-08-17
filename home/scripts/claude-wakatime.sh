@@ -14,7 +14,22 @@ input=$(cat 2>/dev/null)
 cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 [ -z "$cwd" ] && cwd="$PWD"
 
-project=$(basename "$cwd")
+# Project name: the *main* repo, not the checkout directory. Claude Code
+# worktrees live at <repo>/.claude/worktrees/bridge-cse_<24-char-session-id>,
+# so a bare `basename "$cwd"` filed every bridge session under its own
+# throwaway project. --git-common-dir points at the shared <repo>/.git even
+# from a linked worktree, so its parent is the repo root in both cases.
+gitdir=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+case "$gitdir" in
+  */.git) project=$(basename "${gitdir%/.git}") ;;
+  *) project=$(basename "$cwd") ;;
+esac
+[ -z "$project" ] && project=$(basename "$cwd")
+
+# Keep the worktrees distinguishable one level down: wakatime-cli does not
+# auto-detect a branch for --entity-type app, so pass it explicitly.
+branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null)
+
 # Entity must be a path-ish thing for wakatime-cli to accept it as a file;
 # use the project root so the heartbeat groups under that project.
 #
@@ -29,6 +44,7 @@ wakatime-cli \
   --entity-type app \
   --plugin "Claude-Code-wakatime/1.0" \
   --project "$project" \
+  ${branch:+--alternate-branch "$branch"} \
   --language "Claude" \
   --category "ai coding" \
   >/dev/null 2>&1
