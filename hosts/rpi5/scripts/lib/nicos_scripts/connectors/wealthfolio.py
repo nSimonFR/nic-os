@@ -125,7 +125,7 @@ WALLET_GROUPS = {
     "Stader ETHx (0x38...b5b7)": "Ledger",
     "ETH (Stader Staking)": "Ledger",
     "Ledger Staking": "Ledger",
-    "Ethereum (0x21...756F)": "Kraken",
+    "Ethereum (0x21...756F)": "Kraken Wallet",
 }
 
 
@@ -536,7 +536,28 @@ def import_snapshots(wf, log, account_id, snapshots, dry_run):
     return result.get("snapshotsImported", 0)
 
 
-def sync_alternatives(wf, log, alternatives, today, dry_run):
+def sure_alternative_history(cfg, run):
+    """Month-end value of each Property/Loan, from Sure's daily balances.
+
+    Month-end rather than daily: 32 points instead of 928, which is the same
+    curve at this resolution — a mortgage amortises monthly and the flat is
+    revalued a few times a year — for a thirtieth of the API calls.
+    """
+    rows = pg(cfg, run, """
+        SELECT a.name, max(b.date)::text,
+               (array_agg(b.balance ORDER BY b.date DESC))[1]::text
+        FROM balances b JOIN accounts a ON a.id = b.account_id
+        WHERE a.accountable_type IN ('Property', 'Loan') AND a.status <> 'draft'
+        GROUP BY a.name, to_char(b.date, 'YYYY-MM')
+        ORDER BY a.name, max(b.date)
+    """)
+    out = {}
+    for name, date, value in rows:
+        out.setdefault(name.strip(), []).append((date, value))
+    return out
+
+
+def sync_alternatives(wf, log, alternatives, today, dry_run, history=None):
     """Property + Loan, with the loan linked to the property.
 
     Linking is what makes net worth read as equity rather than as an asset and
@@ -567,6 +588,14 @@ def sync_alternatives(wf, log, alternatives, today, dry_run):
         created = wf.call("POST", "/alternative-assets", body)
         ids[alt["kind"]] = created["assetId"]
         log(f"created {alt['kind']} {alt['name']}")
+        # Backfill the curve between purchase and today. Only on creation: the
+        # points do not change once written, and re-pushing 32 valuations every
+        # morning would be 32 calls to say nothing.
+        for date, value in (history or {}).get(alt["name"], []):
+            wf.call("PUT", f"/alternative-assets/{ids[alt['kind']]}/valuation",
+                    {"value": value, "date": date})
+        if (history or {}).get(alt["name"]):
+            log(f"  backfilled {len(history[alt['name']])} month-end valuations")
 
     if not dry_run and "liability" in ids and "property" in ids:
         wf.call("POST", f"/alternative-assets/{ids['liability']}/link-liability",
@@ -768,7 +797,8 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
 
     sync_portfolios(wf, log, members, cfg.dry_run)
-    sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run)
+    sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run,
+                      history=sure_alternative_history(cfg, run))
 
     if not cfg.dry_run:
         # Refresh quotes so the new positions price immediately rather than
