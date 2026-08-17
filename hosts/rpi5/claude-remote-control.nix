@@ -252,135 +252,17 @@ let
     systemctl restart claude-remote-control.service
   '';
 
-  # Kill stale bridge sessions and clean up orphaned worktrees.
-  # Works around: anthropics/claude-code#29313, #26725
-  #
-  # The bug: deleting a session from claude.ai/code does NOT signal
-  # the remote process to exit. The heartbeat API keeps returning
-  # state=active forever. So we detect staleness via conversation
-  # file inactivity (JSONL mtime) which is updated on every real
-  # user/assistant message — much more reliable than process age.
-  cleanupScript = pkgs.writeShellScript "claude-rc-session-cleanup" ''
-    export PATH="${pkgs.jq}/bin:${pkgs.git}/bin:${pkgs.procps}/bin:${pkgs.findutils}/bin:$PATH"
-    SESSIONS_DIR="${sessionsDir}"
-    PROJECTS_DIR="${projectsDir}"
-    WORKTREES_DIR="${worktreesDir}"
-    MAX_INACTIVITY="${maxInactivitySec}"
-    now="$(date +%s)"
-    killed=0
+  # Kill stale bridge sessions and clean up orphaned worktrees. See the script
+  # header for the upstream bugs it works around and why it exits non-zero on a
+  # reap it could not complete. writeShellApplication (not writeShellScript) so
+  # shellcheck runs and `set -euo pipefail` is on — the previous inline version
+  # swallowed every error and reported success anyway.
+  cleanupScript = pkgs.writeShellApplication {
+    name = "claude-rc-session-cleanup";
+    runtimeInputs = with pkgs; [ jq git procps findutils coreutils ];
+    text = builtins.readFile ./scripts/claude-rc-session-cleanup.sh;
+  };
 
-    for f in "$SESSIONS_DIR"/*.json; do
-      [ -f "$f" ] || continue
-      pid="$(basename "$f" .json)"
-      entrypoint="$(jq -r '.entrypoint // ""' "$f")"
-
-      # Only target bridge sessions (spawned by remote-control for web UI)
-      [ "$entrypoint" = "sdk-cli" ] || continue
-
-      # Skip if process is already dead — just clean up the file
-      [ -d "/proc/$pid" ] || {
-        echo "removing stale session file for dead PID $pid"
-        rm -f "$f"
-        killed=$((killed + 1))
-        continue
-      }
-
-      # Find the conversation JSONL file to check last real activity
-      session_id="$(jq -r '.sessionId // ""' "$f")"
-      [ -z "$session_id" ] && continue
-
-      conv_file="$(find "$PROJECTS_DIR" -name "''${session_id}.jsonl" -print -quit 2>/dev/null)"
-      if [ -n "$conv_file" ] && [ -f "$conv_file" ]; then
-        last_mod="$(stat -c %Y "$conv_file")"
-        idle_sec=$(( now - last_mod ))
-      else
-        # No conversation file means it never got a message — use process age
-        idle_sec="$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')"
-        [ -z "$idle_sec" ] && continue
-      fi
-
-      if [ "$idle_sec" -gt "$MAX_INACTIVITY" ]; then
-        idle_min=$(( idle_sec / 60 ))
-        echo "killing stale bridge session PID=$pid sid=$session_id (inactive ''${idle_min}min > $((MAX_INACTIVITY/60))min)"
-        kill "$pid" 2>/dev/null
-        sleep 2
-        kill -9 "$pid" 2>/dev/null || true
-        rm -f "$f"
-        killed=$((killed + 1))
-      fi
-    done
-
-    # Clean up orphaned worktrees (bridge-cse_* dirs whose process is gone)
-    if [ -d "$WORKTREES_DIR" ]; then
-      for wt in "$WORKTREES_DIR"/bridge-cse_*; do
-        [ -d "$wt" ] || continue
-        wt_name="$(basename "$wt")"
-        # Check if any running claude process uses this worktree
-        in_use=0
-        for f in "$SESSIONS_DIR"/*.json; do
-          [ -f "$f" ] || continue
-          pid="$(basename "$f" .json)"
-          [ -d "/proc/$pid" ] || continue
-          cwd="$(jq -r '.cwd // ""' "$f")"
-          case "$cwd" in
-            *"$wt_name"*) in_use=1; break ;;
-          esac
-        done
-        if [ "$in_use" = "0" ]; then
-          # Preserve recently-active worktrees even with no live worker. A bridge
-          # worker process only exists mid-turn, so an idle-but-resumable session
-          # — and, right after a reboot, EVERY session until it is re-hosted — has
-          # no live cwd here and would be reaped, which deletes the worktree and
-          # freezes the session permanently (the app has nothing to spawn into).
-          # Gate on the transcript JSONL mtime, the same 24h window the stale-
-          # process loop above uses. Workers run with CLAUDE_CONFIG_DIR=~/.claude-rc
-          # whose projects/ symlink points into $PROJECTS_DIR; the transcript dir
-          # is the worktree path slugified (every non-alphanumeric char -> '-').
-          slug="$(printf '%s' "$wt" | tr -c 'A-Za-z0-9' '-')"
-          conv_dir="$PROJECTS_DIR/$slug"
-          last_mod=0
-          if [ -d "$conv_dir" ]; then
-            last_mod="$(find "$conv_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\n' 2>/dev/null \
-              | cut -d. -f1 | sort -rn | head -1)"
-            [ -z "$last_mod" ] && last_mod=0
-          fi
-          if [ "$last_mod" -gt 0 ] && [ "$(( now - last_mod ))" -le "$MAX_INACTIVITY" ]; then
-            echo "preserving recently-active worktree: $wt_name (idle $(( (now - last_mod) / 60 ))min)"
-            continue
-          fi
-          echo "removing orphaned worktree: $wt_name"
-          # Unlock BEFORE removing. Every bridge worktree is locked at creation
-          # (so a reboot can't let prune reap a resumable session), and
-          # `worktree remove --force` REFUSES a locked worktree — it does not
-          # override the lock. Without this unlock the command failed silently,
-          # fell through to the `rm -rf`, and left the registration behind
-          # forever.
-          git -C /home/${username}/nic-os worktree unlock "$wt" 2>/dev/null || true
-          git -C /home/${username}/nic-os worktree remove --force "$wt" 2>/dev/null || rm -rf "$wt"
-        fi
-      done
-
-      # Collect registrations whose directory is already gone. `worktree prune`
-      # silently SKIPS locked entries, so any worktree that lost its directory
-      # while still locked — every one removed by the rm -rf fallback above, plus
-      # anything cleaned up by hand — stayed registered permanently. These had
-      # accumulated to 356 orphans against 52 live worktrees (28MB of
-      # .git/worktrees metadata, and 400+ branch refs kept alive because a
-      # registration pins its branch). Unlock the dead ones first so prune can
-      # actually do its job; live worktrees keep their locks.
-      # Pure shell on purpose: this script's PATH (above) carries only
-      # jq/git/procps/findutils, so awk is not guaranteed to be present.
-      git -C /home/${username}/nic-os worktree list --porcelain 2>/dev/null \
-        | while read -r wt_key wt_path; do
-            [ "$wt_key" = "worktree" ] || continue
-            [ -d "$wt_path" ] && continue
-            git -C /home/${username}/nic-os worktree unlock "$wt_path" 2>/dev/null || true
-          done
-      git -C /home/${username}/nic-os worktree prune 2>/dev/null || true
-    fi
-
-    [ "$killed" -gt 0 ] && echo "cleaned up $killed stale session(s)" || echo "no stale sessions found"
-  '';
 in
 lib.recursiveUpdate keepWarm.nixosConfig {
   systemd.services.claude-remote-control = {
@@ -435,15 +317,24 @@ lib.recursiveUpdate keepWarm.nixosConfig {
 
   # Periodic cleanup of stale bridge sessions that the web UI failed to terminate.
   # Workaround for anthropics/claude-code#29313 and #26725.
+  #
+  # No OnFailure= wiring needed: the script exits non-zero when a reap did not
+  # complete, and monitoring.nix's systemd-failed-alert timer sweeps failed units
+  # every 2min. The next successful 30min tick clears the failed state.
   systemd.services.claude-rc-session-cleanup = {
     description = "Claude RC stale session cleanup";
     serviceConfig = {
       Type = "oneshot";
       User = username;
       Group = "users";
-      ExecStart = cleanupScript;
+      ExecStart = "${cleanupScript}/bin/claude-rc-session-cleanup";
       Environment = [
         "HOME=/home/${username}"
+        "SESSIONS_DIR=${sessionsDir}"
+        "PROJECTS_DIR=${projectsDir}"
+        "WORKTREES_DIR=${worktreesDir}"
+        "REPO_DIR=${workingDir}"
+        "MAX_INACTIVITY=${maxInactivitySec}"
       ];
     };
   };
