@@ -155,10 +155,21 @@ WALLET_GROUPS = {
 # and -25) = $209.88.
 COST_BASIS_OVERRIDES = {
     ("Ledger", "BTC-USD"): 209.88,
-    # ETH is NOT here. Only 0.111 of the 0.481 held is accounted for (€328), and
-    # 0.4001 of the remainder is the staking position, whose origin is not in
-    # any export seen so far. A basis covering 23% of a holding would render as
-    # a ~4x gain — a confident wrong number where the blank was honest.
+    # ETH. Most of it was never bought, which is why no export ever reconciled:
+    # 5000 FLT arrived as an airdrop on 2024-05-18, was claimed on 2024-07-17,
+    # sold on 2024-07-19 for 0.3691821 ETH, staked, and came back as 0.37155146
+    # ETH — roughly 0.37 of the 0.481 held, at zero acquisition cost. Traced
+    # on-chain across both wallets with the Etherscan key in agenix.
+    #
+    # Actually paid, €228.05 in three lots, converted at EURUSD on each date:
+    #   2024-05-18  €10.00 x 1.08678 = $10.87   exchange buy, 0.003 ETH
+    #   2024-06-24  €95.00 x 1.06878 = $101.53  Finary, withdrawn 2024-09-21
+    #   2024-09-28  €123.05 x 1.11772 = $137.53 XLM converted to 0.05074 ETH
+    # = $249.74 total, split by holding because the coins are fungible and moved
+    # between both wallets: Ledger 92.3%, Kraken Wallet 7.7%. Average cost is
+    # also what French crypto tax uses, so this matches how it will be declared.
+    ("Ledger", "ETH-USD"): 230.48,
+    ("Kraken Wallet", "ETH-USD"): 19.26,
 }
 
 
@@ -350,7 +361,13 @@ def sure_positions(cfg, run, since):
                "currency": "USD" if is_crypto_pair(symbol) else ccy}
         # Crypto has no cost basis in Sure at all. Sending 0 would render as a
         # 100%-gain position; omitting it leaves the column honestly blank.
-        if basis and not is_crypto_pair(symbol):
+        # Crypto used to be excluded here, because Sure had no cost basis for
+        # it and sending 0 renders as a 100% gain. It has one now — written from
+        # nSimon's exchange exports and the on-chain trace, marked manual and
+        # LOCKED so a CoinStats resync cannot recompute over it — so Sure is the
+        # source for crypto as for everything else, and COST_BASIS_OVERRIDES is
+        # only the fallback for what Sure still does not know.
+        if basis:
             pos["avgCost"] = basis
         # `mic` is read but deliberately NOT sent. Sure's exchange_operating_mic
         # is not always a MIC: the German listings carry the string "GER"

@@ -488,14 +488,18 @@ def test_an_override_never_overwrites_sures_own_basis():
     assert rows[0]["avgCost"] == "1.0"
 
 
-def test_eth_has_no_override_because_the_data_is_incomplete():
-    """0.111 of 0.481 ETH is accounted for; a basis over 23% of a holding would
-    render as a ~4x gain — a confident wrong number where blank was honest."""
-    assert ("Ledger", "ETH-USD") not in wf.COST_BASIS_OVERRIDES
+def test_eth_is_priced_from_what_was_actually_paid_not_what_was_received():
+    """Most of the ETH was an FLT airdrop sold for ETH — zero cost — which is
+    why no exchange export ever reconciled against the holdings. Only €228.05
+    was ever spent, and it is split across both wallets by holding."""
     rows = wf.apply_cost_basis_overrides("Ledger", [
         {"symbol": "ETH-USD", "quantity": "0.44416929"},
     ])
-    assert "avgCost" not in rows[0]
+    assert float(rows[0]["avgCost"]) == pytest.approx(230.48 / 0.44416929)
+    kraken = wf.apply_cost_basis_overrides("Kraken Wallet", [
+        {"symbol": "ETH-USD", "quantity": "0.03711276"},
+    ])
+    assert float(kraken[0]["avgCost"]) == pytest.approx(19.26 / 0.03711276)
 
 
 def test_a_zero_quantity_position_does_not_divide_by_zero():
