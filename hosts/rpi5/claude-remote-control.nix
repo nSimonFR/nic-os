@@ -113,7 +113,7 @@ let
   # change to the real ~/.claude/settings.json.
   prepConfigScript = pkgs.writeShellScript "claude-rc-prep-config" ''
     set -eu
-    export PATH="${pkgs.jq}/bin:${pkgs.coreutils}/bin:$PATH"
+    export PATH="${pkgs.jq}/bin:${pkgs.coreutils}/bin:${pkgs.git}/bin:$PATH"
     src="/home/${username}/.claude"
     dst="${configDir}"
     mkdir -p "$dst"
@@ -157,6 +157,17 @@ let
     else
       echo "post-checkout hook exists and is not ours; skipping worktree-gate install" >&2
     fi
+
+    # Backfill the gate into worktrees that already exist. post-checkout only
+    # fires at creation, so without this the fix would reach a live worktree only
+    # after it is reaped and respawned — and every session running in one until
+    # then would stay invisible to Aperture. Re-running the hook itself (rather
+    # than duplicating its logic) keeps one source of truth for the gate URL; it
+    # is idempotent and self-guarding, so a stray directory costs nothing.
+    for wt in /home/${username}/nic-os/.claude/worktrees/*/; do
+      [ -e "$wt/.git" ] || continue
+      ( cd "$wt" && CLAUDE_CONFIG_DIR="$dst" ${worktreeGateHook} ) || true
+    done
   '';
 
   # NOTE: --create-session-in-dir (the default) is LOAD-BEARING for session
