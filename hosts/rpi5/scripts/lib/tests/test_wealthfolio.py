@@ -415,7 +415,7 @@ def test_the_four_accounts_sharing_one_address_group_together():
                  "Stader ETHx (0x38...b5b7)", "ETH (Stader Staking)",
                  "Ledger Staking", "Bitcoin (bc1q...k6aq)"):
         assert wf.wallet_group(name) == "Ledger"
-    assert wf.wallet_group("Ethereum (0x21...756F)") == "Kraken"
+    assert wf.wallet_group("Ethereum (0x21...756F)") == "Kraken Wallet"
 
 
 def test_an_ungrouped_account_keeps_its_own_name():
@@ -570,3 +570,47 @@ def test_the_loans_origin_is_restored_after_linking(logged):
     assert opener.last.get_full_url().endswith("/alternative-assets/loan/metadata")
     assert json.loads(opener.last.data.decode())["metadata"] == {
         "purchase_price": "325000", "purchase_date": "2025-03-01"}
+
+
+def test_the_history_is_month_end_not_daily():
+    """32 points instead of 928 — the same curve at this resolution, since a
+    mortgage amortises monthly and the flat is revalued a few times a year."""
+    seen = {}
+
+    def run(cmd):
+        seen["sql"] = cmd[-1]
+        return ""
+
+    wf.sure_alternative_history(cfg(), run)
+    assert "to_char(b.date, 'YYYY-MM')" in seen["sql"]
+
+
+def test_a_new_alternative_gets_its_curve_backfilled(logged):
+    _, log = logged
+    opener = FakeOpener([json_reply([]), json_reply({"assetId": "p1"}), json_reply({})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_alternatives(client, log, [
+        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
+         "start_date": "2025-02-14", "start_value": "325000"},
+    ], "2026-08-16", dry_run=False,
+        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]})
+    puts = [r for r in opener.requests if r.get_full_url().endswith("/valuation")]
+    assert [json.loads(r.data.decode())["date"] for r in puts] == \
+        ["2025-02-28", "2025-05-31"]
+
+
+def test_an_existing_alternative_is_not_re_backfilled(logged):
+    """The points do not change once written — re-pushing 32 valuations every
+    morning would be 32 calls to say nothing."""
+    _, log = logged
+    opener = FakeOpener([json_reply([{"id": "p1", "name": "Maison"}]), json_reply({})])
+    client = wf.Wealthfolio("http://wf", opener=opener)
+    wf.sync_alternatives(client, log, [
+        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
+         "start_date": "2025-02-14", "start_value": "325000"},
+    ], "2026-08-16", dry_run=False,
+        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]})
+    # Only today's valuation, not the whole curve again.
+    puts = [json.loads(r.data.decode())["date"] for r in opener.requests
+            if r.get_full_url().endswith("/valuation")]
+    assert puts == ["2026-08-16"]
