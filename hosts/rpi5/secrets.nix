@@ -77,6 +77,14 @@
       owner = "nsimon";
       mode = "0400";
     };
+    etherscan-api-key = {
+      file = ./secrets/etherscan-api-key.age;
+      # Read-only chain queries — used to trace where crypto moved between the
+      # Ledger and Kraken wallets, which is what says whose cost basis is whose.
+      # Root-owned because the Sure -> Wealthfolio sync runs as root.
+      owner = "root";
+      mode = "0400";
+    };
     wealthfolio-sync-env = {
       file = ./secrets/wealthfolio-sync-env.age;
       # WF_PASSWORD for the Sure -> Wealthfolio mirror. Root-owned: the sync
