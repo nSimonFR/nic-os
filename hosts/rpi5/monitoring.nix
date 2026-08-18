@@ -75,7 +75,17 @@ in
     serviceConfig = {
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "systemd-failed-alert" ''
-        FAILED=$(${pkgs.systemd}/bin/systemctl list-units --state=failed --no-legend)
+        # Three sources, because the system manager only knows about the first:
+        # a failed USER unit is invisible to it (hermes-skill-promote failed
+        # hourly for eight days unnoticed), and a user manager that is *stopped*
+        # rather than failed is in neither list (that hid Hermes down for 31h).
+        FAILED=$({
+          ${pkgs.systemd}/bin/systemctl list-units --state=failed --no-legend
+          ${pkgs.systemd}/bin/systemctl --machine=nsimon@.host --user list-units \
+            --state=failed --no-legend 2>/dev/null | ${pkgs.gnused}/bin/sed 's/^/[user] /'
+          ${pkgs.systemd}/bin/systemctl is-active --quiet user@1001.service \
+            || echo "[user] user@1001.service NOT ACTIVE"
+        })
         printf '%s' "$FAILED" | ${telegramAlert} systemd-failed "systemd units failed on rpi5"
       '';
     };

@@ -331,6 +331,7 @@ let
         pkgs.coreutils
         pkgs.gawk
         pkgs.gnugrep
+        pkgs.gnused
         pkgs.findutils
       ]
     }:$PATH"
