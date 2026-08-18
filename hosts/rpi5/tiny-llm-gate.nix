@@ -59,10 +59,11 @@ in
         };
 
         # Claude, spoken natively (v0.9.4): the gate translates OpenAI chat ↔
-        # Anthropic Messages in-process and authenticates via the SHARED 2-account
-        # OAuth pool defined in the `anthropic` block below (no own auth). Lets
-        # any frontend route to Claude — used as "auto"'s last-resort fallback so
-        # the assistant still answers when BOTH beast (ollama) and codex are down.
+        # Anthropic Messages in-process and authenticates via the SHARED OAuth
+        # account pool defined in the `anthropic` block below (no own auth) —
+        # currently a single account, see there. Lets any frontend route to
+        # Claude — used as "auto"'s last-resort fallback so the assistant still
+        # answers when BOTH beast (ollama) and codex are down.
         claude = {
           type = "anthropic";
           base_url = "https://api.anthropic.com";
@@ -116,7 +117,7 @@ in
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
 
-        # -- Anthropic (Claude) via the shared 2-account OAuth pool --
+        # -- Anthropic (Claude) via the shared OAuth account pool --
         # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
         # Claude Max/Pro, so the subscription-OAuth pool serves it natively.
         "claude" = { provider = "claude"; upstream_model = "claude-opus-5"; };
@@ -204,19 +205,23 @@ in
       # Anthropic passthrough proxy — Aperture sits in front (Claude Code's
       # ANTHROPIC_BASE_URL points at Aperture), and forwards /v1/messages
       # here with its own apikey. We strip that apikey and replace it with
-      # the current Claude Code access token, sourced from one of two
-      # accounts. Both tokens are kept fresh by sidecars
-      # (claude-oauth-extract.service / claude-oauth-extract-2.service) that
-      # track ~/.claude/.credentials.json / ~/.claude-secondary/.credentials.json.
+      # the current Claude Code access token, kept fresh by a sidecar
+      # (claude-oauth-extract.service) that tracks ~/.claude/.credentials.json.
       # tiny-llm-gate re-reads the token file on every request (FileBearer
       # auth), so rotation is transparent. Aperture sees the full real
       # request and response bodies for observability.
       #
-      # acct1 is the daily-driver login (team plan); acct2 is a dedicated
-      # gate-only spare (max plan) — see hosts/rpi5/claude-oauth-2.nix. The gate
-      # stays sticky on one account until it gets a 429, then fails over to
-      # the other and stays there (see anthropic.go's sticky-until-429
-      # selection). Naive round-robin was rejected as ToS-adjacent.
+      # claude-oauth-extract-2.service (the disabled spare's extractor) still
+      # runs, and this unit still wants/afters it further down — deliberately:
+      # it keeps /run/claude-oauth-2/token warm so re-enabling acct2 is a pure
+      # config revert, and `wants` is not a hard dependency.
+      #
+      # Single account for now: acct1, the daily-driver login (team plan).
+      # A one-element `accounts` list is valid — the gate only rejects `auth`
+      # and `accounts` set together (internal/config/config.go), there is no
+      # minimum length. With one account there is nothing to switch to, so the
+      # gate's sticky-until-429 failover is inert (naive round-robin was
+      # rejected as ToS-adjacent, and is not what this ever did).
       anthropic = {
         upstream = "https://api.anthropic.com";
         accounts = [
@@ -227,13 +232,38 @@ in
               token_file = "/run/claude-oauth/token";
             };
           }
-          {
-            name = "acct2";
-            auth = {
-              type = "bearer";
-              token_file = "/run/claude-oauth-2/token";
-            };
-          }
+          # acct2 (the gate-only spare, max plan — hosts/rpi5/claude-oauth-2.nix)
+          # DISABLED 2026-08-18: the token is valid and minutes-fresh, but the
+          # ORGANIZATION this account belongs to disallows OAuth API access, so
+          # every raw-passthrough request 403s with
+          # `oauth_not_allowed_for_organization` — 614 × 403 and 0 × 200 on the
+          # day it was caught. The gate handled that CORRECTLY: it reads 403 as
+          # reason=auth_error and fails over to acct1 with a 900 s cooldown, so
+          # failover was never the problem — it just had nothing to fail over
+          # to. Keeping acct2 listed only bought a wasted switch + cooldown on
+          # every flap, and an hourly Telegram page for an accepted state.
+          #
+          # Re-enabling is uncommenting this entry (plus the acct2 page in
+          # claude-account-healthcheck.nix) — but a fresh
+          #   CLAUDE_CONFIG_DIR=~/.claude-secondary claude
+          # login is NOT sufficient and on its own will not help: the refusal is
+          # org policy, not a stale credential. acct2 can only serve the gate
+          # again once that account is outside the team/enterprise org, or that
+          # org enables OAuth API access. Prove it on the passthrough route
+          # before re-enabling — `acct2=OK` from anthropic-account-healthcheck is
+          # a weaker signal that lagged the real onset by ~3.5 h:
+          #   curl -s -o /dev/null -w '%{http_code}\n' -X POST \
+          #     http://127.0.0.1:4001/v1/messages -H 'x-api-key: dummy' \
+          #     -H 'content-type: application/json' \
+          #     -H 'anthropic-version: 2023-06-01' \
+          #     -d '{"model":"claude-opus-5","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}'
+          # {
+          #   name = "acct2";
+          #   auth = {
+          #     type = "bearer";
+          #     token_file = "/run/claude-oauth-2/token";
+          #   };
+          # }
         ];
       };
     };

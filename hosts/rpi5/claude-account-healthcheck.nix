@@ -1,15 +1,20 @@
-# Health probe + proactive alerting for tiny-llm-gate's two Anthropic accounts.
+# Health probe + proactive alerting for tiny-llm-gate's Anthropic account(s).
 #
-# tiny-llm-gate fails over between two OAuth tokens (/run/claude-oauth/token =
-# acct1, /run/claude-oauth-2/token = acct2). A dead token used to wedge the
-# whole pool (fixed in gate v0.8.1 by failing over on 401), but a dead acct2
-# still silently removes all failover headroom — exactly the state that caused
-# the outage this guards against. This oneshot probes each token directly
-# against api.anthropic.com hourly and pages (self-updating Telegram message)
-# when an account is dead/missing or when both tokens are identical (no
-# headroom — e.g. the mirror-stopgap, or a failed secondary re-login).
+# The gate's pool is SINGLE-ACCOUNT since 2026-08-18 (acct2's failover entry is
+# commented out in tiny-llm-gate.nix — its token 403s on the raw OAuth
+# passthrough). So the only credential that can take the gate down is acct1
+# (/run/claude-oauth/token), and that is the only thing this pages on. This
+# oneshot probes it directly against api.anthropic.com hourly and alerts via a
+# self-updating Telegram message when it is dead/missing.
 #
-# On-demand "test both sessions" is: sudo systemctl start
+# acct2 (/run/claude-oauth-2/token) is still probed, but only for visibility in
+# the journal: the keep-warm sidecar stays enabled so the spare is ready to
+# re-enable, and its status is what tells you whether re-enabling would work.
+# Its page — and the "both tokens identical / no failover headroom" page, which
+# is meaningless with one account — are commented out just below, alongside the
+# accounts entry they belong to.
+#
+# On-demand "test the sessions" is: sudo systemctl start
 # anthropic-account-healthcheck  (then journalctl -u it -n 20).
 { config, pkgs, lib, telegramChatId, ... }:
 let
@@ -60,15 +65,25 @@ let
     add() { body="''${body}$1"$'\n'; }
 
     # Page on definitive credential problems (not transient network errors).
+    # Only acct1 pages: it is the gate's only account, so it is the only one
+    # whose death is an outage. acct2's status is still computed above and
+    # printed below, just not paged on.
     case "$S1" in DEAD*|MISSING|EMPTY) add "• acct1 ($TOK1): $S1" ;; esac
-    case "$S2" in DEAD*|MISSING|EMPTY) add "• acct2 ($TOK2): $S2" ;; esac
+    # DISABLED 2026-08-18 with acct2's entry in tiny-llm-gate.nix — acct2 IS
+    # currently DEAD 403 on this probe, which is precisely why it was dropped
+    # from the pool, so leaving this in would re-page an accepted state hourly.
+    # case "$S2" in DEAD*|MISSING|EMPTY) add "• acct2 ($TOK2): $S2" ;; esac
 
     # No failover headroom: both slots hold the same token (mirror-stopgap, or
     # a failed secondary login). Sessions still work, but resilience is gone.
     # Plain string compare (cat + test) avoids a diffutils dependency for cmp.
-    if [ -r "$TOK1" ] && [ -r "$TOK2" ] && [ "$(cat "$TOK1")" = "$(cat "$TOK2")" ]; then
-      add "• no failover headroom: acct1 and acct2 tokens are identical"
-    fi
+    #
+    # DISABLED 2026-08-18: with a single account in the pool there is no
+    # headroom to lose, so this can only ever be a false positive. Re-enable
+    # together with acct2 in tiny-llm-gate.nix.
+    # if [ -r "$TOK1" ] && [ -r "$TOK2" ] && [ "$(cat "$TOK1")" = "$(cat "$TOK2")" ]; then
+    #   add "• no failover headroom: acct1 and acct2 tokens are identical"
+    # fi
 
     if [ -n "$body" ]; then
       echo "anthropic-account-healthcheck: ALERT acct1=$S1 acct2=$S2" >&2
