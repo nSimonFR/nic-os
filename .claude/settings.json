@@ -1,14 +1,30 @@
 {
-  "_comment_mcp": "Repo-scoped Claude Code settings for nic-os. Trims per-session context: claude.ai account connectors load into EVERY project regardless of relevance, and Figma (27 tools) + Slite (39) + Slack (19) together outweigh all ~35 built-in tools. Their schemas are the fattest because of internal duplication — Slite inlines the whole sliteml 'Core rules' paragraph in create-note/append-blocks/modify-block/modify-range/update-note and twice inside edit-document's oneOf (~7 copies); Slack inlines the full Canvas-markdown spec in both slack_create_canvas and slack_update_canvas. None of the three is callable work in a NixOS config repo. Denied here rather than in home/dotfiles/claude-settings.json (user scope) so they stay available in the Trusk repos. deniedMcpServers merges across every settings scope and a deny at any level wins. Deliberately NOT disableClaudeAiConnectors: that is any-source-true and would also drop 'claude.ai Claude Code Remote', which the bridge depends on. serverName must match ~/.claude.json claudeAiMcpEverConnected verbatim (real names have spaces; mcp__claude_ai_* is only the sanitised tool prefix).",
+  "_comment_mcp": "Repo-scoped Claude Code settings for nic-os. Trims per-session context: claude.ai account connectors load into EVERY project regardless of relevance, and Figma (27 tools) + Slite (39) + Slack (19) together outweigh all ~35 built-in tools. Their schemas are the fattest because of internal duplication — Slite inlines the whole sliteml 'Core rules' paragraph in create-note/append-blocks/modify-block/modify-range/update-note and twice inside edit-document's oneOf (~7 copies); Slack inlines the full Canvas-markdown spec in both slack_create_canvas and slack_update_canvas. None of these is callable work in a NixOS config repo. Denied here rather than in home/dotfiles/claude-settings.json (user scope) so they stay available in the Trusk repos. deniedMcpServers merges across every settings scope and a deny at any level wins. Deliberately NOT disableClaudeAiConnectors: that is any-source-true and would also drop 'claude.ai Claude Code Remote', which the bridge depends on.",
+  "_comment_mcp_names": "EVERY CONNECTOR IS LISTED TWICE, AND MUST BE. A connector attaches either under its claudeAiMcpEverConnected name ('claude.ai Figma') or bare ('Figma'), and denying one form brings it back as the other — so the earlier prefixed-only list removed one registration and got the second. The transcripts date it exactly: mcp_instructions_delta addedNames carried the PREFIXED form in all 87 nic-os sessions up to 2026-07-28 (the day this file first denied it) and the BARE form in all 40 sessions since. Metabase Trusk was denied under neither form, which is why it loaded TWICE per session — mcp__claude_ai_Metabase_Trusk__* and mcp__Metabase_Trusk__* were the same 8 tools, paid for twice. mcp__* is only the sanitised tool prefix ('.' and ' ' become '_'); it is never a serverName. Why this got expensive: some time on 2026-08-17 MCP schemas stopped being deferred behind ToolSearch (deferred_tools_delta is in every session 08-05→08-16 and none after, on an unchanged client 2.1.220), so they now load eagerly into the system prompt. Baseline went ~49k → ~134k tokens against a ~167k auto-compact threshold, leaving ~33k of working room: session 018wRTx8 auto-compacted twice in 7 minutes and spent 4.8 of them compacting. If deferral returns these denies cost nothing; while it is gone they are the difference between working and compacting.",
   "deniedMcpServers": [
     {
       "serverName": "claude.ai Figma"
     },
     {
+      "serverName": "Figma"
+    },
+    {
       "serverName": "claude.ai Slack"
     },
     {
+      "serverName": "Slack"
+    },
+    {
       "serverName": "claude.ai Slite"
+    },
+    {
+      "serverName": "Slite"
+    },
+    {
+      "serverName": "claude.ai Metabase Trusk"
+    },
+    {
+      "serverName": "Metabase Trusk"
     }
   ],
   "_comment_plugins": "The slack plugin ships 8 skills plus its own MCP server (mcp__plugin_slack_slack) — dead weight once the Slack connector is denied. It is enabled at user scope in home/dotfiles/claude-settings.json; settings precedence is user < project < local, so false here disables it for nic-os only and leaves it on elsewhere.",
