@@ -4,7 +4,7 @@ let
   telegramTokenFile = "/run/agenix/telegram-bot-token";
   # One-shot seam (shared/notify.nix): "resumed N sessions after boot" is an
   # event, not a condition that later clears.
-  telegramSend = (import ../../shared/notify.nix { inherit pkgs; }).send {
+  telegramSend = (import ../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = telegramTokenFile;
     chatId = telegramChatId;
     name = "claude-rc-telegram-send";
@@ -106,7 +106,7 @@ let
   # each bridge-created worktree; workers don't run the guard, so they're free
   # to use the gate. Guarded by CLAUDE_CONFIG_DIR → no-op for normal checkouts.
   worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate"
-    (builtins.readFile ./scripts/claude-rc-worktree-gate.sh);
+    (builtins.readFile ./claude-rc-worktree-gate.sh);
 
   # Build the isolated bridge config dir (see configDir note above) before each
   # start, refreshing symlinks and regenerating settings.json so it tracks any
@@ -260,7 +260,7 @@ let
   cleanupScript = pkgs.writeShellApplication {
     name = "claude-rc-session-cleanup";
     runtimeInputs = with pkgs; [ jq git procps findutils coreutils ];
-    text = builtins.readFile ./scripts/claude-rc-session-cleanup.sh;
+    text = builtins.readFile ./claude-rc-session-cleanup.sh;
   };
 
 in

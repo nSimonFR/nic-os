@@ -120,7 +120,7 @@ in
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
     # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
-    # spare login (see hosts/rpi5/claude-oauth-2.nix). Its settings.json was previously
+    # spare login (see hosts/rpi5/claude/claude-oauth-2.nix). Its settings.json was previously
     # unmanaged; point it at the SAME baseline as ~/.claude so it inherits the
     # Aperture gate URL, permissions and hooks — one source of truth. Writable
     # out-of-store symlink; note runtime toggles (/voice, theme, …) are shared

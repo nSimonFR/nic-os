@@ -5,7 +5,7 @@
 #   activity      UserPromptSubmit hook. Stamps "the user is present right now"
 #                 into ~/.claude/state/last-activity. No forward.
 #   notification  Notification hook. Forwards to the central Telegram aggregator
-#                 (hosts/rpi5/claude-notify-aggregator.py) ONLY if the user has been
+#                 (hosts/rpi5/claude/claude-notify-aggregator.nix) ONLY if the user has been
 #                 idle for >= CLAUDE_IDLE_NOTIFY_SECONDS. While the user is
 #                 actively working these are dropped, killing routine spam.
 #   push          PostToolUse(PushNotification) hook. Always forwards, flagged

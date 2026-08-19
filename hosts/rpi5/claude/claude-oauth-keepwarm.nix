@@ -32,7 +32,7 @@ let
   # Batching seam (shared/notify.nix). Not a direct send: :8088 is the only
   # thing here holding the root-only bot token, and a session cap is exactly
   # the kind of agent event that should batch with the others.
-  agentNotify = (import ../../shared/notify.nix { inherit pkgs; }).agent {
+  agentNotify = (import ../../../shared/notify.nix { inherit pkgs; }).agent {
     name = "claude-gate${suffix}";
     source = "Claude gate";
   };

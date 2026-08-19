@@ -20,7 +20,7 @@
 let
   # Same self-updating alerter monitoring.nix uses (send-once / edit-in-place /
   # resolve), from the shared seam in shared/notify.nix.
-  telegramAlert = (import ../../shared/notify.nix { inherit pkgs; }).alert {
+  telegramAlert = (import ../../../shared/notify.nix { inherit pkgs; }).alert {
     tokenFile = config.age.secrets.telegram-bot-token.path;
     chatId = telegramChatId;
     name = "telegram-alert-anthropic";
