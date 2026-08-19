@@ -372,7 +372,9 @@ in
     # NOT behind the 443 path-mux: AFFiNE's SPA router insists on root paths, so
     # it runs at the root of its own 8443 funnel.
     public = {
-      order   = 30;
+      # 4th in Apps. Swapped with Nextcloud (was 30) so Nextcloud and Calino, which
+      # reads Nextcloud's calendars, sit next to each other.
+      order   = 25;
       port    = 8443;
       backend = "http://127.0.0.1:13010";
       funnel  = true;

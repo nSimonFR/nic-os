@@ -419,7 +419,8 @@ in
     # bare URL here. Prefix stripped before forwarding — NC routes at its vhost
     # root, and overwritewebroot only rewrites the links it generates.
     public = {
-      order    = 25;
+      # Swapped with AFFiNE (was 25) so Calino (35) follows immediately.
+      order    = 30;
       port     = 443;
       backend  = "http://127.0.0.1:8091";
       proxied  = true;
