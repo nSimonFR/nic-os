@@ -31,6 +31,7 @@
     "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
     "d /mnt/data/backups/karakeep 0750 karakeep karakeep -"
     "d /mnt/data/backups/wealthfolio 0750 wealthfolio wealthfolio -"
+    "d /mnt/data/backups/blogwatcher 0750 nsimon users -"
   ];
 
   systemd.services.hass-backup = {
@@ -158,6 +159,42 @@
     description = "Daily Karakeep backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+  };
+
+  # ── blogwatcher (SQLite in $HOME) ──────────────────────────────────────
+  # blogwatcher is a CLI, not a service, so it has no module and no
+  # `nic.services` entry — which is exactly why its state went unnoticed: the
+  # tracked feeds and the read/unread state of every article live in
+  # /home/nsimon/.blogwatcher/blogwatcher.db, on the SSD, outside /mnt/data,
+  # and restic (storj-backup.nix) backs up /mnt/data and nothing else. The
+  # daily digest (hermes/workspace/daily-pending-digest.sh) calls `read-all`
+  # every morning, so the unread set is *only* here — nothing upstream can
+  # rebuild it.
+  #
+  # 0.0.3 made this urgent rather than theoretical: it migrates the schema in
+  # place on first open (ALTER TABLE blogs ADD COLUMN user_agent), so the very
+  # first blogwatcher command after the upgrade rewrites the only copy.
+  #
+  # Runs as nsimon because the DB is in that home; `.backup` is the online
+  # backup API, safe against a `scan` running concurrently.
+  systemd.services.blogwatcher-backup = {
+    description = "blogwatcher database backup";
+    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      ${pkgs.sqlite}/bin/sqlite3 /home/nsimon/.blogwatcher/blogwatcher.db ".backup '/mnt/data/backups/blogwatcher/blogwatcher-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/blogwatcher/blogwatcher-$STAMP.db"
+      ${pkgs.findutils}/bin/find /mnt/data/backups/blogwatcher -name "blogwatcher-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  # 04:20, not later: restic-backups-storj-daily fires at 04:36, and a dump
+  # that lands after it waits a full day to leave the machine.
+  systemd.timers.blogwatcher-backup = {
+    description = "Daily blogwatcher backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:20:00"; Persistent = true; };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────
