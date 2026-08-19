@@ -52,7 +52,7 @@ let
   # URL globally, and settings.json `env` outranks process env, so the bridge
   # tripped the guard and exited 0 on every start (masked as active by
   # RemainAfterExit; respawned every 5min by the watchdog). We shadow the real
-  # config here: symlink all state so sessions/projects, skills, plugins and
+  # config here: symlink all state so sessions/projects, skills and
   # settings.local.json stay authoritative in ~/.claude, and generate a
   # settings.json whose only change is the base URL forced to direct Anthropic —
   # the same escape the `claude-direct` shell alias already uses. Sessions the
@@ -61,6 +61,8 @@ let
   #
   # credentials.json is the ONE exception to "authoritative in ~/.claude": it
   # cannot survive as a symlink, so this dir owns it. See credentialsFiles above.
+  # plugins/ is a partial exception: the clones stay shared via child symlinks,
+  # but the two registry files are per-config-dir copies — claude-rc-plugin-dir.sh.
   configDir = "/home/${username}/.claude-rc";
 
   # OAuth keep-warm sidecar (token-refresh timer + extract-to-/run unit) for
@@ -108,6 +110,12 @@ let
   worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate"
     (builtins.readFile ./claude-rc-worktree-gate.sh);
 
+  # Builds $dst/plugins as a real dir: shared clones, bridge-local path
+  # bookkeeping. The script's header has the measurement of why a plain symlink
+  # of plugins/ cannot work.
+  pluginDirScript = pkgs.writeShellScript "claude-rc-plugin-dir"
+    (builtins.readFile ./claude-rc-plugin-dir.sh);
+
   # Build the isolated bridge config dir (see configDir note above) before each
   # start, refreshing symlinks and regenerating settings.json so it tracks any
   # change to the real ~/.claude/settings.json.
@@ -118,16 +126,23 @@ let
     dst="${configDir}"
     mkdir -p "$dst"
     # Mirror every real config entry as a symlink (sessions, projects, skills,
-    # plugins, settings.local.json, ...) except settings.json, which is generated
-    # below, and .credentials.json, handled after this loop. Keeps all other state
-    # authoritative in ~/.claude.
+    # settings.local.json, ...) except settings.json, which is generated below,
+    # .credentials.json, handled after this loop, and plugins, handled by
+    # pluginDirScript. Keeps all other state authoritative in ~/.claude.
     for entry in "$src"/* "$src"/.[!.]*; do
       [ -e "$entry" ] || continue
       name="$(basename "$entry")"
       [ "$name" = "settings.json" ] && continue
       [ "$name" = ".credentials.json" ] && continue
+      [ "$name" = "plugins" ] && continue
       ln -sfn "$entry" "$dst/$name"
     done
+
+    # plugins: NOT a plain symlink. claude-code prefix-checks the absolute paths
+    # in the registry files against $CLAUDE_CONFIG_DIR without resolving
+    # symlinks, so the bridge needs its own dir with rewritten paths over shared
+    # clones — see claude-rc-plugin-dir.sh.
+    ${pluginDirScript} "$src/plugins" "$dst/plugins"
 
     # .credentials.json: SEED, never link. Relinking it here destroyed the live
     # tokens on every bridge restart — $dst owns them (credentialsFiles above,
