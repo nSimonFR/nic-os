@@ -1,6 +1,31 @@
 { pkgs, lib, username, telegramChatId, ... }:
 let
   sessionName = "claude-rc";
+
+  # Dedicated tmux server, NOT the user's default socket. The bridge used to run
+  # `tmux new-session` with no -L, so at boot it was the first thing to touch
+  # /tmp/tmux-1001/default and the tmux SERVER forked inside this unit's cgroup.
+  # Every interactive session the user opened afterwards attached to that same
+  # server and therefore lived in the claude-remote-control cgroup too (37 procs
+  # in it when this was diagnosed), so `systemctl restart claude-remote-control`
+  # -> KillMode=control-group -> SIGTERM to every shell the user had open. A
+  # separate socket puts the bridge's server on its own, and a plain `tmux` from
+  # a login shell starts its own default server inside the user slice, where a
+  # bridge restart cannot reach it.
+  #
+  # -f /dev/null is part of the fix, not tidiness: ~/.config/tmux/tmux.conf loads
+  # tmux-resurrect + tmux-continuum, whose state file (~/.tmux/resurrect/last) is
+  # per-user, not per-server. Two servers loading it means (a) continuum's 5min
+  # autosave from the bridge server overwrites the user's real saved layout with
+  # the single claude-rc window, and (b) the `session-created` hook — which
+  # restores when a server has exactly one session — replays the user's whole
+  # saved layout into the bridge server on every start, re-creating the shared-
+  # cgroup problem through the back door. The bridge session needs no config.
+  #
+  # Attach for debugging with: tmux -L claude-rc attach -t claude-rc
+  tmuxSocket = "claude-rc";
+  tmux = "${pkgs.tmux}/bin/tmux -L ${tmuxSocket} -f /dev/null";
+
   telegramTokenFile = "/run/agenix/telegram-bot-token";
   # One-shot seam (shared/notify.nix): "resumed N sessions after boot" is an
   # event, not a condition that later clears.
@@ -94,9 +119,9 @@ let
   stopScript = pkgs.writeShellScript "claude-remote-control-stop" ''
     # Send SIGTERM to the claude process inside tmux, giving it time
     # to deregister from Anthropic's API before we kill the session.
-    ${pkgs.tmux}/bin/tmux send-keys -t ${sessionName} C-c 2>/dev/null || true
+    ${tmux} send-keys -t ${sessionName} C-c 2>/dev/null || true
     sleep 3
-    ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
+    ${tmux} kill-session -t ${sessionName} 2>/dev/null || true
   '';
 
   # post-checkout hook that re-gates RC bridge worker sessions to Aperture.
@@ -209,8 +234,8 @@ let
   # directly rather than through the Aperture gate if anyone actually used it.
   # Leave it idle; open worktree sessions from claude.ai/code instead.
   startScript = pkgs.writeShellScript "claude-remote-control-start" ''
-    ${pkgs.tmux}/bin/tmux kill-session -t ${sessionName} 2>/dev/null || true
-    ${pkgs.tmux}/bin/tmux new-session -d -s ${sessionName} \
+    ${tmux} kill-session -t ${sessionName} 2>/dev/null || true
+    ${tmux} new-session -d -s ${sessionName} \
       "CLAUDE_CONFIG_DIR=${configDir} ${claudeRc} \
         --spawn worktree \
         --capacity 8 \
@@ -232,7 +257,9 @@ let
   watchdogScript = pkgs.writeShellScript "claude-remote-control-watchdog" ''
     export PATH="${pkgs.procps}/bin:${pkgs.tmux}/bin:${pkgs.coreutils}/bin:$PATH"
     uid="$(id -u ${username})"
-    tmux_socket="/tmp/tmux-$uid/default"
+    # This unit runs as root, so `-L ${tmuxSocket}` would resolve to
+    # /tmp/tmux-0/${tmuxSocket}. Address the bridge user's socket by path.
+    tmux_socket="/tmp/tmux-$uid/${tmuxSocket}"
 
     alive() {
       # Primary signal: the bridge process itself.
@@ -269,9 +296,9 @@ lib.recursiveUpdate keepWarm.nixosConfig {
     description = "Claude Code Remote Control server (tmux)";
     after = [ "network.target" ];
     wantedBy = [ "multi-user.target" ];
-    # Never let activation touch the bridge. It hosts the tmux server that any
-    # Claude session rebuilding this box is running inside, so a stop→start here
-    # kills the caller mid-activation: nixos-rebuild hands
+    # Never let activation touch the bridge. Its cgroup holds every worker
+    # session it spawned, so if one of them is rebuilding this box a stop→start
+    # here kills the caller mid-activation: nixos-rebuild hands
     # switch-to-configuration its own stdout via `systemd-run --pipe`, that pipe
     # dies with the caller, and the next write panics it with exit 101 — leaving
     # everything nixos-rebuild-safe had stopped stopped. Twice on 2026-07-29,
