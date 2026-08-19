@@ -37,6 +37,12 @@
       "enabled": false
     },
     {
+      "description": "hermes-agent is held at a tag on purpose: past that tag its nix/lib.nix asks for a nodejs major our nixpkgs release does not carry, and hermes-messaging sits in home.packages, so toplevel forces it and the WHOLE rpi5 config stops evaluating — `nixos-rebuild` cannot start. Renovate proposed exactly that jump once already, as a routine digest bump, which is why the bot is off here rather than left to re-open it: the constraint lives in nixpkgs, not in hermes, so no bump Renovate can compute is safe. See the comment on the input in flake.nix. Re-enable once nixpkgs carries the major upstream wants, or upstream relaxes the requirement; diff nix/lib.nix's argument list first.",
+      "matchManagers": ["nix"],
+      "matchPackageNames": ["hermes-agent"],
+      "enabled": false
+    },
+    {
       "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",
       "matchDepNames": ["ghcr.io/toeverything/affine"],
       "ignoreUnstable": true

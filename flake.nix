@@ -47,22 +47,27 @@
     # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
     #
-    # ⚠ PINNED TO A REV. Upstream tracks its default branch, and `nix flake
-    #   update` walked it to c7b4b4e1 (2026-08-02), whose nix/lib.nix builds a
-    #   `nodejs_26_npm_12` out of `pkgs.nodejs_26`. Our nixpkgs is release-25.11,
-    #   which tops out at nodejs_24, so the rpi5 config stopped EVALUATING
-    #   entirely — not just hermes:
+    # ⚠ HELD AT A TAG — see the `ref` in the url below, not this comment, for
+    #   which one. Upstream tracks its default branch, and once `nix flake
+    #   update` walked this input onto a rev whose nix/lib.nix asks for a nodejs
+    #   major our nixpkgs release does not carry, the rpi5 config stopped
+    #   EVALUATING entirely — not just hermes:
     #     error: Function called without required argument "nodejs_26" …
     #   toplevel forces the package (hermes.nix puts it in home.packages), so
-    #   `nixos-rebuild` could not even start. ebab890a is the last rev that
-    #   builds against 25.11.
+    #   `nixos-rebuild` could not even start.
     #
-    #   Do NOT "fix" this by aliasing nodejs_26 → nodejs_24: upstream moved to
-    #   node 26 deliberately and the runtime may depend on it. Unpin when either
-    #   nixpkgs 26.05 lands (it carries nodejs_26) or upstream relaxes the
-    #   requirement.
+    #   So the ref is the newest upstream TAG whose nix/lib.nix still takes a
+    #   plain `nodejs` argument — a name that says what it is and moves in
+    #   reviewable steps, where the bare rev this used to carry read to Renovate
+    #   as a digest to be walked forward. Before advancing it, diff that
+    #   argument list: a node major we don't have breaks eval system-wide, and
+    #   renovate.json disables the bot here for exactly that reason.
+    #
+    #   Do NOT "fix" this by aliasing the missing nodejs major to an older one:
+    #   upstream moved deliberately and the runtime may depend on it. Unpin once
+    #   nixpkgs carries the major it wants, or upstream relaxes the requirement.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/ebab890ae5676fc297461b6e069df5b54cbbefce";
+      url = "github:NousResearch/hermes-agent/v2026.7.30";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
