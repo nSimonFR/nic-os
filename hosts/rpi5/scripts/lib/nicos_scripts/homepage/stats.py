@@ -10,6 +10,7 @@ Endpoints (one per homepage tile, three stats each):
   /wealthfolio — Wealthfolio (net worth + investments, invested + gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
+  /calino    — Calino (events today, events next 7 days, open tasks) — Nextcloud CalDAV
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
   /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
   /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
@@ -58,7 +59,7 @@ Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
 
 Every fetcher takes `(cfg, run)`: `cfg` carries the paths (so no path is baked
 into the module any more) and `run` executes one command — the seam the tests
-substitute, which is what makes 19 fetchers checkable without the services they
+substitute, which is what makes 20 fetchers checkable without the services they
 read from.
 """
 
@@ -72,6 +73,7 @@ import subprocess
 import sys
 import threading
 import time
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
 from ..secrets import env_int, env_str
@@ -85,7 +87,7 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # backfill_missing only re-fetches keys that are entirely absent, so without this a
 # key whose fields were renamed would keep serving the old shape — blanking its tile
 # — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 10
+STATS_SCHEMA = 11
 
 
 @dataclass(frozen=True)
@@ -145,6 +147,17 @@ class Config:
     # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
+    # Calino (hosts/rpi5/calino.nix) stores nothing of its own — the calendars it
+    # renders are Nextcloud's — so its tile reads Nextcloud's CalDAV. Same always-on
+    # backend as nextcloud_info_url, and no Host header is needed: overwritecondaddr
+    # matches 127.0.0.1 unconditionally, so NC builds its own hrefs regardless.
+    nextcloud_dav_url: str = "http://127.0.0.1:8091/remote.php/dav"
+    nextcloud_user: str = "nsimon"
+    # Calino syncs its OWN settings as a VEVENT in a calendar of its own
+    # (docs/CALINOSETTINGSSYNC.md). It is a real CalDAV calendar advertising VEVENT,
+    # so nothing in the protocol distinguishes it from a diary — it has to be skipped
+    # by name or the tile counts the app's settings blob as an appointment.
+    calino_settings_uri: str = "calino-settings"
     sure_url: str = "http://127.0.0.1:13334/sure"
     # The app's own bind, not the read-only :3700 vhost — see fetch_wealthfolio.
     wealthfolio_url: str = "http://127.0.0.1:13345"
@@ -182,6 +195,9 @@ class Config:
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
             affine_db=s("AFFINE_DB", cls.affine_db),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
+            nextcloud_dav_url=s("NEXTCLOUD_DAV_URL", cls.nextcloud_dav_url),
+            nextcloud_user=s("NEXTCLOUD_USER", cls.nextcloud_user),
+            calino_settings_uri=s("CALINO_SETTINGS_URI", cls.calino_settings_uri),
             # STATE_DIRECTORY is set by systemd StateDirectory=.
             state_dir=s("STATE_DIRECTORY", DEFAULT_STATE_DIR),
             port=env_int("HOMEPAGE_STATS_PORT", 8087, env),
@@ -206,7 +222,7 @@ class Stats:
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
-        "nextcloud", "affine", "beszel",
+        "nextcloud", "calino", "affine", "beszel",
     )
 
     def __init__(self):
@@ -535,6 +551,194 @@ def fetch_nextcloud(cfg, run):
     }
 
 
+# ── Calino / CalDAV ───────────────────────────────────────────────────────────
+#
+# Calino (hosts/rpi5/calino.nix) has no store and no process of its own, so there is
+# no database to read and no API to call — its tile has to read the calendars it
+# renders, which are Nextcloud's. That means CalDAV, and CalDAV is the reason these
+# three numbers are all COUNTS obtained with a server-side filter:
+#
+# ⚠ DO NOT compute "events today" from `oc_calendarobjects.firstoccurence` /
+#   `lastoccurence` in Postgres, which is the obvious tokenless route the other
+#   fetchers would suggest. Those two columns bound the whole recurrence SET, so a
+#   weekly standup defined in 2019 and running till 2030 has firstoccurence far in
+#   the past and lastoccurence far in the future, and `first <= today_end AND last >=
+#   today_start` therefore matches it on every day of the decade. Every recurring
+#   event would be counted as "today". A CalDAV `time-range` filter makes SabreDAV
+#   expand the recurrence properly, which is work this module has no business
+#   reimplementing.
+#
+# Each query asks for `<d:getetag/>` and nothing else, so the response is one line
+# per match and the count is the answer — no iCalendar parsing, no timezone maths on
+# DTSTART, and none of the `VALUE=DATE` / `TZID=` / post-expand-UTC forms to handle.
+# The cost is one request per calendar per window (~27 a day across 11 calendars),
+# which is nothing at a daily cadence and never wakes anything: Nextcloud is
+# always-on.
+
+DAV = "{DAV:}"
+CALDAV = "{urn:ietf:params:xml:ns:caldav}"
+
+_DISCOVER_BODY = (
+    '<d:propfind xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+    "<d:prop><d:resourcetype/><c:supported-calendar-component-set/></d:prop>"
+    "</d:propfind>"
+)
+
+
+def _event_body(start, end):
+    return (
+        '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+        "<d:prop><d:getetag/></d:prop><c:filter>"
+        '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT">'
+        f'<c:time-range start="{start}" end="{end}"/>'
+        "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
+    )
+
+
+_TODO_ALL_BODY = (
+    '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+    "<d:prop><d:getetag/></d:prop><c:filter>"
+    '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/>'
+    "</c:comp-filter></c:filter></c:calendar-query>"
+)
+
+_TODO_DONE_BODY = (
+    '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+    "<d:prop><d:getetag/></d:prop><c:filter>"
+    '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO">'
+    '<c:prop-filter name="STATUS"><c:text-match>COMPLETED</c:text-match>'
+    "</c:prop-filter></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
+)
+
+
+def dav_xml(cfg, run, method, url, body, depth="1"):
+    """One authenticated DAV request against Nextcloud, parsed as XML.
+
+    Basic auth with the app password the Nextcloud tile already holds as
+    HOMEPAGE_VAR_NEXTCLOUD_PASSWORD — serverinfo consumes it as an NC-Token, but it
+    is a genuine app password underneath, so it authenticates DAV too and this tile
+    needs no second secret. (`env_var` strips nothing: homepage.nix already ran
+    `tr -d '\\r\\n'` over the agenix file, whose 73rd byte is a CR. A CR that reaches
+    the Authorization header does not 401 — Nextcloud answers
+    `PasswordLoginForbidden`, because the token lookup misses and it then treats the
+    value as a login password.)
+    """
+    out = run([
+        cfg.curl, "-sf",
+        "-u", f"{cfg.nextcloud_user}:{env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
+        "-X", method,
+        "-H", f"Depth: {depth}",
+        "-H", "Content-Type: application/xml",
+        "--data", body, url,
+    ])
+    return ET.fromstring(out)
+
+
+def dav_count(cfg, run, url, body):
+    """How many objects a calendar-query matched. The filter does the work."""
+    root = dav_xml(cfg, run, "REPORT", url, body)
+    return sum(1 for _ in root.iter(f"{DAV}response"))
+
+
+def discover_calendars(cfg, run):
+    """(event calendars, task calendars) as URLs, split by supported component.
+
+    Splitting matters here: of the 11 calendars on this account only ~5 hold VEVENTs
+    and 6 are iCloud task lists, so asking every collection for both would double the
+    request count to no purpose.
+
+    The returned URLs are rebuilt from the home URL plus each href's last segment
+    rather than from the href itself. Nextcloud emits hrefs under `overwritewebroot`
+    (`/nextcloud/remote.php/dav/...`) because overwritecondaddr matches 127.0.0.1
+    unconditionally, while this fetcher dials the backend directly at
+    `/remote.php/dav` with no such prefix — joining the href to the base would give a
+    doubled or missing webroot and 404 every query.
+
+    Two kinds of collection are deliberately dropped:
+
+      * `{DAV:}collection` + `{http://calendarserver.org/ns/}subscribed` — the webcal
+        subscriptions (here: TRUSK, Google, Airbnb). They advertise VEVENT and answer
+        a calendar-query with 207, but the answer is ALWAYS zero objects: Nextcloud
+        does not expose a subscription's cached contents over DAV, the refresh is the
+        client's job. Querying them costs requests and can only ever add 0, so their
+        events are simply not in these numbers — verified, not assumed.
+      * `calino_settings_uri` — see the Config field.
+    """
+    home = f"{cfg.nextcloud_dav_url}/calendars/{cfg.nextcloud_user}/"
+    root = dav_xml(cfg, run, "PROPFIND", home, _DISCOVER_BODY)
+
+    events, tasks = [], []
+    for resp in root.iter(f"{DAV}response"):
+        href = (resp.findtext(f"{DAV}href") or "").rstrip("/")
+        segment = href.rsplit("/", 1)[-1]
+        # Skip the home collection itself, and anything that is not a calendar —
+        # `inbox`, `outbox` and `trashbin` all answer this PROPFIND too.
+        if not segment or segment == cfg.nextcloud_user:
+            continue
+        if segment == cfg.calino_settings_uri:
+            continue
+        if resp.find(f".//{CALDAV}calendar") is None:
+            continue
+        url = f"{home}{segment}/"
+        comps = {c.get("name") for c in resp.iter(f"{CALDAV}comp")}
+        # An empty set means the server declined to say; CalDAV's default is
+        # "everything", so treat it as both rather than silently dropping the
+        # calendar from every count.
+        if not comps or "VEVENT" in comps:
+            events.append(url)
+        if not comps or "VTODO" in comps:
+            tasks.append(url)
+    return events, tasks
+
+
+def fetch_calino(cfg, run, now=None):
+    """Events today, events in the next 7 days, and open tasks.
+
+    Windows are LOCAL days converted to UTC stamps, not `utcnow()`-based: at 20:30
+    CEST a UTC-midnight window is already two hours into tomorrow, which would move
+    late-evening events onto the wrong day.
+
+    The offset comes from `now.tzinfo`, never from the ambient system zone, so the
+    windows are a pure function of the argument and the tests can pin them. Production
+    passes nothing and gets `now().astimezone()`, i.e. the host's current offset; that
+    fixed offset is then used for all three boundaries, so a DST change inside the
+    7-day window puts its far edge an hour out. That is deliberate — an hour of slack
+    on the *end* of a week-long window cannot change a count of events, and the
+    alternative is resolving a zone name out of /etc/timezone.
+    """
+    now = now or datetime.datetime.now().astimezone()
+
+    def midnight(day):
+        return datetime.datetime.combine(day, datetime.time.min, tzinfo=now.tzinfo)
+
+    def stamp(dt):
+        return dt.astimezone(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    today = now.date()
+    start = stamp(midnight(today))
+    end_today = stamp(midnight(today + datetime.timedelta(days=1)))
+    end_week = stamp(midnight(today + datetime.timedelta(days=7)))
+
+    event_cals, task_cals = discover_calendars(cfg, run)
+
+    counts = {
+        "today": sum(dav_count(cfg, run, url, _event_body(start, end_today))
+                     for url in event_cals),
+        "week": sum(dav_count(cfg, run, url, _event_body(start, end_week))
+                    for url in event_cals),
+        # Open = every VTODO minus the ones marked done, NOT a negated text-match on
+        # STATUS. A negated match only matches objects that HAVE the property, so a
+        # VTODO written without STATUS at all would vanish from the count entirely;
+        # subtracting instead counts it as open, which is the safer way for a to-do
+        # number to be wrong.
+        "tasks": sum(
+            max(0, dav_count(cfg, run, url, _TODO_ALL_BODY)
+                - dav_count(cfg, run, url, _TODO_DONE_BODY))
+            for url in task_cals),
+    }
+    return counts
+
+
 def fetch_affine(cfg, run):
     # Reads AFFiNE's Postgres, NOT its GraphQL — deliberately tokenless. This used
     # to POST `{ workspaces { blobsSize docs { totalCount } } }` with the `ut_…`
@@ -825,6 +1029,7 @@ FETCHERS = {
     "wealthfolio": fetch_wealthfolio,
     "immich": fetch_immich,
     "nextcloud": fetch_nextcloud,
+    "calino": fetch_calino,
     "affine": fetch_affine,
     "beszel": fetch_beszel,
     "karakeep": fetch_karakeep,

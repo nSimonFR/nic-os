@@ -1,4 +1,4 @@
-"""homepage-stats: 19 fetchers that used to run on exactly one machine.
+"""homepage-stats: 20 fetchers that used to run on exactly one machine.
 
 The blast radius here is low — a bug shows a wrong number on a dashboard — so
 these tests are weighted differently from the destructive units: the machinery
@@ -14,6 +14,7 @@ source saying so:
   * gramps-web summing across every tree
 """
 
+import datetime
 import json
 import time
 
@@ -570,6 +571,204 @@ def test_affine_needs_no_token_and_never_calls_the_api():
     assert not any("CURL" in c for c in run.commands)
     assert not any("Bearer" in c for c in run.commands)
     assert any("deleted_at IS NULL" in c for c in run.commands)
+
+
+# ── Calino: counts over Nextcloud's CalDAV ────────────────────────────────────
+#
+# The bug class these guard is not arithmetic, it is asking the WRONG QUESTION:
+# recurrence and local days. See the block comment above fetch_calino.
+
+# Deliberately served under the /nextcloud webroot the live server uses
+# (overwritewebroot), while the fetcher dials /remote.php/dav directly — the paths it
+# queries must be rebuilt from the base, not joined from these hrefs.
+CALDAV_HOME_XML = """<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav"
+               xmlns:cs="http://calendarserver.org/ns/">
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/></d:resourcetype>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/personal/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/reminders/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/inbox/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/><c:schedule-inbox/></d:resourcetype>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/calino-settings/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/nextcloud/remote.php/dav/calendars/nsimon/calendargooglecom-4/</d:href>
+    <d:propstat><d:prop>
+      <d:resourcetype><d:collection/><cs:subscribed/></d:resourcetype>
+      <c:supported-calendar-component-set><c:comp name="VEVENT"/><c:comp name="VTODO"/></c:supported-calendar-component-set>
+    </d:prop></d:propstat>
+  </d:response>
+</d:multistatus>
+"""
+
+
+def multistatus(n):
+    """A calendar-query answer carrying n matched objects."""
+    body = "".join(
+        f"<d:response><d:href>/o{i}.ics</d:href>"
+        f"<d:propstat><d:prop><d:getetag>&quot;{i}&quot;</d:getetag></d:prop>"
+        "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
+        for i in range(n))
+    return f'<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">{body}</d:multistatus>'
+
+
+def calino_cfg(tmp_path):
+    env_file = tmp_path / "env"
+    env_file.write_text("HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=app-pw\n")
+    return hs.Config(curl="CURL", env_file=str(env_file),
+                     nextcloud_dav_url="http://nc/remote.php/dav",
+                     nextcloud_user="nsimon")
+
+
+def calino_run(today=2, week=9, todo_all=237, todo_done=226):
+    """FakeRun for the four query shapes.
+
+    Needle ORDER matters: the completed-VTODO body contains both "COMPLETED" and
+    "VTODO", so the narrower needle has to come first or every task query would be
+    answered as the total.
+    """
+    def events(joined):
+        # The two event queries differ only in the window's end stamp: tonight's local
+        # midnight vs the one seven days on. Naming them here doubles as an assertion —
+        # a fetcher that built UTC windows would match neither and KeyError out.
+        return multistatus(week if 'end="20260825T220000Z"' in joined else today)
+
+    return FakeRun([
+        ("propfind", CALDAV_HOME_XML),
+        ("COMPLETED", multistatus(todo_done)),
+        ("VTODO", multistatus(todo_all)),
+        ("VEVENT", events),
+    ])
+
+
+# A Wednesday 20:30 at UTC+2 — the hour that makes a UTC-midnight window wrong.
+CEST = datetime.timezone(datetime.timedelta(hours=2))
+NOW = datetime.datetime(2026, 8, 19, 20, 30, tzinfo=CEST)
+
+
+def test_calino_counts_events_and_open_tasks(tmp_path):
+    cfg = calino_cfg(tmp_path)
+    run = calino_run(today=2, week=9, todo_all=237, todo_done=226)
+    assert hs.fetch_calino(cfg, run, now=NOW) == {
+        "today": 2, "week": 9, "tasks": 11}
+
+
+def test_calino_windows_are_local_days_not_utc(tmp_path):
+    # 20:30 CEST is 18:30 UTC, so a naive utcnow()-based window would start at
+    # 20260819T000000Z — two hours late, dropping every event between local midnight
+    # and 02:00 and pulling in tomorrow's.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+
+    windows = [c for c in run.commands if "VEVENT" in c]
+    assert len(windows) == 2
+    assert all('start="20260818T220000Z"' in c for c in windows)
+    # Local midnight tonight, and local midnight seven days on.
+    assert any('end="20260819T220000Z"' in c for c in windows)
+    assert any('end="20260825T220000Z"' in c for c in windows)
+
+
+def test_calino_never_reads_firstoccurence_from_postgres(tmp_path):
+    # The trap: oc_calendarobjects.firstoccurence/lastoccurence bound the whole
+    # recurrence set, so a weekly event running for years matches "today" every day of
+    # those years. The count must come from a server-side time-range instead.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert not any("PSQL" in c or "firstoccurence" in c for c in run.commands)
+    assert all("time-range" in c for c in run.commands if "VEVENT" in c)
+
+
+def test_calino_asks_each_calendar_only_for_what_it_holds(tmp_path):
+    # 6 of the 11 real calendars are iCloud task lists. A VTODO-only list must never
+    # be asked for events, nor an event calendar for tasks.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+
+    for cmd in run.commands:
+        if "VEVENT" in cmd:
+            assert "calendars/nsimon/personal/" in cmd
+        if "VTODO" in cmd:
+            assert "calendars/nsimon/reminders/" in cmd
+    # Rebuilt from nextcloud_dav_url, NOT joined from the /nextcloud hrefs.
+    assert not any("/nextcloud/remote.php" in c for c in run.commands)
+    assert all("http://nc/remote.php/dav/" in c for c in run.commands)
+
+
+def test_calino_skips_collections_that_are_not_calendars(tmp_path):
+    # inbox/outbox/trashbin answer the same PROPFIND; querying them 404s or 403s.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert not any("/inbox/" in c for c in run.commands)
+
+
+def test_calino_does_not_count_its_own_settings_calendar(tmp_path):
+    # Calino syncs its settings AS a VEVENT in `calino-settings`, a calendar that is
+    # indistinguishable from a diary over CalDAV — it advertises VEVENT and holds
+    # exactly one object. Counting it reported "1 event today" on an empty day.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert not any("calino-settings" in c for c in run.commands)
+
+
+def test_calino_skips_webcal_subscriptions(tmp_path):
+    # `{calendarserver}subscribed` collections (TRUSK, Google, Airbnb here) advertise
+    # VEVENT and answer 207, but Nextcloud never exposes a subscription's contents over
+    # DAV — every query returns zero objects, so they can only cost requests.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert not any("calendargooglecom" in c for c in run.commands)
+
+
+def test_calino_counts_a_status_less_todo_as_open(tmp_path):
+    # `open = total - completed`, not a negated text-match on STATUS: a negated match
+    # only matches objects that HAVE the property, so a VTODO written without STATUS
+    # would disappear from the count altogether. Here 5 of 20 are marked done and one
+    # of the remainder has no STATUS at all — it must still be open.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run(todo_all=20, todo_done=5)
+    assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 15
+    assert not any("negate-condition" in c for c in run.commands)
+
+
+def test_calino_reuses_the_nextcloud_app_password(tmp_path):
+    # No second secret: serverinfo consumes this value as an NC-Token, but it is a real
+    # app password, so it authenticates DAV too.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert all("nsimon:app-pw" in c for c in run.commands)
 
 
 def test_home_assistant_counts_entities_by_state(tmp_path):

@@ -182,7 +182,9 @@ in
     heavyUnits = [ ];
 
     public = {
-      order = 35; # groups with Nextcloud (25) and AFFiNE (30)
+      # Directly after Nextcloud (30), which is the store these numbers come from;
+      # AFFiNE moved up to 25 to make that pair adjacent.
+      order = 35;
       port = 3800;
       backend = "http://127.0.0.1:${toString internalPort}";
       tile = {
@@ -190,6 +192,21 @@ in
         icon = "mdi-calendar-month";
         category = "Apps";
         description = "Calendar (Nextcloud CalDAV)";
+        # Calino has no store, no database and no process, so unlike every other
+        # tile there is nothing of its own to read — these come from the calendars
+        # it renders, i.e. Nextcloud's CalDAV. See fetch_calino for why all three
+        # are counts obtained with a server-side filter rather than computed from
+        # oc_calendarobjects (recurrence).
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/calino";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "today"; label = "Today"; format = "number"; }
+            { field = "week"; label = "7 days"; format = "number"; }
+            { field = "tasks"; label = "Open tasks"; format = "number"; }
+          ];
+        };
       };
     };
   };
