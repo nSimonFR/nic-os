@@ -23,7 +23,7 @@ buildNpmPackage rec {
     hash = "sha256-6iZ6IsKHftCJjVhAumtKyt5cYwOZuOz6npULB29xX+I=";
   };
 
-  npmDepsHash = "sha256-WderlJSCLaAkPa3LV7IG/m5fGzDRqDBDPVyrEOneLk4=";
+  npmDepsHash = "sha256-Flj6yUve6DRvXejRUIw/6W4RsckNVD0fJjVMfK28wJA=";
 
   # The package's "build" script runs `tsc -p tsconfig.json`. buildNpmPackage
   # invokes `npm run build` automatically; the resulting dist/ + bin/ are

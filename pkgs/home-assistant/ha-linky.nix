@@ -25,7 +25,7 @@ buildNpmPackage rec {
     rev = version;
     hash = "sha256-4hQ5bQ2CxlSDLw4yxakOpnij2gJ0FSyH8OWjX4iCkOE=";
   };
-  npmDepsHash = "sha256-y/64htlLa5RGemCIqXp9nxDgAK8zyVOq8kdW4azhY64=";
+  npmDepsHash = "sha256-j8q0ouD9BSnQ3Yb2tsn+tON+YXh30fynnlDtNbtiVyQ=";
   # npm run build = tsc → dist/
   # Skip the default `npm install -g` install phase; we install manually.
   dontNpmInstall = true;
