@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from nicos_scripts.claude import boot_resume as br
+from nicos_scripts.claude import context_baseline as cb
 from nicos_scripts.claude import notify_aggregator as na
 
 # ── notify_aggregator ─────────────────────────────────────────────────────────
@@ -806,3 +807,220 @@ def test_a_tool_level_error_surfaces_its_message_not_a_json_parse_error():
     client = ms.MCP("http://mcp", "tok", opener=lambda req, timeout=None: Resp())
     with pytest.raises(RuntimeError, match="must sign in first"):
         client.call("search_docs", {})
+
+
+# ── context_baseline ──────────────────────────────────────────────────────────
+#
+# The regression this guards against was invisible: no unit failed, nothing in
+# the repo changed, and the only symptom was sessions compacting. So the tests
+# that matter are the ones pinning the *measurement* (which counters, which
+# message) and the alert contract (empty body = resolved, and never resolving on
+# no evidence).
+
+
+def cb_cfg(tmp_path, **kw):
+    return cb.Config(projects_dir=tmp_path, **kw)
+
+
+def transcript(*objs):
+    return "\n".join(json.dumps(o) for o in objs) + "\n"
+
+
+def usage_msg(inp=0, creation=0, read=0):
+    return {
+        "type": "assistant",
+        "message": {"usage": {
+            "input_tokens": inp,
+            "cache_creation_input_tokens": creation,
+            "cache_read_input_tokens": read,
+        }},
+    }
+
+
+def write_session(tmp_path, project, uuid, text):
+    d = tmp_path / project
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / f"{uuid}.jsonl"
+    p.write_text(text)
+    return p
+
+
+def test_the_baseline_sums_all_three_input_counters(tmp_path):
+    # 134k bridge sessions were ~2 input + ~134k cache_creation: reading
+    # input_tokens alone reports "2" and the alarm never fires.
+    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
+        usage_msg(inp=2, creation=134_000, read=190),
+    ))
+    assert cb.baseline_of(p) == 134_192
+
+
+def test_the_first_request_wins_not_the_largest(tmp_path):
+    # Baseline is a startup property. Later turns are work, and compaction
+    # rewrites them — measuring anything but the first request measures usage.
+    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
+        {"type": "user", "message": {"content": "hi"}},
+        usage_msg(inp=1, creation=50_000),
+        usage_msg(inp=1, read=168_000),
+    ))
+    assert cb.baseline_of(p) == 50_001
+
+
+def test_a_half_written_last_line_is_skipped_not_fatal(tmp_path):
+    # Transcripts are appended to live, so a partially-flushed final line is
+    # normal, not corruption.
+    p = tmp_path / "proj" / "aaaaaaaa-1111.jsonl"
+    p.parent.mkdir(parents=True)
+    p.write_text('{"type":"user"}\n{"type":"assist')
+    assert cb.baseline_of(p) is None
+
+
+def test_a_session_with_no_request_yet_is_not_a_row(tmp_path):
+    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
+        {"type": "user", "message": {"content": "hi"}},
+    ))
+    assert cb.baseline_of(p) is None
+
+
+def test_an_unreadable_transcript_is_skipped(tmp_path):
+    assert cb.baseline_of(tmp_path / "nope.jsonl") is None
+
+
+def test_only_sessions_inside_the_lookback_are_judged(tmp_path):
+    write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(usage_msg(creation=9)))
+    write_session(tmp_path, "proj", "bbbbbbbb-2222", transcript(usage_msg(creation=8)))
+    cfg = cb_cfg(tmp_path, lookback=100)
+    ages = {"aaaaaaaa-1111": 50, "bbbbbbbb-2222": 5000}
+    rows = cb.scan(cfg, now=10_000,
+                   mtime=lambda p: 10_000 - ages[Path(p).stem])
+    assert [r[1] for r in rows] == ["proj/aaaaaaaa"]
+
+
+def test_rows_come_back_worst_first(tmp_path):
+    write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(usage_msg(creation=10)))
+    write_session(tmp_path, "proj", "bbbbbbbb-2222", transcript(usage_msg(creation=90)))
+    rows = cb.scan(cb_cfg(tmp_path), now=10_000, mtime=lambda p: 10_000)
+    assert [r[0] for r in rows] == [90, 10]
+
+
+def test_the_label_names_the_project_dir_and_the_session(tmp_path):
+    p = write_session(tmp_path, "-home-nsimon-nic-os", "6dc4d848-efbf", "")
+    assert cb.label_of(p, tmp_path) == "-home-nsimon-nic-os/6dc4d848"
+
+
+def test_a_body_is_empty_when_every_session_is_under_the_threshold(tmp_path):
+    cfg = cb_cfg(tmp_path, threshold=100_000)
+    assert cb.build_body(cfg, [(54_000, "proj/aaaa", "p")]) == ""
+
+
+def test_the_body_lists_the_offenders_and_says_what_to_do(tmp_path):
+    cfg = cb_cfg(tmp_path, threshold=100_000)
+    body = cb.build_body(cfg, [(134_198, "proj/aaaa", "p"), (50_000, "proj/bbbb", "q")])
+    assert "134,198" in body and "proj/aaaa" in body
+    assert "proj/bbbb" not in body          # under threshold, not an offender
+    assert "BOTH name forms" in body        # the fix that actually applies
+
+
+def test_the_threshold_is_inclusive(tmp_path):
+    cfg = cb_cfg(tmp_path, threshold=100_000)
+    assert cb.build_body(cfg, [(100_000, "proj/aaaa", "p")]) != ""
+
+
+def test_the_offender_list_is_capped_with_an_overflow_marker(tmp_path):
+    cfg = cb_cfg(tmp_path, threshold=10, max_lines=2)
+    rows = [(100 - i, f"proj/{i}", "p") for i in range(5)]
+    body = cb.build_body(cfg, rows)
+    assert "… +3 more" in body
+
+
+def test_the_default_is_a_dry_run_so_nothing_is_ever_sent_by_accident(tmp_path):
+    cfg = cb_cfg(tmp_path, alert_cmd="/bin/true")
+    calls = []
+    assert cb.send_alert(cfg, "body", run=lambda *a, **k: calls.append(a)) is False
+    assert calls == []
+
+
+def test_an_armed_run_pipes_the_body_to_the_keyed_alerter(tmp_path):
+    cfg = cb_cfg(tmp_path, alert_cmd="/nix/store/x-telegram-alert", dry_run=False,
+                 alert_key="claude-context-baseline", alert_title="T")
+    calls = []
+
+    def run(argv, **kw):
+        calls.append((argv, kw["input"]))
+
+    assert cb.send_alert(cfg, "over budget", run=run) is True
+    argv, stdin = calls[0]
+    assert argv == ["/nix/store/x-telegram-alert", "claude-context-baseline", "T"]
+    assert stdin == b"over budget"
+
+
+def test_an_empty_body_still_reaches_the_alerter_to_resolve_it(tmp_path):
+    # The alerter's resolve path IS the empty body. Short-circuiting on "nothing
+    # to report" would leave every alert stuck open forever.
+    cfg = cb_cfg(tmp_path, alert_cmd="/x", dry_run=False)
+    calls = []
+    cb.send_alert(cfg, "", run=lambda argv, **kw: calls.append(kw["input"]))
+    assert calls == [b""]
+
+
+def test_no_alert_command_means_journal_only(tmp_path):
+    cfg = cb_cfg(tmp_path, dry_run=False)
+    calls = []
+    assert cb.send_alert(cfg, "x", run=lambda *a, **k: calls.append(a)) is False
+    assert calls == []
+
+
+def test_an_alerter_failure_is_swallowed(tmp_path):
+    cfg = cb_cfg(tmp_path, alert_cmd="/x", dry_run=False)
+    lines = []
+
+    def boom(*a, **k):
+        raise OSError("no such file")
+
+    assert cb.send_alert(cfg, "x", run=boom, log=lines.append) is False
+    assert "alert failed" in lines[0]
+
+
+def test_a_quiet_window_does_not_resolve_an_open_alert(tmp_path):
+    # No sessions started is no evidence. Sending an empty body here would clear
+    # a real alert overnight and re-open it every morning.
+    cfg_env = {"CTXB_PROJECTS_DIR": str(tmp_path), "CTXB_ALERT": "/x",
+               "CTXB_DRY_RUN": "0"}
+    calls = []
+    lines = []
+    assert cb.main(env=cfg_env, now=10_000, mtime=lambda p: 0,
+                   run=lambda *a, **k: calls.append(a), log=lines.append) == 0
+    assert calls == []
+    assert "nothing to judge" in lines[0]
+
+
+def test_main_reports_the_worst_baseline_either_way(tmp_path):
+    write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(usage_msg(creation=54_000)))
+    lines = []
+    cb.main(env={"CTXB_PROJECTS_DIR": str(tmp_path)}, now=10_000,
+            mtime=lambda p: 10_000, log=lines.append)
+    assert lines[0].startswith("OK 1 session(s), worst 54,000")
+
+
+def test_main_alerts_when_a_session_is_over_the_threshold(tmp_path):
+    write_session(tmp_path, "proj", "aaaaaaaa-1111",
+                  transcript(usage_msg(inp=2, creation=134_000)))
+    calls = []
+    lines = []
+    cb.main(env={"CTXB_PROJECTS_DIR": str(tmp_path), "CTXB_ALERT": "/x",
+                 "CTXB_DRY_RUN": "0"},
+            now=10_000, mtime=lambda p: 10_000,
+            run=lambda argv, **kw: calls.append(kw["input"]), log=lines.append)
+    assert lines[0].startswith("ALERT 1 session(s), worst 134,002")
+    assert b"134,002" in calls[0]
+
+
+def test_the_threshold_and_lookback_come_from_the_environment(tmp_path):
+    cfg = cb.Config.from_env({"CTXB_THRESHOLD": "50000", "CTXB_LOOKBACK": "60",
+                              "HOME": "/home/x"})
+    assert (cfg.threshold, cfg.lookback) == (50_000, 60)
+    assert cfg.projects_dir == Path("/home/x/.claude/projects")
+    assert cfg.dry_run is True
+
+
+def test_a_garbage_threshold_falls_back_instead_of_crashing_the_timer():
+    assert cb.Config.from_env({"CTXB_THRESHOLD": "lots"}).threshold == cb.DEFAULT_THRESHOLD

@@ -32,7 +32,7 @@ Don't inline logic in a `.nix` string, and don't wire a loose
 no importable sibling, so it can't share helpers and can't be tested.
 
 Every system-invoked Python script lives in the **`nicos-scripts`** package
-(`hosts/rpi5/scripts/lib/`, built by `pkgs/services/nicos-scripts.nix`) — 12 entry points, 387
+(`hosts/rpi5/scripts/lib/`, built by `pkgs/services/nicos-scripts.nix`) — 14 entry points, 482
 tests. `hosts/rpi5/scripts/` and `home/scripts/` hold only shell now:
 
 - shared helpers in `nicos_scripts/` (`logs`, `httpjson`, `state`, `secrets`, `ryot`);

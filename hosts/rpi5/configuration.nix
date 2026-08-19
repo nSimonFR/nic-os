@@ -193,6 +193,7 @@ in
     ./claude-oauth-2.nix
     ./claude-account-healthcheck.nix
     ./claude-notify-aggregator.nix
+    ./claude-context-baseline.nix
     ./gramps-web.nix
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
