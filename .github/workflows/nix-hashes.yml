@@ -1,0 +1,117 @@
+# Verify the fixed-output hashes in pkgs/** actually match the pinned version.
+#
+# nix.yml evaluates; evaluation never realises a fixed-output derivation, so a
+# `hash` that belongs to the previous release is invisible to it. Renovate's
+# pkgs/** PRs are exactly that shape — it rewrites `version` and cannot
+# recompute a Nix hash — so they arrived green, and on 2026-08-19 three merged in
+# a row (affine-mcp-server 3.2.2, ha-intratone 0.9.3, ha-linky 1.8.0) and left
+# main unable to rebuild at all. renovate.json had warned about it in every PR
+# body for months; a warning nobody is forced to read is not a gate. This is.
+#
+# Cheap on purpose: scripts/nix-fix-hashes.py fetches the tag tarball and the npm
+# lockfile closure and compares, rather than building the package. That is the
+# whole surface a hash pin covers, it needs no flake attribute (most pkgs/ files
+# are callPackage'd at their use site and have no `packages.<system>` output), and
+# it is architecture-independent — so these aarch64 packages can be checked on a
+# free x86_64 runner in seconds instead of cross-compiling on ARM.
+#
+# The job runs on every PR rather than behind a `paths:` filter, because it is a
+# required check in .github/settings.yml: a filtered workflow reports no status at
+# all on PRs that miss the filter, which leaves them stuck on "Expected — waiting
+# for status" forever. It quick-exits instead, before installing anything.
+#
+# It reports; it does not push a fix. A commit pushed with GITHUB_TOKEN does not
+# trigger workflows, so an auto-fixup would replace one stuck PR with another —
+# the new head commit would never get the four required checks from nix.yml. The
+# corrected hashes are printed in the PR comment, and `--write` applies them in
+# one command. Wiring the push properly means a GitHub App token (app-id +
+# private key as secrets, minted per run); worth doing if these bumps get
+# frequent, unnecessary while they are monthly.
+name: Nix hashes
+
+on:
+  pull_request:
+    branches: [main]
+  # Manual runs audit every Renovate-tracked package, not just a diff, and fail
+  # on the ones that need a real build (--strict).
+  workflow_dispatch:
+
+concurrency:
+  group: nix-hashes-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  hashes:
+    name: hashes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The three-dot diff below needs the base branch's history.
+          fetch-depth: 0
+
+      - name: Collect the package files this PR touches
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = workflow_dispatch ]; then
+            echo "mode=audit" >>"$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only \
+            "origin/${{ github.base_ref }}...HEAD" -- 'pkgs/**/*.nix' | tr '\n' ' ')
+          if [ -z "$files" ]; then
+            echo "No pkgs/**/*.nix changes — nothing to verify."
+            echo "mode=skip" >>"$GITHUB_OUTPUT"
+          else
+            echo "Checking: $files"
+            echo "mode=check" >>"$GITHUB_OUTPUT"
+            echo "files=$files" >>"$GITHUB_OUTPUT"
+          fi
+
+      - uses: DeterminateSystems/nix-installer-action@v22
+        if: steps.changed.outputs.mode != 'skip'
+
+      - name: Verify the pinned hashes
+        if: steps.changed.outputs.mode != 'skip'
+        run: |
+          set -o pipefail
+          if [ "${{ steps.changed.outputs.mode }}" = audit ]; then
+            set -- --strict
+          else
+            set -- ${{ steps.changed.outputs.files }}
+          fi
+          python3 scripts/nix-fix-hashes.py "$@" 2>&1 | tee /tmp/hashes.log
+
+      - name: Explain the mismatch on the PR
+        if: failure() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          {
+            echo "### Stale Nix hashes"
+            echo
+            echo "A pinned hash does not match the version beside it, so \`nixos-rebuild\`"
+            echo "would fail with \`hash mismatch in fixed-output derivation\`. Renovate"
+            echo "cannot compute these; the values below are the real ones."
+            echo
+            echo '```'
+            cat /tmp/hashes.log
+            echo '```'
+            echo
+            echo "Fix it in one command, then push:"
+            echo
+            echo '```sh'
+            echo "scripts/nix-fix-hashes.py --write ${{ steps.changed.outputs.files }}"
+            echo '```'
+          } >/tmp/comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" --body-file /tmp/comment.md
+
+      - name: Summary
+        if: always() && steps.changed.outputs.mode != 'skip'
+        run: |
+          { echo '```'; cat /tmp/hashes.log 2>/dev/null; echo '```'; } >>"$GITHUB_STEP_SUMMARY"
