@@ -83,12 +83,20 @@ branches:
         # trusting.
         require_last_push_approval: true
         require_code_owner_reviews: false
-      # The four jobs of .github/workflows/nix.yml. These are the context names
-      # GitHub actually reported on green runs of that workflow, not names derived
-      # from the YAML — a context that never arrives leaves every PR waiting
-      # forever on a check that will not come.
+      # The four jobs of .github/workflows/nix.yml, plus `hashes` from
+      # nix-hashes.yml. These are the context names GitHub actually reported on
+      # green runs of those workflows, not names derived from the YAML — a context
+      # that never arrives leaves every PR waiting forever on a check that will
+      # not come.
       #
       # So: if you rename a job in nix.yml, rename it here in the same commit.
+      #
+      # `hashes` is required for the same reason it exists: eval cannot see a
+      # stale fixed-output hash, so before it, a Renovate bump with two dead
+      # hashes was green on all four checks and merged straight into an
+      # unbuildable main (2026-08-19). It is why nix-hashes.yml has no `paths:`
+      # filter — a required context must report on every PR, including the ones
+      # that touch nothing under pkgs/.
       #
       # strict is false on purpose. `true` additionally requires a branch to be
       # up to date with main before merging, which on a rebase-only repo means
@@ -100,6 +108,7 @@ branches:
           - eval BeAsT
           - eval nBookPro
           - scripts
+          - hashes
       # Off, deliberately, and this is a change from what this file used to
       # declare. It is the escape hatch: with a required review and four required
       # checks, `true` means a CI outage — a runner incident, a bad flake input,
