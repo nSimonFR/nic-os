@@ -28,7 +28,7 @@ buildHomeAssistantComponent rec {
     owner = "GuiHash";
     repo = "ha-intratone";
     rev = "v${version}";
-    hash = "sha256-BkvdaY1oacmZM+bqTzxBf36G1jTkYK0wbxJRb4oIonY=";
+    hash = "sha256-N4lZ937XHVuXoa3ySHvqXf3/aJEXtqVQG/wdkL2r3mk=";
   };
   dependencies = with python3Packages; [
     firebase-messaging

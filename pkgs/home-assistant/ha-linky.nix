@@ -23,7 +23,7 @@ buildNpmPackage rec {
     owner = "bokub";
     repo = "ha-linky";
     rev = version;
-    hash = "sha256-x8W/kR/L3uJ317MAayv3mUlPW3yw+Tnj4iD2c6CEnOQ=";
+    hash = "sha256-4hQ5bQ2CxlSDLw4yxakOpnij2gJ0FSyH8OWjX4iCkOE=";
   };
   npmDepsHash = "sha256-y/64htlLa5RGemCIqXp9nxDgAK8zyVOq8kdW4azhY64=";
   # npm run build = tsc → dist/
