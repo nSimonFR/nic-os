@@ -14,6 +14,27 @@
 # Claude via api.anthropic.com."` in bin/.claude-wrapped), so dropping the forced
 # URL there kills the bridge rather than gating it.
 #
+# _CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL rides along because gating the worker
+# costs it the 1M context window. Opus 5 and Sonnet 5 carry
+# `context:{window:1e6,native_1m:true}` in the client's model registry and need no
+# beta header for it, but the client only credits native_1m when it believes it is
+# talking to Anthropic directly: `IM()` requires `Yd()`, and `Yd()` is
+# `_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL || host === api.anthropic.com` read
+# from process.env — which a settings `env` entry becomes. So the moment this hook
+# points the base URL at the gate, every bridge session silently drops to 200k and
+# auto-compacts at ~167k (measured: 120 compact_boundary records across the
+# 2026-08-18 sessions, every one of them 166–170k). Setting the flag restores 1m
+# with the same `claude-opus-5` the bridge sends; the `[1m]` model alias cannot be
+# used here because Remote Control's session_context.model overrides settings.json.
+# Verified A/B on 2.1.220 with `claude -p /context --model claude-opus-5`:
+# gate URL alone → "1.6k / 200k", gate URL + flag → "14.4k / 1m".
+#
+# It cannot leak into the guard: claude-code checks Remote Control eligibility
+# with the raw base-URL test, and says so in as many words —
+# "(_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL does not apply to Remote Control.)"
+# The flag only affects first-party feature detection inside the worker, which is
+# the truth here: the gate proxies to api.anthropic.com.
+#
 # Writes settings.LOCAL.json, not settings.json. Both reasons are load-bearing:
 #
 #   - nic-os COMMITS .claude/settings.json (MCP denies, credential guard hooks),
@@ -59,12 +80,15 @@ settings="$top/.claude/settings.local.json"
 if [ -s "$settings" ]; then
   command -v jq >/dev/null 2>&1 || exit 0
   tmp="$settings.tmp.$$"
-  if jq --arg gate "$gate" '.env.ANTHROPIC_BASE_URL = $gate' "$settings" >"$tmp" 2>/dev/null; then
+  if jq --arg gate "$gate" '.env.ANTHROPIC_BASE_URL = $gate
+      | .env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL = "1"' \
+      "$settings" >"$tmp" 2>/dev/null; then
     mv "$tmp" "$settings"
   else
     rm -f "$tmp"
   fi
 else
-  printf '{"env":{"ANTHROPIC_BASE_URL":"%s"}}\n' "$gate" >"$settings"
+  printf '{"env":{"ANTHROPIC_BASE_URL":"%s","_CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL":"1"}}\n' \
+    "$gate" >"$settings"
 fi
 exit 0
