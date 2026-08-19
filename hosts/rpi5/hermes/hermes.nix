@@ -294,7 +294,10 @@ let
     export HOME="/home/nsimon"
     export HERMES_HOME="${hermesHome}"
     export HERMES_ACCEPT_HOOKS=1
-    export PATH="${pkgs.rtk}/bin:${pkgs.ripgrep}/bin:$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/etc/profiles/per-user/nsimon/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
+    # /etc/profiles/per-user (the profile `nixos-rebuild switch` refreshes) must
+    # precede the standalone HM profile, which only `home-manager switch` updates
+    # and so goes stale — it had the agent on a two-week-old atuin.
+    export PATH="${pkgs.rtk}/bin:${pkgs.ripgrep}/bin:/etc/profiles/per-user/nsimon/bin:$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
     exec ${hermes}/bin/hermes gateway run
   '';
 

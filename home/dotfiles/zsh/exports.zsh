@@ -25,8 +25,12 @@ export AUTO_NOTIFY_EXPIRE_TIME=5000
 
 export USE_GKE_GCLOUD_AUTH_PLUGIN=True
 
-# home-manager packages (needed when integrated with nix-darwin)
-export PATH="$HOME/.local/state/nix/profiles/home-manager/home-path/bin:$PATH"
+# home-manager packages: deliberately NOT set here. `home.sessionPath` in
+# home/default.nix already puts both HM profiles on PATH via hm-session-vars.sh,
+# which .zshenv sources before this file runs — and it puts the *authoritative*
+# one (`home.profileDirectory`) first. Re-prepending the standalone profile here
+# undid that ordering, so under the NixOS module every binary the two profiles
+# share resolved to whatever the last `home-manager switch` left behind.
 
 # Mac-OS specific so path will be ignored on other systems
 export PATH=/opt/homebrew/bin:$PATH
