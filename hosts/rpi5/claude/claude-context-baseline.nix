@@ -23,7 +23,7 @@ let
   # monitoring.nix. Correct here rather than the one-shot `send` because this is a
   # condition that CLEARS: deny the offending connector, the next session's
   # baseline drops, and the following empty body resolves the message.
-  telegramAlert = (import ../../shared/notify.nix { inherit pkgs; }).alert {
+  telegramAlert = (import ../../../shared/notify.nix { inherit pkgs; }).alert {
     tokenFile = config.age.secrets.telegram-bot-token.path;
     chatId = telegramChatId;
     name = "telegram-alert-context-baseline";

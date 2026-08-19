@@ -232,7 +232,7 @@ in
               token_file = "/run/claude-oauth/token";
             };
           }
-          # acct2 (the gate-only spare, max plan — hosts/rpi5/claude-oauth-2.nix)
+          # acct2 (gate-only spare, max plan — hosts/rpi5/claude/claude-oauth-2.nix)
           # DISABLED 2026-08-18: the token is valid and minutes-fresh, but the
           # ORGANIZATION this account belongs to disallows OAuth API access, so
           # every raw-passthrough request 403s with

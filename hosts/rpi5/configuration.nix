@@ -189,11 +189,13 @@ in
     ./cyrus.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
-    ./claude-remote-control.nix
-    ./claude-oauth-2.nix
-    ./claude-account-healthcheck.nix
-    ./claude-notify-aggregator.nix
-    ./claude-context-baseline.nix
+    # Everything Claude Code on this host — bridge, OAuth keep-warm, the two
+    # alert oneshots — lives under ./claude/ (same shape as ./hermes/).
+    ./claude/claude-remote-control.nix
+    ./claude/claude-oauth-2.nix
+    ./claude/claude-account-healthcheck.nix
+    ./claude/claude-notify-aggregator.nix
+    ./claude/claude-context-baseline.nix
     ./gramps-web.nix
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
