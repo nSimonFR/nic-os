@@ -32,6 +32,7 @@
     "d /mnt/data/backups/karakeep 0750 karakeep karakeep -"
     "d /mnt/data/backups/wealthfolio 0750 wealthfolio wealthfolio -"
     "d /mnt/data/backups/blogwatcher 0750 nsimon users -"
+    "d /mnt/data/backups/hermes 0750 nsimon users -"
   ];
 
   systemd.services.hass-backup = {
@@ -161,10 +162,30 @@
     timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
   };
 
+  # ── Registration for the two $HOME dumps below ─────────────────────────
+  # Both of these live here rather than in an owning module, which is unusual
+  # enough to say why: blogwatcher is a bare CLI with no module at all, and
+  # Hermes' module (hosts/rpi5/hermes/hermes.nix) is a *home-manager* module,
+  # where `nic.services` — a NixOS option — does not exist.
+  #
+  # Registering is not paperwork. `nic.backupUnits` is what storj-backup.nix
+  # orders restic `After=`, and restic's timer carries `RandomizedDelaySec =
+  # 10m`, so it starts anywhere in 04:30–04:40. Without an entry here the only
+  # thing keeping a dump out of a half-written upload is the gap between two
+  # wall-clock times — which is exactly the arrangement the ordering was added
+  # to replace.
+  nic.services.blogwatcher = {
+    backup = [ "unit" ];
+    backupUnits = [ "blogwatcher-backup.service" ];
+  };
+
+  nic.services.hermes = {
+    backup = [ "unit" ];
+    backupUnits = [ "hermes-backup.service" ];
+  };
+
   # ── blogwatcher (SQLite in $HOME) ──────────────────────────────────────
-  # blogwatcher is a CLI, not a service, so it has no module and no
-  # `nic.services` entry — which is exactly why its state went unnoticed: the
-  # tracked feeds and the read/unread state of every article live in
+  # The tracked feeds and the read/unread state of every article live in
   # /home/nsimon/.blogwatcher/blogwatcher.db, on the SSD, outside /mnt/data,
   # and restic (storj-backup.nix) backs up /mnt/data and nothing else. The
   # daily digest (hermes/workspace/daily-pending-digest.sh) calls `read-all`
@@ -189,12 +210,65 @@
     '';
   };
 
-  # 04:20, not later: restic-backups-storj-daily fires at 04:36, and a dump
-  # that lands after it waits a full day to leave the machine.
+  # 04:20, ahead of restic's 04:30–04:40 window, so the dump is a day old at
+  # most rather than a day stale. The `After=` ordering above is the guarantee;
+  # this is the margin that keeps it from ever mattering.
   systemd.timers.blogwatcher-backup = {
     description = "Daily blogwatcher backup timer";
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 04:20:00"; Persistent = true; };
+  };
+
+  # ── Hermes (SQLite + runtime files in $HOME) ───────────────────────────
+  # Hermes is the sole agent, and everything it has ever said or been told is
+  # in /home/nsimon/.hermes — on the SSD, outside /mnt/data, so restic never
+  # saw any of it. state.db alone is 91 MB: 7,301 messages across 141 sessions
+  # plus their FTS index. None of it is reconstructible from anywhere.
+  #
+  # What is dumped, and what is deliberately not:
+  #
+  #   state.db                 conversation history + sessions (the big one)
+  #   kanban.db                the agent's task board
+  #   memory_store.db          what it has chosen to remember
+  #   verification_evidence.db  its own verification trail
+  #   cron/executions.db       job run history
+  #   memories/, memory/       MEMORY.md / USER.md, written at runtime
+  #   cron/jobs.json           live job definitions — editable by the agent,
+  #                            so the repo is NOT a copy of this
+  #
+  # Skipped because a rebuild recreates them: skills/ (58 MB, rsynced from the
+  # store), documents (likewise), lsp/, cache/, audio_cache/, image_cache/,
+  # logs/, and sessions/ (3.6 MB of request_dump_*.json debug artefacts — the
+  # conversations themselves are in state.db). .env is agenix-derived. That is
+  # 211 MB on disk reduced to ~40 MB dumped.
+  #
+  # `.timeout 60000` before `.backup`, which the other units here do without:
+  # they dump databases that are idle at 04:00, whereas Hermes writes
+  # continuously and would otherwise lose the race to a busy database.
+  systemd.services.hermes-backup = {
+    description = "Hermes agent state backup";
+    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/hermes
+      H=/home/nsimon/.hermes
+      for db in state kanban memory_store verification_evidence; do
+        ${pkgs.sqlite}/bin/sqlite3 "$H/$db.db" ".timeout 60000" ".backup '$OUT/$db-$STAMP.db'"
+      done
+      ${pkgs.sqlite}/bin/sqlite3 "$H/cron/executions.db" ".timeout 60000" ".backup '$OUT/executions-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "$OUT"/*-"$STAMP".db
+      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks.
+      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
+        -cf "$OUT/files-$STAMP.tar.gz" -C "$H" memories memory cron/jobs.json
+      ${pkgs.findutils}/bin/find "$OUT" -type f -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.hermes-backup = {
+    description = "Daily Hermes backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:25:00"; Persistent = true; };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────
