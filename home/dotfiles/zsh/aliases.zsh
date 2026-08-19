@@ -33,6 +33,14 @@ alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit no
 #
 # A function, not an alias, so it can inject flags; a same-named alias would
 # shadow it.
+#
+# --remote-control lives HERE, not on the wrappers below, because it is only
+# valid on the shim branch (Remote Control refuses any base URL but
+# api.anthropic.com, so the degraded branch must NOT pass it). It used to sit on
+# `claude()` alone, which silently left every `cc`/`cr` session with no control
+# channel: the phone still listed them — the claude-rc host publishes every
+# `~/.claude/sessions/<pid>.json` it can see and they inherit the *host's*
+# connected status — so sends were accepted and then landed nowhere.
 # Port and CA path mirror home/claude-aperture-shim.nix — change both together.
 _claude_shim() {
   local ca="$HOME/.claude-aperture-shim/mitmproxy-ca-cert.pem"
@@ -43,7 +51,7 @@ _claude_shim() {
     ANTHROPIC_BASE_URL=https://api.anthropic.com \
     HTTPS_PROXY=http://127.0.0.1:8888 \
     NODE_EXTRA_CA_CERTS=$ca \
-      command claude "$@"
+      command claude --remote-control "$@"
   else
     print -u2 "claude: Aperture shim unavailable — continuing WITHOUT Remote Control."
     print -u2 "  restart it: launchctl kickstart -k gui/\$(id -u)/org.nix-community.home.claude-aperture-shim"
@@ -51,7 +59,7 @@ _claude_shim() {
   fi
 }
 
-claude() { _claude_shim --dangerously-skip-permissions --remote-control "$@"; }
+claude() { _claude_shim --dangerously-skip-permissions "$@"; }
 cc()     { _claude_shim --continue "$@"; }
 cr()     { _claude_shim --resume "$@"; }
 
