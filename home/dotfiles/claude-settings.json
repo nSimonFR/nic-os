@@ -4,6 +4,7 @@
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
+  "_comment_permissions_ccr": "The Claude Code Remote (bridge) MCP tools are allowed for the READ-ONLY half only — get_session/list_* answer 'which session am I, what model is serving it, what else is running' without a prompt. Everything that mutates (create_session, archive/unarchive, interrupt, set_title/set_tags, send_later, create/update/delete/fire_trigger, subscribe_pr_activity, add_repo) is deliberately left prompting: those spawn containers, wake siblings or post to GitHub. Listed under BOTH name forms for the reason spelled out in .claude/settings.json's _comment_mcp_names — a claude.ai connector attaches either as 'claude.ai Claude Code Remote' (mcp__claude_ai_Claude_Code_Remote__*) or bare (mcp__Claude_Code_Remote__*), and only the bare form has been observed since 2026-07-28, so pinning one form silently stops matching if that flips back.",
   "permissions": {
     "allow": [
       "Bash(*)",
@@ -42,6 +43,16 @@
       "mcp__claude_ai_Figma__get_libraries",
       "mcp__claude_ai_Figma__search_design_system",
       "mcp__claude_ai_Figma__whoami",
+      "mcp__Claude_Code_Remote__get_session",
+      "mcp__Claude_Code_Remote__list_sessions",
+      "mcp__Claude_Code_Remote__list_environments",
+      "mcp__Claude_Code_Remote__list_repos",
+      "mcp__Claude_Code_Remote__list_triggers",
+      "mcp__claude_ai_Claude_Code_Remote__get_session",
+      "mcp__claude_ai_Claude_Code_Remote__list_sessions",
+      "mcp__claude_ai_Claude_Code_Remote__list_environments",
+      "mcp__claude_ai_Claude_Code_Remote__list_repos",
+      "mcp__claude_ai_Claude_Code_Remote__list_triggers",
       "mcp__claude_ai_Asana",
       "mcp__claude_ai_Atlassian",
       "mcp__claude_ai_Balsamiq",
