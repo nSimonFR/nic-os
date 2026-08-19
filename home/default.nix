@@ -27,8 +27,23 @@
   home.stateVersion = "25.11";
   programs.home-manager.enable = true;
 
-  # Ensure home-manager packages are in PATH (needed when integrated with nix-darwin)
+  # Ensure home-manager packages are in PATH (needed when integrated with
+  # nix-darwin). The *authoritative* profile has to come first, and it is not
+  # always the standalone one: under the NixOS module (`useUserPackages = true`)
+  # `home.profileDirectory` is /etc/profiles/per-user/<user>, which is what
+  # `nixos-rebuild switch` updates. Hardcoding only the standalone location put
+  # a profile that is refreshed solely by `home-manager switch` ahead of it on
+  # every shell's PATH, so on rpi5 it silently froze on 2026-08-06: `atuin` kept
+  # resolving to 18.17.1 while the module profile and the atuin-daemon moved to
+  # 18.18.1, and since 18.18.1 had already migrated ~/.local/share/atuin's
+  # history.db, every session start aborted with "migration 20260709214605 was
+  # previously applied but is missing in the resolved migrations".
+  # The standalone path stays as a *fallback* (second): under the module a few
+  # binaries live only there — `home-manager` itself (HM keeps its own CLI out
+  # of the per-user profile) and `code`. On standalone hosts profileDirectory
+  # *is* that state-dir path, so the two entries collapse into one.
   home.sessionPath = [
+    "${config.home.profileDirectory}/bin"
     "$HOME/.local/state/nix/profiles/home-manager/home-path/bin"
   ];
 
