@@ -177,6 +177,7 @@ in
     ./showmycards.nix
     ./moxfield-sync.nix
     ./nextcloud.nix
+    ./calino.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
     ./hydroxide.nix
