@@ -20,7 +20,7 @@ buildNpmPackage rec {
     owner = "DAWNCR0W";
     repo = "affine-mcp-server";
     rev = "v${version}";
-    hash = "sha256-Eqod6cSJCw7cuR4He7fierBAs8i3wjSCnc7MSUn3RRU=";
+    hash = "sha256-6iZ6IsKHftCJjVhAumtKyt5cYwOZuOz6npULB29xX+I=";
   };
 
   npmDepsHash = "sha256-WderlJSCLaAkPa3LV7IG/m5fGzDRqDBDPVyrEOneLk4=";
