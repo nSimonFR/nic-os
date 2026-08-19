@@ -48,11 +48,12 @@
       "ignoreUnstable": true
     },
     {
-      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise. The `src` half of that promise only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'. Drop the `name` and a stale src hash goes back to silently reusing the old tree.",
+      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise. It is no longer only a note: three of these merged unfixed on 2026-08-19 and broke main outright, because eval-only CI cannot see a stale fixed-output hash. The `hashes` check now blocks that, and scripts/nix-fix-hashes.py does the recomputation Renovate can't. The `src` half of that promise only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'. Drop the `name` and a stale src hash goes back to silently reusing the old tree.",
       "matchFileNames": ["pkgs/**"],
       "prBodyNotes": [
         "⚠️ **Does not build as-is.** Renovate cannot recompute Nix fixed-output hashes — the `hash` / `npmDepsHash` / `vendorHash` beside this `version` are still the old ones, and the build will fail with a hash mismatch.",
-        "To finish it: set each stale hash to `lib.fakeHash`, run `nix build .#nixosConfigurations.rpi5.config.system.build.toplevel` (or build the package directly), and copy the `got:` value from each error in turn.",
+        "The `hashes` check (.github/workflows/nix-hashes.yml) is red until they are fixed, and comments the correct values on this PR. Apply them with `scripts/nix-fix-hashes.py --write <changed files>`, then push.",
+        "`vendorHash` (Go) and `pnpmDepsHash` are the exceptions that script cannot derive from a fetch — it says so per package. Those still need `lib.fakeHash` + a real build, and the `got:` value from the error.",
         "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
       ]
     }
