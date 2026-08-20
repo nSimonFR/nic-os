@@ -17,6 +17,52 @@
 # probe to get wrong) than the ~12 MB it would reclaim, and the 4-hourly broker
 # sync scheduler wants to actually run.
 #
+# THE AI ASSISTANT IS DB STATE, NOT CONFIG. There is no WF_AI_* env knob: the
+# whole provider config lives in one `app_settings` row (`ai_provider_settings`)
+# written through PUT /api/v1/ai/providers/settings. Ours points the built-in
+# "openai" provider at tiny-llm-gate (customUrl http://127.0.0.1:4001/v1) with
+# selectedModel gpt-5.6. That row also carries a `modelCapabilityOverrides`
+# entry that is load-bearing and NOT reproducible by a rebuild:
+#
+#   {"gpt-5.6": {"tools": true}}
+#
+# Wealthfolio decides tool support from a model catalog baked into the server
+# binary (gpt-5.4 / -mini / -nano only). Any model it does not recognise —
+# which is every model this gate actually serves — resolves to tools=false, so
+# the server sends NO tool definitions and the assistant answers portfolio
+# questions with "I don't have access to your asset allocation with the current
+# model. Please switch to a tool-enabled model using the gear icon". The gear
+# icon is that override; it is per (provider, modelId), so it must be re-set
+# after a DB restore and again for any new selectedModel:
+#
+#   curl -sb <cookiejar> -X PUT http://127.0.0.1:13345/api/v1/ai/providers/settings \
+#     -H 'Content-Type: application/json' \
+#     -d '{"providerId":"openai","modelCapabilityOverride":
+#          {"modelId":"gpt-5.6","overrides":{"tools":true}}}'
+#
+# KNOWN-BROKEN, ACCEPTED 2026-08-20: asset-allocation questions specifically.
+# Through the gate's codex surface, gpt-5.6 fills every OPTIONAL string
+# parameter with "" instead of omitting it — reproducible outside Wealthfolio
+# with a bare curl to :4001, and NOT the gate's doing (it forwards the tool
+# schema verbatim and does not set `strict`). Claude, gemma4:e4b and
+# qwen3.6:35b-a3b all omit them correctly.
+#
+# Every other tool tolerates that: get_performance with accountId "" still
+# returns the aggregate, get_net_worth ignores a blank startDate. But
+# `get_asset_allocation` reads a present-but-empty categoryId/taxonomyId as a
+# DRILL-DOWN request, looks up category "", and returns
+# `{holdings: [], totalValue: 0.0, taxonomyName: "Unknown"}` with
+# success: true — so the assistant reports "€0 in holdings" rather than an
+# error. Deterministic, twice out of two runs.
+#
+# The fix belongs in tiny-llm-gate (drop "" args not in the schema's `required`
+# on the codex response path) and is deliberately NOT taken: routing the
+# assistant at Claude instead is a dead end (claude-opus-5 rejects the
+# `temperature` Wealthfolio always sends, and third-party OAuth draws on
+# unfunded Extra Usage), and a local model gets the groupBy enum wrong. Use the
+# Allocation page for allocation; the assistant is trustworthy on net worth,
+# performance, activities and health.
+#
 # AUTH IS NOT OPTIONAL HERE. Wealthfolio serves the whole portfolio unauth'd
 # unless WF_AUTH_PASSWORD_HASH is set; the tailnet is not a trust boundary worth
 # betting real holdings on. The hash (argon2id PHC string) and WF_SECRET_KEY —
