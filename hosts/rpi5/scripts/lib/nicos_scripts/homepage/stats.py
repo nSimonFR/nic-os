@@ -10,7 +10,7 @@ Endpoints (one per homepage tile, three stats each):
   /wealthfolio — Wealthfolio (net worth + investments, invested + gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
-  /calino    — Calino (events today, events next 7 days, open tasks) — Nextcloud CalDAV
+  /calino    — Calino (events today, events next 7 days, tasks due) — Nextcloud CalDAV
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
   /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
   /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
@@ -83,11 +83,13 @@ REFRESH_INTERVAL = 86400  # seconds — see module docstring
 RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 
 # Bump whenever a fetcher changes WHICH fields it reports (renaming wakapi's
-# heartbeats→today, say), so the cache from the previous shape is discarded.
-# backfill_missing only re-fetches keys that are entirely absent, so without this a
-# key whose fields were renamed would keep serving the old shape — blanking its tile
-# — until the next daily refresh, up to 24h after the rebuild that changed it.
-STATS_SCHEMA = 11
+# heartbeats→today, say) — or what an existing field MEANS, which is just as stale a
+# cache even though the shape still validates. backfill_missing only re-fetches keys
+# that are entirely absent, so without this the old value survives until the next daily
+# refresh, up to 24h after the rebuild that changed it: schema 12 is calino's `tasks`
+# going from "every open task" (76) to "pending, dated and due" (5), which would
+# otherwise have sat there reading 76 under a "Tasks due" label.
+STATS_SCHEMA = 12
 
 
 @dataclass(frozen=True)
@@ -595,20 +597,49 @@ def _event_body(start, end):
     )
 
 
-_TODO_ALL_BODY = (
-    '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
-    "<d:prop><d:getetag/></d:prop><c:filter>"
-    '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO"/>'
-    "</c:comp-filter></c:filter></c:calendar-query>"
-)
-
-_TODO_DONE_BODY = (
+# Pending only — STATUS:NEEDS-ACTION, not "everything that is not COMPLETED".
+#
+# ⚠ That means a VTODO with STATUS:IN-PROCESS, or with no STATUS property at all, is
+#   NOT counted. Neither exists on this account (every VTODO in all six lists carries
+#   either NEEDS-ACTION or COMPLETED — verified), but a client that starts writing
+#   IN-PROCESS would silently undercount. A text-match cannot express OR, so widening
+#   means a second query unioned into `pending` below.
+_TODO_PENDING_BODY = (
     '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
     "<d:prop><d:getetag/></d:prop><c:filter>"
     '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO">'
-    '<c:prop-filter name="STATUS"><c:text-match>COMPLETED</c:text-match>'
+    '<c:prop-filter name="STATUS"><c:text-match>NEEDS-ACTION</c:text-match>'
     "</c:prop-filter></c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
 )
+
+
+
+def _todo_filter_body(inner):
+    return (
+        '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
+        "<d:prop><d:getetag/></d:prop><c:filter>"
+        '<c:comp-filter name="VCALENDAR"><c:comp-filter name="VTODO">'
+        f"{inner}</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
+    )
+
+
+# "Has a date at all". A prop-filter with no children matches when the property is
+# DEFINED (RFC 4791 §9.7), and it is unaffected by the time-range bug below because
+# there is no time-range in these two. DURATION needs a DTSTART to mean anything, so
+# DUE ∪ DTSTART is the whole of "dated".
+_TODO_DUE_BODY = _todo_filter_body('<c:prop-filter name="DUE"/>')
+_TODO_DTSTART_BODY = _todo_filter_body('<c:prop-filter name="DTSTART"/>')
+
+
+def _todo_current_body(end):
+    """VTODOs overlapping (epoch, end] — used to drop the future-dated ones.
+
+    ⚠ This matches UNDATED VTODOs too: RFC 4791 §9.9 says a VTODO with no DTSTART, DUE
+      or DURATION overlaps EVERY time range (verified live — all 11 pending items in
+      `Courses`, a shopping list, match). So a time-range alone cannot answer "has a
+      date that has arrived"; it has to be intersected with the two prop-filters above.
+    """
+    return _todo_filter_body(f'<c:time-range start="19700101T000000Z" end="{end}"/>')
 
 
 def dav_xml(cfg, run, method, url, body, depth="1"):
@@ -634,10 +665,14 @@ def dav_xml(cfg, run, method, url, body, depth="1"):
     return ET.fromstring(out)
 
 
-def dav_count(cfg, run, url, body):
-    """How many objects a calendar-query matched. The filter does the work."""
+def dav_hrefs(cfg, run, url, body):
+    """The href of every object a calendar-query matched. The filter does the work."""
     root = dav_xml(cfg, run, "REPORT", url, body)
-    return sum(1 for _ in root.iter(f"{DAV}response"))
+    return {e.findtext(f"{DAV}href") for e in root.iter(f"{DAV}response")}
+
+
+def dav_count(cfg, run, url, body):
+    return len(dav_hrefs(cfg, run, url, body))
 
 
 def discover_calendars(cfg, run):
@@ -692,7 +727,14 @@ def discover_calendars(cfg, run):
 
 
 def fetch_calino(cfg, run, now=None):
-    """Events today, events in the next 7 days, and open tasks.
+    """Events today, events in the next 7 days, and tasks due.
+
+    "Due" is pending (STATUS:NEEDS-ACTION) AND carrying a DUE/DTSTART AND that date
+    already reached. On this account that is 5, out of 76 pending: 21 of the pending are
+    future-dated, and 50 are undated list items (`Courses`, `Recettes`, `Cadeaux`,
+    `Appartement`, `Dettes` are shopping/gift lists with no dates at all). Only
+    `Reminders` contributes. A tile showing 76 says "you have a lot of lists"; this one
+    says what is actually owed today.
 
     Windows are LOCAL days converted to UTC stamps, not `utcnow()`-based: at 20:30
     CEST a UTC-midnight window is already two hours into tomorrow, which would move
@@ -721,22 +763,37 @@ def fetch_calino(cfg, run, now=None):
 
     event_cals, task_cals = discover_calendars(cfg, run)
 
-    counts = {
+    def tasks(url):
+        """Pending AND dated AND that date has arrived. Intersected HERE, not server-side.
+
+        ⚠ SabreDAV DROPS a `prop-filter` whenever a `time-range` sits in the same
+          comp-filter, so the single query that ought to express this AND silently
+          answers the time-range alone. Measured on this server: `Reminders` has 27
+          pending and 792 in range, and the combined query returns 792 — every
+          COMPLETED task in range, 29× the truth. Element order is not the cause;
+          RFC 4791 wants `time-range` first and it behaves identically either way.
+
+        So each condition is a separate server-side filter and the AND is an href
+        intersection, which is exact. Ordered cheapest-discriminator-first and
+        short-circuited: five of the six lists here are entirely undated, so they cost
+        three requests and never reach the time-range.
+        """
+        pending = dav_hrefs(cfg, run, url, _TODO_PENDING_BODY)
+        if not pending:
+            return 0
+        dated = pending & (dav_hrefs(cfg, run, url, _TODO_DUE_BODY)
+                           | dav_hrefs(cfg, run, url, _TODO_DTSTART_BODY))
+        if not dated:
+            return 0
+        return len(dated & dav_hrefs(cfg, run, url, _todo_current_body(stamp(now))))
+
+    return {
         "today": sum(dav_count(cfg, run, url, _event_body(start, end_today))
                      for url in event_cals),
         "week": sum(dav_count(cfg, run, url, _event_body(start, end_week))
                     for url in event_cals),
-        # Open = every VTODO minus the ones marked done, NOT a negated text-match on
-        # STATUS. A negated match only matches objects that HAVE the property, so a
-        # VTODO written without STATUS at all would vanish from the count entirely;
-        # subtracting instead counts it as open, which is the safer way for a to-do
-        # number to be wrong.
-        "tasks": sum(
-            max(0, dav_count(cfg, run, url, _TODO_ALL_BODY)
-                - dav_count(cfg, run, url, _TODO_DONE_BODY))
-            for url in task_cals),
+        "tasks": sum(tasks(url) for url in task_cals),
     }
-    return counts
 
 
 def fetch_affine(cfg, run):

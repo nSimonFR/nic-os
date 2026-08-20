@@ -204,7 +204,7 @@ in
           mappings = [
             { field = "today"; label = "Today"; format = "number"; }
             { field = "week"; label = "7 days"; format = "number"; }
-            { field = "tasks"; label = "Open tasks"; format = "number"; }
+            { field = "tasks"; label = "Tasks due"; format = "number"; }
           ];
         };
       };
