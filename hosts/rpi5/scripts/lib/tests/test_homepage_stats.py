@@ -402,12 +402,15 @@ def test_the_cash_bracket_leaves_out_the_livret_a():
 
 
 def test_food_spend_includes_the_categorys_children():
-    """Sure budgets on '1 - Food' but books spend against Groceries etc."""
+    """Sure budgets on '0 - Food' but books spend against Groceries etc."""
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
     run = FakeRun(SURE_ROWS)
     hs.fetch_sure(cfg, run)
     food_query = next(c for c in run.commands if "WITH food AS" in c)
     assert "parent_id IN" in food_query
+    # The category is matched by name, so its numeric prefix is load-bearing:
+    # renumbering the categories in Sure silently zeroes the tile otherwise.
+    assert "'0 - Food'" in food_query
 
 
 def test_overspending_the_month_shows_a_negative_remainder():

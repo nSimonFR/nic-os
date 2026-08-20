@@ -355,15 +355,15 @@ def fetch_sure(cfg, run):
     # category and books spend against its children, so both levels count.
     food = pg_superuser(cfg, run, "sure_production", """
         WITH food AS (
-          SELECT id FROM categories WHERE name = '1 - Food'
+          SELECT id FROM categories WHERE name = '0 - Food'
           UNION SELECT id FROM categories
-                WHERE parent_id IN (SELECT id FROM categories WHERE name = '1 - Food')
+                WHERE parent_id IN (SELECT id FROM categories WHERE name = '0 - Food')
         )
         SELECT COALESCE((SELECT round(bc.budgeted_spending::numeric, 2)
                          FROM budget_categories bc
                          JOIN budgets b ON b.id = bc.budget_id
                          JOIN categories c ON c.id = bc.category_id
-                         WHERE c.name = '1 - Food'
+                         WHERE c.name = '0 - Food'
                            AND b.start_date <= CURRENT_DATE AND b.end_date >= CURRENT_DATE
                          LIMIT 1), 0) || '|' ||
                COALESCE((SELECT round(sum(e.amount)::numeric, 2)
