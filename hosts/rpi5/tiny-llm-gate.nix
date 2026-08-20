@@ -163,6 +163,16 @@ in
         "openai/gpt-5.6-terra"       = "gpt-5.6-terra";
         "openai/gpt-5.6-luna"        = "gpt-5.6-luna";
 
+        # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
+        # THREAD-TITLE model (`titleModelId` in the provider catalog baked into
+        # the server binary) — it is not the chat model and cannot be configured
+        # in the app. Unaliased it 404s here ("unknown model") on every single
+        # message; Wealthfolio then silently retries the title with the chat
+        # model, so the only symptom was a wasted round-trip per message plus a
+        # log line. A title is 4 words about the user's own prompt, so route it
+        # local-first through "auto" rather than burning a codex call on it.
+        "gpt-5.4-nano" = "auto";
+
         # AFFiNE hardcodes OpenAI GPT model names for its OpenAI provider.
         # Route through "auto" so beast-down falls back to codex.
         "gpt-4.1-2025-04-14" = "auto";
