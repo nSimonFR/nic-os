@@ -628,13 +628,19 @@ CALDAV_HOME_XML = """<?xml version="1.0"?>
 """
 
 
-def multistatus(n):
-    """A calendar-query answer carrying n matched objects."""
+def multistatus(hrefs):
+    """A calendar-query answer. Takes a count (opaque hrefs) or explicit hrefs.
+
+    The task count is an INTERSECTION of two answers by href, so the identities have
+    to be controllable, not just the totals.
+    """
+    if isinstance(hrefs, int):
+        hrefs = [f"/o{i}.ics" for i in range(hrefs)]
     body = "".join(
-        f"<d:response><d:href>/o{i}.ics</d:href>"
+        f"<d:response><d:href>{h}</d:href>"
         f"<d:propstat><d:prop><d:getetag>&quot;{i}&quot;</d:getetag></d:prop>"
         "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
-        for i in range(n))
+        for i, h in enumerate(hrefs))
     return f'<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">{body}</d:multistatus>'
 
 
@@ -646,13 +652,29 @@ def calino_cfg(tmp_path):
                      nextcloud_user="nsimon")
 
 
-def calino_run(today=2, week=9, todo_all=237, todo_done=226):
-    """FakeRun for the four query shapes.
+def calino_run(today=2, week=9, pending=None, due=None, dtstart=None, current=None):
+    """FakeRun for the five query shapes.
 
-    Needle ORDER matters: the completed-VTODO body contains both "COMPLETED" and
-    "VTODO", so the narrower needle has to come first or every task query would be
-    answered as the total.
+    The task answers are HREF SETS, because "due now" is `pending ∩ (DUE ∪ DTSTART) ∩
+    in-range` intersected client-side — SabreDAV will not AND a prop-filter with a
+    time-range. The default fixture models one of each interesting kind:
+
+        t1  pending, has DUE, date passed      → counts
+        t2  pending, has DTSTART, date passed  → counts
+        t3  pending, has DUE, future           → dropped by the time-range
+        t4  pending, undated                   → dropped for having no date
+        t5  completed, has DUE, date passed    → dropped by the status filter
+
+    Needle ORDER matters: every task body contains "VTODO", so the discriminating
+    needles (STATUS / DUE / DTSTART / time-range) must all precede it.
     """
+    pending = ["/t1.ics", "/t2.ics", "/t3.ics", "/t4.ics"] if pending is None else pending
+    due = ["/t1.ics", "/t3.ics", "/t5.ics"] if due is None else due
+    dtstart = ["/t2.ics"] if dtstart is None else dtstart
+    # Undated VTODOs match every range (RFC 4791 §9.9), so t4 is in here — which is
+    # exactly why the range cannot be the only date test.
+    current = ["/t1.ics", "/t2.ics", "/t4.ics", "/t5.ics"] if current is None else current
+
     def events(joined):
         # The two event queries differ only in the window's end stamp: tonight's local
         # midnight vs the one seven days on. Naming them here doubles as an assertion —
@@ -661,9 +683,13 @@ def calino_run(today=2, week=9, todo_all=237, todo_done=226):
 
     return FakeRun([
         ("propfind", CALDAV_HOME_XML),
-        ("COMPLETED", multistatus(todo_done)),
-        ("VTODO", multistatus(todo_all)),
+        ("NEEDS-ACTION", multistatus(pending)),
+        ('prop-filter name="DUE"', multistatus(due)),
+        ('prop-filter name="DTSTART"', multistatus(dtstart)),
+        # Before the bare "time-range" needle: the event bodies carry a time-range too,
+        # and only the VTODO one should be answered with the href set.
         ("VEVENT", events),
+        ("time-range", multistatus(current)),
     ])
 
 
@@ -672,11 +698,12 @@ CEST = datetime.timezone(datetime.timedelta(hours=2))
 NOW = datetime.datetime(2026, 8, 19, 20, 30, tzinfo=CEST)
 
 
-def test_calino_counts_events_and_open_tasks(tmp_path):
+def test_calino_counts_events_and_tasks_due_now(tmp_path):
+    # Of the five fixture todos only t1 and t2 are pending, dated and arrived.
     cfg = calino_cfg(tmp_path)
-    run = calino_run(today=2, week=9, todo_all=237, todo_done=226)
+    run = calino_run(today=2, week=9)
     assert hs.fetch_calino(cfg, run, now=NOW) == {
-        "today": 2, "week": 9, "tasks": 11}
+        "today": 2, "week": 9, "tasks": 2}
 
 
 def test_calino_windows_are_local_days_not_utc(tmp_path):
@@ -751,15 +778,70 @@ def test_calino_skips_webcal_subscriptions(tmp_path):
     assert not any("calendargooglecom" in c for c in run.commands)
 
 
-def test_calino_counts_a_status_less_todo_as_open(tmp_path):
-    # `open = total - completed`, not a negated text-match on STATUS: a negated match
-    # only matches objects that HAVE the property, so a VTODO written without STATUS
-    # would disappear from the count altogether. Here 5 of 20 are marked done and one
-    # of the remainder has no STATUS at all — it must still be open.
+def test_calino_excludes_undated_tasks(tmp_path):
+    # t4 is pending and matches the time-range — undated VTODOs overlap EVERY range per
+    # RFC 4791 §9.9 — but it carries neither DUE nor DTSTART, so it is not due "now" and
+    # must not count. This is the whole reason the date test cannot be the time-range.
+    # Live, this is what separates 5 from 55: the five shopping/gift lists are undated.
     cfg = calino_cfg(tmp_path)
-    run = calino_run(todo_all=20, todo_done=5)
-    assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 15
-    assert not any("negate-condition" in c for c in run.commands)
+    run = calino_run()
+    assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 2
+
+    # An account of nothing but undated items must report zero, not "all of them".
+    undated = calino_run(due=[], dtstart=[],
+                         pending=["/a.ics", "/b.ics", "/c.ics"],
+                         current=["/a.ics", "/b.ics", "/c.ics"])
+    assert hs.fetch_calino(cfg, undated, now=NOW)["tasks"] == 0
+
+
+def test_calino_excludes_future_dated_tasks(tmp_path):
+    # t3 is pending with a DUE date, but outside (epoch, now] — 21 of the 27 pending in
+    # `Reminders` are like this. A tile that counts them is not actionable.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    ranges = [c for c in run.commands if "time-range" in c and "VTODO" in c]
+    assert ranges, "the future filter must be a server-side time-range"
+    assert all('end="20260819T183000Z"' in c for c in ranges)  # 20:30 CEST == 18:30 UTC
+
+
+def test_calino_counts_only_pending_tasks(tmp_path):
+    # t5 is dated and arrived but COMPLETED. Filtered by STATUS server-side.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    assert any("NEEDS-ACTION" in c for c in run.commands)
+    assert not any("COMPLETED" in c for c in run.commands)
+
+
+def test_calino_does_not_ask_the_server_to_and_a_propfilter_with_a_time_range(tmp_path):
+    # THE bug this guards. SabreDAV drops the prop-filter when a time-range shares the
+    # comp-filter, and answers the range alone: `Reminders` returned 792 (every
+    # completed task in range) for a query meant to yield 27. So no VTODO query may
+    # carry both, and the AND has to be the href intersection.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run()
+    hs.fetch_calino(cfg, run, now=NOW)
+    for cmd in run.commands:
+        if "VTODO" in cmd and "time-range" in cmd:
+            assert "prop-filter" not in cmd
+
+
+def test_calino_skips_the_date_queries_when_nothing_is_pending(tmp_path):
+    # Short-circuit: an all-done list costs one request, not four.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run(pending=[])
+    assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 0
+    assert not any("time-range" in c and "VTODO" in c for c in run.commands)
+    assert not any("prop-filter" in c and "DUE" in c for c in run.commands)
+
+
+def test_calino_skips_the_time_range_when_nothing_is_dated(tmp_path):
+    # Five of the six live lists are entirely undated, so this is the common path.
+    cfg = calino_cfg(tmp_path)
+    run = calino_run(due=[], dtstart=[])
+    assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 0
+    assert not any("time-range" in c and "VTODO" in c for c in run.commands)
 
 
 def test_calino_reuses_the_nextcloud_app_password(tmp_path):
