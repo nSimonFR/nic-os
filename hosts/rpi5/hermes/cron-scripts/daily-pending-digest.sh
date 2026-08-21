@@ -1,5 +1,3 @@
 #!/usr/bin/env bash
-# Self-sending: its stdout is a delivery receipt, not a report, so it is dropped.
-set -euo pipefail
-
+# Self-sending, so stdout is a delivery receipt rather than the report: dropped.
 exec @bash@ @hermesHome@/workspace/daily-pending-digest.sh >/dev/null
