@@ -157,11 +157,11 @@
     "cyrus-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784952401,
-        "narHash": "sha256-VPnMiQTpj0s4CyV68jC5ZUz85cu9/71vOXJoc90y5Vg=",
+        "lastModified": 1786723538,
+        "narHash": "sha256-9vYGCYJkTWWfJ84uY9DWQMYKMN5aJB8DnfwXXjCOZCw=",
         "owner": "cyrusagents",
         "repo": "cyrus",
-        "rev": "d1a98b8033ba76d8778b7e29a63e5898a92af396",
+        "rev": "3241bdd91f06fc10849b1f3b0e6f0502e1211bdb",
         "type": "github"
       },
       "original": {
