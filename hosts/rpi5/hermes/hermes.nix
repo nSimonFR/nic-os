@@ -122,118 +122,6 @@ let
   # survives restarts because the seed rsync below omits --delete.
   workspaceSource = ./workspace;
 
-  # Cron job bodies — ~/.hermes/scripts/*.sh, bound with
-  # `hermes cron edit <id> --script <name>.sh --no-agent`. A `no_agent` tick spends
-  # zero tokens, so it cannot fail on the plan-cap 429 that had killed five of the
-  # ten jobs. Scheduler contract (cron/scheduler.py): non-empty stdout is delivered
-  # verbatim, empty stdout is a silent run, a non-zero exit is sent as an alert.
-  # Hence `>/dev/null` on the ones that send their own richer message — otherwise
-  # the user gets it twice.
-  #
-  # Two non-obvious constraints: the file must end in `.sh` (the interpreter is
-  # chosen by extension, and anything else is run as Python), and it must be a real
-  # file, not a store symlink (the containment check resolves symlinks first, so a
-  # link resolves outside the scripts dir and is refused). Hence rsync-as-copies.
-  cronScript =
-    name: attrs:
-    pkgs.writeShellApplication ({ inherit name; meta.mainProgram = name; } // attrs);
-
-  # Hermes scrubs secret-shaped variables before spawning us, so credentials are
-  # re-sourced here. Doing it in the shim keeps the Python side env-only, and so
-  # testable off-host. `source=/dev/null` because the target only exists at runtime.
-  withAgentEnv = ''
-    set -a
-    # shellcheck source=/dev/null
-    . /run/agenix/agent-env
-    set +a
-  '';
-
-  cronScripts = {
-    # Self-sending: its stdout is a delivery receipt, not a report.
-    daily-pending-digest = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        export HOME=/home/nsimon
-        exec ${pkgs.bash}/bin/bash \
-          ${hermesHome}/workspace/daily-pending-digest.sh >/dev/null
-      '';
-    };
-
-    # Prints its report (including an honest "none this week"), so stdout is the
-    # message. No `cd`: it resolves its config and seen-set from its own __file__.
-    job-alerts = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        export HOME=/home/nsimon
-        exec ${pkgs.python3}/bin/python3 \
-          ${hermesHome}/workspace/job-alerts/job_alert.py
-      '';
-    };
-
-    # Self-sending: a media group, which stdout cannot carry. On "no memories
-    # today" it prints and exits 0, so the tick goes silent.
-    immich-memories = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        ${withAgentEnv}
-        export HOME=/home/nsimon
-        exec ${pkgs.python3}/bin/python3 \
-          ${hermesHome}/skills/immich-memories/scripts/immich-on-this-day.py \
-          --send-album --chat-id ${toString telegramChatId} >/dev/null
-      '';
-    };
-
-    # Self-sending: HTML with a deep link into the day's timeline.
-    dawarich-daily = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        ${withAgentEnv}
-        export TELEGRAM_CHAT_ID=${toString telegramChatId}
-        export TELEGRAM_SEND=${dawarichNotify}
-        exec ${pkgs.nicos-scripts}/bin/hermes-dawarich-daily >/dev/null
-      '';
-    };
-
-    # Plain text on stdout. Reads the Nextcloud password straight from /run/agenix
-    # (owner nsimon, mode 0400), so it needs no env plumbing.
-    calendar-digest = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        exec ${pkgs.nicos-scripts}/bin/hermes-calendar-digest
-      '';
-    };
-
-    # Silent unless a watched path in the Zen source tree appears or disappears.
-    zen-watch = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        export ZEN_STATE_FILE=${hermesHome}/workspace/zen-watch/state.json
-        exec ${pkgs.nicos-scripts}/bin/hermes-zen-watch
-      '';
-    };
-
-    # The app lives in the seeded workspace so its SQLite snapshot survives outside
-    # the store. Reports only what changed, so a quiet week is silent. No `--send`:
-    # stdout is the delivery path.
-    weekly-events = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        cd ${hermesHome}/workspace/weekly-events
-        exec ${pkgs.python3}/bin/python3 -m weekly_events.app \
-          --config sources.json --state data/events.sqlite3 --log-level WARNING
-      '';
-    };
-
-    # A one-shot job that drove an LLM to echo one sentence. This is the sentence.
-    vanilla-reminder = {
-      runtimeInputs = [ pkgs.coreutils ];
-      text = ''
-        printf '%s\n' \
-          'Note : faire ton propre extrait de vanille — vodka + gousse de vanille dans un pot.'
-      '';
-    };
-  };
-
   # The `send` seam (shared/notify.nix): a one-shot with no resolved state.
   dawarichNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = "/run/agenix/telegram-bot-token";
@@ -241,14 +129,43 @@ let
     name = "dawarich-telegram-send";
   };
 
-  # Assemble the scripts as real `.sh` files for the rsync below.
-  cronScriptsDir = pkgs.runCommand "hermes-cron-scripts" { } (
-    lib.concatStringsSep "\n" (
-      lib.mapAttrsToList (
-        name: attrs: "install -Dm0755 ${lib.getExe (cronScript name attrs)} $out/${name}.sh"
-      ) cronScripts
-    )
-  );
+  # Cron job bodies — ./cron-scripts/*.sh, seeded into ~/.hermes/scripts/ and bound
+  # with `hermes cron edit <id> --script <name>.sh --no-agent`. A `no_agent` tick
+  # spends zero tokens, so it cannot fail on the plan-cap 429 that had killed five
+  # of the ten jobs. They are real files rather than Nix strings so you can read,
+  # `bash -n` and run one by hand when a tick fails; this only stamps in the store
+  # paths, because Hermes' PATH does not carry nicos-scripts.
+  #
+  # Scheduler contract (cron/scheduler.py `_run_job_script`): non-empty stdout is
+  # delivered verbatim, empty stdout is a silent run, a non-zero exit is sent as an
+  # alert. Hence `>/dev/null` in the ones that send their own richer message.
+  #
+  # Two non-obvious constraints on the output: each file must end in `.sh` — the
+  # interpreter is chosen by extension and the shebang is deliberately ignored, so
+  # anything else is run as Python — and it must be a real file, not a store
+  # symlink, because the containment check resolves symlinks before comparing
+  # against the scripts dir. Hence `install` here and `rsync -L` below.
+  #
+  # `--replace-quiet`, not `--replace-fail`: no single script uses every
+  # placeholder. The grep is what keeps a typo'd one a build failure instead of a
+  # 10:30 runtime failure.
+  cronScriptsDir = pkgs.runCommand "hermes-cron-scripts"
+    { nativeBuildInputs = [ pkgs.shellcheck ]; }
+    ''
+      install -Dm0755 ${./cron-scripts}/*.sh -t "$out"
+      substituteInPlace "$out"/*.sh \
+        --replace-quiet '@bash@' ${pkgs.bash}/bin/bash \
+        --replace-quiet '@python3@' ${pkgs.python3}/bin/python3 \
+        --replace-quiet '@bin@' ${pkgs.nicos-scripts}/bin \
+        --replace-quiet '@hermesHome@' ${hermesHome} \
+        --replace-quiet '@chatId@' '${toString telegramChatId}' \
+        --replace-quiet '@tgSend@' ${dawarichNotify}
+      if grep -Hn '@[a-zA-Z][a-zA-Z0-9]*@' "$out"/*.sh; then
+        echo "hermes-cron-scripts: unsubstituted placeholder(s) above" >&2
+        exit 1
+      fi
+      shellcheck "$out"/*.sh
+    '';
 
   # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
   # (Scryfall card search + pricing + rulings + legality, deck validation,
@@ -398,7 +315,7 @@ let
       "${workspaceSource}/" "${hermesHome}/workspace/"
 
     # Cron job bodies. `-L` is load-bearing (real files, not store symlinks — see
-    # cronScripts above), and NO --delete for the same reason as skills/: Hermes
+    # cronScriptsDir above), and NO --delete for the same reason as skills/: Hermes
     # installs its own things here at runtime (scripts/whatsapp-bridge,
     # scripts/gmail-triage) and wiping those on restart would be a silent regression.
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/scripts
@@ -507,7 +424,7 @@ in
   # They also delivered to different chats (this timer to nSimon's DM with
   # `--send`, the cron job to the nSimon/ServaTilis/Alfie group via stdout), which
   # made the digest land in a nondeterministic place each week. The cron job is now
-  # the single path — see cronScripts.weekly-events above. Restoring a systemd
+  # the single path — see cron-scripts/weekly-events.sh. Restoring a systemd
   # timer instead would mean dropping that job, not adding to it.
 
   systemd.user.timers.hermes-skill-promote = {
