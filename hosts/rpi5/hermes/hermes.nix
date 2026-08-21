@@ -122,53 +122,25 @@ let
   # survives restarts because the seed rsync below omits --delete.
   workspaceSource = ./workspace;
 
-  # ---------------------------------------------------------------------------
-  # Cron scripts — ~/.hermes/scripts/*.sh, the `no_agent` job bodies
-  # ---------------------------------------------------------------------------
-  # Every recurring Hermes cron job runs in `no_agent` mode against one of these,
-  # so a tick spends zero tokens and cannot fail on a plan-cap 429 (which is what
-  # took out five of the ten jobs before this). `hermes cron edit <id> --script
-  # <name>.sh --no-agent` is the binding; these files are the bodies.
+  # Cron job bodies — ~/.hermes/scripts/*.sh, bound with
+  # `hermes cron edit <id> --script <name>.sh --no-agent`. A `no_agent` tick spends
+  # zero tokens, so it cannot fail on the plan-cap 429 that had killed five of the
+  # ten jobs. Scheduler contract (cron/scheduler.py): non-empty stdout is delivered
+  # verbatim, empty stdout is a silent run, a non-zero exit is sent as an alert.
+  # Hence `>/dev/null` on the ones that send their own richer message — otherwise
+  # the user gets it twice.
   #
-  # The scheduler's contract (cron/scheduler.py, no_agent branch) drives the shape
-  # of each one:
-  #
-  #   non-empty stdout -> delivered verbatim as the Telegram message
-  #   empty stdout     -> silent run, nothing sent
-  #   non-zero exit    -> delivered as an error alert, stderr included
-  #
-  # Hence the split below: a job whose underlying script *sends its own* message
-  # (richer than plain text — an HTML report, a photo album) redirects stdout to
-  # /dev/null, or the user gets the report twice. A job that just prints lets
-  # stdout through.
-  #
-  # Two constraints are load-bearing and not obvious:
-  #
-  #   * The file MUST end in `.sh`. `_run_job_script` picks the interpreter by
-  #     extension and sends anything else to Python — an extensionless
-  #     writeShellApplication output would be run as a Python source file.
-  #   * It MUST be a real file under ~/.hermes/scripts/, not a symlink into the
-  #     store. The containment check resolves symlinks before comparing against
-  #     the scripts dir, so a store symlink resolves outside it and is refused
-  #     ("Blocked: script path resolves outside the scripts directory"). That is
-  #     why these are rsync'd in as copies rather than linked.
-  #
-  # `_sanitize_subprocess_env` strips secret-shaped variables before spawning us,
-  # so anything credential-bearing is re-sourced here rather than inherited.
+  # Two non-obvious constraints: the file must end in `.sh` (the interpreter is
+  # chosen by extension, and anything else is run as Python), and it must be a real
+  # file, not a store symlink (the containment check resolves symlinks first, so a
+  # link resolves outside the scripts dir and is refused). Hence rsync-as-copies.
   cronScript =
     name: attrs:
-    pkgs.writeShellApplication (
-      {
-        inherit name;
-        meta.mainProgram = name;
-      }
-      // attrs
-    );
+    pkgs.writeShellApplication ({ inherit name; meta.mainProgram = name; } // attrs);
 
-  # Sourcing agent-env in the shim (rather than reading it in Python) keeps the
-  # Python side env-only and therefore testable off-host.
-  # `source=/dev/null` because the target only exists at runtime (agenix decrypts
-  # into /run at boot); without it shellcheck fails the build on SC1091.
+  # Hermes scrubs secret-shaped variables before spawning us, so credentials are
+  # re-sourced here. Doing it in the shim keeps the Python side env-only, and so
+  # testable off-host. `source=/dev/null` because the target only exists at runtime.
   withAgentEnv = ''
     set -a
     # shellcheck source=/dev/null
@@ -177,8 +149,7 @@ let
   '';
 
   cronScripts = {
-    # Self-sending: the workspace script owns its own Telegram formatting and
-    # mark-read behaviour, so its stdout is a delivery receipt, not a report.
+    # Self-sending: its stdout is a delivery receipt, not a report.
     daily-pending-digest = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -188,9 +159,8 @@ let
       '';
     };
 
-    # Prints its report (including an honest "no matching listings this week"),
-    # so stdout passes through and becomes the message. No `cd` needed: it
-    # resolves sources.json and .seen_jobs.json from its own __file__.
+    # Prints its report (including an honest "none this week"), so stdout is the
+    # message. No `cd`: it resolves its config and seen-set from its own __file__.
     job-alerts = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -200,8 +170,8 @@ let
       '';
     };
 
-    # Self-sending: the album goes out as a Telegram media group, which stdout
-    # cannot carry. On "no memories today" it prints and exits 0 -> silent.
+    # Self-sending: a media group, which stdout cannot carry. On "no memories
+    # today" it prints and exits 0, so the tick goes silent.
     immich-memories = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -213,7 +183,7 @@ let
       '';
     };
 
-    # Self-sending: the recap is HTML with a deep link into the day's timeline.
+    # Self-sending: HTML with a deep link into the day's timeline.
     dawarich-daily = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -224,8 +194,8 @@ let
       '';
     };
 
-    # Plain text; Hermes delivers stdout. Reads the Nextcloud password straight
-    # from /run/agenix (owner nsimon, mode 0400) — no env plumbing needed.
+    # Plain text on stdout. Reads the Nextcloud password straight from /run/agenix
+    # (owner nsimon, mode 0400), so it needs no env plumbing.
     calendar-digest = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -242,10 +212,9 @@ let
       '';
     };
 
-    # Weekly tabletop events: the app lives in the seeded Hermes workspace so its
-    # SQLite snapshot persists outside the Nix store. It reports only what changed
-    # since the last run, so a quiet week prints nothing and stays silent. No
-    # `--send` — stdout is the delivery path here.
+    # The app lives in the seeded workspace so its SQLite snapshot survives outside
+    # the store. Reports only what changed, so a quiet week is silent. No `--send`:
+    # stdout is the delivery path.
     weekly-events = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -255,8 +224,7 @@ let
       '';
     };
 
-    # A one-shot reminder whose whole content is a fixed string. It was a cron
-    # job driving an LLM to echo a sentence; this is the sentence.
+    # A one-shot job that drove an LLM to echo one sentence. This is the sentence.
     vanilla-reminder = {
       runtimeInputs = [ pkgs.coreutils ];
       text = ''
@@ -266,8 +234,7 @@ let
     };
   };
 
-  # telegram-send with the token file and chat baked in — the `send` seam from
-  # shared/notify.nix (a one-shot event with no resolved state).
+  # The `send` seam (shared/notify.nix): a one-shot with no resolved state.
   dawarichNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = "/run/agenix/telegram-bot-token";
     chatId = telegramChatId;
@@ -430,13 +397,10 @@ let
     ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
       "${workspaceSource}/" "${hermesHome}/workspace/"
 
-    # Cron job bodies. `-L` matters: these must land as real files, because the
-    # scheduler resolves symlinks before checking that a script is contained in
-    # the scripts dir, and a store symlink resolves outside it.
-    #
-    # NO --delete, for the same reason as skills/: Hermes installs things of its
-    # own under here at runtime (scripts/whatsapp-bridge, scripts/gmail-triage),
-    # and wiping those on a restart would be a silent regression.
+    # Cron job bodies. `-L` is load-bearing (real files, not store symlinks — see
+    # cronScripts above), and NO --delete for the same reason as skills/: Hermes
+    # installs its own things here at runtime (scripts/whatsapp-bridge,
+    # scripts/gmail-triage) and wiping those on restart would be a silent regression.
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/scripts
     ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
       "${cronScriptsDir}/" "${hermesHome}/scripts/"
