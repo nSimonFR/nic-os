@@ -140,6 +140,16 @@ let
   # delivered verbatim, empty stdout is a silent run, a non-zero exit is sent as an
   # alert. Hence `>/dev/null` in the ones that send their own richer message.
   #
+  # Env: none of these re-source agent-env, because the cron path is NOT the
+  # model-driven terminal path described at `terminal.env_passthrough` below. That
+  # one (code_execution_tool.py `_scrub_child_env`) substring-strips any name
+  # containing KEY/TOKEN/SECRET/…; this one (`build_subprocess_env` →
+  # `_sanitize_subprocess_env`) strips only registry-known provider keys plus two
+  # narrow patterns (AUXILIARY_*_API_KEY, GATEWAY_RELAY_*_{SECRET,KEY,TOKEN}).
+  # Verified against 0.19.1: GEMINI_API_KEY is stripped, DAWARICH_API_KEY survives,
+  # and HOME/HERMES_HOME are propagated by the subprocess HOME contract. So what
+  # hermes-exec sources is already in scope, and `export HOME=` was a no-op.
+  #
   # Two non-obvious constraints on the output: each file must end in `.sh` — the
   # interpreter is chosen by extension and the shebang is deliberately ignored, so
   # anything else is run as Python — and it must be a real file, not a store

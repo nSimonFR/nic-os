@@ -3,5 +3,4 @@
 # message. No `cd`: it resolves its config and seen-set from its own __file__.
 set -euo pipefail
 
-export HOME=/home/nsimon
 exec @python3@ @hermesHome@/workspace/job-alerts/job_alert.py
