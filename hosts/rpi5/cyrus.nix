@@ -456,10 +456,12 @@ in
         # its control socket. /tmp is private to the service (PrivateTmp=true)
         # and shares the browser daemon's lifetime, which is what we want.
         AGENT_BROWSER_SOCKET_DIR=/tmp/agent-browser
-        # Screenshots must land in the workspace to be picked up by cyrus's
-        # attachment upload flow, so keep the CLI's default-out relative and
-        # let the agent pass explicit paths; this is only the fallback.
-        AGENT_BROWSER_SCREENSHOT_DIR=/tmp/agent-browser/screenshots
+        # AGENT_BROWSER_SCREENSHOT_DIR is deliberately NOT set. Its default is
+        # $HOME/.agent-browser/tmp/screenshots, which is writable here, and
+        # pinning it anywhere else would fight the addendum's own advice to the
+        # agent — write screenshots into the workspace so cyrus's attachment
+        # upload flow finds them, which the agent does by passing an explicit
+        # relative path. An env default cannot express "the current worktree".
         # Chromium's default /dev/shm sizing assumptions do not hold inside a
         # hardened unit — without this the renderer dies on large pages.
         AGENT_BROWSER_ARGS="--disable-dev-shm-usage --disable-gpu"
