@@ -122,11 +122,12 @@ let
   # survives restarts because the seed rsync below omits --delete.
   workspaceSource = ./workspace;
 
-  # The `send` seam (shared/notify.nix): a one-shot with no resolved state.
-  dawarichNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
+  # The `send` seam (shared/notify.nix): one-shot events with no resolved state.
+  # Shared by the dawarich recap and the start-time binding check below.
+  hermesNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = "/run/agenix/telegram-bot-token";
     chatId = telegramChatId;
-    name = "dawarich-telegram-send";
+    name = "hermes-telegram-send";
   };
 
   # Cron job bodies — ./cron-scripts/*.sh, seeded into ~/.hermes/scripts/ and bound
@@ -169,7 +170,7 @@ let
         --replace-quiet '@bin@' ${pkgs.nicos-scripts}/bin \
         --replace-quiet '@hermesHome@' ${hermesHome} \
         --replace-quiet '@chatId@' '${toString telegramChatId}' \
-        --replace-quiet '@tgSend@' ${dawarichNotify}
+        --replace-quiet '@tgSend@' ${hermesNotify}
       if grep -Hn '@[A-Za-z0-9_-]\+@' "$out"/*.sh; then
         echo "hermes-cron-scripts: unsubstituted placeholder(s) above" >&2
         exit 1
@@ -341,6 +342,16 @@ let
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/scripts
     ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
       "${cronScriptsDir}/" "${hermesHome}/scripts/"
+
+    # Which job runs which script is recorded in Hermes-managed cron/jobs.json,
+    # which this repo does not track — so renaming a shim above is a green
+    # rebuild and a "Script not found" at that job's next fire, up to a week
+    # later for the weeklies. Nudge, never fail: a stale binding is not a reason
+    # to hold the agent down, and this runs before every start.
+    cron_check_msg="$(${pkgs.nicos-scripts}/bin/hermes-cron-check || true)"
+    if [ -n "$cron_check_msg" ]; then
+      printf '%s\n' "$cron_check_msg" | ${hermesNotify} || true
+    fi
   '';
 
   # ExecStart wrapper: source shared skill creds, set HERMES_HOME, and give the

@@ -13,6 +13,7 @@ import pytest
 
 from conftest import FakeResponse, json_reply
 from nicos_scripts.hermes import calendar_digest as cal
+from nicos_scripts.hermes import cron_check as chk
 from nicos_scripts.hermes import dawarich_daily as daw
 from nicos_scripts.hermes import zen_watch as zen
 
@@ -460,3 +461,63 @@ def test_missing_tag_raises_and_a_commit_lookup_failure_degrades(opener, tmp_pat
         raise OSError("rate limited")
 
     assert zen.first_commit(zen.Config(), SYNC, opener=boom) is None
+
+
+# ---------------------------------------------------------------------------
+# cron_check
+# ---------------------------------------------------------------------------
+# The point of this one is that it stays QUIET when everything resolves and never
+# raises — it runs in hermes' ExecStartPre, so a false alarm is noise every
+# restart and an exception would keep the agent down.
+
+
+def _home(tmp_path, jobs, seeded=()):
+    (tmp_path / "cron").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "scripts").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "cron" / "jobs.json").write_text(json.dumps(jobs))
+    for name in seeded:
+        (tmp_path / "scripts" / name).write_text("#!/usr/bin/env bash\n")
+    return chk.Config(hermes_home=str(tmp_path))
+
+
+def test_silent_when_every_no_agent_binding_resolves(tmp_path):
+    cfg = _home(
+        tmp_path,
+        [
+            {"id": "a", "no_agent": True, "script": "zen-watch.sh"},
+            {"id": "b", "no_agent": False, "script": None},  # LLM job: not our problem
+            {"id": "c", "no_agent": True, "script": ""},  # no script yet: not a mismatch
+        ],
+        seeded=["zen-watch.sh"],
+    )
+    assert chk.run(cfg) == ""
+
+
+def test_names_the_job_when_its_script_is_gone(tmp_path):
+    cfg = _home(
+        tmp_path,
+        [{"id": "b201", "name": "Veille Zen", "no_agent": True, "script": "zen-watch.sh"}],
+        seeded=[],
+    )
+    out = chk.run(cfg)
+    assert "zen-watch.sh" in out and "b201" in out and "Veille Zen" in out
+
+
+def test_a_directory_is_not_a_script_and_dict_shaped_jobs_are_read(tmp_path):
+    (tmp_path / "scripts" / "zen-watch.sh").mkdir(parents=True)
+    cfg = _home(tmp_path, {"jobs": [{"id": "a", "no_agent": True, "script": "zen-watch.sh"}]})
+    assert "zen-watch.sh" in chk.run(cfg)
+
+
+def test_unreadable_jobs_json_is_skipped_not_raised(tmp_path):
+    cfg = chk.Config(hermes_home=str(tmp_path / "nope"))
+    assert chk.run(cfg) == ""
+    (tmp_path / "cron").mkdir(parents=True)
+    (tmp_path / "cron" / "jobs.json").write_text("{ not json")
+    assert chk.run(chk.Config(hermes_home=str(tmp_path))) == ""
+
+
+def test_main_prints_the_nudge_and_always_exits_zero(tmp_path, capsys):
+    _home(tmp_path, [{"id": "a", "no_agent": True, "script": "gone.sh"}])
+    assert chk.main(env={"HERMES_HOME": str(tmp_path)}) == 0
+    assert "gone.sh" in capsys.readouterr().out
