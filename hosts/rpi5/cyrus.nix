@@ -456,6 +456,15 @@ in
         # its control socket. /tmp is private to the service (PrivateTmp=true)
         # and shares the browser daemon's lifetime, which is what we want.
         AGENT_BROWSER_SOCKET_DIR=/tmp/agent-browser
+        # Without this, `agent-browser skills …` dies with "Skills directory not
+        # found. Set AGENT_BROWSER_SKILLS_DIR or reinstall via npm" — it looks
+        # for the data relative to an npm install prefix we do not have. That
+        # matters more than it sounds: the SKILL.md we stage into
+        # ~/.claude/skills is only a discovery *stub* whose entire job is to
+        # send the agent to `agent-browser skills get core` for the real
+        # 516-line usage guide. Unset, the stub is a dead end and the agent
+        # falls back to guessing at the CLI.
+        AGENT_BROWSER_SKILLS_DIR=${agent-browser}/share/agent-browser/skill-data
         # AGENT_BROWSER_SCREENSHOT_DIR is deliberately NOT set. Its default is
         # $HOME/.agent-browser/tmp/screenshots, which is writable here, and
         # pinning it anywhere else would fight the addendum's own advice to the
