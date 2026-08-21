@@ -41,6 +41,9 @@ papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
 hermes-dawarich-daily = "nicos_scripts.hermes.dawarich_daily:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
+# Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
+# untracked jobs.json, so nothing else can catch a renamed shim.
+hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]
