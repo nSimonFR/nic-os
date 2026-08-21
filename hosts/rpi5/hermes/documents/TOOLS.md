@@ -54,12 +54,11 @@ from the repo lingers in `~/.hermes/` until cleaned by hand.
 unpinned job is silently skipped when the configured model drifts. This applies
 only to LLM-driven jobs; a `no_agent` job never consults a model.
 
-**Cron scripts:** the recurring jobs run in `no_agent` mode against
-`~/.hermes/scripts/*.sh`, seeded from `cronScripts` in `hermes.nix`. Zero tokens,
-so they cannot fail on a plan-cap 429. Their delivery contract: non-empty stdout
-is sent verbatim, empty stdout is a silent run, a non-zero exit is sent as an
-error alert. Scripts that send their own message (dawarich, immich-memories,
-daily-pending-digest) therefore redirect stdout to `/dev/null`.
+**Cron scripts:** the recurring jobs run `no_agent` against
+`~/.hermes/scripts/*.sh`, seeded from `cronScripts` in `hermes.nix` — zero tokens,
+so no plan-cap 429. Non-empty stdout is sent verbatim, empty stdout is silent, a
+non-zero exit is sent as an alert; the ones that send their own message redirect
+stdout to `/dev/null`.
 
 ## Useful Commands
 
