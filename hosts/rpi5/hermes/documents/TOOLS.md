@@ -51,7 +51,15 @@ no HTTP gateway to curl.
 from the repo lingers in `~/.hermes/` until cleaned by hand.
 
 **Cron caveat:** pin `model` and `provider` per job in `jobs.json` — an
-unpinned job is silently skipped when the configured model drifts.
+unpinned job is silently skipped when the configured model drifts. This applies
+only to LLM-driven jobs; a `no_agent` job never consults a model.
+
+**Cron scripts:** the recurring jobs run in `no_agent` mode against
+`~/.hermes/scripts/*.sh`, seeded from `cronScripts` in `hermes.nix`. Zero tokens,
+so they cannot fail on a plan-cap 429. Their delivery contract: non-empty stdout
+is sent verbatim, empty stdout is a silent run, a non-zero exit is sent as an
+error alert. Scripts that send their own message (dawarich, immich-memories,
+daily-pending-digest) therefore redirect stdout to `/dev/null`.
 
 ## Useful Commands
 
@@ -60,5 +68,8 @@ unpinned job is silently skipped when the configured model drifts.
 - `systemctl --user restart hermes` — reload config.yaml + redeploy skills/docs
 - `cat ~/.hermes/config.yaml` — inspect generated config
 - `cat ~/.hermes/cron/ticker_last_success` — confirm the cron ticker is alive
-- `systemctl --user list-timers` — hermes-skill-promote (hourly),
-  weekly-tabletop-events (Mon 09:00 Europe/Paris)
+- `systemctl --user list-timers` — hermes-skill-promote (hourly)
+- `hermes cron list` — the scheduled jobs; `--script`/`no_agent` marks the
+  token-free ones. Weekly tabletop events is job `92715566fb3e`, not a systemd
+  timer (the duplicate timer was removed — both fired Mon 09:00 against one
+  SQLite state and raced over the diff)

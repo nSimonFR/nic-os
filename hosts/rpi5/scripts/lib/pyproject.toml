@@ -35,6 +35,12 @@ claude-context-baseline = "nicos_scripts.claude.context_baseline:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
+# hermes-*: Hermes cron jobs that used to drive an LLM to reach a deterministic
+# answer. Invoked by the scheduler in `no_agent` mode through the `*.sh` shims in
+# hosts/rpi5/hermes/hermes.nix, so stdout is the delivered message.
+hermes-dawarich-daily = "nicos_scripts.hermes.dawarich_daily:main"
+hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
+hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]
