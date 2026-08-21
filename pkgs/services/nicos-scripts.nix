@@ -57,6 +57,9 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.papra.tag_sweep"
     "nicos_scripts.papra.proton_poll"
     "nicos_scripts.papra.tag_sync"
+    "nicos_scripts.hermes.dawarich_daily"
+    "nicos_scripts.hermes.calendar_digest"
+    "nicos_scripts.hermes.zen_watch"
   ];
 
   meta = {
