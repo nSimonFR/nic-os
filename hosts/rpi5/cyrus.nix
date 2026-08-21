@@ -15,6 +15,13 @@
 # build runs once per source rev, marker file at /var/lib/cyrus/.built-rev
 # prevents redundant rebuilds.
 #
+# Browser use: `enableBrowserUse` (default true) flips upstream's
+# CYRUS_BROWSER_USE_ENABLED, which appends a system-prompt addendum telling the
+# agent it can drive a real browser. Upstream leaves it off for self-hosts
+# because the addendum's two promised binaries are not shipped; we supply them
+# (pkgs/agents/agent-browser.nix + pkgs.chromium) and raise MemoryMax to fit a
+# headless Chromium in the unit's cgroup.
+#
 # Aperture path: ANTHROPIC_BASE_URL points at Aperture (ai.gate-mintaka.ts.net).
 # Aperture forwards to tiny-llm-gate (127.0.0.1:4001) which injects the rotated
 # OAuth token from /run/claude-oauth/token. Aperture logs every request +
@@ -44,6 +51,16 @@ let
   # triggers exactly one rebuild.
   cyrusSrc = inputs.cyrus-src;
   cyrusRev = inputs.cyrus-src.rev;
+
+  # ── Browser use ────────────────────────────────────────────────────────────
+  # Upstream gates its browser-use system-prompt addendum
+  # (packages/edge-worker/src/prompts/browserUsePromptAddendum.ts) behind
+  # CYRUS_BROWSER_USE_ENABLED, and the addendum promises the agent two things
+  # that cyrus itself does not ship: the `agent-browser` CLI and a Chromium.
+  # cyrus-hosted preinstalls both on its cloud droplets; on a self-host we have
+  # to provide them, which is what these two derivations are for. Single
+  # consumer, so callPackage'd here rather than added to pkgs/overlay.nix.
+  agent-browser = pkgs.callPackage ../../pkgs/agents/agent-browser.nix { };
 
   # ── Repositories cyrus manages ─────────────────────────────────────────────
   # Edit this list to add/remove repos. nic-os is the catch-all: any Linear
@@ -107,6 +124,41 @@ in
         comprehensive codebase analysis and refactoring tasks. Written into the
         agent's .claude/settings.json by cyrus-rtk-hook.service. Enabled by
         default for this (single-host) deployment.
+      '';
+    };
+
+    enableBrowserUse = lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      description = ''
+        Give the agent a real browser. Sets `CYRUS_BROWSER_USE_ENABLED=true`,
+        which makes cyrus append its browser-use addendum to the session system
+        prompt, and puts the two things that addendum promises on the service
+        PATH: the `agent-browser` CLI (pkgs/agents/agent-browser.nix) and
+        nixpkgs' chromium, wired together via AGENT_BROWSER_EXECUTABLE_PATH.
+
+        Without this the addendum is not injected at all, so leaving it off is
+        the honest default upstream picked for self-hosts that lack the
+        binaries — here we ship them, so it is on.
+
+        Cost: chromium adds ~400MB to the closure, and a headless Chromium
+        lives in cyrus.service's cgroup while a session drives it, which is why
+        `memoryMax` is sized for it. On a 4GB rpi5 that is the real constraint;
+        flip this off if the box starts thrashing.
+      '';
+    };
+
+    memoryMax = lib.mkOption {
+      type = lib.types.str;
+      default = if cfg.enableBrowserUse then "2G" else "768M";
+      defaultText = lib.literalExpression ''if enableBrowserUse then "2G" else "768M"'';
+      description = ''
+        systemd `MemoryMax` for cyrus.service. The agent's Claude process, its
+        shell-outs and (with `enableBrowserUse`) a headless Chromium all share
+        this cgroup, and Chromium alone sits around 500-700MB across its
+        renderer/GPU children — 768M was enough before browser use and is not
+        now. A cgroup cap rather than trusting Chromium keeps a runaway session
+        from taking the host down with it (see memory: rpi5 OOM thrash).
       '';
     };
 
@@ -384,6 +436,30 @@ in
         # webhooks via cyrus's hosted proxy and rejects ours.
         CYRUS_HOST_EXTERNAL=true
         GITHUB_WEBHOOK_SECRET=$(cat ${config.age.secrets.cyrus-github-webhook-secret.path})
+        ${lib.optionalString cfg.enableBrowserUse ''
+        # ── Browser use ──
+        # CYRUS_BROWSER_USE_ENABLED is the only knob cyrus reads; everything
+        # below configures the `agent-browser` CLI the addendum tells the agent
+        # to call. See RunnerConfigBuilder.ts → appendBrowserUseAddendum().
+        CYRUS_BROWSER_USE_ENABLED=true
+        # agent-browser's own `install` subcommand fetches a Chrome for Testing
+        # build — a generic dynamically-linked ELF that cannot execve on NixOS.
+        # Point it at nixpkgs' chromium instead and never run `install`.
+        AGENT_BROWSER_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
+        AGENT_BROWSER_ENGINE=chromium
+        # SOCKET_DIR otherwise falls back to XDG_RUNTIME_DIR, which a system
+        # user under systemd does not have; the daemon then has nowhere to put
+        # its control socket. /tmp is private to the service (PrivateTmp=true)
+        # and shares the browser daemon's lifetime, which is what we want.
+        AGENT_BROWSER_SOCKET_DIR=/tmp/agent-browser
+        # Screenshots must land in the workspace to be picked up by cyrus's
+        # attachment upload flow, so keep the CLI's default-out relative and
+        # let the agent pass explicit paths; this is only the fallback.
+        AGENT_BROWSER_SCREENSHOT_DIR=/tmp/agent-browser/screenshots
+        # Chromium's default /dev/shm sizing assumptions do not hold inside a
+        # hardened unit — without this the renderer dies on large pages.
+        AGENT_BROWSER_ARGS="--disable-dev-shm-usage --disable-gpu"
+        ''}
         ENVEOF
         chown ${cfg.user}:${cfg.user} /run/cyrus/env
         chmod 0400 /run/cyrus/env
@@ -408,6 +484,10 @@ in
         config.age.secrets.cyrus-github-webhook-secret.file
         cfg.claudeDefaultModel
         cfg.enableUltracode
+        # Toggling browser use rewrites /run/cyrus/env and the unit's PATH, but
+        # cyrus reads CYRUS_BROWSER_USE_ENABLED once at session build time — so
+        # without a restart the flip only takes effect at the next crash.
+        (lib.boolToString cfg.enableBrowserUse)
       ];
       path = [
         pkgs.git
@@ -429,6 +509,14 @@ in
         # rewritten `rtk …` commands execute in the agent's shell — both need
         # rtk on PATH (inherited by the SDK-spawned claude child).
         pkgs.rtk
+      ] ++ lib.optionals cfg.enableBrowserUse [
+        # The browser-use addendum names `agent-browser` as a bare command, so
+        # it has to resolve on the agent's shell PATH (inherited from here via
+        # the SDK-spawned claude). chromium is reached through
+        # AGENT_BROWSER_EXECUTABLE_PATH rather than PATH, but keep it here too
+        # so an agent debugging a launch failure can invoke it directly.
+        agent-browser
+        pkgs.chromium
       ];
       serviceConfig = {
         Type = "simple";
@@ -439,7 +527,7 @@ in
         ExecStart = "${pkgs.nodejs_22}/bin/node /var/lib/cyrus/src/apps/cli/dist/src/app.js start";
         Restart = "on-failure";
         RestartSec = 10;
-        MemoryMax = "768M";
+        MemoryMax = cfg.memoryMax;
 
         ProtectSystem = "strict";
         ReadWritePaths = [ "/var/lib/cyrus" ];
@@ -460,6 +548,21 @@ in
         RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
       };
     };
+
+    # ── agent-browser skill ────────────────────────────────────────────────
+    # The prompt addendum is a paragraph; the tarball ships the real command
+    # reference as a Claude skill. The SDK spawns `claude` with
+    # HOME=/var/lib/cyrus, so dropping it in ~/.claude/skills/ makes it a user
+    # skill for every session. Symlink (not copy) so a package bump lands
+    # without a stale-file step; `L+` replaces whatever is there.
+    systemd.tmpfiles.rules = lib.mkIf cfg.enableBrowserUse [
+      # Declare .claude explicitly: tmpfiles would otherwise autovivify it as
+      # root:root, and cyrus-rtk-hook.service (running as cyrus) could then no
+      # longer write settings.json into it.
+      "d /var/lib/cyrus/.claude 0755 ${cfg.user} ${cfg.user} -"
+      "d /var/lib/cyrus/.claude/skills 0755 ${cfg.user} ${cfg.user} -"
+      "L+ /var/lib/cyrus/.claude/skills/agent-browser - - - - ${agent-browser}/share/agent-browser/skills/agent-browser"
+    ];
 
     # ── RTK Claude hook + ultracode install ────────────────────────────────
     # The Claude Agent SDK spawns `claude` with HOME=/var/lib/cyrus, so it reads
