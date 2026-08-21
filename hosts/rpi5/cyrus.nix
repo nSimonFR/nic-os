@@ -465,6 +465,22 @@ in
         # Chromium's default /dev/shm sizing assumptions do not hold inside a
         # hardened unit — without this the renderer dies on large pages.
         AGENT_BROWSER_ARGS="--disable-dev-shm-usage --disable-gpu"
+        # agent-browser leaves its daemon (and the Chromium it owns) resident
+        # for an hour of inactivity by default. That is a fine trade on a
+        # workstation and a bad one here: ~500MB idling on a 4GB box between
+        # Linear issues. Five minutes still covers a single agent session's
+        # bursty back-and-forth, and the next command just starts a fresh
+        # daemon.
+        #
+        # It also bounds a sharp edge worth knowing about: the daemon inherits
+        # its cwd from whichever invocation first started it, and every
+        # *relative* path an agent later passes to `screenshot` resolves
+        # against that cwd — not the caller's. In normal operation the first
+        # call comes from the agent's worktree, so the addendum's advice to
+        # write ./screenshot.png does land in the workspace. But a daemon that
+        # outlived the previous session would silently write into the previous
+        # worktree, and once that worktree is gone, into a read-only /.
+        AGENT_BROWSER_IDLE_TIMEOUT_MS=300000
         ''}
         ENVEOF
         chown ${cfg.user}:${cfg.user} /run/cyrus/env
