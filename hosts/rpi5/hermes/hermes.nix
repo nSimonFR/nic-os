@@ -170,7 +170,7 @@ let
         --replace-quiet '@hermesHome@' ${hermesHome} \
         --replace-quiet '@chatId@' '${toString telegramChatId}' \
         --replace-quiet '@tgSend@' ${dawarichNotify}
-      if grep -Hn '@[a-zA-Z][a-zA-Z0-9]*@' "$out"/*.sh; then
+      if grep -Hn '@[A-Za-z0-9_-]\+@' "$out"/*.sh; then
         echo "hermes-cron-scripts: unsubstituted placeholder(s) above" >&2
         exit 1
       fi
@@ -307,21 +307,31 @@ let
     EOF
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
 
+    # `--checksum` on every seed below is load-bearing, not belt-and-braces. Nix
+    # normalises store mtimes to epoch 1, and substituting one store path for
+    # another never changes a file's SIZE (store hashes are fixed-length) — so
+    # rsync's default quick check (size equal AND mtime equal -> skip) is blind to
+    # exactly the change these files see most often. Reproduced: two
+    # hermes-cron-scripts generations differing only in the nicos-scripts hash,
+    # both 304 bytes, both mtime 1; `rsync -aL` copies neither, leaving the shim
+    # pointing at a store path that disappears at the next GC (ENOENT at 10:30).
+    # Costs 0.05s across all four here.
+    #
     # Skills + persona docs (copy, not symlink, so realpath stays inside HOME).
     # NOTE: deliberately NO --delete here. Hermes writes its own self-authored
     # skills into this same dir (see hermes-skill-promote below); --delete would
     # wipe them on every restart before they can be reviewed. The cost is that a
     # skill removed from the repo lingers in the runtime dir until manually
     # cleaned (Hermes' own `curator prune` archives idle ones anyway).
-    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+    ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${skillsSource}/" "${hermesHome}/skills/"
-    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+    ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
 
     # Cron workspace scripts (executable). Same NO --delete rule: the workspace
     # also holds live runtime state (kanban.db, sandboxes, job-alerts/.seen_jobs.json)
     # that must survive restarts, so only add/refresh the tracked scripts.
-    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
+    ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
       "${workspaceSource}/" "${hermesHome}/workspace/"
 
     # Cron job bodies. `-L` is load-bearing (real files, not store symlinks — see
@@ -329,7 +339,7 @@ let
     # installs its own things here at runtime (scripts/whatsapp-bridge,
     # scripts/gmail-triage) and wiping those on restart would be a silent regression.
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/scripts
-    ${pkgs.rsync}/bin/rsync -aL --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
+    ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rwx,Fgo+rx \
       "${cronScriptsDir}/" "${hermesHome}/scripts/"
   '';
 
