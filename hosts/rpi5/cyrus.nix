@@ -445,8 +445,12 @@ in
         # agent-browser's own `install` subcommand fetches a Chrome for Testing
         # build — a generic dynamically-linked ELF that cannot execve on NixOS.
         # Point it at nixpkgs' chromium instead and never run `install`.
+        # Note: do NOT also set AGENT_BROWSER_ENGINE=chromium. The engine is a
+        # protocol selector, not a browser name, and its only values are
+        # `chrome` (CDP, the default) and `lightpanda` — "chromium" is rejected
+        # outright and every invocation dies with "Unknown engine". Chromium is
+        # a chrome-engine browser; the path below is the whole configuration.
         AGENT_BROWSER_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
-        AGENT_BROWSER_ENGINE=chromium
         # SOCKET_DIR otherwise falls back to XDG_RUNTIME_DIR, which a system
         # user under systemd does not have; the daemon then has nowhere to put
         # its control socket. /tmp is private to the service (PrivateTmp=true)
