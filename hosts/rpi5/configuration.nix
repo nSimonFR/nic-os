@@ -165,6 +165,8 @@ in
     ./tailscale-serve.nix
     ./blocky.nix
     ./monitoring.nix
+    # beast-wake + the four-hourly "beast is idling powered-on" backstop.
+    ./beast-power.nix
     ./immich.nix
     ./immich-clip.nix
     ./sure.nix
