@@ -51,7 +51,7 @@ stdenv.mkDerivation (finalAttrs: {
     # re-serves the OLD tree under the new version number. See
     # known_issue_nix_fod_hash_desync; that trap shipped sure-0.7.3 as v0.7.2.
     name = "calino-${finalAttrs.version}-source";
-    hash = "sha256-Yy2MmWQFjOsWU7yJnEdNSN0Uv9z8YKAJdVMZpzUDcPo=";
+    hash = "sha256-hfoqVhE6502igtcKWqAY/sn+t8zZgkf250MOhDnCQKI=";
   };
 
   pnpmDeps = pnpm_10.fetchDeps {
@@ -61,7 +61,7 @@ stdenv.mkDerivation (finalAttrs: {
     # showmycards.nix this hash is ONE value across aarch64 and x86_64 — no
     # per-system attrset needed.
     fetcherVersion = 3;
-    hash = "sha256-BHvqjOgXfO1fEl5LY9xA7ZL0fDtVNWTUufQhC72LFD0=";
+    hash = "sha256-/7Rdhf9rTXLm0AOai9obIBGjvPHoS2UOo0bHZ+IgrSs=";
   };
 
   nativeBuildInputs = [
