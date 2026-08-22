@@ -79,6 +79,7 @@
       wget
       yarn
       yq
+      zip
       zoxide
       zsh
 
