@@ -12,16 +12,23 @@
 # a generic dynamically-linked ELF that cannot run on NixOS. We pass nixpkgs'
 # own chromium via AGENT_BROWSER_EXECUTABLE_PATH instead.)
 #
-# Bumping: `version` + `hash` below. Renovate does not manage pins under pkgs/
-# (see memory reference_renovate_nix_pins.md), so this is a manual bump:
-#   V=<new>; nix store prefetch-file --name agent-browser-$V.tgz \
-#     https://registry.npmjs.org/agent-browser/-/agent-browser-$V.tgz
+# Bumping: Renovate opens the PR (the `# renovate:` marker below opts this file
+# into renovate.json's regex manager, npm datasource) but cannot recompute a Nix
+# fixed-output hash, so the `hash` beside `version` arrives stale and the build
+# fails on a mismatch. That is the expected shape for everything under pkgs/ —
+# the `hashes` check (.github/workflows/nix-hashes.yml) turns the PR red and
+# comments the right value. Finish it with:
+#   scripts/nix-fix-hashes.py --write pkgs/agents/agent-browser.nix
+# That script grew fetchurl support for this package; before, it only understood
+# fetchFromGitHub and would have reported "nothing this script knows how to
+# fetch", leaving the pin to drift the way affine-mcp-server's did.
 { lib
 , stdenvNoCC
 , fetchurl
 , autoPatchelfHook
 }:
 let
+  # renovate: datasource=npm depName=agent-browser
   version = "0.34.0";
 
   # The tarball ships one binary per platform under bin/. Map the Nix system
@@ -39,7 +46,14 @@ stdenvNoCC.mkDerivation {
   pname = "agent-browser";
   inherit version;
 
+  # `name` carries the version on purpose (pkgs/README.md, "Fixed-output names"):
+  # an FOD's store path is keyed on (outputHash, name), so a bumped `version`
+  # beside a stale `hash` must not be able to resolve to the old path. fetchurl
+  # would default this to the URL's basename, which happens to contain the
+  # version already — but that is the URL's shape, not a property we control, so
+  # it is stated rather than relied upon.
   src = fetchurl {
+    name = "agent-browser-${version}.tgz";
     url = "https://registry.npmjs.org/agent-browser/-/agent-browser-${version}.tgz";
     hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
   };

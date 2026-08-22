@@ -66,19 +66,17 @@ class Problem(Exception):
 @dataclass
 class Package:
     path: Path
-    owner: str
-    repo: str
-    rev: str
+    tarball: str
+    # Which hash the `hash` pin actually holds, which is a property of the
+    # fetcher rather than of the artifact:
+    #   fetchFromGitHub — NAR hash of the *unpacked* tree     (unpack=True)
+    #   fetchurl        — flat hash of the downloaded *file*  (unpack=False)
+    # Hashing the wrong one produces a plausible-looking value that is simply
+    # never what the file pins, so this flag has to follow the fetcher.
+    unpack: bool
     pinned: dict[str, str] = field(default_factory=dict)
     actual: dict[str, str] = field(default_factory=dict)
     unverifiable: list[str] = field(default_factory=list)
-
-    @property
-    def tarball(self) -> str:
-        # GitHub's /archive/<ref> resolves tags and commits alike, and is the same
-        # endpoint fetchFromGitHub itself fetches through — so the NAR hash of the
-        # unpacked result is exactly what the `hash` pin holds.
-        return f"https://github.com/{self.owner}/{self.repo}/archive/{self.rev}.tar.gz"
 
     @property
     def drift(self) -> dict[str, tuple[str, str]]:
@@ -123,8 +121,17 @@ def parse(path: Path) -> Package:
             bindings[match["key"]] = bindings[match["val"]]
 
     unverifiable = [key for key in UNVERIFIABLE if re.search(rf"\b{key}\s*=", text)]
-    if "fetchFromGitHub" not in text:
-        raise Problem("no fetchFromGitHub — nothing this script knows how to fetch")
+    # Match the *call* shape, not the bare word: these names get mentioned in
+    # header comments (this file's own docs did exactly that and tripped the
+    # both-fetchers guard below), and `fetchurl` is additionally a prefix of
+    # `fetchurlBoot`. `fetchFromGitHub {` / `fetchurl {` only appear where one is
+    # actually invoked.
+    from_github = re.search(r"\bfetchFromGitHub\s*\{", text) is not None
+    from_url = re.search(r"\bfetchurl\s*\{", text) is not None
+    if from_github and from_url:
+        raise Problem("both fetchFromGitHub and fetchurl — recompute this one by hand")
+    if not (from_github or from_url):
+        raise Problem("no fetchFromGitHub or fetchurl — nothing this script knows how to fetch")
 
     pinned = {m["key"]: m["val"] for m in HASH_LINE.finditer(text)}
     if "hash" not in pinned:
@@ -132,23 +139,41 @@ def parse(path: Path) -> Package:
     if len(HASH_LINE.findall(text)) != len(pinned):
         raise Problem("more than one fetcher in the file — recompute this one by hand")
 
-    for key in ("owner", "repo", "rev"):
-        if key not in bindings:
-            raise Problem(f"no `{key}` binding found")
+    if from_github:
+        for key in ("owner", "repo", "rev"):
+            if key not in bindings:
+                raise Problem(f"no `{key}` binding found")
+        # GitHub's /archive/<ref> resolves tags and commits alike, and is the same
+        # endpoint fetchFromGitHub itself fetches through — so the NAR hash of the
+        # unpacked result is exactly what the `hash` pin holds.
+        owner = resolve(bindings["owner"], bindings)
+        repo = resolve(bindings["repo"], bindings)
+        rev = resolve(bindings["rev"], bindings)
+        return Package(
+            path=path,
+            tarball=f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz",
+            unpack=True,
+            pinned=pinned,
+            unverifiable=unverifiable,
+        )
 
+    if "url" not in bindings:
+        raise Problem("fetchurl with no literal `url` binding — recompute this one by hand")
     return Package(
         path=path,
-        owner=resolve(bindings["owner"], bindings),
-        repo=resolve(bindings["repo"], bindings),
-        rev=resolve(bindings["rev"], bindings),
+        tarball=resolve(bindings["url"], bindings),
+        unpack=False,
         pinned=pinned,
         unverifiable=unverifiable,
     )
 
 
 def fetch(pkg: Package) -> None:
-    # --print-path prints the hash, then the store path of the unpacked tree.
-    out = run("nix-prefetch-url", "--unpack", "--print-path", pkg.tarball).splitlines()
+    # --print-path prints the hash, then the store path of the fetched artifact.
+    cmd = ["nix-prefetch-url", "--print-path", pkg.tarball]
+    if pkg.unpack:
+        cmd.insert(1, "--unpack")
+    out = run(*cmd).splitlines()
     if len(out) < 2:
         raise Problem(f"unexpected nix-prefetch-url output for {pkg.tarball}")
     pkg.actual["hash"] = to_sri(out[-2])
@@ -156,6 +181,11 @@ def fetch(pkg: Package) -> None:
 
     if "npmDepsHash" not in pkg.pinned:
         return
+    if not pkg.unpack:
+        # The store path here is the tarball itself, so there is no tree to read a
+        # lockfile out of. No package needs this yet; fail loudly rather than
+        # silently leaving npmDepsHash unchecked the way a stale `hash` was.
+        raise Problem("pins npmDepsHash alongside fetchurl — recompute this one by hand")
     lock = src / "package-lock.json"
     if not lock.is_file():
         raise Problem("pins npmDepsHash but the tag has no package-lock.json")
