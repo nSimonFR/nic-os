@@ -62,6 +62,52 @@ let
   # consumer, so callPackage'd here rather than added to pkgs/overlay.nix.
   agent-browser = pkgs.callPackage ../../pkgs/agents/agent-browser.nix { };
 
+  # ── `cyrus` CLI wrapper ────────────────────────────────────────────────────
+  # This module documents `sudo -u cyrus -H cyrus self-auth-linear` in five
+  # places (the header, the `repositories` description, and three runtime "run
+  # 'cyrus self-auth-linear' first" hints) — and until now no `cyrus` existed
+  # anywhere on the system, so every one of those was an instruction that
+  # cannot be followed. `sudo: cyrus: command not found` is the whole
+  # bootstrap path, hit twice in one session.
+  #
+  # There is no upstream bin to install: pnpm never links the workspace CLI's
+  # `bin` into a store path we own, and the entry point is a bare
+  # /var/lib/cyrus/src/… script that needs node on PATH. So wrap it. The
+  # wrapper is what makes the documentation true rather than a rewording of
+  # every hint into a 3-line `node …` invocation.
+  cyrusCli = pkgs.writeShellApplication {
+    name = "cyrus";
+    runtimeInputs = [ pkgs.nodejs_22 ];
+    text = ''
+      APP=/var/lib/cyrus/src/apps/cli/dist/src/app.js
+      # -r, not -f: /var/lib/cyrus is 0700, so for any other user the entry
+      # point is unreadable rather than absent. Report which of those it is —
+      # a flat "not built yet" sends you to inspect a build that is fine.
+      if [ ! -r "$APP" ]; then
+        if [ "$(id -un)" != "${cfg.user}" ]; then
+          echo "cyrus: run this as the ${cfg.user} user:" >&2
+          echo "       sudo -u ${cfg.user} -H cyrus $*" >&2
+        else
+          echo "cyrus: not built yet — $APP is missing." >&2
+          echo "       systemctl status cyrus-build.service" >&2
+        fi
+        exit 1
+      fi
+      # LINEAR_CLIENT_ID/SECRET and CYRUS_BASE_URL live here, and self-auth-linear
+      # cannot do the OAuth exchange without them. Mode 0400 owned by cyrus, so
+      # this is readable exactly when running as the cyrus user — which is how
+      # every documented invocation is spelled. Pass it only when readable so
+      # `cyrus --help` still works for anyone else instead of dying on a
+      # permission error.
+      if [ -r /run/cyrus/env ]; then
+        exec node "$APP" --env-file /run/cyrus/env "$@"
+      fi
+      echo "cyrus: /run/cyrus/env unreadable — run as the cyrus user" \
+           "(sudo -u cyrus -H cyrus ...) for anything needing Linear credentials." >&2
+      exec node "$APP" "$@"
+    '';
+  };
+
   # ── Repositories cyrus manages ─────────────────────────────────────────────
   # Edit this list to add/remove repos. nic-os is the catch-all: any Linear
   # issue assigned to cyrus without a matching routing label / projectKey /
@@ -257,6 +303,10 @@ in
     # exist and execve fails before the program starts. nix-ld provides the
     # loader shim at /lib/ld-linux-* and stages a library set under
     # LD_LIBRARY_PATH so generic-Linux binaries Just Work.
+    # Makes `sudo -u cyrus -H cyrus <cmd>` — the invocation this module's own
+    # docs and runtime hints tell you to run — actually resolve.
+    environment.systemPackages = [ cyrusCli ];
+
     programs.nix-ld = {
       enable = true;
       libraries = with pkgs; [
