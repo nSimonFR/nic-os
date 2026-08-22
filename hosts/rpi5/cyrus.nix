@@ -292,6 +292,21 @@ in
             sudo -u ${cfg.user} -H cyrus self-auth-linear; \
             sudo systemctl start cyrus.service
 
+        ⚠ Approve the authorize URL in a browser logged into the **nSimon**
+        workspace. The Cyrus OAuth app is PRIVATE to that workspace, and Linear
+        resolves a private client_id only within its owner — so approving from
+        another workspace you are signed into (Trusk, say) fails with:
+
+          Could not find OAuth client with clientId <id>.
+          Please check that you are logged into the correct workspace.
+
+        which reads like a bad/stale client_id and is not. To tell the two
+        apart without guessing, query the app with a personal API key: the
+        owning workspace's key returns its details, any other workspace's key
+        returns "Private application". A genuinely deleted app returns neither.
+
+          query($id:String!){ applicationInfo(clientId:$id){ name developer } }
+
         The same applies to re-authenticating later. The stored grant expires,
         refresh token included, and every Linear-triggered session then fails
         401/400 before the agent starts — while webhook delivery keeps working,
