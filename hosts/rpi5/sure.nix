@@ -1,9 +1,29 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, ... }:
 let
   # externalPort: where Tailscale Serve (→ :3333) and the socket-activate
   # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
   externalPort = 13334;
   backendPort  = 13335;
+
+  # rootVhostPort: the nginx vhost that gives Sure an origin of its own, where
+  # the app sits at the root (see the vhost below). rootServePort: the tailnet
+  # HTTPS port Tailscale Serve binds in front of it.
+  rootVhostPort = 8093;
+  rootServePort = 3850;
+
+  # Headers both proxying locations on that vhost forward. The Host is the
+  # LITERAL origin — not $host (which drops the port) and not $http_host
+  # (client-controlled, which gixy fails the build on). Rails builds
+  # request.base_url from it, and the browser's Origin header carries the port,
+  # so without it every POST — starting with the login — would fail Rails' CSRF
+  # origin check. Only tailscaled reaches this socket, and it only ever forwards
+  # this one origin.
+  fwdToSure = ''
+    proxy_set_header Host ${tailnetFqdn}:${toString rootServePort};
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto https;
+  '';
 
   # Route Sure's assistant/merchant-detection LLM calls through tiny-llm-gate
   # on :4001 (which then fans out to codex-proxy or Ollama). These ENVs take
@@ -134,6 +154,78 @@ in
     requires = [ "sure-pg-setup.service" ];
   };
 
+  # ── A second door: Sure at an origin root, for clients that assume they own it ──
+  # The 443 path-mux serves Sure under /sure, which every client that builds its
+  # URLs from the *origin* rather than from the configured base gets wrong:
+  #
+  #   desktop app  — `normalize_server_url` (upstream desktop/src-tauri/src/servers.rs)
+  #                  rebuilds what you type as scheme://host[:port] and THROWS THE
+  #                  PATH AWAY, then health-checks {origin}/up demanding a literal
+  #                  200 and afterwards navigates to {origin}/. Under the mux both
+  #                  are Nextcloud, so it answers "Couldn't reach a Sure server at
+  #                  that address".
+  #   ActionCable  — the JS client connects to a root-absolute /cable regardless of
+  #                  relative_url_root, so live updates 404 under the mux.
+  #   mobile app   — concatenates (baseUrl + "/api/v1/…") and so DOES work under
+  #                  the mux, but only if the sub-path is part of the saved
+  #                  backend_url; drop it and every call lands at the root.
+  #
+  # So Sure gets an origin whose root IS Sure: /up answers, / lands in the app,
+  # and anything else is forwarded with the /sure prefix prepended. Tailnet-only
+  # — Tailscale funnels 443/8443/10000 and all three are allocated. The 443 /sure
+  # mux is untouched and remains the URL to use from outside the tailnet.
+  services.nginx.virtualHosts."sure-root" = {
+    listen = [ { addr = "127.0.0.1"; port = rootVhostPort; ssl = false; } ];
+
+    # Relative Location headers on the redirect below — otherwise nginx builds
+    # it from its own listen socket and leaks http://127.0.0.1:8093.
+    extraConfig = ''
+      absolute_redirect off;
+    '';
+
+    locations = {
+      # Answered here rather than proxied to Sure's own /sure/up. The desktop app
+      # gives the health check 6 seconds (ureq timeout in
+      # commands.rs::check_server) while a socket-activated cold start is ~30s, so
+      # a real probe would fail every time Sure had idled out — which is most of
+      # the time (idleSec=600). Nothing else lives on this origin, so "this origin
+      # is Sure" is the whole question being asked; the answer does not depend on
+      # Puma being awake. The navigation that follows wakes it like any other
+      # request.
+      "= /up" = {
+        extraConfig = ''
+          default_type text/plain;
+          return 200 "OK\n";
+        '';
+      };
+
+      # Where the desktop app navigates once the check passes. A redirect rather
+      # than a proxy so the webview's address bar, and everything it resolves
+      # relative to it, agree with the /sure prefix Rails emits.
+      "= /" = { return = "301 /sure/"; };
+
+      # Everything a root-assuming client asks for (/sessions/new, /api/v1/…,
+      # /cable, /auth/…), re-rooted under /sure. The trailing slash on both sides
+      # is what does it: nginx swaps the matched "/" for "/sure/". Longest-prefix
+      # wins, so anything already carrying the prefix takes the block below and is
+      # never doubled up.
+      "/" = {
+        proxyPass = "http://127.0.0.1:${toString externalPort}/sure/";
+        proxyWebsockets = true;   # /cable
+        extraConfig = fwdToSure;
+      };
+
+      # Same pass-through as the 443 mux — Rack::URLMap does the SCRIPT_NAME
+      # strip itself, so /sure goes to the socket-activate port UNCHANGED and
+      # every link Rails emits (all /sure-prefixed) lands back here.
+      "/sure" = {
+        proxyPass = "http://127.0.0.1:${toString externalPort}";
+        proxyWebsockets = true;
+        extraConfig = fwdToSure;
+      };
+    };
+  };
+
   # ── Sumeria token → Sure sync trigger ──────────────────────────────────────
   # When the MITM captures new Sumeria tokens (file changes), automatically
   # trigger a Sure sync so balances/transactions update without manual action.
@@ -177,6 +269,25 @@ in
       ${pkgs.coreutils}/bin/sleep 30
       echo "[sumeria-sync] Done"
     '';
+  };
+
+  # The root origin (the vhost above). A registration of its own because
+  # `public` is one-per-service and Sure's is the 443 mux entry — this is a
+  # second route to the same app, not a second app. No tile: the Sure tile
+  # already links to it, and the dashboard is read in a browser, where the mux
+  # URL is the right one (it works from outside the tailnet; this does not).
+  nic.services.sure-root = {
+    backup     = [ "none" ];
+    backupNote = "stateless — an nginx vhost; the app's state is registered on nic.services.sure";
+    # nginx is infra that nixos-rebuild-safe deliberately leaves up, and Sure's
+    # own units are listed on nic.services.sure.
+    heavyUnits = [ ];
+
+    public = {
+      order   = 11;   # untiled; sits with sure (10), before wealthfolio (15)
+      port    = rootServePort;
+      backend = "http://127.0.0.1:${toString rootVhostPort}";
+    };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
