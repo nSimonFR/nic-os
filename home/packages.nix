@@ -79,9 +79,6 @@
       wget
       yarn
       yq
-      # Companion to unzip above. p7zip can technically write zips, but nothing
-      # here provided the `zip` binary itself, so anything shelling out to it
-      # (or any doc that says "just zip it") failed with command not found.
       zip
       zoxide
       zsh
