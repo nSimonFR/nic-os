@@ -272,9 +272,31 @@ in
           - existing repos → routingLabels reconciled in place via jq
 
         Bootstrap order (one-time): create Linear OAuth app → encrypt
-        cyrus-linear-*.age → `nixos-rebuild switch` → `sudo -u cyrus -H
-        cyrus self-auth-linear` (interactive browser flow) → `nixos-rebuild
-        switch` again (sync-repos picks up the workspace token).
+        cyrus-linear-*.age → `nixos-rebuild switch` → authenticate (below) →
+        `nixos-rebuild switch` again (sync-repos picks up the workspace token).
+
+        ⚠ `self-auth-linear` REQUIRES cyrus.service to be stopped. It serves
+        the OAuth callback itself, on the same port — and it has to, because
+        Linear redirects to <baseUrl>/callback, which the 443 nginx mux maps to
+        127.0.0.1:${toString cfg.port}. It therefore cannot pick a free port,
+        and against a running cyrus it dies with:
+
+          [ERROR] [CLI] Authentication failed: Server error:
+                  listen EADDRINUSE: address already in use 0.0.0.0:${toString cfg.port}
+
+        cyrus is `wantedBy multi-user.target`, so it is always listening by the
+        time you reach this step. Run the three together — `;` not `&&`, so
+        cyrus comes back even if the browser flow is abandoned:
+
+          sudo systemctl stop cyrus.service; \
+            sudo -u ${cfg.user} -H cyrus self-auth-linear; \
+            sudo systemctl start cyrus.service
+
+        The same applies to re-authenticating later. The stored grant expires,
+        refresh token included, and every Linear-triggered session then fails
+        401/400 before the agent starts — while webhook delivery keeps working,
+        so it presents as a routing bug rather than an auth one.
+        `sudo -u ${cfg.user} -H cyrus check-tokens` is the one-line diagnosis.
 
         Removing a repo from the list does NOT remove it from cyrus's
         runtime config — that's a destructive op left to the operator.
@@ -704,7 +726,9 @@ in
         set -e
         CONFIG=/var/lib/cyrus/.cyrus/config.json
         if [ ! -f "$CONFIG" ]; then
-          echo "config.json not present — run 'cyrus self-auth-linear' first"
+          echo "config.json not present — authenticate first (cyrus.service must be"
+          echo "stopped; self-auth-linear needs port ${toString cfg.port} for the OAuth callback):"
+          echo "  sudo systemctl stop cyrus.service; sudo -u ${cfg.user} -H cyrus self-auth-linear; sudo systemctl start cyrus.service"
           exit 0
         fi
         tmp=$(mktemp)
@@ -755,12 +779,15 @@ in
           CONFIG=/var/lib/cyrus/.cyrus/config.json
           CHANGED=0
           if [ ! -f "$CONFIG" ]; then
-            echo "config.json not present — run 'cyrus self-auth-linear' first to bootstrap"
+            echo "config.json not present — bootstrap with (cyrus.service must be stopped;"
+            echo "self-auth-linear needs port ${toString cfg.port} for the OAuth callback):"
+            echo "  sudo systemctl stop cyrus.service; sudo -u ${cfg.user} -H cyrus self-auth-linear; sudo systemctl start cyrus.service"
             exit 0
           fi
           # Skip if no Linear workspace OAuth'd yet (self-add-repo would fail).
           if [ "$(jq '.linearWorkspaces | length' "$CONFIG")" = "0" ]; then
-            echo "linearWorkspaces empty — run 'cyrus self-auth-linear' first"
+            echo "linearWorkspaces empty — authenticate first (see above); check state with"
+            echo "  sudo -u ${cfg.user} -H cyrus check-tokens"
             exit 0
           fi
           declared='${reposJson}'
