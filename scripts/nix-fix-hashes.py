@@ -51,6 +51,16 @@ BINDING = re.compile(r'^\s*(?P<key>[a-zA-Z_][\w-]*)\s*=\s*"(?P<val>[^"]*)"\s*;',
 BARE_BINDING = re.compile(r"^\s*(?P<key>[a-zA-Z_][\w-]*)\s*=\s*(?P<val>[a-zA-Z_][\w.-]*)\s*;", re.M)
 HASH_LINE = re.compile(r'(?P<key>\bhash|\bnpmDepsHash)\s*=\s*"(?P<val>[^"]*)"')
 
+# `<attr> = <something>fetch<Something> {` — the opening of a fetcher call. The
+# attribute name matters for reporting ("pnpmDeps.hash"), and the fetcher name
+# decides whether its `hash` is something we can re-fetch or a build output.
+# Deliberately matches a dotted prefix so `pnpm_10.fetchDeps` is caught.
+FETCHER_CALL = re.compile(
+    r"(?P<attr>[a-zA-Z_][\w-]*)\s*=\s*(?P<fetcher>[\w.]*\bfetch[A-Za-z]*)\s*\{"
+)
+# The two we can re-fetch cheaply, and what their `hash` covers.
+REFETCHABLE = {"fetchFromGitHub": True, "fetchurl": False}  # name -> unpack?
+
 # Hashes this script cannot derive from a fetch: they are the output of a build
 # (Go module vendoring, a pnpm store, a Cargo vendor tree). Their presence does
 # NOT stop the file being checked — blogwatcher pins a `vendorHash` and still
@@ -104,11 +114,42 @@ def to_sri(value: str) -> str:
 def resolve(template: str, bindings: dict[str, str]) -> str:
     def sub(match: re.Match[str]) -> str:
         name = match.group(1)
+        # `finalAttrs.version` / `self.version`: the mkDerivation fixed-point
+        # spelling of a plain top-level binding. calino writes
+        # `tag = "v${finalAttrs.version}"`, so without this the file is
+        # unresolvable and silently falls out of the gate.
+        if name not in bindings and "." in name:
+            name = name.rsplit(".", 1)[1]
         if name not in bindings:
             raise Problem(f"cannot resolve ${{{name}}} in {template!r}")
         return bindings[name]
 
     return INTERP.sub(sub, template)
+
+
+def fetcher_blocks(text: str) -> list[tuple[str, str, str]]:
+    """Every `<attr> = <fetcher> { … }` in the file, as (attr, fetcher, body).
+
+    Brace-matched rather than regexed to the next `}`, so a nested attrset
+    inside a fetcher (or a `}` in a comment-free string) does not truncate the
+    body. Needed because a `hash` has to be attributed to the fetcher that owns
+    it: calino pins two, one per fetcher, and both are literally named `hash`.
+    """
+    blocks: list[tuple[str, str, str]] = []
+    for match in FETCHER_CALL.finditer(text):
+        depth, i = 0, match.end() - 1  # sitting on the opening brace
+        while i < len(text):
+            if text[i] == "{":
+                depth += 1
+            elif text[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        else:
+            raise Problem(f"unbalanced braces after `{match['attr']} = {match['fetcher']} {{`")
+        blocks.append((match["attr"], match["fetcher"], text[match.end() : i]))
+    return blocks
 
 
 def parse(path: Path) -> Package:
@@ -121,48 +162,72 @@ def parse(path: Path) -> Package:
             bindings[match["key"]] = bindings[match["val"]]
 
     unverifiable = [key for key in UNVERIFIABLE if re.search(rf"\b{key}\s*=", text)]
-    # Match the *call* shape, not the bare word: these names get mentioned in
-    # header comments (this file's own docs did exactly that and tripped the
-    # both-fetchers guard below), and `fetchurl` is additionally a prefix of
-    # `fetchurlBoot`. `fetchFromGitHub {` / `fetchurl {` only appear where one is
-    # actually invoked.
-    from_github = re.search(r"\bfetchFromGitHub\s*\{", text) is not None
-    from_url = re.search(r"\bfetchurl\s*\{", text) is not None
-    if from_github and from_url:
-        raise Problem("both fetchFromGitHub and fetchurl — recompute this one by hand")
-    if not (from_github or from_url):
+
+    # Attribute every `hash` to the fetcher that owns it. A flat scan of the
+    # file cannot: calino pins two hashes, both spelled `hash`, one under
+    # fetchFromGitHub and one under pnpm_10.fetchDeps. Collapsing them used to
+    # trip a "more than one fetcher" bail that skipped the whole file — which
+    # contradicted this script's own rule about vendorHash (see UNVERIFIABLE
+    # above) and let calino v0.30.0 merge with a dead src hash, taking main's
+    # nginx.conf, and therefore every host's rebuild, down with it.
+    blocks = fetcher_blocks(text)
+    refetchable = [b for b in blocks if b[1].split(".")[-1] in REFETCHABLE]
+    derived = [b for b in blocks if b[1].split(".")[-1] not in REFETCHABLE]
+
+    # A fetcher whose hash is a build output (pnpm store, npm closure, Go vendor
+    # tree) is reported, never verified — same treatment as a named vendorHash.
+    for attr, fetcher, body in derived:
+        if HASH_LINE.search(body):
+            # Bare label: main() supplies the "a build output, not a fetch;
+            # recompute with lib.fakeHash" explanation for every entry.
+            unverifiable.append(f"{attr}.hash ({fetcher})")
+
+    if not refetchable:
         raise Problem("no fetchFromGitHub or fetchurl — nothing this script knows how to fetch")
+    if len(refetchable) > 1:
+        names = ", ".join(f"{a} = {f}" for a, f, _ in refetchable)
+        raise Problem(f"more than one re-fetchable fetcher ({names}) — recompute this one by hand")
 
-    pinned = {m["key"]: m["val"] for m in HASH_LINE.finditer(text)}
+    attr, fetcher, body = refetchable[0]
+    unpack = REFETCHABLE[fetcher.split(".")[-1]]
+
+    # Only this block's hash is ours to check. `npmDepsHash` stays file-scoped:
+    # it sits on the mkDerivation, not inside the fetcher.
+    pinned = {m["key"]: m["val"] for m in HASH_LINE.finditer(body) if m["key"] == "hash"}
     if "hash" not in pinned:
-        raise Problem("no `hash =` to check")
-    if len(HASH_LINE.findall(text)) != len(pinned):
-        raise Problem("more than one fetcher in the file — recompute this one by hand")
+        raise Problem(f"`{attr} = {fetcher}` pins no literal `hash`")
+    top_level = {m["key"]: m["val"] for m in HASH_LINE.finditer(text) if m["key"] == "npmDepsHash"}
+    pinned.update(top_level)
 
-    if from_github:
-        for key in ("owner", "repo", "rev"):
-            if key not in bindings:
+    # Prefer the fetcher's own bindings over file-level ones, so a top-level
+    # `url`/`rev` cannot be mistaken for the fetcher's.
+    local = dict(bindings)
+    local.update({m["key"]: m["val"] for m in BINDING.finditer(body)})
+
+    if unpack:  # fetchFromGitHub
+        # `tag` and `rev` are interchangeable here, and calino uses `tag`.
+        ref = next((k for k in ("rev", "tag") if k in local), None)
+        for key in ("owner", "repo"):
+            if key not in local:
                 raise Problem(f"no `{key}` binding found")
+        if ref is None:
+            raise Problem("no `rev` or `tag` binding found")
         # GitHub's /archive/<ref> resolves tags and commits alike, and is the same
         # endpoint fetchFromGitHub itself fetches through — so the NAR hash of the
         # unpacked result is exactly what the `hash` pin holds.
-        owner = resolve(bindings["owner"], bindings)
-        repo = resolve(bindings["repo"], bindings)
-        rev = resolve(bindings["rev"], bindings)
-        return Package(
-            path=path,
-            tarball=f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz",
-            unpack=True,
-            pinned=pinned,
-            unverifiable=unverifiable,
-        )
+        owner = resolve(local["owner"], local)
+        repo = resolve(local["repo"], local)
+        rev = resolve(local[ref], local)
+        tarball = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
+    else:  # fetchurl
+        if "url" not in local:
+            raise Problem("fetchurl with no literal `url` binding — recompute this one by hand")
+        tarball = resolve(local["url"], local)
 
-    if "url" not in bindings:
-        raise Problem("fetchurl with no literal `url` binding — recompute this one by hand")
     return Package(
         path=path,
-        tarball=resolve(bindings["url"], bindings),
-        unpack=False,
+        tarball=tarball,
+        unpack=unpack,
         pinned=pinned,
         unverifiable=unverifiable,
     )
