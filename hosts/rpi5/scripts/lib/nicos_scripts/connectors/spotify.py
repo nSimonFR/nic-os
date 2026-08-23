@@ -7,9 +7,19 @@ id via GET /v1/tracks/{id} — needs MUSIC_SPOTIFY_CLIENT_ID/SECRET in ryot-env)
 We poll the user's recently-played tracks and push each new listen as a completed
 music "seen" to Ryot's Generic JSON integration webhook.
 
-Idempotency: Spotify's recently-played endpoint takes an `after` cursor (Unix ms).
-We persist the newest `played_at` we've seen (spotify-cursor.json) and only ask
-for tracks after it, so overlapping polls never re-push a listen.
+Idempotency: we ask for the full window Spotify exposes (the last 50 plays) every
+run and drop what we've already sent, keyed on (track id, played_at) in
+spotify-cursor.json. We deliberately do NOT pass the endpoint's `after` cursor:
+a play cached offline on the phone syncs hours later but keeps its *original*
+`played_at`, so anchoring the request (or a floor) to the newest timestamp we'd
+seen silently dropped every late arrival. Per-listen keys make an overlapping
+poll safe without needing that floor.
+
+Retention: keys are pruned to RETAIN_DAYS behind the high-water mark. Since the
+endpoint only ever exposes 50 plays, the window it spans is far shorter than the
+retention horizon at any realistic listening rate — a listener quiet enough for
+50 plays to reach back past RETAIN_DAYS would see the oldest re-pushed, which
+Ryot absorbs as an in-place update of the same seen (no duplicate).
 
 Two-phase completion (mirrors Ryot's own YouTube Music integration): the generic
 JSON sink runs on the *live-progress* path (is_import=false), so a track that is
@@ -46,6 +56,11 @@ from ..state import ensure_dir, load_json, save_json
 log = logger("spotify-to-ryot")
 
 DEFAULT_STATE_DIR = "/var/lib/ryot-connectors"
+# How far behind the high-water mark we remember per-listen keys. Only has to
+# outlast the span of the 50 plays the endpoint returns; 30d is ~20x that at the
+# observed rate.
+RETAIN_DAYS = 30
+RETAIN_MS = RETAIN_DAYS * 24 * 60 * 60 * 1000
 REQUIRED_ENV = (
     "SPOTIFY_CLIENT_ID",
     "SPOTIFY_CLIENT_SECRET",
@@ -89,13 +104,16 @@ def get_access_token(cfg, opener=None):
     )["access_token"]
 
 
-def get_recently_played(token, after_ms, opener=None):
-    query = {"limit": 50}
-    if after_ms:
-        query["after"] = after_ms
+def get_recently_played(token, opener=None):
+    """The full window Spotify exposes — 50 plays, newest first.
+
+    No `after` cursor on purpose: it is applied against `played_at`, so a play
+    that syncs late from an offline device lands *behind* the cursor and would
+    never be returned. Dedupe happens locally instead (see build_payload).
+    """
     url = (
         "https://api.spotify.com/v1/me/player/recently-played?"
-        + urllib.parse.urlencode(query)
+        + urllib.parse.urlencode({"limit": 50})
     )
     return get_json(
         url, headers={"Authorization": "Bearer " + token}, opener=opener
@@ -121,18 +139,50 @@ def iso_to_ms(iso):
     return int(dt.timestamp() * 1000)
 
 
-def build_payload(items, after_ms, known):
-    """Return (metadata, new_cursor_ms, first_evers).
+def listen_key(tid, ms):
+    """Identity of a single listen. Track ids are base62, so `@` can't collide."""
+    return f"{tid}@{ms}"
 
-    Only listens newer than after_ms. `first_evers` are the {identifier, source_id,
-    ended_on} of tracks never pushed before (not in `known`) — these land as
-    in_progress@0 because Ryot resolves their metadata asynchronously (the sink runs
-    on the live-progress path, not the import path), so they must be re-pushed once
-    metadata exists (see main()). `known` is mutated with any new identifiers.
+
+def key_ms(key):
+    """The played_at ms back out of a key, or None if it doesn't parse."""
+    _, _, tail = key.rpartition("@")
+    try:
+        return int(tail)
+    except ValueError:
+        return None
+
+
+def prune_keys(keys, newest_ms):
+    """Drop keys more than RETAIN_DAYS behind the high-water mark."""
+    if not newest_ms:
+        return sorted(keys)
+    horizon = newest_ms - RETAIN_MS
+    kept = (k for k in keys if (key_ms(k) or 0) >= horizon)
+    return sorted(kept)
+
+
+def build_payload(items, known, pushed, prev_newest=None, floor_ms=None):
+    """Return (metadata, new_high_water_ms, first_evers).
+
+    Skips listens already in `pushed` (keys of (track id, played_at)); `pushed` is
+    mutated with the keys of everything returned here, so a caller that fails to
+    deliver must discard it rather than persist it.
+
+    `floor_ms` drops listens at or before that timestamp. Used only to bootstrap a
+    state file written before per-listen keys existed — without keys, every play in
+    the window looks new, and the floor stands in for the missing history exactly
+    once. Passing it routinely would reintroduce the offline-sync gap.
+
+    `first_evers` are the {identifier, source_id, ended_on} of tracks never pushed
+    before (not in `known`) — these land as in_progress@0 because Ryot resolves
+    their metadata asynchronously (the sink runs on the live-progress path, not the
+    import path), so they must be re-pushed once metadata exists (see main()).
+    `known` is mutated with any new identifiers.
     """
     metadata = []
     first_evers = []
-    newest = after_ms or 0
+    newest = prev_newest or 0
     for it in items:
         played_at = it.get("played_at")  # ISO8601, e.g. 2026-07-22T09:15:00.123Z
         track = it.get("track") or {}
@@ -140,8 +190,15 @@ def build_payload(items, after_ms, known):
         if not played_at or not tid:
             continue
         ms = iso_to_ms(played_at)
-        if after_ms and ms <= after_ms:
+        key = listen_key(tid, ms)
+        if floor_ms and ms <= floor_ms:
+            # Below the bootstrap floor: not ours to push, but recording the key
+            # retires the floor — the next run needs no stand-in for history.
+            pushed.add(key)
             continue
+        if key in pushed:
+            continue
+        pushed.add(key)
         newest = max(newest, ms)
         metadata.append(music_item(tid, track.get("name", tid), played_at))
         if tid not in known:
@@ -165,17 +222,29 @@ def main(env=None, opener=None):
     ensure_dir(cfg.state_dir)
 
     state = load_json(cfg.cursor_file, {})
-    after_ms = state.get("after_ms")
+    # `after_ms` is the pre-per-listen-key name for the high-water mark.
+    prev_newest = state.get("newest_ms", state.get("after_ms"))
     known = set(state.get("known", []))
     prev_pending = state.get("pending", [])
+    # A state file with no `pushed` predates per-listen keys; fall back to the
+    # high-water mark as a floor for this run only, so the migration doesn't
+    # re-push the whole window.
+    legacy = "pushed" not in state
+    pushed = set(state.get("pushed", []))
     try:
         token = get_access_token(cfg, opener=opener)
-        items = get_recently_played(token, after_ms, opener=opener)
+        items = get_recently_played(token, opener=opener)
     except (urllib.error.URLError, KeyError) as e:
         log(f"FATAL: Spotify API failed: {e}")
         return 1
 
-    new_metadata, new_cursor, first_evers = build_payload(items, after_ms, known)
+    new_metadata, new_newest, first_evers = build_payload(
+        items,
+        known,
+        pushed,
+        prev_newest=prev_newest,
+        floor_ms=prev_newest if legacy else None,
+    )
 
     # Second phase: re-push last run's first-ever tracks. Their metadata has since
     # resolved, so this flips their in_progress@0 seen to completed (updates in
@@ -203,10 +272,15 @@ def main(env=None, opener=None):
 
     save_json(
         cfg.cursor_file,
-        {"after_ms": new_cursor, "known": sorted(known), "pending": first_evers},
+        {
+            "newest_ms": new_newest,
+            "known": sorted(known),
+            "pending": first_evers,
+            "pushed": prune_keys(pushed, new_newest),
+        },
     )
     log(
-        f"done (Ryot {status}); cursor {new_cursor}; "
+        f"done (Ryot {status}); newest {new_newest}; "
         f"{len(first_evers)} tracks pending completion next run"
     )
     return 0
