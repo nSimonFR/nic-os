@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Adopt someone else's photos out of a shared album into my own library.
+"""Adopt someone else's photos into my own library, so they stop being theirs.
 
 An Immich asset has exactly one owner, and album sharing does not change that.
 Adding an asset to any album needs `Permission.AssetShare`, which resolves to
@@ -7,41 +7,54 @@ Adding an asset to any album needs `Permission.AssetShare`, which resolves to
 `editor` is not enough. So a photo a friend put in a shared album cannot be put
 in a *different* album of mine, and does not show in my timeline.
 
-Two ways out, and they solve different problems:
+Two ways out, solving different problems:
 
   * Partner sharing — the sharer grants their whole library, `AssetShare` then
     passes, zero duplication. But the assets stay theirs: their quota, and they
-    vanish from my albums if they delete them. Prefer this when it is available;
-    it needs no script.
+    vanish from my albums if they delete them or leave. Needs no script.
   * This script — download the original and re-upload it as me. I own the copy,
-    so it survives them deleting theirs or leaving. Costs a second copy on disk.
+    so it survives all of that. Costs a second copy on disk.
 
-Use this for the one-off case (a friend, 19 photos, no reason to ask for their
-entire library). Live Photos are the wrinkle: the motion video is a *separate*
-hidden asset, so it is uploaded first and the still is then linked to it via
-`livePhotoVideoId` — miss that and the copies are silently no longer alive.
+Two source modes:
 
-Re-running is safe. Immich rejects a second upload of the same checksum for the
-same owner and hands back the existing id with `status: duplicate`, so a repeated
-run re-links and re-adds rather than duplicating.
+  --source ALBUM      adopt the assets in an album that are not already mine.
+                      The one-off case (a friend, 19 photos, no reason to ask
+                      for their whole library).
+  --from-owner USER   adopt everything a given user owns. The continuous case:
+                      point it at a partner and run it on a timer, and their
+                      uploads keep landing in my library as *my* copies.
 
-Config via environment (every one overridable by the matching flag):
+Live Photos are the wrinkle: the motion video is a *separate* hidden asset, so it
+is uploaded first and the still is then linked to it via `livePhotoVideoId` —
+miss that and the copies are silently no longer alive. Enumeration therefore only
+ever walks `visibility=timeline`; motion halves arrive through their still, never
+on their own.
+
+Re-running is safe twice over. The server rejects a second upload of the same
+checksum for the same owner and hands back the existing id (`status: duplicate`),
+and the state file means an already-adopted asset is not even re-downloaded. Every
+run still re-asserts album membership for known copies, so a copy removed from the
+album by hand comes back rather than being silently forgotten.
+
+Config via environment (each overridable by the matching flag):
   IMMICH_URL              base url            (default http://127.0.0.1:2283)
   IMMICH_API_KEY_FILE     agenix secret path  (default /run/agenix/immich-api-key)
   IMMICH_ADOPT_SOURCE     album id to adopt *from*
-  IMMICH_ADOPT_TARGET     album id to add my copies to (default: the source album)
-  IMMICH_ADOPT_DRY_RUN    "0" to actually write      (default dry run)
+  IMMICH_ADOPT_OWNER      user id to adopt *everything* from (alternative source)
+  IMMICH_ADOPT_TARGET     album id for my copies (default: the source album)
+  IMMICH_ADOPT_STATE      json cursor path    (default /var/lib/immich-adopt/state.json)
+  IMMICH_ADOPT_DRY_RUN    "0" to actually write       (default dry run)
   IMMICH_ADOPT_REPLACE    "1" to drop the original's album entry afterwards
-                          (default off — see the docstring on `adopt_album`)
 
-`--replace` is the only destructive-to-the-sharer flag and it is off by default:
-it removes *their* album entry (their photo stays in their library, but their
-comments on it and their contributor credit go with the entry). It also only
-works on albums I own — on someone else's album the server falls back to a
-per-asset `AssetShare` check and refuses, which is a permission error, not a bug.
+`--replace` is the only destructive-to-the-sharer flag and is off by default: it
+removes *their* album entry (their photo stays in their library, but their
+comments on it and their contributor credit go with the entry). It also only works
+on albums I own — on someone else's album the server falls back to a per-asset
+`AssetShare` check and refuses, which is a permission error, not a bug.
 """
 
 import argparse
+import json
 import mimetypes
 import sys
 import urllib.request
@@ -51,9 +64,11 @@ from dataclasses import dataclass, replace as _replace
 from ..httpjson import get_json, http_json
 from ..logs import logger
 from ..secrets import env_str, read_secret_env
+from ..state import ensure_dir, load_json, save_json
 
 DEFAULT_URL = "http://127.0.0.1:2283"
 DEFAULT_KEY_FILE = "/run/agenix/immich-api-key"
+DEFAULT_STATE = "/var/lib/immich-adopt/state.json"
 
 # The server pages metadata search; 1000 is its documented ceiling per page.
 PAGE_SIZE = 1000
@@ -72,7 +87,9 @@ class Config:
     url: str = DEFAULT_URL
     key: str = ""
     source: str = ""
+    owner: str = ""
     target: str = ""
+    state_path: str = DEFAULT_STATE
     # Both default to the SAFE value, so a Config built from an empty env
     # cannot write anything and cannot touch the sharer's album entries.
     dry_run: bool = True
@@ -84,7 +101,9 @@ class Config:
             url=env_str("IMMICH_URL", DEFAULT_URL, env).rstrip("/"),
             key=read_secret_env("IMMICH_API_KEY_FILE", DEFAULT_KEY_FILE, env) or "",
             source=env_str("IMMICH_ADOPT_SOURCE", "", env),
+            owner=env_str("IMMICH_ADOPT_OWNER", "", env),
             target=env_str("IMMICH_ADOPT_TARGET", "", env),
+            state_path=env_str("IMMICH_ADOPT_STATE", DEFAULT_STATE, env),
             dry_run=env_str("IMMICH_ADOPT_DRY_RUN", "1", env) != "0",
             replace=env_str("IMMICH_ADOPT_REPLACE", "0", env) == "1",
         )
@@ -101,6 +120,16 @@ def _headers(cfg, extra=None):
     return h
 
 
+def _post_json(cfg, path, payload, method="POST", opener=None):
+    req = urllib.request.Request(
+        f"{cfg.url}{path}",
+        data=json.dumps(payload).encode(),
+        headers=_headers(cfg, {"Content-Type": "application/json"}),
+        method=method,
+    )
+    return http_json(req, timeout=60, opener=opener)
+
+
 def whoami(cfg, opener=None):
     return get_json(f"{cfg.url}/api/users/me", headers=_headers(cfg), opener=opener)["id"]
 
@@ -110,6 +139,12 @@ def album(cfg, album_id, opener=None):
         f"{cfg.url}/api/albums/{album_id}?withoutAssets=true",
         headers=_headers(cfg),
         opener=opener,
+    )
+
+
+def asset(cfg, asset_id, opener=None):
+    return get_json(
+        f"{cfg.url}/api/assets/{asset_id}", headers=_headers(cfg), opener=opener
     )
 
 
@@ -130,22 +165,54 @@ def album_assets(cfg, album_id, opener=None):
     return out
 
 
-def asset(cfg, asset_id, opener=None):
-    return get_json(
-        f"{cfg.url}/api/assets/{asset_id}", headers=_headers(cfg), opener=opener
+def owner_assets(cfg, owner_id, opener=None):
+    """Every timeline asset a given user owns, via the month-bucket timeline.
+
+    Metadata search has no owner filter in v3, but the timeline does (`userId`),
+    and it is the only endpoint that will enumerate a *partner's* library. The
+    payload is columnar (parallel arrays, not a list of objects) and omits
+    `fileModifiedAt`/`originalFileName`, so what comes back here is a stub that
+    `_detailed` fills in — only for the assets actually being adopted, which is
+    what keeps a timer run cheap once the backlog is done.
+    """
+    out = []
+    listed = get_json(
+        f"{cfg.url}/api/timeline/buckets?userId={owner_id}&visibility=timeline",
+        headers=_headers(cfg),
+        opener=opener,
     )
+    for bucket in listed:
+        cols = get_json(
+            f"{cfg.url}/api/timeline/bucket?userId={owner_id}"
+            f"&visibility=timeline&timeBucket={bucket['timeBucket']}",
+            headers=_headers(cfg),
+            opener=opener,
+        )
+        ids = cols.get("id") or []
+        for i, asset_id in enumerate(ids):
+            out.append({
+                "id": asset_id,
+                "ownerId": _col(cols, "ownerId", i, owner_id),
+                "livePhotoVideoId": _col(cols, "livePhotoVideoId", i),
+                # Deliberately no fileModifiedAt/originalFileName: absence is the
+                # signal to `_detailed` that this stub needs a round trip.
+            })
+    return out
 
 
-def _post_json(cfg, path, payload, method="POST", opener=None):
-    import json
+def _col(cols, name, i, default=None):
+    """One cell out of the timeline's columnar payload."""
+    values = cols.get(name)
+    if not values or i >= len(values):
+        return default
+    return values[i]
 
-    req = urllib.request.Request(
-        f"{cfg.url}{path}",
-        data=json.dumps(payload).encode(),
-        headers=_headers(cfg, {"Content-Type": "application/json"}),
-        method=method,
-    )
-    return http_json(req, timeout=60, opener=opener)
+
+def _detailed(cfg, src, opener=None):
+    """Fill in a timeline stub. A metadata-search result is already complete."""
+    if "fileModifiedAt" in src:
+        return src
+    return asset(cfg, src["id"], opener=opener)
 
 
 def download_original(cfg, asset_id, opener=None):
@@ -221,11 +288,7 @@ def remove_from_album(cfg, album_id, asset_ids, opener=None):
     if not asset_ids:
         return []
     return _post_json(
-        cfg,
-        f"/api/albums/{album_id}/assets",
-        {"ids": asset_ids},
-        "DELETE",
-        opener=opener,
+        cfg, f"/api/albums/{album_id}/assets", {"ids": asset_ids}, "DELETE", opener=opener
     )
 
 
@@ -235,6 +298,7 @@ def adopt_one(cfg, src, opener=None, log=log):
     Order is load-bearing: the video goes first, because the server validates on
     link that the motion asset is already mine (`onBeforeLink`).
     """
+    src = _detailed(cfg, src, opener=opener)
     motion_id = None
     if src.get("livePhotoVideoId"):
         motion = asset(cfg, src["livePhotoVideoId"], opener=opener)
@@ -261,62 +325,97 @@ def adopt_one(cfg, src, opener=None, log=log):
     return new_id
 
 
-def adopt_album(cfg, opener=None, log=log):
-    """Adopt every asset in `cfg.source` that is not already mine.
+def _sources(cfg, me, opener=None):
+    """(description, candidates) for whichever source mode is configured."""
+    if cfg.owner:
+        found = owner_assets(cfg, cfg.owner, opener=opener)
+        return f"owner={cfg.owner}", found
+    found = album_assets(cfg, cfg.source, opener=opener)
+    return f"album={album(cfg, cfg.source, opener=opener).get('albumName')!r}", found
+
+
+def run(cfg, opener=None, log=log):
+    """Adopt every asset from the configured source that is not already mine.
 
     Read-only for the sharer unless `cfg.replace` is set, in which case their
     album entry is removed once my copy is safely in the target album. Their
-    photo itself is never touched — this script has no path that deletes an
-    asset it does not own.
+    photo itself is never touched — there is no path here that deletes an asset
+    this account does not own.
     """
     if not cfg.key:
         raise AdoptError(f"no API key (IMMICH_API_KEY_FILE, default {DEFAULT_KEY_FILE})")
-    if not cfg.source:
-        raise AdoptError("no source album (IMMICH_ADOPT_SOURCE / --source)")
+    if not cfg.source and not cfg.owner:
+        raise AdoptError("no source: pass --source ALBUM or --from-owner USER")
+    if cfg.owner and not cfg.target:
+        raise AdoptError("--from-owner has no album to default to; pass --target ALBUM")
+    if cfg.replace and not cfg.source:
+        raise AdoptError("--replace needs --source (there is no album entry to remove)")
 
     me = whoami(cfg, opener=opener)
-    src_album = album(cfg, cfg.source, opener=opener)
-    dst_album = (
-        src_album
-        if cfg.target_album == cfg.source
-        else album(cfg, cfg.target_album, opener=opener)
-    )
-    assets = album_assets(cfg, cfg.source, opener=opener)
-    foreign = [a for a in assets if a["ownerId"] != me]
+    state = load_json(cfg.state_path, {"adopted": {}})
+    known = state.get("adopted", {})
+
+    where, candidates = _sources(cfg, me, opener=opener)
+    dst = album(cfg, cfg.target_album, opener=opener)
+    foreign = [a for a in candidates if a["ownerId"] != me]
+    fresh = [a for a in foreign if a["id"] not in known]
 
     log(
-        f"source={src_album.get('albumName')!r} target={dst_album.get('albumName')!r} "
-        f"assets={len(assets)} foreign={len(foreign)} "
-        f"dry_run={cfg.dry_run} replace={cfg.replace}"
+        f"{where} target={dst.get('albumName')!r} candidates={len(candidates)} "
+        f"foreign={len(foreign)} already_adopted={len(foreign) - len(fresh)} "
+        f"new={len(fresh)} dry_run={cfg.dry_run} replace={cfg.replace}"
     )
-    if not foreign:
-        log("nothing to adopt")
-        return []
 
     if cfg.dry_run:
-        for a in foreign:
+        for a in fresh:
             live = " +motion" if a.get("livePhotoVideoId") else ""
-            log(f"  would adopt {a.get('originalFileName')} ({a['id']}){live}")
+            log(f"  would adopt {a.get('originalFileName') or a['id']}{live}")
         return []
 
     adopted = []
-    for a in foreign:
+    for a in fresh:
         try:
-            adopted.append((a["id"], adopt_one(cfg, a, opener=opener, log=log)))
+            new_id = adopt_one(cfg, a, opener=opener, log=log)
         except Exception as exc:  # one bad file must not abandon the rest
-            log(f"  FAILED {a.get('originalFileName')} ({a['id']}): {exc}")
+            log(f"  FAILED {a.get('originalFileName') or a['id']}: {exc}")
+            continue
+        adopted.append((a["id"], new_id))
+        known[a["id"]] = new_id
 
-    added = add_to_album(cfg, cfg.target_album, [new for _, new in adopted], opener=opener)
-    ok = {r["id"] for r in added if r.get("success")}
-    log(f"added {len(ok)}/{len(adopted)} copies to {dst_album.get('albumName')!r}")
+    if adopted:
+        state["adopted"] = known
+        try:
+            ensure_dir(cfg.state_path.rsplit("/", 1)[0] or ".")
+            save_json(cfg.state_path, state, indent=1, sort_keys=True)
+        except OSError as exc:
+            # Losing the cursor costs a re-download next run, which the server's
+            # checksum dedupe makes harmless. Aborting here would instead skip
+            # the album add below and leave the copies orphaned — far worse.
+            log(f"  WARNING could not save state to {cfg.state_path}: {exc}")
+
+    # Re-assert membership for every copy this source has ever produced, not just
+    # the new ones: a copy someone removed from the album by hand should come
+    # back, and the server no-ops the ones already in it (so no notification).
+    mine_from_here = [known[a["id"]] for a in foreign if a["id"] in known]
+    added = add_to_album(cfg, cfg.target_album, mine_from_here, opener=opener)
+    landed = {r["id"] for r in added if r.get("success")}
+    # A repeat run gets `duplicate` for copies already in the album. That is a
+    # success for our purposes and must not be confused with `no_permission`,
+    # which means the copy genuinely is not in there.
+    already = {r["id"] for r in added if not r.get("success")
+               and r.get("error") == "duplicate"}
+    log(
+        f"adopted {len(adopted)} new, {len(mine_from_here)} copies asserted into "
+        f"{dst.get('albumName')!r} ({len(landed)} newly added, {len(already)} already in)"
+    )
 
     if cfg.replace:
-        # Only drop originals whose copy actually landed, so a partial failure
-        # never removes a photo that was not replaced.
-        safe = [old for old, new in adopted if new in ok]
+        # Only drop an original once its copy is provably in the target album.
+        in_album = landed | already
+        safe = [old for old, new in adopted if new in in_album]
         results = remove_from_album(cfg, cfg.source, safe, opener=opener)
         gone = sum(1 for r in results if r.get("success"))
-        log(f"removed {gone}/{len(safe)} original entries from {src_album.get('albumName')!r}")
+        log(f"removed {gone}/{len(safe)} original entries from the source album")
         refused = [r["id"] for r in results if not r.get("success")]
         if refused:
             log(f"  refused (album not mine? need owner rights): {len(refused)}")
@@ -326,8 +425,11 @@ def adopt_album(cfg, opener=None, log=log):
 
 def _parse_args(argv):
     p = argparse.ArgumentParser(prog="immich-adopt", description=__doc__.split("\n")[0])
-    p.add_argument("--source", help="album id to adopt from")
+    src = p.add_mutually_exclusive_group()
+    src.add_argument("--source", help="album id to adopt from")
+    src.add_argument("--from-owner", dest="owner", help="user id to adopt everything from")
     p.add_argument("--target", help="album id for my copies (default: the source album)")
+    p.add_argument("--state", help=f"json cursor path (default {DEFAULT_STATE})")
     p.add_argument(
         "--apply",
         action="store_true",
@@ -348,8 +450,12 @@ def main(argv=None, env=None, opener=None):
     overrides = {}
     if args.source:
         overrides["source"] = args.source
+    if args.owner:
+        overrides["owner"] = args.owner
     if args.target:
         overrides["target"] = args.target
+    if args.state:
+        overrides["state_path"] = args.state
     if args.apply:
         overrides["dry_run"] = False
     if args.replace:
@@ -357,7 +463,7 @@ def main(argv=None, env=None, opener=None):
     cfg = _replace(cfg, **overrides)
 
     try:
-        adopt_album(cfg, opener=opener)
+        run(cfg, opener=opener)
     except AdoptError as exc:
         log(f"FATAL {exc}")
         return 1
