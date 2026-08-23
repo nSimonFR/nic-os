@@ -32,6 +32,10 @@ claude-notify-aggregator = "nicos_scripts.claude.notify_aggregator:main"
 claude-rc-boot-resume = "nicos_scripts.claude.boot_resume:main"
 claude-memory-sync = "nicos_scripts.claude.memory_sync:main"
 claude-context-baseline = "nicos_scripts.claude.context_baseline:main"
+# Hand-run, not on a timer: adopting someone else's shared-album photos into my
+# own library is a deliberate act (it makes a second copy on disk). Lives here
+# anyway so it gets the shared helpers and the tests.
+immich-adopt = "nicos_scripts.immich.adopt:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
