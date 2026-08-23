@@ -5,6 +5,16 @@
     nixpkgs.url = "github:nixos/nixpkgs/release-25.11";
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
+    # Ollama only. The nixpkgs-unstable pin above carries ollama 0.32.4, which
+    # refuses to pull qwen3.8:27b (registry answers 412 "requires a newer version
+    # of Ollama" — the model landed upstream in 0.32.12). Bumping the shared
+    # nixpkgs-unstable to get it would also move the rpi5 (home-assistant,
+    # immich, papra, uv) and force a from-source onnxruntime-cuda rebuild for
+    # hosts/beast/immich-ml.nix, whose immich must stay in lock-step with the
+    # rpi5's — so keep the newer tree scoped to the one package that needs it.
+    # Rev is nixpkgs-unstable @ 2026-08-22, ollama 0.32.14.
+    nixpkgs-ollama.url = "github:NixOS/nixpkgs/a831408e6378bc02ebf8cc09b52c96ca86f6bab4";
+
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
