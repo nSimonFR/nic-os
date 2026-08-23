@@ -54,6 +54,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.claude.notify_aggregator"
     "nicos_scripts.claude.boot_resume"
     "nicos_scripts.claude.memory_sync"
+    "nicos_scripts.immich.adopt"
     "nicos_scripts.papra.tag_sweep"
     "nicos_scripts.papra.proton_poll"
     "nicos_scripts.papra.tag_sync"
