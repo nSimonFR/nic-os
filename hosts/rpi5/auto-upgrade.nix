@@ -65,6 +65,12 @@ in
       Type = "oneshot";
       # A full nixpkgs bump can build for hours on the Pi with --max-jobs 1.
       TimeoutStartSec = "6h";
+      # systemd gives a service no HOME, and `git config --global` is fatal
+      # without one ("fatal: $HOME not set", exit 128) — which killed the whole
+      # unit at the safe.directory step below, before any rebuild. Point it at
+      # root's real home so the global config is the same file an interactive
+      # `sudo git` writes.
+      Environment = [ "HOME=/root" ];
     };
 
     script = ''
