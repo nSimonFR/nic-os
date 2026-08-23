@@ -169,6 +169,7 @@ in
     ./beast-power.nix
     ./immich.nix
     ./immich-clip.nix
+    ./immich-adopt.nix
     ./sure.nix
     ./papra.nix
     ./karakeep.nix
