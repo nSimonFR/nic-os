@@ -74,7 +74,10 @@ in
         # -- Ollama chat models --
         "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
         "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
-        "qwen3.6:35b-a3b"    = { provider = "ollama"; upstream_model = "qwen3.6:35b-a3b"; };
+        # Qwen3.8-27B, replacing Qwen3.6-35B-A3B (removed from beast): vision +
+        # tools + thinking in half the weights. RAM-offloaded, so slower than
+        # gemma4 — a deliberate-choice model, not an "auto" candidate.
+        "qwen3.8:27b"        = { provider = "ollama"; upstream_model = "qwen3.8:27b"; };
         # Papra on-prem document tagging. Beast-only, NO fallback: sensitive
         # OCR'd text (bank/tax/ID) must never reach a cloud model, and a
         # beast-down error is what makes the Papra tag-sweeper wait and retry
@@ -147,7 +150,7 @@ in
         # it — handle both.
         "openai/gemma4:e4b"          = "gemma4:e4b";
         "openai/gemma4:26b"          = "gemma4:26b";
-        "openai/qwen3.6:35b-a3b"     = "qwen3.6:35b-a3b";
+        "openai/qwen3.8:27b"         = "qwen3.8:27b";
         "openai/qwen3-vl:8b"         = "qwen3-vl:8b";
         "openai/qwen3-embedding:8b"  = "qwen3-embedding:8b";
         "openai/gpt-5.5"             = "gpt-5.5";
