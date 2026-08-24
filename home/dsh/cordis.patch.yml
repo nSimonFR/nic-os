@@ -1,0 +1,67 @@
+# The home-level user patch layer ($DSH_HOME/cordis.patch.yml), applied over
+# every dsh profile after its bundle layers. This is the Aperture provider —
+# the whole of pi's `extensions/aperture-provider.ts`, as data.
+#
+# dsh's LLM adapter *is* pi-ai (@deepseek-ai/dsh-llm-pi-ai), the same library
+# pi uses, so the route needs no code: a baseURL plus `api: openai-completions`
+# is exactly what pi.registerProvider() was building by hand.
+#
+# Patch grammar: a top-level list. An entry carrying an `id` targets that row
+# in the composed tree and REPLACES its whole `config` (no deep merge); an
+# entry carrying `insert:` adds new rows. Row ids come from
+# @deepseek-ai/dsh-base's own cordis.patch.yml.
+#
+# PRECEDENCE: $DSH_HOME/settings.yaml outranks this file — the Web UI's
+# Settings → Models page writes there, which is why settings.yaml is
+# deliberately NOT Nix-managed (same reasoning as pi's ~/.pi/agent/auth.json).
+# If a UI edit ever shadows this route, drop its `llm-pi-ai:` section from
+# settings.yaml to fall back here.
+
+# Every model goes through the Aperture observability gateway →
+# tiny-llm-gate (:4001) → codex-proxy (:4040) or beast Ollama.
+- id: llm-pi-ai
+  name: '@deepseek-ai/dsh-llm-pi-ai'
+  config:
+    providers:
+      aperture:
+        displayName: Aperture
+        # tiny-llm-gate ignores the key, but pi-ai refuses a route whose
+        # credential does not resolve (MISSING_CREDENTIAL). The wrapper in
+        # default.nix sets this to a dummy, scoped to the dsh binary.
+        apiKeyEnv: APERTURE_API_KEY
+        api: openai-completions
+        baseURL: https://ai.gate-mintaka.ts.net/v1
+        # No `headers:` block. pi's extension set a User-Agent here to tell
+        # itself apart in Aperture's /api/sessions; dsh needs none and would
+        # ignore one — the route's `headers` lose reserved names to the
+        # harness's own attribution, and it already sends
+        # `deepseek-harness/<version>`, verified against Aperture during
+        # bring-up.
+        # pi-ai picks a request shape from the endpoint's URL, and a private
+        # gateway's URL tells it nothing — so it addresses tlg as if it were
+        # OpenAI itself and sends `role: developer` + `max_completion_tokens`,
+        # which tlg's chat/completions route does not take.
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+        # Hand-maintained subset of `curl .../v1/models`, filtered the way
+        # pi's extension filtered: no embeddings, no `openai/*` aliases, no
+        # `claude-*` (Anthropic has its own route), no codex-auto-review.
+        # Unset fields fall back to the route defaults (262144 context /
+        # 32768 max tokens); correct one only when a real request proves it
+        # wrong.
+        models:
+          - id: gpt-5.5          # ChatGPT subscription via codex-proxy — the default
+          - id: gpt-5.6
+          - id: gpt-5.5-mini
+          - id: gemma4:e4b       # beast Ollama, free local
+          - id: gemma4:26b
+          - id: auto             # tlg's beast-first, codex-fallback route
+
+# Without this, new agents default to deepseek-official/deepseek-v4-flash and
+# ask for a DEEPSEEK_API_KEY we do not have.
+- id: agent-default-model
+  name: '@deepseek-ai/dsh-agent-default-model'
+  config:
+    provider: aperture
+    model: gpt-5.5

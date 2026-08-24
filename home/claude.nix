@@ -23,7 +23,7 @@ let
 
   sharedSkillFiles =
     skillTree.homeFiles {
-      targets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ];
+      targets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
       lineages = [ { source = sharedSkillsDir; } ];
     }
     // skillTree.homeFiles {

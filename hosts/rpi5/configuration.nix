@@ -191,6 +191,7 @@ in
     ./affine-mcp.nix
     ./reactive-resume.nix
     ./cyrus.nix
+    ./dsh.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
     # Everything Claude Code on this host — bridge, OAuth keep-warm, the two

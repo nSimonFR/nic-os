@@ -94,3 +94,11 @@ if [[ "$OSTYPE" == darwin* ]]; then
 else
   pi() { command pi --provider aperture --model gpt-5.5 "$@"; }
 fi
+
+# dsh: DeepSeek Harness, same Aperture route as pi (the provider lives in
+# ~/.dsh/cordis.patch.yml, so there is no --provider flag to pass here).
+# dsh has no TUI — the interactive surface is the Web UI, served on the tailnet
+# by hosts/rpi5/dsh.nix. What is useful from a shell is the one-shot runner:
+#   dsh-run "run the tests"   → one fresh persisted session, prints the answer
+# It exits 0 on completion and 1 otherwise, so it composes in scripts.
+dsh-run() { command dsh --profile headless "$@"; }
