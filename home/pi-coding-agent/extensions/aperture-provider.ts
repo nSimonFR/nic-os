@@ -9,7 +9,7 @@
 //
 // Costs are zeroed unconditionally: gpt-5.x is paid via the ChatGPT/Codex
 // subscription (per-token pricing in pi-ai is wrong for that route),
-// gemma4/qwen3.6 are free local on beast.
+// gemma4/qwen3.8 are free local on beast.
 
 import { getModel } from "@mariozechner/pi-ai";
 
