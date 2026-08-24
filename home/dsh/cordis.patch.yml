@@ -31,12 +31,34 @@
         apiKeyEnv: APERTURE_API_KEY
         api: openai-completions
         baseURL: https://ai.gate-mintaka.ts.net/v1
-        # No `headers:` block. pi's extension set a User-Agent here to tell
-        # itself apart in Aperture's /api/sessions; dsh needs none and would
-        # ignore one — the route's `headers` lose reserved names to the
-        # harness's own attribution, and it already sends
-        # `deepseek-harness/<version>`, verified against Aperture during
-        # bring-up.
+        headers:
+          # Aperture only reconstructs sessions by itself on the Anthropic
+          # path (`ancc_` ids). On openai-completions it reads this header and
+          # merges every request carrying the same value into one session
+          # (`xsid_`); with no header it mints a random id per request
+          # (`xrnd_`), which is why pi and Sure each show up as N one-request
+          # rows. Verified against the live gate: three requests sharing a
+          # value collapsed to one row with request_count=3.
+          #
+          # `headers` is route config, evaluated once per process, so the
+          # granularity this buys is per-PROCESS, not per-conversation:
+          #   `dsh-run` (headless) — one process per invocation, so one
+          #      Aperture session per run. Exactly right.
+          #   `dsh web` — one process serving every conversation, so one
+          #      bucket per service lifetime. Coarse, but the unit idle-stops
+          #      after 15 min, so buckets rotate rather than growing forever.
+          # Per-conversation grouping would need a Cordis plugin injecting the
+          # live session id per request, which means an out-of-tree pnpm
+          # install into the profile — deliberately not done here.
+          #
+          # Expression must not START with a quote: after a `!!js` tag YAML
+          # reads `'dsh-'` as a complete quoted scalar and then fails on the
+          # rest of the line.
+          x-session-id: !!js process.pid.toString(36) + '-' + Date.now().toString(36)
+        # No User-Agent here. pi's extension set one to tell itself apart in
+        # Aperture; dsh would ignore it — a route's `headers` lose reserved
+        # names to the harness's own attribution, and it already sends
+        # `deepseek-harness/<version>`, confirmed in the Aperture session log.
         # pi-ai picks a request shape from the endpoint's URL, and a private
         # gateway's URL tells it nothing — so it addresses tlg as if it were
         # OpenAI itself and sends `role: developer` + `max_completion_tokens`,
@@ -53,7 +75,11 @@
         models:
           - id: gpt-5.5          # ChatGPT subscription via codex-proxy — the default
           - id: gpt-5.6
-          - id: gpt-5.5-mini
+          # gpt-5.5-mini is deliberately absent. A hand-declared model takes
+          # the route's 262144 fallback, and the mini answered dsh's system
+          # prompt + tool schemas with a hard 400 CONTEXT_WINDOW_EXCEEDED.
+          # Re-add it with a `contextWindow:` someone has actually verified,
+          # not a guessed number.
           - id: gemma4:e4b       # beast Ollama, free local
           - id: gemma4:26b
           - id: auto             # tlg's beast-first, codex-fallback route
