@@ -626,6 +626,15 @@ in
     };
   };
 
+  # Check the floor the nixpkgs-ollama rev exists for: a moved rev should fail
+  # here, not as a registry 412 after a long uncached CUDA build.
+  assertions = [
+    {
+      assertion = lib.versionAtLeast config.services.ollama.package.version "0.32.12";
+      message = "ollama ${config.services.ollama.package.version} < 0.32.12, too old for qwen3.8:27b; move the nixpkgs-ollama rev in flake.nix.";
+    }
+  ];
+
   services.hardware.openrgb = {
     enable = true;
     package = pkgs.openrgb-lg; # Use custom build with LG monitor support
