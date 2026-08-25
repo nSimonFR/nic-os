@@ -46,10 +46,10 @@ _claude_shim() {
   local ca="$HOME/.claude-aperture-shim/mitmproxy-ca-cert.pem"
   # Probe the port: HTTPS_PROXY pointing at a closed one makes Claude Code HANG
   # rather than fail fast, so degrade to plain Aperture instead of wedging.
-  if [[ -f $ca ]] && zmodload zsh/net/tcp 2>/dev/null && ztcp 127.0.0.1 8888 2>/dev/null; then
+  if [[ -f $ca ]] && zmodload zsh/net/tcp 2>/dev/null && ztcp 127.0.0.1 18888 2>/dev/null; then
     ztcp -c $REPLY 2>/dev/null
     ANTHROPIC_BASE_URL=https://api.anthropic.com \
-    HTTPS_PROXY=http://127.0.0.1:8888 \
+    HTTPS_PROXY=http://127.0.0.1:18888 \
     NODE_EXTRA_CA_CERTS=$ca \
       command claude --remote-control "$@"
   else
