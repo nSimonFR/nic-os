@@ -24,6 +24,12 @@ A finding earns a note when it is longer than a paragraph, still true in six mon
 not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
 Write notes for agents: triggers, commands, numbers. No narrative.
 
+**Extend them freely.** Append to a note, or add one plus its row above, whenever a session
+turns up something meeting that bar — no need to keep them short: only the row costs tokens
+every session, the note itself costs only when opened. Widen a note's triggers as you learn
+what people actually search for. Correct or delete what proves wrong — a stale note is worse
+than a missing one.
+
 > **Keep fresh.** When you learn something future sessions need (a kubectl pattern, operator quirk, permission grant, release gotcha), propose adding/updating an entry before the conversation ends — show the diff, get the OK, write to the nic-os source. Flag stale/wrong entries for removal too.
 
 ## Repos on disk — siblings under `/Users/nsimon/MyDocuments/TRUSK/`
