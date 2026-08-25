@@ -24,8 +24,19 @@ on `SELECT pg_advisory_lock(...)`, AMQP ack rate 0.
 ### Same key nested = deadlock. No pool size fixes it.
 
 The inner take runs on a **second connection** and waits on the lock the outer frame
-holds; the outer frame waits on the inner to return. Circular wait. A pool of 1000 just
-parks 1000 connections. Each execution permanently burns two slots and never returns.
+holds; the outer frame waits on the inner to return. Circular wait, and no pool size
+fixes it — a pool of 1000 just parks 1000 connections.
+
+**What you will actually see depends on the library version**, and it matters for
+diagnosis:
+
+- **Before nestjs-sql 11.9.2**, nothing bounded the inner `SELECT pg_advisory_lock(...)`.
+  Each execution parked two slots **permanently** and never returned. Signature: ancient
+  locks held by idle connections, ack rate 0.
+- **From 11.9.2**, `lock_timeout` bounds that wait, so the inner take fails with `55P03`
+  after the acquire timeout. The bug is unchanged and every execution still fails — but the
+  signature is now **recurring timeout-and-retry churn with young lock ages**, not an
+  indefinite hang. Look for the retry rate, not for old locks.
 
 Real case: `createFromOrderMission` wrapped `this.delete(id)` in
 ``lockBuilder(`mission:${id}`)`` and `delete` takes that same key itself. Byte-identical,
