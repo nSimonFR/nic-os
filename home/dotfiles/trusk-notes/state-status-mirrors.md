@@ -1,6 +1,6 @@
 # state-status and the consumer state mirrors
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: `state_label` / `state_detail` wrong or stale · wiring a new `state.<ENTITY>.*` consumer · mirror drift · `StatusFindByEntityid`
 
 ## state-status ↔ consumer state mirrors (2026-07)
 

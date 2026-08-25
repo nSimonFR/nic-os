@@ -1,6 +1,6 @@
 # Legacy trusk-api — users and PF Pro order visibility
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: legacy user cannot see an order set · `trusk_customer` · `profile.truskCustomer` · `contract_ids` / `shipment_site_ids`
 
 ## Legacy users (trusk-api) — PF Pro order visibility
 

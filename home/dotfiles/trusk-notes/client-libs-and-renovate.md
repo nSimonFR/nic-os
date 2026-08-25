@@ -1,6 +1,6 @@
 # Generated client libs, and the Renovate release batches
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: consuming a route not yet merged · `need client API` label · `renovate/release-to-*` · coordinated multi-service release · `use<Tag><Method>` orval hook
 
 ## Generating a service's `-client` / `-query` lib (consume a new route)
 

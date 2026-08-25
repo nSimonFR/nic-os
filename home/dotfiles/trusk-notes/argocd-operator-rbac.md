@@ -1,6 +1,6 @@
 # ArgoCD selfHeal vs operator-managed RBAC
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: ClusterRoleBinding subjects keep reverting · consumers 403 after an operator writes RBAC · `ignoreDifferences`
 
 ## ArgoCD selfHeal + operator-managed RBAC = drift trap
 
