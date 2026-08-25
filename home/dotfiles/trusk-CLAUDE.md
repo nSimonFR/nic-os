@@ -53,9 +53,15 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 
 ## Linear — use the `linear` skill (not the MCP)
 
-`~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all IN-/EXTERN-/DO- tickets). Most-used team `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"IN-545"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
+`~/.claude/skills/linear/SKILL.md` hits the GraphQL API with a personal key. Default for any Trusk ticket op. Keys: `$LINEAR_KEY` = personal (team NSI); `$LINEAR_KEY_TRUSK` = work (use for all TEC-/IN-/EXTERN-/DO- tickets). For a subissue, set `parentId` to the parent's **UUID** (`issue(id:"TEC-261"){ id }`), and reuse the parent's `team{id} project{id} cycle{id}` so it lands in the same context (avoids the "ended up in personal/no-project" footgun).
 
-### Filing defaults on `IN` (INTERNAL)
+**Tech tickets go on `TECHTASKS`** (`key: TEC`, `id: 34a61138-6e65-418f-ac7e-ae51e7b80098`) — dette technique, infra, run, outillage. `INTERNAL` (`key: IN`, `id: 835374eb-2c41-427f-9779-772d1b95aa0a`) is for produit/run content, not tech debt. (Nicolas, 2026-08-25.)
+
+### Filing defaults — `TEC` (TECHTASKS) and `IN` (INTERNAL)
+
+Swimlane / priority / estimate / assignee below apply to **both** teams (the `> SWIM LANES` labels are workspace-level, `team: null`). **State ids are per team** — the table's ids are `IN`'s; on `TEC` use `Backlog` `0af1c90e-011d-490d-bf81-35e8d27ae89c`, `Sprint Backlog` `892ea6ad-222a-4bab-86ec-5ec0ac3c1b8f`, `In Production` `6f0cb5c2-b4ec-4188-8366-1ecd5eea2737`.
+
+**Moving a ticket between teams**: `issueUpdate` with `teamId` **+** the target team's `stateId` **+** `cycleId: null` — otherwise `Discrepancy between issue team and state, cycle or project`. The move renames the ticket (IN-901 → TEC-261); Linear keeps the old identifier as a redirect and parent/child links survive.
 
 | Field | Default | ids |
 | --- | --- | --- |
