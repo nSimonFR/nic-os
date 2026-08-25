@@ -2,6 +2,12 @@
 
 Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, services…). Per-project memory under `~/.claude/projects/<workdir>/memory/` adds local detail. **Source of truth:** `~/nic-os/home/dotfiles/trusk-CLAUDE.md` (home-manager symlinks it to this path) — edit there.
 
+**Deep notes:** `~/MyDocuments/TRUSK/notes/` (source: `~/nic-os/home/dotfiles/trusk-notes/`)
+holds the long-form findings that do not fit here — advisory locks, metastable staging,
+the IN-871 tour-size chase, merge/CI traps. Start at
+[`notes/README.md`](/Users/nsimon/MyDocuments/TRUSK/notes/README.md). This file stays short
+because it loads into every Trusk session; those load only when you open them.
+
 > **Keep fresh.** When you learn something future sessions need (a kubectl pattern, operator quirk, permission grant, release gotcha), propose adding/updating an entry before the conversation ends — show the diff, get the OK, write to the nic-os source. Flag stale/wrong entries for removal too.
 
 ## Repos on disk — siblings under `/Users/nsimon/MyDocuments/TRUSK/`
@@ -85,6 +91,12 @@ gh pr checks <n> --repo trusk-official/<repo>
 gh run view <id> --repo trusk-official/<repo> --json conclusion --jq .conclusion
 gh run view <id> --repo … --log-failed | sed 's/\x1b\[[0-9;]*m//g' | grep -aE "✕|● |Tests:|error TS|prettier|Expected|Received"
 ```
+
+`strictNullChecks` is **off** in these repos, so `tsc --noEmit` passes on things that break
+at runtime (e.g. a test stub `mockResolvedValue(null)` against a `Promise<T[]>`). Only CI
+catches those — when you change a return type, grep the test stubs by hand. More, plus the
+per-repo merge methods (backoffice is **rebase-only**):
+[`notes/merge-and-ci-traps.md`](/Users/nsimon/MyDocuments/TRUSK/notes/merge-and-ci-traps.md).
 
 Match the run by headSha (its name is often `CI Workflow`, not the PR title). Draft PRs still run CI on push; editing a PR body does not. Wait for a fix's run with the Monitor pattern above.
 
@@ -212,6 +224,24 @@ const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER
 For out-of-band schema mutations, also insert the `<schema>._migrations` row (`{id,timestamp,name}`) so the next deploy's init container skips re-running it.
 
 ## nestjs-sql LockService = TypeORM pool deadlock under concurrency (TEC-105)
+
+`lockBuilder` holds advisory locks on a **dedicated pg pool** (default max 5/pod, override
+`POSTGRES_LOCK_POOL_MAX`; acquire timeout `POSTGRES_LOCK_ACQUIRE_TIMEOUT_MS`, and since
+11.9.2 the wait on the lock itself is bounded too, surfacing as SQLSTATE `55P03`).
+
+Two failure modes, **not** the same problem:
+
+- **Same key nested** = real deadlock. The inner take runs on a second connection and waits
+  on the lock the outer frame holds. **No pool size fixes it.** (IN-873.)
+- **Different keys nested** = capacity. Sizing rule: **pool >= prefetchCount x nesting
+  depth**. Below it, starvation triggers retries that re-trigger it — self-sustaining, and
+  **a restart does not clear it**. (IN-871.)
+
+Corollary: never hold a lock slot across a network call — 10 slots cluster-wide x a 10 s
+call inside = 1 locked op/sec, whatever the pool size.
+
+Full account, including the hoist-and-revalidate pattern and the sites still to audit:
+[`notes/advisory-locks.md`](/Users/nsimon/MyDocuments/TRUSK/notes/advisory-locks.md).
 
 Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
