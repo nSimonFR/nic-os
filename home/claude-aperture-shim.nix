@@ -20,7 +20,13 @@
 # interactive sessions depend on it, and the rpi5's headless services, the desktop
 # app and cron keep the wrapper's plain Aperture default.
 let
-  port = 8888;
+  # 18888, deliberately NOT 8888: that port is a busy default (Jupyter, and the
+  # Trusk bastion tunnels in home/dotfiles/zsh/trusk.zsh forward to it), and a
+  # permanently-held 8888 made `ssh -L8888` fail with "Address already in use"
+  # while silently swallowing every other tool's proxied traffic — the shim
+  # allow-lists api.anthropic.com, so anything else got a TLS handshake timeout.
+  # Keep it on a port nothing else wants.
+  port = 18888;
   stateDir = "${config.home.homeDirectory}/.claude-aperture-shim";
 
   # mitmdump generates the CA into confdir on first run; the shell functions probe
