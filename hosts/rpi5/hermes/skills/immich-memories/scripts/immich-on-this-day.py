@@ -187,7 +187,11 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     Returns the JSON-serialisable manifest dict consumed by Hermes.
     """
     total_memories = len(memories)
-    shown = sorted(memories, key=lambda m: len(m["assets"]), reverse=True)[:top]
+    # A gallery is a timeline, not a "largest memories first" sampler. Keep the
+    # on-this-day groups in chronological year order; within each group Immich's
+    # asset order is already chronological. The prior size sort yielded a 2024 →
+    # 2020 → 2025 sequence, which made the album jump back and forth in time.
+    shown = sorted(memories, key=lambda m: (parse_iso_z(m["memoryAt"]), m["id"]))[:top]
 
     # Self-cleaning: wipe + recreate so yesterday's photos never accumulate.
     shutil.rmtree(out_dir, ignore_errors=True)
@@ -216,8 +220,8 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     if total_memories:
         caption = f"📸 {french_date(datetime.now())}"
         if per_year:
-            # Newest year first — most recent memories read at the top.
-            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year, reverse=True))
+            # Match the visual gallery's oldest-to-newest timeline order.
+            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
     else:
         caption = ""
 
