@@ -1,6 +1,6 @@
 # Schema migrations
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: editing anything under `schema/migrations` · `42703 column does not exist` after a deploy · `_migrations` table · schema drift between envs
 
 ## Migration footgun — never add steps to an already-applied migration
 

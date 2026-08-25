@@ -1,6 +1,6 @@
 # Data & analytics MCPs — Steampipe and Metabase
 
-Split out of `../CLAUDE.md`, which loads into every Trusk session — this does not.
+Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase · `execute_query` · pMBQL
 
 ## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
 

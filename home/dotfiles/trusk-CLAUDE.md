@@ -2,24 +2,27 @@
 
 Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, services…). Per-project memory under `~/.claude/projects/<workdir>/memory/` adds local detail. **Source of truth:** `~/nic-os/home/dotfiles/trusk-CLAUDE.md` (home-manager symlinks it to this path) — edit there.
 
-**Deep notes** — situational detail, kept out of this file because it loads into *every*
-Trusk session. Source: `~/nic-os/home/dotfiles/trusk-notes/`, symlinked to `/Users/nsimon/MyDocuments/TRUSK/notes/`.
+**Deep notes** — situational detail, out of this file because this one loads into *every*
+session. Source `~/nic-os/home/dotfiles/trusk-notes/`, symlinked to `/Users/nsimon/MyDocuments/TRUSK/notes/`.
 
-| note | read it when |
+Rows below are **match triggers, not titles**: symptoms, error strings and commands you
+would actually be looking at. Open a note when the work in front of you hits its trigger.
+
+| open | triggers |
 | --- | --- |
-| [advisory-locks](/Users/nsimon/MyDocuments/TRUSK/notes/advisory-locks.md) | anything touches `lockBuilder`, or a service wedges under concurrency |
-| [metastable-staging](/Users/nsimon/MyDocuments/TRUSK/notes/metastable-staging.md) | **before** trusting any staging perf measurement |
-| [roundtrip-tour-size](/Users/nsimon/MyDocuments/TRUSK/notes/roundtrip-tour-size.md) | tour creation times out — the worked IN-871 example |
-| [merge-and-ci-traps](/Users/nsimon/MyDocuments/TRUSK/notes/merge-and-ci-traps.md) | `gh pr merge` refuses, or local tests disagree with CI |
-| [schema-migrations](/Users/nsimon/MyDocuments/TRUSK/notes/schema-migrations.md) | you are about to touch `schema/migrations` |
-| [state-status-mirrors](/Users/nsimon/MyDocuments/TRUSK/notes/state-status-mirrors.md) | a `state_label` / `state_detail` is wrong, or you wire a new consumer |
-| [client-libs-and-renovate](/Users/nsimon/MyDocuments/TRUSK/notes/client-libs-and-renovate.md) | consuming a not-yet-merged route, or a coordinated multi-service release |
-| [data-and-analytics-mcp](/Users/nsimon/MyDocuments/TRUSK/notes/data-and-analytics-mcp.md) | GCP inventory as SQL (Steampipe), or a warehouse query (Metabase) |
-| [argocd-operator-rbac](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-operator-rbac.md) | an operator-managed ClusterRoleBinding keeps reverting → 403 |
-| [legacy-trusk-api](/Users/nsimon/MyDocuments/TRUSK/notes/legacy-trusk-api.md) | making a legacy user see a given order set |
+| [advisory-locks](/Users/nsimon/MyDocuments/TRUSK/notes/advisory-locks.md) | `lockBuilder` · `advisory-lock pool saturated` · `timeout exceeded when trying to connect` · `55P03` · `POSTGRES_LOCK_POOL_MAX` · service wedged under concurrency · AMQP acks stopped |
+| [metastable-staging](/Users/nsimon/MyDocuments/TRUSK/notes/metastable-staging.md) | about to quote a staging latency/throughput number · restart did not fix it · retry storm · load test setup and cleanup · "is this a real limit?" |
+| [merge-and-ci-traps](/Users/nsimon/MyDocuments/TRUSK/notes/merge-and-ci-traps.md) | `gh pr merge` refused · "can't be rebased" · CI red but local green · `mockResolvedValue(null)` · peer-dep resolution · `-pr.` version pins |
+| [schema-migrations](/Users/nsimon/MyDocuments/TRUSK/notes/schema-migrations.md) | editing anything under `schema/migrations` · `42703 column does not exist` after deploy · `_migrations` table |
+| [state-status-mirrors](/Users/nsimon/MyDocuments/TRUSK/notes/state-status-mirrors.md) | `state_label` / `state_detail` wrong or stale · wiring a new `state.<ENTITY>.*` consumer · mirror drift |
+| [client-libs-and-renovate](/Users/nsimon/MyDocuments/TRUSK/notes/client-libs-and-renovate.md) | consuming a route not yet merged · `need client API` label · `renovate/release-to-*` · coordinated multi-service release |
+| [data-and-analytics-mcp](/Users/nsimon/MyDocuments/TRUSK/notes/data-and-analytics-mcp.md) | GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase |
+| [argocd-operator-rbac](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-operator-rbac.md) | ClusterRoleBinding subjects keep reverting · consumers 403 after an operator writes RBAC · `ignoreDifferences` |
+| [legacy-trusk-api](/Users/nsimon/MyDocuments/TRUSK/notes/legacy-trusk-api.md) | legacy user cannot see an order set · `trusk_customer` · `profile.truskCustomer` |
 
 A finding earns a note when it is longer than a paragraph, still true in six months, and
 not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
+Write notes for agents: triggers, commands, numbers. No narrative.
 
 > **Keep fresh.** When you learn something future sessions need (a kubectl pattern, operator quirk, permission grant, release gotcha), propose adding/updating an entry before the conversation ends — show the diff, get the OK, write to the nic-os source. Flag stale/wrong entries for removal too.
 
@@ -52,9 +55,11 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 | --- | --- | --- |
 | Swimlane | exactly one, from the `> SWIM LANES` group — the board keys on it | `BUG/RUN` `f3166fe6-b3c7-40c0-81f3-591b054f1566` · `TECH` `5274833e-40ae-43cc-83e7-0f1095a78ac6` · `GROOMED` `55c1f085-885d-44d7-b15d-bd16f130f390` |
 | Priority | `2` for a prod defect, `1` only for a live incident | 0 none · 1 urgent · 2 high · 3 medium · 4 low |
-| Estimate | `1` for a one-file fix | fibonacci, zero allowed, extended |
+| Estimate | **leave empty** — see below | fibonacci, zero allowed, extended |
 | Assignee | Nicolas | `803d1002-a245-4dc8-bcb0-a01d9b959c63` |
 | State | `Sprint Backlog` if slotted into a cycle, else `Backlog` | `99b3b72b-c364-4c52-80b5-a27c916f6a15` / `c1d1b450-41cc-4ed8-94c3-f3ad43e3c1a9` |
+
+**Never set an estimate, and never comment about one.** Points are a human's call — they feed velocity and sprint planning, so a number the agent invented is worse than no number: it looks like a commitment somebody made. File without one; when rescoping, leave the human's value alone even if the scope changed. Don't flag it as stale in a comment either — whoever grooms it re-reads the description anyway, and a note about points is process noise on a ticket that should carry findings. (Nicolas, 2026-08-25.)
 
 Leave the `PRODUCT - *`, `QA - *` and `TECH - Chapters` labels alone — product and QA own them.
 
@@ -173,27 +178,6 @@ const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER
 
 For out-of-band schema mutations, also insert the `<schema>._migrations` row (`{id,timestamp,name}`) so the next deploy's init container skips re-running it.
 
-## nestjs-sql LockService = TypeORM pool deadlock under concurrency (TEC-105)
-
-`lockBuilder` holds advisory locks on a **dedicated pg pool** (default max 5/pod, override
-`POSTGRES_LOCK_POOL_MAX`; acquire timeout `POSTGRES_LOCK_ACQUIRE_TIMEOUT_MS`, and since
-11.9.2 the wait on the lock itself is bounded too, surfacing as SQLSTATE `55P03`).
-
-Two failure modes, **not** the same problem:
-
-- **Same key nested** = real deadlock. The inner take runs on a second connection and waits
-  on the lock the outer frame holds. **No pool size fixes it.** (IN-873.)
-- **Different keys nested** = capacity. Sizing rule: **pool >= prefetchCount x nesting
-  depth**. Below it, starvation triggers retries that re-trigger it — self-sustaining, and
-  **a restart does not clear it**. (IN-871.)
-
-Corollary: never hold a lock slot across a network call — 10 slots cluster-wide x a 10 s
-call inside = 1 locked op/sec, whatever the pool size.
-
-Full account, including the hoist-and-revalidate pattern and the sites still to audit:
-[`notes/advisory-locks.md`](/Users/nsimon/MyDocuments/TRUSK/notes/advisory-locks.md).
-
-Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
 ## Quick verifications
 
@@ -207,6 +191,8 @@ kubectl --context trusk-staging-ts -n staging get cm <name> -o jsonpath='{.data}
 ```
 
 ## Prod access + debug gotchas
+
+- **Logs missing entirely?** Nest11 `nestjs-core` reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only. Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
 - **Auth: use ADC, never ask for `gcloud auth login`.** The *user* credential (`gcloud auth print-access-token`) routinely needs interactive reauth and dies non-interactively (`Reauthentication failed. cannot prompt during non-interactive execution`) — that is NOT a blocker and never a reason to hand the user a login command. `gcloud auth application-default login` is set up and long-lived, and gcloud honours it when passed explicitly. Export it once per Bash call (mint it OUTSIDE the proxy, then set the proxy vars) and both `proxy-prod`/`get-credentials` and kubectl work:
 

@@ -1,120 +1,95 @@
-# Advisory locks (`@trusk-official/nestjs-sql` `LockService`)
+# Advisory locks — `@trusk-official/nestjs-sql` `LockService`
 
-Applies to every service using `lockBuilder`. Learned the hard way over IN-871 / IN-873
-(2026-08). The one-paragraph version lives in `../CLAUDE.md`; this is the full account.
+Triggers: `lockBuilder` · `advisory-lock pool saturated` · `timeout exceeded when trying to
+connect` · `55P03` · `POSTGRES_LOCK_POOL_MAX` · service wedged under concurrency · AMQP acks
+at 0.
 
-## How it works
+## Mechanics
 
-`lockBuilder(key, fn)` takes `pg_advisory_lock(hashtext(prefix:key))` on a **dedicated pg
-pool**, separate from TypeORM's. That separation is deliberate — the original design took
-the lock on a `QueryRunner` from the *same* pool, so under concurrency every connection
-ended up parked holding a lock while the guarded work waited for a connection that would
-never free. Observed in prod (state-status, 2026-06-15): 10 idle connections per pod, all
-on `SELECT pg_advisory_lock(...)`, AMQP ack rate 0.
+`lockBuilder(key, fn)` → `pg_advisory_lock(hashtext(prefix:key))` on a **dedicated pg pool**,
+separate from TypeORM's.
 
-- Default pool max: **5 per pod**. Override: **`POSTGRES_LOCK_POOL_MAX`**.
-- Acquire timeout: `POSTGRES_LOCK_ACQUIRE_TIMEOUT_MS`, default 10 s.
-- Since 11.9.2 the lock pool is opened with `options: -c lock_timeout=<acquireTimeoutMs>`,
-  so a *wait on the lock itself* is bounded too and surfaces as SQLSTATE **`55P03`**.
-  Before that, `connectionTimeoutMillis` guarded only `pool.connect()`, never the
-  `SELECT pg_advisory_lock(...)` — which is why a nested same-key take hung forever.
+| knob | default |
+| --- | --- |
+| `POSTGRES_LOCK_POOL_MAX` | 5 **per pod** |
+| `POSTGRES_LOCK_ACQUIRE_TIMEOUT_MS` | 10 s |
+| `-c lock_timeout` on the lock pool | = acquire timeout, since 11.9.2 → `55P03` |
 
-## Two failure modes, and they are NOT the same problem
+Why a separate pool: taking the lock on a `QueryRunner` from the *same* pool means every
+connection ends up parked holding a lock while the guarded work waits for a connection that
+never frees. Prod, state-status, 2026-06-15: 10 idle connections/pod all on
+`SELECT pg_advisory_lock(...)`, ack rate 0.
 
-### Same key nested = deadlock. No pool size fixes it.
+## Two failure modes — different problems
 
-The inner take runs on a **second connection** and waits on the lock the outer frame
-holds; the outer frame waits on the inner to return. Circular wait, and no pool size
-fixes it — a pool of 1000 just parks 1000 connections.
+### Same key nested → deadlock. No pool size fixes it.
 
-**What you will actually see depends on the library version**, and it matters for
-diagnosis:
+Inner take runs on a second connection, waits on the lock the outer frame holds; outer waits
+on inner. Circular. Pool of 1000 → 1000 parked connections.
 
-- **Before nestjs-sql 11.9.2**, nothing bounded the inner `SELECT pg_advisory_lock(...)`.
-  Each execution parked two slots **permanently** and never returned. Signature: ancient
-  locks held by idle connections, ack rate 0.
-- **From 11.9.2**, `lock_timeout` bounds that wait, so the inner take fails with `55P03`
-  after the acquire timeout. The bug is unchanged and every execution still fails — but the
-  signature is now **recurring timeout-and-retry churn with young lock ages**, not an
-  indefinite hang. Look for the retry rate, not for old locks.
+Symptom depends on version:
 
-Real case: `createFromOrderMission` wrapped `this.delete(id)` in
-``lockBuilder(`mission:${id}`)`` and `delete` takes that same key itself. Byte-identical,
-nested. Reached on ordinary traffic (a log_order deleted or cancelled while its mission
-exists). Introduced by a copy-paste onto a call that already locked.
+| version | symptom to look for |
+| --- | --- |
+| < 11.9.2 | two slots frozen **permanently**; old locks on `idle` connections; ack rate 0 |
+| ≥ 11.9.2 | inner take fails `55P03` after the acquire timeout → **retry churn, young lock ages**. Bug identical, every execution still fails. |
 
-- [IN-873](https://linear.app/trusk/issue/IN-873) — closed, shipped in order-mission 1.54.1
-- [order-mission#252](https://github.com/trusk-official/order-mission/pull/252)
+Case: `createFromOrderMission` wrapped `this.delete(id)` in ``lockBuilder(`mission:${id}`)``;
+`delete` takes the same key. Triggered by ordinary traffic (log_order deleted/cancelled while
+its mission exists). [IN-873](https://linear.app/trusk/issue/IN-873) ·
+[order-mission#252](https://github.com/trusk-official/order-mission/pull/252) · fixed in 1.54.1.
 
-### Different keys nested = capacity. Sizing fixes it.
-
-Both locks *can* coexist given enough connections. The rule:
+### Different keys nested → capacity. Sizing fixes it.
 
 > **pool ≥ prefetchCount × nesting depth**
 
-order-mission's AMQP handlers take `orderMission:<id>`, then `createFromOrderMission`
-takes `mission:<id>` — depth 2 — with `prefetchCount: 5` in `app.module.ts`. So five
-concurrent messages occupy the whole default pool of 5 with their *outer* lock alone, and
-the inner one asks for a sixth connection that does not exist.
+order-mission: handlers take `orderMission:<id>` → `createFromOrderMission` takes
+`mission:<id>` (depth 2), `prefetchCount: 5` → minimum 10, default was 5.
 
-The failure then feeds itself: job fails → retried (**up to 100×**) → each retry asks for
-a lock again. **A full restart does not clear it** — measured in staging, the pool climbed
-back to 10/10 within five minutes of a `rollout restart` and stayed pinned, with no test
-running. See [`metastable-staging.md`](./metastable-staging.md).
+Self-sustaining: starvation → job fails → retried (**up to 100×**) → each retry asks for a
+lock again. **A restart does not clear it** — measured: pool back to 10/10 within 5 min of
+`rollout restart`, no test running.
 
-Proven in both directions in staging (2026-08-24): at pool 5, permanent saturation; pool
-raised, **0 saturation errors over 1078 log lines**.
+Measured both directions, staging 2026-08-24: pool 5 → permanent saturation; pool raised →
+**0 saturation errors / 1078 log lines**.
+[IN-871](https://linear.app/trusk/issue/IN-871) ·
+[order-mission#256](https://github.com/trusk-official/order-mission/pull/256) sets
+`POSTGRES_LOCK_POOL_MAX=15`.
 
-- [IN-871](https://linear.app/trusk/issue/IN-871)
-- [order-mission#256](https://github.com/trusk-official/order-mission/pull/256) — sets
-  `POSTGRES_LOCK_POOL_MAX=15` in staging/preprod/production charts
+## No network calls inside a lock
 
-## Never hold a lock slot across a network call
+10 slots cluster-wide × 10 s HTTP call inside = **1 locked op/sec**, whatever the pool size.
 
-10 slots cluster-wide (2 pods × 5) × a 10 s HTTP call inside the critical section = **one
-locked operation per second**, whatever the pool size. The lock's capacity becomes hostage
-to a third party's latency.
+Rule: inside the lock, local state transitions only. Remote **reads** hoisted + re-validated.
+Remote **writes** moved out.
 
-The rule that actually works:
+- Remote read feeding the serialized decision → hoist + re-validate under the lock, fetch
+  only on mismatch. Reference: `mission.service.update`'s `prefetchAvailability` (carries the
+  id the fetch was made for, so the critical section can detect a stale prefetch).
+- Remote write → never atomic with the DB write anyway. Out, with idempotency/compensation.
 
-> Inside the lock, only local state transitions. Every remote **read** is hoisted and
-> re-validated. Every remote **write** moves out.
-
-You cannot blanket-hoist. Two cases:
-
-- **Remote read feeding the serialized decision.** Hoisting it raw creates a TOCTOU. Hoist
-  + re-validate under the lock, falling back to a fetch only on mismatch. Reference
-  implementation: `mission.service.update`'s `prefetchAvailability` — it carries the id the
-  fetch was made for, so the critical section can tell whether the prefetch still matches
-  the locked row.
-- **Remote write.** It can never be atomic with the DB write anyway; the lock gives an
-  illusion of atomicity it cannot deliver. Move it out, with idempotency or compensation.
-
-Still outstanding as of 2026-08-25: `upsertTruskOrder` makes **3 outbound calls under
-`orderMission:<id>`** (centiro `getOrder`, trusk-api, interop `getContract`), and
-`createFromOrderMission` calls `getCustomerId` there too.
-[IN-878](https://linear.app/trusk/issue/IN-878) covers the same defect in
+Outstanding 2026-08-25: `upsertTruskOrder` makes 3 outbound calls under `orderMission:<id>`
+(centiro `getOrder`, trusk-api, interop `getContract`); `createFromOrderMission` calls
+`getCustomerId` there too. [IN-878](https://linear.app/trusk/issue/IN-878) = same defect in
 `mission-reset.reset()`.
 
-## Known lock sites worth auditing
+## Sites to audit
 
-- `trusk-api/assignation.js:162-170` calls `syncAssignedOrder(...)` **without
-  `await`/`return`**, so the lock releases before the guarded work starts. One-word fix,
-  verified in source, not yet ticketed.
-- centiro ADR-002 documents an already-fixed defective key as accepted design — misleading
-  to a future reader.
+- `trusk-api/assignation.js:162-170` — `syncAssignedOrder(...)` called without
+  `await`/`return`, so the lock releases before the guarded work starts. Verified in source,
+  unticketed.
+- centiro ADR-002 documents an already-fixed defective key as accepted design.
 
-## Library helpers
+## Helpers
 
-`withEntityLock` / `tryEntityLock` (nestjs-sql 11.10.0,
+`withEntityLock` / `tryEntityLock` (11.10.0,
 [trusk-lib#886](https://github.com/trusk-official/trusk-lib/pull/886)) take the lock on the
-caller's `EntityManager` via `opts.manager` — one connection instead of two. Prefer them
-when the guarded work is already inside a transaction.
+caller's `EntityManager` via `opts.manager` — one connection, not two. Prefer when the
+guarded work is already in a transaction.
 
-## Diagnosing
+## Diagnose
 
 ```sql
--- who holds advisory locks, and for how long
 select a.application_name, a.state, count(*),
        max(round(extract(epoch from now() - a.state_change))) oldest_s
   from pg_locks l join pg_stat_activity a using(pid)
@@ -122,6 +97,4 @@ select a.application_name, a.state, count(*),
  group by 1, 2 order by 3 desc;
 ```
 
-`<service>-locks` pinned at its max = saturated. Young ages (a few seconds) mean churn, not
-a stuck lock — that is the retry storm, not a deadlock. Old ages on an `idle` connection
-mean a genuine hang.
+`<service>-locks` at its max = saturated. Young ages = retry churn. Old ages on `idle` = hang.
