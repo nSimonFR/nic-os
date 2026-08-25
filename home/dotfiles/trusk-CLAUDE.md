@@ -2,11 +2,24 @@
 
 Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, services…). Per-project memory under `~/.claude/projects/<workdir>/memory/` adds local detail. **Source of truth:** `~/nic-os/home/dotfiles/trusk-CLAUDE.md` (home-manager symlinks it to this path) — edit there.
 
-**Deep notes:** `~/MyDocuments/TRUSK/notes/` (source: `~/nic-os/home/dotfiles/trusk-notes/`)
-holds the long-form findings that do not fit here — advisory locks, metastable staging,
-the IN-871 tour-size chase, merge/CI traps. Start at
-[`notes/README.md`](/Users/nsimon/MyDocuments/TRUSK/notes/README.md). This file stays short
-because it loads into every Trusk session; those load only when you open them.
+**Deep notes** — situational detail, kept out of this file because it loads into *every*
+Trusk session. Source: `~/nic-os/home/dotfiles/trusk-notes/`, symlinked to `/Users/nsimon/MyDocuments/TRUSK/notes/`.
+
+| note | read it when |
+| --- | --- |
+| [advisory-locks](/Users/nsimon/MyDocuments/TRUSK/notes/advisory-locks.md) | anything touches `lockBuilder`, or a service wedges under concurrency |
+| [metastable-staging](/Users/nsimon/MyDocuments/TRUSK/notes/metastable-staging.md) | **before** trusting any staging perf measurement |
+| [roundtrip-tour-size](/Users/nsimon/MyDocuments/TRUSK/notes/roundtrip-tour-size.md) | tour creation times out — the worked IN-871 example |
+| [merge-and-ci-traps](/Users/nsimon/MyDocuments/TRUSK/notes/merge-and-ci-traps.md) | `gh pr merge` refuses, or local tests disagree with CI |
+| [schema-migrations](/Users/nsimon/MyDocuments/TRUSK/notes/schema-migrations.md) | you are about to touch `schema/migrations` |
+| [state-status-mirrors](/Users/nsimon/MyDocuments/TRUSK/notes/state-status-mirrors.md) | a `state_label` / `state_detail` is wrong, or you wire a new consumer |
+| [client-libs-and-renovate](/Users/nsimon/MyDocuments/TRUSK/notes/client-libs-and-renovate.md) | consuming a not-yet-merged route, or a coordinated multi-service release |
+| [data-and-analytics-mcp](/Users/nsimon/MyDocuments/TRUSK/notes/data-and-analytics-mcp.md) | GCP inventory as SQL (Steampipe), or a warehouse query (Metabase) |
+| [argocd-operator-rbac](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-operator-rbac.md) | an operator-managed ClusterRoleBinding keeps reverting → 403 |
+| [legacy-trusk-api](/Users/nsimon/MyDocuments/TRUSK/notes/legacy-trusk-api.md) | making a legacy user see a given order set |
+
+A finding earns a note when it is longer than a paragraph, still true in six months, and
+not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
 
 > **Keep fresh.** When you learn something future sessions need (a kubectl pattern, operator quirk, permission grant, release gotcha), propose adding/updating an entry before the conversation ends — show the diff, get the OK, write to the nic-os source. Flag stale/wrong entries for removal too.
 
@@ -46,21 +59,6 @@ The active `GH_TOKEN` is the personal account `nSimonFR-ai`, which **can't see t
 Leave the `PRODUCT - *`, `QA - *` and `TECH - Chapters` labels alone — product and QA own them.
 
 Two traps: a shipped ticket ends at **`In Production`** (`7dc6b655-09d0-41f9-9a25-9df31bd448cc`), not `To Release` — both are `completed`-typed. And `cycles(filter:{isFuture:{eq:true}})` returns cycles **descending**, so next cycle = lowest `number`, not `nodes[0]`.
-
-## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
-
-`trusk-steampipe` = query **GCP as live SQL**. Only the `turbot/gcp` plugin is installed, so it's for Google Cloud inventory/IAM/audit introspection — `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster / gcp_service_account …`, read-only, hits the real GCP API per query (nothing cached). Use it instead of `gcloud … | jq` for cross-resource GCP questions. It's **not** fronted by the ToolHive proxy (no GCP there; `dbhub` is real-database-only) — kept as its own MCP.
-
-## Metabase — query via the `metabase` MCP (not the old cookie skill)
-
-Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__metabase__*`, OAuth — first call → `authenticate` returns a browser URL to approve). Replaced the retired cookie `metabase` skill; wired in nic-os `home/mcp.nix` + allowlisted in `claude-settings.json`.
-
-- Endpoint is **`/api/mcp`** (docs' `/api/metabase-mcp` 404s on v0.61.2.10). Warehouse = **database id 6**.
-- Flow: `search` → `get_table {with-fields:true}` → `construct_query`/`query` → `execute_query` → `create_question`. `execute_query` caps at **200 rows** (saved cards show all). `create_question` `collection_id:null` → root "Our analytics" (no collection-lookup tool; move in UI). Link: `metabase.trusk.com/question/<id>`.
-- **Joins are unbuildable via `construct_query`** (`String cannot be cast to Associative`). Workaround — save any SQL (incl. joins) as a question by hand-crafting the base64 `query` as a native pMBQL stage, then pass to `execute_query`/`create_question`:
-  ```bash
-  jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
-  ```
 
 ## ToolHive (`toolhive-tech`) — the MCP proxy, and what it fronts
 
@@ -124,23 +122,6 @@ kubectl --context trusk-staging-ts -n staging logs <pod> --previous
 
 `10.106.0.3` (corp VPN). One DB+role per service; creds in `deployment/configurations/staging/secrets/` (sops). `PGPASSWORD='<secret>' psql -h 10.106.0.3 -U <service> -d <service_db>`.
 
-## Legacy users (trusk-api) — PF Pro order visibility
-
-Users/organisations live in PG (`trusk_api`, schema `trusk`). Nicolas' staging user id is literally `nicos`.
-
-PF Pro visibility = `trusk.users.trusk_customer` (read as `profile.truskCustomer`), matched against the mission's `customer_id`. To show a user a given order set, set it to that set's `mission.customer_id` — **mono-valued, it REPLACES the previous one**, and needs a re-login. Backoffice scoping is elsewhere: IAM's `contract_ids`/`shipment_site_ids`.
-
-```sql
--- 1. target customer of the order set (order-mission DB)
-SELECT DISTINCT m.customer_id FROM journey_trusk_order.order_mission om
-  JOIN journey_trusk_order.mission m ON m.id = om.trusk_order_id
- WHERE om.log_order = ANY('{oKyRwdU20,Vhm82mz4j}') AND om.active;
--- 2. note the old value, then swap (trusk_api DB) — psql absent from the image,
---    run via the in-image `pg` driver: kubectl exec <trusk-api pod> -c trusk-api -- node -e '...'
-SELECT id, email, trusk_customer FROM trusk.users WHERE id = 'nicos';
-UPDATE trusk.users SET trusk_customer = '<customer_id>', updated_at = now() WHERE id = 'nicos';
-```
-
 ## Conventional commits → semantic-release
 
 `@trusk-official/config-release` releaseRules come from the `type-enum` in config-commitlint. Valid PascalCase scopes: **`Feature, Fix, Docs, Style, Refactor, Test, Chore`** — `Feature`/`Refactor` → minor, rest → patch. The Angular preset also adds lowercase `feat`→minor, `fix`→patch, `BREAKING CHANGE`→major.
@@ -148,15 +129,6 @@ UPDATE trusk.users SET trusk_customer = '<customer_id>', updated_at = now() WHER
 - **`Perf:` cuts NO release** (not in the list, not in the Angular preset) — same for any type outside the seven. Use `Fix:`/`Feature:`/lowercase `fix:` to force a bump. (Verified on fleet 2026-06-04.)
 - **No Linear prefix** on commit messages _or PR titles_ unless asked — plain `Type(Scope): desc`. Repos squash-merge, so a PR title like `IN-625 Perf(…)` becomes the master commit and semantic-release can't parse it → no release, no deploy. Strip `IN-`/`EXTERN-`/`DO-` from PR titles before merge.
 - **Link a PR to its Linear issue via the PR body, not the title/branch.** Put `Closes IN-XXX` (or `Fixes IN-XXX`) at the **top of the PR description** — the Linear↔GitHub integration auto-attaches the PR to the issue and advances its status on merge. Keeps the title clean (above rule) while still wiring the ticket. No need to touch Linear by hand.
-
-## Generating a service's `-client` / `-query` lib (consume a new route)
-
-Each service publishes `@trusk-official/api-<service>-client` (raw fns, backend↔backend) and `@trusk-official/api-<service>-query` (TanStack-Query hooks, used by the backoffice) from its OpenAPI spec, via `orval-client-generator` + the reusable `generate-apiclient.yaml`. Two service workflows:
-
-- `generate-apiclient.yaml` (`on: push: tags`) → real versioned client+query on every release tag.
-- `generate-PR-apiclient.yaml` (`on: pull_request`, gated by the **`need client API`** label) → prerelease `<ver>-pr.<PR#>.<run>.<attempt>`.
-
-Use a not-yet-merged route in the backoffice: (1) `gh pr edit <PR#> --add-label "need client API"` on the service repo. **Gotcha:** the workflow triggers on `pull_request` **push** events, NOT `labeled` — labelling alone leaves the job `skipped`; after labelling, **push a commit** (`git commit --allow-empty && git push`) or reopen the PR to fire a run. Label case doesn't matter (`contains()` is case-insensitive). (2) wait for "Generate PR client", read the version via `npm view @trusk-official/api-<service>-query versions --json | tail`; (3) bump the dep to that `-pr.*` version + `npm install`; (4) import the orval hook (`use<Tag><Method>`, e.g. `Mission`/`resync` → `useMissionResync`). After merge, bump to the clean released version.
 
 ## Code style — brace every `if`
 
@@ -166,28 +138,6 @@ Always brace `if` bodies, even one-liners. No `if (cond) doThing();`. All Trusk 
 
 `targetRevision` doesn't auto-bump after a release. **Push directly to `master`** (Nicolas 2026-06-03: PRs are needless churn + branch protection blocks non-admin merges anyway). Message: `Chore(Staging): bump <service> to <version>` / `Chore(Production): …`; diff is one line in `applications/<env>.yaml`. If a PR was already opened: `gh pr merge <n> --rebase --delete-branch --admin` (squash disabled here).
 
-### release-to-\<env\> — Renovate batch PRs (for a coordinated multi-service release)
-
-For a whole batch (not a one-off bump), Renovate keeps three long-lived **grouped** PRs, one per env, that bump every service's `targetRevision` to its newest **git tag**: branches `renovate/release-to-staging` (`applications/staging.yaml`), `renovate/release-to-preprod`, `renovate/release-to-production`. Author is the hosted **`app/renovate`** GitHub App — **there is NO in-repo renovate workflow** to dispatch. Config = `renovate.json` (customManagers regex on `repoURL`+`targetRevision`; staging/preprod use datasource `git-tags`, production uses `custom.localstaging` so prod can only go to the rev already on staging). Reviewers: staging/preprod = `chapter_qa`+`team_product`, prod = `managers`+`team_product`. So: service releases → new tag → next Renovate scan folds it into that env's PR. PR number isn't stable (Renovate can recreate) — find it by branch, e.g. `gh pr list --repo trusk-official/trusk-applications --head renovate/release-to-staging`.
-
-**Refresh now (don't wait for Renovate's schedule)** = tick the rebase checkbox in the PR body (`- [ ] <!-- rebase-check -->` → `- [x]`); Renovate rebases onto master + refreshes the diff within ~1-3 min (its own commit):
-
-```bash
-unset GH_TOKEN && cd ~/MyDocuments/TRUSK/trusk-applications
-PR=$(gh pr list --repo trusk-official/trusk-applications --head renovate/release-to-staging --json number --jq '.[0].number')
-gh pr view "$PR" --repo trusk-official/trusk-applications --json body --jq .body \
- | sed 's/- \[ \] <!-- rebase-check -->/- [x] <!-- rebase-check -->/' \
- | gh pr edit "$PR" --repo trusk-official/trusk-applications --body-file -
-# then poll until app/renovate pushes a fresh commit, re-read `gh pr diff "$PR"`
-```
-
-Only refresh **after** the services you want have actually released (their tags exist) — a service whose tag isn't cut yet simply won't appear in the diff. Then admin-merge (`gh pr merge "$PR" --repo … --rebase --admin` — squash disabled here). Merging = ArgoCD reconciles those services to the new revs on the next sweep.
-
-**Sync windows gate the actual rollout — staging/preprod only.** The staging/preprod AppProjects carry ArgoCD **sync windows** (deny weekdays 20:00–07:00 + **all weekend** Sat 07:00→Mon 07:00 Europe/Paris; allow weekdays 07:00–20:00). **Prod has NO deny window** (AppProject window = `allow */* * * *`, `automated{selfHeal:true}` on `production-gitops` + child apps) → a `production.yaml` bump auto-deploys immediately, no manual sync / window wait (verified 2026-07). Outside the allow window, merging the renovate PR changes nothing until it opens — `staging-gitops` sits `OutOfSync` with `operationState.message = "Sync operation blocked by sync window"`, and the child `<svc>-staging` apps keep the old `targetRevision`. `manualSync:true` permits manual overrides, but a raw `kubectl patch application … -p '{"operation":{"sync":{…}}}'` is **not** treated as manual and stays blocked — force it via the ArgoCD **UI** (`staging-argocd.trusk.com`) or `argocd app sync`, else just wait for the window. Independently, staging is **downscaled to 0 replicas off-hours** (a `downscaling-staging` app), so off-hours a service is both un-synced and scaled to 0. `state-status-staging` is an app-of-apps child rendered by `staging-gitops` (targetRevision comes from staging.yaml as a param), so the **parent** must sync first to propagate a bump.
-
-## Migration footgun — never add steps to an already-applied migration
-
-TypeORM/knex track migrations by name+timestamp. If a migration already ran (its row is in `_migrations`) and you later **add steps to that same file**, every env that recorded it **skips the new steps** → silent schema drift. Real case (state-status, 2026-07): the `label→status_label` / `detail→status_detail` rename was folded into the already-run `1782` split-drop-code migration. Staging had run 1782 **pre-rename** (the manual "run the migration in staging" step during review) → the 1.33.x redeploy saw 1782 in `_migrations` and skipped it → columns stayed `label`/`detail` while the entity mapped `status_label`/`status_detail` → **every write threw `42703 column status_label does not exist`** (TypeORM's post-insert entity reload). CI didn't catch it (CI builds the schema fresh from the full current migration; only envs with the stale recorded row drift). **Fix = a NEW idempotent migration** (rename only `IF EXISTS old_col AND NOT EXISTS new_col`, via a `DO $$ … $$` block) — never re-edit the applied one. Prod is safe if it never ran the intermediate version (it runs the complete migration once); the idempotent follow-up protects both.
 
 ## kubectl contexts
 
@@ -245,10 +195,6 @@ Full account, including the hoist-and-revalidate pattern and the sites still to 
 
 Related (same day): the Nest11 `nestjs-core` logger reads `LOGGER_LEVEL` (default `error`) and ignores the legacy `LOG_LEVEL` still in the infra-env configmap → migrated services log error-only (Datadog still works). Fix = add `LOGGER_LEVEL` to infra-env configmaps (TEC-104).
 
-## ArgoCD selfHeal + operator-managed RBAC = drift trap
-
-When an operator appends ServiceAccount subjects to a ClusterRoleBinding at runtime (cert-manager, Velero, etc.), `selfHeal: true` reverts the additions as drift → consumers 403. Fix = `ignoreDifferences` on `/subjects` for that binding (pattern in trusk-k8s#1191). Apply preemptively for any new RBAC-self-managing operator.
-
 ## Quick verifications
 
 ```bash
@@ -275,13 +221,3 @@ kubectl --context trusk-staging-ts -n staging get cm <name> -o jsonpath='{.data}
 - **proxy-prod socket goes stale**: the socket file lingers but the tunnel dies (`connection refused`). Test with a real `kubectl get ns`, not socket existence; re-run `zsh -ic 'proxy-prod'` if refused.
 - **`kubectl logs --since=60m` truncates** on verbose services (undercounts massively) → use short windows (`--since=15m`) or Datadog for reliable counts.
 - **Temp per-service debug** (LOGGER_LEVEL & LOG_LEVEL live in the SHARED `infra-env` cm, both read; editing it floods every service): override on the deployment + stop selfHeal from reverting it — `kubectl -n argocd patch application <svc>-production --type merge -p '{"spec":{"syncPolicy":{"automated":{"selfHeal":false}}}}'` → `kubectl -n production set env deploy/<svc> LOGGER_LEVEL=debug LOG_LEVEL=debug` → capture → revert (`set env … LOGGER_LEVEL- LOG_LEVEL-` + selfHeal:true).
-
-## state-status ↔ consumer state mirrors (2026-07)
-
-Each consumer keeps a local `state_label`/`state_detail` mirror, synced by consuming `state.<ENTITY>.*` off exchange `state-status` (`OrderStateSyncService` centiro, `Mission`/`OrderMissionStateSyncService` order-mission, `RoundtripStateSyncService` roundtrip). Prod mirror tables (DB `trusk`, id = state-status `entity_id`): `ikea_orders.log_order` (ORDER), `journey_trusk_order.order_mission` (ORDERMISSION) / `.mission` (MISSION), `roundtrip.roundtrip` (ROUNDTRIP).
-
-- **Sync-back re-reads, never trusts the event payload.** Consumer must call `StatusFindByEntityid(entity,id)` (HTTP `GET /status/{entity}/{entityId}`, states `date DESC`; `.find(isState)`=latest) — writing `payload.statusLabel/statusDetail` verbatim clobbers under out-of-order delivery. Client base-URL defaults from `TRUSK_STATE_STATUS_API_URL || STATE_STATUS_API_URL`.
-- **AND wrap a per-entity lock** (`lockService.lockBuilder(`<ent>:${id}`,…)`); fetch-latest alone still races. ORDERMISSION shipped without it → drift (fixed 1.46.2).
-- **state-status publish**: `createStateForEntity` always publishes `StatusEvent` (no guard), routing `${isState?'state':'status'}.${entity}.${entityId}`; save-then-publish, no wrapping tx (committed before publish).
-- **Cross-schema reconcile**: state-status DB role READs every schema but WRITEs only its own → joined UPDATE from the state-status pod fails `permission denied`; write each mirror from its **owning service's pod** (in-image `pg` driver).
-- **Residual drift under burst**: even with lock+fetch, a small % of roundtrip mirrors drift during peak routing (load race); self-heals on next event, settled ones need a reconcile sweep (mirror ← state-status latest, bounded to the buggy window, SETTLED-only >5min).
