@@ -187,11 +187,11 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
     Returns the JSON-serialisable manifest dict consumed by Hermes.
     """
     total_memories = len(memories)
-    # A gallery is a timeline, not a "largest memories first" sampler. Keep the
-    # on-this-day groups in chronological year order; within each group Immich's
-    # asset order is already chronological. The prior size sort yielded a 2024 →
-    # 2020 → 2025 sequence, which made the album jump back and forth in time.
-    shown = sorted(memories, key=lambda m: (parse_iso_z(m["memoryAt"]), m["id"]))[:top]
+    # Preserve --top's largest-memory selection, which is shared with text and
+    # JSON modes. Only then arrange that chosen subset as a timeline: chronological
+    # memory groups and Immich's chronological asset order within each group.
+    selected = sorted(memories, key=lambda m: len(m["assets"]), reverse=True)[:top]
+    shown = sorted(selected, key=lambda m: (parse_iso_z(m["memoryAt"]), m["id"]))
 
     # Self-cleaning: wipe + recreate so yesterday's photos never accumulate.
     shutil.rmtree(out_dir, ignore_errors=True)

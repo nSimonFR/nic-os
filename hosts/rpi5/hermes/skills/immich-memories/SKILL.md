@@ -68,9 +68,9 @@ day?" text answer when the user does not want the photos sent.
 - The caption is two lines: 📸 + today's date in French on line 1, then each year
   with its photo count in the gallery's chronological order on line 2 — e.g.
   `📸 11 juin 2026` / `2006 (2), 2023 (1), 2025 (1)`.
-- The gallery is chronological: memory groups run from oldest year to newest and
-  photos retain Immich's chronological order within each group. It is a timeline,
-  not a largest-memory-first sampler.
+- `--top` first selects the same largest-memory subset used by text/JSON modes;
+  the gallery then orders that subset from oldest year to newest. Photos retain
+  Immich's chronological order within each group.
 - Volume is bounded: top 3 memories, ≤ 4 photos each, **10 max**; videos are skipped.
   Don't raise the caps unless the user asks.
 - The download dir (`<tmp>/immich-on-this-day`) is wiped at the start of every run,
