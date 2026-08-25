@@ -198,6 +198,11 @@ in
     # and this gate did nothing. Removed there; this is now the only definition.
     "MyDocuments/TRUSK/CLAUDE.md".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
+
+    # Long-form companions to the file above, linked from it and read on demand — they do
+    # NOT load into every session. Same out-of-store symlink so both paths stay editable.
+    "MyDocuments/TRUSK/notes".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-notes";
   };
 
 }
