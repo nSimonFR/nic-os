@@ -42,6 +42,7 @@ class Job:
     team: str = ""
     url: str = ""
     source_url: str = ""
+    description: str = ""
 
     @property
     def key(self) -> str:
@@ -85,11 +86,32 @@ def textify(raw: str) -> str:
     return raw.strip()
 
 
-def is_relevant(job: Job, keywords: list[str], locations: list[str]) -> bool:
+MANAGEMENT_RE = re.compile(
+    r"\b(?:engineering\s+manager|engineer(?:ing)?\s+manager|manager|"
+    r"head(?:\s+of)?|director|vice\s+president|vp\.?|chief|lead)\b",
+    re.I,
+)
+
+
+def is_senior_or_management(job: Job, minimum_years: int) -> bool:
+    """Only alert on explicit management or a stated experience threshold.
+
+    Job-board list APIs usually omit full descriptions. Do not infer years from
+    title seniority (e.g. Staff/Principal): without stated years it is excluded.
+    """
+    # Management must describe the role, not merely appear in its requirements.
+    if MANAGEMENT_RE.search(" ".join([job.title, job.team])):
+        return True
+    blob = " ".join([job.title, job.location, job.team, job.description])
+    years = re.findall(r"\b(\d{1,2})\s*\+?\s*(?:years?|yrs?)\b", blob, re.I)
+    return any(int(value) >= minimum_years for value in years)
+
+
+def is_relevant(job: Job, keywords: list[str], locations: list[str], minimum_years: int) -> bool:
     blob = norm(" ".join([job.title, job.location, job.team]))
     kw_ok = any(k.lower() in blob for k in keywords)
     loc_ok = not job.location or any(l.lower() in blob for l in locations)
-    return kw_ok and loc_ok
+    return kw_ok and loc_ok and is_senior_or_management(job, minimum_years)
 
 
 def ashby(source: dict[str, Any]) -> list[Job]:
@@ -106,6 +128,7 @@ def ashby(source: dict[str, Any]) -> list[Job]:
             team=j.get("team") or j.get("department") or "",
             url=j.get("jobUrl") or source["url"],
             source_url=source["url"],
+            description=textify(j.get("descriptionPlain") or j.get("descriptionHtml") or ""),
         ))
     return out
 
@@ -260,6 +283,7 @@ def main() -> int:
     cfg = json.loads(CONFIG.read_text())
     keywords = cfg.get("profile", {}).get("keywords", [])
     locations = cfg.get("profile", {}).get("locations", [])
+    minimum_years = int(cfg.get("profile", {}).get("minimum_years_experience", 8))
     seen = load_seen()
     next_seen = set(seen)
 
@@ -277,7 +301,7 @@ def main() -> int:
         name = source.get("name", source.get("url", "unknown"))
         try:
             jobs = handlers[source.get("type", "generic_page")](source)
-            jobs = [j for j in dedupe(jobs) if is_relevant(j, keywords, locations)]
+            jobs = [j for j in dedupe(jobs) if is_relevant(j, keywords, locations, minimum_years)]
             if only_new:
                 fresh = [j for j in jobs if j.key not in seen]
             else:
