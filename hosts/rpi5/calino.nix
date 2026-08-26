@@ -7,10 +7,11 @@
 # Dexie/IndexedDB.
 #
 # So there is NO systemd unit here. This module is one nginx vhost on
-# 127.0.0.1:<internalPort> that does two things:
+# 127.0.0.1:<internalPort> that does three things:
 #
 #   /                            → static files from the nix store (SPA)
 #   /nextcloud/remote.php/dav/   → 127.0.0.1:8091 (Nextcloud's DAV endpoint)
+#   /gcal/                       → calendar.google.com's ICS endpoint
 #
 # ⚠ WHY CALINO IS NOT ON THE 443 PATH-MUX. It cannot live at a sub-path: App.tsx
 #   mounts <BrowserRouter> with no `basename`, every route (/month, /week,
@@ -164,6 +165,54 @@ in
           proxy_buffering off;
           proxy_read_timeout 300s;
           proxy_send_timeout 300s;
+        '';
+      };
+
+      # ── Same-origin Google Calendar ICS ────────────────────────────────────
+      # Nextcloud's webcal subscriptions are invisible to any CalDAV client: the
+      # feeds are cached (`oc_calendarobjects` at `calendartype = 1`) but a
+      # subscription's DAV node is properties-only, so PROPFIND Depth:1 returns
+      # just itself. That is why TRUSK/Google/Airbnb list as empty calendars.
+      #
+      # Calino 0.30.0's own webcal subscriptions (Sidebar → "Subscribe to
+      # Calendar") fetch the .ics from the browser, and calendar.google.com
+      # sends no Access-Control-Allow-Origin — same CORS wall as the DAV block
+      # above, same answer. Subscribe to
+      # <origin>/gcal/<address>/private-<token>/basic.ics; nginx forwards the
+      # tail with `@` unescaped, which Google answers 200 for.
+      #
+      # ⚠ PIN THE UPSTREAM; don't use upstream's "Proxy URL" field. That shape
+      #   is `<proxy>/<urlencoded-origin><path>` — an open relay, and
+      #   unmatchable here anyway since nginx decodes %3A/%2F and merges slashes
+      #   before location matching. Pinning also keeps the secret feed token in
+      #   the browser rather than in this PUBLIC repo (that URL is unexpiring
+      #   read access to the whole calendar — so no proxy.calino.io either).
+      "^~ /gcal/" = {
+        proxyPass = "https://calendar.google.com/calendar/ical/";
+        extraConfig = ''
+          limit_except GET HEAD {
+            deny all;
+          }
+
+          # Both default OFF: Google's frontend needs SNI, and this hop leaves
+          # the tailnet so it verifies against the system trust store.
+          proxy_ssl_server_name on;
+          proxy_ssl_verify on;
+          proxy_ssl_verify_depth 3;
+          proxy_ssl_trusted_certificate "/etc/ssl/certs/ca-certificates.crt";
+          proxy_http_version 1.1;
+          proxy_set_header Host calendar.google.com;
+
+          # Outbound: this origin's jar has no business reaching Google.
+          # Inbound: every response carries `Set-Cookie: NID=…;
+          # domain=.google.com`, which the browser rejects on the domain
+          # mismatch — but only after we relayed a third party's tracker.
+          proxy_set_header  Cookie "";
+          proxy_hide_header Set-Cookie;
+
+          # ~10 MB, marked no-store, so every refresh is a full re-fetch.
+          proxy_buffering on;
+          proxy_read_timeout 120s;
         '';
       };
     };
