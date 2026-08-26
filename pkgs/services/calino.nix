@@ -86,9 +86,42 @@ stdenv.mkDerivation (finalAttrs: {
   # build instead of quietly reverting the PWA to off. Re-check whether this is
   # still needed on every version bump — if upstream sets envPrefix itself, or
   # switches to VITE_-prefixed names, DROP this.
+  # ⚠ SECOND PATCH, UNRELATED TO THE FIRST: a conditional DELETE of an object
+  #   that is already gone answers 412, not 404, on sabre-based servers
+  #   (Nextcloud, Baikal) — "An If-Match header was specified and the resource
+  #   did not exist". CalDAVClient.deleteEvent always sends If-Match (it hands
+  #   tsdav the etag), and assertResponseOk's `tolerateGone` forgives only
+  #   404/410, so that branch is unreachable here and the throw surfaces as a
+  #   failed delete. Measured against this very deployment: DELETE without
+  #   If-Match → 404, DELETE with If-Match → 412. Net effect is that any event
+  #   whose local copy outlives the server object becomes PERMANENTLY
+  #   undeletable from the UI — every retry re-412s.
+  #
+  #   412 has two causes and only one is benign, so this does NOT simply widen
+  #   the tolerate list: it probes first. No etag (404/410 on HEAD) means the
+  #   object is gone and the delete already happened; a live object means a
+  #   concurrent edit invalidated our etag, which is a real conflict that must
+  #   keep throwing. `proxyFetch` + `authHeader` are the same pair fetchEtag
+  #   uses for its own out-of-band PROPFIND, and a network error deliberately
+  #   does NOT absolve the 412 — only a definitive "not there" does.
+  #
+  #   Anchored on the comment line rather than the assert call, so the insert
+  #   lands before it. Upstream fix pending; drop this once released.
   postPatch = ''
     substituteInPlace vite.config.ts \
       --replace-fail "base: '/'," "base: '/', envPrefix: ['VITE_', 'CALINO_'],"
+
+    substituteInPlace src/features/caldav/client/CalDAVClient.ts \
+      --replace-fail \
+    "    // 404/410 mean the resource is already gone — the outcome a delete wants." \
+    "    if (response?.status === 412) {
+      const probe = await this.proxyFetch(eventUrl, {
+        method: 'HEAD',
+        headers: { Authorization: this.authHeader },
+      }).catch(() => null)
+      if (probe && (probe.status === 404 || probe.status === 410)) return
+    }
+    // 404/410 mean the resource is already gone — the outcome a delete wants."
   '';
 
   env = {
