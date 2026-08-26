@@ -347,11 +347,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1785627969,
-        "narHash": "sha256-4dtXQk/NMePegK/nWp5NSeuZKLATItOq61lpEvmXqGw=",
+        "lastModified": 1787559586,
+        "narHash": "sha256-onL0VLf9vPllmT0H/OlURIU5r5t5WIEl7t4tVNKT0Nw=",
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "427bf4bd9435fdf21321c8cc628c24efc14c0f7a",
+        "rev": "9d0d87172c374f89da73c1cfe6d81ae62feac1f1",
         "type": "github"
       },
       "original": {
@@ -643,17 +643,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1783630775,
-        "narHash": "sha256-7RNjvmE5nTYhLOuV+zzO2RHHLRXg3hxs3sI1qh1Sw4o=",
+        "lastModified": 1784543930,
+        "narHash": "sha256-cxKc58l70lIK/p4WUJ+1qYOqEs/D/3ONvktWiG9YXuo=",
         "owner": "nSimonFR",
         "repo": "gramps-web-nix",
-        "rev": "4e1740a1fdb7cccf3244d3152e26e2ce4dcab027",
+        "rev": "a3f86d5d557118ce2db08a2ff20e840cdff316f1",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
         "repo": "gramps-web-nix",
-        "rev": "4e1740a1fdb7cccf3244d3152e26e2ce4dcab027",
+        "rev": "a3f86d5d557118ce2db08a2ff20e840cdff316f1",
         "type": "github"
       }
     },
