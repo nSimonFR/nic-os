@@ -6,8 +6,9 @@
 }:
 let
   # pkgs.home-assistant and pkgs.buildHomeAssistantComponent are both overridden
-  # in overlays.nix to use nixpkgs-unstable, keeping HA current and preventing
-  # the "cannot downgrade" startup failure when .HA_VERSION > binary version.
+  # in overlays.nix to use the dedicated nixpkgs-hass input, keeping HA current
+  # and preventing the "cannot downgrade" startup failure when the data dir was
+  # written by a newer release than the binary.
   #
   # The two custom components take HA's own python set so their deps match the
   # ABI of the HA binary — hence the explicit python3Packages argument.

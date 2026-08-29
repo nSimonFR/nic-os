@@ -10,19 +10,30 @@
           system = prev.stdenv.hostPlatform.system;
           config.allowUnfree = true;
         };
+        # Home Assistant's own tree — see the nixpkgs-hass comment in flake.nix.
+        # It is deliberately NOT unstablePkgs: HA's on-disk .storage migration is
+        # irreversible, so its pin must only ever ratchet forward, which a shared
+        # input cannot promise.
+        hassPkgs = import inputs.nixpkgs-hass {
+          system = prev.stdenv.hostPlatform.system;
+          config.allowUnfree = true;
+        };
         uv = unstablePkgs.uv;
         tailscale = unstablePkgs.tailscale;
         # Vaultwarden 1.35.5+ adds AccountKeys to API key login response,
         # required for Bitwarden CLI 2026.x compatibility (vaultwarden#6912).
         vaultwarden = unstablePkgs.vaultwarden;
-        # nixpkgs 25.11 ships HA 2025.11.x; HA refuses to start if .HA_VERSION
-        # in the data dir is newer than the binary (no downgrade allowed).
-        # Track unstable so the package version always meets or exceeds what was
-        # last written by the previous release.
-        home-assistant = unstablePkgs.home-assistant.overrideAttrs (_: {
+        # nixpkgs 25.11 ships HA 2025.11.x; HA refuses to start if the data dir
+        # was written by a newer release (no downgrade allowed) — so HA rides
+        # nixpkgs-hass, a pin that only moves forward, rather than the shared
+        # unstable one that a routine lock bump can walk backwards.
+        home-assistant = hassPkgs.home-assistant.overrideAttrs (_: {
           doInstallCheck = false;
         });
-        buildHomeAssistantComponent = unstablePkgs.buildHomeAssistantComponent;
+        # Must come from the same tree as home-assistant above: custom components
+        # are loaded into the HA binary's own interpreter, so a split would build
+        # them against a different Python ABI.
+        buildHomeAssistantComponent = hassPkgs.buildHomeAssistantComponent;
         # papra: needs 26.6.0+ for AI auto-tagging; unstable pin is kept ≥ that.
         papra = unstablePkgs.papra;
       }
