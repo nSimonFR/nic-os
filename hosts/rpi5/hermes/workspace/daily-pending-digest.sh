@@ -105,15 +105,31 @@ format_github() {
   fi
 
   jq -r --argjson max "$MAX_GH" '.[:$max][] | .id' "$GH_ITEMS" >"$GH_INCLUDED_IDS"
-  jq -r --argjson max "$MAX_GH" '
-    .[:$max][] |
+  # GitHub notifications expose Release subjects as API URLs ending in a numeric
+  # release ID. Resolve those to their canonical public .html_url; converting the
+  # number into /releases/tag/<id> produces invalid links.
+  local resolved="$TMPDIR/daily_pending_digest_gh_resolved.json"
+  jq -c --argjson max "$MAX_GH" '.[:$max][]' "$GH_ITEMS" |
+    while IFS= read -r notification; do
+      subject_type=$(jq -r '.subject.type' <<<"$notification")
+      subject_url=$(jq -r '.subject.url' <<<"$notification")
+      if [ "$subject_type" = "Release" ] && [[ "$subject_url" =~ ^https://api.github.com/repos/.*/releases/[0-9]+$ ]]; then
+        if public_url=$(gh api "$subject_url" --jq '.html_url' 2>/dev/null) && [[ "$public_url" =~ ^https://github.com/ ]]; then
+          jq --arg url "$public_url" '.subject.url = $url' <<<"$notification"
+          continue
+        fi
+      fi
+      jq '.' <<<"$notification"
+    done | jq -s '.' >"$resolved"
+
+  jq -r '
+    .[] |
     "• <a href=\"" + (.subject.url
       | sub("^https://api.github.com/repos/"; "https://github.com/")
       | sub("/issues/"; "/issues/")
       | sub("/pulls/"; "/pull/")
-      | sub("/releases/"; "/releases/tag/")
     ) + "\">" + .repository.full_name + "</a> " + .subject.type + ": " + .subject.title
-  ' "$GH_ITEMS" | html_escape | sed 's/&lt;a href=/\<a href=/; s/&quot;/"/g; s/&gt;/\>/; s#&lt;/a&gt;#</a>#'
+  ' "$resolved" | html_escape | sed 's/&lt;a href=/\<a href=/; s/&quot;/"/g; s/&gt;/\>/; s#&lt;/a&gt;#</a>#'
 
   if [ "$count" -gt "$MAX_GH" ]; then
     extra=$((count - MAX_GH))
