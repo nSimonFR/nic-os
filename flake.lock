@@ -919,6 +919,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-hass": {
+      "locked": {
+        "lastModified": 1787814960,
+        "narHash": "sha256-PYZq1qzCJXC2zGI0mH07vrZBsw6DRBAOX0jN1pPtqOQ=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "c27cdad491a991b11ed731760aa2ef8db0cb0410",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "c27cdad491a991b11ed731760aa2ef8db0cb0410",
+        "type": "github"
+      }
+    },
     "nixpkgs-lib": {
       "locked": {
         "lastModified": 1765674936,
@@ -1263,6 +1279,7 @@
         "nix-gaming": "nix-gaming",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_7",
+        "nixpkgs-hass": "nixpkgs-hass",
         "nixpkgs-ollama": "nixpkgs-ollama",
         "nixpkgs-unstable": "nixpkgs-unstable",
         "ragenix": "ragenix",

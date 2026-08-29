@@ -15,6 +15,27 @@
     # Rev is nixpkgs-unstable @ 2026-08-22, ollama 0.32.14.
     nixpkgs-ollama.url = "github:NixOS/nixpkgs/a831408e6378bc02ebf8cc09b52c96ca86f6bab4";
 
+    # Home Assistant only, same reasoning as nixpkgs-ollama above — and the same
+    # reason it cannot just ride the shared nixpkgs-unstable pin.
+    #
+    # HA migrates /var/lib/hass/.storage in place on first start of a newer
+    # release and refuses to read it back afterwards ("Storage file http has
+    # version 2 which is newer than the max supported version 1"). So the pin
+    # feeding it is a one-way ratchet: it may only ever move forward, and a
+    # rebuild that moves it backward bricks HA until it is bumped again.
+    #
+    # That is not hypothetical. On 2026-08-23 a rebuild off a lock-file bump
+    # (generation 1088) shipped HA 2026.8.2, which migrated .storage to the new
+    # schema; the next rebuild from main (generation 1089, same day) snapped the
+    # shared unstable pin back to 2026.7.4 and HA crash-looped for six days —
+    # 60k restarts, unnoticed, because the homepage tile kept serving the last
+    # cached counts. Scoping HA to its own input means a shared-pin bump can no
+    # longer walk it backwards.
+    #
+    # Rev is nixpkgs-unstable @ 2026-08-27, home-assistant 2026.8.3. Only ever
+    # replace this with a rev carrying an equal or newer HA.
+    nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
+
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
