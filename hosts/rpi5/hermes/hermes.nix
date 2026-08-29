@@ -260,6 +260,11 @@ let
       threshold = 0.85;
     };
 
+    # Nico explicitly opted out of shell-command approval prompts. This is
+    # declarative because setupScript regenerates ~/.hermes/config.yaml on every
+    # gateway restart; a runtime `hermes config set` would otherwise be lost.
+    approvals.mode = "off";
+
     # Stream replies progressively by editing a Telegram message as tokens arrive.
     # This is the documented transport for Hermes 0.19.0.
     gateway.streaming = {
