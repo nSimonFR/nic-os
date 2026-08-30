@@ -14,7 +14,8 @@ Endpoints (one per homepage tile, three stats each):
   /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
   /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
   /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
-  /homeassistant — Home Assistant (people home, lights on, switches on) — /api/states
+  /homeassistant — Home Assistant (last reported day, 30-day cost, heating today)
+                   — recorder SQLite for the Linky statistics, /api/states for Voltalis
   /papra     — Papra (documents, tags, storage) — direct read-only SQLite
   /reactiveresume — Reactive Resume (resumes, users, views) — direct Postgres query
   /grampsweb — Gramps Web (people, families, events) — direct read-only SQLite, summed across trees
@@ -89,7 +90,11 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # refresh, up to 24h after the rebuild that changed it: schema 12 is calino's `tasks`
 # going from "every open task" (76) to "pending, dated and due" (5), which would
 # otherwise have sat there reading 76 under a "Tasks due" label.
-STATS_SCHEMA = 12
+#
+# 13 replaces home assistant's people_home/lights_on/switches_on with day/cost/heating
+# — all three field names change at once, so without a bump every one of them renders
+# as NaN until the next nightly refresh.
+STATS_SCHEMA = 13
 
 
 @dataclass(frozen=True)
@@ -168,6 +173,12 @@ class Config:
     wealthfolio_db: str = "/var/lib/wealthfolio/wealthfolio.db"
     immich_url: str = "http://127.0.0.1:2283"
     hass_url: str = "http://127.0.0.1:8123"
+    # Home Assistant's recorder database (hosts/rpi5/home-assistant.nix). The tile
+    # needs LONG-TERM STATISTICS — ha-linky's hourly Enedis backfill — and those are
+    # not on the REST API at all, only on the websocket one. Read-only, and this
+    # service runs as root so hass's 0700 state dir is reachable, same as
+    # wealthfolio_db. HA is always-on, so nothing here is about avoiding a wake.
+    hass_db: str = "/var/lib/hass/home-assistant_v2.db"
 
     state_dir: str = DEFAULT_STATE_DIR
     port: int = 8087
@@ -196,6 +207,7 @@ class Config:
             rxresume_role=s("RXRESUME_ROLE", cls.rxresume_role),
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
             affine_db=s("AFFINE_DB", cls.affine_db),
+            hass_db=s("HASS_DB", cls.hass_db),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
             nextcloud_dav_url=s("NEXTCLOUD_DAV_URL", cls.nextcloud_dav_url),
             nextcloud_user=s("NEXTCLOUD_USER", cls.nextcloud_user),
@@ -414,6 +426,33 @@ def eur(amount, signed=True):
 
 def days_ago(n):
     return (datetime.date.today() - datetime.timedelta(days=n)).isoformat()
+
+
+def pct_delta(current, baseline):
+    """`current` against `baseline`, for the bracketed half of a tile value.
+
+    Percent rather than an absolute difference because the two sides are not
+    always measured over the same number of days — Enedis leaves gaps, so a
+    window total can be short simply for want of data. Comparing daily MEANS and
+    reporting the change as a percentage is the shape that survives that; see
+    fetch_homeassistant.
+
+    An em dash when there is no baseline to divide by: "+100%" against nothing
+    reads as a real measurement, and it is not one.
+    """
+    if not baseline:
+        return "—"
+    change = (current - baseline) / baseline * 100
+    return f"{'+' if change >= 0 else '-'}{abs(change):.0f}%"
+
+
+def watt_hours(wh):
+    """Wh below a kilowatt-hour, kWh above it — a heater tile spans both.
+
+    Summer idle is single-digit Wh and a winter day is five figures, so a fixed
+    unit is unreadable at one end or the other whichever one is picked.
+    """
+    return f"{wh / 1000:,.1f} kWh" if abs(wh) >= 1000 else f"{wh:,.0f} Wh"
 
 
 def fetch_wealthfolio(cfg, run):
@@ -1058,23 +1097,101 @@ def fetch_forgejo(cfg, run):
     }
 
 
+# Complete local days of an ha-linky statistic, newest first. 23 rather than 24
+# because a DST day is 23 or 25 hours long; the point of the HAVING is to drop
+# PARTIAL days, which is also what excludes today and the lagging tail (Enedis
+# publishes about two days behind, so the newest rows are always incomplete).
+#
+# `state` is the per-hour increment for these — ha-linky writes both `state` and a
+# cumulative `sum`, and summing `state` over the day matches the meter. That is NOT
+# true of the Voltalis sensors, whose `state` is a running daily counter that resets
+# at midnight; those are read live from /api/states below rather than from here.
+_LINKY_DAYS = """
+    SELECT date(s.start_ts, 'unixepoch', 'localtime') AS day, SUM(s.state) AS v
+    FROM statistics s JOIN statistics_meta m ON m.id = s.metadata_id
+    WHERE m.statistic_id LIKE 'linky:%' AND m.unit_of_measurement = '{unit}'
+    GROUP BY day HAVING COUNT(*) >= 23
+"""
+
+# Last reported day, and the mean of the seven before it.
+LINKY_DAY_SQL = f"""
+WITH d AS ({_LINKY_DAYS.format(unit='Wh')} ORDER BY day DESC LIMIT 8)
+SELECT COALESCE((SELECT v FROM d ORDER BY day DESC LIMIT 1), 0) || '|' ||
+       COALESCE((SELECT AVG(v) FROM (SELECT v FROM d ORDER BY day DESC LIMIT 7 OFFSET 1)), 0);
+"""
+
+# Rolling 30 days of cost against the 30 before it: total, then both daily means.
+# A rolling window rather than month-to-date because the meter's two-day lag makes
+# the first days of a month report nothing at all, and "0 EUR" is a worse lie than
+# a window that straddles the boundary.
+LINKY_COST_SQL = f"""
+WITH c AS ({_LINKY_DAYS.format(unit='€')})
+SELECT COALESCE(SUM(CASE WHEN day > date('now','localtime','-30 day') THEN v END), 0) || '|' ||
+       COALESCE(AVG(CASE WHEN day > date('now','localtime','-30 day') THEN v END), 0) || '|' ||
+       COALESCE(AVG(CASE WHEN day > date('now','localtime','-60 day')
+                          AND day <= date('now','localtime','-30 day') THEN v END), 0)
+FROM c;
+"""
+
+
+def _floats(scalar, n):
+    """Split a pipe-joined SQL row into n floats, tolerating an empty result."""
+    parts = (scalar or "").split("|")
+    return [float(parts[i] or 0) if i < len(parts) else 0.0 for i in range(n)]
+
+
 def fetch_homeassistant(cfg, run):
-    # HA is always-on (not socket-activated), so polling it doesn't wake anything.
-    # It's routed through this daily-cached aggregator only for consistency with
-    # the other tiles — note the counts can be up to refresh_interval stale.
+    """Electricity, each figure against something — not entity counts.
+
+    The tile used to report people_home / lights_on / switches_on, and two of the
+    three could not move. There is exactly one `person.` entity, so "Home" was a
+    boolean; and this install has no `light.` entities AT ALL, so "Lights" was a
+    structural 0 dressed up as a measurement. Nothing about that told you anything
+    you would act on.
+
+    What this Home Assistant actually is, is an electricity meter: ha-linky
+    backfills Enedis consumption and cost as long-term statistics, and Voltalis
+    reports per-room heater use. So the tile reports energy, and every figure
+    carries a comparison — a kWh with nothing beside it is not information.
+
+    Two sources, because neither alone covers it. Long-term statistics live only in
+    the recorder database (the REST API has the present, and statistics are reachable
+    only over the WEBSOCKET API), while the Voltalis daily counters are live states
+    whose statistics rows cannot be summed — see _LINKY_DAYS. HA is always-on, so
+    reading either wakes nothing.
+    """
+    day_wh, day_mean = _floats(sqlite_scalar(cfg, run, cfg.hass_db, LINKY_DAY_SQL), 2)
+    cost, cost_mean, prev_mean = _floats(
+        sqlite_scalar(cfg, run, cfg.hass_db, LINKY_COST_SQL), 3)
+
     token = env_var(cfg, "HA_TOKEN")
     states = curl_json(cfg, run, f"{cfg.hass_url}/api/states",
                        "-H", f"Authorization: Bearer {token}",
                        "-H", "Content-Type: application/json")
 
-    def count(prefix, st):
-        return sum(1 for e in states
-                   if e.get("entity_id", "").startswith(prefix) and e.get("state") == st)
+    def entities(suffix):
+        return [e for e in states if e.get("entity_id", "").endswith(suffix)]
+
+    def numeric(state):
+        # Voltalis drops to "unknown"/"unavailable" between polls and for a while
+        # after an HA restart; that is absence, not zero consumption, but a tile
+        # cannot show absence, and treating it as 0 only ever understates.
+        try:
+            return float(state)
+        except (TypeError, ValueError):
+            return 0.0
+
+    heater_wh = sum(numeric(e.get("state"))
+                    for e in entities("_daily_consumption"))
+    rooms_on = sum(1 for e in entities("_device_switch") if e.get("state") == "on")
 
     return {
-        "people_home": count("person.", "home"),
-        "lights_on": count("light.", "on"),
-        "switches_on": count("switch.", "on"),
+        # "Yesterday" is the last day the meter REPORTED, roughly two days back —
+        # there is no honest way to show today, and labelling the lag would cost
+        # more room than the number is worth.
+        "day": f"{watt_hours(day_wh)} ({pct_delta(day_wh, day_mean)})",
+        "cost": f"€{cost:,.2f} ({pct_delta(cost_mean, prev_mean)})",
+        "heating": f"{watt_hours(heater_wh)} ({rooms_on} on)",
     }
 
 

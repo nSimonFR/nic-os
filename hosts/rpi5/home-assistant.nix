@@ -231,17 +231,32 @@ in
         deepLink    = "/mine-dashboard/";
         # Routed through the homepage-stats aggregator (:8087, daily-cached) like the
         # other tiles rather than the native `homeassistant` widget that polls HA
-        # every 60s. Counts can be up to the aggregator's REFRESH_INTERVAL (24h)
+        # every 60s. Figures can be up to the aggregator's REFRESH_INTERVAL (24h)
         # stale — acceptable for a glanceable tile; the aggregator holds the HA
         # token, so no key is exposed here.
+        #
+        # Electricity, not entity counts. The previous three fields were
+        # people_home / lights_on / switches_on, two of which could not move: one
+        # `person.` entity makes "Home" a boolean, and there is not a single
+        # `light.` entity on this install, so "Lights" was a permanent 0. What
+        # replaced them each carry a comparison — see fetch_homeassistant.
+        #
+        # `format = "text"`, like Sure and Wealthfolio: the fetcher returns a
+        # pre-formatted string with its delta already in brackets, because homepage
+        # only renders an additionalField in `display: list` and drops it silently
+        # in the default block renderer.
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/homeassistant";
           refreshInterval = 3600000;
           mappings = [
-            { field = "people_home"; label = "Home";     format = "number"; }
-            { field = "lights_on";   label = "Lights";   format = "number"; }
-            { field = "switches_on"; label = "Switches"; format = "number"; }
+            # The last day Enedis actually reported (~2 days back), against the
+            # mean of the seven before it.
+            { field = "day";     label = "Yesterday"; format = "text"; }
+            { field = "cost";    label = "30 days";   format = "text"; }
+            # Voltalis heaters: consumed so far today, and how many rooms are on
+            # right now — the one live figure on the tile.
+            { field = "heating"; label = "Heating";   format = "text"; }
           ];
         };
       };
