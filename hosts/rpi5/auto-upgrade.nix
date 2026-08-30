@@ -4,14 +4,14 @@
 #   1. `nix flake update` on the live checkout (/home/nsimon/nic-os), run AS
 #      nsimon so the rewritten flake.lock stays user-owned and git's
 #      dubious-ownership guard is satisfied (the repo is nsimon's).
-#   2. Stops the heavy userspace services (shared OOM guard — `nic.heavyServices`,
-#      see ./lib/service-registration.nix) so the memory-tight Pi has build headroom and
-#      doesn't zram-thrash into a watchdog reset.
-#   3. `nixos-rebuild switch` against the (now dirty) working tree. On failure
-#      the script aborts BEFORE the reboot line, the new generation is not
-#      booted, and the existing systemd-failed monitor (monitoring.nix)
+#   2. `nixos-rebuild switch` against the (now dirty) working tree, wrapped in
+#      `nic.heavyShed` (./lib/service-registration.nix): the shared OOM guard
+#      that stops the heavy userspace services so the memory-tight Pi doesn't
+#      zram-thrash into a watchdog reset, and puts them back if the build fails.
+#      On failure the script aborts BEFORE the reboot line, the new generation
+#      is not booted, and the systemd-failed monitor (monitoring.nix)
 #      Telegram-alerts on the failed unit.
-#   4. On success, fires a one-off Telegram message, then schedules a reboot in
+#   3. On success, fires a one-off Telegram message, then schedules a reboot in
 #      +1 min so this unit exits cleanly first. The weekly reboot is
 #      unconditional (user's choice) and also clears memory-leak buildup.
 #
@@ -33,7 +33,6 @@
 let
   flakeDir = "/home/nsimon/nic-os";
   owner = "nsimon";
-  heavyServices = config.nic.heavyServices;
   tokenFile = config.age.secrets.telegram-bot-token.path;
   telegramSend = (import ../../shared/notify.nix { inherit pkgs; }).send {
     inherit tokenFile;
@@ -89,20 +88,19 @@ in
       git config --global --get-all safe.directory | grep -qxF "$FLAKE" \
         || git config --global --add safe.directory "$FLAKE"
 
-      # 2. OOM guard: stop the heavy services before building.
-      echo "auto-upgrade: stopping heavy services to free memory…" >&2
-      systemctl stop \
-        ${lib.concatStringsSep " \\\n        " heavyServices} || true
-
-      # 3. Build + activate the new generation. Aborts here on any failure —
-      #    reboot below is never reached, so the box stays on the old gen.
+      # 2. OOM guard + build + activate. Aborts here on any failure — the reboot
+      #    below is never reached, so the box stays on the old generation, and
+      #    heavy-shed puts the always-on services back. This unit used to stop
+      #    them itself with no restore at all, so a failed build left nine of
+      #    them down for 9h on 2026-08-30: `set -e` aborts before any cleanup,
+      #    and systemd's Restart= does not apply to a unit stopped on request.
       echo "auto-upgrade: nixos-rebuild switch…" >&2
-      nixos-rebuild switch --flake "$FLAKE#rpi5"
+      ${config.nic.heavyShed}/bin/heavy-shed nixos-rebuild switch --flake "$FLAKE#rpi5"
 
       echo "auto-upgrade: disk after build:" >&2
       df -h /nix /mnt/data >&2 2>/dev/null || true
 
-      # 4. Notify (fire-and-forget), then reboot in +1 min so this unit records
+      # 3. Notify (fire-and-forget), then reboot in +1 min so this unit records
       #    success first.
       echo "auto-upgrade: rebuild OK — notifying + scheduling reboot (+1 min)" >&2
       NEWGEN=$(basename "$(readlink -f /run/current-system 2>/dev/null || echo unknown)")
