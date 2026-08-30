@@ -250,6 +250,11 @@ in
       Group            = config.services.sure.group;
       WorkingDirectory = "${config.services.sure.package}/share/sure";
       EnvironmentFile  = config.services.sure.environmentFile;
+      # The script below waits for the sync to actually finish, which is well
+      # past systemd's 90s default for a oneshot. Must exceed the in-script
+      # deadline, or systemd would SIGTERM us mid-import — the exact failure
+      # this unit is being fixed for.
+      TimeoutStartSec  = "20min";
     };
     environment = {
       RAILS_ENV          = "production";
@@ -258,15 +263,38 @@ in
       BUNDLE_FORCE_RUBY_PLATFORM = "1";
       HOME               = config.services.sure.dataDir;
     };
+    # This oneshot must outlive the sync it triggers: it holds sure-web up (and
+    # sure-worker with it, via sleepWith), so when it exits the worker is torn
+    # down — killing any Sidekiq job still in flight.
+    #
+    # It used to sleep a flat 30s, which was enough only while the Lunchflow
+    # import was small. Once the connector started paging the full history
+    # (~4100 transactions) the import ran past 30s, so every token-rotation sync
+    # was SIGTERMed mid-import — and Sidekiq still marked the Sync `completed`,
+    # so nothing retried and the missing rows were invisible. Observed: 243
+    # transactions silently dropped, no error logged.
+    #
+    # So wait on the real signal instead of a magic number. `Sync.incomplete` is
+    # pending+syncing and covers the child Account syncs the parent spawns, not
+    # just the LunchflowItem sync. Bounded by a deadline so a stuck sync cannot
+    # pin the heavy services up indefinitely.
     script = ''
       echo "[sumeria-sync] Sumeria tokens changed, triggering Sure sync..."
-      ${config.services.sure.package}/bin/sure-rails runner \
-        'LunchflowItem.find_each { |item| item.sync_later }'
-      echo "[sumeria-sync] Sync jobs queued; waiting 30s for Sidekiq to drain"
-      # Keep this oneshot alive so sure-web + sure-worker don't idle-stop
-      # before Sidekiq picks up and finishes the queued jobs (Sidekiq polls
-      # Redis every 1s; 30s comfortably covers a Lunchflow sync).
-      ${pkgs.coreutils}/bin/sleep 30
+      ${config.services.sure.package}/bin/sure-rails runner '
+        LunchflowItem.find_each { |item| item.sync_later }
+        deadline = Time.current + 15.minutes
+        # `rails runner` leaves the ActiveRecord query cache ENABLED, so polling
+        # the same relation returns the first result for the life of the process
+        # — the loop would never observe the sync finishing and would always run
+        # to the deadline, pinning the heavy services up. Must be uncached.
+        still_running = -> { Sync.uncached { Sync.incomplete.exists? } }
+        sleep 2 while still_running.call && Time.current < deadline
+        if still_running.call
+          warn "[sumeria-sync] deadline reached with syncs still running"
+        else
+          puts "[sumeria-sync] all syncs complete"
+        end
+      '
       echo "[sumeria-sync] Done"
     '';
   };
