@@ -856,20 +856,168 @@ def test_calino_reuses_the_nextcloud_app_password(tmp_path):
     assert all("nsimon:app-pw" in c for c in run.commands)
 
 
-def test_home_assistant_counts_entities_by_state(tmp_path):
+def ha_cfg(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_HA_TOKEN=t\n")
-    cfg = hs.Config(curl="CURL", env_file=str(env_file), hass_url="http://ha")
+    return hs.Config(curl="CURL", sqlite="SQLITE", env_file=str(env_file),
+                     hass_url="http://ha", hass_db="/db/hass")
+
+
+HA_STATES = json.dumps([
+    # Voltalis: a running daily counter per room, plus the heater's own switch.
+    {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "820"},
+    {"entity_id": "sensor.kitchen_cuisine_daily_consumption", "state": "480"},
+    {"entity_id": "switch.living_room_salon_device_switch", "state": "on"},
+    {"entity_id": "switch.bedroom_chambre_device_switch", "state": "off"},
+    # Not a heater switch — must not be counted as a room.
+    {"entity_id": "switch.quicksettings_athome", "state": "on"},
+])
+
+
+def ha_run(day="3073|3895.43", cost="16.96|0.6523|0.91125", states=HA_STATES):
+    # The two statistics queries differ only by the unit they filter on.
+    return FakeRun([("'Wh'", day), ("'€'", cost), ("api/states", states)])
+
+
+def test_home_assistant_reports_energy_against_a_baseline(tmp_path):
+    # 3073 Wh against a 3895 Wh weekly mean is -21%; 0.6523 EUR/day against
+    # 0.91125 is -28%. The euro figure shown is the 30-day TOTAL, but the delta
+    # beside it compares daily means — see pct_delta.
+    assert hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run()) == {
+        "day": "3.1 kWh (-21%)",
+        "cost": "€16.96 (-28%)",
+        "heating": "1.3 kWh (1 on)",
+    }
+
+
+def test_home_assistant_reads_the_recorder_database_read_only(tmp_path):
+    # Without -readonly, sqlite3 creates root-owned -wal/-shm files next to a
+    # database that hass (not root) has open for writing.
+    run = ha_run()
+    hs.fetch_homeassistant(ha_cfg(tmp_path), run)
+    sqlite_calls = [c for c in run.commands if c.startswith("SQLITE")]
+    assert len(sqlite_calls) == 2
+    assert all("-readonly /db/hass" in c for c in sqlite_calls)
+
+
+def test_home_assistant_survives_voltalis_reporting_nothing(tmp_path):
+    # Every daily counter is "unknown" for a while after an HA restart, and
+    # "unavailable" between polls. Neither is a number; neither may raise.
     states = json.dumps([
-        {"entity_id": "person.nico", "state": "home"},
-        {"entity_id": "person.alfie", "state": "not_home"},
-        {"entity_id": "light.kitchen", "state": "on"},
-        {"entity_id": "light.hall", "state": "off"},
-        {"entity_id": "switch.tv", "state": "on"},
-        {"entity_id": "sensor.temp", "state": "on"},
+        {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "unknown"},
+        {"entity_id": "sensor.kitchen_cuisine_daily_consumption", "state": "unavailable"},
+        {"entity_id": "sensor.bedroom_chambre_daily_consumption", "state": None},
     ])
-    assert hs.fetch_homeassistant(cfg, FakeRun([("api/states", states)])) == {
-        "people_home": 1, "lights_on": 1, "switches_on": 1}
+    out = hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run(states=states))
+    assert out["heating"] == "0 Wh (0 on)"
+
+
+def test_home_assistant_admits_when_there_is_nothing_to_compare_against(tmp_path):
+    # A fresh ha-linky backfill has no prior week and no prior month. "+100%"
+    # against a zero baseline would read as a real measurement.
+    out = hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run(day="900|0", cost="4.2|0.6|0"))
+    assert out["day"] == "900 Wh (—)"
+    assert out["cost"] == "€4.20 (—)"
+
+
+def test_home_assistant_tolerates_an_empty_statistics_table(tmp_path):
+    # sqlite3 prints nothing at all for a query over no rows in some shapes;
+    # the COALESCEs should prevent it, but the parse must not depend on that.
+    out = hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run(day="", cost=""))
+    assert out["day"] == "0 Wh (—)"
+
+
+@pytest.mark.parametrize("wh,expected", [
+    (0, "0 Wh"), (5, "5 Wh"), (999, "999 Wh"),
+    (1000, "1.0 kWh"), (12400, "12.4 kWh"),
+])
+def test_watt_hours_switches_unit_at_a_kilowatt_hour(wh, expected):
+    assert hs.watt_hours(wh) == expected
+
+
+def recorder_db(path):
+    """A recorder database with 40 complete days of hourly ha-linky statistics.
+
+    Only the columns the two queries touch — this stands in for sqlite3(1), not
+    for Home Assistant's schema, which has many more.
+
+    Hours are built from LOCAL naive datetimes so they land in the local day the
+    queries group by. A spring-forward day yields 23 of them rather than 24,
+    which is exactly why the queries say `HAVING COUNT(*) >= 23`.
+    """
+    import sqlite3
+
+    con = sqlite3.connect(path)
+    con.executescript("""
+        CREATE TABLE statistics_meta (
+            id INTEGER PRIMARY KEY, statistic_id TEXT, unit_of_measurement TEXT);
+        CREATE TABLE statistics (
+            metadata_id INTEGER, start_ts REAL, state REAL, sum REAL);
+        INSERT INTO statistics_meta VALUES
+            (1, 'linky:1234', 'Wh'), (2, 'linky:1234_cost', '€');
+    """)
+    today = datetime.date.today()
+    rows = []
+    for ago in range(2, 42):
+        day = today - datetime.timedelta(days=ago)
+        # Newest complete day is a quiet one; the seven before it are twice that.
+        wh = 100 if ago == 2 else 200
+        # Halves at the 30-day boundary, so the rolling comparison is -50%.
+        eur = 0.01 if ago < 30 else 0.02
+        for hour in range(24):
+            ts = datetime.datetime.combine(
+                day, datetime.time(hour)).timestamp()
+            rows.append((1, ts, wh, 0))
+            rows.append((2, ts, eur, 0))
+    con.executemany("INSERT INTO statistics VALUES (?,?,?,?)", rows)
+    con.commit()
+    con.close()
+
+
+def real_sql_run(db_path, states=HA_STATES):
+    """A `run` that executes the fetcher's SQL for real, in SQLite.
+
+    FakeRun matches a query by substring and never parses it, so a malformed one
+    passes every mocked test and fails only on the machine — which is how
+    LINKY_COST_SQL shipped a CTE whose SELECT had no FROM clause.
+    """
+    import sqlite3
+
+    def run(argv, env=None):
+        if "api/states" in " ".join(argv):
+            return states
+        with sqlite3.connect(db_path) as con:
+            return str(con.execute(argv[-1]).fetchone()[0])
+
+    return run
+
+
+def test_the_home_assistant_queries_are_valid_sql_over_a_real_table(tmp_path):
+    db = tmp_path / "hass.db"
+    recorder_db(db)
+    out = hs.fetch_homeassistant(ha_cfg(tmp_path), real_sql_run(db))
+    # 2400 Wh against a 4800 Wh weekly mean; 28 reported days at €0.24 against a
+    # prior window at €0.48/day. Both halves come out of SQLite, not a fixture.
+    assert out["day"] == "2.4 kWh (-50%)"
+    assert out["cost"] == "€6.72 (-50%)"
+
+
+def test_the_home_assistant_queries_ignore_incomplete_days(tmp_path):
+    # Today and yesterday are always partial — Enedis publishes ~2 days behind —
+    # so a half-reported day must never become "consumption halved".
+    db = tmp_path / "hass.db"
+    recorder_db(db)
+    import sqlite3
+    con = sqlite3.connect(db)
+    today = datetime.date.today()
+    for hour in range(3):
+        ts = datetime.datetime.combine(today, datetime.time(hour)).timestamp()
+        con.execute("INSERT INTO statistics VALUES (1,?,5,0)", (ts,))
+    con.commit()
+    con.close()
+    # Unchanged: the three-hour stub is not a day.
+    assert hs.fetch_homeassistant(ha_cfg(tmp_path), real_sql_run(db))["day"] \
+        == "2.4 kWh (-50%)"
 
 
 def test_reactive_resume_passes_its_password_through_the_environment(tmp_path):
