@@ -59,7 +59,7 @@
 # hidden by `category = "Infrastructure"`, enforced in three overlapping places
 # (a name test for "Homepage", a category test, and omission from
 # `categoryOrder`) none of which said "hidden".
-{ config, lib, tailnetFqdn, ... }:
+{ config, lib, pkgs, tailnetFqdn, ... }:
 
 let
   cfg = config.nic.services;
@@ -90,6 +90,56 @@ let
     (lib.mapAttrsToList (name: value: { inherit name value; }) cfg);
 
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
+
+  # `heavy-shed <command…>`: free the RAM, do the thing, put it back. Shared by
+  # nixos-rebuild-safe (configuration.nix) and auto-upgrade.nix — it used to be
+  # written twice and only the wrapper's copy had the restore, so a failed weekly
+  # upgrade left nine always-on services stopped for 9h on 2026-08-30.
+  heavyShed = pkgs.writeShellApplication {
+    name = "heavy-shed";
+    runtimeInputs = [ pkgs.systemd ];
+    text = ''
+      # Guard: with no command, "$@" is a no-op that exits 0 — which would stop
+      # everything and take the success path straight past the restore.
+      : "''${1:?heavy-shed: no command given}"
+
+      # Already root under the auto-upgrade unit, which has no sudo on its PATH
+      # (and the store's sudo is not setuid); nsimon interactively, which does.
+      as_root=()
+      if [ "$(id -u)" -ne 0 ]; then as_root=(/run/wrappers/bin/sudo); fi
+
+      heavy=(
+        ${lib.concatMapStringsSep "\n  " (u: ''"${u}"'') allHeavyUnits}
+      )
+
+      # Only always-on units need putting back; socket-idle ones re-activate on
+      # the next request, which is how the memory stays freed.
+      restore=()
+      for unit in "''${heavy[@]}"; do
+        if ! systemctl is-active --quiet "$unit"; then continue; fi
+        if [ "$(systemctl show "$unit" --property=StopWhenUnneeded --value)" = yes ]; then continue; fi
+        restore+=("$unit")
+      done
+
+      # A trap, not a branch after the command: callers run `set -e`, and an
+      # aborting script never reaches the next line but does run its trap. On
+      # success the new generation's activation restarts them instead.
+      restore_heavy() {
+        status=$?
+        trap - EXIT
+        if [ "$status" -ne 0 ] && [ "''${#restore[@]}" -gt 0 ]; then
+          echo "heavy-shed: failed (exit $status) — restarting ''${#restore[@]} service(s)" >&2
+          "''${as_root[@]}" systemctl start "''${restore[@]}" || true
+        fi
+        exit "$status"
+      }
+      trap restore_heavy EXIT
+
+      "''${as_root[@]}" systemctl stop "''${heavy[@]}" || true
+      echo "heavy-shed: running $*" >&2
+      "$@"
+    '';
+  };
 
   # Sorted so the derivation is stable across evals; `unique` because nothing
   # stops two services from naming one shared dump unit.
@@ -396,9 +446,20 @@ in
     default = allHeavyUnits;
     description = ''
       Derived, heaviest → lightest: every `nic.services.*.heavyUnits` entry
-      sorted by `heavyPriority`. Consumed by `nixos-rebuild-safe`
-      (configuration.nix) and `auto-upgrade.nix`. Read-only — add units to the
-      owning service's module.
+      sorted by `heavyPriority`. Read-only — add units to the owning service's
+      module. Stop them via `nic.heavyShed`, never by hand: the one caller that
+      did is why nine services stayed down for 9h on 2026-08-30.
+    '';
+  };
+
+  options.nic.heavyShed = lib.mkOption {
+    type = lib.types.package;
+    readOnly = true;
+    default = heavyShed;
+    description = ''
+      Derived: `heavy-shed <command…>` stops every `nic.heavyServices` unit, runs
+      the command, and restarts the always-on ones if it fails. The single
+      implementation behind `nixos-rebuild-safe` and the weekly auto-upgrade.
     '';
   };
 

@@ -11,53 +11,17 @@
 let
   blogwatcherPkg = pkgs.callPackage ../../pkgs/cli/blogwatcher.nix { };
 
-  # Shared with the weekly auto-upgrade (auto-upgrade.nix): the heavy userspace
-  # services stopped before a build to give the memory-tight Pi build headroom.
-  # Derived from `nic.services.*.heavyUnits` (lib/service-registration.nix) —
-  # each service names its own units, so a new one cannot be forgotten here.
-  heavyServices = config.nic.heavyServices;
-
   # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
-  # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs
-  # to avoid zram thrashing and a watchdog reset. On success the activation phase
-  # of nixos-rebuild switch brings them back; on failure it never runs, so the
-  # wrapper restarts the always-on ones itself.
+  # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs to
+  # avoid zram thrashing and a watchdog reset. The shed/restore lives in
+  # `nic.heavyShed` (lib/service-registration.nix) because the weekly
+  # auto-upgrade needs the same thing, and its own copy had no restore.
   nixosRebuildSafe = pkgs.writeShellApplication {
     name = "nixos-rebuild-safe";
-    runtimeInputs = with pkgs; [ systemd nixos-rebuild ];
-    text = ''
-      # The heavy userspace services (derived from nic.services.*.heavyUnits,
-      # shared with the weekly auto-upgrade). Socket-activated ones free their
-      # RSS here and re-activate on demand; always-on ones are restarted by the
-      # activation phase of nixos-rebuild switch. Infra (tailscaled, nginx,
-      # postgresql, redis, blocky) is deliberately left running.
-      heavy=(
-        ${lib.concatStringsSep "\n        " heavyServices}
-      )
-
-      # Remember the always-on ones so a failed rebuild can put them back:
-      # activation never runs, and nothing else restarts them. Socket-idle units
-      # (StopWhenUnneeded=yes) are skipped — they re-activate on the next
-      # request, so leaving them down keeps the RAM free.
-      restore=()
-      for unit in "''${heavy[@]}"; do
-        if ! systemctl is-active --quiet "$unit"; then continue; fi
-        if [ "$(systemctl show "$unit" --property=StopWhenUnneeded --value)" = yes ]; then continue; fi
-        restore+=("$unit")
-      done
-
-      echo "nixos-rebuild-safe: stopping heavy services to free memory…" >&2
-      sudo systemctl stop "''${heavy[@]}" || true
-
-      echo "nixos-rebuild-safe: running nixos-rebuild $*" >&2
-      if sudo nixos-rebuild "$@"; then
-        exit 0
-      fi
-
-      echo "nixos-rebuild-safe: rebuild failed — restarting ''${#restore[@]} always-on service(s)" >&2
-      sudo systemctl start "''${restore[@]}" || true
-      exit 1
-    '';
+    runtimeInputs = with pkgs; [ nixos-rebuild config.nic.heavyShed ];
+    # Absolute path to sudo: /run/wrappers/bin is missing from some callers'
+    # PATH (the claude-rc bridge among them), and only the wrapper is setuid.
+    text = ''exec heavy-shed /run/wrappers/bin/sudo nixos-rebuild "$@"'';
   };
 
   # Fix nixos-raspberrypi bug: kernelboot-gen-builder.sh writes default/cmdline.txt
