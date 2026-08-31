@@ -139,6 +139,7 @@ in
     ./karakeep.nix
     ./airtrail.nix
     ./beaverhabits.nix
+    ./freereps.nix
     ./wealthfolio.nix
     ./wealthfolio-sync.nix
     ./showmycards.nix
