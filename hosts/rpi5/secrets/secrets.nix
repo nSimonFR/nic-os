@@ -49,4 +49,9 @@ in {
   "wealthfolio-sync-env.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "wealthfolio-mcp-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "etherscan-api-key.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
+  # Two encryptions of one password: the bare value for nic.pgRole's ALTER USER,
+  # and the FREEREPS_DB_PASSWORD= assignment for freereps.service's
+  # EnvironmentFile. Same split as airtrail-pg-password / airtrail-env.
+  "freereps-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
+  "freereps-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
 }

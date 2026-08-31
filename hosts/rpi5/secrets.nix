@@ -106,6 +106,15 @@
       file = ./secrets/ryot-pg-password.age;
       owner = "postgres"; # ryot-pg-setup runs as postgres and reads this
     };
+    freereps-pg-password = {
+      file = ./secrets/freereps-pg-password.age;
+      owner = "postgres"; # freereps-pg-setup runs as postgres and reads this
+    };
+    freereps-env = {
+      file = ./secrets/freereps-env.age;
+      owner = "freereps"; # EnvironmentFile for freereps.service (FREEREPS_DB_PASSWORD)
+      mode = "0400";
+    };
     steam-connector-env = {
       file  = ./secrets/steam-connector-env.age;
       owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service

@@ -38,6 +38,13 @@ inputs: final: _prev: {
   # which evaluated the derivation twice with no single source of truth.
   mtg-mcp = final.callPackage ./agents/mtg-mcp.nix { };
 
+  # FreeReps (self-hosted Apple Health server) — built from source; upstream
+  # publishes only a docker-compose stack.
+  # Consumers: hosts/rpi5/freereps.nix (the service) and
+  # hosts/rpi5/hermes/hermes.nix (the `-mcp` stdio server), plus
+  # `nix build .#freereps`.
+  freereps = final.callPackage ./services/freereps.nix { };
+
   # nicos-scripts — this repo's own Python: one package holding the shared
   # library plus a console script per unit (bin/steam-to-ryot, bin/homepage-stats,
   # …), with its pytest suite in checkPhase.

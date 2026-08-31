@@ -487,6 +487,13 @@
           # (no prebuild cache). Pulls the exact rpi5 derivation via the overlay.
           aarch64-linux.showmycards =
             self.nixosConfigurations.${rpiconfig}.pkgs.showmycards;
+          # FreeReps — `nix build .#freereps` to isolate its Go + Vite/React
+          # compile from a full rebuild. Same reasoning as showmycards above:
+          # no prebuild cache, and this one is OOM-prone on a 4 GB box because
+          # the tailscale dependency tree and a Rollup build land in one
+          # derivation. See hosts/rpi5/freereps.nix.
+          aarch64-linux.freereps =
+            self.nixosConfigurations.${rpiconfig}.pkgs.freereps;
           # Hermes Agent — lean `messaging` variant. Exposed as a standalone
           # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
           # npm compile can be validated/isolated on the Pi BEFORE wiring the
