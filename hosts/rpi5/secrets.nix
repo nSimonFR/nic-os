@@ -115,6 +115,15 @@
       owner = "freereps"; # EnvironmentFile for freereps.service (FREEREPS_DB_PASSWORD)
       mode = "0400";
     };
+    freereps-env-hermes = {
+      # Same ciphertext as freereps-env, decrypted again under a second owner:
+      # Hermes' FreeReps MCP server is a `freereps -mcp` subprocess of
+      # hermes.service, which runs as nsimon. One .age file rather than a second
+      # encryption, so a rotation cannot desync the service and the agent.
+      file = ./secrets/freereps-env.age;
+      owner = "nsimon";
+      mode = "0400";
+    };
     steam-connector-env = {
       file  = ./secrets/steam-connector-env.age;
       owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service
