@@ -237,6 +237,7 @@ class Stats:
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
         "nextcloud", "calino", "affine", "beszel",
+        "freereps",
     )
 
     def __init__(self):
@@ -1035,6 +1036,79 @@ def fetch_dawarich(cfg, run):
     }
 
 
+def _freereps_daily_avg(cfg, run, metric):
+    """Mean of the DAILY TOTALS of `metric` over the last 7 complete days.
+
+    Two deliberate choices:
+
+    * The average is of per-day sums, not of rows. Apple Health delivers these
+      metrics as intraday buckets (~8 step_count rows a day), so AVG(qty) would
+      be the mean bucket rather than the mean day — off by roughly 8x.
+    * `time < current_date` excludes today. Today is always partial (the phone
+      syncs periodically), and including it drags the average down by however
+      much of the day has not happened yet.
+
+    `qty` is the column: FreeReps leaves avg_val/min_val/max_val NULL for
+    cumulative metrics like these and fills only qty (verified against the live
+    table — 100% qty, 0% avg_val).
+
+    `source = ''` is pinned, and it is NOT paranoia: health_metrics already holds
+    two sources ("" from the Health Auto Export ingest and "FreeReps Backfill"),
+    and FreeReps only dedups by source priority in its OWN query layer — a plain
+    SUM here sees every source at once. Today the two do not overlap on these
+    metrics, so dropping the filter would give the same answer and then silently
+    double the step count the day something backfills the same days twice. If
+    the empty source ever stops being the live one this reads 0, which is wrong
+    but VISIBLY wrong, rather than plausibly inflated.
+    """
+    return int(pg_superuser(cfg, run, "freereps", f"""
+        SELECT COALESCE(ROUND(AVG(daily)), 0) FROM (
+            SELECT SUM(qty) AS daily
+              FROM health_metrics
+             WHERE metric_name = '{metric}'
+               AND source = ''
+               AND time >= current_date - INTERVAL '7 days'
+               AND time <  current_date
+             GROUP BY time::date
+        ) d;
+    """) or 0)
+
+
+def fetch_freereps(cfg, run):
+    """Apple Health: a week of activity plus the latest weigh-in.
+
+    Reads Postgres directly rather than FreeReps' own /api/v1/stats, and that is
+    the whole point: freereps.service is socket-activated (0 MB at rest), so a
+    daily poll against its HTTP API would wake it every single day and throw
+    away the reason it sleeps. Same rule as every other tile here.
+
+    The two averages pin `source = ''` (see _freereps_daily_avg); the weigh-in
+    below deliberately does NOT. The distinction is the query, not the metric: a
+    SUM over several sources double-counts, whereas "the most recent row" is
+    correct whichever source produced it. Filtering here would instead freeze the
+    tile on the last Apple weight the day a Withings sync starts writing
+    `source = 'Withings'` — the silent-stale-tile failure that
+    known_issue_homepage_stats_silent_stale_tiles is about.
+    """
+    # No time bound on the weight lookup, unlike the averages above. Weight is
+    # sparse and can be weeks stale (the live table's newest is over a month old,
+    # and a bound would render that as 0 rather than "last known"), and
+    # health_metrics is small enough here that the missing-chunk-exclusion cost
+    # TimescaleDB warns about is irrelevant at once a day.
+    weight = pg_superuser(cfg, run, "freereps", """
+        SELECT COALESCE(ROUND(qty::numeric, 1), 0)
+          FROM health_metrics
+         WHERE metric_name = 'weight_body_mass'
+         ORDER BY time DESC
+         LIMIT 1;
+    """)
+    return {
+        "steps": _freereps_daily_avg(cfg, run, "step_count"),
+        "energy": _freereps_daily_avg(cfg, run, "active_energy"),
+        "weight": float(weight or 0),
+    }
+
+
 def fetch_airtrail(cfg, run):
     # flight.duration is SECONDS, not minutes: the longest flight on record is
     # 42872, i.e. 11h54m. Dividing by 60 reported 7922 "hours" for 29 flights;
@@ -1219,6 +1293,7 @@ FETCHERS = {
     "forgejo": fetch_forgejo,
     "beaverhabits": fetch_beaverhabits,
     "ryot": fetch_ryot,
+    "freereps": fetch_freereps,
 }
 
 # NOTE: every published key must have a fetcher and vice versa. The two used to be
