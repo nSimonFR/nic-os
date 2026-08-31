@@ -19,8 +19,7 @@ def run(config_path,state_path,send=False):
    runs[source['id']]=f'failed:{exc}';log.exception('source_failed source=%s',source['id'])
    current.update({k:v for k,v in old.items() if v.source_id==source['id']})
  changes=ChangeDetector().compare(old,current); text=render_digest(changes,now)
- # Only newly discovered events are delivered. Updates, cancellations, and removals
- # still advance the snapshot silently, so they cannot be resurfaced later.
+ # Deliver new events only; silently synchronize every other change.
  if send and changes.new:
   token=os.environ.get('TELEGRAM_BOT_TOKEN') or Path(os.environ.get('TELEGRAM_BOT_TOKEN_FILE','/run/agenix/telegram-bot-token')).read_text().strip()
   chat=os.environ['TELEGRAM_CHAT_ID'];telegram_send(token,chat,text)
