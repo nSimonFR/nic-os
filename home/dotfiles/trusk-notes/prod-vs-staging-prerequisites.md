@@ -25,7 +25,15 @@ Clé `TRUSK_AUTH_SECRET` → fichier `/etc/trusk-auth/TRUSK_AUTH_SECRET`, chemin
 
 Le Secret est un SealedSecret déclaré dans `trusk-applications` : `manifests/<cluster>/<ns>/common-config/trusk-auth-secret-sealed.yaml`. **Une valeur par env, jamais partagée** (un backoffice de preview ne doit pas pouvoir signer un token accepté en prod). Appliqué par l'app ArgoCD `common-config`, **priority 0** — elle existe déjà dans staging ET production, donc rien à câbler : un seul fichier à déposer.
 
-⚠ **Le volume est rendu SANS `optional: true`.** Secret absent ⇒ kubelet ne démarre pas le conteneur ⇒ nouveaux pods en `ContainerCreating` + events `FailedMount`. Les anciens pods continuent de servir (`pdb.minAvailable: 1`), donc **pas de coupure et aucune erreur applicative** : le déploiement ne se termine simplement jamais. Panne invisible si on ne regarde pas les pods.
+⚠ **Le volume est rendu SANS `optional: true`.** Secret absent ⇒ kubelet ne démarre pas le conteneur ⇒ nouveaux pods en `ContainerCreating` + events `FailedMount`. Le déploiement ne se termine alors **jamais**, sans coupure ni erreur applicative : panne invisible si on ne regarde pas les pods.
+
+Ce qui retient les anciens pods en service, c'est la **stratégie du Deployment**, pas le PDB — un PodDisruptionBudget ne contraint que les évictions *volontaires* (drain, API eviction), pas la mise à l'échelle du ReplicaSet par le contrôleur pendant un rolling update. Vérifié le 2026-08-31 : order-mission est en `RollingUpdate` `maxSurge: 25% / maxUnavailable: 25%` sur 2 replicas en staging **et** en prod — 25 % de 2 arrondit **à 0** indisponible, donc l'ancien ReplicaSet n'est pas réduit avant qu'un nouveau pod soit `Ready`. Preuve à l'appui : staging n'a **aucun** PDB pour ce service et les anciens pods ont quand même servi tout du long du bump 1.57.1 ; le `pdb.enabled: true / minAvailable: 1` du chart prod n'y joue aucun rôle.
+
+Donc **contrôler la stratégie avant de promettre l'absence de coupure** : un service en `Recreate`, ou avec un `maxUnavailable` autorisant la disparition de tous les replicas, prendrait une vraie coupure sur ce même secret manquant. Au 2026-08-31 le namespace `production` n'en compte aucun (69 Deployments, 69 en `RollingUpdate`), mais c'est la chose à vérifier, pas à supposer :
+
+```bash
+kubectl --context $CTX -n production get deploy <svc> -o jsonpath='{.spec.strategy}{"\n"}{.spec.replicas}{"\n"}'
+```
 
 État au 2026-08-31 : présent en staging/preprod/previews depuis ~4 j ; créé en production le 2026-08-31 (`trusk-applications@b8cfabcd`). order-mission était le premier service prod à le monter — **backoffice prod (1.379.0) ne le montait pas encore**, donc personne ne signait avec ce secret en prod : le guard vérifiait des tokens que rien ne signait. Sans danger, parce que le flag d'enforcement `<service>_backend_authz` est `defaultVariant: "off"` (le guard vérifie, attache le principal, loge `auth.enforcement.bypassed`, **ne refuse rien**) — mais la fonctionnalité est inerte tant que le signataire n'est pas passé.
 
@@ -56,7 +64,9 @@ CTX=gke_trusk-production-kkypwi_europe-west1_trusk-production-gke   # cf. proxy-
 SVC=<service>
 
 # 1. Le service monte-t-il trusk-auth à la version cible ?
-git -C ~/MyDocuments/TRUSK/$SVC diff <verprod>..<vercible> -- deployment/ --name-status
+#    `--name-status` AVANT les révisions : après le `--`, git le prend pour un pathspec et sort
+#    le patch complet au lieu de l'inventaire, sans rien signaler.
+git -C ~/MyDocuments/TRUSK/$SVC diff --name-status <verprod>..<vercible> -- deployment/
 git -C ~/MyDocuments/TRUSK/$SVC show <vercible>:deployment/charts/default.yaml | grep -A4 mounts
 
 # 2. Le secret existe-t-il en prod ?
