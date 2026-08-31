@@ -231,6 +231,23 @@ in
         icon = "mdi-heart-pulse";
         category = "Apps";
         description = "Apple Health";
+        # Reads the freereps Postgres directly (nicos_scripts/homepage/stats.py
+        # fetch_freereps), NOT /api/v1/stats — so the daily poll never wakes the
+        # socket-activated service. Steps and energy are 7-day averages of daily
+        # totals excluding today (today is always partial); weight is the last
+        # weigh-in, which is routinely weeks old and shown as-is.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/freereps";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "steps"; label = "Steps/day"; format = "number"; }
+            { field = "energy"; label = "kcal/day"; format = "number"; }
+            # float, not number: weight is one decimal (78.4) and `number` would
+            # drop it — same reason wakapi's hour fields are float.
+            { field = "weight"; label = "Weight"; format = "float"; suffix = " kg"; }
+          ];
+        };
       };
     };
   };

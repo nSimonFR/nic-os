@@ -321,6 +321,77 @@ def test_ryot_hours_come_from_the_minute_rollup_minus_the_steam_dump():
     assert "- visual_novel_duration" in " ".join(hs.RYOT_MEDIA_HOURS_SQL.split())
 
 
+def test_freereps_averages_daily_totals_not_individual_rows():
+    # Apple Health delivers step_count as ~8 intraday buckets a day, so AVG(qty)
+    # would be the mean BUCKET (~1200) rather than the mean DAY (~9600). The
+    # inner query must sum per day before the outer one averages.
+    def answer(cmd):
+        if "step_count" in cmd:
+            return "9600"
+        if "active_energy" in cmd:
+            return "512"
+        return "78.4"  # weight_body_mass
+
+    out = hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
+    assert out == {"steps": 9600, "energy": 512, "weight": 78.4}
+
+
+def test_freereps_excludes_today_from_its_averages():
+    # Today is always partial — the phone syncs periodically — so including it
+    # drags the 7-day average down by however much of the day has not happened.
+    seen = []
+
+    def answer(cmd):
+        seen.append(cmd)
+        return "1"
+
+    hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
+    averages = [c for c in seen if "AVG(daily)" in c]
+    assert len(averages) == 2
+    for cmd in averages:
+        flat = " ".join(cmd.split())
+        assert "time < current_date" in flat
+        assert "current_date - INTERVAL '7 days'" in flat
+        assert "GROUP BY time::date" in flat
+
+
+def test_freereps_pins_the_source_on_sums_but_not_on_the_weigh_in():
+    # health_metrics already carries two sources ("" and "FreeReps Backfill") and
+    # FreeReps only dedups by source priority in its own query layer, so a plain
+    # SUM sees every source at once and would double the step count.
+    # "Most recent weight" has no such problem, and filtering it there would
+    # freeze the tile on the last Apple value once a Withings sync starts writing
+    # its own source — the silent-stale-tile failure mode.
+    seen = []
+
+    def answer(cmd):
+        seen.append(" ".join(cmd.split()))
+        return "1"
+
+    hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
+
+    sums = [c for c in seen if "AVG(daily)" in c]
+    assert len(sums) == 2
+    assert all("source = ''" in c for c in sums)
+
+    weighin = [c for c in seen if "weight_body_mass" in c]
+    assert len(weighin) == 1
+    assert "source" not in weighin[0]
+
+
+def test_freereps_never_touches_its_http_api():
+    # freereps.service is socket-activated (0 MB at rest). A daily poll against
+    # /api/v1/stats would wake it every day and defeat the reason it sleeps, so
+    # every stat here must come from Postgres.
+    run = FakeRun([("PSQL", "5")])
+    hs.fetch_freereps(CFG, run)
+    assert run.commands, "fetcher made no calls at all"
+    for cmd in run.commands:
+        assert "CURL" not in cmd
+        assert "8370" not in cmd and "13348" not in cmd
+        assert "PSQL" in cmd and "freereps" in cmd
+
+
 def test_showmycards_counts_the_collection_not_the_catalogue():
     # `cards` is the 171k-printing Scryfall catalogue; counting it reported 171182
     # owned cards. A row in `inventories` is a stack, so cards = SUM(quantity).
