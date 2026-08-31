@@ -105,6 +105,21 @@ buildGoModule {
   postPatch = ''
     substituteInPlace server/internal/storage/db.go \
       --replace-fail 'cfg.MaxConns = 16' 'cfg.MaxConns = 4'
+
+    # GetSourcePriorities accumulates into a `var result []SourcePriorityRule`,
+    # which stays NIL when the source_priority table has no rows for the user —
+    # and Go marshals a nil slice to JSON `null`, not `[]`. The dashboard's
+    # SourcesTab.tsx then does `config.data.rules.find(...)` unguarded (its `?.`
+    # is on `data`, not on `rules`) and the whole Settings → Sources tab dies
+    # with "can't access property find, h.rules is null".
+    #
+    # That is the DEFAULT state, not an edge case: nothing seeds source_priority,
+    # so every fresh install hits it the first time the tab is opened. Seeding a
+    # row would paper over it until someone deleted their rules again; making the
+    # empty result serialize as `[]` is the actual fix, and is what the field's
+    # own type promises.
+    substituteInPlace server/internal/storage/source_priority.go \
+      --replace-fail 'var result []SourcePriorityRule' 'result := []SourcePriorityRule{}'
   '';
 
   # buildGoModule cd's into $modRoot during configurePhase, so cwd is already
@@ -119,7 +134,16 @@ buildGoModule {
   # take a dependency on the entire Vite build just to run `go mod download`.
   # Worse, it makes a frontend failure surface as "go-modules: 1 dependency
   # failed", which is where the vendorHash bring-up actually got stuck. Drop it.
-  overrideModAttrs = _: { preBuild = null; };
+  #
+  # `postPatch` goes too, for a different reason: it only edits .go files, never
+  # go.mod or go.sum, so it cannot change what `go mod download` fetches — but
+  # leaving it in makes every source patch invalidate the vendor derivation and
+  # re-download the whole tailscale/gvisor module set to produce a byte-identical
+  # output. Nulling it here keeps vendorHash stable across future patches.
+  overrideModAttrs = _: {
+    preBuild = null;
+    postPatch = null;
+  };
 
   # `RunMigrations(dsn, "migrations")` (internal/storage/db.go) resolves a
   # RELATIVE path, so the migrations have to sit next to a WorkingDirectory the
