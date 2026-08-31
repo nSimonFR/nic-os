@@ -321,38 +321,53 @@ def test_ryot_hours_come_from_the_minute_rollup_minus_the_steam_dump():
     assert "- visual_novel_duration" in " ".join(hs.RYOT_MEDIA_HOURS_SQL.split())
 
 
-def test_freereps_averages_daily_totals_not_individual_rows():
-    # Apple Health delivers step_count as ~8 intraday buckets a day, so AVG(qty)
-    # would be the mean BUCKET (~1200) rather than the mean DAY (~9600). The
-    # inner query must sum per day before the outer one averages.
+def test_freereps_reports_distance_in_km_from_metres():
+    # distance_walking_running is stored in METRES (units column says "m"):
+    # 13960 m alongside 18545 steps is ~0.75 m a step. Passing qty through as-is
+    # would have put "13960 km" on the tile.
     def answer(cmd):
+        if "distance_walking_running" in cmd:
+            return "13960.88"
         if "step_count" in cmd:
-            return "9600"
-        if "active_energy" in cmd:
-            return "512"
+            return "18545"
         return "78.4"  # weight_body_mass
 
     out = hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
-    assert out == {"steps": 9600, "energy": 512, "weight": 78.4}
+    assert out == {"steps": 18545, "km": 14.0, "weight": 78.4}
 
 
-def test_freereps_excludes_today_from_its_averages():
-    # Today is always partial — the phone syncs periodically — so including it
-    # drags the 7-day average down by however much of the day has not happened.
+def test_freereps_day_totals_are_yesterday_not_today():
+    # The aggregator refreshes once every 86400s at an arbitrary wall-clock hour,
+    # so "today" would be sampled mid-day and then frozen for 24 hours. Yesterday
+    # is the last COMPLETE day.
     seen = []
 
     def answer(cmd):
-        seen.append(cmd)
+        seen.append(" ".join(cmd.split()))
         return "1"
 
     hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
-    averages = [c for c in seen if "AVG(daily)" in c]
-    assert len(averages) == 2
-    for cmd in averages:
-        flat = " ".join(cmd.split())
-        assert "time < current_date" in flat
-        assert "current_date - INTERVAL '7 days'" in flat
-        assert "GROUP BY time::date" in flat
+    totals = [c for c in seen if "SUM(qty)" in c]
+    assert len(totals) == 2
+    for cmd in totals:
+        assert "time >= current_date - INTERVAL '1 day'" in cmd
+        assert "time < current_date" in cmd
+
+
+def test_freereps_weight_is_the_last_known_not_a_day_total():
+    # Weigh-ins are sparse (146 rows over six years, newest over a month old), so
+    # a "yesterday" weight would render 0 almost every day.
+    seen = []
+
+    def answer(cmd):
+        seen.append(" ".join(cmd.split()))
+        return "78.4"
+
+    hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
+    weighin = [c for c in seen if "weight_body_mass" in c]
+    assert len(weighin) == 1
+    assert "ORDER BY time DESC LIMIT 1" in weighin[0]
+    assert "current_date" not in weighin[0]
 
 
 def test_freereps_pins_the_source_on_sums_but_not_on_the_weigh_in():
@@ -370,7 +385,7 @@ def test_freereps_pins_the_source_on_sums_but_not_on_the_weigh_in():
 
     hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
 
-    sums = [c for c in seen if "AVG(daily)" in c]
+    sums = [c for c in seen if "SUM(qty)" in c]
     assert len(sums) == 2
     assert all("source = ''" in c for c in sums)
 
