@@ -327,19 +327,21 @@ def test_freereps_reports_distance_in_km_from_metres():
     # would have put "13960 km" on the tile.
     def answer(cmd):
         if "distance_walking_running" in cmd:
-            return "13960.88"
+            return "210430.5"
         if "step_count" in cmd:
             return "18545"
         return "78.4"  # weight_body_mass
 
     out = hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
-    assert out == {"steps": 18545, "km": 14.0, "weight": 78.4}
+    assert out == {"km": 210.4, "steps": 18545, "weight": 78.4}
 
 
-def test_freereps_day_totals_are_yesterday_not_today():
-    # The aggregator refreshes once every 86400s at an arbitrary wall-clock hour,
-    # so "today" would be sampled mid-day and then frozen for 24 hours. Yesterday
-    # is the last COMPLETE day.
+def test_freereps_distance_is_month_to_date_but_steps_are_yesterday():
+    # Different windows because they answer different questions. A monthly total
+    # is cumulative, so including a partial today is correct — it just grows.
+    # A single-day figure with a partial day is misleading, and the aggregator
+    # refreshes once every 86400s at an arbitrary hour, so a "today" step count
+    # would be sampled mid-day and then frozen for 24 hours.
     seen = []
 
     def answer(cmd):
@@ -347,11 +349,16 @@ def test_freereps_day_totals_are_yesterday_not_today():
         return "1"
 
     hs.fetch_freereps(CFG, FakeRun([("PSQL", answer)]))
-    totals = [c for c in seen if "SUM(qty)" in c]
-    assert len(totals) == 2
-    for cmd in totals:
-        assert "time >= current_date - INTERVAL '1 day'" in cmd
-        assert "time < current_date" in cmd
+
+    month = [c for c in seen if "distance_walking_running" in c]
+    assert len(month) == 1
+    assert "date_trunc('month', current_date)" in month[0]
+    assert "time < current_date" not in month[0]  # today is included
+
+    day = [c for c in seen if "step_count" in c]
+    assert len(day) == 1
+    assert "time >= current_date - INTERVAL '1 day'" in day[0]
+    assert "time < current_date" in day[0]  # today is excluded
 
 
 def test_freereps_weight_is_the_last_known_not_a_day_total():
