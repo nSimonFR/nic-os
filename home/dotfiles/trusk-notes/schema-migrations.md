@@ -1,6 +1,10 @@
 # Schema migrations
 
-Triggers: editing anything under `schema/migrations` · `42703 column does not exist` after a deploy · `_migrations` table · schema drift between envs
+Triggers: editing anything under `schema/migrations` · `42703 column does not exist` after a deploy · `_migrations` table · schema drift between envs · `ALTER COLUMN … TYPE` · `AccessExclusiveLock` · `lock_timeout`
+
+## `ALTER COLUMN ... TYPE numeric(p,s)` réécrit la table dès que le scale change
+
+`ADD COLUMN` nullable sans default est une opération de métadonnée (instantané). `ALTER COLUMN ... TYPE` sur un `numeric` dont le **scale** change ne l'est pas : PostgreSQL réécrit toute la table sous `AccessExclusiveLock`, ce qui bloque lectures ET écritures pendant la réécriture. `SET LOCAL lock_timeout` borne **l'attente du verrou, pas la réécriture** — ne pas le lire comme une garantie de durée. Mesure de référence (order-mission, `mission`, `fee_percent` `decimal(10,2)` → `(10,4)`, 2026-08-31) : 64 341 lignes / 70 MB ⇒ quelques secondes. Vérifier aussi que les données passent la nouvelle contrainte avant : `precision 10, scale 4` ne laisse que 6 chiffres entiers.
 
 ## Migration footgun — never add steps to an already-applied migration
 

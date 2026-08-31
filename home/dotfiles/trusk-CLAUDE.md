@@ -19,6 +19,7 @@ would actually be looking at. Open a note when the work in front of you hits its
 | [data-and-analytics-mcp](/Users/nsimon/MyDocuments/TRUSK/notes/data-and-analytics-mcp.md) | GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase |
 | [argocd-operator-rbac](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-operator-rbac.md) | ClusterRoleBinding subjects keep reverting · consumers 403 after an operator writes RBAC · `ignoreDifferences` |
 | [legacy-trusk-api](/Users/nsimon/MyDocuments/TRUSK/notes/legacy-trusk-api.md) | legacy user cannot see an order set · `trusk_customer` · `profile.truskCustomer` |
+| [prod-vs-staging-prerequisites](/Users/nsimon/MyDocuments/TRUSK/notes/prod-vs-staging-prerequisites.md) | bump prod isolé d'un service Nest 11 · `FailedMount` / `CreateContainerConfigError` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` · sidecar flagd qui ne démarre pas · `flagd/shared-flags` introuvable · « marche en staging, pas en prod » |
 
 A finding earns a note when it is longer than a paragraph, still true in six months, and
 not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
