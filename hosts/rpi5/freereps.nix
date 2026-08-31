@@ -233,18 +233,20 @@ in
         description = "Apple Health";
         # Reads the freereps Postgres directly (nicos_scripts/homepage/stats.py
         # fetch_freereps), NOT /api/v1/stats — so the daily poll never wakes the
-        # socket-activated service. Steps and energy are 7-day averages of daily
-        # totals excluding today (today is always partial); weight is the last
-        # weigh-in, which is routinely weeks old and shown as-is.
+        # socket-activated service. Steps and distance are YESTERDAY's totals
+        # (the last complete day: the aggregator refreshes once a day at an
+        # arbitrary hour, so "today" would be a partial day frozen for 24h).
+        # Weight is the last weigh-in, routinely weeks old and shown as-is,
+        # because weigh-ins are far too sparse for a per-day figure.
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/freereps";
           refreshInterval = 3600000;
           mappings = [
-            { field = "steps"; label = "Steps/day"; format = "number"; }
-            { field = "energy"; label = "kcal/day"; format = "number"; }
-            # float, not number: weight is one decimal (78.4) and `number` would
-            # drop it — same reason wakapi's hour fields are float.
+            { field = "steps"; label = "Steps"; format = "number"; }
+            # float, not number: these carry a decimal (13.9 km, 78.4 kg) and
+            # `number` would drop it — same reason wakapi's hour fields are float.
+            { field = "km"; label = "Distance"; format = "float"; suffix = " km"; }
             { field = "weight"; label = "Weight"; format = "float"; suffix = " kg"; }
           ];
         };

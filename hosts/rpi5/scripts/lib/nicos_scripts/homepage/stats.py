@@ -1036,59 +1036,59 @@ def fetch_dawarich(cfg, run):
     }
 
 
-def _freereps_daily_avg(cfg, run, metric):
-    """Mean of the DAILY TOTALS of `metric` over the last 7 complete days.
+def _freereps_yesterday_total(cfg, run, metric):
+    """Total of `metric` over the last COMPLETE day.
 
-    Two deliberate choices:
+    Yesterday, not today, and not "the most recent day that happens to have
+    data". Both alternatives are worse here:
 
-    * The average is of per-day sums, not of rows. Apple Health delivers these
-      metrics as intraday buckets (~8 step_count rows a day), so AVG(qty) would
-      be the mean bucket rather than the mean day — off by roughly 8x.
-    * `time < current_date` excludes today. Today is always partial (the phone
-      syncs periodically), and including it drags the average down by however
-      much of the day has not happened yet.
+    * Today is always partial. The aggregator refreshes once every
+      REFRESH_INTERVAL (86400s) at whatever wall-clock time the service last
+      started, so "today" would be sampled at an arbitrary hour — a fetch at
+      06:00 would show a near-empty day and keep showing it for 24 hours.
+    * "Most recent day with data" would keep rendering a week-old day as if it
+      were current the moment the phone stops syncing. Yesterday reads 0
+      instead, which is wrong but VISIBLY wrong — the failure mode
+      known_issue_homepage_stats_silent_stale_tiles exists to avoid.
 
-    `qty` is the column: FreeReps leaves avg_val/min_val/max_val NULL for
-    cumulative metrics like these and fills only qty (verified against the live
-    table — 100% qty, 0% avg_val).
+    Summed, not averaged: Apple Health delivers these as intraday buckets (~8
+    step_count rows a day), so this is a SUM over the day's buckets. `qty` is the
+    column — FreeReps leaves avg_val/min_val/max_val NULL for cumulative metrics
+    and fills only qty.
 
     `source = ''` is pinned, and it is NOT paranoia: health_metrics already holds
     two sources ("" from the Health Auto Export ingest and "FreeReps Backfill"),
     and FreeReps only dedups by source priority in its OWN query layer — a plain
-    SUM here sees every source at once. Today the two do not overlap on these
-    metrics, so dropping the filter would give the same answer and then silently
-    double the step count the day something backfills the same days twice. If
-    the empty source ever stops being the live one this reads 0, which is wrong
-    but VISIBLY wrong, rather than plausibly inflated.
+    SUM here sees every source at once. They do not overlap on these metrics
+    today, so the filter is a no-op now and a guard against a silently doubled
+    step count once something backfills the same days twice.
     """
-    return int(pg_superuser(cfg, run, "freereps", f"""
-        SELECT COALESCE(ROUND(AVG(daily)), 0) FROM (
-            SELECT SUM(qty) AS daily
-              FROM health_metrics
-             WHERE metric_name = '{metric}'
-               AND source = ''
-               AND time >= current_date - INTERVAL '7 days'
-               AND time <  current_date
-             GROUP BY time::date
-        ) d;
+    return float(pg_superuser(cfg, run, "freereps", f"""
+        SELECT COALESCE(SUM(qty), 0)
+          FROM health_metrics
+         WHERE metric_name = '{metric}'
+           AND source = ''
+           AND time >= current_date - INTERVAL '1 day'
+           AND time <  current_date;
     """) or 0)
 
 
 def fetch_freereps(cfg, run):
-    """Apple Health: a week of activity plus the latest weigh-in.
+    """Apple Health: yesterday's steps and distance, plus the latest weigh-in.
 
     Reads Postgres directly rather than FreeReps' own /api/v1/stats, and that is
     the whole point: freereps.service is socket-activated (0 MB at rest), so a
     daily poll against its HTTP API would wake it every single day and throw
     away the reason it sleeps. Same rule as every other tile here.
 
-    The two averages pin `source = ''` (see _freereps_daily_avg); the weigh-in
-    below deliberately does NOT. The distinction is the query, not the metric: a
-    SUM over several sources double-counts, whereas "the most recent row" is
-    correct whichever source produced it. Filtering here would instead freeze the
-    tile on the last Apple weight the day a Withings sync starts writing
-    `source = 'Withings'` — the silent-stale-tile failure that
-    known_issue_homepage_stats_silent_stale_tiles is about.
+    Weight is the odd one out on purpose, twice over. It is NOT a
+    yesterday total — weigh-ins are sparse (146 rows across six years, and the
+    newest is over a month old), so "yesterday" would render 0 almost every day;
+    the last known value is the only useful reading. And it does NOT pin
+    `source`, unlike the two day totals: a SUM over several sources
+    double-counts, whereas "the most recent row" is correct whichever source
+    produced it, and filtering would freeze the tile on the last Apple weight the
+    day a Withings sync starts writing `source = 'Withings'`.
     """
     # No time bound on the weight lookup, unlike the averages above. Weight is
     # sparse and can be weeks stale (the live table's newest is over a month old,
@@ -1102,9 +1102,14 @@ def fetch_freereps(cfg, run):
          ORDER BY time DESC
          LIMIT 1;
     """)
+    # distance_walking_running is stored in METRES (the units column says "m"),
+    # not kilometres: yesterday's 13960 alongside 18545 steps is ~0.75 m a step,
+    # which is a walk, not a marathon. Reporting qty as-is would have put "13960
+    # km" on the tile.
+    metres = _freereps_yesterday_total(cfg, run, "distance_walking_running")
     return {
-        "steps": _freereps_daily_avg(cfg, run, "step_count"),
-        "energy": _freereps_daily_avg(cfg, run, "active_energy"),
+        "steps": int(_freereps_yesterday_total(cfg, run, "step_count")),
+        "km": round(metres / 1000, 1),
         "weight": float(weight or 0),
     }
 
