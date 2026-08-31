@@ -1073,8 +1073,33 @@ def _freereps_yesterday_total(cfg, run, metric):
     """) or 0)
 
 
+def _freereps_month_total(cfg, run, metric):
+    """Total of `metric` so far this calendar month, today included.
+
+    Today is deliberately NOT excluded here, unlike _freereps_yesterday_total.
+    A month-to-date total is cumulative, so a partial today simply makes it grow
+    through the day — that is the expected reading of "this month". For a
+    single-day figure a partial day is misleading, which is why that one stops at
+    midnight; the two rules differ because the questions differ.
+
+    Same `source = ''` pin and same `qty` column as the day totals — see
+    _freereps_yesterday_total for why both matter.
+    """
+    return float(pg_superuser(cfg, run, "freereps", f"""
+        SELECT COALESCE(SUM(qty), 0)
+          FROM health_metrics
+         WHERE metric_name = '{metric}'
+           AND source = ''
+           AND time >= date_trunc('month', current_date);
+    """) or 0)
+
+
 def fetch_freereps(cfg, run):
-    """Apple Health: yesterday's steps and distance, plus the latest weigh-in.
+    """Apple Health: this month's distance, yesterday's steps, latest weigh-in.
+
+    Three different time windows on purpose, one per question: distance is a
+    month-to-date running total, steps are the last complete day, and weight is
+    simply the most recent reading.
 
     Reads Postgres directly rather than FreeReps' own /api/v1/stats, and that is
     the whole point: freereps.service is socket-activated (0 MB at rest), so a
@@ -1103,13 +1128,13 @@ def fetch_freereps(cfg, run):
          LIMIT 1;
     """)
     # distance_walking_running is stored in METRES (the units column says "m"),
-    # not kilometres: yesterday's 13960 alongside 18545 steps is ~0.75 m a step,
+    # not kilometres: a day's 13960 alongside 18545 steps is ~0.75 m a step,
     # which is a walk, not a marathon. Reporting qty as-is would have put "13960
     # km" on the tile.
-    metres = _freereps_yesterday_total(cfg, run, "distance_walking_running")
+    metres = _freereps_month_total(cfg, run, "distance_walking_running")
     return {
-        "steps": int(_freereps_yesterday_total(cfg, run, "step_count")),
         "km": round(metres / 1000, 1),
+        "steps": int(_freereps_yesterday_total(cfg, run, "step_count")),
         "weight": float(weight or 0),
     }
 
