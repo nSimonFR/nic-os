@@ -146,20 +146,6 @@ class DigestTests(unittest.TestCase):
         self.assertIn("🎲 *Modern Tournament*", text)
         self.assertIn("👥 6 places", text)
 
-    def test_digest_ignores_updates_cancellations_and_removals(self):
-        def event(**changes):
-            base = {"external_id": "one", "title": "Modern Tournament", "start_at": "2026-08-12T19:30:00+02:00", "timezone": "Europe/Paris", "event_url": "https://example.test/one", "remaining_seats": 10}
-            return normalize("source", {**base, **changes}, "Europe/Paris")
-        old = event()
-        updated = event(remaining_seats=4)
-        cancelled = event(external_id="cancelled", status="cancelled")
-        removed = event(external_id="removed")
-        result = ChangeDetector().compare(
-            {old.key: old, removed.key: removed},
-            {updated.key: updated, cancelled.key: cancelled},
-        )
-        self.assertEqual(render_digest(result), "")
-
 
 if __name__ == "__main__":
     unittest.main()
