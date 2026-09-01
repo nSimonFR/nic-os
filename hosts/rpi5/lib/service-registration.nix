@@ -281,18 +281,39 @@ let
           groups by `tile.category` first and walks `categoryOrder`, so a Backend
           tile renders after every Apps tile whatever its number. The blocks are
           therefore free to be laid out for legibility rather than for global
-          sequence:
+          sequence.
 
-            10–220   Apps tiles, grouped by subject — money (Sure, Wealthfolio),
-                     body (FreeReps, BeaverHabits, Ryot), making (Wakapi), the
-                     day (Home Assistant, Calino), files and memory (Nextcloud
-                     … Karakeep), places (Gramps, Dawarich, AirTrail), the rest
-                     (Forgejo, Reactive Resume, ShowMyCards) and finally the
-                     platform (Beszel, Vaultwarden, Aperture).
-            300–380  Backend tiles and the untiled routed services.
+          ⚠ THE APPS BLOCK IS GROUPED IN FOURS, and that is not cosmetic: the
+            dashboard renders Apps at `columns = 4` (see homepage.nix's `layout`),
+            so a group of three or five does not end where a row ends and the
+            grid stops carrying any meaning. The first pass here grouped by
+            subject alone and every boundary landed mid-row — Ryot separated from
+            FreeReps and BeaverHabits, Karakeep separated from the rest of the
+            library, Beszel stranded at the end of a row of unrelated tiles.
 
-          A tile with no obvious neighbour goes at the end of its block, not at
-          the end of the file.
+            Each row is one subject, four tiles wide:
+
+              10–40    money and the day  — Sure, Wealthfolio, Home Assistant,
+                                            Calino
+              50–80    my hours           — FreeReps, BeaverHabits, Ryot, Wakapi
+              90–120   things I saved     — Immich, AFFiNE, Papra, Karakeep
+              130–160  people and places  — Nextcloud, Gramps Web, Dawarich,
+                                            AirTrail
+              170–200  making, collecting — Forgejo, Reactive Resume,
+                                            ShowMyCards, Aperture
+              210–220  keeping it safe    — Beszel, Vaultwarden
+
+            The last row is short because 22 does not divide by four. That is
+            fine as long as the remainder is itself a coherent pair, which is why
+            monitoring and secrets are the two left over rather than whichever
+            tiles happened to sort last.
+
+            ADDING A TILE therefore means deciding which row it joins and
+            renumbering that row's neighbours, not appending after 220. Adding a
+            23rd and 24th tile should fill row 6 out to four.
+
+            300–380  Backend tiles and the untiled routed services. Backend is
+                     four tiles, so it is already exactly one row.
         '';
         example = 120;
       };

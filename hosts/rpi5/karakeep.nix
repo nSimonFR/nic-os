@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 130;   # with the other things-I-saved tiles (Immich…Papra)
+      order   = 120;   # closes row 3, "things I saved" (Immich, AFFiNE, Papra)
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {

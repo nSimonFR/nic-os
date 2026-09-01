@@ -374,7 +374,7 @@ in
     public = {
       # 4th in Apps. Swapped with Nextcloud (was 30) so Nextcloud and Calino, which
       # reads Nextcloud's calendars, sit next to each other.
-      order   = 110;
+      order   = 100;
       port    = 8443;
       backend = "http://127.0.0.1:13010";
       funnel  = true;

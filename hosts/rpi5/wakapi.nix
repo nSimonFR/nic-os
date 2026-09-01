@@ -122,7 +122,7 @@ in {
     heavyPriority = 140;
 
     public = {
-      order   = 60;
+      order   = 80;
       port    = 3030;
       backend = "http://127.0.0.1:3030";
       tile = {

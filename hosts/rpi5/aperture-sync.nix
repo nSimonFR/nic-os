@@ -211,11 +211,13 @@ in
   # zero-usage caveat that makes tokens/day an Anthropic-side figure.
   nic.externalTiles = lib.mkIf isEnabled [
     {
-      # Last in Apps, closing the platform block with Beszel (200) and
-      # Vaultwarden (210). The Backend category renders after Apps regardless of
+      # Closes row 5, "making & collecting" (Forgejo, Reactive Resume,
+      # ShowMyCards): this is the gateway the coding agents actually run on, so it
+      # sits with what they produce rather than with the two keep-the-box-safe
+      # tiles on row 6. The Backend category renders after Apps regardless of
       # these numbers — `order` only sorts WITHIN a category — so this does not
       # need to stay below tiny-llm-gate's 300.
-      order = 220;
+      order = 200;
       href = "${apertureUrl}/ui";
       tile = {
         name = "Aperture";
