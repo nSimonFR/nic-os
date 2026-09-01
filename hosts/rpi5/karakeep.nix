@@ -140,8 +140,13 @@ in
           url = "http://127.0.0.1:8087/karakeep";
           refreshInterval = 3600000;
           mappings = [
+            # `Favorites` was 0 of 15 bookmarks — the feature is simply not used, so
+            # the field could only render 0. Untagged rather than "added this week",
+            # which would also be 0: with 32 tags over 15 bookmarks this collection
+            # is over-tagged, so what the tagger has NOT reached is the actionable
+            # count.
             { field = "bookmarks"; label = "Bookmarks"; format = "number"; }
-            { field = "favorites"; label = "Favorites"; format = "number"; }
+            { field = "untagged";  label = "Untagged";  format = "number"; }
             { field = "tags";      label = "Tags";      format = "number"; }
           ];
         };

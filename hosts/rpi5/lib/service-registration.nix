@@ -224,6 +224,46 @@ let
     };
   };
 
+  # A dashboard tile for something that is NOT a service on this host.
+  #
+  # Aperture is the only one and the reason this exists: it is a Tailscale-managed
+  # service on the tailnet (ai.gate-mintaka.ts.net), so it has no unit here, no
+  # port to bind, nothing for `tailscale serve` to forward to and no database on
+  # this box. Registering it under `nic.services.*.public` would mean inventing a
+  # `port` and a `backend` — both mandatory there, and both read by
+  # tailscale-serve.nix to emit a serve command for a service that does not exist.
+  # It lived in homepage's `bookmarks` for that reason, and bookmarks cannot carry
+  # a widget.
+  #
+  # So: same `tile` submodule as a registered service, but the href is given
+  # outright rather than derived from a `publicUrl` this host does not own. The
+  # `order` shares one number line with `public.order` — the uniqueness assertion
+  # below covers services only, so a collision between the two lists is broken by
+  # name rather than caught. Deterministic, just not asserted.
+  externalTileModule = lib.types.submodule {
+    options = {
+      order = lib.mkOption {
+        type = lib.types.int;
+        description = "Sort key, ascending, shared with `public.order`.";
+        example = 240;
+      };
+
+      href = lib.mkOption {
+        type = lib.types.str;
+        description = "Absolute URL the tile links to. Not derived — this host does not route it.";
+        example = "https://ai.gate-mintaka.ts.net/ui";
+      };
+
+      tile = lib.mkOption {
+        type = tileModule;
+        description = ''
+          The tile itself, exactly as a registered service declares it. `deepLink`
+          is ignored here — fold any path into `href`, which is already absolute.
+        '';
+      };
+    };
+  };
+
   # A service's reachable-from-outside surface.
   publicModule = lib.types.submodule ({ config, ... }: {
     options = {
@@ -487,6 +527,19 @@ in
       funnel commands) and `homepage.nix` (tiles). Read-only — this replaced
       services-registry.nix, so declare the facts on the owning service and
       never maintain a list here.
+    '';
+  };
+
+  options.nic.externalTiles = lib.mkOption {
+    type = lib.types.listOf externalTileModule;
+    default = [ ];
+    description = ''
+      Dashboard tiles for things this host does not run or route — see
+      externalTileModule above. Declared by the module that owns the integration
+      (aperture-sync.nix for Aperture) so the tile still sits next to the config
+      it describes, and consumed by homepage.nix alongside `nic.publicEntries`.
+      Keep this list near-empty: anything with a unit on this box belongs in
+      `nic.services.*.public`, which also gets it routed and backed up.
     '';
   };
 

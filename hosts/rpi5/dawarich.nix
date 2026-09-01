@@ -86,9 +86,16 @@ in
           url = "http://127.0.0.1:8087/dawarich";
           refreshInterval = 3600000;
           mappings = [
-            { field = "points"; label = "Points"; format = "number"; }
-            { field = "trips"; label = "Trips"; format = "number"; }
-            { field = "visits"; label = "Visits"; format = "number"; }
+            # `Points` was all-time (7,244) — a large, always-growing number that
+            # hid the only thing worth knowing here: whether the phone is still
+            # feeding it. It is barely feeding it, 134 points over 7 days, and that
+            # starvation is exactly why DBSCAN has produced no new visit since
+            # 2026-04-19 (known_issue_dawarich_no_visits_sparse_points). `Visits`
+            # stays all-time on purpose — a "visits this week" field would read 0
+            # and look like a display bug rather than the symptom it is.
+            { field = "points_7d"; label = "Points 7d"; format = "number"; }
+            { field = "trips";     label = "Trips";     format = "number"; }
+            { field = "visits";    label = "Visits";    format = "number"; }
           ];
         };
       };

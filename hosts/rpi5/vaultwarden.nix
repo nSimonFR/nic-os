@@ -89,9 +89,12 @@ in {
           url = "http://127.0.0.1:8087/vaultwarden";
           refreshInterval = 3600000;
           mappings = [
-            { field = "items"; label = "Items"; format = "number"; }
-            { field = "users"; label = "Users"; format = "number"; }
-            { field = "devices"; label = "Devices"; format = "number"; }
+            # `Users` was 2 and a two-person vault does not gain users. On a
+            # password manager the figure that moves — and that says whether
+            # anything is being rotated — is how many items changed this month.
+            { field = "items";       label = "Items";    format = "number"; }
+            { field = "changed_30d"; label = "Changed";  format = "number"; }
+            { field = "devices";     label = "Devices";  format = "number"; }
           ];
         };
       };

@@ -9,23 +9,34 @@ Endpoints (one per homepage tile, three stats each):
   /sure      — Sure (cash + spendable, spend + budget left, food + food left) — direct Postgres
   /wealthfolio — Wealthfolio (net worth + investments, invested + gain, 30-day return)
   /immich    — Immich (photos, videos, storage)
-  /nextcloud — Nextcloud (active users, files, shares) — serverinfo OCS API
+  /nextcloud — Nextcloud (files, contacts, storage used) — serverinfo OCS API + Postgres
   /calino    — Calino (events today, events next 7 days, tasks due) — Nextcloud CalDAV
-  /affine    — AFFiNE (workspaces, docs, storage) — direct Postgres, summed across workspaces
-  /beszel    — Beszel (systems, up, triggered alerts) — direct read-only SQLite
-  /karakeep  — Karakeep (bookmarks, favorites, tags) — direct read-only SQLite
+  /affine    — AFFiNE (docs, docs edited in 7 days, storage) — direct Postgres, summed across workspaces
+  /beszel    — Beszel (up, triggered alerts, peak CPU temperature in 24h) — direct read-only SQLite
+  /karakeep  — Karakeep (bookmarks, untagged, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (last reported day, 30-day cost, heating today)
                    — recorder SQLite for the Linky statistics, /api/states for Voltalis
   /papra     — Papra (documents, tags, storage) — direct read-only SQLite
-  /reactiveresume — Reactive Resume (resumes, users, views) — direct Postgres query
+  /reactiveresume — Reactive Resume (resumes, public, edited in 30 days) — direct Postgres query
   /grampsweb — Gramps Web (people, families, events) — direct read-only SQLite, summed across trees
-  /vaultwarden — Vaultwarden (items, users, devices) — direct read-only SQLite
+  /vaultwarden — Vaultwarden (items, changed in 30 days, devices) — direct read-only SQLite
   /wakapi    — Wakapi (coding hours: today, 30 days, all time) — direct read-only SQLite
-  /dawarich  — Dawarich (points, trips, visits) — direct Postgres query (superuser)
+  /dawarich  — Dawarich (points in 7 days, trips, visits) — direct Postgres query (superuser)
   /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
-  /forgejo   — Forgejo (repositories, open issues, open PRs) — direct Postgres query (superuser)
+  /forgejo   — Forgejo (repositories, overdue mirrors, disk size) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
+  /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
+
+A NOTE ON WHAT BELONGS ON A TILE. Three of these used to spend a field on a
+number that cannot change: Nextcloud's `users` (1 on a single-user server),
+Vaultwarden's `users` (2), AFFiNE's `workspaces` (4), Beszel's `systems` (2) —
+and three more on a number that is structurally 0: Nextcloud's `shares`,
+Forgejo's `issues`/`pulls` (167 repos, all mirrors), Reactive Resume's `views`.
+A dashboard field earns its third of a tile by being able to tell you something
+you did not already know, so each of those was replaced by a figure with a time
+window or a threshold in it. `alerts` is the shape to copy: 0 nearly always, and
+the one day it is not, that is the whole point.
 
 Every homepage tile reads its stats from here rather than from the app itself,
 including the three that have a native homepage widget (Nextcloud, AFFiNE,
@@ -77,6 +88,7 @@ import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 
+from .. import state
 from ..secrets import env_int, env_str
 
 DEFAULT_STATE_DIR = "/var/lib/homepage-stats"
@@ -94,7 +106,15 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # 13 replaces home assistant's people_home/lights_on/switches_on with day/cost/heating
 # — all three field names change at once, so without a bump every one of them renders
 # as NaN until the next nightly refresh.
-STATS_SCHEMA = 13
+#
+# 14 retires the constant and structurally-zero fields (see the module docstring):
+# nextcloud users/shares → contacts/storage, vaultwarden users → changed_30d,
+# affine workspaces → edited_7d, beszel systems → peak_temp, karakeep favorites →
+# untagged, forgejo issues/pulls → stale_mirrors/size, reactiveresume users/views →
+# public/edited_30d, dawarich points → points over 7 days (same NAME, different
+# meaning — exactly the case the paragraph above says to bump for), and drops
+# showmycards' `locations`, which no tile ever mapped.
+STATS_SCHEMA = 14
 
 
 @dataclass(frozen=True)
@@ -154,6 +174,12 @@ class Config:
     # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
+    # serverinfo reports num_files and num_shares but nothing per-window and no
+    # contact count, so the two figures that replaced `users`/`shares` come from
+    # Nextcloud's Postgres instead (same superuser-over-peer route as forgejo).
+    # Both sources are read in one fetch; Nextcloud is always-on, so neither wakes
+    # anything.
+    nextcloud_db: str = "nextcloud_production"
     # Calino (hosts/rpi5/calino.nix) stores nothing of its own — the calendars it
     # renders are Nextcloud's — so its tile reads Nextcloud's CalDAV. Same always-on
     # backend as nextcloud_info_url, and no Host header is needed: overwritecondaddr
@@ -179,6 +205,13 @@ class Config:
     # service runs as root so hass's 0700 state dir is reachable, same as
     # wealthfolio_db. HA is always-on, so nothing here is about avoiding a wake.
     hass_db: str = "/var/lib/hass/home-assistant_v2.db"
+
+    # Aperture's Prometheus endpoint (hosts/rpi5/aperture-sync.nix grants
+    # `read_metrics` to nSimonFR@github; without it this 403s, and `admin` does
+    # NOT imply it). Aperture is a Tailscale-managed service on the tailnet, not a
+    # unit on this host — it is the one tile whose data comes from off-box, which
+    # is also why it has no `nic.services` entry and rides `nic.externalTiles`.
+    aperture_metrics_url: str = "http://ai.gate-mintaka.ts.net/metrics"
 
     state_dir: str = DEFAULT_STATE_DIR
     port: int = 8087
@@ -209,8 +242,10 @@ class Config:
             affine_db=s("AFFINE_DB", cls.affine_db),
             hass_db=s("HASS_DB", cls.hass_db),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
+            nextcloud_db=s("NEXTCLOUD_DB", cls.nextcloud_db),
             nextcloud_dav_url=s("NEXTCLOUD_DAV_URL", cls.nextcloud_dav_url),
             nextcloud_user=s("NEXTCLOUD_USER", cls.nextcloud_user),
+            aperture_metrics_url=s("APERTURE_METRICS_URL", cls.aperture_metrics_url),
             calino_settings_uri=s("CALINO_SETTINGS_URI", cls.calino_settings_uri),
             # STATE_DIRECTORY is set by systemd StateDirectory=.
             state_dir=s("STATE_DIRECTORY", DEFAULT_STATE_DIR),
@@ -237,7 +272,7 @@ class Stats:
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
         "nextcloud", "calino", "affine", "beszel",
-        "freereps",
+        "freereps", "aperture",
     )
 
     def __init__(self):
@@ -317,6 +352,28 @@ def pg_superuser(cfg, run, db, sql):
 
 def curl_json(cfg, run, *args):
     return json.loads(run([cfg.curl, "-sf", *args]))
+
+
+def curl_text(cfg, run, *args):
+    """Raw body, for the one endpoint here that is not JSON — Prometheus text."""
+    return run([cfg.curl, "-sf", *args])
+
+
+def compact(n):
+    """A large count at tile width: 865_900_000 -> "866M", 15_641 -> "15.6k".
+
+    Token counts run to nine figures, and homepage's `number` formatter would
+    render that as "865,900,000" — wider than the tile. Thousands keep one
+    decimal because the interesting range for requests-per-day is 1–20k, where
+    "1k" and "1.9k" are meaningfully different; millions do not, because nobody
+    reads the tenth of a million.
+    """
+    n = float(n)
+    if abs(n) >= 1_000_000:
+        return f"{n / 1_000_000:,.0f}M"
+    if abs(n) >= 1_000:
+        return f"{n / 1_000:,.1f}k"
+    return f"{n:,.0f}"
 
 
 # ── fetchers ─────────────────────────────────────────────────────────────────
@@ -583,13 +640,37 @@ def fetch_nextcloud(cfg, run):
     # as nsimon 401s. Replaces the native `nextcloud` homepage widget, which always
     # renders freespace/activeusers/numfiles/numshares and only lets `fields` filter
     # which of them survive.
+    #
+    # `users` and `shares` used to take two of the three fields and neither could
+    # move: this is a single-user server, so activeUsers.last24hours is 1 whenever
+    # anything has touched it and 0 otherwise, and nothing is ever shared with
+    # anybody — num_shares has been 0 since the day it was installed. What this
+    # instance actually is, is the DAV hub behind Calino and the phone's contact
+    # sync, so the two replacements are the contact count and the bytes stored.
     data = curl_json(cfg, run, cfg.nextcloud_info_url,
                      "-H", f"NC-Token: {env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
                      "-H", "OCS-APIRequest: true")["ocs"]["data"]
     return {
-        "users": data["activeUsers"]["last24hours"],
         "files": data["nextcloud"]["storage"]["num_files"],
-        "shares": data["nextcloud"]["shares"]["num_shares"],
+        # oc_cards is CardDAV's row-per-vCard table, so this is contacts across
+        # every address book. Calendars are deliberately NOT counted here — the
+        # Calino tile already answers the calendar question, and with recurrence
+        # expansion rather than a raw oc_calendarobjects count.
+        "contacts": int(pg_superuser(cfg, run, cfg.nextcloud_db,
+                                     "SELECT COUNT(*) FROM oc_cards;") or 0),
+        # The filecache row with an empty path IS the storage root, so its `size`
+        # is that storage's total. There are three storages here (the user's home,
+        # plus the local appdata ones), and only `home::` is the user's data —
+        # summing all of them would fold ~1.4 MB of appdata into the figure and,
+        # worse, would drift the day another external storage is mounted.
+        # serverinfo has no equivalent: it reports `freespace`, which is a fact
+        # about the disk (already in the header's resources widget), not about
+        # what Nextcloud is holding.
+        "storage": int(pg_superuser(cfg, run, cfg.nextcloud_db, """
+            SELECT COALESCE(f.size, 0) FROM oc_filecache f
+              JOIN oc_storages s ON s.numeric_id = f.storage
+             WHERE f.path = '' AND s.id LIKE 'home::%';
+        """) or 0),
     }
 
 
@@ -854,11 +935,25 @@ def fetch_affine(cfg, run):
         return int(pg_superuser(cfg, run, cfg.affine_db, sql) or 0)
 
     return {
-        "workspaces": count("SELECT COUNT(*) FROM workspaces;"),
         # workspace_pages is AFFiNE's registry of actual docs. `snapshots` holds a
         # few more rows — one Yjs doc per workspace for the doc list itself — which
         # are not docs anyone would count on a dashboard.
         "docs": count("SELECT COUNT(*) FROM workspace_pages;"),
+        # Replaces `workspaces`, which was a 4 fixed by the four-workspace layout in
+        # project_affine_workspaces_courses and could only change if that layout did.
+        # With 7,914 docs the total is effectively a constant too — what says whether
+        # the wiki is alive is how many were touched this week (15).
+        #
+        # The timestamp lives on `snapshots`, not on workspace_pages (which has no
+        # mtime at all), so this joins the two: snapshots alone counts 17 because it
+        # includes the per-workspace doc-list Yjs docs, the same rows the `docs`
+        # count above excludes. Joining keeps both fields counting the same universe.
+        "edited_7d": count("""
+            SELECT COUNT(*) FROM snapshots s
+              JOIN workspace_pages p
+                ON p.page_id = s.guid AND p.workspace_id = s.workspace_id
+             WHERE s.updated_at > now() - interval '7 days';
+        """),
         # deleted_at IS NULL reproduced GraphQL's blobsSize to the byte
         # (558516275); summing every row instead over-reports by the tombstones.
         "storage": count(
@@ -866,25 +961,62 @@ def fetch_affine(cfg, run):
     }
 
 
+# Hottest the CPU has been in the last 24 hours, across every monitored system.
+#
+# `stats` is a JSON blob per sample and the temperatures live in a nested object
+# keyed by sensor name (`{"t": {"cpu_thermal": 61.15, "rp1_adc": 60.7}}`), which
+# is why this reads $.t.cpu_thermal by name rather than taking the object's max:
+# rp1_adc is the I/O controller, it tracks the SoC closely, and including it would
+# make the figure "hottest sensor" instead of "hottest CPU".
+#
+# type = '10m' rather than '1m': Beszel keeps only about an hour of 1-minute
+# samples before rolling them up, so a 24h window over '1m' silently becomes a
+# 1h window. json_extract returns NULL on a system whose agent reports no
+# temperature at all (beast does not always), and MAX skips NULLs, so a mixed
+# fleet still yields the Pi's figure rather than nothing.
+BESZEL_PEAK_TEMP_SQL = """
+SELECT COALESCE(ROUND(MAX(json_extract(stats, '$.t.cpu_thermal')), 1), 0)
+  FROM system_stats
+ WHERE type = '10m' AND created > datetime('now', '-1 day');
+"""
+
+
 def fetch_beszel(cfg, run):
     # Read-only direct SQLite query against Beszel's PocketBase DB — same trick as
     # fetch_karakeep. `alerts.triggered` is the interesting one: it's what actually
     # fired, not how many alert rules exist.
+    #
+    # `systems` was the third field and it is a 2 that has been a 2 since beast was
+    # added. Peak CPU temperature replaced it because this is a Pi 5 in a case whose
+    # documented failure mode is thermal throttling and OOM-thrash-into-watchdog-
+    # reset, and Beszel is already sampling the sensor every minute — the dashboard
+    # simply never showed it. `up` still carries the fleet size implicitly: it reads
+    # 1 when beast is suspended, which is most of the time and is normal.
     return {
-        "systems": sqlite_count(cfg, run, cfg.beszel_db, "SELECT COUNT(*) FROM systems;"),
         "up": sqlite_count(cfg, run, cfg.beszel_db,
                            "SELECT COUNT(*) FROM systems WHERE status = 'up';"),
         "alerts": sqlite_count(cfg, run, cfg.beszel_db,
                                "SELECT COUNT(*) FROM alerts WHERE triggered = 1;"),
+        "peak_temp": float(sqlite_scalar(cfg, run, cfg.beszel_db,
+                                         BESZEL_PEAK_TEMP_SQL) or 0),
     }
 
 
 def fetch_karakeep(cfg, run):
     # Read-only direct SQLite query — no API key, never wakes karakeep.
+    #
+    # `favorites` was 0 of 15 bookmarks — the feature is simply not used, so the
+    # field could only ever render 0. Untagged is the replacement rather than
+    # "added in the last 7 days", which would ALSO be 0 (nothing has been saved
+    # here in a month): with 32 tags over 15 bookmarks the collection is
+    # over-tagged, not under-tagged, so the count of items the AI tagger has not
+    # reached is the one number here that is both non-zero and actionable.
     return {
         "bookmarks": sqlite_count(cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarks;"),
-        "favorites": sqlite_count(cfg, run, cfg.karakeep_db,
-                                  "SELECT COUNT(*) FROM bookmarks WHERE favourited = 1;"),
+        "untagged": sqlite_count(cfg, run, cfg.karakeep_db, """
+            SELECT COUNT(*) FROM bookmarks b
+             WHERE NOT EXISTS (SELECT 1 FROM tagsOnBookmarks t WHERE t.bookmarkId = b.id);
+        """),
         "tags": sqlite_count(cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarkTags;"),
     }
 
@@ -955,11 +1087,14 @@ def fetch_showmycards(cfg, run):
     # `cards` is the 171k-printing Scryfall catalogue, NOT the collection: counting
     # it would report 171182 owned cards. The collection is `inventories`, and a row
     # there is a stack, so cards = SUM(quantity), not COUNT(*).
+    #
+    # No `locations` key. It used to count storage_locations (8) and no tile ever
+    # mapped it — a tile shows three fields and this was a fourth, so the query ran
+    # daily to populate a number nothing rendered.
     db = cfg.showmycards_db
     return {
         "cards": sqlite_count(cfg, run, db, "SELECT COALESCE(SUM(quantity),0) FROM inventories;"),
         "decks": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM lists;"),
-        "locations": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM storage_locations;"),
         "value": round(float(sqlite_scalar(cfg, run, db, SHOWMYCARDS_VALUE_SQL) or 0), 2),
     }
 
@@ -974,10 +1109,26 @@ def fetch_reactive_resume(cfg, run):
             "-U", cfg.rxresume_role, "-d", cfg.rxresume_db, "-tAc", sql,
         ], env=env).strip()
 
+    # `users` was 2 and `views` was 0 — a self-hosted resume builder nobody has
+    # published a public link from cannot register a view, so two of three fields
+    # were fixed.
     return {
         "resumes": int(q("SELECT COUNT(*) FROM resume;") or 0),
-        "users": int(q('SELECT COUNT(*) FROM "user";') or 0),
-        "views": int(q("SELECT COALESCE(SUM(views), 0) FROM resume_statistics;") or 0),
+        # An AGE, not a count-in-window. A "edited in the last 30 days" field reads
+        # 0 here (the newest edit is 2026-07-27, five weeks back) and a 90-day one
+        # reads 14 — both are the disease this change is curing, because editing a
+        # CV is an every-few-months act and no fixed window fits it. Days since the
+        # last edit is never 0-by-construction and answers the real question.
+        "updated": int(float(q("""
+            SELECT COALESCE(EXTRACT(EPOCH FROM now() - MAX(updated_at)) / 86400, 0)
+              FROM resume;
+        """) or 0)),
+        # is_public stays even though it is 0, and for the same reason beszel's
+        # `alerts` stays: it is an ALARM, not a statistic. Nothing here is meant to
+        # be on the public internet, so 0 is the reassuring reading and a 1 is
+        # something to see immediately. Contrast `views`, which was 0 because the
+        # feature is unreachable — that 0 could never carry information.
+        "public": int(q("SELECT COUNT(*) FROM resume WHERE is_public = true;") or 0),
     }
 
 
@@ -998,11 +1149,21 @@ def fetch_gramps_web(cfg, run, find=None):
 
 def fetch_vaultwarden(cfg, run):
     # Read-only direct SQLite query — same trick as fetch_karakeep, never wakes vaultwarden.
+    #
+    # `users` was 2 and a two-person vault does not gain users. Items changed in the
+    # last 30 days replaces it: on a password manager that is the figure that says
+    # whether anything is being rotated, and it moves (19 of 793 this month) without
+    # being noise.
     db = cfg.vaultwarden_db
     return {
         "items": sqlite_count(cfg, run, db,
                               "SELECT COUNT(*) FROM ciphers WHERE deleted_at IS NULL;"),
-        "users": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM users;"),
+        # updated_at is bumped on any edit including a password rotation; created_at
+        # rows also satisfy it, which is correct — a new credential is a change too.
+        "changed_30d": sqlite_count(cfg, run, db, """
+            SELECT COUNT(*) FROM ciphers
+             WHERE deleted_at IS NULL AND updated_at > datetime('now', '-30 day');
+        """),
         "devices": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM devices;"),
     }
 
@@ -1029,10 +1190,31 @@ def fetch_wakapi(cfg, run):
 
 
 def fetch_dawarich(cfg, run):
+    """Points over the last 7 days, then trips and visits all-time.
+
+    `points` was an all-time count (7,244) and that is the one number here that
+    could not tell you the thing you need to know about this service, which is
+    whether the phone is still feeding it. It is barely feeding it: 134 points over
+    7 days is ~19 a day, and that sampling rate is precisely why DBSCAN has
+    produced no new visit since 2026-04-19 (known_issue_dawarich_no_visits_sparse_
+    points). The all-time total hid that behind a large, always-growing figure.
+
+    `visits` stays all-time even though it is the frozen number, because a "visits
+    this week" field would read 0 and look like a display bug rather than the
+    starvation it is; the 7-day point count is the field that carries the signal,
+    and the two sit next to each other on the tile.
+    """
+    def count(sql):
+        return int(pg_superuser(cfg, run, "dawarich", sql) or 0)
+
     return {
-        "points": int(pg_superuser(cfg, run, "dawarich", "SELECT COUNT(*) FROM points;") or 0),
-        "trips": int(pg_superuser(cfg, run, "dawarich", "SELECT COUNT(*) FROM trips;") or 0),
-        "visits": int(pg_superuser(cfg, run, "dawarich", "SELECT COUNT(*) FROM visits;") or 0),
+        # `timestamp` is an integer epoch column on points, not a timestamptz.
+        "points_7d": count("""
+            SELECT COUNT(*) FROM points
+             WHERE timestamp > EXTRACT(EPOCH FROM now()) - 7 * 86400;
+        """),
+        "trips": count("SELECT COUNT(*) FROM trips;"),
+        "visits": count("SELECT COUNT(*) FROM visits;"),
     }
 
 
@@ -1188,16 +1370,179 @@ def fetch_ryot(cfg, run):
     }
 
 
-def fetch_forgejo(cfg, run):
+# ── Aperture ─────────────────────────────────────────────────────────────────
+#
+# The only tile fed from OFF this host: Aperture is Tailscale-managed at
+# ai.gate-mintaka.ts.net (project_aperture_observability), so it has no unit, no
+# database here and no `nic.services` entry — it reaches the dashboard through
+# `nic.externalTiles` instead.
+#
+# ⚠ These figures UNDERCOUNT, and the gap is not small. codex-proxy returns zero
+#   usage on every response (Vercel AI SDK v6 spec mismatch, vercel/ai#12771), so
+#   Aperture is blind to the token cost of all gpt-5.6 traffic while still counting
+#   its requests — 663 gpt responses contribute to the request rate and nothing to
+#   the token rate. Treat tokens/day as "tokens Anthropic-side", not "all tokens".
+
+# Prometheus exposition format: `name{label="v",...} 1.23e+08`. Values may be in
+# scientific notation, which is why the value is parsed as float and not int.
+_PROM_LINE = re.compile(r'^(?P<name>[a-z_]+)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>\S+)$')
+
+# The four token kinds Aperture persists. Its own /metrics HELP text says to add
+# them for a total, so that is what this does rather than reading
+# aperture_llm_tokens_total{type="input"} — that one already folds cache_read into
+# input, and summing the two families would double-count 817M cached tokens.
+_TOKEN_TYPES = ("input", "cache_read", "output", "reasoning")
+
+# Below this, do not recompute the rate or move the baseline. The refresh loop
+# calls every fetcher once a REFRESH_INTERVAL, so the normal elapsed time here is
+# ~24h; a much shorter gap means something restarted the service and re-fetched
+# (a schema bump, say), and dividing a few minutes' delta by a few minutes of
+# elapsed time turns ordinary noise into a wild per-day figure. Holding the last
+# good rate is the honest answer for the rest of the day.
+APERTURE_MIN_ELAPSED = 6 * 3600
+
+
+def parse_prometheus(text):
+    """-> {metric_name: {frozenset_of_label_pairs: float}} for the lines we need.
+
+    A deliberately small parser, not a Prometheus client: this reads four counters
+    out of a 934-line exposition and has no business handling histograms, exemplars
+    or `# TYPE` semantics. Comment lines start with '#' and are skipped.
+    """
+    out = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = _PROM_LINE.match(line)
+        if not m:
+            continue
+        labels = {}
+        for pair in (m.group("labels") or "").split(","):
+            if "=" in pair:
+                k, v = pair.split("=", 1)
+                labels[k.strip()] = v.strip().strip('"')
+        try:
+            value = float(m.group("value"))
+        except ValueError:
+            continue
+        out.setdefault(m.group("name"), []).append((labels, value))
+    return out
+
+
+def _prom_sum(metrics, name, label=None, values=None):
+    """Total of `name`, optionally only the series whose `label` is in `values`."""
+    total = 0.0
+    for labels, value in metrics.get(name, []):
+        if values is not None and labels.get(label) not in values:
+            continue
+        total += value
+    return total
+
+
+def fetch_aperture(cfg, run, now=None, state_path=None):
+    """Tokens and requests per day, plus the cache-read share of input.
+
+    Every counter Aperture exposes is monotonic and all-time — 237,201 requests and
+    866M tokens since 2026-04-23 — so reporting them raw would put two more
+    never-changing numbers on the dashboard, which is the very thing the rest of
+    this change removes. What a gateway tile should answer is "how much am I using
+    it", so the first two fields are RATES, derived by differencing against the
+    previous reading.
+
+    That needs one piece of durable state, and it deliberately does NOT live in
+    stats.json: that file is the served payload, and a raw baseline counter in it
+    would be a fourth field on a three-field tile — the `locations` mistake again.
+    It goes in its own file next to it via nicos_scripts.state instead.
+
+    The third field needs no state at all. cache_read over total input is the
+    prompt-cache hit rate, currently ~95%, and it is the number that explains the
+    bill: an uncached 866M-token month costs an order of magnitude more than a
+    cached one.
+    """
+    now = now or time.time()
+    state_path = state_path or os.path.join(cfg.state_dir, "aperture-counters.json")
+
+    metrics = parse_prometheus(curl_text(cfg, run, cfg.aperture_metrics_url))
+    tokens = _prom_sum(metrics, "aperture_generations_tokens_total",
+                       label="type", values=_TOKEN_TYPES)
+    requests = _prom_sum(metrics, "aperture_captured_requests_total")
+    cache_read = _prom_sum(metrics, "aperture_generations_tokens_total",
+                           label="type", values=("cache_read",))
+    # llm_tokens_total{input} is input INCLUDING cache reads, which is exactly the
+    # denominator wanted here: 817M/863M = 95%. Falling back to the summed total
+    # keeps the field from dividing by zero on an instance that has served nothing.
+    billed_input = _prom_sum(metrics, "aperture_llm_tokens_total",
+                             label="type", values=("input",)) or tokens
+
+    prev = state.load_json(state_path, {})
+    elapsed = now - prev.get("at", 0)
+    # A counter that went BACKWARDS means the instance was replaced or its durable
+    # keyvalue counters were reset. There is no meaningful delta across that, so
+    # treat it as a first reading rather than rendering a negative rate.
+    reset = tokens < prev.get("tokens", 0) or requests < prev.get("requests", 0)
+
+    if prev and not reset and elapsed >= APERTURE_MIN_ELAPSED:
+        days = elapsed / 86400
+        rates = {
+            "tokens_per_day": (tokens - prev["tokens"]) / days,
+            "requests_per_day": (requests - prev["requests"]) / days,
+        }
+        state.save_json(state_path, {"at": now, "tokens": tokens,
+                                    "requests": requests, **rates})
+    elif prev and not reset:
+        # Too soon to re-measure: keep both the baseline and the last known rate.
+        rates = {k: prev.get(k) for k in ("tokens_per_day", "requests_per_day")}
+    else:
+        # First reading ever, or after a reset: record the baseline and report no
+        # rate. An em dash rather than 0 — see pct_delta, same reasoning. "0
+        # tokens/day" would be a measurement, and this is the absence of one.
+        rates = {"tokens_per_day": None, "requests_per_day": None}
+        state.save_json(state_path, {"at": now, "tokens": tokens, "requests": requests})
+
+    def rate(key, fmt):
+        value = rates.get(key)
+        return "—" if value is None else fmt(value)
+
     return {
-        "repositories": int(pg_superuser(cfg, run, "forgejo",
-                                         "SELECT COUNT(*) FROM repository;") or 0),
-        "issues": int(pg_superuser(
-            cfg, run, "forgejo",
-            "SELECT COUNT(*) FROM issue WHERE is_pull=false AND is_closed=false;") or 0),
-        "pulls": int(pg_superuser(
-            cfg, run, "forgejo",
-            "SELECT COUNT(*) FROM issue WHERE is_pull=true AND is_closed=false;") or 0),
+        "tokens": rate("tokens_per_day", compact),
+        "requests": rate("requests_per_day", compact),
+        "cached": f"{cache_read / billed_input * 100:.0f}%" if billed_input else "—",
+    }
+
+
+def fetch_forgejo(cfg, run):
+    """Repositories, overdue mirrors, and bytes on disk.
+
+    `issues` and `pulls` used to be the second and third fields and both are
+    structurally 0: of 167 repositories 68 are mirrors and the rest are personal
+    pushes, so nothing here has ever had an issue tracker in use. Counting them
+    was two thirds of a tile spent proving that.
+
+    What this instance is FOR is mirroring, so the useful question is whether the
+    mirrors are actually running — and the field earns itself immediately, because
+    they are not: `next_update_unix` is in the past for all 68, the newest sync is
+    2026-08-11, and nothing on the dashboard said so. Same shape as beszel's
+    `alerts`: 0 when healthy, non-zero exactly when you want to know.
+    """
+    def count(sql):
+        return int(pg_superuser(cfg, run, "forgejo", sql) or 0)
+
+    return {
+        "repositories": count("SELECT COUNT(*) FROM repository;"),
+        # next_update_unix is when Forgejo intends to sync next, so "in the past"
+        # means the scheduler has not got to it — which covers both a stalled
+        # queue and a mirror whose interval has been missed. Compared in SQL
+        # against the database's own clock rather than Python's, so the two cannot
+        # disagree.
+        "stale_mirrors": count("""
+            SELECT COUNT(*) FROM mirror
+             WHERE next_update_unix > 0
+               AND next_update_unix < EXTRACT(EPOCH FROM now());
+        """),
+        # repository.size is the git directory in bytes, already maintained by
+        # Forgejo — no du walk over /var/lib/forgejo needed.
+        "size": count("SELECT COALESCE(SUM(size), 0) FROM repository;"),
     }
 
 
@@ -1324,6 +1669,7 @@ FETCHERS = {
     "beaverhabits": fetch_beaverhabits,
     "ryot": fetch_ryot,
     "freereps": fetch_freereps,
+    "aperture": fetch_aperture,
 }
 
 # NOTE: every published key must have a fetcher and vice versa. The two used to be

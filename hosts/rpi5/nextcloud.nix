@@ -437,10 +437,15 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/nextcloud";
           refreshInterval = 3600000;
+          # `Active users` (serverinfo's activeUsers.last24hours) and `Shares` were
+          # two thirds of this tile and neither could move: one user exists, and
+          # nothing has ever been shared. Contacts and bytes-held replaced them —
+          # what this instance actually does is back Calino and the phone's CardDAV
+          # sync. Files stays; it is the one original field that grows.
           mappings = [
-            { field = "users";  label = "Active users"; format = "number"; }
-            { field = "files";  label = "Files";        format = "number"; }
-            { field = "shares"; label = "Shares";       format = "number"; }
+            { field = "files";    label = "Files";    format = "number"; }
+            { field = "contacts"; label = "Contacts"; format = "number"; }
+            { field = "storage";  label = "Storage";  format = "bytes"; }
           ];
         };
       };

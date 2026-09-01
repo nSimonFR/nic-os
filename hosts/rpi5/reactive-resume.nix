@@ -186,9 +186,16 @@ in
           url = "http://127.0.0.1:8087/reactiveresume";
           refreshInterval = 3600000;
           mappings = [
+            # `Users` was 2 and `Views` was 0 — nothing here has ever been published,
+            # so the view counter is unreachable and could never carry information.
+            # `Updated` is an AGE rather than a count-in-window because editing a CV
+            # is an every-few-months act: "edited in 30 days" reads 0 here and
+            # "in 90 days" reads all 14, so no fixed window fits. `Public` stays at 0
+            # deliberately — like beszel's Alerts it is an alarm, not a statistic:
+            # nothing should be on the public internet, and a 1 is worth seeing.
             { field = "resumes"; label = "Resumes"; format = "number"; }
-            { field = "users"; label = "Users"; format = "number"; }
-            { field = "views"; label = "Views"; format = "number"; }
+            { field = "updated"; label = "Updated"; format = "number"; suffix = "d ago"; }
+            { field = "public";  label = "Public";  format = "number"; }
           ];
         };
       };

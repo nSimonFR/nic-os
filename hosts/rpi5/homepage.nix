@@ -17,8 +17,26 @@ let
     "Backend"
   ];
 
-  entriesForCategory = cat:
-    builtins.filter (e: e.tile.category == cat) visibleEntries;
+  # Two sources of tiles, flattened to one shape before anything sorts or groups
+  # them, so the rest of this file never asks which kind it is holding.
+  #
+  # publicUrl already folds in the port rule (omitted on 443, the bare-URL funnel)
+  # and the path-mux prefix. deepLink is the cosmetic tail — only Home Assistant
+  # sets one, to land on its "Mine" dashboard.
+  serviceTiles = map (e: e.tile // {
+    inherit (e) order;
+    href = e.publicUrl + lib.optionalString (e.tile.deepLink != null) e.tile.deepLink;
+  }) visibleEntries;
+
+  # Things this host neither runs nor routes — Aperture only, see
+  # `nic.externalTiles` in lib/service-registration.nix. href is given outright.
+  externalTiles = map (e: e.tile // { inherit (e) order href; }) config.nic.externalTiles;
+
+  # One number line for both lists. Ties break on name so the order is stable
+  # across evals even though the uniqueness assertion covers services only.
+  allTiles = lib.sort
+    (a: b: if a.order != b.order then a.order < b.order else a.name < b.name)
+    (serviceTiles ++ externalTiles);
 
   # Build tile config, including widget if the entry has one.
   #
@@ -27,28 +45,17 @@ let
   # 404 on `/` and Hydroxide answers 401, none of which means "unhealthy" — and
   # (b) kept every socket-activated backend pinned in memory on a 3.9 GB box.
   # Liveness is Beszel's job; the tiles are links plus a daily stat.
-  mkTile = e:
-    let
-      # publicUrl already folds in the port rule (omitted on 443, the bare-URL
-      # funnel) and the path-mux prefix. deepLink is the cosmetic tail — only
-      # Home Assistant sets one, to land on its "Mine" dashboard.
-      base = {
-        icon = e.tile.icon;
-        href = e.publicUrl + lib.optionalString (e.tile.deepLink != null) e.tile.deepLink;
-        inherit (e.tile) description;
-      };
-      widgetAttr = lib.optionalAttrs (e.tile.widget != null) { inherit (e.tile) widget; };
-    in base // widgetAttr;
+  mkTile = t:
+    { inherit (t) icon href description; }
+    // lib.optionalAttrs (t.widget != null) { inherit (t) widget; };
 
   # Build the services list: one attrset per category, each containing service tiles
   servicesByCategory = builtins.filter (group: group != null) (
     map (cat:
-      let entries = entriesForCategory cat;
+      let entries = builtins.filter (t: t.category == cat) allTiles;
       in if entries == [] then null
       else {
-        "${cat}" = map (e: {
-          "${e.tile.name}" = mkTile e;
-        }) entries;
+        "${cat}" = map (t: { "${t.name}" = mkTile t; }) entries;
       }
     ) categoryOrder
   );
@@ -132,6 +139,10 @@ in
         "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"
         "PSQL_BIN=${pkgs.postgresql}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
+        # The Aperture tile's source. Passed in rather than defaulted in Python so
+        # the flake's `apertureUrl` stays the single place the tailnet name is
+        # spelled — fetch_aperture's default is only there for the tests.
+        "APERTURE_METRICS_URL=${apertureUrl}/metrics"
       ];
     };
   };
@@ -163,7 +174,9 @@ in
           { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
           { "Tailscale Admin" = [{ icon = "tailscale.svg"; href = "https://login.tailscale.com/admin/machines"; }]; }
           { "nic-os PRs" = [{ icon = "github.svg"; href = "https://github.com/nSimonFR/nic-os/pulls"; }]; }
-          { "Aperture" = [{ icon = "tailscale.svg"; href = "${apertureUrl}/ui"; description = "LLM usage & cost dashboard"; }]; }
+          # Aperture was here. It is a real tile now (aperture-sync.nix, via
+          # nic.externalTiles) because a bookmark cannot carry a widget, and the
+          # most expensive thing on the box should show its token rate.
           { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
           { "BentoPDF" = [{ icon = "mdi-file-pdf-box"; href = "https://bentopdf.com/"; }]; }
         ];
