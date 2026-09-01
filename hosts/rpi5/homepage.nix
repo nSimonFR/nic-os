@@ -222,7 +222,7 @@ in
 
     # No tile: the dashboard does not link to itself.
     public = {
-      order   = 250;
+      order   = 360;
       port    = 8082;
       backend = "http://127.0.0.1:8082";
     };

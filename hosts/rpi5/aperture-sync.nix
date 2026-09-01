@@ -211,9 +211,11 @@ in
   # zero-usage caveat that makes tokens/day an Anthropic-side figure.
   nic.externalTiles = lib.mkIf isEnabled [
     {
-      # After Vaultwarden (240) and before homepage's own 250, so it lands at the
-      # end of Apps next to the other platform-shaped tiles.
-      order = 245;
+      # Last in Apps, closing the platform block with Beszel (200) and
+      # Vaultwarden (210). The Backend category renders after Apps regardless of
+      # these numbers — `order` only sorts WITHIN a category — so this does not
+      # need to stay below tiny-llm-gate's 300.
+      order = 220;
       href = "${apertureUrl}/ui";
       tile = {
         name = "Aperture";

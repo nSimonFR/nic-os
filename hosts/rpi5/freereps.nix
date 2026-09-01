@@ -220,7 +220,7 @@ in
     heavyPriority = 145;
 
     public = {
-      order = 175; # in Apps, ahead of BeaverHabits which stays last
+      order = 30; # heads the body block: FreeReps, BeaverHabits (40), Ryot (50)
       port = 3960;
       backend = "http://127.0.0.1:${toString proxyPort}";
       funnel = false; # NEVER — there is no authentication, see the header

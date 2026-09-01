@@ -115,7 +115,7 @@ in
     heavyPriority = 120;
 
     public = {
-      order   = 235; # next to Cyrus, the other coding agent
+      order   = 340; # next to Cyrus, the other coding agent
       port    = publicPort;
       backend = "http://127.0.0.1:${toString proxyPort}";
       tile = {

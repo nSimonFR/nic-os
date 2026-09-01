@@ -149,7 +149,7 @@ in
     heavyPriority = 10;
 
     public = {
-      order   = 20;
+      order   = 100;
       port    = 10000;
       backend = "http://127.0.0.1:2283";
       funnel  = true;

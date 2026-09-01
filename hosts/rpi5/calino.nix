@@ -233,7 +233,7 @@ in
     public = {
       # Directly after Nextcloud (30), which is the store these numbers come from;
       # AFFiNE moved up to 25 to make that pair adjacent.
-      order = 35;
+      order = 80;
       port = 3800;
       backend = "http://127.0.0.1:${toString internalPort}";
       tile = {

@@ -312,7 +312,7 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 11;   # untiled; sits with sure (10), before wealthfolio (15)
+      order   = 11;   # untiled; sits with sure (10), before wealthfolio (20)
       port    = rootServePort;
       backend = "http://127.0.0.1:${toString rootVhostPort}";
     };
