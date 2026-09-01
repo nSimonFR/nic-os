@@ -229,7 +229,7 @@ in
     # forwards /ryot/* verbatim. This also makes the Plex webhook (…/ryot/_i/<id>)
     # publicly reachable.
     public = {
-      order   = 50;
+      order   = 70;
       port    = 443;
       # externalPort, NOT proxyPort: the path-mux must land on the socket so a
       # request wakes the stack. Pointing this at Caddy directly would work only

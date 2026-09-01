@@ -161,8 +161,16 @@ in
       favicon = "https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/svg/nixos.svg";
       headerStyle = "clean";
       # List format preserves display order (Nix attrsets sort alphabetically)
+      # `columns` is load-bearing for how the tile ORDER reads, not just for
+      # density: Apps is grouped in fours to match `columns = 4` so each row is one
+      # subject (see the `order` option in lib/service-registration.nix). Changing
+      # 4 here silently un-groups every row.
+      #
+      # Quick Links is 5 across because it holds 5 bookmarks. It was 6 at 3 columns
+      # — two clean rows — until Aperture graduated to a real tile and left 5,
+      # which at 3 columns is a row of three and an orphaned pair.
       layout = [
-        { "Quick Links" = { style = "row"; columns = 3; header = false; }; }
+        { "Quick Links" = { style = "row"; columns = 5; header = false; }; }
         { "Apps"        = { style = "row"; columns = 4; }; }
         { "Backend"     = { style = "row"; columns = 4; }; }
       ];
