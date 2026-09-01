@@ -275,15 +275,15 @@ in
       # metasearch instance is an open proxy that upstream engines will rate-
       # limit or CAPTCHA this box's IP for.
       funnel = false;
-      tile = {
-        name = "SearXNG";
-        icon = "searxng.svg";
-        category = "Apps";
-        description = "Metasearch";
-        # No widget. The only numbers SearXNG has are the in-memory metrics
-        # disabled above, and even enabled they would reset on every idle-stop —
-        # a tile stat that reads 0 for most of the day is worse than no stat.
-      };
+
+      # No tile: routed, but it renders nothing on the dashboard. homepage's
+      # search bar (homepage.nix `widgets.search`) is pointed straight at this
+      # instance, so the entry point is the box you type into rather than a card
+      # you click to reach a box you type into. A tile would only duplicate it.
+      #
+      # `order` still matters with no tile — it also sequences the serve
+      # commands in tailscale-serve.nix, and is asserted unique.
+      tile = null;
     };
   };
 }

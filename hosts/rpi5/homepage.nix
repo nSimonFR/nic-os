@@ -215,8 +215,20 @@ in
         };
       }
       {
+        # The dashboard's own search bar, pointed at the SearXNG instance
+        # (searxng.nix) instead of Google. homepage's named providers all send
+        # the query straight to the engine from the browser; `custom` is the
+        # only one that takes a URL, and it is a plain GET — SearXNG's
+        # `server.method = POST` governs only the form on its own pages, so
+        # `?q=` works regardless.
+        #
+        # This is the one consumer that reads another service's publicUrl: the
+        # query has to leave the browser for the tailnet origin, so the
+        # loopback proxy port would not resolve. It also means the first search
+        # of the day pays SearXNG's ~9 s cold start.
         search = {
-          provider = "google";
+          provider = "custom";
+          url = "${config.nic.services.searxng.public.publicUrl}/search?q=";
           target = "_blank";
         };
       }
