@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 70;   # 60 = the retired Open WebUI slot
+      order   = 130;   # with the other things-I-saved tiles (Immich…Papra)
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {

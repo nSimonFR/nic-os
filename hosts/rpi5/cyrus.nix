@@ -950,7 +950,7 @@ in
       # /callback, /linear-webhook and /github-webhook at its root and knows its
       # public base only via CYRUS_BASE_URL.
       public = {
-        order   = 230;
+        order   = 330;
         port    = 443;
         backend = "http://127.0.0.1:${toString cfg.port}";
         proxied = true;

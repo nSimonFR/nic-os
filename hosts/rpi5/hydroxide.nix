@@ -93,7 +93,7 @@ in
       # Moved 8443 → 8083 (matching its backend port) to free the 8443 funnel
       # slot; AFFiNE took it, since it needs a root origin. Devices using
       # …:8443/.well-known/carddav must update to :8083.
-      order   = 220;
+      order   = 320;
       port    = 8083;
       backend = "http://127.0.0.1:8083";
       tile = {

@@ -276,6 +276,23 @@ let
           to insert without renumbering — same convention as `heavyPriority`.
           Asserted unique: equal keys would make the emit order depend on
           attrset iteration rather than on a decision.
+
+          It sorts WITHIN a tile's category, not across categories: homepage.nix
+          groups by `tile.category` first and walks `categoryOrder`, so a Backend
+          tile renders after every Apps tile whatever its number. The blocks are
+          therefore free to be laid out for legibility rather than for global
+          sequence:
+
+            10–220   Apps tiles, grouped by subject — money (Sure, Wealthfolio),
+                     body (FreeReps, BeaverHabits, Ryot), making (Wakapi), the
+                     day (Home Assistant, Calino), files and memory (Nextcloud
+                     … Karakeep), places (Gramps, Dawarich, AirTrail), the rest
+                     (Forgejo, Reactive Resume, ShowMyCards) and finally the
+                     platform (Beszel, Vaultwarden, Aperture).
+            300–380  Backend tiles and the untiled routed services.
+
+          A tile with no obvious neighbour goes at the end of its block, not at
+          the end of the file.
         '';
         example = 120;
       };

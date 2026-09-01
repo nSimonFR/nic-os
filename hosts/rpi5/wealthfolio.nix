@@ -169,7 +169,7 @@ in
     heavyPriority = 90;
 
     public = {
-      order = 15; # between Sure (10) and Immich (20)
+      order = 20; # the other money tile, right after Sure (10)
       port = 3700;
       backend = "http://127.0.0.1:${toString internalPort}";
       tile = {

@@ -420,7 +420,7 @@ in
     # root, and overwritewebroot only rewrites the links it generates.
     public = {
       # Swapped with AFFiNE (was 25) so Calino (35) follows immediately.
-      order    = 30;
+      order    = 90;
       port     = 443;
       backend  = "http://127.0.0.1:8091";
       proxied  = true;

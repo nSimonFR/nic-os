@@ -335,7 +335,7 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 200;
+      order   = 300;
       port    = 4001;
       backend = "http://127.0.0.1:4001";
       tile = {

@@ -81,7 +81,7 @@ in
     # service worker needs root scope (gramps-web#531), so it keeps its own
     # Tailscale Serve port — same call as AFFiNE on 8443.
     public = {
-      order   = 130;
+      order   = 140;
       port    = 5050;
       backend = "http://127.0.0.1:15050";
       tile = {

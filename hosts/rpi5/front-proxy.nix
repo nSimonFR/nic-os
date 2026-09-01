@@ -200,7 +200,7 @@ in
     # No tile: the mux is how other services are reached, not a destination.
     # This is the single public 443 funnel that fronts every `proxied` service.
     public = {
-      order   = 240;
+      order   = 350;
       port    = 443;
       backend = "http://127.0.0.1:8092";
       funnel  = true;

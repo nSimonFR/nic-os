@@ -160,7 +160,7 @@ in
     # an interactive solve. Tailnet-only serve so the Telegram captcha link
     # resolves from a phone.
     public = {
-      order   = 270;
+      order   = 380;
       port    = 3750;
       backend = "http://127.0.0.1:${toString portalPort}";
     };
