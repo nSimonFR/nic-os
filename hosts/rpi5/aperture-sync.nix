@@ -229,12 +229,17 @@ in
           url = "http://127.0.0.1:8087/aperture";
           refreshInterval = 3600000;
           mappings = [
-            # All three are pre-formatted text: the rates are compacted to "65M" /
-            # "3.3k" in the fetcher (homepage's `number` would render nine figures
-            # wider than the tile), and both carry an em dash on the first reading
-            # of a fresh instance, when there is no baseline to difference against.
-            { field = "tokens"; label = "Tokens/day"; format = "text"; }
-            { field = "requests"; label = "Reqs/day"; format = "text"; }
+            # All three are pre-formatted text, compacted in the fetcher —
+            # homepage's `number` would render nine figures wider than the tile.
+            #
+            # The labels are deliberately unitless. The first two values carry
+            # their own unit ("65M/day" once a rate can be differenced, "913M
+            # total" before that), because a rate needs two readings hours apart
+            # and a "Tokens/day" label over a first-fetch placeholder would be
+            # mislabelled — see fetch_aperture, which also explains why the
+            # instance start time cannot stand in as a denominator.
+            { field = "tokens"; label = "Tokens"; format = "text"; }
+            { field = "requests"; label = "Requests"; format = "text"; }
             { field = "cached"; label = "Cached"; format = "text"; }
           ];
         };

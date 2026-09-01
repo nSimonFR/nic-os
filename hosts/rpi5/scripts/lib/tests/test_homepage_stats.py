@@ -1403,12 +1403,14 @@ def test_token_total_does_not_double_count_the_cached_reads(tmp_path):
                                 label="type", values=("input",)) * 2
 
 
-def test_the_first_reading_reports_no_rate_and_records_a_baseline(tmp_path):
-    # An em dash, not 0 — same reasoning as pct_delta. "0 tokens/day" is a
-    # measurement, and this is the absence of one.
+def test_the_first_reading_falls_back_to_the_all_time_total(tmp_path):
+    # THE REGRESSION THIS GUARDS: the first version rendered an em dash for both
+    # fields, so on a daily refresh the tile showed nothing at all for 24h and gave
+    # no way to tell "no baseline yet" from "broken". The total is tagged so the
+    # unitless label is not mislabelling it.
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000)
-    assert out["tokens"] == "—"
-    assert out["requests"] == "—"
+    assert out["tokens"] == "866M total"
+    assert out["requests"] == "237.2k total"
     # Stateless, so it works on the very first fetch: 817129133 / 863068161.
     assert out["cached"] == "95%"
     saved = json.loads((tmp_path / "aperture-counters.json").read_text())
@@ -1423,8 +1425,8 @@ def test_a_day_later_the_delta_becomes_a_per_day_rate(tmp_path):
         "requests": 237201 - 3000,
     }))
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
-    assert out["tokens"] == "20M"
-    assert out["requests"] == "3.0k"
+    assert out["tokens"] == "20M/day"
+    assert out["requests"] == "3.0k/day"
     # Baseline advanced, so tomorrow differences against today.
     assert json.loads((tmp_path / "aperture-counters.json").read_text())["at"] == now
 
@@ -1437,7 +1439,7 @@ def test_the_rate_is_normalised_so_a_half_day_gap_is_not_read_as_a_day(tmp_path)
         "at": 1_000_000, "tokens": TOKENS_TOTAL - 10_000_000, "requests": 237201,
     }))
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
-    assert out["tokens"] == "20M"                  # 10M in 12h = 20M/day
+    assert out["tokens"] == "20M/day"              # 10M in 12h = 20M/day
 
 
 def test_a_gap_below_the_floor_keeps_the_last_rate_and_the_old_baseline(tmp_path):
@@ -1448,8 +1450,8 @@ def test_a_gap_below_the_floor_keeps_the_last_rate_and_the_old_baseline(tmp_path
               "tokens_per_day": 42_000_000, "requests_per_day": 1234}
     (tmp_path / "aperture-counters.json").write_text(json.dumps(before))
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
-    assert out["tokens"] == "42M"
-    assert out["requests"] == "1.2k"
+    assert out["tokens"] == "42M/day"
+    assert out["requests"] == "1.2k/day"
     assert json.loads((tmp_path / "aperture-counters.json").read_text()) == before
 
 
@@ -1460,8 +1462,8 @@ def test_a_counter_reset_reports_no_rate_rather_than_a_negative_one(tmp_path):
         "at": 1_000_000, "tokens": 9e12, "requests": 9e9,
     }))
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000 + 86400)
-    assert out["tokens"] == "—"
-    assert out["requests"] == "—"
+    assert out["tokens"] == "866M total"
+    assert out["requests"] == "237.2k total"
     assert json.loads((tmp_path / "aperture-counters.json").read_text())["tokens"] == TOKENS_TOTAL
 
 
@@ -1473,6 +1475,11 @@ def test_the_aperture_baseline_is_not_published_on_the_tile(tmp_path):
 
 
 @pytest.mark.parametrize(("n", "text"), [
+    # The billions tier: without it this rendered "1,013M" — wider than the tile,
+    # and a thousand-separator inside a unit that already means thousands of
+    # thousands. The counter crossed a billion during this change's deployment.
+    (1_012_647_234, "1.01B"), (2_500_000_000, "2.50B"),
+    (999_400_000, "999M"),
     (865_900_000, "866M"), (20_000_000, "20M"), (15_641, "15.6k"),
     (3000, "3.0k"), (999, "999"), (0, "0"),
 ])
