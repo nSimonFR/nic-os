@@ -217,7 +217,7 @@ in
       # Backend category renders after Apps regardless of these numbers — `order`
       # only sorts WITHIN a category — so this does not need to stay below
       # tiny-llm-gate's 300.
-      order = 200;
+      order = 160;
       href = "${apertureUrl}/ui";
       tile = {
         name = "Aperture";
