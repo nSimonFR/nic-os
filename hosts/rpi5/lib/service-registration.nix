@@ -291,36 +291,37 @@ let
             FreeReps and BeaverHabits, Karakeep separated from the rest of the
             library, Beszel stranded at the end of a row of unrelated tiles.
 
-            Each row is one subject, four tiles wide:
+            Each row is four tiles wide:
 
               10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
               50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
-              90–120  the day            — Calino, BeaverHabits, FreeReps,
-                                            Home Assistant
-              130–160  the catalogues     — Karakeep, Gramps Web, ShowMyCards,
-                                            Ryot
-              170–200  making             — Forgejo, Wakapi, Reactive Resume,
+              90–120  logged and locked   — Ryot, Karakeep, Beszel, Vaultwarden
+              130–160  making             — Wakapi, Forgejo, DeepSeek Harness,
                                             Aperture
-              210–220  keeping it safe    — Beszel, Vaultwarden
+              170–200  the day            — Calino, BeaverHabits, FreeReps,
+                                            Home Assistant
+              210–230  the rest           — Gramps Web, ShowMyCards,
+                                            Reactive Resume
 
-            Rows 1–3 are the owner's; the rest were filled to match. Note that
-            three of them run one idea INTO another rather than being a single
-            label — row 1 is the two money tiles then the two map ones, and row 2
+            The rows are the OWNER'S CHOICE and not derivable from anything in
+            the tree, which is the whole reason they are written down here. Do not
+            re-derive them from what the tiles "obviously" have in common: several
+            deliberately run one idea into another rather than carrying a single
+            label — row 1 is the two money tiles then the two map ones, row 2
             walks the file cabinet from the DAV root out through photos and notes
-            to scanned paper. A row does not have to be one word, only one
-            thought.
+            to scanned paper. A row has to be one thought, not one word.
 
-            The last row is short because 22 does not divide by four. That is
-            fine as long as the remainder is itself a coherent pair, which is why
-            monitoring and secrets are the two left over rather than whichever
-            tiles happened to sort last.
+            The last row is short because 23 does not divide by four, and the
+            three that ended up there are the ones with no neighbour rather than
+            whichever sorted last.
 
-            ADDING A TILE therefore means deciding which row it joins and
-            renumbering that row's neighbours, not appending after 220. Adding a
-            23rd and 24th tile should fill row 6 out to four.
+            ADDING A TILE means deciding which row it joins and renumbering that
+            row's neighbours, not appending after 230.
 
             300–380  Backend tiles and the untiled routed services. Backend is
-                     four tiles, so it is already exactly one row.
+                     three tiles now that dsh moved into Apps (an interactive
+                     agent belongs with what it is used to build, not with the
+                     never-visited plumbing).
         '';
         example = 120;
       };

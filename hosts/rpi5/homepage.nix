@@ -139,6 +139,8 @@ in
         "SQLITE_BIN=${pkgs.sqlite}/bin/sqlite3"
         "PSQL_BIN=${pkgs.postgresql}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
+        # dsh's session transcripts are zstd-compressed JSONL — see fetch_dsh.
+        "ZSTD_BIN=${pkgs.zstd}/bin/zstd"
         # The Aperture tile's source. Passed in rather than defaulted in Python so
         # the flake's `apertureUrl` stays the single place the tailnet name is
         # spelled — fetch_aperture's default is only there for the tests.

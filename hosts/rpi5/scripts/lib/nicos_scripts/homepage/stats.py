@@ -27,6 +27,7 @@ Endpoints (one per homepage tile, three stats each):
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
+  /dsh       — DeepSeek Harness (sessions, prompts, days since the last) — zstd JSONL on disk
 
 A NOTE ON WHAT BELONGS ON A TILE. Three of these used to spend a field on a
 number that cannot change: Nextcloud's `users` (1 on a single-user server),
@@ -120,7 +121,12 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # to a tagged all-time fallback ("913M total"). Without the bump the cached em dash
 # would have survived until the next nightly refresh — i.e. the tile stays blank for
 # a day, which is the very bug the change fixes.
-STATS_SCHEMA = 15
+#
+# 16 adds the `dsh` key. A brand-new key does NOT strictly need a bump —
+# backfill_missing fetches keys the cache has no entry for — but the bump costs one
+# refetch and removes the need to reason about it, and this same rebuild moves dsh
+# out of Backend into Apps, so the tile is new to the dashboard either way.
+STATS_SCHEMA = 16
 
 
 @dataclass(frozen=True)
@@ -212,6 +218,16 @@ class Config:
     # wealthfolio_db. HA is always-on, so nothing here is about avoiding a wake.
     hass_db: str = "/var/lib/hass/home-assistant_v2.db"
 
+    # dsh's session log (hosts/rpi5/dsh.nix). One directory per workspace, one
+    # per session inside it, and the transcript is zstd-compressed JSONL. Read
+    # off disk rather than through dsh's HTTP API for the usual reason: dsh-web is
+    # socket-activated with a 900s idle timer, and a daily poll would wake a
+    # 1.5 GB-capped Node process to read three numbers. The files belong to nsimon
+    # and this service runs as root, so the 0700 sessions dir is reachable.
+    zstd: str = "zstd"
+    dsh_sessions_glob: str = (
+        "/home/nsimon/.dsh/sessions/*/session-*/session.jsonl.zstd")
+
     # Aperture's Prometheus endpoint (hosts/rpi5/aperture-sync.nix grants
     # `read_metrics` to nSimonFR@github; without it this 403s, and `admin` does
     # NOT imply it). Aperture is a Tailscale-managed service on the tailnet, not a
@@ -247,6 +263,8 @@ class Config:
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
             affine_db=s("AFFINE_DB", cls.affine_db),
             hass_db=s("HASS_DB", cls.hass_db),
+            zstd=s("ZSTD_BIN", cls.zstd),
+            dsh_sessions_glob=s("DSH_SESSIONS_GLOB", cls.dsh_sessions_glob),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
             nextcloud_db=s("NEXTCLOUD_DB", cls.nextcloud_db),
             nextcloud_dav_url=s("NEXTCLOUD_DAV_URL", cls.nextcloud_dav_url),
@@ -278,7 +296,7 @@ class Stats:
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
         "nextcloud", "calino", "affine", "beszel",
-        "freereps", "aperture",
+        "freereps", "aperture", "dsh",
     )
 
     def __init__(self):
@@ -1383,6 +1401,63 @@ def fetch_ryot(cfg, run):
     }
 
 
+def fetch_dsh(cfg, run, find=None, stat=None, now=None):
+    """DeepSeek Harness: sessions, prompts sent, and how long since the last one.
+
+    Reads ~/.dsh/sessions off disk, NOT dsh's HTTP API — dsh-web is
+    socket-activated with a 900s idle timer and a MemoryMax of 1500M, so a daily
+    poll through the API would wake a heavyweight Node process to read three
+    numbers. Same rule as every other socket-activated tile here.
+
+    The transcripts are zstd-compressed JSONL, one file per session, so the prompt
+    count costs a decompress per session. That is cheap today (5 sessions, 123 KB
+    total) and stays cheap because dsh prunes nothing: worth re-checking if the
+    session count ever runs to the hundreds, since this is a daily full read.
+
+    `prompts` counts `user/message` records and NOT raw lines. A line count reads
+    301 for these five sessions because the bulk of a transcript is
+    `text-chunks` and `assistant/chunk` streaming fragments — an artefact of how
+    the stream was flushed, not a measure of anything. 16 prompts is the true
+    figure and it is the one that says how much the agent has been asked to do.
+
+    `last` is an AGE, for the reason spelled out in fetch_reactive_resume:
+    interactive-agent use is bursty, so a count-in-window reads 0 most of the
+    time (it is 0 over 7 days right now, and 5 over 30). Days since the newest
+    session is never 0-by-construction.
+
+    `workspaces` is deliberately NOT a field even though it is right there in the
+    directory layout: it is 2, and it is 2 because there are two checkouts on this
+    box. Exactly the kind of number this whole change removed elsewhere.
+    """
+    find = find or glob.glob
+    stat = stat or os.stat
+    now = now or time.time()
+
+    paths = find(cfg.dsh_sessions_glob)
+    prompts = 0
+    for path in paths:
+        for line in run([cfg.zstd, "-dc", path]).splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                if json.loads(line).get("type") == "user/message":
+                    prompts += 1
+            except ValueError:
+                # A session killed mid-write leaves a truncated final record.
+                # One unparseable line must not zero the whole tile.
+                continue
+
+    newest = max((stat(p).st_mtime for p in paths), default=0)
+    return {
+        "sessions": len(paths),
+        "prompts": prompts,
+        # 0 when there are no sessions at all, which is the honest reading of
+        # "how long since the last one" for a harness that has never been used.
+        "last": int((now - newest) / 86400) if newest else 0,
+    }
+
+
 # ── Aperture ─────────────────────────────────────────────────────────────────
 #
 # The only tile fed from OFF this host: Aperture is Tailscale-managed at
@@ -1701,6 +1776,7 @@ FETCHERS = {
     "ryot": fetch_ryot,
     "freereps": fetch_freereps,
     "aperture": fetch_aperture,
+    "dsh": fetch_dsh,
 }
 
 # NOTE: every published key must have a fetcher and vice versa. The two used to be

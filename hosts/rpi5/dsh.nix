@@ -115,14 +115,43 @@ in
     heavyPriority = 120;
 
     public = {
-      order   = 340; # next to Cyrus, the other coding agent
+      # Row 4, the making row: Wakapi, Forgejo, here, Aperture. Moved out of
+      # Backend — it is an interactive agent the user drives from a browser, so it
+      # belongs with the other things it is used to build, not with the
+      # never-visited plumbing tiles. Backend is down to three as a result.
+      order   = 150;
       port    = publicPort;
       backend = "http://127.0.0.1:${toString proxyPort}";
       tile = {
         name        = "DeepSeek Harness";
         icon        = "si-deepseek";
-        category    = "Backend";
+        category    = "Apps";
         description = "Agent harness (dsh) — Aperture-routed";
+        # Reads ~/.dsh/sessions off disk (nicos_scripts/homepage/stats.py
+        # fetch_dsh), NOT dsh's HTTP API: dsh-web is socket-activated with a 900s
+        # idle timer and a MemoryMax of 1500M, so polling the API would wake a
+        # heavyweight Node process once a day to read three numbers.
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/dsh";
+          refreshInterval = 3600000;
+          mappings = [
+            # `prompts` counts user/message records, not transcript lines — the
+            # bulk of a session log is streaming chunk fragments, so a line count
+            # measures how the stream was flushed rather than anything real.
+            #
+            # `last` is an age rather than a count-in-window: agent use is bursty,
+            # and "sessions in the last 7 days" reads 0 most of the time (it is 0
+            # right now, against 5 over 30 days). Same call as Reactive Resume's
+            # Updated.
+            #
+            # No `workspaces` field. It is 2, and it is 2 because there are two
+            # checkouts on this box.
+            { field = "sessions"; label = "Sessions"; format = "number"; }
+            { field = "prompts";  label = "Prompts";  format = "number"; }
+            { field = "last";     label = "Last";     format = "number"; suffix = "d ago"; }
+          ];
+        };
       };
     };
   };

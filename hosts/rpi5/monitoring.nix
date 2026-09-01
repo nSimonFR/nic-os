@@ -292,7 +292,7 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 210;
+      order   = 110;
       port    = 3000;
       backend = "http://127.0.0.1:${toString beszelHubPort}";
       tile = {

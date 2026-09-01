@@ -1487,3 +1487,94 @@ def test_compact_keeps_a_large_count_inside_a_tile(n, text):
     # homepage's `number` formatter renders 865900000 as "865,900,000", wider
     # than the tile it sits in.
     assert hs.compact(n) == text
+
+
+# ── DeepSeek Harness ──────────────────────────────────────────────────────────
+#
+# The other off-the-beaten-path fetcher: no database and no API call, just
+# zstd-compressed JSONL on disk. Reading the files is the point — dsh-web is
+# socket-activated with a 900s idle timer and a MemoryMax of 1500M, so polling
+# its API would wake a heavyweight Node process daily for three numbers.
+
+# Two sessions' worth of records, in the shape dsh actually writes. The bulk of a
+# real transcript is streaming fragments, which is exactly what must NOT be
+# counted as a prompt.
+DSH_A = "\n".join([
+    '{"type":"session","id":"session-aaa","createdAt":1787564015673,"cwd":"/home/nsimon"}',
+    '{"type":"permission/preset","seq":0,"data":{"preset":"workspace-write"}}',
+    '{"type":"user/message","seq":1}',
+    '{"type":"text-chunks","seq":2}',
+    '{"type":"assistant/chunk","seq":3}',
+    '{"type":"assistant/message","seq":4}',
+    '{"type":"user/message","seq":5}',
+])
+DSH_B = "\n".join([
+    '{"type":"session","id":"session-bbb"}',
+    '{"type":"user/message","seq":1}',
+    '{"type":"tool/call","seq":2}',
+    '',                                     # blank lines occur; must be skipped
+    '{"type":"text-chunks","seq":3}',
+])
+
+
+def dsh_run(bodies):
+    """FakeRun answering `zstd -dc <path>` per path."""
+    def answer(cmd):
+        for path, body in bodies.items():
+            if path in cmd:
+                return body
+        raise AssertionError(f"no body for {cmd}")
+    return FakeRun([("ZSTD", answer)])
+
+
+def test_dsh_counts_prompts_and_not_transcript_lines():
+    # A line count reads 12 across these two sessions because most of a
+    # transcript is text-chunks/assistant-chunk streaming fragments — an artefact
+    # of how the stream was flushed, not a measure of anything. 3 is the answer.
+    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd")
+    bodies = {"/dsh/w/session-aaa/session.jsonl.zstd": DSH_A,
+              "/dsh/w/session-bbb/session.jsonl.zstd": DSH_B}
+    out = hs.fetch_dsh(cfg, dsh_run(bodies), find=lambda _p: list(bodies),
+                       stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
+                       now=1_000_000 + 3 * 86400)
+    assert out == {"sessions": 2, "prompts": 3, "last": 3}
+
+
+def test_dsh_reads_the_files_and_never_the_api():
+    # The whole reason this fetcher exists in this shape.
+    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd")
+    bodies = {"/dsh/w/session-aaa/session.jsonl.zstd": DSH_A}
+    run = dsh_run(bodies)
+    hs.fetch_dsh(cfg, run, find=lambda _p: list(bodies),
+                 stat=lambda _p: type("S", (), {"st_mtime": 1})(), now=2)
+    assert run.commands, "fetcher issued no command at all"
+    for cmd in run.commands:
+        assert "ZSTD" in cmd
+        # dsh's own bind (13360) and its socket-activate proxy (8360).
+        assert "13360" not in cmd and "8360" not in cmd
+
+
+def test_a_truncated_final_record_does_not_zero_the_dsh_tile():
+    # A session killed mid-write leaves a half-flushed last line.
+    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/g")
+    body = DSH_A + '\n{"type":"user/mess'
+    out = hs.fetch_dsh(cfg, FakeRun([("ZSTD", body)]), find=lambda _p: ["/s.zstd"],
+                       stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
+                       now=1_000_000)
+    assert out["prompts"] == 2      # the two intact ones, not 0
+    assert out["last"] == 0
+
+
+def test_dsh_with_no_sessions_at_all_reports_zeroes_not_a_crash():
+    # max() over an empty sequence, and a division by a zero mtime.
+    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/g")
+    out = hs.fetch_dsh(cfg, FakeRun(), find=lambda _p: [], now=1_000_000)
+    assert out == {"sessions": 0, "prompts": 0, "last": 0}
+
+
+def test_dsh_reports_no_workspace_count():
+    # It is 2, and it is 2 because there are two checkouts on this box — the same
+    # class of dead field schema 14 removed everywhere else.
+    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/g")
+    out = hs.fetch_dsh(cfg, FakeRun(), find=lambda _p: [], now=1)
+    assert "workspaces" not in out

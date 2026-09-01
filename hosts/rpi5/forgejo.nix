@@ -251,7 +251,7 @@ in
     # externalPort is also the socket-activate listen (see below), so the literal
     # stays local; only the URL shape is derived.
     public = {
-      order   = 170;
+      order   = 140;
       port    = externalPort;
       backend = "http://127.0.0.1:${toString externalPort}";
       tile = {

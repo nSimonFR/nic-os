@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 130;   # heads row 4, the catalogues (Gramps, ShowMyCards, Ryot)
+      order   = 100;   # row 3, after Ryot (90), before Beszel and Vaultwarden
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {

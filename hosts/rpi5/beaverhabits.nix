@@ -59,7 +59,7 @@ in
 
     # Kept last in Apps so the tile sits at the end of the group.
     public = {
-      order   = 100;
+      order   = 180;
       port    = 3650;
       backend = "http://127.0.0.1:${toString proxyPort}";
       tile = {
