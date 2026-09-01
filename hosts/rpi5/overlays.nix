@@ -36,6 +36,13 @@
         buildHomeAssistantComponent = hassPkgs.buildHomeAssistantComponent;
         # papra: needs 26.6.0+ for AI auto-tagging; unstable pin is kept ≥ that.
         papra = unstablePkgs.papra;
+        # searxng: 25.11 ships the 2026-02-22 snapshot, whose google engine still
+        # hits the `asearch=arc` endpoint with a Google-Search-App User-Agent —
+        # which Google now answers 403 to, so the engine could not be enabled at
+        # all. Upstream dropped both in March/July (a563127a, fd5eb84a); the
+        # unstable snapshot (2026-07-26) has them and issues a plain /search with
+        # the ordinary Firefox UA, which this box gets a 200 for.
+        searxng = unstablePkgs.searxng;
       }
     )
 

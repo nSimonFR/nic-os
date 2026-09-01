@@ -80,7 +80,18 @@ in
       # Blocks come and go — re-testing one is flipping `disabled` here, or
       # ticking it under Preferences → Engines for one browser, no rebuild.
       engines = [
-        { name = "google"; disabled = true; }
+        # Google, via the only engine upstream still ships working. The plain
+        # `google` web engine is marked `inactive: true` in this snapshot —
+        # retired, not merely off, so `disabled = false` cannot bring it back.
+        # Forcing `inactive = false` does register it and it fetches without
+        # error, but every query returns zero results: Google's markup no longer
+        # matches its XPaths, which is what retirement means here. `google cse`
+        # goes through cse.google.com's element API, needs no key, and returns
+        # Google's own index (20/page, EN and FR both fine).
+        #
+        # This is also why the package is pinned forward in overlays.nix: 25.11's
+        # snapshot predates google_cse and its plain `google` 403s outright.
+        { name = "google cse"; disabled = false; }
         { name = "duckduckgo"; disabled = true; }
         { name = "startpage"; disabled = true; }
         { name = "brave"; disabled = true; }
