@@ -309,10 +309,19 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/beszel";
           refreshInterval = 3600000;
+          # `Systems` was a 2 fixed by the fleet being rpi5 + beast, so it went in
+          # favour of the hottest the CPU has been in 24h. Beszel samples
+          # cpu_thermal every minute already and the dashboard never showed it,
+          # which on a Pi 5 whose documented failure mode is thermal throttling
+          # into an OOM/watchdog reset is the wrong thing to omit. `Up` still
+          # carries the fleet size implicitly — it reads 1 whenever beast is
+          # suspended, which is normal and most of the time.
           mappings = [
-            { field = "systems"; label = "Systems"; format = "number"; }
-            { field = "up";      label = "Up";      format = "number"; }
-            { field = "alerts";  label = "Alerts";  format = "number"; }
+            { field = "up";        label = "Up";        format = "number"; }
+            { field = "alerts";    label = "Alerts";    format = "number"; }
+            # float + suffix, not `number`: this carries a decimal (56.0 °C) and
+            # `number` would drop it — same reason freereps' km/kg are floats.
+            { field = "peak_temp"; label = "Peak 24h";  format = "float"; suffix = " °C"; }
           ];
         };
       };

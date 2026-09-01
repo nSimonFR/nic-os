@@ -194,4 +194,49 @@ in
       '';
     };
   };
+
+  # ── Dashboard tile ───────────────────────────────────────────────────────────
+  #
+  # `nic.externalTiles`, not `nic.services.aperture.public`: Aperture is
+  # Tailscale-managed on the tailnet, so there is no unit here, no port to bind
+  # and nothing for `tailscale serve` to forward — `public` would mean inventing a
+  # mandatory `port` and `backend` and having tailscale-serve.nix emit a command
+  # for a service this host does not run.
+  #
+  # It was a homepage bookmark until now, which is why the most expensive thing on
+  # the box had no numbers next to it: bookmarks cannot carry a widget. The three
+  # figures come from Aperture's Prometheus endpoint, which the `read_metrics`
+  # grant above is what opens — see fetch_aperture for why the first two are RATES
+  # (every counter Aperture exposes is all-time monotonic) and for the codex
+  # zero-usage caveat that makes tokens/day an Anthropic-side figure.
+  nic.externalTiles = lib.mkIf isEnabled [
+    {
+      # After Vaultwarden (240) and before homepage's own 250, so it lands at the
+      # end of Apps next to the other platform-shaped tiles.
+      order = 245;
+      href = "${apertureUrl}/ui";
+      tile = {
+        name = "Aperture";
+        # Not in dashboard-icons, and the bookmark's `tailscale.svg` was borrowed
+        # rather than right. mdi needs no pinned CDN URL to go stale.
+        icon = "mdi-chart-timeline-variant";
+        category = "Apps";
+        description = "LLM usage & cost (Tailscale Aperture)";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/aperture";
+          refreshInterval = 3600000;
+          mappings = [
+            # All three are pre-formatted text: the rates are compacted to "65M" /
+            # "3.3k" in the fetcher (homepage's `number` would render nine figures
+            # wider than the tile), and both carry an em dash on the first reading
+            # of a fresh instance, when there is no baseline to difference against.
+            { field = "tokens"; label = "Tokens/day"; format = "text"; }
+            { field = "requests"; label = "Reqs/day"; format = "text"; }
+            { field = "cached"; label = "Cached"; format = "text"; }
+          ];
+        };
+      };
+    }
+  ];
 }

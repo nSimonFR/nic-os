@@ -264,9 +264,14 @@ in
           url = "http://127.0.0.1:8087/forgejo";
           refreshInterval = 3600000;
           mappings = [
-            { field = "repositories"; label = "Repos"; format = "number"; }
-            { field = "issues"; label = "Issues"; format = "number"; }
-            { field = "pulls"; label = "PRs"; format = "number"; }
+            # `Issues` and `PRs` were both structurally 0 — of 167 repositories 68
+            # are mirrors and the rest are personal pushes, so no tracker here has
+            # ever been used. What this instance is FOR is mirroring, so the second
+            # field now asks whether the mirrors are running. It earned itself on
+            # the first fetch: all 68 are overdue, newest sync 2026-08-11.
+            { field = "repositories";  label = "Repos";   format = "number"; }
+            { field = "stale_mirrors"; label = "Overdue"; format = "number"; }
+            { field = "size";          label = "Size";    format = "bytes"; }
           ];
         };
       };

@@ -391,9 +391,13 @@ in
           url = "http://127.0.0.1:8087/affine";
           refreshInterval = 3600000;
           mappings = [
-            { field = "workspaces"; label = "Workspaces"; format = "number"; }
-            { field = "docs";       label = "Docs";       format = "number"; }
-            { field = "storage";    label = "Storage";    format = "bytes"; }
+            # `Workspaces` was a 4 fixed by the four-workspace layout in
+            # project_affine_workspaces_courses, so it could only change if that
+            # layout did. With 7,915 docs the total is near-constant too — what says
+            # whether the wiki is alive is the count touched this week.
+            { field = "docs";      label = "Docs";      format = "number"; }
+            { field = "edited_7d"; label = "Edited 7d"; format = "number"; }
+            { field = "storage";   label = "Storage";   format = "bytes"; }
           ];
         };
       };

@@ -422,12 +422,14 @@ def test_showmycards_counts_the_collection_not_the_catalogue():
             return "623"
         if "FROM lists" in cmd:
             return "5"
-        if "storage_locations" in cmd:
-            return "8"
         return "148.87"
 
-    out = hs.fetch_showmycards(CFG, FakeRun([("SQLITE", answer)]))
-    assert out == {"cards": 623, "decks": 5, "locations": 8, "value": 148.87}
+    run = FakeRun([("SQLITE", answer)])
+    out = hs.fetch_showmycards(CFG, run)
+    assert out == {"cards": 623, "decks": 5, "value": 148.87}
+    # No storage_locations query at all any more: it populated a `locations` key
+    # that no tile ever mapped, so the read ran daily for nothing.
+    assert not [c for c in run.commands if "storage_locations" in c]
 
 
 def test_the_collection_value_is_foil_aware():
@@ -633,28 +635,21 @@ def test_wealthfolio_reads_its_database_read_only(tmp_path):
     assert any("-readonly" in c for c in run.commands if "cost_basis_base" in c)
 
 
-def test_forgejo_separates_issues_from_pull_requests():
-    def answer(cmd):
-        if "is_pull=true" in cmd:
-            return "2"
-        if "is_pull=false" in cmd:
-            return "7"
-        return "31"
-
-    assert hs.fetch_forgejo(CFG, FakeRun([("PSQL", answer)])) == {
-        "repositories": 31, "issues": 7, "pulls": 2}
+# The issue/PR split this file used to test is gone: both counts were
+# structurally 0 on an instance whose 167 repositories are mirrors and personal
+# pushes. See test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past.
 
 
 def test_affine_counts_docs_and_live_blobs_only():
     def answer(cmd):
+        if "FROM snapshots" in cmd:
+            return "15"
         if "workspace_pages" in cmd:
             return "7503"
-        if "FROM workspaces" in cmd:
-            return "4"
         return "1000"  # blobs
 
     assert hs.fetch_affine(CFG, FakeRun([("PSQL", answer)])) == {
-        "workspaces": 4, "docs": 7503, "storage": 1000}
+        "docs": 7503, "edited_7d": 15, "storage": 1000}
 
 
 def test_affine_needs_no_token_and_never_calls_the_api():
@@ -1118,7 +1113,7 @@ def test_reactive_resume_passes_its_password_through_the_environment(tmp_path):
     pw.write_text("s3cret\n")
     cfg = hs.Config(psql="PSQL", rxresume_pw_file=str(pw))
     run = FakeRun([("PSQL", "4")])
-    assert hs.fetch_reactive_resume(cfg, run) == {"resumes": 4, "users": 4, "views": 4}
+    assert hs.fetch_reactive_resume(cfg, run) == {"resumes": 4, "updated": 4, "public": 4}
     # In the env, never on the command line.
     for argv, env in run.calls:
         assert env["PGPASSWORD"] == "s3cret"
@@ -1216,3 +1211,272 @@ def test_a_key_still_empty_after_backfill_is_retried_not_left_for_a_day(tmp_path
         hs.run_fetcher = orig
     assert "wealthfolio" in attempts
     assert hs.RETRY_INTERVAL in slept
+
+
+# ── the retired constants ─────────────────────────────────────────────────────
+#
+# Schema 14 removed ten fields that could not carry information: six fixed by
+# construction (nextcloud users/shares, vaultwarden users, affine workspaces,
+# beszel systems, reactiveresume users) and four structurally zero (forgejo
+# issues/pulls, karakeep favorites, reactiveresume views). The point of these
+# tests is that they do not come back — a "restore the old field" patch is easy
+# to write and the numbers still render, so nothing else would catch it.
+
+RETIRED = {
+    "nextcloud": {"users", "shares"},
+    "vaultwarden": {"users"},
+    "affine": {"workspaces"},
+    "beszel": {"systems"},
+    "karakeep": {"favorites"},
+    "forgejo": {"issues", "pulls"},
+    "reactiveresume": {"users", "views"},
+    # Never rendered by any tile, so the query ran daily for nothing.
+    "showmycards": {"locations"},
+}
+
+
+def test_beszel_peak_temperature_reads_the_ten_minute_rollup():
+    # Beszel keeps only ~1h of '1m' samples before rolling them up, so a 24h
+    # window over '1m' silently becomes a 1h window.
+    def answer(cmd):
+        return "61.2" if "cpu_thermal" in cmd else "1"
+
+    run = FakeRun([("SQLITE", answer)])
+    out = hs.fetch_beszel(CFG, run)
+    temp_sql = [c for c in run.commands if "cpu_thermal" in c][0]
+    assert "type = '10m'" in temp_sql
+    assert "'-1 day'" in temp_sql
+    # By sensor NAME: rp1_adc is the I/O controller and tracks the SoC closely,
+    # so taking the object's max would report "hottest sensor", not "hottest CPU".
+    assert "$.t.cpu_thermal" in temp_sql
+    assert out["peak_temp"] == 61.2
+    assert "systems" not in out
+
+
+def test_nextcloud_storage_counts_the_user_home_and_not_appdata():
+    # Three storages exist; only home:: is the user's data. Summing all of them
+    # folds ~1.4 MB of appdata in and drifts the day another mount appears.
+    run = FakeRun([("CURL", json.dumps({"ocs": {"data": {
+        "activeUsers": {"last24hours": 1},
+        "nextcloud": {"storage": {"num_files": 2556}, "shares": {"num_shares": 0}},
+    }}})), ("oc_cards", "249"), ("oc_filecache", "7556451690")])
+    # env_var reads the NC-Token out of the shared env file.
+    cfg = hs.Config(curl="CURL", psql="PSQL", runuser="RUNUSER",
+                    env_file=str(_write_env()))
+    out = hs.fetch_nextcloud(cfg, run)
+    assert out == {"files": 2556, "contacts": 249, "storage": 7556451690}
+    storage_sql = [c for c in run.commands if "oc_filecache" in c][0]
+    assert "home::" in storage_sql
+    assert "f.path = ''" in storage_sql
+
+
+def _write_env():
+    import pathlib
+    import tempfile
+    p = pathlib.Path(tempfile.mkdtemp()) / "env"
+    p.write_text("HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=tok\n")
+    return p
+
+
+def test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past():
+    # The field earned itself on the first fetch: all 68 mirrors overdue, newest
+    # sync 2026-08-11, and nothing on the dashboard had said so.
+    run = FakeRun([("COUNT(*) FROM repository;", "167"),
+                   ("FROM mirror", "68"),
+                   ("SUM(size)", "2308263025")])
+    out = hs.fetch_forgejo(CFG, run)
+    assert out == {"repositories": 167, "stale_mirrors": 68, "size": 2308263025}
+    mirror_sql = [c for c in run.commands if "FROM mirror" in c][0]
+    assert "next_update_unix <" in mirror_sql
+    # next_update_unix = 0 means "no schedule", which is not the same as overdue.
+    assert "next_update_unix > 0" in mirror_sql
+    # Compared against the database's clock, not Python's, so the two cannot
+    # disagree about what "now" is.
+    assert "now()" in mirror_sql
+
+
+def test_dawarich_points_are_a_seven_day_window_not_all_time():
+    # 7,244 all-time hid the only thing worth knowing: whether the phone is still
+    # feeding it. 134 over 7 days is the starvation behind the missing visits.
+    run = FakeRun([("FROM points", "134"), ("FROM trips", "4"), ("FROM visits", "183")])
+    out = hs.fetch_dawarich(CFG, run)
+    assert out == {"points_7d": 134, "trips": 4, "visits": 183}
+    points_sql = [c for c in run.commands if "FROM points" in c][0]
+    assert "7 * 86400" in points_sql
+    # `timestamp` is an integer epoch column here, not a timestamptz.
+    assert "EXTRACT(EPOCH FROM now())" in points_sql
+
+
+def test_affine_edited_count_covers_the_same_docs_as_the_total():
+    # snapshots alone counts 17 because it includes the per-workspace doc-list Yjs
+    # docs that `docs` (workspace_pages) excludes. Joining keeps both fields
+    # counting one universe.
+    run = FakeRun([("FROM workspace_pages;", "7915"),
+                   ("FROM snapshots", "15"),
+                   ("FROM blobs", "558516275")])
+    out = hs.fetch_affine(CFG, run)
+    assert out == {"docs": 7915, "edited_7d": 15, "storage": 558516275}
+    edited_sql = [c for c in run.commands if "FROM snapshots" in c][0]
+    assert "JOIN workspace_pages" in edited_sql
+    assert "interval '7 days'" in edited_sql
+
+
+def test_reactive_resume_reports_an_age_because_no_window_fits_a_cv(tmp_path):
+    # "edited in 30 days" reads 0 here (newest edit five weeks back) and "in 90
+    # days" reads all 14 — the disease this change cures. Days-since is never
+    # 0-by-construction.
+    pw = tmp_path / "pw"
+    pw.write_text("secret\n")
+    cfg = hs.Config(psql="PSQL", rxresume_pw_file=str(pw))
+    run = FakeRun([("COUNT(*) FROM resume;", "14"),
+                   ("MAX(updated_at)", "36.4"),
+                   ("is_public", "0")])
+    assert hs.fetch_reactive_resume(cfg, run) == {
+        "resumes": 14, "updated": 36, "public": 0,
+    }
+
+
+@pytest.mark.parametrize(("key", "gone"), sorted(RETIRED.items()))
+def test_the_retired_fields_stay_retired(key, gone):
+    # Every fetcher answers "1" to everything, so this checks the SHAPE of the
+    # returned dict and nothing about the numbers.
+    cfg = hs.Config(curl="CURL", sqlite="SQLITE", psql="PSQL", runuser="RUNUSER",
+                    env_file=str(_write_env()),
+                    rxresume_pw_file=str(_write_env()))
+    payload = json.dumps({"ocs": {"data": {
+        "activeUsers": {"last24hours": 1},
+        "nextcloud": {"storage": {"num_files": 1}, "shares": {"num_shares": 0}},
+    }}})
+    run = FakeRun([("CURL", payload), ("SQLITE", "1"), ("PSQL", "1")])
+    assert gone & set(hs.FETCHERS[key](cfg, run)) == set()
+
+
+# ── Aperture ──────────────────────────────────────────────────────────────────
+#
+# The one tile fed from off this host, and the only fetcher with durable state of
+# its own: every counter Aperture exposes is all-time monotonic, so the tile's
+# first two figures are RATES differenced against the previous reading.
+
+METRICS = """\
+# HELP aperture_captured_requests_total Total number of LLM requests ever captured.
+# TYPE aperture_captured_requests_total counter
+aperture_captured_requests_total{instance_id="26-04-23-b79145"} 237201
+aperture_generations_tokens_total{instance_id="26-04-23-b79145",type="cache_read"} 8.17129133e+08
+aperture_generations_tokens_total{instance_id="26-04-23-b79145",type="input"} 4.5939028e+07
+aperture_generations_tokens_total{instance_id="26-04-23-b79145",type="output"} 2.784606e+06
+aperture_generations_tokens_total{instance_id="26-04-23-b79145",type="reasoning"} 0
+aperture_llm_tokens_total{instance_id="26-04-23-b79145",type="cache_read"} 8.17129133e+08
+aperture_llm_tokens_total{instance_id="26-04-23-b79145",type="input"} 8.63068161e+08
+aperture_llm_tokens_total{instance_id="26-04-23-b79145",type="output"} 2.784606e+06
+"""
+
+# input + cache_read + output + reasoning, per Aperture's own HELP text.
+TOKENS_TOTAL = 817129133 + 45939028 + 2784606
+
+
+def ap_cfg(tmp_path):
+    return hs.Config(curl="CURL", state_dir=str(tmp_path),
+                     aperture_metrics_url="http://aperture/metrics")
+
+
+def ap_run():
+    return FakeRun([("CURL", METRICS)])
+
+
+def test_prometheus_parsing_handles_labels_scientific_notation_and_comments():
+    m = hs.parse_prometheus(METRICS)
+    assert "# HELP" not in str(m)
+    series = {tuple(sorted(labels.items())): v
+              for labels, v in m["aperture_generations_tokens_total"]}
+    assert len(series) == 4
+    assert series[(("instance_id", "26-04-23-b79145"), ("type", "cache_read"))] == 817129133.0
+
+
+def test_token_total_does_not_double_count_the_cached_reads(tmp_path):
+    # aperture_llm_tokens_total{input} already folds cache_read into input, so
+    # summing both metric families counts 817M cached tokens twice.
+    m = hs.parse_prometheus(METRICS)
+    total = hs._prom_sum(m, "aperture_generations_tokens_total",
+                         label="type", values=hs._TOKEN_TYPES)
+    assert total == TOKENS_TOTAL
+    assert total < hs._prom_sum(m, "aperture_llm_tokens_total",
+                                label="type", values=("input",)) * 2
+
+
+def test_the_first_reading_reports_no_rate_and_records_a_baseline(tmp_path):
+    # An em dash, not 0 — same reasoning as pct_delta. "0 tokens/day" is a
+    # measurement, and this is the absence of one.
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000)
+    assert out["tokens"] == "—"
+    assert out["requests"] == "—"
+    # Stateless, so it works on the very first fetch: 817129133 / 863068161.
+    assert out["cached"] == "95%"
+    saved = json.loads((tmp_path / "aperture-counters.json").read_text())
+    assert saved == {"at": 1_000_000, "tokens": TOKENS_TOTAL, "requests": 237201.0}
+
+
+def test_a_day_later_the_delta_becomes_a_per_day_rate(tmp_path):
+    now = 1_000_000 + 86400
+    (tmp_path / "aperture-counters.json").write_text(json.dumps({
+        "at": 1_000_000,
+        "tokens": TOKENS_TOTAL - 20_000_000,
+        "requests": 237201 - 3000,
+    }))
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
+    assert out["tokens"] == "20M"
+    assert out["requests"] == "3.0k"
+    # Baseline advanced, so tomorrow differences against today.
+    assert json.loads((tmp_path / "aperture-counters.json").read_text())["at"] == now
+
+
+def test_the_rate_is_normalised_so_a_half_day_gap_is_not_read_as_a_day(tmp_path):
+    # The refresh loop is daily, but a restart can shorten the gap. Dividing by
+    # elapsed days keeps the "per day" label true instead of under-reporting.
+    now = 1_000_000 + 43200                        # 12h
+    (tmp_path / "aperture-counters.json").write_text(json.dumps({
+        "at": 1_000_000, "tokens": TOKENS_TOTAL - 10_000_000, "requests": 237201,
+    }))
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
+    assert out["tokens"] == "20M"                  # 10M in 12h = 20M/day
+
+
+def test_a_gap_below_the_floor_keeps_the_last_rate_and_the_old_baseline(tmp_path):
+    # Dividing a few minutes' delta by a few minutes of elapsed time turns
+    # ordinary noise into a wild per-day figure.
+    now = 1_000_000 + 600
+    before = {"at": 1_000_000, "tokens": 1.0, "requests": 1.0,
+              "tokens_per_day": 42_000_000, "requests_per_day": 1234}
+    (tmp_path / "aperture-counters.json").write_text(json.dumps(before))
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
+    assert out["tokens"] == "42M"
+    assert out["requests"] == "1.2k"
+    assert json.loads((tmp_path / "aperture-counters.json").read_text()) == before
+
+
+def test_a_counter_reset_reports_no_rate_rather_than_a_negative_one(tmp_path):
+    # Aperture's counters are durable across restarts and purges, but a replaced
+    # instance starts from zero. There is no meaningful delta across that.
+    (tmp_path / "aperture-counters.json").write_text(json.dumps({
+        "at": 1_000_000, "tokens": 9e12, "requests": 9e9,
+    }))
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000 + 86400)
+    assert out["tokens"] == "—"
+    assert out["requests"] == "—"
+    assert json.loads((tmp_path / "aperture-counters.json").read_text())["tokens"] == TOKENS_TOTAL
+
+
+def test_the_aperture_baseline_is_not_published_on_the_tile(tmp_path):
+    # A raw counter in the served payload would be a fourth field on a
+    # three-field tile — the `locations` mistake this change also removes.
+    out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000)
+    assert set(out) == {"tokens", "requests", "cached"}
+
+
+@pytest.mark.parametrize(("n", "text"), [
+    (865_900_000, "866M"), (20_000_000, "20M"), (15_641, "15.6k"),
+    (3000, "3.0k"), (999, "999"), (0, "0"),
+])
+def test_compact_keeps_a_large_count_inside_a_tile(n, text):
+    # homepage's `number` formatter renders 865900000 as "865,900,000", wider
+    # than the tile it sits in.
+    assert hs.compact(n) == text
