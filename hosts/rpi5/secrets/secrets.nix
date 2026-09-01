@@ -54,4 +54,5 @@ in {
   # EnvironmentFile. Same split as airtrail-pg-password / airtrail-env.
   "freereps-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "freereps-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
+  "searxng-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
 }

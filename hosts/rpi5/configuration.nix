@@ -143,6 +143,7 @@ in
     ./wealthfolio.nix
     ./wealthfolio-sync.nix
     ./showmycards.nix
+    ./searxng.nix
     ./moxfield-sync.nix
     ./nextcloud.nix
     ./calino.nix
