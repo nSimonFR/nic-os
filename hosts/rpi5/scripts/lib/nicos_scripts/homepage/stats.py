@@ -114,7 +114,13 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # public/edited_30d, dawarich points → points over 7 days (same NAME, different
 # meaning — exactly the case the paragraph above says to bump for), and drops
 # showmycards' `locations`, which no tile ever mapped.
-STATS_SCHEMA = 14
+#
+# 15 is a pure MEANING change with no rename, which is the case this counter exists
+# for: aperture's `tokens`/`requests` went from a bare em dash on the first reading
+# to a tagged all-time fallback ("913M total"). Without the bump the cached em dash
+# would have survived until the next nightly refresh — i.e. the tile stays blank for
+# a day, which is the very bug the change fixes.
+STATS_SCHEMA = 15
 
 
 @dataclass(frozen=True)
@@ -367,8 +373,15 @@ def compact(n):
     decimal because the interesting range for requests-per-day is 1–20k, where
     "1k" and "1.9k" are meaningfully different; millions do not, because nobody
     reads the tenth of a million.
+
+    Billions get their own tier rather than running the millions one past 1000:
+    the all-time token counter crossed a billion during this change's own
+    deployment and rendered "1,013M", which is both wider than the tile and a
+    thousand-separator inside a unit that already means thousands-of-thousands.
     """
     n = float(n)
+    if abs(n) >= 1_000_000_000:
+        return f"{n / 1_000_000_000:,.2f}B"
     if abs(n) >= 1_000_000:
         return f"{n / 1_000_000:,.0f}M"
     if abs(n) >= 1_000:
@@ -1441,23 +1454,37 @@ def _prom_sum(metrics, name, label=None, values=None):
 
 
 def fetch_aperture(cfg, run, now=None, state_path=None):
-    """Tokens and requests per day, plus the cache-read share of input.
+    """Token and request throughput, plus the cache-read share of input.
 
-    Every counter Aperture exposes is monotonic and all-time — 237,201 requests and
-    866M tokens since 2026-04-23 — so reporting them raw would put two more
-    never-changing numbers on the dashboard, which is the very thing the rest of
-    this change removes. What a gateway tile should answer is "how much am I using
-    it", so the first two fields are RATES, derived by differencing against the
-    previous reading.
+    Every counter Aperture exposes is monotonic and all-time — 238k requests and
+    913M tokens since 2026-04-23 — and a rate is the more useful reading of them:
+    "how hard am I leaning on this" rather than "how much have I ever spent". So
+    the first two fields DIFFERENCE against the previous reading, which needs one
+    piece of durable state. It deliberately does not live in stats.json: that file
+    is the served payload, and a raw baseline counter in it would be a fourth
+    field on a three-field tile — the `locations` mistake again. It goes in its own
+    file next to it via nicos_scripts.state instead.
 
-    That needs one piece of durable state, and it deliberately does NOT live in
-    stats.json: that file is the served payload, and a raw baseline counter in it
-    would be a fourth field on a three-field tile — the `locations` mistake again.
-    It goes in its own file next to it via nicos_scripts.state instead.
+    ⚠ THE VALUE CARRIES ITS OWN UNIT, and that is load-bearing rather than
+      decorative. A rate cannot exist until there are two readings a few hours
+      apart, so the first version of this rendered an em dash for both fields —
+      which on a daily refresh meant the tile showed nothing at all for its first
+      24 hours, and gave no way to tell "no baseline yet" from "broken". It cannot
+      be fixed with a lifetime average either: the obvious denominator,
+      aperture_instance_start_time_seconds, is when the INSTANCE last started
+      (3.2 days ago on a gateway serving since April), so all-time tokens over
+      instance uptime overstates the rate several-fold.
+
+      So each field falls back to the all-time total, tagged as such — "913M total"
+      until a rate can be computed, "65M/day" afterwards. The label stays the
+      neutral "Tokens"/"Requests" so neither reading is mislabelled, and the tile
+      says something true from the first fetch. An all-time total is a weak figure
+      but not a dead one, unlike the fields this change retired: it moves visibly
+      every day, the way wakapi's "All time" already does.
 
     The third field needs no state at all. cache_read over total input is the
     prompt-cache hit rate, currently ~95%, and it is the number that explains the
-    bill: an uncached 866M-token month costs an order of magnitude more than a
+    bill: an uncached 913M-token month costs an order of magnitude more than a
     cached one.
     """
     now = now or time.time()
@@ -1494,19 +1521,23 @@ def fetch_aperture(cfg, run, now=None, state_path=None):
         # Too soon to re-measure: keep both the baseline and the last known rate.
         rates = {k: prev.get(k) for k in ("tokens_per_day", "requests_per_day")}
     else:
-        # First reading ever, or after a reset: record the baseline and report no
-        # rate. An em dash rather than 0 — see pct_delta, same reasoning. "0
-        # tokens/day" would be a measurement, and this is the absence of one.
+        # First reading ever, or after a reset: record the baseline. No rate is
+        # knowable yet, so both fields fall back to the all-time total below.
         rates = {"tokens_per_day": None, "requests_per_day": None}
         state.save_json(state_path, {"at": now, "tokens": tokens, "requests": requests})
 
-    def rate(key, fmt):
+    def throughput(key, total):
+        """The rate if one exists, else the all-time total, each tagged as such."""
         value = rates.get(key)
-        return "—" if value is None else fmt(value)
+        if value is None:
+            return f"{compact(total)} total"
+        return f"{compact(value)}/day"
 
     return {
-        "tokens": rate("tokens_per_day", compact),
-        "requests": rate("requests_per_day", compact),
+        "tokens": throughput("tokens_per_day", tokens),
+        "requests": throughput("requests_per_day", requests),
+        # An em dash here and NOT a 0: this one is a ratio, so an instance that has
+        # served nothing has no hit rate to report rather than a hit rate of zero.
         "cached": f"{cache_read / billed_input * 100:.0f}%" if billed_input else "—",
     }
 
