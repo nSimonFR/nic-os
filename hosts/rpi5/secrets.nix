@@ -124,6 +124,14 @@
       owner = "nsimon";
       mode = "0400";
     };
+    searxng-env = {
+      file = ./secrets/searxng-env.age;
+      # SEARXNG_SECRET — signs the preferences cookie and the link token.
+      # Read by searx-init (envsubst into /run/searx/settings.yml) and by
+      # searx.service itself, both of which run as the searx user.
+      owner = "searx";
+      mode = "0400";
+    };
     steam-connector-env = {
       file  = ./secrets/steam-connector-env.age;
       owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service
