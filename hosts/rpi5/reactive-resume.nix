@@ -168,7 +168,7 @@ in
     # built with Vite base=/rxresume/ so the browser requests everything under
     # /rxresume/, and the server's browser-facing URLs carry it via APP_URL.
     public = {
-      order   = 180;
+      order   = 190;
       port    = 443;
       backend = "http://127.0.0.1:13336";
       proxied = true;

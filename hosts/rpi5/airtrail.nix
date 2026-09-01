@@ -85,7 +85,7 @@ in
     heavyPriority     = 110;
 
     public = {
-      order   = 160;
+      order   = 40;
       port    = 3600;
       backend = "http://127.0.0.1:${toString proxyPort}";
       tile = {

@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 120;   # closes row 3, "things I saved" (Immich, AFFiNE, Papra)
+      order   = 130;   # heads row 4, the catalogues (Gramps, ShowMyCards, Ryot)
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {
