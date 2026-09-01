@@ -34,7 +34,15 @@ Reading the result: queues at 0 messages **with** consumers ≥ 1 means the topo
 
 Two traps here, both of which fake a "flagd is broken / off" conclusion:
 
-1. **The flagd sidecar may not appear in the container list.** The openfeature operator injects it, but `kubectl get pod -o jsonpath='{.status.containerStatuses[*].name}'` can show only the app container while the annotations (`openfeature.dev/enabled`, `openfeature.dev/featureflagsource`) are present and port 8013 is live and serving. Never conclude "no flagd" from the container list.
+1. **flagd is a *native sidecar*, so it is invisible in the container list.** The openfeature operator injects it as an `initContainer` with `restartPolicy: Always` — not as a regular container. So `{.spec.containers[*].name}` and `{.status.containerStatuses[*].name}` both show only the app container, while `READY` says `2/2` and port 8013 is live and serving. Never conclude "no flagd" from the container list; look here instead:
+
+   ```bash
+   kubectl -n staging get pod <pod> -o jsonpath='{range .spec.initContainers[*]}{.name}{" restartPolicy="}{.restartPolicy}{"\n"}{end}'
+   # state-status-pgm restartPolicy=
+   # flagd          restartPolicy=Always     ← the sidecar
+   ```
+
+   This also means the documented "two containers" pod shape (init `<svc>-pgm` + main `<svc>`) is really three on flagd-enabled services, and `kubectl logs <pod> -c flagd` is how you read its startup.
 2. **The repo's `deployment/flagd/featureflag.yaml` is not the live value.** `defaultVariant` there is usually `off` while the cluster has been flipped `on` by hand.
 
 Evaluate the flag for real, from inside the pod:
