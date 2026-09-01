@@ -220,7 +220,7 @@ in
     heavyPriority = 145;
 
     public = {
-      order = 50; # heads row 2, "my hours": +BeaverHabits, Ryot, Wakapi
+      order = 110; # row 3, the day: Calino, BeaverHabits, here, Home Assistant
       port = 3960;
       backend = "http://127.0.0.1:${toString proxyPort}";
       funnel = false; # NEVER — there is no authentication, see the header

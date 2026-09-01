@@ -293,15 +293,22 @@ let
 
             Each row is one subject, four tiles wide:
 
-              10–40    money and the day  — Sure, Wealthfolio, Home Assistant,
-                                            Calino
-              50–80    my hours           — FreeReps, BeaverHabits, Ryot, Wakapi
-              90–120   things I saved     — Immich, AFFiNE, Papra, Karakeep
-              130–160  people and places  — Nextcloud, Gramps Web, Dawarich,
-                                            AirTrail
-              170–200  making, collecting — Forgejo, Reactive Resume,
-                                            ShowMyCards, Aperture
+              10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
+              50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
+              90–120  the day            — Calino, BeaverHabits, FreeReps,
+                                            Home Assistant
+              130–160  the catalogues     — Karakeep, Gramps Web, ShowMyCards,
+                                            Ryot
+              170–200  making             — Forgejo, Wakapi, Reactive Resume,
+                                            Aperture
               210–220  keeping it safe    — Beszel, Vaultwarden
+
+            Rows 1–3 are the owner's; the rest were filled to match. Note that
+            three of them run one idea INTO another rather than being a single
+            label — row 1 is the two money tiles then the two map ones, and row 2
+            walks the file cabinet from the DAV root out through photos and notes
+            to scanned paper. A row does not have to be one word, only one
+            thought.
 
             The last row is short because 22 does not divide by four. That is
             fine as long as the remainder is itself a coherent pair, which is why
