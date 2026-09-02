@@ -59,7 +59,6 @@ let
     }
 
     S1=$(probe "$TOK1")
-    S2=$(probe "$TOK2")
 
     body=""
     add() { body="''${body}$1"$'\n'; }
