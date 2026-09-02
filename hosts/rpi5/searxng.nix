@@ -108,15 +108,21 @@ in
     };
   };
 
-  # Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix): ~0 RAM at
-  # rest, 14-134 MB awake. searx-init is RemainAfterExit with
-  # RuntimeDirectoryPreserve, so /run/searx survives the sleep.
+  # Lazy-start, no idle sleep (hosts/rpi5/lib/socket-activate.nix): the first
+  # request after a boot starts it, and then it stays up. Measured 2026-09-02:
+  # 138 MB RSS cold, ~147 MB after one search, settling ~175-185 MB once the
+  # engine caches are warm. That is the standing cost of `idleSec = null`, and
+  # it is deliberate — as a browser's default search engine the ~10 s cold start
+  # landed on a keystroke, which is the one place it is not affordable.
+  #
+  # searx-init is RemainAfterExit with RuntimeDirectoryPreserve, so /run/searx
+  # would survive a sleep if one is ever restored here.
   services.socketActivate.searxng = {
     enable = true;
     realUnit = "searx.service";
     listen = [ "127.0.0.1:${toString proxyPort}" ];
     backend = "127.0.0.1:${toString internalPort}";
-    idleSec = 600;
+    idleSec = null;
     readyProbe = {
       # Returns a literal "OK" with no template, engine or cookie involved.
       url = "http://127.0.0.1:${toString internalPort}/healthz";
@@ -127,8 +133,9 @@ in
 
   systemd.services.searx.serviceConfig = {
     # SearXNG's expiring SQLite cache (engine tokens, tracker patterns) lives at
-    # $TMPDIR/sxng_cache_*.db. Under PrivateTmp it would die with every
-    # idle-stop, so point TMPDIR at a cache dir that outlives the sleep.
+    # $TMPDIR/sxng_cache_*.db. Under PrivateTmp it dies with the unit, so point
+    # TMPDIR at a cache dir that outlives a restart (and would have outlived an
+    # idle-stop, back when there was one).
     CacheDirectory = "searx";
     CacheDirectoryMode = "0700";
     Environment = [ "TMPDIR=/var/cache/searx" ];
@@ -162,7 +169,9 @@ in
       + "re-fetchable engine data, and preferences live in the visitor's cookie";
 
     heavyUnits = [ "searx.service" ];
-    heavyPriority = 165; # lightest, and socket-asleep anyway
+    # Load-bearing now that it no longer sleeps: ~175 MB is held for as long as
+    # the box is up, and a rebuild has about 250 MB of slack to work with.
+    heavyPriority = 165;
 
     public = {
       order = 195;
