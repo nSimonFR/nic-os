@@ -167,6 +167,7 @@ in
     ./claude/claude-notify-aggregator.nix
     ./claude/claude-context-baseline.nix
     ./gramps-web.nix
+    ./vibe-log.nix
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
     ./ryot.nix
