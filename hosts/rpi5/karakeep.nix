@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 130;   # row 4, kept and locked: here, Beszel, Vaultwarden, Home Assistant
+      order   = 150;   # row 4, kept and locked: Home Assistant, Beszel, here, Vaultwarden
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {
