@@ -119,7 +119,7 @@ in
       # Backend — it is an interactive agent the user drives from a browser, so it
       # belongs with the other things it is used to build, not with the
       # never-visited plumbing tiles. Backend is down to three as a result.
-      order   = 150;
+      order   = 180;
       port    = publicPort;
       backend = "http://127.0.0.1:${toString proxyPort}";
       tile = {

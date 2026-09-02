@@ -191,7 +191,7 @@ in
     # would be reverted by the next daily sync. moxfield-sync itself still writes
     # via :8330, which the tailnet cannot reach.
     public = {
-      order   = 220;
+      order   = 230;
       port    = 3550;
       backend = "http://127.0.0.1:8331";
       tile = {

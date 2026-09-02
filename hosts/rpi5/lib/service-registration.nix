@@ -295,13 +295,12 @@ let
 
               10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
               50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
-              90–120  logged and locked   — Ryot, Karakeep, Beszel, Vaultwarden
-              130–160  making             — Wakapi, Forgejo, DeepSeek Harness,
-                                            Aperture
-              170–200  the day            — Calino, BeaverHabits, FreeReps,
+              90–120  the day             — Calino, BeaverHabits, FreeReps, Ryot
+              130–160  kept and locked    — Karakeep, Beszel, Vaultwarden,
                                             Home Assistant
-              210–230  the rest           — Gramps Web, ShowMyCards,
+              170–200  making             — Aperture, DeepSeek Harness, Wakapi,
                                             Reactive Resume
+              210–230  the rest           — Forgejo, Gramps Web, ShowMyCards
 
             The rows are the OWNER'S CHOICE and not derivable from anything in
             the tree, which is the whole reason they are written down here. Do not

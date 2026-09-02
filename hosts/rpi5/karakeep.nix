@@ -124,7 +124,7 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 100;   # row 3, after Ryot (90), before Beszel and Vaultwarden
+      order   = 130;   # row 4, kept and locked: here, Beszel, Vaultwarden, Home Assistant
       port    = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {
