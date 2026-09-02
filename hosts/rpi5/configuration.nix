@@ -163,7 +163,6 @@ in
     # Everything Claude Code on this host — bridge, OAuth keep-warm, the two
     # alert oneshots — lives under ./claude/ (same shape as ./hermes/).
     ./claude/claude-remote-control.nix
-    ./claude/claude-oauth-2.nix
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix
     ./claude/claude-context-baseline.nix

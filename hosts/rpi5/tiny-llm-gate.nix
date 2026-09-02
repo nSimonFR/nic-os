@@ -224,10 +224,10 @@ in
       # auth), so rotation is transparent. Aperture sees the full real
       # request and response bodies for observability.
       #
-      # claude-oauth-extract-2.service (the disabled spare's extractor) still
-      # runs, and this unit still wants/afters it further down — deliberately:
-      # it keeps /run/claude-oauth-2/token warm so re-enabling acct2 is a pure
-      # config revert, and `wants` is not a hard dependency.
+      # acct2's keep-warm sidecar (claude/claude-oauth-2.nix) was REMOVED
+      # 2026-09-02 — it had been failing since 2026-08-30, so /run/claude-oauth-2
+      # was empty and the "warm spare" it existed to preserve was already gone.
+      # See the acct2 block below for what re-enabling now costs.
       #
       # Single account for now: acct1, the daily-driver login (team plan).
       # A one-element `accounts` list is valid — the gate only rejects `auth`
@@ -256,8 +256,15 @@ in
           # to. Keeping acct2 listed only bought a wasted switch + cooldown on
           # every flap, and an hourly Telegram page for an accepted state.
           #
-          # Re-enabling is uncommenting this entry (plus the acct2 page in
-          # claude-account-healthcheck.nix) — but a fresh
+          # Re-enabling is no longer just an uncomment: acct2's keep-warm
+          # sidecar was deleted 2026-09-02 (it had been failing since 08-30, so
+          # /run/claude-oauth-2/token did not exist anyway), so it also means
+          # restoring hosts/rpi5/claude/claude-oauth-2.nix from git history —
+          #   git log --diff-filter=D -- hosts/rpi5/claude/claude-oauth-2.nix
+          #   git show <that-commit>^:hosts/rpi5/claude/claude-oauth-2.nix
+          # — plus its configuration.nix import, the acct2 probe + page in
+          # claude-account-healthcheck.nix, and the extract-2 wants/after on
+          # this unit. And a fresh
           #   CLAUDE_CONFIG_DIR=~/.claude-secondary claude
           # login is NOT sufficient and on its own will not help: the refusal is
           # org policy, not a stale credential. acct2 can only serve the gate
@@ -294,8 +301,8 @@ in
   # static config: tiny-llm-gate registers them at startup and proxies
   # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
-    wants = [ "claude-oauth-extract.service" "claude-oauth-extract-2.service" ];
+    after = [ "network.target" "claude-oauth-extract.service" ];
+    wants = [ "claude-oauth-extract.service" ];
 
     # Writable state for the codex provider's OAuth credentials. The native
     # oauth_chatgpt loader refreshes the ChatGPT access token and persists the
