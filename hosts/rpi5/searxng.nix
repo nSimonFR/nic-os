@@ -40,9 +40,14 @@ in
       general = {
         instance_name = "nic-os search";
         debug = false; # load-bearing: this is what keeps queries out of the journal
-        enable_metrics = false; # in-memory only, wiped by every idle-stop
+        enable_metrics = false; # in-memory only, wiped by every restart
       };
 
+      # Preferences live here, not in a cookie: SearXNG has no accounts, so the
+      # preferences page's 21 cookies are per-browser and per-device, share a
+      # port-blind jar with every other app on this host, and carry no SameSite
+      # (a POST search from the URL bar can drop them). Server-side they hold
+      # everywhere, and a cookie is only needed to deviate.
       server = {
         port = internalPort;
         bind_address = "127.0.0.1";
@@ -50,6 +55,7 @@ in
         # to be the Serve origin rather than the loopback bind.
         base_url = "${config.nic.services.searxng.public.publicUrl}/";
         secret_key = "$SEARXNG_SECRET";
+        image_proxy = true; # thumbnails via this box, not the origin host
       };
 
       search = {
@@ -60,9 +66,33 @@ in
           "html"
           "json"
         ];
-        # Off: one upstream request per keystroke would cold-start a service
-        # that sleeps every 10 minutes.
-        autocomplete = "";
+        # One upstream request per keystroke — only affordable because the
+        # service no longer sleeps; it used to race a cold start.
+        autocomplete = "google";
+      };
+
+      ui = {
+        center_alignment = true;
+        results_on_new_tab = true;
+        theme_args.simple_style = "black";
+      };
+
+      # All eleven upstream entries, restated deliberately: `plugins` is the one
+      # key update_settings assigns wholesale instead of merging
+      # (settings_loader.py:142-144), so listing only the two flipped here would
+      # deactivate the other nine. Quoted names are entry points, not a path.
+      plugins = {
+        "searx.plugins.calculator.SXNGPlugin".active = true;
+        "searx.plugins.infinite_scroll.SXNGPlugin".active = true; # upstream: false
+        "searx.plugins.hash_plugin.SXNGPlugin".active = true;
+        "searx.plugins.self_info.SXNGPlugin".active = true;
+        "searx.plugins.unit_converter.SXNGPlugin".active = true;
+        "searx.plugins.ahmia_filter.SXNGPlugin".active = true;
+        "searx.plugins.hostnames.SXNGPlugin".active = true;
+        "searx.plugins.time_zone.SXNGPlugin".active = true;
+        "searx.plugins.oa_doi_rewrite.SXNGPlugin".active = true; # upstream: false
+        "searx.plugins.tor_check.SXNGPlugin".active = false;
+        "searx.plugins.tracker_url_remover.SXNGPlugin".active = true;
       };
 
       # Upstream's default general set — google, duckduckgo, startpage, brave —
