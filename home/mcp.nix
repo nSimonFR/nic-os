@@ -15,7 +15,7 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
-  # Trusk mutualised PG ("monodb") MCPs — crystaldba/postgres-mcp in docker.
+  # Trusk mutualised PG ("monodb") MCPs — crystaldba/postgres-mcp, run natively.
   # Staging = CloudSQL trusk-common-325eac79 @ 10.106.0.3, main DB `trusk_staging`;
   # prod = CloudSQL trusk-production @ 10.206.0.21, main DB `trusk`. Both hold one
   # schema per service and are reachable directly over the corp VPN. Users:
@@ -25,10 +25,18 @@ let
   # CloudSQL API users are cloudsqlsuperuser members so no postgres pwd needed).
   # ro pairs the readonly role with --access-mode=restricted (read-only SQL,
   # statement timeouts); rw is unrestricted. Passwords live in mcp-secrets.age.
+  # Native via uvx, no docker daemon needed. postgres-mcp 0.3.0 (latest PyPI
+  # release) declares an open `mcp` dep and the mcp 2.x SDK removed FastMCP, so
+  # unpinned resolution crashes on import — hence `--with mcp<2`. First run
+  # downloads into ~/.cache/uv; proxy vars are unset because the Aperture shim
+  # (HTTPS_PROXY=127.0.0.1:18888 in claude sessions) blocks PyPI, and the DB is
+  # reached directly over the corp VPN anyway. Verified 2026-09-03: handshake +
+  # write test green over MCP stdio against staging with mcp_readwrite.
   postgresMcp = name: user: pwVar: hostDb: mode: pkgs.writeShellScript "postgres-mcp-${name}" ''
     [ -f "${secretsPath}" ] && . "${secretsPath}"
+    unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
     export DATABASE_URI="postgresql://${user}:''${${pwVar}}@${hostDb}?sslmode=require"
-    exec docker run -i --rm -e DATABASE_URI crystaldba/postgres-mcp --access-mode=${mode}
+    exec ${pkgs.uv}/bin/uvx --with 'mcp<2' postgres-mcp@0.3.0 --access-mode=${mode}
   '';
   postgresStagingRo = postgresMcp "staging-ro" "mcp_readonly"  "PG_MCP_STAGING_RO_PW" "10.106.0.3:5432/trusk_staging" "restricted";
   postgresStagingRw = postgresMcp "staging-rw" "mcp_readwrite" "PG_MCP_STAGING_RW_PW" "10.106.0.3:5432/trusk_staging" "unrestricted";
