@@ -25,6 +25,12 @@ let
   # CloudSQL API users are cloudsqlsuperuser members so no postgres pwd needed).
   # ro pairs the readonly role with --access-mode=restricted (read-only SQL,
   # statement timeouts); rw is unrestricted. Passwords live in mcp-secrets.age.
+  # NO postgres_staging_ro: ToolHive's dbhub already serves read-only staging
+  # trusk_staging (Yvan, #tech 2026-09-03) — redundant here. dbhub's prod source
+  # is the warehouse replica, NOT the live prod monodb, so postgres_prod_ro
+  # stays; dbhub has no write path, so both rw servers stay. If crystaldba's
+  # extra tools (explain/health/index advisor) are ever needed on staging,
+  # postgres_staging_rw exposes the same set (ask-gated).
   # Native via uvx, no docker daemon needed. postgres-mcp 0.3.0 (latest PyPI
   # release) declares an open `mcp` dep and the mcp 2.x SDK removed FastMCP, so
   # unpinned resolution crashes on import — hence `--with mcp<2`. First run
@@ -38,7 +44,6 @@ let
     export DATABASE_URI="postgresql://${user}:''${${pwVar}}@${hostDb}?sslmode=require"
     exec ${pkgs.uv}/bin/uvx --with 'mcp<2' postgres-mcp@0.3.0 --access-mode=${mode}
   '';
-  postgresStagingRo = postgresMcp "staging-ro" "mcp_readonly"  "PG_MCP_STAGING_RO_PW" "10.106.0.3:5432/trusk_staging" "restricted";
   postgresStagingRw = postgresMcp "staging-rw" "mcp_readwrite" "PG_MCP_STAGING_RW_PW" "10.106.0.3:5432/trusk_staging" "unrestricted";
   postgresProdRo    = postgresMcp "prod-ro"    "mcp_readonly"  "PG_MCP_PROD_RO_PW"    "10.206.0.21:5432/trusk"        "restricted";
   postgresProdRw    = postgresMcp "prod-rw"    "mcp_readwrite" "PG_MCP_PROD_RW_PW"    "10.206.0.21:5432/trusk"        "unrestricted";
@@ -88,7 +93,6 @@ let
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
     affine  = { type = "sse"; url = affineMcpUrl; };
-    postgres_staging_ro = { command = "${postgresStagingRo}"; };
     postgres_staging_rw = { command = "${postgresStagingRw}"; };
     postgres_prod_ro    = { command = "${postgresProdRo}"; };
     postgres_prod_rw    = { command = "${postgresProdRw}"; };
