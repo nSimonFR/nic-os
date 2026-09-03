@@ -6,6 +6,10 @@
   },
   "_comment_permissions_ccr": "The Claude Code Remote (bridge) MCP tools are allowed for the READ-ONLY half only — get_session/list_* answer 'which session am I, what model is serving it, what else is running' without a prompt. Everything that mutates (create_session, archive/unarchive, interrupt, set_title/set_tags, send_later, create/update/delete/fire_trigger, subscribe_pr_activity, add_repo) is deliberately left prompting: those spawn containers, wake siblings or post to GitHub. Listed under BOTH name forms for the reason spelled out in .claude/settings.json's _comment_mcp_names — a claude.ai connector attaches either as 'claude.ai Claude Code Remote' (mcp__claude_ai_Claude_Code_Remote__*) or bare (mcp__Claude_Code_Remote__*), and only the bare form has been observed since 2026-07-28, so pinning one form silently stops matching if that flips back.",
   "permissions": {
+    "ask": [
+      "mcp__postgres_staging_rw",
+      "mcp__postgres_prod_rw"
+    ],
     "allow": [
       "Bash(*)",
       "Read(*)",
@@ -142,7 +146,14 @@
     "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed \u2014 the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json."
   },
   "_comment_denied_mcp": "DEDUPLICATION, not removal — deliberately asymmetric, unlike .claude/settings.json where each connector is listed under BOTH name forms to drop it entirely. Gmail attaches TWICE per session: observed 2026-08-25 in bridge session ancc_9c9e0e76218174a1 as mcp__Gmail__* AND mcp__claude_ai_Gmail__*, the same 28 tools, the combined MCP group costing 37,178 tokens. The two registrations are attempted independently and matched by raw === on the registration name (no trim, no case fold, no 'claude.ai ' strip), and the name space is closed at two forms — so denying exactly one form leaves exactly one attachment. Denying the bare 'Gmail' is what keeps 'claude.ai Gmail', which is also the only form this file's permissions.allow lists (mcp__claude_ai_Gmail). Do NOT add 'claude.ai Gmail' here: that drops Gmail outright. Deliberately USER scope rather than nic-os project scope — a duplicate is pure waste in every repo, while Gmail itself is real work in the Trusk ones. CAVEAT, unverified: 'claude.ai Metabase Trusk' has been denied under both forms since 2f8d755 (2026-08-18) and still attached on 08-19 and again on 08-25, so this mechanism has no positive evidence of biting for claude.ai connectors. Confirm with the mcp_instructions_delta/deferred_tools_delta addedNames recipe in known_issue_claude_connector_deny_both_name_forms before counting the saving.",
+  "_comment_pg_rw": "The two write-capable Trusk monodb MCPs (postgres_staging_rw / postgres_prod_rw, defined in home/mcp.nix) are disabled by default: deniedMcpServers keeps them from attaching at all (also saves their tool tokens). To use one deliberately, remove its entry here and restart the session. permissions.ask then forces a confirmation prompt per call — but ONLY in a normal-permission session; the default `claude` shell function passes --dangerously-skip-permissions, where ask rules never fire. For rw work, start claude without that flag.",
   "deniedMcpServers": [
+    {
+      "serverName": "postgres_staging_rw"
+    },
+    {
+      "serverName": "postgres_prod_rw"
+    },
     {
       "serverName": "claude-in-chrome"
     },
