@@ -15,6 +15,26 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
+  # Trusk mutualised PG ("monodb") MCPs — crystaldba/postgres-mcp in docker.
+  # Staging = CloudSQL trusk-common-325eac79 @ 10.106.0.3, main DB `trusk_staging`;
+  # prod = CloudSQL trusk-production @ 10.206.0.21, main DB `trusk`. Both hold one
+  # schema per service and are reachable directly over the corp VPN. Users:
+  # mcp_readonly (pg_read_all_data + pg_monitor; staging one pre-existed for
+  # ToolHive's dbhub) and mcp_readwrite (adds pg_write_all_data; created
+  # 2026-09-03 via `gcloud sql users create`, self-granted the predefined roles —
+  # CloudSQL API users are cloudsqlsuperuser members so no postgres pwd needed).
+  # ro pairs the readonly role with --access-mode=restricted (read-only SQL,
+  # statement timeouts); rw is unrestricted. Passwords live in mcp-secrets.age.
+  postgresMcp = name: user: pwVar: hostDb: mode: pkgs.writeShellScript "postgres-mcp-${name}" ''
+    [ -f "${secretsPath}" ] && . "${secretsPath}"
+    export DATABASE_URI="postgresql://${user}:''${${pwVar}}@${hostDb}?sslmode=require"
+    exec docker run -i --rm -e DATABASE_URI crystaldba/postgres-mcp --access-mode=${mode}
+  '';
+  postgresStagingRo = postgresMcp "staging-ro" "mcp_readonly"  "PG_MCP_STAGING_RO_PW" "10.106.0.3:5432/trusk_staging" "restricted";
+  postgresStagingRw = postgresMcp "staging-rw" "mcp_readwrite" "PG_MCP_STAGING_RW_PW" "10.106.0.3:5432/trusk_staging" "unrestricted";
+  postgresProdRo    = postgresMcp "prod-ro"    "mcp_readonly"  "PG_MCP_PROD_RO_PW"    "10.206.0.21:5432/trusk"        "restricted";
+  postgresProdRw    = postgresMcp "prod-rw"    "mcp_readwrite" "PG_MCP_PROD_RW_PW"    "10.206.0.21:5432/trusk"        "unrestricted";
+
   # AFFiNE MCP — write-capable. tiny-llm-gate exposes an SSE bridge at
   # tailnet :7020 that proxies to affine-mcp.service (DAWNCR0W) on the rpi5.
   # See hosts/rpi5/affine-mcp.nix and hosts/rpi5/tiny-llm-gate.nix.
@@ -60,6 +80,10 @@ let
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
     affine  = { type = "sse"; url = affineMcpUrl; };
+    postgres_staging_ro = { command = "${postgresStagingRo}"; };
+    postgres_staging_rw = { command = "${postgresStagingRw}"; };
+    postgres_prod_ro    = { command = "${postgresProdRo}"; };
+    postgres_prod_rw    = { command = "${postgresProdRw}"; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
