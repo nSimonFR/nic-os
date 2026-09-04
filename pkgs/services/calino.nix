@@ -39,7 +39,7 @@
 stdenv.mkDerivation (finalAttrs: {
   pname = "calino";
   # renovate: datasource=github-releases depName=Ivan-Malinovski/calino extractVersion=^v(?<version>.+)$
-  version = "0.30.0";
+  version = "0.33.1";
 
   src = fetchFromGitHub {
     owner = "Ivan-Malinovski";
