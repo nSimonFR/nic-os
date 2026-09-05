@@ -29,7 +29,7 @@
 }:
 let
   # renovate: datasource=npm depName=agent-browser
-  version = "0.34.0";
+  version = "0.36.0";
 
   # The tarball ships one binary per platform under bin/. Map the Nix system
   # onto upstream's naming; glibc only (the musl variants are for Alpine).
