@@ -1,6 +1,6 @@
 # Prod vs staging — prérequis d'infra qu'un bump n'emmène pas
 
-Triggers: bump prod isolé d'un service Nest 11 · `CreateContainerConfigError` / `FailedMount` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` sans erreur applicative · sidecar flagd qui ne démarre pas · source `flagd/shared-flags` introuvable · « pourquoi ça marche en staging et pas en prod »
+Triggers: bump prod isolé d'un service Nest 11 · `CreateContainerConfigError` / `FailedMount` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` sans erreur applicative · sidecar flagd qui ne démarre pas · source `flagd/shared-flags` introuvable · « pourquoi ça marche en staging et pas en prod » · `flagd-<svc>-<env>` bloqué `OutOfSync` avec `health=Healthy` · `spec.flagSpec.flags.<flag>.variants: Required value` · une release qui **retire** un flag · bascule d'un service vers Infisical
 
 ## La règle
 
@@ -83,3 +83,74 @@ git -C ~/MyDocuments/TRUSK/$SVC log --oneline <verprod>..<vercible> | grep -v 'C
 ```
 
 Conclusion pratique : pour un service dont la prod est plusieurs releases en retard et qui a franchi TEC-262 / flagd entre-temps, **une MEP globale staging→prod est plus sûre qu'un bump isolé** — elle emmène backoffice avec, donc les prérequis se résolvent par GitOps au lieu de gestes hors-bande.
+
+## Prérequis 3 — TEC-275 casse aussi les **suppressions** de flag, pas seulement les créations
+
+Le changelog de `trusk-argo-project` ne décrit le bug que côté *création*. **Il se déclenche identiquement quand une release RETIRE un flag** — vérifié en prod le 2026-09-07 sur la MEP des 6 services, après avoir conclu à tort la veille que « aucun flag ajouté ⇒ TEC-275 ne mordra pas ». Cette checklist-là est insuffisante : il faut differ les flags **dans les deux sens**.
+
+Mécanisme : git ne déclare plus la clé, l'apply est un merge donc la clé live survit, `RespectIgnoreDifferences=true` strippe `.state`/`.defaultVariant`, il reste `<flag>: {}` — et le CRD exige `variants`. **L'apply entier échoue**, donc *aucun* des flags du fichier n'est mis à jour.
+
+```
+FeatureFlag "backoffice-flags" is invalid: spec.flagSpec.flags.roundtrip_panel_v2.variants: Required value
+FeatureFlag "shared-flags"     is invalid: spec.flagSpec.flags.derive_author.variants: Required value
+FeatureFlag "iam-flags"        is invalid: spec.flagSpec.flags.iap_admin.variants: Required value (retried 5 times)
+```
+
+Signature à reconnaître : l'app reste **`health=Healthy`** (les CRD live sont valides en tant qu'objets) pendant que `sync=OutOfSync` et `operationState.phase=Failed`, en retry perpétuel. Aucun monitoring basé sur la santé ne le voit.
+
+Déblocage — retirer la clé orpheline du live pour que git et le cluster s'alignent :
+
+```bash
+kubectl --context $CTX -n flagd patch featureflag <name> --type json \
+  -p '[{"op":"remove","path":"/spec/flagSpec/flags/<flag>"}]'
+```
+
+Snapshoter avant (`get -o yaml`). Sans danger si plus aucune version déployée ne lit le flag — le vérifier d'abord, par version *réellement déployée* et pas sur `master` :
+
+```bash
+git -C ~/MyDocuments/TRUSK/<svc> grep -c "readBooleanFlag(<CONST>)" <version-prod> -- src
+```
+
+Un `flags: {}` vide est valide (staging tournait comme ça depuis des jours).
+
+**Chercher partout** : le 2026-09-07 les mêmes clés orphelines bloquaient trois apps dans deux clusters et trois namespaces — `flagd` en prod (backoffice-flags, shared-flags, iam-flags) et `flagd-preview` en staging (`flagd-preview-store`). Balayage :
+
+```bash
+kubectl --context $CTX -n argocd get applications | grep '^flagd'
+kubectl --context $CTX -n flagd get featureflag -o json | jq -r '.items[] | "\(.metadata.name): \(.spec.flagSpec.flags | keys | join(", "))"'
+```
+
+Le correctif de fond est le chart **0.18.0** (`managedFieldsManagers: [kubectl-patch]` au lieu du filtre par chemin) — PR trusk-chart-museum#136, toujours ouverte au 2026-09-07.
+
+## Les flags levés depuis l'UI ArgoCD s'éteindront le jour du bump chart 0.18.0
+
+Un flag flippé depuis l'UI (ou par tout client qui n'envoie pas de field manager) est enregistré sous le field manager **`unknown`**.
+
+**Avec le chart 0.17.0 — celui déployé — c'est stable.** Le filtre est *par chemin* (`jqPathExpressions` sur `.spec.flagSpec.flags[].state` et `.defaultVariant`), donc `.defaultVariant` est ignoré **quel que soit son propriétaire**. Conséquence contre-intuitive à connaître : l'app se déclare **`Synced/Healthy`** alors que git dit `off` et le live `on`. Ne pas lire un `Synced` comme « git et le cluster sont d'accord » sur ces deux champs — ArgoCD ne les regarde simplement pas.
+
+**Le chart 0.18.0 change ça.** Il remplace le filtre par chemin par `managedFieldsManagers: [kubectl-patch]` : seuls les champs possédés par `kubectl-patch` restent ignorés. Tout ce qui appartient à `unknown` redevient un écart réel, et **selfHeal le ramène à la valeur de git**. Donc au bump du chart, chaque flag levé depuis l'UI **s'éteint en silence** — sans alerte, sans déploiement, sans rien dans les logs.
+
+Audit à faire **avant** ce bump — la liste des flags qui vont retomber :
+
+```bash
+for f in $(kubectl --context $CTX -n flagd get featureflag -o jsonpath='{.items[*].metadata.name}'); do
+  kubectl --context $CTX -n flagd get featureflag "$f" --show-managed-fields -o json \
+    | jq -r --arg n "$f" '
+      .spec.flagSpec.flags as $live
+      | .metadata.managedFields[] | select(.manager=="unknown")
+      | .fieldsV1["f:spec"]["f:flagSpec"]["f:flags"] // {} | to_entries[]
+      | select(.value["f:defaultVariant"])
+      | "\($n) \(.key[2:]) live=\($live[.key[2:]].defaultVariant)"'
+done
+```
+
+Puis, pour chaque ligne, comparer à git (`git -C <svc> show <ver>:deployment/flagd/featureflag.yaml`) : si les valeurs diffèrent, le flag va basculer. Le remède est de le **reposer en `kubectl patch`**, ce qui transfère la propriété du champ à `kubectl-patch` et le remet sous protection.
+
+État au 2026-09-07 en production — trois fonctionnalités actives ne tiennent que par le filtre par chemin :
+
+| CRD | flag | live | git | au bump 0.18.0 |
+| --- | --- | --- | --- | --- |
+| state-status-flags | `state_status_order_validation` | on | off | **s'éteint** (IN-708) |
+| state-status-flags | `mission_auto_delay_detection` | on | off | **s'éteint** (IN-589) |
+| state-status-flags | `state_status_put_state_only` | on | off | **s'éteint** (IN-602) |
+| iam-flags | `iam_backend_authz` | off | off | sans effet |
