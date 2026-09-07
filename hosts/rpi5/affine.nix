@@ -5,7 +5,7 @@ let
   # line is a real upgrade rather than a comment change. Beta tags (AFFiNE cuts
   # one most days) are filtered out in renovate.json.
   # renovate: datasource=docker depName=ghcr.io/toeverything/affine
-  version = "0.27.3";
+  version = "0.27.4";
   port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
   dataDir = "/var/lib/affine";
   appDir = "${dataDir}/app";
