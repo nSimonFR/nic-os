@@ -1467,7 +1467,7 @@ def fetch_dsh(cfg, run, find=None, stat=None, now=None):
 #
 # ⚠ These figures UNDERCOUNT, and the gap is not small. codex-proxy returns zero
 #   usage on every response (Vercel AI SDK v6 spec mismatch, vercel/ai#12771), so
-#   Aperture is blind to the token cost of all gpt-5.6 traffic while still counting
+#   Aperture is blind to the token cost of all codex traffic (gpt-6 / gpt-5.x) while still counting
 #   its requests — 663 gpt responses contribute to the request rate and nothing to
 #   the token rate. Treat tokens/day as "tokens Anthropic-side", not "all tokens".
 

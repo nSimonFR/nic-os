@@ -32,15 +32,16 @@ let
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
     OPENAI_URI_BASE     = "${apertureUrl}/v1/";
-    # Use gpt-5.6 directly for reliable JSON output in merchant categorization.
-    # "auto" (gemma4:e4b) had 55-80% JSON validation failure rate; gpt-5.6
-    # produces valid JSON in both strict json_schema and json_object modes
-    # (verified against the gate) at the cost of higher token usage.
-    OPENAI_MODEL        = "gpt-5.6";
-    OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in codex-proxy OAuth
+    # Use gpt-6 directly for reliable JSON output in merchant categorization.
+    # "auto" (gemma4:e4b) had 55-80% JSON validation failure rate; the codex
+    # tiers produce valid JSON in both strict json_schema and json_object modes
+    # at the cost of higher token usage — re-verified for gpt-6 against the
+    # gate on 2026-09-06 (strict json_schema, additionalProperties:false).
+    OPENAI_MODEL        = "gpt-6";
+    OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
     # prompt (full category list) needs ~1352 → categories were never assigned.
-    # gpt-5.6 has ample context; 8192 gives 7424 input budget.
+    # gpt-6 has ample context (272k); 8192 gives 7424 input budget.
     LLM_CONTEXT_WINDOW  = "8192";
   };
 in

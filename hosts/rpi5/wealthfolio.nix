@@ -21,10 +21,15 @@
 # whole provider config lives in one `app_settings` row (`ai_provider_settings`)
 # written through PUT /api/v1/ai/providers/settings. Ours points the built-in
 # "openai" provider at tiny-llm-gate (customUrl http://127.0.0.1:4001/v1) with
-# selectedModel gpt-5.6. That row also carries a `modelCapabilityOverrides`
+# selectedModel gpt-6. That row also carries a `modelCapabilityOverrides`
 # entry that is load-bearing and NOT reproducible by a rebuild:
 #
-#   {"gpt-5.6": {"tools": true}}
+#   {"gpt-6": {"tools": true}}
+#
+# ⚠ Because this is DB state, the GPT-6 switch does NOT reach Wealthfolio via
+# a rebuild — selectedModel AND a fresh gpt-6 capability override have to be
+# PUT at runtime (both curls below). Until then it keeps calling gpt-5.6,
+# which still resolves on the gate.
 #
 # Wealthfolio decides tool support from a model catalog baked into the server
 # binary (gpt-5.4 / -mini / -nano only). Any model it does not recognise —
@@ -38,9 +43,14 @@
 #   curl -sb <cookiejar> -X PUT http://127.0.0.1:13345/api/v1/ai/providers/settings \
 #     -H 'Content-Type: application/json' \
 #     -d '{"providerId":"openai","modelCapabilityOverride":
-#          {"modelId":"gpt-5.6","overrides":{"tools":true}}}'
+#          {"modelId":"gpt-6","overrides":{"tools":true}}}'
+#   curl -sb <cookiejar> -X PUT http://127.0.0.1:13345/api/v1/ai/providers/settings \
+#     -H 'Content-Type: application/json' \
+#     -d '{"providerId":"openai","selectedModel":"gpt-6"}'
 #
-# KNOWN-BROKEN, ACCEPTED 2026-08-20: asset-allocation questions specifically.
+# KNOWN-BROKEN, ACCEPTED 2026-08-20 — and NOT fixed by GPT-6: a bare-curl
+# probe on 2026-09-06 showed gpt-6 (Astra) filling an optional string arg just
+# like gpt-5.6 does, so everything below still applies after the switch.
 # Through the gate's codex surface, gpt-5.6 fills every OPTIONAL string
 # parameter with "" instead of omitting it — reproducible outside Wealthfolio
 # with a bare curl to :4001, and NOT the gate's doing (it forwards the tool
