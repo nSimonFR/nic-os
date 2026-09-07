@@ -144,7 +144,18 @@ for f in $(kubectl --context $CTX -n flagd get featureflag -o jsonpath='{.items[
 done
 ```
 
-Puis, pour chaque ligne, comparer à git (`git -C <svc> show <ver>:deployment/flagd/featureflag.yaml`) : si les valeurs diffèrent, le flag va basculer. Le remède est de le **reposer en `kubectl patch`**, ce qui transfère la propriété du champ à `kubectl-patch` et le remet sous protection.
+Puis, pour chaque ligne, comparer à git (`git -C <svc> show <ver>:deployment/flagd/featureflag.yaml`) : si les valeurs diffèrent, le flag basculera au bump.
+
+**Le remède n'est PAS de reposer le flag en `kubectl patch`.** Ça marcherait techniquement — la propriété du champ passe à `kubectl-patch`, donc 0.18.0 continue de l'ignorer — mais ça consacre le cluster comme source de vérité. Décision Nicolas du 2026-09-07 : **les valeurs de flag vivent dans GitOps**, un flip depuis l'UI ou par `kubectl patch` est une dérive, pas une bascule.
+
+Deux remèdes, dans cet ordre :
+
+1. **Jeter le flag** — rendre le comportement inconditionnel, supprimer la déclaration et le `readBooleanFlag`. C'est le bon geste dès que le rollout est acquis, et c'est celui qui supprime le problème au lieu de le déplacer.
+2. **Déclarer la valeur dans git** — seulement si le flag doit rester comme kill-switch durable.
+
+Ne pas faire (1) *et* (2) : déclarer `on` puis supprimer une semaine plus tard, c'est deux releases pour le même résultat, et entre les deux on a installé un flag définitivement levé — exactement la branche morte que TEC-272 a nettoyée pour `derive_author` (« a flag nobody flips is a branch nobody runs »).
+
+Et mesurer l'urgence avant de churner une release : le bump 0.18.0 demande review → merge → publication GCS → bump du `Chart.yaml` de trusk-applications. Au 2026-09-07 la PR trusk-chart-museum#136 était ouverte sans review depuis 4 jours et 0.18.0 n'était pas publiée — donc la fenêtre était large, et attendre le nettoyage du flag valait mieux qu'une release d'assurance.
 
 État au 2026-09-07 en production — trois fonctionnalités actives ne tiennent que par le filtre par chemin :
 
