@@ -26,10 +26,33 @@
 #
 #   {"gpt-6": {"tools": true}}
 #
-# ⚠ Because this is DB state, the GPT-6 switch does NOT reach Wealthfolio via
-# a rebuild — selectedModel AND a fresh gpt-6 capability override have to be
-# PUT at runtime (both curls below). Until then it keeps calling gpt-5.6,
-# which still resolves on the gate.
+# ⚠ Because this is DB state, the GPT-6 switch did NOT reach Wealthfolio via
+# the rebuild — selectedModel AND a fresh gpt-6 capability override had to be
+# written at runtime (2026-09-07, done: selectedModel gpt-6, overrides for both
+# gpt-6 and gpt-5.6 so the old model stays tool-enabled if you switch back).
+#
+# BOTH PUTs BELOW NEED A LOGGED-IN SESSION, and there is no way to get one from
+# this host unattended: WF_AUTH_REQUIRED=true, /api/v1/ai/providers/settings
+# 401s unauth'd, and the only credential on the box is the argon2id
+# WF_AUTH_PASSWORD_HASH in wealthfolio-env.age — a hash cannot log in. So the
+# switch was applied straight to SQLite instead, which is the recovery path
+# when nobody can type the password:
+#
+#   sudo systemctl stop wealthfolio      # it caches this row in memory
+#   # back up first — this DB is NOT in restic (that covers /mnt/data only):
+#   sudo sqlite3 -readonly /var/lib/wealthfolio/wealthfolio.db \
+#     'select setting_value from app_settings where setting_key="ai_provider_settings";' \
+#     > /var/lib/wealthfolio/ai_provider_settings.pre-gpt6.json
+#   # edit selectedModel + modelCapabilityOverrides in that JSON, then
+#   #   update app_settings set setting_value='<json>'
+#   #     where setting_key='ai_provider_settings';
+#   sudo systemctl start wealthfolio
+#
+# What that CANNOT prove is the last hop: whether the server actually emits
+# tool definitions for the new modelId only shows up in a real assistant
+# reply, and the chat route needs the same login. Ask it a net-worth question
+# in the UI once — a tools answer means the override took, the "switch to a
+# tool-enabled model using the gear icon" line means it did not.
 #
 # Wealthfolio decides tool support from a model catalog baked into the server
 # binary (gpt-5.4 / -mini / -nano only). Any model it does not recognise —
