@@ -116,9 +116,33 @@ in
         #    bare `gpt-5.6` alias is rejected ("not supported when using Codex
         #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
         #    All three verified live via /v1/chat/completions on 2026-07-20.
+        #    KEPT DECLARED as the rollback target for the GPT-6 switch below:
+        #    reverting an agent is a one-line model-id edit, not a revert.
         "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
+
+        # -- GPT-6 generation. The codex surface offers TWO tiers, not 5.6's
+        #    three: `gpt-6-astra` ("our most capable model for complex,
+        #    demanding work", default reasoning low) and `gpt-reserve` ("fast
+        #    and affordable agentic coding model", default medium). 5.6's
+        #    balanced middle tier (Terra) has NO GPT-6 successor — Astra is the
+        #    replacement for both Sol and Terra here, Reserve for Luna.
+        #    Client-facing `gpt-6` is Astra, mirroring how `gpt-5.6` is Sol.
+        #    Same bare-alias trap as 5.6, re-verified 2026-09-06: upstream
+        #    rejects a bare `gpt-6` with 400 "The 'gpt-6' model is not
+        #    supported when using Codex with a ChatGPT account", so the
+        #    upstream id must carry the tier (`gpt-6-astra`). `gpt-reserve`
+        #    carries no generation prefix upstream — that IS its slug.
+        #    Both tiers verified live end-to-end through this gate's codex
+        #    provider on 2026-09-06 (chat, streaming, tool_calls, strict
+        #    json_schema, token counts), enumerated from
+        #    /backend-api/codex/models?client_version=1.0.0 — note the gate's
+        #    own 0.9.x client_version returns an EMPTY model list there, which
+        #    is a listing quirk only: /responses serves both tiers fine.
+        #    Context window is 272k (872k max), same as the 5.6 tiers.
+        "gpt-6"              = { provider = "codex"; upstream_model = "gpt-6-astra";   fallback = [ "gemma4:e4b" ]; };
+        "gpt-reserve"        = { provider = "codex"; upstream_model = "gpt-reserve";   fallback = [ "gemma4:e4b" ]; };
 
         # -- Anthropic (Claude) via the shared OAuth account pool --
         # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
@@ -132,7 +156,7 @@ in
         "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
         # "auto" — local-first model with a resilience cascade: gemma4:e4b on
-        # beast → codex gpt-5.5 (beast unreachable/5xx) → Claude (codex also
+        # beast → codex gpt-6 (beast unreachable/5xx) → Claude (codex also
         # down). Prefers free local inference when beast is awake, keeps the
         # assistant working when it's asleep, and only reaches the metered
         # Anthropic pool as a last resort. Works behind BOTH the OpenAI and
@@ -141,7 +165,7 @@ in
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.5" "claude" ];
+          fallback       = [ "gpt-6" "claude" ];
         };
       };
 
@@ -165,6 +189,12 @@ in
         "openai/gpt-5.6-sol"         = "gpt-5.6";
         "openai/gpt-5.6-terra"       = "gpt-5.6-terra";
         "openai/gpt-5.6-luna"        = "gpt-5.6-luna";
+        # GPT-6. `gpt-6-astra` (the upstream slug) resolves to the same
+        # client-facing `gpt-6`, mirroring the gpt-5.6-sol → gpt-5.6 aliasing.
+        "gpt-6-astra"                = "gpt-6";
+        "openai/gpt-6"               = "gpt-6";
+        "openai/gpt-6-astra"         = "gpt-6";
+        "openai/gpt-reserve"         = "gpt-reserve";
 
         # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
         # THREAD-TITLE model (`titleModelId` in the provider catalog baked into

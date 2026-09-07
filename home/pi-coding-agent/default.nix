@@ -44,7 +44,7 @@ in
   # Without these, pi falls back to provider="google" and refuses to start.
   home.file.".pi/agent/settings.json".text = builtins.toJSON {
     defaultProvider = "aperture";
-    defaultModel = "gpt-5.5";
+    defaultModel = "gpt-6";
   };
 
   home.sessionVariables = {

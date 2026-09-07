@@ -73,7 +73,9 @@
         # 32768 max tokens); correct one only when a real request proves it
         # wrong.
         models:
-          - id: gpt-5.5          # ChatGPT subscription via codex-proxy — the default
+          - id: gpt-6            # ChatGPT subscription via tlg's codex provider — the default
+          - id: gpt-reserve      # fast/affordable GPT-6 tier
+          - id: gpt-5.5          # previous generation, kept as the rollback target
           - id: gpt-5.6
           # gpt-5.5-mini is deliberately absent. A hand-declared model takes
           # the route's 262144 fallback, and the mini answered dsh's system
@@ -90,4 +92,4 @@
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
     provider: aperture
-    model: gpt-5.5
+    model: gpt-6
