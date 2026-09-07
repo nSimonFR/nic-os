@@ -1,6 +1,6 @@
 # Data & analytics MCPs — Steampipe and Metabase
 
-Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase · `execute_query` · pMBQL
+Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase · `execute_query` · `create_question` · pMBQL · `The token request is invalid` · clear authentication · `This tool is not available` · `conflict with recovery` · `prod-warehouse` · dbhub · cross-schema join
 
 ## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
 
@@ -16,3 +16,13 @@ Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__m
   ```bash
   jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
   ```
+- **`Failed to reconnect to metabase: The token request is invalid`** → `/mcp` → **clear authentication**, then reconnect. "Reconnect" alone replays the stale DCR client and reproduces the error indefinitely. Clearing forces a fresh registration; works first try.
+- **claude.ai connector "Metabase Trusk" is read-only in practice.** `execute_query` / `get_table` reach Metabase; `create_question` returns `permission_error: This tool is not available` with an Anthropic `req_…` id and **without schema validation** (omitting required params changes nothing) — the call never leaves Claude, so it is *not* an OAuth scope problem. Use the local `metabase` MCP to write.
+- **API keys don't work on `/api/mcp`.** `X-Api-Key` → same 401 as no auth at all; only OAuth bearer is accepted (a bogus bearer gives a distinct `invalid_token`). No key-based shortcut.
+- **Verify `database id 6`** by reading `metabase.report_card` on `prod-warehouse`: the `metabase` schema there replicates part of Metabase's own app DB (`report_card`, `collection`, `core_user`, `query_execution`, `report_dashboard`). Cards per `database_id` answer "which connection do the real questions use".
+
+## Warehouse (`prod-warehouse` via dbhub · Metabase db 6)
+
+- DB `warehouse`, user `mcp_readonly`. **Replicates the OLTP schemas**, incl. `ikea_orders` (COA) and `journey_trusk_order` (order-mission) → **cross-service joins in one native question**.
+- **~5h lag** — periodic snapshot, not live (2026-08-26: latest rows 09:01 for a warehouse clock of 14:17). Any column derived from live state (mission status, order state) is stale by that much; recheck on the OLTP before acting on a per-row list.
+- **`canceling statement due to conflict with recovery`** = hot-standby killing a long query. Narrow the window (180d → 45d sufficed). A saved card run from the UI is unaffected.

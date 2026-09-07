@@ -20,8 +20,10 @@ would actually be looking at. Open a note when the work in front of you hits its
 | [argocd-operator-rbac](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-operator-rbac.md) | ClusterRoleBinding subjects keep reverting · consumers 403 after an operator writes RBAC · `ignoreDifferences` |
 | [legacy-trusk-api](/Users/nsimon/MyDocuments/TRUSK/notes/legacy-trusk-api.md) | legacy user cannot see an order set · `trusk_customer` · `profile.truskCustomer` |
 | [prod-vs-staging-prerequisites](/Users/nsimon/MyDocuments/TRUSK/notes/prod-vs-staging-prerequisites.md) | bump prod isolé d'un service Nest 11 · `FailedMount` / `CreateContainerConfigError` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` · sidecar flagd qui ne démarre pas · `flagd/shared-flags` introuvable · « marche en staging, pas en prod » |
+| [preview-environments](/Users/nsimon/MyDocuments/TRUSK/notes/preview-environments.md) | `appset-preview` · `pr-<n>-bo.trusk.com` · about to enable an authz gate / rate limit in staging · preview behaves unlike staging · flag flipped in staging not seen in preview · `flagd-preview` · `infra-env-infisical-appset-shared` · `env.values[0..3]` clobbered |
 | [backoffice-deeplinks](/Users/nsimon/MyDocuments/TRUSK/notes/backoffice-deeplinks.md) | need a BO link to a specific order / mission · `?primary=order~<id>` · `primaryTab` / `secondaryTab` · which id is a "commande" · `log_order` vs `trusk_order_id` · `GET /missions/<id>` 503 `Failed to fetch availability` |
 | [amqp-publish-traps](/Users/nsimon/MyDocuments/TRUSK/notes/amqp-publish-traps.md) | publish resolves but the queue stays empty · consumer never fires · delayed/scheduled work never runs · `AmqpExchangeType.DIRECT` · `lib-messenger` · `rabbitmqctl list_queues` times out · is this flagd flag really on |
+| [datadog-prod-observability](/Users/nsimon/MyDocuments/TRUSK/notes/datadog-prod-observability.md) | « pas d'erreurs sur Datadog » comme preuve de santé · vérifier un déploiement prod dans les logs · pic d'erreurs juste après un rollout · `auth.enforcement.bypassed` en volume · monitor `[LOGS] — … burst` · comparer un taux d'erreurs à une baseline · `service:backoffice` vs `trusk-backoffice` · `@version` absent d'un service |
 
 A finding earns a note when it is longer than a paragraph, still true in six months, and
 not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
@@ -84,9 +86,13 @@ Two traps: a shipped ticket ends at **`In Production`** (`7dc6b655-09d0-41f9-9a2
 
 One MCP (`find_tool` to discover, `call_tool` to run) proxying several tool sets — **notably Datadog** alongside ArgoCD. Datadog tools: `tech-datadog_logs` (`search` / `aggregate`), `tech-datadog_security`, plus the logs indexes/pipelines/archives admin tools.
 
-Datadog gotchas: **`env:production` and `namespace:production` are NOT searchable facets** — filter with `host:gke-trusk-production*`. Version in scope is `@version` (log attribute) or `image_tag:` (pod tag). Prefer `aggregate` + `groupBy` for anything you'll quote as a number; `sample:"spread"` samples and must never be counted, and the **current time bucket is incomplete** so never conclude "it dropped to zero" on it. `search` with `sample:"diverse"` is the right tool to enumerate distinct error patterns.
+Datadog gotchas: **`env:production` and `namespace:production` are NOT searchable facets — but `kube_namespace:production` IS** (corrigé le 2026-09-07 ; l'ancienne formulation envoyait vers `host:gke-trusk-production*`, qui marche aussi mais oblige à énumérer les services et fait donc manquer ceux qu'on n'a pas anticipés). Version in scope is `@version` (log attribute) or `image_tag:` (pod tag). Prefer `aggregate` + `groupBy` for anything you'll quote as a number; `sample:"spread"` samples and must never be counted, and the **current time bucket is incomplete** so never conclude "it dropped to zero" on it. `search` with `sample:"diverse"` is the right tool to enumerate distinct error patterns.
+
+Avant de conclure quoi que ce soit d'une requête de logs prod — surtout « pas d'erreurs » après un déploiement — lire [`notes/datadog-prod-observability.md`](/Users/nsimon/MyDocuments/TRUSK/notes/datadog-prod-observability.md) : quels services loggent vraiment, les trois familles de bruit à exclure, et pourquoi une baseline d'heure creuse ne vaut rien.
 
 Before calling a new regression: `aggregate` the same query over 3-30d `groupBy ["@version"]` — it separates "introduced by the version we just shipped" from "pre-existing, only now reaching this env".
+
+**Logs retention = 15 days** (single `main` index, no flex logs) — queries beyond that silently return nothing, so an "it started on <today − 15d>" onset date is the retention cliff, not a launch (bit us on the trusk-api 429 investigation, 2026-09-03). For any history question >15d, use `tech-datadog_metrics` (15-month retention), e.g. `sum:nginx_ingress.controller.requests{ingress:<svc>,status:429}.as_count()` — per-ingress + per-status, no user-agent dimension.
 
 ## ArgoCD — read via MCP, write via UI/kubectl
 
@@ -122,7 +128,7 @@ Match the run by headSha (its name is often `CI Workflow`, not the PR title). Dr
 
 1. **`cd.yaml`** runs at merge; its `Trusk CD` job calls a reusable `github-actions` workflow — `gh run view <id> --json jobs` shows only wrapper steps (Install/Release/Linear); the docker build/push lives inside the reusable wf (`gh api .../actions/runs/<id>/jobs` for the full list).
 2. **semantic-release** cuts the tag + pushes a `Chore(Version): <ver>` commit → a 2nd cd.yaml run where Trusk CD is correctly `skipped`.
-3. **Image** → `europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry/<service>:<version>`. Propagation 1–2 min; expect one `ErrImagePull`→`ImagePullBackOff`→pull cycle (~30s). Only dig into wf logs if it persists past ~5 min.
+3. **Image** → `europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry/<service>:<version>`. **Built by `ci.yaml` on the TAG push, not by `cd.yaml`** (`on: push: tags: ["*"]`). Measured (front-tracking-page 1.50.0, 2026-08-26): Release Workflow 2m30 (cuts tag only, no build) → tag CI **13m30** (build+push). Bumping trusk-applications before that run ends ⇒ `ImagePullBackOff` + `not found` — expected, wait. Find it: `gh run list --repo trusk-official/<svc> --workflow ci.yaml` → run whose `headBranch` = the version.
 4. **trusk-applications bump** is manual — see below.
 5. **ArgoCD** reconciles `<env>-<service>` next sweep; old pod serves until the new one is `1/1 Running`.
 
@@ -147,16 +153,29 @@ kubectl --context trusk-staging-ts -n staging logs <pod> --previous
 `@trusk-official/config-release` releaseRules come from the `type-enum` in config-commitlint. Valid PascalCase scopes: **`Feature, Fix, Docs, Style, Refactor, Test, Chore`** — `Feature`/`Refactor` → minor, rest → patch. The Angular preset also adds lowercase `feat`→minor, `fix`→patch, `BREAKING CHANGE`→major.
 
 - **`Perf:` cuts NO release** (not in the list, not in the Angular preset) — same for any type outside the seven. Use `Fix:`/`Feature:`/lowercase `fix:` to force a bump. (Verified on fleet 2026-06-04.)
-- **No Linear prefix** on commit messages _or PR titles_ unless asked — plain `Type(Scope): desc`. Repos squash-merge, so a PR title like `IN-625 Perf(…)` becomes the master commit and semantic-release can't parse it → no release, no deploy. Strip `IN-`/`EXTERN-`/`DO-` from PR titles before merge.
+- **No Linear prefix** on commit messages unless asked — plain `Type(Scope): desc`. Repos are **rebase-only** (`squash:false merge:false rebase:true` — verified on front-tracking-page, centiro-orders-api, backoffice, communications, rating, order-mission, trusk-applications, state-status, 2026-08-26), so each commit lands verbatim and semantic-release parses **commit messages, never the PR title**. A prefixed commit = no release, no deploy. Keep PR titles clean too, but that is legibility, not the failure mode.
 - **Link a PR to its Linear issue via the PR body, not the title/branch.** Put `Closes IN-XXX` (or `Fixes IN-XXX`) at the **top of the PR description** — the Linear↔GitHub integration auto-attaches the PR to the issue and advances its status on merge. Keeps the title clean (above rule) while still wiring the ticket. No need to touch Linear by hand.
 
 ## Code style — brace every `if`
 
 Always brace `if` bodies, even one-liners. No `if (cond) doThing();`. All Trusk TS repos.
 
+## Shell — le tool Bash tourne en **zsh**, qui ne découpe pas les variables
+
+Pas de word splitting par défaut en zsh : `set -- $pair` laisse `"a b c"` **entier** dans `$1`, et `$2`/`$3` sont vides. Une boucle `for pair in "state-status 1.39.0 1.41.0" …; do set -- $pair; git -C "$1" grep … "$2"; done` ne signale rien et renvoie des résultats **silencieusement faux** — ça a produit des comptages tous à zéro sur les lectures de `derive_author` pendant la préparation de la MEP du 2026-09-07, ce qui aurait inversé la conclusion sur l'ordre des vagues. Utiliser :
+
+```bash
+printf '%s\n' "svc 1.2.3" "svc2 4.5.6" | while read -r svc from to; do … done
+# ou:  read -r svc from to <<< "$pair"
+```
+
+Corollaire : toute boucle shell dont le résultat sert de preuve doit être vérifiée sur **un** cas à la main avant d'être crue.
+
 ## trusk-applications bumps — commit straight to master, no PR
 
 `targetRevision` doesn't auto-bump after a release. **Push directly to `master`** (Nicolas 2026-06-03: PRs are needless churn + branch protection blocks non-admin merges anyway). Message: `Chore(Staging): bump <service> to <version>` / `Chore(Production): …`; diff is one line in `applications/<env>.yaml`. If a PR was already opened: `gh pr merge <n> --rebase --delete-branch --admin` (squash disabled here).
+
+Since ~2026-08 the direct push prints `remote: - Changes must be made through a pull request` **yet the commit can still land**. Confirm with `git fetch && git log origin/master -1` before retrying — retrying blind duplicates the bump. If it really bounced: branch + PR + `--admin`.
 
 
 ## kubectl contexts
