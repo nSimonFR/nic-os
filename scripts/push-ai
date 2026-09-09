@@ -8,7 +8,7 @@
 # PR sits green, approved and unmergeable, looking like the rule is broken
 # rather than like the push came from the wrong account.
 #
-# WHY A HEADER AND NOT `gh`. `gh auth token --user nSimonfr-ai` prints a token
+# WHY A HEADER AND NOT `gh`. `gh auth token --user nSimonFR-ai` prints a token
 # but does not switch the credential helper's active account, so git would
 # still authenticate as nSimonFR. The remote also *looks* like SSH
 # (git@github.com:…) while a global `url.https://github.com/.insteadof
@@ -29,8 +29,12 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! token=$(gh auth token --user nSimonfr-ai 2>/dev/null) || [ -z "$token" ]; then
-  echo "push-ai: no token for nSimonfr-ai. Run: gh auth login --user nSimonfr-ai" >&2
+# `--user` matches the stored account name EXACTLY, case included: the account
+# is nSimonFR-ai, and asking for nSimonfr-ai returns nothing (the spelling this
+# script shipped with, so every push failed with the message below while
+# `gh auth status` listed the account as present).
+if ! token=$(gh auth token --user nSimonFR-ai 2>/dev/null) || [ -z "$token" ]; then
+  echo "push-ai: no token for nSimonFR-ai. Run: gh auth login --user nSimonFR-ai" >&2
   exit 1
 fi
 
