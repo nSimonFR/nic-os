@@ -83,6 +83,18 @@ let
     # (resolves over utun, valid TLS via `tailscale serve`); OAuth route also
     # exists at staging-toolhive-tech.trusk.com/mcp.
     "toolhive-tech"     = { type = "http"; url = "https://ai-toolhive-tech.tail271d7a.ts.net/mcp"; };
+    # trusk-apis — aggregator over the 17 staging OpenAPI specs (Andy, #tech
+    # 2026-09-08). 6 tools: list-apis / search-operations / list-endpoints /
+    # get-endpoint-schema / get-schema / invoke-endpoint. invoke-endpoint really
+    # calls staging; DELETE needs `confirm: true`. Holds no token — you paste
+    # your Scalar-portal JWT into the conversation and it forwards it as-is
+    # (only a fingerprint is audited); unauthenticated calls still work on the
+    # staging routes that aren't gated yet. Specs read live, 5 min cache.
+    # Cluster-internal DNS, resolved over the work Tailscale tunnel (the
+    # trusk-staging-ts operator) — plain http, so the Aperture shim's
+    # HTTPS_PROXY doesn't intercept it. Adding an API = one line in
+    # `conf/apis.json` of the open-api-scalar repo, nothing to change here.
+    "trusk-apis"        = { type = "http"; url = "http://scalar-mcp.staging.svc.cluster.local/mcp"; };
     # Steampipe — query GCP as live SQL (only the turbot/gcp plugin is
     # installed): `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster
     # / gcp_service_account …`, read-only, hits the real GCP API per query.
