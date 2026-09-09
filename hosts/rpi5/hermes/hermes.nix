@@ -28,8 +28,7 @@
 #   - `api_mode = "chat"` forces /v1/chat/completions, dodging the Ollama-native
 #     probe hang (upstream #26489).
 #   - context_length ≥64k is required or hermes rejects the model at startup;
-#     gpt-6 (via the gate) is declared at 131072 — deliberately below the
-#     model's real 272k window, unchanged from the gpt-5.6-terra era.
+#     gpt-5.6-terra (via the gate) is declared at 131072.
 #   - No failover is configured (see the gateModel note below): a plan-cap 429
 #     on the primary takes Hermes offline until the quota resets.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
@@ -63,14 +62,15 @@ let
   # Aperture rejects /v1/embeddings — harmless here because memory.provider is
   # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
   gateBase = "${apertureUrl}/v1";
-  # gpt-6 (Astra, the flagship GPT-6 tier — see hosts/rpi5/tiny-llm-gate.nix)
-  # has a 272k context window; the small gemma models don't have >64k, and
-  # hermes rejects sub-64k models at startup. GPT-6 ships only two tiers, so
-  # the balanced middle tier this used to run (gpt-5.6-terra) is gone; Astra is
-  # its replacement. Alternatives on the gate: gpt-reserve (fast/affordable
-  # GPT-6 tier), gpt-5.6 / -terra / -luna and gpt-5.5 (previous generation,
-  # still declared). Bump this one line to switch.
-  gateModel = "gpt-6";
+  # gpt-5.6-terra (the balanced GPT-5.6 coding tier) has a >64k context window;
+  # the small gemma models don't, and hermes rejects sub-64k models at startup.
+  # Alternatives on the gate: gpt-5.6-sol (flagship), gpt-5.6-luna (high-volume),
+  # gpt-5.5, gpt-6 (Astra) / gpt-reserve. Bump this one line to switch.
+  #
+  # Ran gpt-6 from 2026-09-07 to 2026-09-09 and rolled back: Astra chewed
+  # through the ChatGPT plan quota far faster than Terra, and Hermes has no
+  # failover, so a plan-cap 429 takes the assistant offline outright.
+  gateModel = "gpt-5.6-terra";
 
   # NO Anthropic fallback here, deliberately — do not re-add one without
   # funding Extra Usage first (claude.ai/settings/usage).

@@ -73,10 +73,14 @@
         # 32768 max tokens); correct one only when a real request proves it
         # wrong.
         models:
-          - id: gpt-6            # ChatGPT subscription via tlg's codex provider — the default
-          - id: gpt-reserve      # fast/affordable GPT-6 tier
-          - id: gpt-5.5          # previous generation, kept as the rollback target
+          - id: gpt-5.5          # ChatGPT subscription via tlg's codex provider — the default
           - id: gpt-5.6
+          # GPT-6 stays SELECTABLE but is no longer the default: it burned the
+          # ChatGPT plan quota far faster than 5.5 did (2026-09-09). Pick it per
+          # agent if a task needs it; don't make it the default again without a
+          # usage budget to spend.
+          - id: gpt-6            # GPT-6 Astra, flagship
+          - id: gpt-reserve      # fast/affordable GPT-6 tier
           # gpt-5.5-mini is deliberately absent. A hand-declared model takes
           # the route's 262144 fallback, and the mini answered dsh's system
           # prompt + tool schemas with a hard 400 CONTEXT_WINDOW_EXCEEDED.
@@ -92,4 +96,4 @@
   name: '@deepseek-ai/dsh-agent-default-model'
   config:
     provider: aperture
-    model: gpt-6
+    model: gpt-5.5
