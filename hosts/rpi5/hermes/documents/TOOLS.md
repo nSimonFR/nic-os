@@ -32,7 +32,8 @@ no HTTP gateway to curl.
 - **Models / routing:** configured inline in `hermes.nix`. Hermes points at
   **Aperture** (`http://ai.gate-mintaka.ts.net/v1`), which forwards to
   tiny-llm-gate so usage and cost land on the observability dashboard. Current
-  model: `gpt-5.6-terra`. **No Anthropic fallback** — deliberately; see the long
+  model: `gpt-5.6` by default; `/model` also offers `gpt-6` (GPT-6 Astra) for a
+  hard task, session-scoped. **No Anthropic fallback** — deliberately; see the long
   note in `hermes.nix`, do not re-add one.
 
 ## Config Changes

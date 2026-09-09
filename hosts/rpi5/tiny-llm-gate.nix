@@ -116,8 +116,12 @@ in
         #    bare `gpt-5.6` alias is rejected ("not supported when using Codex
         #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
         #    All three verified live via /v1/chat/completions on 2026-07-20.
-        #    These are the tiers the agents actually run: the GPT-6 switch of
-        #    2026-09-07 was ROLLED BACK to them on 2026-09-09 (see below).
+        #
+        #    `gpt-5.6` (Sol) is THE fleet default — dsh, pi-coding-agent, sure,
+        #    wealthfolio, hermes and "auto"'s codex hop all name this one id, so
+        #    there is a single model to reason about. Terra and Luna stay
+        #    declared but nothing points at them any more; the GPT-6 switch of
+        #    2026-09-07 was rolled back here on 2026-09-09 (see below).
         "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
@@ -142,12 +146,19 @@ in
         #    is a listing quirk only: /responses serves both tiers fine.
         #    Context window is 272k (872k max), same as the 5.6 tiers.
         #
-        #    ⚠ DECLARED BUT NOT THE DEFAULT ANYWHERE. Every agent ran Astra
-        #    from 2026-09-07 and it burned the ChatGPT plan quota far faster
-        #    than the 5.6 tiers did, so all of them were rolled back to
-        #    gpt-5.6* / gpt-5.5 on 2026-09-09. Kept declared so a model-id edit
-        #    is enough to opt one agent back in — don't flip the fleet again
-        #    without a usage budget to spend.
+        #    ⚠ DECLARED, BUT THE DEFAULT NOWHERE. Every agent ran Astra from
+        #    2026-09-07 and it burned the ChatGPT plan quota far faster than
+        #    the 5.6 tiers did, so the fleet was normalized onto `gpt-5.6` on
+        #    2026-09-09. Don't make it a default again without a usage budget
+        #    to spend.
+        #
+        #    ON-DEMAND ACCESS, deliberately, in two places: Hermes declares
+        #    `gpt-6` alongside `gpt-5.6` so its Telegram `/model` picker can
+        #    switch a single SESSION to Astra (hosts/rpi5/hermes/hermes.nix
+        #    `gateModels`), and dsh keeps both GPT-6 tiers in its selectable
+        #    model list. Both are per-conversation opt-ins that fall back to
+        #    gpt-5.6 on restart — no path where GPT-6 becomes the standing
+        #    model without someone editing Nix.
         "gpt-6"              = { provider = "codex"; upstream_model = "gpt-6-astra";   fallback = [ "gemma4:e4b" ]; };
         "gpt-reserve"        = { provider = "codex"; upstream_model = "gpt-reserve";   fallback = [ "gemma4:e4b" ]; };
 
@@ -163,7 +174,7 @@ in
         "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
         # "auto" — local-first model with a resilience cascade: gemma4:e4b on
-        # beast → codex gpt-5.5 (beast unreachable/5xx) → Claude (codex also
+        # beast → codex gpt-5.6 (beast unreachable/5xx) → Claude (codex also
         # down). Prefers free local inference when beast is awake, keeps the
         # assistant working when it's asleep, and only reaches the metered
         # Anthropic pool as a last resort. Works behind BOTH the OpenAI and
@@ -172,7 +183,7 @@ in
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.5" "claude" ];
+          fallback       = [ "gpt-5.6" "claude" ];
         };
       };
 
