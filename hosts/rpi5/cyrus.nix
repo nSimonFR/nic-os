@@ -327,7 +327,7 @@ in
           SECRET=$(sudo cat /run/agenix/cyrus-github-webhook-secret)
           jq -nc --arg s "$SECRET" '{name:"web",active:true,events:["issue_comment","pull_request_review","pull_request_review_comment"],config:{url:"https://rpi5.gate-mintaka.ts.net/cyrus/github-webhook",content_type:"json",secret:$s,insecure_ssl:"0"}}' \
             | gh api -X POST /repos/nSimonFR/<repo>/hooks --input -
-          gh auth switch --user nSimonfr-ai
+          gh auth switch --user nSimonFR-ai
       '';
     };
   };
