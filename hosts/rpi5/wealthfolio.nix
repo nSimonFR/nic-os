@@ -21,32 +21,37 @@
 # whole provider config lives in one `app_settings` row (`ai_provider_settings`)
 # written through PUT /api/v1/ai/providers/settings. Ours points the built-in
 # "openai" provider at tiny-llm-gate (customUrl http://127.0.0.1:4001/v1) with
-# selectedModel gpt-6. That row also carries a `modelCapabilityOverrides`
+# selectedModel gpt-5.6. That row also carries a `modelCapabilityOverrides`
 # entry that is load-bearing and NOT reproducible by a rebuild:
 #
-#   {"gpt-6": {"tools": true}}
+#   {"gpt-5.6": {"tools": true}, "gpt-6": {"tools": true}}
 #
-# ⚠ Because this is DB state, the GPT-6 switch did NOT reach Wealthfolio via
-# the rebuild — selectedModel AND a fresh gpt-6 capability override had to be
-# written at runtime (2026-09-07, done: selectedModel gpt-6, overrides for both
-# gpt-6 and gpt-5.6 so the old model stays tool-enabled if you switch back).
+# ⚠ Because this is DB state, a fleet-wide model switch does NOT reach
+# Wealthfolio via a rebuild — selectedModel AND a capability override for the
+# new id have to be written at runtime. History: switched to gpt-6 2026-09-07,
+# ROLLED BACK to gpt-5.6 2026-09-09 (Astra burned the ChatGPT plan quota too
+# fast — same rollback as the rest of the fleet). The gpt-6 override is left in
+# place so a switch back is a one-field edit.
 #
 # BOTH PUTs BELOW NEED A LOGGED-IN SESSION, and there is no way to get one from
 # this host unattended: WF_AUTH_REQUIRED=true, /api/v1/ai/providers/settings
 # 401s unauth'd, and the only credential on the box is the argon2id
-# WF_AUTH_PASSWORD_HASH in wealthfolio-env.age — a hash cannot log in. So the
-# switch was applied straight to SQLite instead, which is the recovery path
+# WF_AUTH_PASSWORD_HASH in wealthfolio-env.age — a hash cannot log in. So both
+# switches were applied straight to SQLite instead, which is the recovery path
 # when nobody can type the password:
 #
 #   sudo systemctl stop wealthfolio      # it caches this row in memory
 #   # back up first — this DB is NOT in restic (that covers /mnt/data only):
 #   sudo sqlite3 -readonly /var/lib/wealthfolio/wealthfolio.db \
 #     'select setting_value from app_settings where setting_key="ai_provider_settings";' \
-#     > /var/lib/wealthfolio/ai_provider_settings.pre-gpt6.json
+#     > /var/lib/wealthfolio/ai_provider_settings.<label>.json
 #   # edit selectedModel + modelCapabilityOverrides in that JSON, then
 #   #   update app_settings set setting_value='<json>'
 #   #     where setting_key='ai_provider_settings';
 #   sudo systemctl start wealthfolio
+#
+# Snapshots kept alongside the DB: ai_provider_settings.pre-gpt6.json (the
+# 2026-09-07 state) and .gpt6.json (the 2026-09-09 pre-rollback state).
 #
 # What that CANNOT prove is the last hop: whether the server actually emits
 # tool definitions for the new modelId only shows up in a real assistant
@@ -66,14 +71,14 @@
 #   curl -sb <cookiejar> -X PUT http://127.0.0.1:13345/api/v1/ai/providers/settings \
 #     -H 'Content-Type: application/json' \
 #     -d '{"providerId":"openai","modelCapabilityOverride":
-#          {"modelId":"gpt-6","overrides":{"tools":true}}}'
+#          {"modelId":"gpt-5.6","overrides":{"tools":true}}}'
 #   curl -sb <cookiejar> -X PUT http://127.0.0.1:13345/api/v1/ai/providers/settings \
 #     -H 'Content-Type: application/json' \
-#     -d '{"providerId":"openai","selectedModel":"gpt-6"}'
+#     -d '{"providerId":"openai","selectedModel":"gpt-5.6"}'
 #
-# KNOWN-BROKEN, ACCEPTED 2026-08-20 — and NOT fixed by GPT-6: a bare-curl
-# probe on 2026-09-06 showed gpt-6 (Astra) filling an optional string arg just
-# like gpt-5.6 does, so everything below still applies after the switch.
+# KNOWN-BROKEN, ACCEPTED 2026-08-20 — and it was NOT fixed by GPT-6 either: a
+# bare-curl probe on 2026-09-06 showed gpt-6 (Astra) filling an optional string
+# arg just like gpt-5.6 does, so switching model generation is not a way out.
 # Through the gate's codex surface, gpt-5.6 fills every OPTIONAL string
 # parameter with "" instead of omitting it — reproducible outside Wealthfolio
 # with a bare curl to :4001, and NOT the gate's doing (it forwards the tool

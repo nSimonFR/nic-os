@@ -116,8 +116,8 @@ in
         #    bare `gpt-5.6` alias is rejected ("not supported when using Codex
         #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
         #    All three verified live via /v1/chat/completions on 2026-07-20.
-        #    KEPT DECLARED as the rollback target for the GPT-6 switch below:
-        #    reverting an agent is a one-line model-id edit, not a revert.
+        #    These are the tiers the agents actually run: the GPT-6 switch of
+        #    2026-09-07 was ROLLED BACK to them on 2026-09-09 (see below).
         "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
@@ -141,6 +141,13 @@ in
         #    own 0.9.x client_version returns an EMPTY model list there, which
         #    is a listing quirk only: /responses serves both tiers fine.
         #    Context window is 272k (872k max), same as the 5.6 tiers.
+        #
+        #    ⚠ DECLARED BUT NOT THE DEFAULT ANYWHERE. Every agent ran Astra
+        #    from 2026-09-07 and it burned the ChatGPT plan quota far faster
+        #    than the 5.6 tiers did, so all of them were rolled back to
+        #    gpt-5.6* / gpt-5.5 on 2026-09-09. Kept declared so a model-id edit
+        #    is enough to opt one agent back in — don't flip the fleet again
+        #    without a usage budget to spend.
         "gpt-6"              = { provider = "codex"; upstream_model = "gpt-6-astra";   fallback = [ "gemma4:e4b" ]; };
         "gpt-reserve"        = { provider = "codex"; upstream_model = "gpt-reserve";   fallback = [ "gemma4:e4b" ]; };
 
@@ -156,7 +163,7 @@ in
         "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
 
         # "auto" — local-first model with a resilience cascade: gemma4:e4b on
-        # beast → codex gpt-6 (beast unreachable/5xx) → Claude (codex also
+        # beast → codex gpt-5.5 (beast unreachable/5xx) → Claude (codex also
         # down). Prefers free local inference when beast is awake, keeps the
         # assistant working when it's asleep, and only reaches the metered
         # Anthropic pool as a last resort. Works behind BOTH the OpenAI and
@@ -165,7 +172,7 @@ in
         "auto" = {
           provider       = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-6" "claude" ];
+          fallback       = [ "gpt-5.5" "claude" ];
         };
       };
 
