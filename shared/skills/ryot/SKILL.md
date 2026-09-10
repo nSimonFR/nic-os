@@ -181,6 +181,22 @@ ryot_q 'query($id:String!){ userWorkoutDetails(workoutId:$id){ response{
 ryot_q 'mutation($id:String!){ deleteUserWorkout(workoutId:$id) }' '{"id":"wor_…"}'
 ```
 
+### Personal bests: verify, then congratulate
+
+After saving and reading back a workout, check for personal bests (PBs) against
+prior comparable sessions. Compare the same verified exercise/equipment, units,
+and metric: load at the same reps, reps at the same load, or another explicitly
+named record. Exclude the current workout from the historical baseline; for an
+update, do not compare the corrected workout with itself.
+
+If a PB is confirmed, include a short, enthusiastic congratulations in French
+with the exercise and the actual improvement (previous → new). Distinguish a
+record within the retrieved history from an all-time record when history is
+incomplete. A first recorded performance is a baseline, not proof of a PB.
+Never invent a record, treat different machine variants as comparable, or claim
+an estimated 1RM is a measured maximum. If no PB is verified, simply confirm the
+session without manufacturing congratulations for a record.
+
 ## Wishlist media
 
 Ryot's default "wishlist" collection is named **`Watchlist`** (works for every media

@@ -86,6 +86,14 @@ If the budget cannot make the deck a solid version of the requested target, say 
 4. For non-obvious interactions, retrieve exact Oracle text, published rulings where useful, then the decisive Comprehensive Rule (known number: `mcp__mtg__get_rule`; unknown: `mcp__mtg__search_rules` then `get_rule`; keyword: `mcp__mtg__get_glossary_term`). Give prerequisites, ordered actions, result, disruption point, and only the evidence that decides it. Call a line a synergy rather than a combo if it is not deterministic.
 5. If a check fails, make only necessary corrections and repeat the whole gate. Do not call the deck legal until all checks pass.
 
+## Collection and Theme Constraints
+
+For owned-only builds, excluded decks/binders, or character/art restrictions, read
+`references/collection-and-theme.md`. It defines the availability ledger, strict
+name exclusions versus copy reservations, source limitations, and printing checks.
+Keep the MCP-only research and full legality gates above; do not revive the
+superseded deck-analysis skill or its direct-API fallback.
+
 ## Build or Rebuild
 
 For a new build, obtain commander/desire, strategy, power target, budget, restrictions, ownership constraint, and complete command zone. Verify commander(s), color identity, and bans; build a coherent 100-card role map; then use the same candidate, interaction, budget, and final-legality gates above. A full rebuild must return the complete flat list—not only suggestions.
