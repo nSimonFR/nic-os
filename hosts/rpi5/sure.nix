@@ -126,6 +126,48 @@ in
     workers."sure-worker.service".policy = "sleepWith";
   };
 
+  # ── Keep Sure awake while Sidekiq still has work ─────────────────────────────
+  # `sleepWith` above ties sure-worker's lifetime to the WEB tier: the proxy
+  # exits after idleSec without an HTTP connection, StopWhenUnneeded stops
+  # sure-web, and PartOf takes the worker with it — with Sidekiq's queue depth
+  # invisible to all of it. So the worker gets killed mid-backlog and only
+  # revives when a human next opens the UI.
+  #
+  # That is what broke auto-categorization for 8 days from 2026-09-02: a rule
+  # run left ~950 jobs queued (~7.6h of continuous LLM work at ~40s/job) while
+  # the worker was awake 2-11 minutes per wake, once or twice a day — about
+  # 7 min/day. Categories simply stopped; nothing was wrong with the LLM, the
+  # model, the context budget or the rule.
+  #
+  # No new systemd machinery is needed to fix it: --exit-idle-time restarts on
+  # every connection, so one request inside each idle window holds the whole
+  # tier up. This makes that request ONLY while a queue is non-empty, so idle
+  # sleep is untouched whenever there is genuinely nothing to do. Reordering
+  # Sidekiq's queues was the other candidate and would not have worked —
+  # weights are a per-fetch shuffle, not priorities, and the constraint was
+  # uptime, not order.
+  systemd.services.sure-drain-keepalive = {
+    description = "Hold Sure awake while Sidekiq has queued work";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.nicos-scripts}/bin/sure-drain-keepalive";
+      Environment = [
+        "REDIS_CLI_BIN=${pkgs.redis}/bin/redis-cli"
+        "CURL_BIN=${pkgs.curl}/bin/curl"
+        "WAKE_URL=http://127.0.0.1:${toString externalPort}/sure/up"
+      ];
+    };
+  };
+  systemd.timers.sure-drain-keepalive = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "3m";
+      # Must stay comfortably inside idleSec (600s) or the proxy exits between
+      # pokes and the hold does not hold.
+      OnUnitActiveSec = "4m";
+    };
+  };
+
   # ── Sure memory optimizations ──────────────────────────────────────────────
   # Reduce Sidekiq concurrency (personal app, no need for 3 threads) and limit
   # glibc malloc arenas to curb RSS on a 4 GB RPi5.

@@ -36,6 +36,13 @@ claude-context-baseline = "nicos_scripts.claude.context_baseline:main"
 # own library is a deliberate act (it makes a second copy on disk). Lives here
 # anyway so it gets the shared helpers and the tests.
 immich-adopt = "nicos_scripts.immich.adopt:main"
+# Reports on a QUEUE, not a log line: the alert it replaced grepped sure-worker
+# for a failure message, so it could not see AutoCategorizeJob never running at
+# all (8-day silent stall, 2026-09-02).
+sure-categorize-health = "nicos_scripts.sure.categorize_health:main"
+# The cause of that stall: sure-worker sleeps with the web tier regardless of
+# queue depth, so it was awake ~7 min/day against hours of queued LLM work.
+sure-drain-keepalive = "nicos_scripts.sure.drain_keepalive:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
