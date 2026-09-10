@@ -1,4 +1,4 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, telegramChatId, ... }:
 let
   # externalPort: where Tailscale Serve (→ :3333) and the socket-activate
   # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
@@ -60,6 +60,22 @@ in
     apiKeyFile            = "/run/agenix/for-sure-api-key";
     swile.accountName     = "Swile";
     sumeria.tokenFile     = config.services.sumeria-mitm.tokenFile;
+
+    # Sumeria tokens are static session headers captured off the phone by
+    # sumeria-mitm; they expire in ~3h and there is no refresh flow — renewing
+    # them REQUIRES a human enabling the RPi5 exit node and opening the app. So
+    # the 401 alert is not a nicety, it is the only thing that closes the loop.
+    #
+    # It was dead: for-sure's sendTelegram() returns early unless BOTH of these
+    # are set, and neither ever was, so `getAccounts` threw its "tokens expired"
+    # error into the journal and told nobody. Sure surfaces it only as
+    # `Lunch Flow API: Unexpected response - Code: 500`, buried in sure-worker.
+    # Tokens lapsed 2026-09-08 08:42 and no Sumeria transaction synced for 2
+    # days without a single notification. The agenix secret was already
+    # group-readable by for-sure (secrets.nix: group "for-sure", mode 0440) —
+    # only these two lines were missing.
+    telegram.botTokenFile = config.age.secrets.telegram-bot-token.path;
+    telegram.chatId       = toString telegramChatId;
   };
 
 
