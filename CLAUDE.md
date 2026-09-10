@@ -4,9 +4,17 @@ Author all commits, pushes and PRs as **nSimonFR-ai** (never nSimonFR). Commits:
 `git -c user.name="nSimonFR-ai" commit …`. Pushes: `./scripts/push-ai` (takes any
 `git push` args — protection rejects an approval from the last pusher, so a push
 as nSimonFR deadlocks the PR). PRs: `GH_TOKEN=$(gh auth token --user
-nSimonFR-ai) gh pr create …` (per-command, keeps nSimonFR active for merging).
-`--user` is an exact, case-sensitive match on the stored account name.
+nSimonfr-ai) gh pr create …` (per-command, keeps nSimonFR active for merging).
 nSimonFR owns/merges — nSimonFR-ai can't self-merge (main branch protection).
+
+⚠️ **`--user` matches what gh stored in `hosts.yml`, which is NOT the canonical
+login.** The API reports the account as `nSimonFR-ai`; `hosts.yml` keys it
+`nSimonfr-ai` (lowercase `fr`), because gh records the spelling typed at
+`gh auth login`. So `--user nSimonFR-ai` mints **nothing** — and for `gh pr
+create` that failure is invisible, since an empty `GH_TOKEN` silently falls back
+to the active account (also the AI one, so it looks like it worked). Confirm with
+`gh auth status` before trusting either case; `scripts/push-ai` resolves it
+case-insensitively rather than hardcoding a spelling.
 
 ## Agent skills
 
