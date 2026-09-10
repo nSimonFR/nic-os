@@ -29,12 +29,29 @@ if ! command -v gh >/dev/null 2>&1; then
   exit 1
 fi
 
-# `--user` matches the stored account name EXACTLY, case included: the account
-# is nSimonFR-ai, and asking for nSimonfr-ai returns nothing (the spelling this
-# script shipped with, so every push failed with the message below while
-# `gh auth status` listed the account as present).
-if ! token=$(gh auth token --user nSimonFR-ai 2>/dev/null) || [ -z "$token" ]; then
-  echo "push-ai: no token for nSimonFR-ai. Run: gh auth login --user nSimonFR-ai" >&2
+# `--user` matches the name gh STORED in hosts.yml, exactly, case included —
+# and that is not necessarily the canonical GitHub login. Here the API reports
+# the account as `nSimonFR-ai` while hosts.yml keys it `nSimonfr-ai`, because
+# gh records whatever spelling was typed at `gh auth login` rather than what the
+# API returns. Hardcoding either case is therefore a coin flip that silently
+# breaks every push: asking for the canonical `nSimonFR-ai` returned nothing
+# while `gh auth status` listed the account as plainly present.
+#
+# So resolve the stored spelling case-insensitively instead of asserting one.
+# `grep -ix` anchors the whole line, so this cannot match a different account
+# that merely contains the name.
+ai_account=$(gh auth status 2>&1 \
+  | sed -n 's/.*account \([A-Za-z0-9._-]*\).*/\1/p' \
+  | grep -ix 'nsimonfr-ai' | head -n1)
+
+if [ -z "$ai_account" ]; then
+  echo "push-ai: no nSimonFR-ai account in gh. Run: gh auth login --user nSimonFR-ai" >&2
+  exit 1
+fi
+
+if ! token=$(gh auth token --user "$ai_account" 2>/dev/null) || [ -z "$token" ]; then
+  echo "push-ai: gh lists '$ai_account' but minted no token for it." >&2
+  echo "push-ai: re-run: gh auth login --user nSimonFR-ai" >&2
   exit 1
 fi
 
