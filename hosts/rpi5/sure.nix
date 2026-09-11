@@ -44,6 +44,67 @@ let
     # gpt-5.6 has ample context; 8192 gives 7424 input budget.
     LLM_CONTEXT_WINDOW  = "8192";
   };
+
+  # Shared shape for the oneshots that drive a Sure sync from OUTSIDE Rails — the
+  # Sumeria token refresh, and the daily account sync. Both have the same hard
+  # requirement, which is why they are one function rather than two units:
+  #
+  # The oneshot holds sure-web up (and sure-worker with it, via sleepWith), so
+  # when it exits the worker is torn down — killing any Sidekiq job still in
+  # flight. It used to sleep a flat 30s, which was enough only while the
+  # Lunchflow import was small. Once the connector started paging the full
+  # history (~4100 transactions) the import ran past 30s, so every sync was
+  # SIGTERMed mid-import — and Sidekiq still marked the Sync `completed`, so
+  # nothing retried and the missing rows were invisible. 243 transactions were
+  # silently dropped with no error logged (nic-os PR#588).
+  #
+  # So wait on the real signal, not a magic number. `Sync.incomplete` is
+  # pending+syncing and covers the child Account syncs the parent spawns, not
+  # just the item sync. Bounded by a deadline so a stuck sync cannot pin the
+  # heavy services up indefinitely; TimeoutStartSec must exceed that deadline or
+  # systemd's 90s oneshot default reintroduces the very kill being fixed.
+  syncTrigger = { description, tag, enqueue }: {
+    inherit description;
+    after = [ "sure-web.service" "sure-worker.service" ];
+    # Requires sure-web (not just sure-worker) so that under socket-activate both
+    # tiers wake together — sure-worker has wantedBy=sure-web from the
+    # socket-activate module, so pulling in web pulls in worker too.
+    requires = [ "sure-web.service" ];
+    serviceConfig = {
+      Type             = "oneshot";
+      User             = config.services.sure.user;
+      Group            = config.services.sure.group;
+      WorkingDirectory = "${config.services.sure.package}/share/sure";
+      EnvironmentFile  = config.services.sure.environmentFile;
+      TimeoutStartSec  = "20min";
+    };
+    environment = {
+      RAILS_ENV          = "production";
+      DATABASE_URL       = config.services.sure.databaseUrl;
+      REDIS_URL          = config.services.sure.redisUrl;
+      BUNDLE_FORCE_RUBY_PLATFORM = "1";
+      HOME               = config.services.sure.dataDir;
+    };
+    script = ''
+      echo "[${tag}] triggering Sure sync..."
+      ${config.services.sure.package}/bin/sure-rails runner '
+        ${enqueue}
+        deadline = Time.current + 15.minutes
+        # `rails runner` leaves the ActiveRecord query cache ENABLED, so polling
+        # the same relation returns the first result for the life of the process
+        # — the loop would never observe the sync finishing and would always run
+        # to the deadline, pinning the heavy services up. Must be uncached.
+        still_running = -> { Sync.uncached { Sync.incomplete.exists? } }
+        sleep 2 while still_running.call && Time.current < deadline
+        if still_running.call
+          warn "[${tag}] deadline reached with syncs still running"
+        else
+          puts "[${tag}] all syncs complete"
+        end
+      '
+      echo "[${tag}] Done"
+    '';
+  };
 in
 {
   # ── for-sure: combined Swile + Sumeria Lunchflow connector ────────────────
@@ -296,66 +357,52 @@ in
     pathConfig.PathModified = config.services.sumeria-mitm.tokenFile;
   };
 
-  systemd.services.sumeria-sync-trigger = {
+  systemd.services.sumeria-sync-trigger = syncTrigger {
     description = "Trigger Sure sync after Sumeria token refresh";
-    after       = [ "sure-web.service" "sure-worker.service" ];
-    # Requires sure-web (not just sure-worker) so that under socket-activate
-    # both tiers wake together — sure-worker has wantedBy=sure-web from the
-    # socket-activate module, so pulling in web pulls in worker too.
-    requires    = [ "sure-web.service" ];
-    serviceConfig = {
-      Type             = "oneshot";
-      User             = config.services.sure.user;
-      Group            = config.services.sure.group;
-      WorkingDirectory = "${config.services.sure.package}/share/sure";
-      EnvironmentFile  = config.services.sure.environmentFile;
-      # The script below waits for the sync to actually finish, which is well
-      # past systemd's 90s default for a oneshot. Must exceed the in-script
-      # deadline, or systemd would SIGTERM us mid-import — the exact failure
-      # this unit is being fixed for.
-      TimeoutStartSec  = "20min";
+    tag         = "sumeria-sync";
+    enqueue     = "LunchflowItem.find_each { |item| item.sync_later }";
+  };
+
+  # ── Daily account sync (restores Sure's own dead cron) ───────────────────────
+  # Sure schedules its daily sync itself: AutoSyncScheduler registers the
+  # `sync_all_accounts` sidekiq-cron entry from Setting.auto_sync_time (13:50
+  # Europe/Paris here) running SyncAllJob. But sidekiq-cron only fires while the
+  # WORKER PROCESS is up, and under socket-activate the worker is awake ~10
+  # minutes a day, whenever someone opens the UI. It therefore essentially never
+  # coincides with 13:50, and `sync_all_accounts` last fired 2026-09-02 — nine
+  # days before this was written. Every other Sure cron scheduled outside that
+  # accidental window has been dead since socket activation landed (~2026-07-02):
+  # clean_data, clean_debug_log_entries, clean_inactive_families,
+  # run_security_health_checks and import_market_data all last fired Jul 1-2, and
+  # generate_insights has never run at all. Only the hourly/15-min entries look
+  # healthy, and only because a wake happens to catch one of their slots.
+  #
+  # Consequence for the thing that prompted this: Sumeria is NOT on the hourly
+  # path (SyncHourlyJob's HOURLY_SYNCABLES is CoinstatsItem only), so the dead
+  # daily cron was its only automatic sync.
+  #
+  # Deliberately does NOT try to make sidekiq-cron fire. Waking Sure just before
+  # 13:50 would work only in summer: AutoSyncScheduler converts the Paris time to
+  # a fixed UTC cron (`50 11 * * *`) and only recomputes it when the setting is
+  # re-saved, so the entry drifts an hour against local time at every DST change
+  # while an OnCalendar timer would not. Enqueueing SyncAllJob directly is the
+  # same work with no clock to keep in agreement.
+  #
+  # Persistent so a sync missed while the Pi was down or rebuilding runs on the
+  # next boot rather than being skipped until tomorrow.
+  systemd.services.sure-daily-account-sync = syncTrigger {
+    description = "Daily Sure sync of all accounts";
+    tag         = "sure-daily-sync";
+    enqueue     = "SyncAllJob.perform_later";
+  };
+  systemd.timers.sure-daily-account-sync = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      # Local time, so it tracks Europe/Paris DST — matching the intent of
+      # Setting.auto_sync_time, which the stored UTC cron does not.
+      OnCalendar = "13:50";
+      Persistent = true;
     };
-    environment = {
-      RAILS_ENV          = "production";
-      DATABASE_URL       = config.services.sure.databaseUrl;
-      REDIS_URL          = config.services.sure.redisUrl;
-      BUNDLE_FORCE_RUBY_PLATFORM = "1";
-      HOME               = config.services.sure.dataDir;
-    };
-    # This oneshot must outlive the sync it triggers: it holds sure-web up (and
-    # sure-worker with it, via sleepWith), so when it exits the worker is torn
-    # down — killing any Sidekiq job still in flight.
-    #
-    # It used to sleep a flat 30s, which was enough only while the Lunchflow
-    # import was small. Once the connector started paging the full history
-    # (~4100 transactions) the import ran past 30s, so every token-rotation sync
-    # was SIGTERMed mid-import — and Sidekiq still marked the Sync `completed`,
-    # so nothing retried and the missing rows were invisible. Observed: 243
-    # transactions silently dropped, no error logged.
-    #
-    # So wait on the real signal instead of a magic number. `Sync.incomplete` is
-    # pending+syncing and covers the child Account syncs the parent spawns, not
-    # just the LunchflowItem sync. Bounded by a deadline so a stuck sync cannot
-    # pin the heavy services up indefinitely.
-    script = ''
-      echo "[sumeria-sync] Sumeria tokens changed, triggering Sure sync..."
-      ${config.services.sure.package}/bin/sure-rails runner '
-        LunchflowItem.find_each { |item| item.sync_later }
-        deadline = Time.current + 15.minutes
-        # `rails runner` leaves the ActiveRecord query cache ENABLED, so polling
-        # the same relation returns the first result for the life of the process
-        # — the loop would never observe the sync finishing and would always run
-        # to the deadline, pinning the heavy services up. Must be uncached.
-        still_running = -> { Sync.uncached { Sync.incomplete.exists? } }
-        sleep 2 while still_running.call && Time.current < deadline
-        if still_running.call
-          warn "[sumeria-sync] deadline reached with syncs still running"
-        else
-          puts "[sumeria-sync] all syncs complete"
-        end
-      '
-      echo "[sumeria-sync] Done"
-    '';
   };
 
   # The root origin (the vhost above). A registration of its own because
