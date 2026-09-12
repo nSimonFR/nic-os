@@ -1,0 +1,27 @@
+{
+  "currency": "EUR",
+  "updated_at": null,
+  "products": {
+    "valerion_visionmaster_pro_2": {
+      "reference_price": 1999,
+      "alert_threshold": 1850,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    },
+    "valerion_pro_2_purevision_motorized_100": {
+      "reference_price": 2249,
+      "alert_threshold": 2150,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    },
+    "valerion_pro_2_fresnel_alr_100": {
+      "reference_price": 2399,
+      "alert_threshold": 2350,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    }
+  }
+}
