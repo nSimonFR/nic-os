@@ -1,0 +1,4 @@
+prices.sqlite3
+prices.sqlite3-shm
+prices.sqlite3-wal
+__pycache__/
