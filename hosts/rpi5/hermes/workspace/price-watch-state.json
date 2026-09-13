@@ -22,6 +22,34 @@
       "best_observed_total": null,
       "best_observed_at": null,
       "best_observed_url": null
+    },
+    "backmarket_iphone_15_pro_128": {
+      "reference_price": 532,
+      "exceptional_threshold": 480,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    },
+    "backmarket_iphone_15_pro_256": {
+      "reference_price": null,
+      "exceptional_threshold": null,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    },
+    "backmarket_iphone_15_pro_512": {
+      "reference_price": 689,
+      "exceptional_threshold": 620,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
+    },
+    "backmarket_iphone_15_pro_1000": {
+      "reference_price": 849.45,
+      "exceptional_threshold": 765,
+      "best_observed_total": null,
+      "best_observed_at": null,
+      "best_observed_url": null
     }
   }
 }
