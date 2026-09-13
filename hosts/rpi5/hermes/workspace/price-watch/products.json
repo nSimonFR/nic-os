@@ -1,0 +1,124 @@
+{
+  "version": 1,
+  "products": [
+    {
+      "slug": "shelly_power_strip_4_gen4",
+      "name": "Shelly Power Strip 4 Gen4",
+      "category": "power-strip",
+      "currency": "EUR",
+      "sources": ["Shelly France", "Shelly Europe", "Amazon France", "Domadoo", "Planète Domotique", "Reichelt", "Conrad", "Alternate", "Galaxus"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 55}
+      ]
+    },
+    {
+      "slug": "tapo_p300",
+      "name": "TP-Link Tapo P300",
+      "category": "power-strip",
+      "currency": "EUR",
+      "sources": ["Amazon France", "Fnac", "Darty", "Boulanger", "Cdiscount", "ManoMano", "Leroy Merlin", "Reichelt", "Conrad", "Alternate", "Galaxus"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 30}
+      ]
+    },
+    {
+      "slug": "tapo_p304m",
+      "name": "TP-Link Tapo P304M",
+      "category": "power-strip",
+      "currency": "EUR",
+      "sources": ["Amazon France", "Fnac", "Darty", "Boulanger", "Cdiscount", "ManoMano", "Leroy Merlin", "Reichelt", "Conrad", "Alternate", "Galaxus"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 38}
+      ]
+    },
+    {
+      "slug": "valerion_visionmaster_pro_2",
+      "name": "Valerion VisionMaster Pro 2",
+      "category": "projector",
+      "currency": "EUR",
+      "reference_price": 1999,
+      "sources": ["Valerion France", "Valerion Europe", "Son-Vidéo", "Fnac", "Darty", "Boulanger", "Amazon France", "Cdiscount"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 1850},
+        {"kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price"}
+      ]
+    },
+    {
+      "slug": "valerion_pro_2_purevision_100",
+      "name": "Valerion VisionMaster Pro 2 + écran PureVision motorisé 100 pouces",
+      "category": "projector-bundle",
+      "currency": "EUR",
+      "reference_price": 2249,
+      "screen_type": "white_purevision",
+      "screen_size_inches": 100,
+      "sources": ["Valerion France", "Valerion Europe", "Son-Vidéo", "Fnac", "Darty", "Boulanger", "Amazon France", "Cdiscount"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 2150}
+      ]
+    },
+    {
+      "slug": "valerion_pro_2_fresnel_alr_100",
+      "name": "Valerion VisionMaster Pro 2 + écran Fresnel ALR 100 pouces",
+      "category": "projector-bundle",
+      "currency": "EUR",
+      "reference_price": 2399,
+      "screen_type": "fresnel_alr",
+      "screen_size_inches": 100,
+      "priority": 100,
+      "sources": ["Valerion France", "Valerion Europe", "Son-Vidéo", "Fnac", "Darty", "Boulanger", "Amazon France", "Cdiscount"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 2350}
+      ]
+    },
+    {
+      "slug": "backmarket_iphone_15_pro_128",
+      "name": "iPhone 15 Pro reconditionné 128 Go",
+      "category": "refurbished-phone",
+      "currency": "EUR",
+      "reference_price": 532,
+      "sources": ["Back Market France"],
+      "comparison_dimensions": ["capacity", "cosmetic_condition", "battery_option"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 480},
+        {"kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price"}
+      ]
+    },
+    {
+      "slug": "backmarket_iphone_15_pro_256",
+      "name": "iPhone 15 Pro reconditionné 256 Go",
+      "category": "refurbished-phone",
+      "currency": "EUR",
+      "sources": ["Back Market France"],
+      "comparison_dimensions": ["capacity", "cosmetic_condition", "battery_option"],
+      "conditions": [
+        {"kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price"}
+      ]
+    },
+    {
+      "slug": "backmarket_iphone_15_pro_512",
+      "name": "iPhone 15 Pro reconditionné 512 Go",
+      "category": "refurbished-phone",
+      "currency": "EUR",
+      "reference_price": 689,
+      "sources": ["Back Market France"],
+      "comparison_dimensions": ["capacity", "cosmetic_condition", "battery_option"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 620},
+        {"kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price"}
+      ]
+    },
+    {
+      "slug": "backmarket_iphone_15_pro_1000",
+      "name": "iPhone 15 Pro reconditionné 1 To",
+      "category": "refurbished-phone",
+      "currency": "EUR",
+      "reference_price": 849.45,
+      "sources": ["Back Market France"],
+      "comparison_dimensions": ["capacity", "cosmetic_condition", "battery_option"],
+      "conditions": [
+        {"kind": "threshold", "metric": "total_price", "operator": "<=", "value": 765},
+        {"kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price"}
+      ]
+    }
+  ]
+}
