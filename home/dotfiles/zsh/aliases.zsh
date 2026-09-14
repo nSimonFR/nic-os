@@ -59,7 +59,29 @@ _claude_shim() {
   fi
 }
 
-claude() { _claude_shim --dangerously-skip-permissions "$@"; }
+# `claude()` used to pass --dangerously-skip-permissions, putting every session
+# in bypassPermissions mode. Dropped — but NOT to hide the mode banner under the
+# input box, which was the original theory and is wrong. That row is
+# unconditional in a local interactive session: it renders on
+# `etl = !!dne && qMS`, where dne is toolPermissionContext.mode and qMS is only
+# "can this session change modes", and EVERY mode in the indicator table has a
+# label, `default` included ("manual mode", colour inactive). So the mode cannot
+# be un-shown, only re-labelled and re-coloured: bypassPermissions is red
+# "bypass permissions", auto is yellow "auto mode", default is dim "manual mode".
+# Nor does the row free a line — it is the shared footer that also carries the PR
+# indicator and "? for shortcuts".
+#
+# What dropping the flag DOES buy is not running every session with permissions
+# switched off wholesale. It is close to a no-op on prompting, because
+# claude-settings.json already allows the whole tool surface
+# (Bash/Read/Write/Edit/Glob/Grep/WebFetch/Task…), and the two gaps that would
+# have started prompting were closed in the same commit: postgres_prod_ro +
+# trusk-apis went into permissions.allow, and additionalDirectories/Read() gained
+# their /Users/nsimon spellings so the transcript dirs resolve on darwin too.
+#
+# `cc`/`cr` never passed the flag, so they were already running this way.
+# shift+tab still reaches bypass by hand when a session genuinely needs it.
+claude() { _claude_shim "$@"; }
 cc()     { _claude_shim --continue "$@"; }
 cr()     { _claude_shim --resume "$@"; }
 
