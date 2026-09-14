@@ -186,6 +186,24 @@ in
       source = ./scripts/claude-wakatime.sh;
       executable = true;
     };
+
+    # settings.json `statusLine` — the prompt line under the input box. Styled
+    # after the spaceship-prompt zsh theme (home/zsh.nix) so the terminal reads
+    # the same whichever side of it you are on; see home/scripts/claude-statusline.sh.
+    #
+    # Wrapped rather than linked bare (like claude-notify above): Claude Code
+    # re-runs this on a 300ms debounce, and a status line that silently degrades
+    # because `jq` happened to be missing from the invoking PATH is worse than
+    # one that never ships. Pinning jq+git here makes the render hermetic — the
+    # script needs nothing else, which is why `rev`/`cut`/`seq` were factored
+    # out of it in favour of bash builtins.
+    ".claude/hooks/statusline" = {
+      executable = true;
+      source = pkgs.writeShellScript "claude-statusline" ''
+        export PATH=${lib.makeBinPath [ pkgs.jq pkgs.git pkgs.gawk ]}''${PATH:+:$PATH}
+        exec ${pkgs.bash}/bin/bash ${./scripts/claude-statusline.sh} "$@"
+      '';
+    };
   } // lib.optionalAttrs pkgs.stdenv.isDarwin {
     # Trusk infra notes — only the Mac (nBookPro) has the Trusk repos under
     # ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by walking UP the dir tree, so it
