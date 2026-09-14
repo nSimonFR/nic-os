@@ -14,22 +14,43 @@ let
   # the IPs changed. Keeps interception working if Sumeria migrates the API.
   # lc.lydia-app.com round-robins across several VIPs, so advertise all of them
   # — picking one with `head -1` would flap with DNS ordering.
-  routeUpdateScript = pkgs.writeShellScript "sumeria-route-update" ''
-    set -euo pipefail
-    STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
-    CURRENT_IPS=$(cat "$STATE_FILE" 2>/dev/null || echo "")
-    NEW_IPS=$(${pkgs.dig}/bin/dig +short lc.${apiDomain} \
-      | ${pkgs.gnugrep}/bin/grep -E '^[0-9.]+$' | sort | sed 's|$|/32|' | paste -sd, -)
-    if [ -z "$NEW_IPS" ]; then
-      echo "[sumeria-route] DNS lookup failed, keeping current route"
-      exit 0
-    fi
-    if [ "$NEW_IPS" != "$CURRENT_IPS" ]; then
-      echo "[sumeria-route] IPs changed: $CURRENT_IPS -> $NEW_IPS, updating route"
-      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IPS"
-      echo "$NEW_IPS" > "$STATE_FILE"
-    fi
-  '';
+  #
+  # `tailscale set --advertise-routes=` is ABSOLUTE: it replaces the node's whole
+  # route list. Advertising only the Lydia IPs therefore withdrew 10.7.0.1/32 and
+  # silently killed SideStore refresh (2026-09-14). So this reconciles instead of
+  # overwriting: take what the node advertises today, drop the previous run's
+  # Lydia IPs, add the current ones, and leave every other route alone. The
+  # comparison is against live prefs rather than the state file so it also heals
+  # the reverse clobber — tailscale-autoconnect runs `tailscale up
+  # --advertise-routes=<static list>` on every boot, which drops the Lydia IPs.
+  routeUpdateScript = pkgs.writeShellApplication {
+    name = "sumeria-route-update";
+    runtimeInputs = with pkgs; [ dig gnugrep coreutils jq tailscale ];
+    text = ''
+      STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
+
+      NEW_IPS=$(dig +short lc.${apiDomain} | grep -E '^[0-9.]+$' | sed 's|$|/32|' | sort)
+      if [ -z "$NEW_IPS" ]; then
+        echo "[sumeria-route] DNS lookup failed, keeping current routes"
+        exit 0
+      fi
+
+      # Exit-node advertisement is rendered into AdvertiseRoutes as the two
+      # default routes but is a separate pref — never pass it back to --advertise-routes.
+      CURRENT=$(tailscale debug prefs \
+        | jq -r '.AdvertiseRoutes[]?' \
+        | grep -vE '^(0\.0\.0\.0/0|::/0)$' | sort)
+      PREV=$(tr ',' '\n' < "$STATE_FILE" 2>/dev/null | grep -v '^$' | sort || true)
+      OTHERS=$(comm -23 <(echo "$CURRENT") <(echo "$PREV"))
+      DESIRED=$(printf '%s\n%s\n' "$OTHERS" "$NEW_IPS" | grep -v '^$' | sort -u)
+
+      if [ "$DESIRED" != "$CURRENT" ]; then
+        echo "[sumeria-route] routes changed: $(echo "$CURRENT" | paste -sd, -) -> $(echo "$DESIRED" | paste -sd, -)"
+        tailscale set --advertise-routes="$(echo "$DESIRED" | paste -sd, -)"
+      fi
+      echo "$NEW_IPS" | paste -sd, - > "$STATE_FILE"
+    '';
+  };
 
   # Intercepts requests to lydia-app.com and extracts the three static session
   # headers (auth_token / public_token / access-token) that Sumeria uses instead of OAuth.
@@ -171,9 +192,15 @@ in
     # Monitor lc.${apiDomain} DNS and update subnet route if the IPs change
     systemd.services.sumeria-route-update = {
       description = "Update Tailscale subnet route for lc.${apiDomain}";
+      # Also runs at boot, after tailscale-autoconnect has reset the route list to
+      # the static one from configuration.nix — otherwise the Lydia routes stay
+      # withdrawn until DNS changes, i.e. capture dies silently on every reboot.
+      wantedBy = [ "multi-user.target" ];
+      after    = [ "tailscale-autoconnect.service" ];
+      wants    = [ "tailscale-autoconnect.service" ];
       serviceConfig = {
         Type      = "oneshot";
-        ExecStart = routeUpdateScript;
+        ExecStart = "${routeUpdateScript}/bin/sumeria-route-update";
         ReadWritePaths = [ "/var/lib/sumeria-mitm" ];
       };
     };

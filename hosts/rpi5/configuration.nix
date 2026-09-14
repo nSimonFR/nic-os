@@ -180,16 +180,18 @@ in
     ./sidestore-reflector.nix
     # Tailscale with server features (subnet routing, SSH, exit node)
     # Subnet routes advertised through RPi5:
-    #   - 34.117.84.152/32: api.lydia-app.com, for transparent Sumeria MITM
-    #     token extraction (without enabling exit node).
     #   - 10.7.0.1/32: SideStore's fixed "virtual computer" address. Advertising
     #     it lets the phone reach 10.7.0.1 over the tailnet; sidestore-reflector.nix
     #     then hairpins that traffic back so SideStore refreshes with no on-device VPN.
+    # The Sumeria MITM routes are NOT listed here: lc.lydia-app.com round-robins
+    # across VIPs that change, so sumeria-mitm.nix's route-update unit resolves
+    # them and merges them into this list at runtime. (34.117.84.152/32 used to
+    # live here for the old api.lydia-app.com — dead since the 2026-09-08 move.)
     (import ../../shared/tailscale.nix {
       role = "server";
       enableSSH = true;
       advertiseExitNode = true;
-      advertiseRoutes = [ "34.117.84.152/32" "10.7.0.1/32" ];
+      advertiseRoutes = [ "10.7.0.1/32" ];
     })
   ];
 
