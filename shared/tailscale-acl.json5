@@ -131,8 +131,15 @@
 		"exitNode": ["autogroup:member"],
 		// 10.7.0.1/32 is SideStore's fixed virtual-computer address, advertised
 		// by rpi5 so the tailnet-connected phone can refresh with no on-device VPN.
+		// 91.194.60.0/24 holds the lc.lydia-app.com VIPs that sumeria-mitm.nix
+		// resolves and advertises for transparent token capture. It has to be the
+		// enclosing prefix, not the individual /32s: the VIPs round-robin and
+		// change, and an unapproved route fails silently (the phone just talks to
+		// Lydia directly and the tokens freeze). Octopuce, Lydia's host, holds
+		// 91.194.60.0/23 — a resolved IP outside this /24 will need a new entry.
 		"routes": {
-			"10.7.0.1/32": ["autogroup:member"],
+			"10.7.0.1/32":    ["autogroup:member"],
+			"91.194.60.0/24": ["autogroup:member"],
 		},
 	},
 }
