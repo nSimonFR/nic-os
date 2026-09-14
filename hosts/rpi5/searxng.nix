@@ -121,7 +121,15 @@ in
         #
         # This is also why the package is pinned forward in overlays.nix: 25.11's
         # snapshot predates google_cse and its plain `google` 403s outright.
-        { name = "google cse"; disabled = false; }
+        # weight 3 — it multiplies into the score rather than adding
+        # (results.py:calculate_score: one factor per contributing engine, then
+        # ×len(positions), then summed as weight/position). So a page only
+        # Google found scores 3× one only Bing found at the same rank, and a
+        # Google+Bing agreement scores 6×. It tilts the merge toward Google
+        # without overriding consensus: agreement across engines still scales
+        # the score too, so a broad multi-engine hit can outrank a solo Google
+        # one.
+        { name = "google cse"; disabled = false; weight = 3; }
         { name = "duckduckgo"; disabled = true; }
         { name = "startpage"; disabled = true; }
         { name = "brave"; disabled = true; }
