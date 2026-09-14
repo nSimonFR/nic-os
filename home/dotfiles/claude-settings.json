@@ -5,6 +5,7 @@
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
   "_comment_permissions_ccr": "The Claude Code Remote (bridge) MCP tools are allowed for the READ-ONLY half only — get_session/list_* answer 'which session am I, what model is serving it, what else is running' without a prompt. Everything that mutates (create_session, archive/unarchive, interrupt, set_title/set_tags, send_later, create/update/delete/fire_trigger, subscribe_pr_activity, add_repo) is deliberately left prompting: those spawn containers, wake siblings or post to GitHub. Listed under BOTH name forms for the reason spelled out in .claude/settings.json's _comment_mcp_names — a claude.ai connector attaches either as 'claude.ai Claude Code Remote' (mcp__claude_ai_Claude_Code_Remote__*) or bare (mcp__Claude_Code_Remote__*), and only the bare form has been observed since 2026-07-28, so pinning one form silently stops matching if that flips back.",
+  "_comment_ro_mcps": "postgres_prod_ro and trusk-apis were added to permissions.allow when the `claude()` alias stopped passing --dangerously-skip-permissions (home/dotfiles/zsh/aliases.zsh): they were the only two MCPs in home/mcp.nix listed in neither allow nor ask, so bypass mode was the sole reason they never prompted. Both are read paths — the rw postgres twins stay in `ask` below, and trusk-apis gates DELETE behind confirm:true itself. NB comments must be object keys, never entries inside the allow/ask/deny ARRAYS, where a _comment_ string would be parsed as a permission rule.",
   "permissions": {
     "ask": [
       "mcp__postgres_staging_rw",
@@ -80,9 +81,14 @@
       "mcp__metabase",
       "mcp__trusk-steampipe",
       "mcp__toolhive-tech",
+      "mcp__postgres_prod_ro",
+      "mcp__trusk-apis",
       "Read(//home/nsimon/.claude/projects/**)",
       "Read(//home/nsimon/.claude-rc/projects/**)",
-      "Read(//home/nsimon/.claude-secondary/projects/**)"
+      "Read(//home/nsimon/.claude-secondary/projects/**)",
+      "Read(//Users/nsimon/.claude/projects/**)",
+      "Read(//Users/nsimon/.claude-rc/projects/**)",
+      "Read(//Users/nsimon/.claude-secondary/projects/**)"
     ],
     "deny": [
       "Read(**/node_modules/**)",
@@ -141,9 +147,12 @@
     "additionalDirectories": [
       "/home/nsimon/.claude/projects",
       "/home/nsimon/.claude-rc/projects",
-      "/home/nsimon/.claude-secondary/projects"
+      "/home/nsimon/.claude-secondary/projects",
+      "/Users/nsimon/.claude/projects",
+      "/Users/nsimon/.claude-rc/projects",
+      "/Users/nsimon/.claude-secondary/projects"
     ],
-    "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed \u2014 the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json."
+    "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed \u2014 the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json. Listed under BOTH /home/nsimon and /Users/nsimon because ONE file is symlinked to every host (BeAsT + rpi5 are Linux, nBookPro is darwin) and these are absolute paths, so a single spelling silently covers only two hosts of three. That went unnoticed while the `claude()` alias passed --dangerously-skip-permissions, which skipped the boundary check outright; it surfaced the moment the flag was dropped (see home/dotfiles/zsh/aliases.zsh). A path that does not exist on a given host is inert, so listing both is free."
   },
   "_comment_denied_mcp": "DEDUPLICATION, not removal — deliberately asymmetric, unlike .claude/settings.json where each connector is listed under BOTH name forms to drop it entirely. Gmail attaches TWICE per session: observed 2026-08-25 in bridge session ancc_9c9e0e76218174a1 as mcp__Gmail__* AND mcp__claude_ai_Gmail__*, the same 28 tools, the combined MCP group costing 37,178 tokens. The two registrations are attempted independently and matched by raw === on the registration name (no trim, no case fold, no 'claude.ai ' strip), and the name space is closed at two forms — so denying exactly one form leaves exactly one attachment. Denying the bare 'Gmail' is what keeps 'claude.ai Gmail', which is also the only form this file's permissions.allow lists (mcp__claude_ai_Gmail). Do NOT add 'claude.ai Gmail' here: that drops Gmail outright. Deliberately USER scope rather than nic-os project scope — a duplicate is pure waste in every repo, while Gmail itself is real work in the Trusk ones. CAVEAT, unverified: 'claude.ai Metabase Trusk' has been denied under both forms since 2f8d755 (2026-08-18) and still attached on 08-19 and again on 08-25, so this mechanism has no positive evidence of biting for claude.ai connectors. Confirm with the mcp_instructions_delta/deferred_tools_delta addedNames recipe in known_issue_claude_connector_deny_both_name_forms before counting the saving.",
   "_comment_pg_rw": "Write-capable Trusk monodb MCPs (defined in home/mcp.nix): postgres_staging_rw and postgres_prod_rw both attach normally and are gated per-call by permissions.ask — not denied. The ask gate DOES survive --dangerously-skip-permissions (measured 2026-09-03 in `claude -p` sessions: postgres_prod_ro, not in ask, ran unprompted; staging_rw, in ask, was blocked with 'needs your approval' under the same flag, and an ask-less --settings override did not help since ask merges across scopes and any scope's rule applies). Consequence: rw calls are unusable in ANY non-interactive session (-p, cron, bridge) because there is nobody to answer the prompt — that is the intended safety property, not a bug. Use rw from an interactive session and approve the prompt; for scripted writes, drive the wrapper in home/mcp.nix directly over MCP stdio.",
