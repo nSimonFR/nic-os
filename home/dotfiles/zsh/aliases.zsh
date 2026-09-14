@@ -59,7 +59,27 @@ _claude_shim() {
   fi
 }
 
-claude() { _claude_shim --dangerously-skip-permissions "$@"; }
+# `claude()` used to pass --dangerously-skip-permissions. Dropped: the flag put
+# every session in bypassPermissions mode, and Claude Code renders a permanent
+# "⏵⏵ bypass permissions on (shift+tab to cycle)" banner under the input box for
+# any non-default mode. That banner is not configurable — it is gated only on
+# "can this session change modes" (canSetPermissionMode && !viewerOnly, or a
+# non-remote session), with no hide/disable setting anywhere in the binary — so
+# not entering the mode is the only way to reclaim the line. Note `cc`/`cr` never
+# passed it, so they were already running in default mode.
+#
+# This is close to a no-op on prompting because claude-settings.json already
+# allows the whole tool surface (Bash/Read/Write/Edit/Glob/Grep/WebFetch/Task…).
+# The two gaps that WOULD have started prompting were closed in the same commit:
+# the postgres_prod_ro + trusk-apis MCPs are now in permissions.allow, and
+# additionalDirectories/Read() gained their /Users/nsimon spellings so the
+# transcript dirs resolve on darwin as well as on the Linux hosts.
+#
+# Deliberately not swapped for `permissions.defaultMode: "bypassPermissions"` in
+# settings: the banner reflects the ACTIVE mode, not how it was set, so that
+# would keep the flag's behaviour and the banner both. shift+tab still reaches
+# bypass mode by hand when a session genuinely needs it.
+claude() { _claude_shim "$@"; }
 cc()     { _claude_shim --continue "$@"; }
 cr()     { _claude_shim --resume "$@"; }
 
