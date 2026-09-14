@@ -1,0 +1,8 @@
+{
+  "name": "nic-dim",
+  "base": "dark",
+  "overrides": {
+    "inactive": "#333333",
+    "inactiveShimmer": "#3d3d3d"
+  }
+}
