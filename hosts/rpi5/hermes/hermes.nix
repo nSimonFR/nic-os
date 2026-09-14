@@ -328,6 +328,10 @@ let
     compression = {
       enabled = true;
       threshold = 0.85;
+      # Compact inactive gateway sessions too, so a turn interrupted by a
+      # provider rate limit resumes from a fresh summary instead of replaying
+      # the complete accumulated prompt.
+      idle_compact_after_seconds = 300;
     };
 
     # Nico explicitly opted out of shell-command approval prompts. This is
