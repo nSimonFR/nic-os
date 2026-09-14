@@ -2,29 +2,41 @@
 let
   cfg = config.services.sumeria-mitm;
 
-  # Periodically resolve api.lydia-app.com and update the Tailscale subnet
-  # route if the IP changed. Keeps the MITM interception working even if
-  # Lydia migrates their API to a different IP.
+  # Every hostname the Sumeria app has been observed calling. Matching on the
+  # apex covers all of them at once — the app moved api.lydia-app.com ->
+  # lc.lydia-app.com on 2026-09-08 and a host-specific match silently stopped
+  # intercepting (traffic passed through undecrypted, tokens froze for 6 days).
+  apiDomain = "lydia-app.com";
+  # Regex for mitmproxy --allow-hosts, which matches against "host:port".
+  apiDomainRe = "lydia-app\\.com";
+
+  # Periodically resolve the API host and update the Tailscale subnet route if
+  # the IPs changed. Keeps interception working if Sumeria migrates the API.
+  # lc.lydia-app.com round-robins across several VIPs, so advertise all of them
+  # — picking one with `head -1` would flap with DNS ordering.
   routeUpdateScript = pkgs.writeShellScript "sumeria-route-update" ''
     set -euo pipefail
     STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
-    CURRENT_IP=$(cat "$STATE_FILE" 2>/dev/null || echo "")
-    NEW_IP=$(${pkgs.dig}/bin/dig +short api.lydia-app.com | head -1)
-    if [ -z "$NEW_IP" ]; then
+    CURRENT_IPS=$(cat "$STATE_FILE" 2>/dev/null || echo "")
+    NEW_IPS=$(${pkgs.dig}/bin/dig +short lc.${apiDomain} \
+      | ${pkgs.gnugrep}/bin/grep -E '^[0-9.]+$' | sort | sed 's|$|/32|' | paste -sd, -)
+    if [ -z "$NEW_IPS" ]; then
       echo "[sumeria-route] DNS lookup failed, keeping current route"
       exit 0
     fi
-    if [ "$NEW_IP" != "$CURRENT_IP" ]; then
-      echo "[sumeria-route] IP changed: $CURRENT_IP -> $NEW_IP, updating route"
-      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IP/32"
-      echo "$NEW_IP" > "$STATE_FILE"
+    if [ "$NEW_IPS" != "$CURRENT_IPS" ]; then
+      echo "[sumeria-route] IPs changed: $CURRENT_IPS -> $NEW_IPS, updating route"
+      ${pkgs.tailscale}/bin/tailscale set --advertise-routes="$NEW_IPS"
+      echo "$NEW_IPS" > "$STATE_FILE"
     fi
   '';
 
-  # Intercepts requests to api.lydia-app.com and extracts the three static session
+  # Intercepts requests to lydia-app.com and extracts the three static session
   # headers (auth_token / public_token / access-token) that Sumeria uses instead of OAuth.
   # Tokens are written atomically so the consumer picks them up without a restart.
   # NOTE: these headers are undocumented and were discovered by MITM. Update if auth changes.
+  # Only some endpoints carry all three (e.g. /service/accounts/<id>/moneyalerts);
+  # most requests have none, so a miss here is normal, not a failure.
   tokenExtractor = pkgs.writeText "sumeria-token-extractor.py" ''
     import json, os
     from mitmproxy import http
@@ -35,7 +47,7 @@ let
         def request(self, flow: http.HTTPFlow):
             # In transparent mode flow.request.host is the IP; use pretty_host (SNI-based)
             host = flow.request.pretty_host
-            if "api.lydia-app.com" not in host:
+            if "${apiDomain}" not in host:
                 return
             h = flow.request.headers
             print(f"[sumeria-mitm] intercepted {host}{flow.request.path} auth={bool(h.get('auth_token'))}")
@@ -116,7 +128,7 @@ in
           "${pkgs.mitmproxy}/bin/mitmdump"
           "--mode transparent"
           "-p ${toString cfg.port}"
-          "--allow-hosts api\\.lydia-app\\.com"
+          "--allow-hosts ${apiDomainRe}"
           "--set confdir=/var/lib/sumeria-mitm/mitmproxy"
           "--set block_global=false"
           "-s ${tokenExtractor}"
@@ -131,10 +143,14 @@ in
       };
 
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
+      # mitmdump's stdout is block-buffered, so with this service's low traffic
+      # the journal lagged by *days* — the 2026-09-08 breakage only surfaced in
+      # the log when the process was restarted 6 days later. Keep it live.
+      environment.PYTHONUNBUFFERED = "1";
     };
 
     # Redirect HTTPS from subnet-routed / exit-node clients → mitmproxy.
-    # With subnet routing for api.lydia-app.com's IP, traffic arrives on tailscale0
+    # With subnet routing for the API's IPs, traffic arrives on tailscale0
     # with a public destination (not RPi5's own Tailscale IP), so no conflict with Serve.
     # Also drop UDP 443 (QUIC/HTTP3) so apps fall back to TCP (HTTP2) which mitmproxy can intercept.
     networking.firewall.extraCommands = lib.mkIf (cfg.exitNodeClients != []) (
@@ -152,9 +168,9 @@ in
       '') cfg.exitNodeClients
     );
 
-    # Monitor api.lydia-app.com DNS and update subnet route if IP changes
+    # Monitor lc.${apiDomain} DNS and update subnet route if the IPs change
     systemd.services.sumeria-route-update = {
-      description = "Update Tailscale subnet route for api.lydia-app.com";
+      description = "Update Tailscale subnet route for lc.${apiDomain}";
       serviceConfig = {
         Type      = "oneshot";
         ExecStart = routeUpdateScript;
@@ -162,7 +178,7 @@ in
       };
     };
     systemd.timers.sumeria-route-update = {
-      description = "Daily DNS check for api.lydia-app.com IP changes";
+      description = "Daily DNS check for lc.${apiDomain} IP changes";
       wantedBy    = [ "timers.target" ];
       timerConfig = {
         OnCalendar = "*-*-* 04:00:00";
