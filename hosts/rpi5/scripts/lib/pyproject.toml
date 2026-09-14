@@ -43,6 +43,11 @@ sure-categorize-health = "nicos_scripts.sure.categorize_health:main"
 # The cause of that stall: sure-worker sleeps with the web tier regardless of
 # queue depth, so it was awake ~7 min/day against hours of queued LLM work.
 sure-drain-keepalive = "nicos_scripts.sure.drain_keepalive:main"
+# Hand-run, deliberately NOT on a timer: it writes rules, and the rules are the
+# durable fix — once a name has one, Sure applies it on every sync for free, so
+# there is nothing left to re-run on a schedule. Re-run it by hand when enough
+# new merchants have accumulated to be worth a pass.
+sure-derive-rules = "nicos_scripts.sure.derive_rules:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
