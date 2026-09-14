@@ -134,6 +134,23 @@ in
     ".claude/keybindings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-keybindings.json";
 
+    # Custom theme, selected by claude-settings.json's `"theme": "custom:nic-dim"`
+    # (the `custom:` prefix is literal, and the slug is this FILENAME, not the
+    # file's `name` field — so renaming the link breaks the setting).
+    #
+    # It exists to drag the `inactive` colour down, which is the only lever on the
+    # permission-mode row under the input box: that row cannot be hidden, and
+    # `default` is the one mode coloured `inactive` rather than yellow/red.
+    #
+    # Both config dirs get it: settings.json is shared between ~/.claude and
+    # ~/.claude-secondary, so the theme setting resolves in both, and a
+    # `custom:` slug with no matching file silently falls back to the base theme.
+    # Out-of-store symlink so the colour can be retuned with a restart, no rebuild.
+    ".claude/themes/nic-dim.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
+    ".claude-secondary/themes/nic-dim.json".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
+
     # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
     # under three hook events in claude-settings.json: UserPromptSubmit
     # (`activity`), Notification (`notification`, idle-gated), and
