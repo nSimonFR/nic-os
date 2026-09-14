@@ -247,6 +247,12 @@
       }
     }
   },
+  "_comment_statusline": "Spaceship-styled prompt line — see home/scripts/claude-statusline.sh for the segment list and home/claude.nix for the PATH-pinning wrapper. No refreshInterval: every segment is derived from the payload Claude Code already pushes on each state change, so a timer would only re-render identical output. padding 0 aligns the status line's left edge with the input box border rather than indenting it one column.",
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/hooks/statusline",
+    "padding": 0
+  },
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "agentPushNotifEnabled": true,
