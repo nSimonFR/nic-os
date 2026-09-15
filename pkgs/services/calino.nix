@@ -39,7 +39,7 @@
 stdenv.mkDerivation (finalAttrs: {
   pname = "calino";
   # renovate: datasource=github-releases depName=Ivan-Malinovski/calino extractVersion=^v(?<version>.+)$
-  version = "0.30.0";
+  version = "0.33.4";
 
   src = fetchFromGitHub {
     owner = "Ivan-Malinovski";
@@ -51,7 +51,7 @@ stdenv.mkDerivation (finalAttrs: {
     # re-serves the OLD tree under the new version number. See
     # known_issue_nix_fod_hash_desync; that trap shipped sure-0.7.3 as v0.7.2.
     name = "calino-${finalAttrs.version}-source";
-    hash = "sha256-hfoqVhE6502igtcKWqAY/sn+t8zZgkf250MOhDnCQKI=";
+    hash = "sha256-R/w0Ls4VHufkIfS+UTVgTzvNm7cgrTs2JgAYrwuslfw=";
   };
 
   pnpmDeps = pnpm_10.fetchDeps {
@@ -61,7 +61,7 @@ stdenv.mkDerivation (finalAttrs: {
     # showmycards.nix this hash is ONE value across aarch64 and x86_64 — no
     # per-system attrset needed.
     fetcherVersion = 3;
-    hash = "sha256-/7Rdhf9rTXLm0AOai9obIBGjvPHoS2UOo0bHZ+IgrSs=";
+    hash = "sha256-z+omB1JqIyNuFK+qu5RZ8S5sI4VcQu0ygJfBewPS+Tg=";
   };
 
   nativeBuildInputs = [
@@ -70,32 +70,29 @@ stdenv.mkDerivation (finalAttrs: {
     pnpm_10.configHook
   ];
 
-  # ⚠ UPSTREAM BUG, NOT A PREFERENCE. src/config.ts reads three knobs off
-  # `import.meta.env.CALINO_*` (ENABLE_SW, GITHUB_REPO, CONTACT_EMAIL) and
-  # README.md/docs/DOCKER.md tell you to set them at build time — but
-  # vite.config.ts never sets `envPrefix`, so Vite's default of `VITE_` is in
-  # force and NOTHING unprefixed reaches import.meta.env. The knobs are inert:
-  # a build with CALINO_ENABLE_SW=true still bakes `enableServiceWorker:!1`
-  # (verified by grepping the built bundle), so the service worker never
-  # registers and offline mode silently does nothing. Upstream's own Dockerfile
-  # has the same hole. Widening the prefix is what makes the documented
-  # interface true; it exposes only these CALINO_* build knobs, none of which is
-  # a secret.
+  # ⚠ THE `envPrefix` PATCH IS GONE — upstream fixed it. Through 0.30.0
+  #   vite.config.ts never set `envPrefix`, so Vite's `VITE_` default dropped
+  #   the CALINO_* knobs src/config.ts reads off import.meta.env and
+  #   CALINO_ENABLE_SW=true still baked `enableServiceWorker:!1` (PWA silently
+  #   off). As of this version vite.config.ts declares
+  #   `envPrefix: ['VITE_', 'CALINO_GITHUB_REPO', 'CALINO_CONTACT_EMAIL',
+  #   'CALINO_ENABLE_SW']`, which covers the one knob we set. Keeping the old
+  #   --replace-fail would now fail the build on an anchor upstream rewrote.
+  #   Still worth re-verifying after a bump the cheap way: grep the built
+  #   bundle for `enableServiceWorker:` — `!0` is on, `!1` is off.
   #
-  # One line, and --replace-fail, so a source bump that moves `base` fails the
-  # build instead of quietly reverting the PWA to off. Re-check whether this is
-  # still needed on every version bump — if upstream sets envPrefix itself, or
-  # switches to VITE_-prefixed names, DROP this.
-  # ⚠ SECOND PATCH, UNRELATED TO THE FIRST: a conditional DELETE of an object
-  #   that is already gone answers 412, not 404, on sabre-based servers
-  #   (Nextcloud, Baikal) — "An If-Match header was specified and the resource
-  #   did not exist". CalDAVClient.deleteEvent always sends If-Match (it hands
-  #   tsdav the etag), and assertResponseOk's `tolerateGone` forgives only
-  #   404/410, so that branch is unreachable here and the throw surfaces as a
-  #   failed delete. Measured against this very deployment: DELETE without
-  #   If-Match → 404, DELETE with If-Match → 412. Net effect is that any event
-  #   whose local copy outlives the server object becomes PERMANENTLY
-  #   undeletable from the UI — every retry re-412s.
+  # ⚠ THE DELETE PATCH STAYS. A conditional DELETE of an object that is already
+  #   gone answers 412, not 404, on sabre-based servers (Nextcloud, Baikal) —
+  #   "An If-Match header was specified and the resource did not exist".
+  #   CalDAVClient.deleteEvent always sends If-Match (it hands tsdav the etag),
+  #   and assertResponseOk's `tolerateGone` forgives only 404/410, so that
+  #   branch is unreachable here and the throw surfaces as a failed delete.
+  #   Measured against this very deployment: DELETE without If-Match → 404,
+  #   DELETE with If-Match → 412. Net effect is that any event whose local copy
+  #   outlives the server object becomes PERMANENTLY undeletable from the UI —
+  #   every retry re-412s. Upstream has since fixed a DIFFERENT 412 (issue #110,
+  #   a proxy-prefixed resource URL, and the stale-etag replay of issue #163),
+  #   but `tolerateGone` still lists only 404/410, so this hole is open.
   #
   #   412 has two causes and only one is benign, so this does NOT simply widen
   #   the tolerate list: it probes first. No etag (404/410 on HEAD) means the
@@ -108,9 +105,6 @@ stdenv.mkDerivation (finalAttrs: {
   #   Anchored on the comment line rather than the assert call, so the insert
   #   lands before it. Upstream fix pending; drop this once released.
   postPatch = ''
-    substituteInPlace vite.config.ts \
-      --replace-fail "base: '/'," "base: '/', envPrefix: ['VITE_', 'CALINO_'],"
-
     substituteInPlace src/features/caldav/client/CalDAVClient.ts \
       --replace-fail \
     "    // 404/410 mean the resource is already gone — the outcome a delete wants." \
