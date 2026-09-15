@@ -174,7 +174,7 @@ in
       # subscription's DAV node is properties-only, so PROPFIND Depth:1 returns
       # just itself. That is why TRUSK/Google/Airbnb list as empty calendars.
       #
-      # Calino 0.30.0's own webcal subscriptions (Sidebar → "Subscribe to
+      # Calino's own webcal subscriptions (Sidebar → "Subscribe to
       # Calendar") fetch the .ics from the browser, and calendar.google.com
       # sends no Access-Control-Allow-Origin — same CORS wall as the DAV block
       # above, same answer. Subscribe to
