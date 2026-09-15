@@ -6,12 +6,14 @@
 # browser. Credentials sit in the browser's localStorage, the event cache in
 # Dexie/IndexedDB.
 #
-# So there is NO systemd unit here. This module is one nginx vhost on
+# Calino itself has no process. This module is one nginx vhost on
 # 127.0.0.1:<internalPort> that does three things:
 #
 #   /                            → static files from the nix store (SPA)
 #   /nextcloud/remote.php/dav/   → 127.0.0.1:8091 (Nextcloud's DAV endpoint)
-#   /gcal/                       → calendar.google.com's ICS endpoint
+#   /feeds/                      → windowed .ics files written by ics-mirror
+#
+# …plus the one timer that fills /feeds/. See "WHY THE ICS MIRROR" below.
 #
 # ⚠ WHY CALINO IS NOT ON THE 443 PATH-MUX. It cannot live at a sub-path: App.tsx
 #   mounts <BrowserRouter> with no `basename`, every route (/month, /week,
@@ -29,9 +31,37 @@
 #   bundled CORS-proxy container (docs/DOCKER.md). Serving DAV from the SAME
 #   origin as the SPA sidesteps CORS entirely, in one nginx location, with zero
 #   new processes.
+#
+# ⚠ WHY THE ICS MIRROR (and why `/gcal/` is gone). Calino's own webcal
+#   subscriptions fetch from the BROWSER and persist every parsed event into
+#   `calino-storage` in raw localStorage — capped at ~5 MB per origin. The TRUSK
+#   Google feed is 6234 VEVENTs / 9.8 MB, so subscribing to it directly overflowed the
+#   quota and Calino toasted "Storage is full. Your data may not be saved.", after
+#   which the store silently stopped persisting.
+#
+#   `ics-mirror` (nicos-scripts) fetches each feed SERVER-side on a timer, keeps
+#   only what can render in a -3/+12-month window (6234 → ~216 events, 9.8 MB →
+#   ~370 kB) and writes a small .ics that this vhost serves from Calino's own
+#   origin. Calino subscribes same-origin.
+#
+#   That removes the `^~ /gcal/` passthrough entirely: it existed only because
+#   calendar.google.com sends no Access-Control-Allow-Origin and a BROWSER
+#   therefore could not fetch the feed. A server-side fetch has no CORS to satisfy
+#   (verified: a direct GET of the feed answers 200), so the proxy had no consumer
+#   left — and with it goes its open-relay-shaped "Proxy URL" footgun.
+#
+#   ⚠ The mirror is why the TRUSK feed must NOT go anywhere near Nextcloud: this
+#     origin is tailnet-only (`public.port` below is served, never funnelled),
+#     whereas Nextcloud is the bare-URL target of the PUBLIC 443 funnel
+#     (front-proxy.nix). Work-calendar data stays on the tailnet by construction.
 { config, pkgs, ... }:
 let
   internalPort = 13347;
+
+  # Written by ics-mirror.service, read by the `/feeds/` location below. Not a
+  # nix-store path: the contents change on a timer, not on a rebuild.
+  mirrorDir = "/var/lib/ics-mirror";
+  mirrorOutDir = "${mirrorDir}/public";
 
   # Same fixpoint as showmycards.nix:49 — read back the publicUrl derived from
   # the port declared in nic.services.calino.public below, instead of spelling
@@ -168,53 +198,107 @@ in
         '';
       };
 
-      # ── Same-origin Google Calendar ICS ────────────────────────────────────
-      # Nextcloud's webcal subscriptions are invisible to any CalDAV client: the
-      # feeds are cached (`oc_calendarobjects` at `calendartype = 1`) but a
-      # subscription's DAV node is properties-only, so PROPFIND Depth:1 returns
-      # just itself. That is why TRUSK/Google/Airbnb list as empty calendars.
-      #
-      # Calino's own webcal subscriptions (Sidebar → "Subscribe to
-      # Calendar") fetch the .ics from the browser, and calendar.google.com
-      # sends no Access-Control-Allow-Origin — same CORS wall as the DAV block
-      # above, same answer. Subscribe to
-      # <origin>/gcal/<address>/private-<token>/basic.ics; nginx forwards the
-      # tail with `@` unescaped, which Google answers 200 for.
-      #
-      # ⚠ PIN THE UPSTREAM; don't use upstream's "Proxy URL" field. That shape
-      #   is `<proxy>/<urlencoded-origin><path>` — an open relay, and
-      #   unmatchable here anyway since nginx decodes %3A/%2F and merges slashes
-      #   before location matching. Pinning also keeps the secret feed token in
-      #   the browser rather than in this PUBLIC repo (that URL is unexpiring
-      #   read access to the whole calendar — so no proxy.calino.io either).
+      # Tombstone for the retired passthrough. Without it `/gcal/…` falls through
+      # to the SPA fallback and answers 200 with index.html — so a browser still
+      # holding the old subscription would hand HTML to an ICS parser and see an
+      # empty calendar rather than an error. 410 says what actually happened.
+      # Delete this once no browser has a /gcal/ subscription left.
       "^~ /gcal/" = {
-        proxyPass = "https://calendar.google.com/calendar/ical/";
+        return = "410";
+      };
+
+      # ── Same-origin windowed ICS feeds ─────────────────────────────────────
+      # Replaces the old `^~ /gcal/` passthrough to calendar.google.com. These
+      # files are written by ics-mirror.service below; Calino subscribes to
+      # <origin>/feeds/<slug>.ics (Sidebar → "Subscribe to Calendar").
+      #
+      # Why a same-origin FILE rather than a proxy: the browser never touches
+      # Google, so there is no CORS wall to work around and no secret feed token
+      # in the browser — the token lives only in the agenix secret the timer
+      # reads. It also means the browser downloads ~370 kB instead of 9.8 MB,
+      # which is the whole point (see WHY THE ICS MIRROR in the header).
+      #
+      # ⚠ Leave upstream's "Proxy URL" field empty. `buildProxyUrl` makes
+      #   `<proxy>/<urlencoded-origin><path>` — an arbitrary origin as a path
+      #   segment, i.e. an open relay — and it is unmatchable in nginx anyway,
+      #   which decodes %3A/%2F and merges slashes BEFORE location matching.
+      "^~ /feeds/" = {
+        # Trailing slash on both sides: `alias` replaces the matched prefix, so
+        # /feeds/trusk.ics resolves to <mirrorOutDir>/trusk.ics.
+        alias = "${mirrorOutDir}/";
         extraConfig = ''
           limit_except GET HEAD {
             deny all;
           }
 
-          # Both default OFF: Google's frontend needs SNI, and this hop leaves
-          # the tailnet so it verifies against the system trust store.
-          proxy_ssl_server_name on;
-          proxy_ssl_verify on;
-          proxy_ssl_verify_depth 3;
-          proxy_ssl_trusted_certificate "/etc/ssl/certs/ca-certificates.crt";
-          proxy_http_version 1.1;
-          proxy_set_header Host calendar.google.com;
+          # The mirror rewrites these on a timer and Calino re-fetches on its own
+          # refresh interval, so a cached copy would just pin a stale calendar.
+          add_header Cache-Control "no-store" always;
 
-          # Outbound: this origin's jar has no business reaching Google.
-          # Inbound: every response carries `Set-Cookie: NID=…;
-          # domain=.google.com`, which the browser rejects on the domain
-          # mismatch — but only after we relayed a third party's tracker.
-          proxy_set_header  Cookie "";
-          proxy_hide_header Set-Cookie;
+          # No directory listing: the slugs are not secret, but there is no
+          # reason to enumerate them either.
+          autoindex off;
 
-          # ~10 MB, marked no-store, so every refresh is a full re-fetch.
-          proxy_buffering on;
-          proxy_read_timeout 120s;
+          # ~370 kB of highly repetitive text — the one place on this vhost where
+          # gzip earns its keep. (`gzip_types` in extraConfig above does not list
+          # text/calendar, so name it here.)
+          gzip_types text/calendar;
         '';
       };
+    };
+  };
+
+  # ── ICS mirror ──────────────────────────────────────────────────────────────
+  # Fetches each feed in the agenix secret, windows it, writes <slug>.ics into
+  # mirrorOutDir for the `/feeds/` location above. See WHY THE ICS MIRROR in the
+  # header for what this replaces and why it is not a CalDAV write.
+  systemd.services.ics-mirror = {
+    description = "Mirror remote ICS feeds, windowed, for Calino to subscribe to";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    environment = {
+      ICS_MIRROR_FEEDS_FILE = config.age.secrets.calino-ics-feeds.path;
+      ICS_MIRROR_OUT_DIR = mirrorOutDir;
+      ICS_MIRROR_STATE_DIR = mirrorDir;
+      # -3/+12 months. Measured on the TRUSK feed: 6234 events → 216, 9.8 MB →
+      # 370 kB. Widening this is the knob to turn if you need more back-scroll;
+      # the ~5 MB localStorage cap is the ceiling it is trading against.
+      ICS_MIRROR_BACK_DAYS = "92";
+      ICS_MIRROR_FWD_DAYS = "365";
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      # root only to read the 0400 feeds secret; it writes nowhere else. The
+      # StateDirectory is 0755 so the nginx worker can read what it writes.
+      User = "root";
+      StateDirectory = "ics-mirror";
+      StateDirectoryMode = "0755";
+      ExecStart = "${pkgs.nicos-scripts}/bin/ics-mirror";
+      NoNewPrivileges = true;
+      PrivateTmp = true;
+      ProtectHome = true;
+      ProtectSystem = "strict";
+      ProtectKernelTunables = true;
+      ProtectControlGroups = true;
+      # AF_UNIX is load-bearing, not boilerplate: glibc's NSS talks to
+      # systemd-resolved over /run/systemd/resolve/io.systemd.Resolve, so without
+      # it every fetch dies on name resolution rather than on the network.
+      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+    };
+  };
+  systemd.timers.ics-mirror = {
+    description = "Refresh the windowed ICS mirrors";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "3min";
+      # ⚠ This is NOT what bounds freshness. Google serves the private
+      # `basic.ics` from its own publishing cache and has historically lagged
+      # real edits by hours, so polling faster buys nothing. 15 min keeps the
+      # worst-case OUR side adds small; `last_changed_at` in
+      # /var/lib/ics-mirror/state.json records when the body actually moved, so
+      # the real cadence can be measured and this re-tuned on evidence.
+      OnUnitActiveSec = "15min";
+      Persistent = true;
     };
   };
 
@@ -225,10 +309,14 @@ in
       stateless — static files out of the nix store. The only state (the CalDAV
       URL + app password, plus a Dexie event cache) lives in the browser. The
       calendars themselves are Nextcloud's, already covered by its Postgres dump
-      and /mnt/data.
+      and /mnt/data. /var/lib/ics-mirror is a regenerable cache: every file in it
+      is rebuilt from the upstream feeds on the next timer tick.
     '';
-    # No process of its own; nginx is infra that nixos-rebuild-safe leaves up.
-    heavyUnits = [ ];
+    # Calino serves from the nix store, but the mirror timer parses a ~10 MB ICS
+    # (~127 MB peak RSS, measured). Cheap to shed while a build needs the RAM —
+    # heavy-shed only restores units that were active, so the dormant oneshot is
+    # never spuriously started. nginx stays up: it is infra.
+    heavyUnits = [ "ics-mirror.timer" "ics-mirror.service" ];
 
     public = {
       # Directly after Nextcloud (30), which is the store these numbers come from;
