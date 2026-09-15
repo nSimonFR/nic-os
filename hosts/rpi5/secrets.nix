@@ -210,6 +210,11 @@
       file  = ./secrets/nextcloud-homepage-password.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
+    # Feed list for ics-mirror (calino.nix). Root-readable only: the unit runs as
+    # root and each value is an unexpiring read token for a whole calendar.
+    calino-ics-feeds = {
+      file = ./secrets/calino-ics-feeds.age;
+    };
     wakapi-password-salt = {
       file = ./secrets/wakapi-password-salt.age;
       mode = "0444"; # DynamicUser (wakapi) needs to read via EnvironmentFile

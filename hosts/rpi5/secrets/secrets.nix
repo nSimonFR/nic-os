@@ -31,6 +31,10 @@ in {
   "nextcloud-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "protonmail-bridge-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
   "nextcloud-homepage-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  # {"<slug>": "<ics url>"} for ics-mirror. Encrypted because a Google
+  # `private-<token>/basic.ics` URL is unexpiring read access to the whole
+  # calendar — it must never be committed in clear to this PUBLIC repo.
+  "calino-ics-feeds.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "wakapi-password-salt.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wakapi-smtp-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
   "wakapi-api-key.age".publicKeys              = [ nsimon-age nsimon-ed25519 ];
