@@ -38,10 +38,19 @@ let
   virtualComputerIp = "10.7.0.1";
 
   rules = pkgs.writeText "sidestore-reflector.nft" ''
+    # Idempotent reload: without this, re-running the unit over a table left by an
+    # earlier deploy APPENDS a second copy of the rule instead of replacing it.
+    # (Harmless in practice — after the first swap daddr is no longer 10.7.0.1, so
+    # the duplicate never matches — but it makes the counter below read as a lie.)
+    destroy table ip sidestore
+
     table ip sidestore {
       chain prerouting {
         type filter hook prerouting priority -350; policy accept;
-        iifname "tailscale0" ip daddr ${virtualComputerIp} ip daddr set ip saddr ip saddr set ${virtualComputerIp} notrack
+        # The counter is the ONLY way to tell "the phone never sent anything" apart
+        # from "we reflected it and the phone ignored the reply" — the two failure
+        # modes look identical from the phone, and they have opposite fixes.
+        iifname "tailscale0" ip daddr ${virtualComputerIp} counter ip daddr set ip saddr ip saddr set ${virtualComputerIp} notrack
       }
     }
   '';
