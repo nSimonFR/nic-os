@@ -56,7 +56,7 @@ jobs:
             output: darwinConfigurations
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@v23
       # --accept-flake-config: the flake declares nixos-raspberrypi.cachix.org,
       # which is what keeps the rpi5 job from building its inputs from source.
       - name: Evaluate ${{ matrix.host }}
@@ -71,6 +71,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@v23
       - name: Run the nicos-scripts test suite
         run: nix build --accept-flake-config --print-build-logs .#checks.x86_64-linux.nicos-scripts
