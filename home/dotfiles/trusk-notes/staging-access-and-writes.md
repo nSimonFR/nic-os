@@ -12,30 +12,29 @@ which cluster you are on · `permission denied for table <x>` · multi-schema da
 | Tailscale operator | `trusk-staging-ts` | Needs the **work** tailscaled (see `kubectl contexts` in the main file — two daemons run side by side on the Mac). |
 | IAP tunnel | `gke_trusk-staging-3rpyod_europe-west1_trusk-staging-gke` | `proxy-staging`. Works with no tailnet at all. |
 
-`proxy-staging` and `proxy-prod` **both** bind `-L$TRUSK_PROXY_PORT`, which is `8888`
-(`home/dotfiles/zsh/trusk.zsh`). With a prod tunnel already up, the staging one **fails to bind,
-exits 0, and still creates its socket** — and everything on `localhost:8888` then reaches
-**production's** control plane.
+Since 2026-09-16 the two tunnels bind **distinct local ports** — `TRUSK_PROXY_PORT_PROD=8888`,
+`TRUSK_PROXY_PORT_STAGING=8889` (`home/dotfiles/zsh/trusk.zsh`) — and each alias exports the proxy
+variables for *its own* port. `8888` is only ever prod, `8889` only ever staging. They can run side
+by side.
 
-On 2026-09-16 the only thing that surfaced it was `x509: certificate signed by unknown authority`
-(staging's CA presented against prod's cert). Had the CAs matched, a `kubectl patch` aimed at
-staging would have hit prod. **The socket file proves nothing.** `lsof -nP -iTCP:8888 -sTCP:LISTEN`
-plus socket mtimes tell you which tunnel owns the port.
+**What it used to do, and why it was dangerous.** Both bound `8888`. Whichever came second lost
+the bind, but ssh carried on, **exited 0 and still created its control socket** — so
+`localhost:8888` silently kept pointing at the *other* cluster. On 2026-09-16 the only thing that
+surfaced it was `x509: certificate signed by unknown authority` (staging's CA presented against
+prod's cert). Had the CAs matched, a `kubectl patch` aimed at staging would have hit prod.
 
-The simplest fix is to not overlap: `proxy-prod-down` first, then `proxy-staging`, and the
-standard `8888` vars apply. If you genuinely need both at once, put staging on its own port —
-and **export the proxy vars for that port yourself**, because `proxy-up` hardcodes
-`TRUSK_PROXY_PORT=8888` and would keep pointing you at prod:
+Two things prevent the recurrence, and the second matters more than the ports:
 
-```bash
-PORT=8899
-gcloud beta compute ssh trusk-staging-gke-bastion --tunnel-through-iap \
-  --project trusk-staging-3rpyod --zone europe-west1-c \
-  -- -fNT -M -S /tmp/trusk-staging-$PORT.socket -L$PORT:127.0.0.1:8888 -o ServerAliveInterval=60
-# proxy-up would re-export 8888 → do it by hand, all four casings (Go reads the uppercase first)
-export http_proxy=http://localhost:$PORT https_proxy=http://localhost:$PORT \
-       HTTP_PROXY=http://localhost:$PORT HTTPS_PROXY=http://localhost:$PORT
-```
+- distinct ports, so the two tunnels no longer contend at all;
+- **`-o ExitOnForwardFailure=yes`** on every tunnel, so a failed local bind now makes ssh exit
+  non-zero instead of leaving you proxied to whoever already owned the port.
+
+The helper also probes the port before dialling (`curl -x … /generate_204`) and reuses a live
+tunnel rather than failing — re-running `proxy-prod` when it is already up stays a no-op, as
+before. **The socket file still proves nothing**: it outlives a failed bind. Ask the proxy, or
+`lsof -nP -iTCP:8888 -sTCP:LISTEN`.
+
+The remote side is always the bastion's own proxy on `127.0.0.1:8888`; only the local bind differs.
 
 ## Assert the cluster before any write — and fail closed
 
