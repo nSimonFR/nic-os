@@ -152,6 +152,19 @@ kubectl --context trusk-staging-ts -n staging logs <pod> --previous
 
 `10.106.0.3` (corp VPN). One DB+role per service; creds in `deployment/configurations/staging/secrets/` (sops). `PGPASSWORD='<secret>' psql -h 10.106.0.3 -U <service> -d <service_db>`.
 
+**One database, but each app role only WRITES its own schema.** Cross-schema `SELECT` *is* granted — service-onfleet reads `journey_trusk_order.mission` fine, in staging **and** prod, which is what makes a cross-service backfill migration viable. `UPDATE` is not: `permission denied for table <x>`. A multi-schema data fix therefore has to be split per owning pod — `roundtrip.*` from the `roundtrip` pod, `journey_trusk_order.*` from `order-mission`, `fleet.*` from `fleet`, `onfleet.*` from `service-onfleet` — and there is **no cross-schema transaction**, so a 4-pod sequence can half-apply. Prefer a test/fix scope writable from a single pod. Probe before writing rather than discover it mid-script:
+
+```bash
+kubectl --context "$CTX" -n staging exec <pod> -c <svc> -- node -e '
+const {Client}=require("pg");const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER,
+password:process.env.POSTGRES_PASSWORD,database:process.env.POSTGRES_DB});
+(async()=>{await c.connect();console.log((await c.query(
+ "SELECT current_user, has_table_privilege($1,\x27UPDATE\x27) AS can_write",["roundtrip.point"])).rows[0]);
+await c.end()})()'
+```
+
+When 10.106.0.3 is unreachable (no corp VPN) **and** the `postgres_staging_rw` MCP is down, `kubectl exec` + the in-image `pg` driver is the fallback — same recipe as the prod one below. NestJS services ship `pg` via TypeORM, so it is present in every service image.
+
 ## Conventional commits → semantic-release
 
 `@trusk-official/config-release` releaseRules come from the `type-enum` in config-commitlint. Valid PascalCase scopes: **`Feature, Fix, Docs, Style, Refactor, Test, Chore`** — `Feature`/`Refactor` → minor, rest → patch. The Angular preset also adds lowercase `feat`→minor, `fix`→patch, `BREAKING CHANGE`→major.
@@ -184,8 +197,22 @@ Since ~2026-08 the direct push prints `remote: - Changes must be made through a 
 
 ## kubectl contexts
 
-- **Staging** — `trusk-staging-ts` (Tailscale operator), works directly.
+- **Staging** — `trusk-staging-ts` (Tailscale operator) when the tailnet is up. **It often is not**: the macOS daemon holds one profile at a time and is routinely logged into the *personal* tailnet (`nsimonfr.github`), where the staging operator does not exist → every call dies on `i/o timeout`. `tailscale switch --list` showing a single non-Trusk account means no switch can help. Don't ask for a re-login — fall back to IAP below; switching tailnets would drop the personal nodes.
+- **Staging without Tailscale** — `proxy-staging` (same IAP mechanics as `proxy-prod`), ctx `gke_trusk-staging-3rpyod_europe-west1_trusk-staging-gke`. **Open it on a port other than 8888** — see the collision below.
 - **Production** — no Tailscale; run the `proxy-prod` alias once/session (opens an IAP tunnel + SOCKS/HTTP proxy on `localhost:8888`), then `export http_proxy=localhost:8888 https_proxy=localhost:8888` and use ctx `gke_trusk-production-kkypwi_europe-west1_trusk-production-gke`. Socket `/tmp/trusk-production-gke-bastion.socket` = readiness signal (direct GKE ctx times out on TLS — private control plane).
+
+> ### ⚠️ `proxy-staging` and `proxy-prod` both bind `-L8888`
+>
+> With a prod tunnel already up, the staging one **fails to bind, exits 0, and still creates its socket** — and everything on `localhost:8888` then reaches **production's** control plane. On 2026-09-16 the only thing that surfaced it was `x509: certificate signed by unknown authority` (staging's CA against prod's cert). Had the CAs matched, a `kubectl patch featureflag` aimed at staging would have hit prod. The socket file proves nothing; `lsof -nP -iTCP:8888 -sTCP:LISTEN` plus socket mtimes tell you which tunnel owns the port.
+>
+> Open staging on its own port, then **assert the cluster before any write** — `production` exists only on prod, staging has `staging` + `pr-*`:
+>
+> ```bash
+> gcloud beta compute ssh trusk-staging-gke-bastion --tunnel-through-iap \
+>   --project trusk-staging-3rpyod --zone europe-west1-c \
+>   -- -fNT -M -S /tmp/trusk-staging-8899.socket -L8899:127.0.0.1:8888 -o ServerAliveInterval=60
+> kubectl --context "$CTX" get ns production >/dev/null 2>&1 && { echo "C'EST LA PROD — STOP"; exit 3; }
+> ```
 
 `proxy-prod` is an interactive-shell alias and long-running. Run it autonomously via **`zsh -ic 'proxy-prod'`** in `Bash(run_in_background:true)`, prefixed with the ADC token export below (without it, stale user creds make `get-credentials` die on `Reauthentication failed. cannot prompt during non-interactive execution`), then poll for the socket:
 

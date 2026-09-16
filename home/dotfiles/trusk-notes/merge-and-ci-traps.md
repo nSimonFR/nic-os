@@ -63,6 +63,44 @@ merged and forgotten. Still on master 2026-08-25:
 git show origin/master:package.json | grep -oE '"@trusk-official/[a-z-]+": "[^"]*pr\.[^"]*"'
 ```
 
+## e2e suites that call real external APIs flake on jest's 5 s hook timeout
+
+`service-onfleet`'s `tests/scenarii/*` drive the **real** Onfleet API. Their hooks chain several
+sequential HTTP calls — `driver.js`'s `afterAll` does up to four `tasks.get` / `forceComplete` /
+`deleteOne`. Jest's default 5 s applies to hooks too, and it is not enough.
+
+Symptom, on diffs touching none of those code paths:
+
+```
+● Test suite failed to run
+  thrown: "Exceeded timeout of 5000 ms for a hook."
+  at beforeAll (tests/scenarii/task.js:14:5)
+```
+
+Hit twice in two days (2026-09-15 `driver.js` `afterAll`, 2026-09-16 `task.js` `beforeAll`), both
+times green on a plain `gh run rerun --failed` with zero code change. **A rerun proves it is the
+budget, not your diff** — but do the A/B before blaming the flake: `git stash` and run the suite on
+the pristine branch, identical failures = environmental.
+
+`driver.js` had raised only its own `beforeAll` to 10 s; the other five files had nothing. Fixed
+2026-09-16 with `jest.setTimeout(30000)` in `tests/scenarii/suite.test.js` — file-scoped, so unit
+and integration suites keep the 5 s default. Apply the same pattern to any suite that talks to a
+third-party API rather than raising the global `testTimeout`.
+
+## Stale node_modules silently change test outcomes
+
+Same repo, same day: 2 integration tests failed locally and passed in CI. Cause was neither —
+the installed `@trusk-official/api-order-mission-client` predated `ASSISTANCE_SECOND_CREW`, so
+`OrderTypeEnum.ASSISTANCE_SECOND_CREW` was `undefined`, a fixture wrote `mission_type: null` and
+the sort took a different branch. `package.json` pinned `1.45.0`; node_modules had older.
+
+```bash
+npm install --no-save --no-package-lock @trusk-official/<client>@<pinned>   # no lockfile churn
+```
+
+Reflex when a test disagrees with CI: check the **installed** version of any enum/const you rely
+on, not the pin.
+
 ## zsh does not word-split unquoted variables
 
 `for x in $LIST`, `set -- $pair`, `K="kubectl …"; $K scale …` all silently misbehave. Iterate
