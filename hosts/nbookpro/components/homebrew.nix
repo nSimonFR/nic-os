@@ -23,6 +23,7 @@
     "infisical/get-cli"
     "Sikarugir-App/sikarugir"
     "RhetTbull/osxphotos"
+    "manaflow-ai/cmux"
     {
       name = "jundot/omlx";
       clone_target = "https://github.com/jundot/omlx";
@@ -51,6 +52,7 @@
     "beekeeper-studio"
     "beeper"
     "claude"
+    "cmux"
     "cursor"
     "cyberduck"
     "disk-inventory-x"
