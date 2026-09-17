@@ -1,5 +1,9 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, tinyLlmGateUrl, ... }:
+{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, tinyLlmGateUrl, username, ... }:
 let
+  # Proton account hydroxide is authenticated as — the only envelope sender the
+  # bridge will accept. Same address mail.nix gives himalaya.
+  protonAddress = "${username}@protonmail.com";
+
   # The pinned upstream image tag, and the only place the version is written.
   # affine-sync below installs whatever this says, so a Renovate bump of this
   # line is a real upgrade rather than a comment change. Beta tags (AFFiNE cuts
@@ -24,6 +28,28 @@ let
     # allowedOrigin list (localhost, 127.0.0.1), causing link-preview
     # and image-proxy requests to be rejected with "Invalid header".
     "worker.allowedOrigin" = [ "localhost" "127.0.0.1" "assets://." ];
+    # Outbound mail via the local hydroxide ProtonMail bridge (hosts/rpi5/hydroxide.nix).
+    # Until this existed AFFiNE logged "Mailer SMTP transport is not configured." at every
+    # boot and every magic-link sign-in died server-side with email_service_not_configured
+    # — the mail never left the box, so the code screen waited on a mail that was never sent.
+    #
+    # Keys are the module's own flattened descriptor names (`IHd("mailer", {"SMTP.host": …})`),
+    # matching the `worker.allowedOrigin` / `providers.gemini` style above.
+    #
+    # Plaintext on loopback: hydroxide advertises `AUTH PLAIN` and no STARTTLS, and
+    # nodemailer only implies TLS on port 465, so :1025 stays a cleartext local socket.
+    # ignoreTLS is therefore left at its default — it only drives `rejectUnauthorized`,
+    # and no handshake happens to reject.
+    mailer = {
+      # Bridge endpoints are hardcoded in hydroxide.nix's `let`; mail.nix repeats them too.
+      "SMTP.host" = "127.0.0.1";
+      "SMTP.port" = 1025;
+      "SMTP.username" = protonAddress;
+      "SMTP.password" = "@SMTP_PASSWORD@";
+      # Proton rejects a From it doesn't own, so this is the account address, not an
+      # alias and not a noreply@. Replies land in the same mailbox hermes reads.
+      "SMTP.sender" = "AFFiNE <${protonAddress}>";
+    };
     calendar.google = {
       enabled = true;
       clientId = "@GCAL_CLIENT_ID@";
@@ -283,17 +309,27 @@ in
       NODE_OPTIONS = "--max-old-space-size=384";
       MALLOC_ARENA_MAX = "2";
     };
-    # Inject Google Calendar OAuth credentials from agenix into config.json
+    # Inject Google Calendar OAuth credentials + the Proton bridge password from agenix
+    # into config.json. The file is the only place the SMTP password lands: AFFiNE also
+    # accepts MAILER_PASSWORD, but a systemd environment is readable via `systemctl show`
+    # and the unit itself is world-readable in the store, whereas ${dataDir}/.affine is 0750
+    # affine:affine. Note config.json seeds a key only while app_configs has no row for it
+    # — see known_issue_affine_db_config_precedence; `mailer.*` has none today.
     script = ''
       CONF="${dataDir}/.affine/config/config.json"
       OAUTH=$(cat /run/agenix/affine-gcal-oauth)
       CID=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientId)
       CSE=$(echo "$OAUTH" | ${pkgs.jq}/bin/jq -r .clientSecret)
+      # Readable because the unit joins the hydroxide group below; the file is 0440
+      # hydroxide:hydroxide. `$(cat)` drops agenix's trailing newline, which SMTP AUTH
+      # would otherwise carry into the password.
+      SMTP_PW=$(cat /run/agenix/protonmail-bridge-password)
       TEMPLATE='${affineConfigTemplate}'
       # Use bash parameter substitution for safe literal replacement
       # (sed breaks if CID/CSE contain | & / or other regex metacharacters)
       RESULT="''${TEMPLATE//@GCAL_CLIENT_ID@/$CID}"
       RESULT="''${RESULT//@GCAL_CLIENT_SECRET@/$CSE}"
+      RESULT="''${RESULT//@SMTP_PASSWORD@/$SMTP_PW}"
       echo "$RESULT" > "$CONF"
 
       # ── Bundle patches ──────────────────────────────────────────────
@@ -349,6 +385,11 @@ in
       User = dbUser;
       Group = dbUser;
       WorkingDirectory = appDir;
+      # Read on the 0440 hydroxide:hydroxide bridge password. Scoped to this unit rather
+      # than users.users.affine.extraGroups so the grant is visible next to the service
+      # that needs it. No After=hydroxide.service: nodemailer connects per-send and a
+      # failed send is retryable, so the bridge being late costs a retry, not a boot order.
+      SupplementaryGroups = [ "hydroxide" ];
       Restart = "on-failure";
       RestartSec = "5s";
       PrivateUsers = lib.mkForce false;
