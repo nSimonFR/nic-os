@@ -39,7 +39,7 @@
 stdenv.mkDerivation (finalAttrs: {
   pname = "calino";
   # renovate: datasource=github-releases depName=Ivan-Malinovski/calino extractVersion=^v(?<version>.+)$
-  version = "0.33.4";
+  version = "0.33.6";
 
   src = fetchFromGitHub {
     owner = "Ivan-Malinovski";
@@ -51,17 +51,25 @@ stdenv.mkDerivation (finalAttrs: {
     # re-serves the OLD tree under the new version number. See
     # known_issue_nix_fod_hash_desync; that trap shipped sure-0.7.3 as v0.7.2.
     name = "calino-${finalAttrs.version}-source";
-    hash = "sha256-R/w0Ls4VHufkIfS+UTVgTzvNm7cgrTs2JgAYrwuslfw=";
+    hash = "sha256-W4Rd7SxAE2eKK3X3adJHatk1BITs/Zs5hIfd+TsL8wM=";
   };
 
   pnpmDeps = pnpm_10.fetchDeps {
-    inherit (finalAttrs) pname version src;
+    inherit (finalAttrs) version src;
+    # ⚠ THE SAME DESYNC TRAP AS `src`, AND IT BIT THE 0.33.4 → 0.33.6 BUMP.
+    # fetchPnpmDeps hardcodes `name = "${pname}-pnpm-deps"` and drops `version`
+    # on the floor, so with a bare pname every version shares ONE store path:
+    # 0.33.6 moved pnpm-lock.yaml (tsdav 2.3.3) yet the stale hash still
+    # "built" — it just re-served 0.33.4's already-realised deps. Folding the
+    # version into pname is what makes a forgotten hash a build failure instead
+    # of a silent old-tree install. (See known_issue_nix_fod_hash_desync.)
+    pname = "${finalAttrs.pname}-${finalAttrs.version}";
     # 3 = reproducible tarball. `pnpm install --force` in the fetcher pulls
     # every platform's optional deps, so unlike the npm-install FODs in
     # showmycards.nix this hash is ONE value across aarch64 and x86_64 — no
     # per-system attrset needed.
     fetcherVersion = 3;
-    hash = "sha256-z+omB1JqIyNuFK+qu5RZ8S5sI4VcQu0ygJfBewPS+Tg=";
+    hash = "sha256-YPz46fYGSoZptQXnsXFWySDgVjx1VTIT11T6l0dYGZA=";
   };
 
   nativeBuildInputs = [
@@ -90,9 +98,10 @@ stdenv.mkDerivation (finalAttrs: {
   #   Measured against this very deployment: DELETE without If-Match → 404,
   #   DELETE with If-Match → 412. Net effect is that any event whose local copy
   #   outlives the server object becomes PERMANENTLY undeletable from the UI —
-  #   every retry re-412s. Upstream has since fixed a DIFFERENT 412 (issue #110,
-  #   a proxy-prefixed resource URL, and the stale-etag replay of issue #163),
-  #   but `tolerateGone` still lists only 404/410, so this hole is open.
+  #   every retry re-412s. Upstream has now fixed two DIFFERENT 412s — issue
+  #   #110's proxy-prefixed resource URL, and issue #163's stale-etag replay,
+  #   which is what 0.33.5 carries (PR #169, ours) — but `tolerateGone` still
+  #   lists only 404/410, so this hole is open. Re-verified at 0.33.6.
   #
   #   412 has two causes and only one is benign, so this does NOT simply widen
   #   the tolerate list: it probes first. No etag (404/410 on HEAD) means the
