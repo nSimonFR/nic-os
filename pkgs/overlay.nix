@@ -54,16 +54,6 @@ inputs: final: _prev: {
   # `nix build .#nicos-scripts` — which is also the flake check.
   nicos-scripts = final.callPackage ./services/nicos-scripts.nix { };
 
-  # herdr — terminal workspace manager for AI coding agents, from its own
-  # nixpkgs input (see nixpkgs-herdr in flake.nix). Replaces the homebrew-core
-  # formula, which is darwin-only and which `brew bundle --no-upgrade` never
-  # moves once installed.
-  # Consumers: home/packages.nix on every host.
-  herdr =
-    (import inputs.nixpkgs-herdr {
-      inherit (final) system;
-    }).herdr;
-
   # OpenRGB 1.0rc2 — the first build with working LG monitor support.
   # Consumers: hosts/beast/rgb/openrgb-lg.nix (systemPackages) and
   # hosts/beast/configuration.nix (services.hardware.openrgb.package).

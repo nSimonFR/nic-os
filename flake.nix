@@ -50,12 +50,6 @@
     # replace this with a rev carrying an equal or newer HA.
     nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
 
-    # herdr only. Tracks the same branch as nixpkgs-unstable but as its own
-    # input, so `nix flake update nixpkgs-herdr` moves herdr without also moving
-    # immich, vaultwarden, searxng, papra and dawarich on the rpi5. No rev to
-    # hand-maintain, unlike the two pins above.
-    nixpkgs-herdr.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";

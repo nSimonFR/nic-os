@@ -37,7 +37,7 @@
       gnused
       gnugrep
       gzip
-      herdr
+      unstablePkgs.herdr
       unstablePkgs.jujutsu
       jq
       k9s
