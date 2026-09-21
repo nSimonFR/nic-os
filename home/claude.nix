@@ -203,6 +203,25 @@ in
     # Shipped as a console script of the nicos-scripts package rather than a raw
     # .py: a loose file relies on a `python3` happening to be on the hook's PATH
     # and declares no dependencies. The wrapper pins its own interpreter.
+    # herdr's agent-state hook: reports agent_session_id + agent_session_path on
+    # SessionStart, which is what lets `[session] resume_agents_on_restore` bring
+    # a pane back as its conversation instead of a bare shell. Registered in
+    # dotfiles/claude-settings.json.
+    #
+    # Vendored rather than installed by `herdr integration install claude`. That
+    # installer writes BOTH the script and a settings registration — and
+    # ~/.claude/settings.json is an out-of-store symlink to
+    # dotfiles/claude-settings.json, so "registering" means editing a tracked
+    # file in this repo. Running it at activation therefore dirtied the working
+    # tree on every switch and appended a duplicate SessionStart entry with a
+    # host-absolute path. The cost of vendoring is drift: the copy carries
+    # HERDR_INTEGRATION_VERSION, so check `herdr integration status
+    # --outdated-only` after a herdr bump and re-copy when it complains.
+    ".claude/hooks/herdr-agent-state.sh" = {
+      source = ./scripts/herdr-agent-state.sh;
+      executable = true;
+    };
+
     ".claude/hooks/memory-sync".source =
       "${pkgs.nicos-scripts}/bin/claude-memory-sync";
 
