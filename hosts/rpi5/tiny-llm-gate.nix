@@ -117,11 +117,18 @@ in
         #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
         #    All three verified live via /v1/chat/completions on 2026-07-20.
         #
-        #    `gpt-5.6` (Sol) is THE fleet default — dsh, pi-coding-agent, sure,
+        #    `gpt-5.6` (Sol) is THE fleet default — dsh, pi-coding-agent,
         #    wealthfolio, hermes and "auto"'s codex hop all name this one id, so
-        #    there is a single model to reason about. Terra and Luna stay
-        #    declared but nothing points at them any more; the GPT-6 switch of
+        #    there is a single model to reason about. The GPT-6 switch of
         #    2026-09-07 was rolled back here on 2026-09-09 (see below).
+        #
+        #    ONE deliberate exception, added 2026-09-21: Sure names
+        #    `gpt-5.6-luna`. It is not an interactive client — it batches 20
+        #    transactions per strict-json_schema call and does that for its
+        #    whole history on every rule run, which made it 3202 of the 3225
+        #    gpt-5.6 requests Aperture saw tailnet-wide over 2026-09-08→21.
+        #    Luna is the tier meant for that, and scored identically to Sol on
+        #    the real prompt (hosts/rpi5/sure.nix). Terra remains unreferenced.
         "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };

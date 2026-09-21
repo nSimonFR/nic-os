@@ -32,12 +32,28 @@ let
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
     OPENAI_URI_BASE     = "${apertureUrl}/v1/";
-    # Use gpt-5.6 directly for reliable JSON output in merchant categorization.
-    # "auto" (gemma4:e4b) had 55-80% JSON validation failure rate; the codex
-    # tiers produce valid JSON in both strict json_schema and json_object modes
-    # at the cost of higher token usage. gpt-6 works here too (verified
+    # Luna — GPT-5.6's high-volume/extraction tier, which is exactly the shape
+    # of this workload: 20-transaction batches under a strict json_schema, no
+    # reasoning required. "auto" (gemma4:e4b) had 55-80% JSON validation
+    # failure rate, so a codex tier it has to be; gpt-6 works too (verified
     # 2026-09-06) but ate the plan quota too fast — see the note on the gate.
-    OPENAI_MODEL        = "gpt-5.6";
+    #
+    # Was Sol (`gpt-5.6`), the flagship tier, and that is what makes Sure by
+    # far the heaviest consumer of the ChatGPT plan: Aperture 2026-09-08→21
+    # attributes 3202 of the 3225 gpt-5.6 requests on the whole tailnet to
+    # Sure's `Ruby` client. Sol buys nothing here. Replaying the real
+    # auto_categorize request (37 live categories, 40 labelled transactions,
+    # two batches, gate :4001, 2026-09-21) scored Sol and Luna IDENTICALLY —
+    # 63/80 agreement with the categories Sure already holds, 100% valid
+    # strict JSON, zero out-of-enum category names on both. Luna is ~2x the
+    # wall-clock (≈32s vs ≈17s per batch), which is free: these run in
+    # Sidekiq's medium_priority queue, nothing waits on them.
+    #
+    # NB the tier suffix is load-bearing on the codex surface — see the gate's
+    # `models` block. `gpt-5.5-mini` is NOT a fallback to reach for: the
+    # upstream rejects it outright with "not supported when using Codex with a
+    # ChatGPT account" (probed 2026-09-21), despite being declared there.
+    OPENAI_MODEL        = "gpt-5.6-luna";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
     # prompt (full category list) needs ~1352 → categories were never assigned.
