@@ -65,8 +65,8 @@ let
 
     # Page on definitive credential problems (not transient network errors).
     # Only acct1 pages: it is the gate's only account, so it is the only one
-    # whose death is an outage. acct2's status is still computed above and
-    # printed below, just not paged on.
+    # whose death is an outage. acct2 is no longer probed at all — re-add
+    # `S2=$(probe "$TOK2")` together with its case below if it ever returns.
     case "$S1" in DEAD*|MISSING|EMPTY) add "• acct1 ($TOK1): $S1" ;; esac
     # DISABLED 2026-08-18 with acct2's entry in tiny-llm-gate.nix — acct2 IS
     # currently DEAD 403 on this probe, which is precisely why it was dropped
@@ -84,10 +84,14 @@ let
     #   add "• no failover headroom: acct1 and acct2 tokens are identical"
     # fi
 
+    # No $S2 here: it has not been assigned since acct2's probe was dropped
+    # (2026-09-02), and under `set -u` these echoes aborted the script before the
+    # alerter ran below — so this healthcheck could neither page nor resolve for
+    # 19 days. Keep every name in these two lines actually assigned above.
     if [ -n "$body" ]; then
-      echo "anthropic-account-healthcheck: ALERT acct1=$S1 acct2=$S2" >&2
+      echo "anthropic-account-healthcheck: ALERT acct1=$S1" >&2
     else
-      echo "anthropic-account-healthcheck: OK acct1=$S1 acct2=$S2"
+      echo "anthropic-account-healthcheck: OK acct1=$S1"
     fi
 
     # Empty body clears any open alert; non-empty opens/updates one.
