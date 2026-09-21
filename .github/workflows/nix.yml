@@ -88,19 +88,29 @@ jobs:
           # land a core package the aarch64 Hydra jobs have not caught up on.
           # Compare by name, not by store path: an input bump rewrites the hash
           # of everything downstream, so path-level diffing is all noise.
+          # --dry-run writes both halves to stderr, so it has to be captured to a
+          # file rather than piped: piping it into the parser swallows Nix's own
+          # error text, and `set -o pipefail` then kills the job with no output
+          # at all. That is not hypothetical — it is how this job first failed.
           built() {
-            nix build --accept-flake-config --dry-run \
-              ".#nixosConfigurations.rpi5.config.system.build.toplevel" 2>&1 \
-              | awk '/will be built/{f=1;next} /will be fetched/{f=0}
-                     f && /^ *\/nix\/store\//{sub(/^ */,"");print}' \
+            local out=$1
+            if ! nix build --accept-flake-config --dry-run \
+                 ".#nixosConfigurations.rpi5.config.system.build.toplevel" \
+                 > "$out.raw" 2>&1; then
+              echo "::error::nix build --dry-run failed for $out — output follows."
+              cat "$out.raw"
+              exit 1
+            fi
+            awk '/will be built/{f=1;next} /will be fetched/{f=0}
+                 f && /^ *\/nix\/store\//{sub(/^ */,"");print}' "$out.raw" \
               | sed -E 's|^/nix/store/[a-z0-9]{32}-||; s|\.drv$||' \
-              | sort -u
+              | sort -u > "$out"
           }
 
           head_sha=$(git rev-parse HEAD)
-          built > /tmp/head.txt
+          built /tmp/head.txt
           git checkout --quiet --force "$BASE"
-          built > /tmp/base.txt
+          built /tmp/base.txt
           git checkout --quiet --force "$head_sha"
 
           comm -23 /tmp/head.txt /tmp/base.txt > /tmp/new.txt
