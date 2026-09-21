@@ -14,6 +14,7 @@
     ./claude.nix
     ./claude-mtg.nix
     ./claude-aperture-shim.nix
+    ./herdr.nix
     ./mcp.nix
     ./ssh.nix
     ./wakatime.nix
