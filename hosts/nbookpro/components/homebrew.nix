@@ -35,7 +35,6 @@
     "cookcli"
     "dbt-postgres"
     "helm"
-    "herdr"
     "infisical"
     "omlx"
     "pinentry-touchid"
