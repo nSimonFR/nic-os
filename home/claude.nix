@@ -65,7 +65,19 @@ let
   # Built as a list rather than one backslash-continued heredoc so a host-gated
   # flag can be dropped without leaving a dangling continuation behind.
   claudeWrapperFlags =
-    [ "--prefix PATH : /run/wrappers/bin" ]
+    # Make this Claude visible to herdr as an agent. herdr matches argv[0]'s
+    # basename against its detection manifest (id="claude"), but nix execs as
+    # `.claude-wrapped_`, so the pane never registers — agent_status stays
+    # "unknown" and it is absent from `herdr agent list`. (The integration hook
+    # only reports session identity; state comes from this process match.)
+    # HERDR_AGENT names the manifest directly and is the actual fix: cmux skips
+    # wrapper scripts it detects and execs deeper, resetting argv[0], but wrapper
+    # env still survives. --argv0 is hygiene only — it keeps `ps` readable.
+    [
+      "--set HERDR_AGENT claude"
+      "--argv0 claude"
+    ]
+    ++ [ "--prefix PATH : /run/wrappers/bin" ]
     # The vendored vendor/ripgrep/arm64-linux/rg in claude-code's npm package
     # ships a jemalloc compiled for 4K pages and SIGABRTs on the rpi5's 16K-page
     # kernel ("<jemalloc>: Unsupported system page size"). Force cli.js onto the
