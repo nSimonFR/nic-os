@@ -40,9 +40,23 @@ Watch the near-miss: the mission's status tab is `state-statuses` (**plural**), 
 ## BO order id ≠ mission id
 
 - BO **commande** id == order-mission `log_order`
-- BO **mission** id == order-mission `trusk_order_id`
+- BO **mission** id == order-mission **`mission_id`** — plus `trusk_order_id` depuis IN-864
 
 Authority: `app/[locale]/orders/hooks/use-enriched-order.ts` feeds the orders list's `order.id` straight into `filter.log_order`.
+
+⚠️ **La colonne a changé (IN-864, order-mission 1.67.0 — staging 2026-09-15, prod pas encore).** IN-731 avait scindé le `trusk_order_id` polymorphe en deux colonnes, puis dual-écrit le même id dans les deux pendant la transition ; IN-864 retire cette double écriture. Conséquence :
+
+| ligne `order_mission` | `mission_id` | `trusk_order_id` |
+| --- | --- | --- |
+| nouveau système, créée **avant** 1.67.0 | l'id de mission | le même id (dual write) |
+| nouveau système, créée **après** 1.67.0 | l'id de mission | **NULL** |
+| legacy (`is_new_mission = false`) | **NULL** | l'id de course trusk-api |
+
+Donc `trusk_order_id` ne résout plus une mission récente, et il ne faut **pas** le dropper : c'est le seul lien des contrats non migrés (`isMissionsMigrated = false`).
+
+Corollaire pour la résolution ci-dessous : `?orderId=` **a changé de colonne en même temps**. Il passe par `OrderMissionService.getByMissionId`, qui depuis IN-864 interroge `mission_id` **seul** — la lecture tolérante qui acceptait aussi `trusk_order_id` a été retirée (`orderMission.service.ts:76-85`). Le nom du param n'a pas bougé, sa sémantique oui.
+
+Donc `?orderId=<missionId>` résout bien les prestations récentes. En revanche, un **id de course legacy** n'y résout plus : sur une ligne `is_new_mission = false`, `mission_id` est NULL. Le commentaire du contrôleur (`orderMission.controller.ts:45`) dit encore « `orderId` carries a mission id on the new system and a legacy course id otherwise » — il décrit l'état d'avant IN-864. Pour du legacy, passer par `?logOrder=`.
 
 Resolve one from the other through order-mission. **Trap: the query param is named `orderId` but takes the *mission* id**:
 
