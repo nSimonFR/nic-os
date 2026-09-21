@@ -129,9 +129,15 @@ in
   # HDD dirs owned by the papra service user (mirrors paperless consume-dir).
   # tmpfiles is a no-op if the paths already exist.
   systemd.tmpfiles.settings."10-papra" = {
-    "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = "0755"; };
-    "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
-    "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
+    # mkForce: nixpkgs gained its own papra module in the 2026-09-19 unstable
+    # bump and declares these same paths (documents 0700, ingestion 0770). Two
+    # definitions of `.d.mode` fail eval, which blocks the whole rpi5 rebuild,
+    # not just papra. Forced to the modes this host already runs — taking
+    # upstream's stricter ones is fine (papra owns the dirs; the inbox feeder and
+    # restic run as root, papra-backup as papra) but is its own change.
+    "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
+    "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
+    "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
   };
 
   # ── Nextcloud "PAPRA" inbox feeder ────────────────────────────────────────
