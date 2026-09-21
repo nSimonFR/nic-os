@@ -109,6 +109,14 @@ branches:
           - eval nBookPro
           - scripts
           - hashes
+          # `substitutes` is required for the same reason `hashes` is: eval is
+          # blind to it. A flake bump evaluates perfectly while quietly moving a
+          # core package onto a rev the aarch64 Hydra jobs have not built, and
+          # the Pi then compiles it — nodejs 26.9.0 cost ~4h of V8 that way.
+          # Like `hashes`, it reports on every PR rather than filtering on
+          # paths, because a required context that never arrives leaves a PR
+          # waiting forever.
+          - substitutes
       # Off, deliberately, and this is a change from what this file used to
       # declare. It is the escape hatch: with a required review and four required
       # checks, `true` means a CI outage — a runner incident, a bad flake input,

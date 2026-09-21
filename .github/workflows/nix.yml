@@ -64,6 +64,68 @@ jobs:
           nix eval --accept-flake-config --raw \
             ".#${{ matrix.output }}.${{ matrix.host }}.config.system.build.toplevel.drvPath"
 
+  substitutes:
+    name: substitutes
+    # PRs only — the question is "what does this PR newly make the Pi compile",
+    # which needs a base to compare against.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: DeterminateSystems/nix-installer-action@v22
+      - name: Compare what would be built from source, PR vs base
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # --dry-run splits the closure in two: paths that will be FETCHED and
+          # derivations that will be BUILT because no substituter has them. Only
+          # the second half costs the Pi anything, and it is invisible from a
+          # diff — a flake bump that reads as fifteen harmless rev changes can
+          # land a core package the aarch64 Hydra jobs have not caught up on.
+          # Compare by name, not by store path: an input bump rewrites the hash
+          # of everything downstream, so path-level diffing is all noise.
+          built() {
+            nix build --accept-flake-config --dry-run \
+              ".#nixosConfigurations.rpi5.config.system.build.toplevel" 2>&1 \
+              | awk '/will be built/{f=1;next} /will be fetched/{f=0}
+                     f && /^ *\/nix\/store\//{sub(/^ */,"");print}' \
+              | sed -E 's|^/nix/store/[a-z0-9]{32}-||; s|\.drv$||' \
+              | sort -u
+          }
+
+          head_sha=$(git rev-parse HEAD)
+          built > /tmp/head.txt
+          git checkout --quiet --force "$BASE"
+          built > /tmp/base.txt
+          git checkout --quiet --force "$head_sha"
+
+          comm -23 /tmp/head.txt /tmp/base.txt > /tmp/new.txt
+
+          if [ ! -s /tmp/new.txt ]; then
+            echo "No new from-source builds on rpi5." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          {
+            echo "### Newly built from source on rpi5"
+            echo
+            echo 'Not substitutable from any configured cache, so the Pi compiles them:'
+            echo
+            sed 's/^/- `/; s/$/`/' /tmp/new.txt
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "::error::This PR adds $(wc -l < /tmp/new.txt) from-source build(s) on rpi5 (see the job summary)."
+          sed 's/^/  /' /tmp/new.txt
+
+          # Not a lint. nodejs 26.9.0 arrived exactly this way and cost ~4h of V8
+          # on the Pi, with earlyoom killing the first attempt. If the build is
+          # genuinely wanted, say so in the PR and merge past this check.
+          exit 1
+
   scripts:
     name: scripts
     # x86_64 on purpose: nicos-scripts is pure Python and its checks are meant to

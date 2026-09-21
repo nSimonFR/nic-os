@@ -43,12 +43,6 @@
       "enabled": false
     },
     {
-      "description": "nixpkgs-unstable is held at a bare rev on purpose, and a bare rev is exactly what Renovate reads as a digest to walk forward — the same shape that had it re-proposing the hermes-agent break as routine maintenance. What it would walk onto is not an eval failure but a silent cost: the channel gates on Hydra, not on every aarch64 job, so a rev can advance with a core build-time dependency absent from cache.nixos.org. Rev 0a3468a4 did exactly that, moving papra's toolchain onto nodejs-slim 26.9.0 (narinfo 404 for aarch64) — ~4h of V8 compiled on the Pi, earlyoom killing the first attempt, and papra at 26.6.1 on both sides so nothing gained. Nothing in a PR title would have said so. Bump this by hand instead, after running the cache check written on the input in flake.nix.",
-      "matchManagers": ["nix"],
-      "matchPackageNames": ["nixpkgs-unstable"],
-      "enabled": false
-    },
-    {
       "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",
       "matchDepNames": ["ghcr.io/toeverything/affine"],
       "ignoreUnstable": true
