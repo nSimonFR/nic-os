@@ -53,6 +53,33 @@ Pour les seconds, discriminer sur **`pod_name`** : le nouveau ReplicaSet a un ha
 
 Exemple réel : fleet avait 4 873 warns sur l'heure du déploiement — **4 854 sur 1.80.2 et 19 sur 1.82.1**. Sans le `groupBy`, on aurait attribué le bruit à la version qu'on venait de livrer alors qu'elle le supprimait.
 
+### ⚠️ Le paramètre `keyword` est IGNORÉ en mode `aggregate`
+
+`tech-datadog_logs` accepte `keyword` (grep de texte) et `query` (syntaxe Datadog). En `action: "aggregate"`, **`keyword` ne filtre rien** : les buckets renvoyés sont le volume de logs **total** par groupe, quel que soit le mot-clé.
+
+Le contrôle qui le démontre — passer une chaîne qui ne peut rien matcher et constater des totaux identiques :
+
+```
+# faux : keyword ignoré, on lit le volume total par version
+{action: aggregate, query: "service:order-mission kube_namespace:production",
+ keyword: "trusk_order_retrieve_error", groupBy: ["@version"]}
+→ 1.60.0: 767 006 · 1.62.0: 4 334 603 · 1.66.2: 2 749
+
+{… keyword: "zzzz_ne_matche_rien_zzzz" …}   # contrôle
+→ 1.60.0: 705 990 · 1.62.0: 4 334 603 · 1.66.2: 60 538   # mêmes ordres de grandeur
+
+# correct : le texte entre guillemets DANS query
+{action: aggregate, query: "service:order-mission kube_namespace:production \"trusk_order_retrieve_error\"",
+ groupBy: ["@version"]}
+→ 1.60.0: 3 897 · 1.62.0: 34 730 · 1.66.2: 334
+```
+
+Écart réel : **~4 000/jour**, annoncé à tort comme ~1,5 M/jour — facteur 300, et un ticket « bruit de logs à traiter » ouvert pour rien (2026-09-15, order-mission 1.66.2). La conclusion qualitative (« pré-existant, pas une régression ») tenait quand même, mais aucun des chiffres n'était le bon.
+
+**Réflexe** : tout nombre issu d'un `aggregate` avec `keyword` doit être revérifié avec le motif dans `query`, et un contrôle à chaîne absurde coûte un appel.
+
+En `action: "search"`, `keyword` fonctionne — c'est bien le couple `aggregate` + `keyword` qui est piégeux.
+
 ## Baselines — jamais une heure creuse contre une heure de pointe
 
 Une baseline prise à 06:00 comparée à un déploiement de 10:00 donne un facteur 3 qui n'est qu'un profil de trafic. **Comparer la même tranche horaire d'un jour ouvré comparable** :
