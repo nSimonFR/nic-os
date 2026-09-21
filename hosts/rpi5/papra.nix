@@ -52,9 +52,7 @@ in
     package = pkgs.papra;
 
     # AUTH_SECRET (Better Auth) + OPENAI_API_KEY (tiny-llm-gate) come from agenix.
-    # Upstream renamed the singular `environmentFile` to a list (mkChangedOptionModule
-    # still accepts the old name, but warns on every eval).
-    environmentFiles = [ "/run/agenix/papra-env" ];
+    environmentFile = "/run/agenix/papra-env";
 
     environment = {
       # ── Networking / reverse-proxy ───────────────────────────────────────
@@ -132,10 +130,8 @@ in
   # tmpfiles is a no-op if the paths already exist.
   systemd.tmpfiles.settings."10-papra" = {
     "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = "0755"; };
-    # nixpkgs' papra module also sets this path (0700); keep the live 0755 —
-    # the beszel agent and shell inspection read into the tree as non-papra users.
-    "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
-    "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
+    "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
+    "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = "0755"; };
   };
 
   # ── Nextcloud "PAPRA" inbox feeder ────────────────────────────────────────
