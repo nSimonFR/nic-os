@@ -21,7 +21,7 @@
       btop
       coreutils-full
       curl
-      codex
+      unstablePkgs.codex
       unstablePkgs.cursor-cli
       ctop
       direnv
