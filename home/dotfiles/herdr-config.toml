@@ -1,0 +1,35 @@
+# herdr client/server config — ~/.config/herdr/config.toml, wired as an
+# out-of-store symlink in home/herdr.nix.
+#
+# WRITABLE ON PURPOSE: herdr edits this file itself (`onboarding`, the theme
+# picker, `herdr config` subcommands), so it cannot be a read-only store path.
+# The trade is the same one home/dotfiles/claude-settings.json makes — runtime
+# edits land in the checkout and show up as a repo diff, which is how they get
+# captured rather than lost.
+
+onboarding = false
+
+[ui]
+# Right-aligned status area — herdr's only session-wide, NON-CLICKABLE surface.
+# The sidebar was the other candidate and was rejected twice over: every row
+# there is a navigation target, and rate limits are per ACCOUNT, so a space row
+# would repeat the same number once per space.
+#
+# `herdr-usage-bar` is the writeShellApplication wrapper from home/herdr.nix; it
+# pins the interpreter and runs home/herdr/usage-bar.py. Called by name, not by
+# store path, so a rebuild cannot leave a dangling command here.
+#
+# 60s is the RENDER interval, not the fetch interval — the script caches, and
+# api.anthropic.com/api/oauth/usage answers 429 if actually polled this often.
+# timeout covers the ~1s `codex app-server` handshake on a cache miss.
+tab_bar_right = [
+  { type = "command", command = "herdr-usage-bar", interval_seconds = 60, timeout_seconds = 20 },
+]
+tab_bar_right_separator = " · "
+
+[ui.toast]
+delivery = "terminal"
+
+[theme]
+name = "tokyo-night"
+auto_switch = false
