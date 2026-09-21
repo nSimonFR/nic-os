@@ -18,6 +18,30 @@
 }:
 
 {
+  # herdr's agent integrations, which are what make a restored pane come back as
+  # the CONVERSATION it was rather than a bare shell: the hook reports
+  # agent_session_id + agent_session_path, and `[session] resume_agents_on_restore`
+  # (on by default) replays them after a server restart. Detection is a separate
+  # thing and needs none of this — that is HERDR_AGENT, in home/claude.nix.
+  #
+  # Run rather than vendored, deliberately. The hook carries
+  # HERDR_INTEGRATION_VERSION, so a checked-in copy goes stale the moment herdr
+  # moves and `herdr integration status` starts reporting it outdated; letting
+  # the installed herdr write its own keeps the two in lock-step. The artifact is
+  # therefore generated rather than a store symlink — declared, not managed —
+  # which is the same trade home/atuin.nix makes for its data dir.
+  #
+  # The installer also wants to register a SessionStart hook in
+  # ~/.claude/settings.json, which is a read-only store symlink here, so that
+  # half cannot work and is supplied from home/dotfiles/claude-settings.json
+  # instead. Hence `|| true`: the script still lands, and a non-zero exit from
+  # the half it cannot do must not fail the switch.
+  home.activation.herdrIntegrations = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    for agent in claude codex pi; do
+      run ${unstablePkgs.herdr}/bin/herdr integration install "$agent" || true
+    done
+  '';
+
   systemd.user.services.herdr = lib.mkIf pkgs.stdenv.isLinux {
     Unit = {
       Description = "herdr headless server";
