@@ -4,30 +4,20 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/release-25.11";
 
-    # Tracks a BRANCH, so `nix flake update` walks it forward silently. Before
-    # bumping this one, check that its heavy derivations actually have a
-    # substitute for aarch64 — the channel gates on Hydra, but not on every
-    # aarch64 job, so a rev can advance with a core build-time dependency
-    # missing from the cache and nothing says so until the Pi starts compiling.
+    # Left on the branch on purpose, and guarded by CI rather than by a pin. The
+    # channel gates on Hydra but not on every aarch64 job, so a rev can advance
+    # with a core package missing from cache.nixos.org and nothing says so until
+    # the Pi starts compiling: 0a3468a4 (2026-09-20) put papra's toolchain on
+    # nodejs 26.9.0, narinfo 404 for aarch64, ~4h of V8 with earlyoom killing the
+    # first attempt. The lock therefore sits one rev back, at f8e81fc7.
     #
-    # Held at f8e81fc7 (2026-08) for exactly that. Rev 0a3468a4 (2026-09-20)
-    # moves papra's toolchain to nodejs-slim 26.9.0, whose narinfo is a 404 on
-    # cache.nixos.org for aarch64 — measured at ~4h of V8 on the Pi, at
-    # --cores 2, with earlyoom killing the first attempt outright. Referrers are
-    # the whole papra chain: papra-pnpm-deps, pnpm, tsx. Nothing was gained for
-    # it: papra is 26.6.1 at BOTH revs, so the bump carried only the module
-    # refactor (environmentFile -> environmentFiles, tmpfiles) and no upgrade.
-    #
-    # The check, before touching this line:
-    #   nix eval --raw .#nixosConfigurations.rpi5.config.system.build.toplevel.drvPath
-    #   # then, for any big drv nix says it will BUILD rather than fetch:
-    #   curl -so /dev/null -w '%{http_code}\n' https://cache.nixos.org/<out-hash>.narinfo
-    # A 404 means you are signing up for a source build on the Pi.
-    #
-    # Pinned to the rev rather than left on the branch: the lock alone holds it
-    # only until the next `nix flake update`, and that is the vector that landed
-    # it here — this bump was hand-run, not a Renovate PR.
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/f8e81fc7eb063db454f563cdd596fb96a5ad1497";
+    # Pinning this line was the first answer and it was the wrong one — freezing
+    # the shared tree also forces freezing whatever follows it (llm-agents needed
+    # an electron only the newer tree has), and it leaves a hold nobody remembers
+    # to lift. The `substitutes` job in .github/workflows/nix.yml makes the cost
+    # visible instead: it fails a PR that adds a from-source build on rpi5. So
+    # bump this freely — the check is what decides whether the bump is cheap.
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     # Ollama only. The nixpkgs-unstable pin above carries ollama 0.32.4, which
     # refuses to pull qwen3.8:27b (registry answers 412 "requires a newer version
