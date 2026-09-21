@@ -52,7 +52,9 @@ in
     package = pkgs.papra;
 
     # AUTH_SECRET (Better Auth) + OPENAI_API_KEY (tiny-llm-gate) come from agenix.
-    environmentFile = "/run/agenix/papra-env";
+    # Upstream renamed the singular `environmentFile` to a list (mkChangedOptionModule
+    # still accepts the old name, but warns on every eval).
+    environmentFiles = [ "/run/agenix/papra-env" ];
 
     environment = {
       # ── Networking / reverse-proxy ───────────────────────────────────────
