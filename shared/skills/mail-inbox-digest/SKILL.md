@@ -1,7 +1,7 @@
 ---
 name: mail-inbox-digest
 description: "Use when producing daily cross-account inbox action digests."
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Mail Inbox Digest
@@ -24,9 +24,10 @@ Use for scheduled or on-demand digests that triage unread and important mail acr
 3. Query `in:inbox is:important` separately for each Gmail account. Do **not** use the global `IMPORTANT` label's unread count: it includes mail outside the inbox and is not the requested inbox-important count. For IMAP/Proton, only report an important count if the provider's flag semantics were successfully queried; never invent one.
 4. Aggregate the Personal/Work Inbox figures only after every account in that role has a verified unread count. If Gmail's INBOX label omits `messagesUnread`, use zero only when the matching unread-message search is empty.
 5. Inspect sender, subject, date, and available snippet/body only for candidates whose urgency is unclear. Prefer payment failures, deadlines, meeting responses, approvals, security/account access, and direct work requests.
-5. Classify at most three urgent/actionable messages as Top actions. Select lower-priority but useful messages for Read if time. If none qualify, write `none` for each required bullet.
-6. Suggest cleanup only when the reason is clear: promotional newsletters, privacy-policy announcements, redundant incident updates, and obvious unsolicited outreach. Name the sender/topic explicitly. Do not label legitimate mail as spam without strong evidence.
-7. Verify every count and the exact delivery format before sending.
+6. Rank the candidates with `scripts/jev_classify.py` (below). It returns the Top actions, Read-if-time and cleanup buckets. If it exits 2 (no key), classify by your own judgement instead and append ` (no Jev)` after the date in the digest header so a silent downgrade is visible.
+7. Take at most three Top actions and three Read-if-time items from its output. If a bucket is empty, write `none` for each required bullet.
+8. Suggest cleanup only from its `delete_spam`/`archive` buckets, and only when the reason is clear: promotional newsletters, privacy-policy announcements, redundant incident updates, and obvious unsolicited outreach. Name the sender/topic explicitly. Do not label legitimate mail as spam without strong evidence.
+9. Verify every count and the exact delivery format before sending.
 
 ## Gmail via gog
 
@@ -59,6 +60,29 @@ himalaya envelope list --account proton --folder INBOX --output json 'flag flagg
 ```
 
 If `--output json` follows the query, Himalaya parses it as query text and may fail while returning a misleading zero exit status. Combine each verified IMAP unread count with the matching role's Gmail count. Treat an empty flagged query as zero important only after the query itself succeeds.
+
+## Classification via Jev (`scripts/jev_classify.py`)
+
+Which messages are urgent is decided by [TypeSafe's Jev](https://docs.typesafe.ai/models), a decision model that returns calibrated probabilities instead of prose, not by reading the list and forming an opinion. Same three messages in, same three picks out — the buckets stop drifting between mornings.
+
+Pipe the envelopes you already collected straight in; the field names from both CLIs are understood as-is:
+
+```bash
+gog gmail messages search 'in:inbox is:unread' --all --max 100 \
+  --account ACCOUNT --json --results-only --no-input \
+  | python3 "$SKILL_DIR/scripts/jev_classify.py" --max 60
+```
+
+- Run it **once per account** and merge, or concatenate the envelope arrays first — set each envelope's `account` field either way, because the digest reports Personal and Work separately.
+- Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
+- Cost is ~$0.042 per million input tokens with output free, so a 60-message run is a small fraction of a cent. `--max` caps the run regardless; raise it only deliberately.
+- The key comes from `$TYPESAFE_API_KEY`, falling back to the `TYPESAFE_API_KEY=` line in `/run/agenix/agent-env`. The fallback is load-bearing on the Hermes cron path: `code_execution_tool.py`'s `_scrub_child_env` strips any env name containing `KEY`/`TOKEN`/`SECRET` before the model's shell sees it, exactly as it does for `GOG_KEYRING_PASSWORD`.
+- `python3 scripts/jev_classify.py --self-test` exercises the full pipeline offline — no key, no network. Run it after touching the file.
+- The call goes **straight to TypeSafe, not through Aperture**: Aperture answers `405 Method Not Allowed` on `/v1/decisions`, and its only compatibility modes are `openai_chat`, `gemini_generate_content` and `anthropic_messages`. Making Jev observable needs a chat-completions shim in tiny-llm-gate — tracked as NSI-89. Until then this is the one LLM-ish call on the box that Aperture cannot see.
+
+**Do not treat a probability as permission.** The numbers order messages against each other; they are not trustworthy as absolute confidences (measured expected calibration error ~0.107, roughly 4.4x the noise floor, with yes/no answers running underconfident). Nothing is archived, deleted or marked read on Jev's say-so — the skill still only ever *suggests* cleanup, and the read-only rule in Principles is unchanged.
+
+The question set in `QUESTIONS` is the actual program. Eight narrow questions beat one broad one by a wide margin on Jev specifically, and a vague criterion is worse than no question at all — a miswritten set has benchmarked below the random floor. Change that block deliberately, and re-read the note above it first.
 
 ## Telegram Delivery Format
 
