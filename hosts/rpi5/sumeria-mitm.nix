@@ -29,7 +29,13 @@ let
     text = ''
       STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
 
-      NEW_IPS=$(dig +short lc.${apiDomain} | grep -E '^[0-9.]+$' | sed 's|$|/32|' | sort)
+      # `|| true` is load-bearing: writeShellApplication sets `-o pipefail`, so an
+      # empty dig — DNS not up yet on the boot run — makes `grep` exit 1 and kills
+      # the script *at the assignment*, before the guard below. That is how the
+      # 2026-09-21 boot left the Lydia routes withdrawn (interception silently
+      # down) until the next daily timer, which is exactly what the boot run is
+      # supposed to prevent.
+      NEW_IPS=$(dig +short lc.${apiDomain} | grep -E '^[0-9.]+$' | sed 's|$|/32|' | sort || true)
       if [ -z "$NEW_IPS" ]; then
         echo "[sumeria-route] DNS lookup failed, keeping current routes"
         exit 0
