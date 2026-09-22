@@ -88,7 +88,10 @@ def reset_at(epoch: float | None) -> str:
         return ""
     when = datetime.datetime.fromtimestamp(float(epoch))
     fmt = "%H:%M" if when.date() == datetime.date.today() else "%a %H:%M"
-    return f" \u21bb{when.strftime(fmt)}"
+    # Space after the glyph: U+21BB is East-Asian "ambiguous" width, so the
+    # terminal reserves one cell and the font draws into the next one, clipping
+    # the first digit.
+    return f" \u21bb {when.strftime(fmt)}"
 
 
 def norm(windows: list) -> list:
