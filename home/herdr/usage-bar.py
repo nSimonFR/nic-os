@@ -29,6 +29,7 @@ stays quiet until a window actually matters.
 
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import subprocess
@@ -74,9 +75,32 @@ def mark(pct: float) -> str:
     return " 🔴" if pct >= HOT_PCT else (" 🟡" if pct >= WARN_PCT else "")
 
 
-def render(windows: list[tuple[str, float]]) -> str:
-    """[("5", 36.0), ("W", 24.0)] -> "5:36%/W:24%"."""
-    return "/".join(f"{label}:{pct:.0f}%" for label, pct in windows)
+def render(windows: list) -> str:
+    """[("5", 36.0, None), ("W", 24.0, None)] -> "5:36%/W:24%"."""
+    return "/".join(f"{label}:{pct:.0f}%" for label, pct, _ in windows)
+
+
+def reset_at(epoch: float | None) -> str:
+    """Local clock time a window reopens. Absolute, not a countdown: the bar
+    re-renders on a 60s timer off a cached reading, so "in 2h" would be wrong
+    for up to the whole TTL. Same day gets HH:MM, further out gets a weekday."""
+    if not epoch:
+        return ""
+    when = datetime.datetime.fromtimestamp(float(epoch))
+    fmt = "%H:%M" if when.date() == datetime.date.today() else "%a %H:%M"
+    return f" \u21bb{when.strftime(fmt)}"
+
+
+def norm(windows: list) -> list:
+    """Tolerate 2-tuples cached by an older build alongside new 3-tuples."""
+    return [(w[0], float(w[1]), w[2] if len(w) > 2 else None) for w in windows]
+
+
+def iso_epoch(value: str | None) -> float | None:
+    try:
+        return datetime.datetime.fromisoformat(value).timestamp()
+    except Exception:
+        return None
 
 
 def window_label(minutes: float | None) -> str:
@@ -182,7 +206,10 @@ def claude_windows() -> list[tuple[str, float]] | None:
     seven = (data.get("seven_day") or {}).get("utilization")
     if five is None or seven is None:
         return None
-    windows = [("5", float(five)), ("W", float(seven))]
+    windows = [
+        ("5", float(five), iso_epoch((data.get("five_hour") or {}).get("resets_at"))),
+        ("W", float(seven), iso_epoch((data.get("seven_day") or {}).get("resets_at"))),
+    ]
     fable = next(
         (l.get("percent") for l in data.get("limits") or []
          if l.get("kind") == "weekly_scoped"
@@ -190,7 +217,7 @@ def claude_windows() -> list[tuple[str, float]] | None:
         None,
     )
     if fable is not None:
-        windows.append(("F", float(fable)))
+        windows.append(("F", float(fable), None))
     return windows
 
 
@@ -245,14 +272,19 @@ def codex_windows() -> list[tuple[str, float]] | None:
         pct = block.get("usedPercent")
         if pct is None:
             continue
-        windows.append((window_label(block.get("windowDurationMins")), float(pct)))
+        # codex reports resetsAt as epoch seconds; claude sends ISO.
+        windows.append((window_label(block.get("windowDurationMins")), float(pct), block.get("resetsAt")))
     return windows or None
 
 
 def segment(name: str, windows: list, stale: bool) -> str:
-    windows = [(label, float(pct)) for label, pct in windows]
-    worst = max(pct for _, pct in windows)
-    return f"{name} {bar(worst)} {render(windows)}{'*' if stale else ''}{mark(worst)}"
+    windows = norm(windows)
+    worst = max(w[1] for w in windows)
+    # Only the window that is actually close to its limit says when it reopens;
+    # below the warn threshold the reset is noise in a one-line bar.
+    hot = max(windows, key=lambda w: w[1])
+    when = reset_at(hot[2]) if worst >= WARN_PCT else ""
+    return f"{name} {bar(worst)} {render(windows)}{'*' if stale else ''}{mark(worst)}{when}"
 
 
 def main() -> int:

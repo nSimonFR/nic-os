@@ -41,7 +41,7 @@ IFS= read -r -d '' input
 # key (fast_mode, effort, agent, pr) would silently shift every later field left.
 # A non-whitespace IFS char preserves empty fields positionally.
 IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
-  fast effort agent_name pr_num rl5h < <(
+  fast effort agent_name pr_num rl5h rl5h_at < <(
   printf '%s' "$input" | jq -r '
     [ .cwd // "",
       (.model.display_name // .model.id // ""),
@@ -55,7 +55,11 @@ IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
       (.effort.level // ""),
       (.agent.name // ""),
       (.pr.number // ""),
-      (.rate_limits.five_hour.used_percentage // 0)
+      (.rate_limits.five_hour.used_percentage // 0),
+      (.rate_limits.five_hour.resets_at // "" |
+        if . == "" then "" else
+          (sub("\\.[0-9]+";"") | sub("\\+00:00$";"Z") | fromdateiso8601 | strflocaltime("%H:%M"))
+        end)
     ] | map(tostring) | join("\u001f")' 2>/dev/null
 )
 [ -z "$cwd" ] && cwd="$PWD"
@@ -177,7 +181,13 @@ fi
 [ -n "$agent_name" ] && out="${out}${sep}${dim}⟐ ${agent_name}${reset}"
 [ -n "$pr_num" ] && out="${out}${sep}${dim}PR#${pr_num}${reset}"
 rl=$(printf '%.0f' "${rl5h:-0}" 2>/dev/null) || rl=0
-[ "$rl" -ge 80 ] && out="${out}${sep}${red}5h ${rl}%${reset}"
+# resets_at rides along in the same payload, so the hour costs no extra call.
+# Absolute, not "in 2h14m": the status line has no refreshInterval, so a
+# countdown would sit there going stale between state changes.
+if [ "$rl" -ge 80 ]; then
+  out="${out}${sep}${red}5h ${rl}%${reset}"
+  [ -n "$rl5h_at" ] && out="${out}${red} ↻${rl5h_at}${reset}"
+fi
 
 printf '%s\n' "$out"
 exit 0
