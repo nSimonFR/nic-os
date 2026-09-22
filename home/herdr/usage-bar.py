@@ -274,7 +274,7 @@ def segment(name: str, windows: list, stale: bool) -> str:
     hot = max(windows, key=lambda w: w[1])
     when = reset_at(hot[2]) if worst >= WARN_PCT else ""
     icon = f"{mark(worst).strip()} " if mark(worst) else ""
-    return f"{icon}{name} {render(windows)}{'*' if stale else ''}{when}"
+    return f"{name} {icon}{render(windows)}{'*' if stale else ''}{when}"
 
 
 def main() -> int:
