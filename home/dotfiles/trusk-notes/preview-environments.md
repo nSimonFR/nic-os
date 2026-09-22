@@ -231,9 +231,9 @@ spec:
       - { name: duration, value: endofnight }
 ```
 
-### It cannot work outside the sync window, and that is not a bug in the workflow
+### At night it only works as a MANUAL sync — and the workflow does not send one
 
-AppProject `staging-preview` carries three sync windows (Europe/Paris):
+AppProject `staging-preview` (and `staging`) carries three sync windows (Europe/Paris):
 
 ```
 deny   0 20 * * 1-5   11h    manualSync: true
@@ -241,16 +241,39 @@ allow  0 7  * * 1-5   13h    manualSync: true
 deny   0 7  * * 6     48h    manualSync: true
 ```
 
-So **weeknights 20:00→07:00 and all weekend, ArgoCD refuses to sync a preview**. `manualSync: true`
-does not save you: patching an Application with an explicit `operation.initiatedBy` still comes back
-`Sync operation blocked by sync window`. The wake-up workflow's `wake-up` step succeeds, then
-`check-argocd` loops on `OutOfSync` for 20 attempts and the workflow fails. Measured 2026-09-22 at
-20:40 on `pr-tec296`.
+`manualSync: true` exempts **manual** syncs from the deny window. ArgoCD decides manual vs
+automated from `operation.initiatedBy.automated`, and the wake-up workflow patches
+`{"operation":{"sync":{…}}}` **without `initiatedBy`** — so every one of its syncs is classed
+automated and refused: `Sync operation blocked by sync window`, `initiatedBy.automated: true`.
+The `wake-up` step reports success, `check-argocd` loops on `OutOfSync`, nothing starts.
+Measured 2026-09-22 at 20:40 on `pr-tec296`: 56/56 operations stuck `Running` since the patch.
 
-Consequence, and it is the useful part: **changing images (a new branch pin) is impossible until
-07:00**, because that needs a real sync. But `kubectl -n pr-<slug> scale deploy <x> --replicas=1`
-does work at any hour — ArgoCD carries `ignoreDifferences` on replicas, so it neither reverts nor
-needs a sync. Use it to bring up the two or three pods a read-only probe needs; never to deploy.
+The fix is to send the sync as a manual one. Two traps on the way:
+
+- a refused operation **stays** `Running`, and a new `operation` patched on top is ignored while
+  it is there — so clear it first, including `status.operationState` (patching its phase to
+  `Terminating` is not enough: it sat there for minutes);
+- the preview has **two** levels of app-of-apps: `staging-preview-gitops` renders
+  `pr-<slug>-gitops`, which renders the per-service apps. A new branch pin lands only after both
+  are synced, in that order.
+
+```bash
+# manual sync, the only kind the night window lets through
+a=<app>   # staging-preview-gitops, then pr-<slug>-gitops, then <svc>-pr-<slug>
+kubectl -n argocd patch application $a --type json -p '[{"op":"remove","path":"/operation"}]'
+kubectl -n argocd patch application $a --type json -p '[{"op":"remove","path":"/status/operationState"}]'
+kubectl -n argocd patch application $a --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}},
+  "operation":{"initiatedBy":{"username":"<you>","automated":false},"sync":{"syncStrategy":{"apply":{"force":false}}}}}'
+```
+
+Result on 2026-09-22 at 21:45, inside the deny window: 55/56 `successfully synced`, namespace at
+64/64 deployments, and nine new branch images rolled out the same night. `argocd-sync-namespace`
+(ns `argocd`) has the same flaw as the wake-up — it too omits `initiatedBy`.
+
+`kubectl scale` also works at any hour (ArgoCD carries `ignoreDifferences` on replicas), but it
+only restores what already runs; a new image needs a real sync. kube-green's
+`sleepinfo-working-hours` secret remembers only the deployments that were up at 20:00, not the
+whole namespace — it is not a reliable list of what to scale back.
 
 ### A pod that restarts is a pod that re-resolves `envFrom`
 
