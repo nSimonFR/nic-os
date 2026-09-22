@@ -113,7 +113,17 @@ let
       ''--set GITHUB_TOKEN ""''
     ];
 
-  claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
+  # claude-code ahead of nixpkgs-unstable, which carries 2.1.278 — a binary with
+  # no claude-opus-5-5 in it. The package takes version + per-platform checksums
+  # from `manifest`, so vendoring upstream's release manifest is the whole bump;
+  # refresh it from
+  #   https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json
+  # Drop the override once nixpkgs ships >= 2.1.280.
+  claudeCodeUpstream = unstablePkgs.claude-code.override {
+    manifest = lib.importJSON ./claude-code-manifest.zst.json;
+  };
+
+  claudeCodePkg = claudeCodeUpstream.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
     postFixup = (old.postFixup or "") + ''
       wrapProgram $out/bin/claude ${lib.concatStringsSep " " claudeWrapperFlags}
