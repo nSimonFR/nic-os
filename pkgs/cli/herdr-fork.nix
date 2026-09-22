@@ -38,12 +38,14 @@ let
     assets.${stdenvNoCC.hostPlatform.system}
       or (throw "herdr-fork: no prebuilt binary for ${stdenvNoCC.hostPlatform.system}");
 
-  # Same share/skills/herdr layout as nixpkgs' herdr, so home/claude.nix can
-  # take the version-matched skill from either.
-  skill = fetchurl {
-    url = "https://raw.githubusercontent.com/jerryfane/herdr/${commit}/skills/herdr/SKILL.md";
-    hash = "sha256-0UNlKbr6NCgXALSFEiTAumOy8WU8yiugt5HB0oLQ6Q4=";
-  };
+  # Fetched at eval time, not by a derivation: home/claude.nix reads the skill
+  # dir during evaluation, and a darwin derivation can't be built from rpi5.
+  skillDir =
+    builtins.fetchTarball {
+      url = "https://github.com/jerryfane/herdr/archive/${commit}.tar.gz";
+      sha256 = "18drclfyd2jp0zgzbcvlgzn96r167h42261m1z82flyzz6gl1ad0";
+    }
+    + "/skills/herdr";
 in
 stdenvNoCC.mkDerivation {
   pname = "herdr-fork-${buildId}";
@@ -62,7 +64,7 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
     install -Dm755 $src $out/bin/herdr
-    install -Dm644 ${skill} $out/share/skills/herdr/SKILL.md
+    install -Dm644 ${skillDir}/SKILL.md $out/share/skills/herdr/SKILL.md
     runHook postInstall
   '';
 
@@ -70,6 +72,8 @@ stdenvNoCC.mkDerivation {
   installCheckPhase = ''
     $out/bin/herdr --version | grep -q '${builtins.substring 0 7 commit}'
   '';
+
+  passthru = { inherit skillDir; };
 
   meta = {
     description = "herdr fork with HerdrUp phone pairing and saved-machine federation";
