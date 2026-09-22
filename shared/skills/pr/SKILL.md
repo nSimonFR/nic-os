@@ -50,6 +50,27 @@ Monitor: until [ "$(unset GH_TOKEN; gh run view <ID> --repo trusk-official/<repo
 Match the run by **headSha** — its name is often `CI Workflow`. A pushed fix starts a new
 run; re-resolve the id.
 
+## 3b. The branch image, and the gate bypass
+
+A green run pushes **one image per branch** to GAR — that's what a preview env consumes
+(`/trusk-preview-deploy`). The tag is the branch sanitized by `sed "s/[^a-z0-9_.]/_/ig"`, so
+`feat/coa-postpone` → `feat_coa_postpone` (`/` and `-` both become `_`). Push Image runs
+after the checks, so a red run means no image. Renovate branches are skipped unless labelled
+**`push-image`** — mention it when the PR is one and someone wants to deploy it.
+
+```bash
+unset http_proxy https_proxy
+gcloud artifacts docker tags list \
+  europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry/<svc> \
+  --format="value(tag)" | grep -x '<sanitized>'
+```
+
+**`bypass-ci-gate`** on the PR makes `CI Gate` pass over a red CI. Labels are read live, so
+add it then re-run the gate job alone — no new push needed. It is a human's call: surface it
+as an option with what would be shipping red, never add it yourself. Confirm both names on
+the repo rather than trusting this file — `gh label list --repo trusk-official/<repo>`, and
+the gate's own `bypass_label` default in `github-actions/.github/actions/ci-gate/action.yaml`.
+
 ## 4. Triage red
 
 ```bash
