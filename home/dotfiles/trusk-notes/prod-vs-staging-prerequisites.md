@@ -57,6 +57,49 @@ La doc trusk-k8s prévient qu'un pod annoté sans sidecar fonctionnel **crashloo
 
 L'app ArgoCD flagd du service (`flagd-<service>-<env>`) est un **companion auto-émis** par le chart `trusk-argo-project` dès que `deployment/flagd/` existe dans le repo du service. **Rien à ajouter dans `applications/<env>.yaml`.** Vérifié le 2026-08-31 : `flagd-order-mission-staging` est apparue seule au bump 1.57.1, créant `order-mission-flags` et `order-mission-flags-source`.
 
+## Prérequis 4 — l'émetteur : monter la clé ne suffit pas pour *signer*
+
+`trusk-auth` monté, le service **vérifie** les jetons qu'il reçoit. Pour **signer** ses propres appels
+il lui faut aussi `TRUSK_AUTH_ISSUER`, et seul le chart **trusk-app ≥ 0.15.0** le pose (valeur = l'alias
+de dépendance, `include "trusk-app.name"`). Sans émetteur, `isTokenSigningEnabled()` est faux :
+l'intercepteur laisse partir l'appel **nu**, sans erreur, et la cible répond 401 le jour où son drapeau
+monte. Ce n'est visible qu'en lisant l'env du pod :
+
+```bash
+kubectl -n <ns> get deploy <svc> -o jsonpath='{range .spec.template.spec.containers[0].env[?(@.name=="TRUSK_AUTH_ISSUER")]}{.value}{end}'
+grep -A2 'name: trusk-app' ~/MyDocuments/TRUSK/<svc>/deployment/charts/Chart.yaml   # version >= 0.15.0 ?
+```
+
+Mesuré sur les pods le 2026-09-22 : IAM, state-status, interop-configuration, interop-engine et
+trusk-estimator-api montent la clé mais sont en 0.14.1 — vérifiables, pas signataires. Et
+l'émetteur **est l'alias**, pas le nom du repo : communications signe `communications`,
+`communications-cron` ou `communications-engine` selon son `APP_MODE`, et seul `engine` fait des appels
+sortants. `services:` compare le `sub` par égalité stricte.
+
+Deux autres conditions, sans lesquelles la signature n'a pas lieu non plus :
+
+- **le client généré doit porter l'intercepteur** — les générations anciennes ne l'ont pas
+  (`grep -rl "trusk.auth.tokenProvider" node_modules/@trusk-official/api-*`). roundtrip embarquait
+  `api-fleet-client` 1.62.0 et `api-communications-client` 1.47.7 sans lui ;
+- **le gateway retire `authorization`** dans son forwarder (`headersToRemove`) : tout ce qui passe par
+  lui arrive nu, quoi que signe l'appelant.
+
+L'inverse existe aussi : une garde **sans** clé montée ne peut vérifier aucun jeton, et drapeau levé elle
+répond **401 à un utilisateur légitime** — c'était interop-engine et l'estimateur. Un 401 sur un jeton
+valide = clé absente, pas droit manquant (qui donne 403).
+
+## Prérequis 5 — le sidecar flagd, dans *chaque* chart
+
+Un service qui ajoute `FeatureFlagsModule` installe un fournisseur **gRPC** qui attend son sidecar au
+démarrage. Sans `openfeature.dev/enabled: "true"` dans les `podAnnotations`, l'opérateur n'injecte rien,
+et le pod meurt sur `Failed to connect before the deadline` → `CrashLoopBackOff`. Il faut l'annotation
+dans `preview.yaml`, `staging.yaml` **et** `production.yaml` : interop-engine (TEC-301) ne l'avait dans
+aucun, et aurait planté dans les trois. La source nommée doit exister dans le namespace `flagd` — donc
+`deployment/flagd/` dans le repo, et le semis TEC-275 avant le premier sync.
+
+Un service à plusieurs alias (communications : api, cron, engine) demande le sidecar **sous chaque
+alias**.
+
 ## Checklist avant un bump prod
 
 ```bash
@@ -78,7 +121,13 @@ kubectl --context $CTX -n flagd get featureflag shared-flags
 awk '/- name: backoffice$/{f=1} f&&/targetRevision/{print;exit}' \
   ~/MyDocuments/TRUSK/trusk-applications/applications/production.yaml   # doit être >= 1.383.0
 
-# 4. Qu'est-ce qui monte avec ? (les releases intermédiaires, pas juste ton fix)
+# 4. Signe-t-il ses appels ? (émetteur = trusk-app >= 0.15.0) — cf. prérequis 4
+git -C ~/MyDocuments/TRUSK/$SVC show <vercible>:deployment/charts/Chart.yaml | grep -A2 'name: trusk-app'
+
+# 5. Chaque chart demande-t-il le sidecar flagd ? — cf. prérequis 5
+for e in staging production; do git -C ~/MyDocuments/TRUSK/$SVC show <vercible>:deployment/charts/$e.yaml | grep -c 'openfeature.dev/enabled'; done
+
+# 6. Qu'est-ce qui monte avec ? (les releases intermédiaires, pas juste ton fix)
 git -C ~/MyDocuments/TRUSK/$SVC log --oneline <verprod>..<vercible> | grep -v 'Chore(Version)'
 ```
 
