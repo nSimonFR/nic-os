@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Open the focused herdr pane's agent session in `zoe`.
+# Open a herdr pane's agent session in `zoe`.
+#
+# Usage: herdr-zoe          — from a `type = "pane"` keybind: the pane underneath
+#        herdr-zoe split    — split the focused pane, run zoe there
+#        herdr-zoe <pane>   — draw that pane's session in the current terminal
 #
 # Upstream's herdr plugin does this and cannot work here: it resolves herdr via
 # $HERDR_BIN_PATH, which herdr computes as /opt/homebrew/bin/herdr on macOS with
 # no -x check, so on nix it points at nothing.
-#
-# `herdr pane current` replaces the plugin's `focused_pane_id`, which only exists
-# for plugin invocations. It can answer with the popup's own pane, hence the
-# fallback to zoe's no-argument mode (newest session in this project).
 set -euo pipefail
 
 die() {
@@ -16,7 +16,18 @@ die() {
   exit 1
 }
 
-pane=$(herdr pane current 2>/dev/null | jq '.result.pane // empty' 2>/dev/null || true)
+if [ "${1:-}" = split ]; then
+  # A `type = "shell"` keybind is detached: the focused pane is HERDR_ACTIVE_*.
+  from="$HERDR_ACTIVE_PANE_ID"
+  pane=$(herdr pane split --pane "$from" --direction right \
+    --cwd "${HERDR_ACTIVE_PANE_CWD:-$PWD}" --focus | jq -r '.result.pane.pane_id')
+  # `exec` so the split closes with zoe.
+  herdr pane run "$pane" "exec herdr-zoe $from" >/dev/null
+  exit 0
+fi
+
+pane=$(herdr pane get "${1:-${HERDR_ACTIVE_PANE_ID:?no pane given and no HERDR_ACTIVE_PANE_ID}}" 2>/dev/null |
+  jq '.result.pane // empty' 2>/dev/null || true)
 
 agent=$(printf '%s' "$pane" | jq -r '.agent_session.agent // .agent // empty' 2>/dev/null || true)
 kind=$(printf '%s' "$pane" | jq -r '.agent_session.kind // empty' 2>/dev/null || true)
