@@ -3,10 +3,14 @@
 # A persistent daemon (the `travel-cal-sync` entry point of the nicos-scripts
 # package, hosts/rpi5/scripts/lib/) reads Proton over the local
 # hydroxide IMAP bridge (same creds as papra-proton-poll), detects travel
-# bookings with the local tiny-llm-gate, and writes each as a VEVENT into a
+# bookings through tiny-llm-gate, and writes each as a VEVENT into a
 # Nextcloud calendar over CalDAV. It holds an IMAP IDLE connection, so a new
 # booking lands on the calendar within minutes of arriving — no polling timer.
 # Each booking has a stable UID, so the PUT is idempotent (no duplicates).
+#
+# It also files document attachments into Papra's ingestion drop-zone: a trip's
+# tickets and vouchers, and any other mail whose PDF a second LLM call judges
+# worth keeping (invoices, payslips, tax: yes; brochures: no).
 #
 # Runs as root (like papra-proton-poll) so it can read all three secrets:
 #   /run/agenix/protonmail-bridge-password   (Proton IMAP, hydroxide:hydroxide 0440)
@@ -34,18 +38,22 @@ in
     wants = [ "hydroxide.service" "network-online.target" ];
     environment = {
       TINY_LLM_GATE_URL = tinyLlmGateUrl;
-      # Local-only extraction: pin to a local model (runs on the beast GPU host,
-      # stays on-prem) rather than `auto`, which could fall back to a cloud model.
-      # Booking emails (addresses, names) therefore never leave your hardware.
-      # e4b (not 26b): 26b is a slow reasoning model — poor fit for a per-email
-      # daemon; e4b is fast and extracts these bookings correctly.
-      MODEL = "gemma4:e4b";
+      # Cloud, on the ChatGPT plan: the beast-only gemma4:e4b stalled every scan
+      # from 2026-09-05 while beast was down. So candidate email bodies (names,
+      # addresses, and with PAPRA_FILE_ALL_MAIL any mail carrying a PDF) now go
+      # to OpenAI. Luna = the 5.6 extraction tier; a plan 429 backs off 15 min.
+      MODEL = "gpt-5.6-luna";
       LOOKBACK_DAYS = "365";
       TELEGRAM_SEND = "${telegramSend}";
       NEXTCLOUD_CALDAV_URL = "https://${tailnetFqdn}/nextcloud/remote.php/dav/calendars/nsimon/";
       NEXTCLOUD_PASS_FILE = "/run/agenix/nextcloud-homepage-password";
       # Calendar collection URI to write into (from `--list-calendars`): "Personal".
       NEXTCLOUD_CAL = "personal";
+      # Same drop-zone as papra-proton-poll, read off its unit so papra.nix stays
+      # the only place the org id is written.
+      PAPRA_DEST = config.systemd.services.papra-proton-poll.environment.PAPRA_PROTON_DEST;
+      PAPRA_POLL_STATE = "/var/lib/papra-proton-poll/seen";
+      PAPRA_FILE_ALL_MAIL = "1";
     };
     serviceConfig = {
       Type = "simple";
