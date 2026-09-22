@@ -109,6 +109,19 @@ in
       text = builtins.readFile ./scripts/herdr-zoe.sh;
     })
 
+    # The prefix+" / % / shift+c / shift+s bindings. Same PATH caveat as
+    # herdr-zoe: the shell command is spawned by the SERVER, not the login shell.
+    # It only opens the pane — what runs in it is claude-pane-menu, a zsh
+    # function, because the pane's shell is where the claude() shim lives.
+    (pkgs.writeShellApplication {
+      name = "herdr-claude-open";
+      runtimeInputs = [
+        pkgs.jq
+        unstablePkgs.herdr
+      ];
+      text = builtins.readFile ./scripts/herdr-claude-open.sh;
+    })
+
     # Backs the `shutdown` skill (shared/skills/shutdown).
     (pkgs.writeShellApplication {
       name = "herdr-shutdown";

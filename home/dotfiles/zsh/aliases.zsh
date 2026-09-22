@@ -85,6 +85,28 @@ claude() { _claude_shim "$@"; }
 cc()     { _claude_shim --continue "$@"; }
 cr()     { _claude_shim --resume "$@"; }
 
+# The menu a pane opened by prefix+" / % / shift+c / shift+s lands on
+# (home/scripts/herdr-claude-open.sh sends it, with the calling pane id and its
+# session). A zsh function, not another nix script, so claude resolves to the
+# shim above — a bash script would have to re-enter an interactive zsh to get it.
+#
+# --fork-session copies the caller's history into a NEW session id, so the two
+# panes diverge instead of writing over each other.
+claude-pane-menu() {
+  local key
+  print -P "\n  %B${PWD:t}%b · forked from $1\n"
+  print "    [enter]  fork that session"
+  print "    [n]      new session"
+  print "    [r]      resume a session…\n"
+  read -s -k 1 "key?  ctrl-c for a plain shell › "
+  print
+  case $key in
+    n | N) claude ;;
+    r | R) claude --resume ;;
+    *) claude --resume "$2" --fork-session ;;
+  esac
+}
+
 # claude-local: Claude Code → oMLX on localhost:8000 (M3 Pro, MLX backend, Anthropic-native)
 # Qwen3.6-27B-4bit (~15 GB resident, reasoning model — replies via reasoning_content).
 # oMLX has its own admin auth; localhost verification is disabled (skip_api_key_verification=true),
