@@ -50,6 +50,22 @@
     # replace this with a rev carrying an equal or newer HA.
     nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
 
+    # Immich only, and a REGRESSION HOLD rather than a version chase.
+    #
+    # immich 3.2.2 (the 2026-09-19 unstable rev) SIGBUSes on the rpi5: the
+    # server core-dumps on startup with status=7/BUS and systemd restarts it
+    # every 3s forever — 541 restarts over ~8h before it was caught, with
+    # immich-proxy's socket activation pulling it straight back up each time.
+    # SIGBUS on aarch64 is the signature of a page-size assumption, and this Pi
+    # runs a 16K-page kernel (see host.has16KPages in home/claude.nix, which
+    # already works around the same class of bug in claude-code's vendored
+    # ripgrep). 3.1.0 on the same kernel was healthy.
+    #
+    # Rev is the pre-bump shared pin, nixpkgs-unstable @ 2026-08-01, immich
+    # 3.1.0. Only move it to a rev whose immich has been STARTED on the Pi —
+    # `nix build` proves nothing here, the crash is at runtime.
+    nixpkgs-immich.url = "github:NixOS/nixpkgs/f8e81fc7eb063db454f563cdd596fb96a5ad1497";
+
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -306,6 +322,7 @@
       self,
       nixpkgs,
       nixpkgs-unstable,
+      nixpkgs-immich,
       home-manager,
       darwin,
       ...
@@ -330,7 +347,7 @@
       # unstable and both hosts move together. (Version is a string attr; reading
       # it forces no build. x86_64 vs aarch64 is irrelevant — same package def.)
       immichVersion =
-        (import nixpkgs-unstable {
+        (import nixpkgs-immich {
           system = "x86_64-linux";
           config.allowUnfree = true;
         }).immich.version;
@@ -406,6 +423,21 @@
         import nixpkgs-unstable {
           inherit system;
           config.allowUnfree = true;
+          # Immich comes from its own held rev (see nixpkgs-immich above), not
+          # the shared tree. Done here rather than at each call site so every
+          # `unstablePkgs.immich` resolves to the held one and the two hosts
+          # cannot drift apart.
+          overlays = [
+            (_: _: {
+              inherit
+                (import nixpkgs-immich {
+                  inherit system;
+                  config.allowUnfree = true;
+                })
+                immich
+                ;
+            })
+          ];
         };
 
       # Systems we build first-party, pure-Python things for. Deliberately

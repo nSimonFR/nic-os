@@ -39,8 +39,11 @@ let
   # CUDA-enabled immich-machine-learning, same import pattern as ollama-cuda.
   # config.cudaSupport = true flows through onnxruntime and gives the ML worker
   # a CUDAExecutionProvider; without it nixpkgs builds onnxruntime CPU-only.
+  # nixpkgs-immich, not nixpkgs-unstable: the server is held at 3.1.0 (see the
+  # input comment in flake.nix — 3.2.2 SIGBUSes on the Pi's 16K-page kernel) and
+  # Immich requires server==ML, which the assertion below enforces.
   immichMlCuda =
-    (import inputs.nixpkgs-unstable {
+    (import inputs.nixpkgs-immich {
       system = "x86_64-linux";
       config.allowUnfree = true;
       config.cudaSupport = true;
