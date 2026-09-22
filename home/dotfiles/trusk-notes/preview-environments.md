@@ -323,14 +323,19 @@ The sleep/wake cycle is where latent chart mistakes surface. `envFrom` resolves 
 creation**, so a secret that stopped existing only kills the pod at its next restart — a service
 can run for months on a spec that can no longer start.
 
-Found this way on 2026-09-22: `identity-access-management`, `fleet`, `communications` and
-`centiro-orders-api` all list `staging-env` in their preview chart's `pod.envFrom.secrets`. That
-secret exists in the `staging` namespace and in **no preview namespace**, so every one of them died on
-`CreateContainerConfigError` the moment it was scaled back up. Drop it from the preview chart only —
+Found this way on 2026-09-22: `identity-access-management`, `fleet` and `communications` inherit
+`staging-env` in `pod.envFrom.secrets` on preview. That secret exists in the `staging` namespace and in
+**no preview namespace**, so every one of them died on `CreateContainerConfigError` the moment it was
+scaled back up. `order-mission` and `rating` carried it too. Drop it from the preview values only —
 the staging chart needs it. (An earlier check claimed it was missing from `staging` too: it was a
-`jsonpath` → `json.load` probe that failed and printed "absent". Probe existence by exit code.) `pr-surge-ve` still showed IAM at
-`1/1` purely because that pod had never restarted since the reference landed. Fixed on the first
-three; centiro still carries it.
+`jsonpath` → `json.load` probe that failed and printed "absent". Probe existence by exit code.)
+`pr-surge-ve` still showed IAM at `1/1` purely because that pod had never restarted since the
+reference landed.
+
+Helm replaces a list, it does not merge it: a `preview.yaml` that declares `envFrom.secrets` drops
+the default's whole list, `staging-env` included. That is why `centiro-orders-api` (its preview lists
+the two `*-infisical` secrets only) never had the problem. Read the rendered pod
+(`kubectl get deploy -o yaml`), not `default.yaml`.
 
 Probe before blaming the wake-up:
 
