@@ -135,14 +135,30 @@ def cached(cache: dict, key: str, ttl: int, fetch) -> tuple[list | None, bool]:
     return None, False
 
 
-def claude_windows() -> list[tuple[str, float]] | None:
+def claude_token() -> str | None:
+    """Claude Code's OAuth token: login Keychain on darwin, credentials file on
+    Linux. Both are tried, in that order, because only one exists per host —
+    there is no Keychain on rpi5, and the Mac keeps no credentials file."""
     try:
         raw = subprocess.run(
             ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
             capture_output=True, text=True, timeout=5,
         )
-        token = json.loads(raw.stdout)["claudeAiOauth"]["accessToken"]
+        if raw.returncode == 0:
+            return json.loads(raw.stdout)["claudeAiOauth"]["accessToken"]
     except Exception:
+        pass
+    try:
+        with open(os.path.expanduser("~/.claude/.credentials.json")) as f:
+            return json.load(f)["claudeAiOauth"]["accessToken"]
+    except Exception:
+        return None
+    return None
+
+
+def claude_windows() -> list[tuple[str, float]] | None:
+    token = claude_token()
+    if not token:
         return None
 
     req = urllib.request.Request(
