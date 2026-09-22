@@ -202,6 +202,37 @@ in
     };
   };
 
+  # ── Alert: SideStore refresh path gone quiet ────────────────────────────────
+  # SideStore's certs last 7 days and every failure of the 10.7.0.1 hairpin so
+  # far went unnoticed until one expired — the 0.6.4 anisette break ran 31h, a
+  # withdrawn subnet route killed it outright, a drifted RemotePairing port
+  # (SideStore#1579) cost another day. From rpi5 all three look the same: the
+  # counter in sidestore-reflector.nix stops moving. Threshold is 5d, not 48h:
+  # we have not measured SideStore's own refresh cadence, and a threshold that
+  # trips on a normal quiet stretch pages until it is ignored.
+  systemd.services.sidestore-refresh-alert = {
+    description = "Alert when no SideStore refresh traffic has crossed the hairpin";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = pkgs.writeShellScript "sidestore-refresh-alert" ''
+        BODY=$(${pkgs.nicos-scripts}/bin/sidestore-refresh-watch || true)
+        [ -n "$BODY" ] && BODY="<code>$BODY</code>"
+        printf '%s' "$BODY" | ${telegramAlert} sidestore-refresh "SideStore refresh stalled on rpi5"
+      '';
+      Environment = [ "NFT_BIN=${pkgs.nftables}/bin/nft" ];
+      StateDirectory = "sidestore-refresh-watch";
+    };
+  };
+  systemd.timers.sidestore-refresh-alert = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "10m";
+      # One nft read against a 5d threshold; hourly only keeps `since` accurate
+      # across reboots, which reset the counter.
+      OnUnitActiveSec = "1h";
+    };
+  };
+
   # ── Beszel SMART refresh (workaround for henrygd/beszel#1800) ───────────────
   # TODO(beszel#1800): DELETE THIS WHOLE BLOCK (service + timer) once Beszel
   #   0.19.0+ with a verified fix lands in nixpkgs and a natural background

@@ -52,6 +52,10 @@ sure-drain-keepalive = "nicos_scripts.sure.drain_keepalive:main"
 # there is nothing left to re-run on a schedule. Re-run it by hand when enough
 # new merchants have accumulated to be worth a pass.
 sure-derive-rules = "nicos_scripts.sure.derive_rules:main"
+# Asserts on the hairpin COUNTER, not on any one cause: the three SideStore
+# outages so far (anisette break, withdrawn route, drifted RemotePairing port)
+# are indistinguishable from rpi5 and all show up as a counter that stopped.
+sidestore-refresh-watch = "nicos_scripts.sidestore.refresh_watch:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"

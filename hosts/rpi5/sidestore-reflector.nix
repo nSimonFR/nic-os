@@ -37,11 +37,20 @@ let
   # StosVPN's fixed virtual-computer address — not configurable in SideStore.
   virtualComputerIp = "10.7.0.1";
 
+  # `destroy` (not `delete`) so a reload over a leftover table is idempotent and
+  # still succeeds when there is none. Without it a redeploy APPENDED a second
+  # rule, splitting the counter.
+  #
+  # The counter is the only thing that separates "nothing reaches rpi5" (route or
+  # ACL) from "the phone rejects the reflection" (on-device) — two failures with
+  # opposite fixes. It read a hard 0 through the 31h anisette outage and 730 pkts
+  # through a healthy refresh. sidestore-refresh-watch reads it.
   rules = pkgs.writeText "sidestore-reflector.nft" ''
+    destroy table ip sidestore
     table ip sidestore {
       chain prerouting {
         type filter hook prerouting priority -350; policy accept;
-        iifname "tailscale0" ip daddr ${virtualComputerIp} ip daddr set ip saddr ip saddr set ${virtualComputerIp} notrack
+        iifname "tailscale0" ip daddr ${virtualComputerIp} counter ip daddr set ip saddr ip saddr set ${virtualComputerIp} notrack
       }
     }
   '';
