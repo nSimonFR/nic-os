@@ -21,9 +21,16 @@
 let
   # Exit 1 when a herdr server already answers on the API socket, which tells
   # systemd to skip the unit instead of starting a second one that cannot bind.
+  #
+  # gnugrep is listed explicitly because writeShellApplication only PREPENDS
+  # runtimeInputs to the ambient PATH, and a systemd --user unit's PATH carries
+  # no coreutils at all. Left out, the guard dies on "grep: command not found",
+  # the pipeline is false, and it reports ABSENT against a server that is up —
+  # re-arming the exact loop this script exists to break. It passed by hand only
+  # because an interactive shell lends it a grep the unit never has.
   herdrServerAbsent = pkgs.writeShellApplication {
     name = "herdr-server-absent";
-    runtimeInputs = [ unstablePkgs.herdr ];
+    runtimeInputs = [ unstablePkgs.herdr pkgs.gnugrep ];
     text = ''
       if herdr status server 2>/dev/null | grep -q '^status: running'; then
         exit 1
