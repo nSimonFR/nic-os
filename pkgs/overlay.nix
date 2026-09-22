@@ -58,4 +58,9 @@ inputs: final: _prev: {
   # Consumers: hosts/beast/rgb/openrgb-lg.nix (systemPackages) and
   # hosts/beast/configuration.nix (services.hardware.openrgb.package).
   openrgb-lg = final.callPackage ./rgb/openrgb-lg.nix { };
+
+  # herdr, jerryfane's fork (HerdrUp phone pairing) — replaces nixpkgs' herdr on
+  # every host so client and server speak the same protocol.
+  # Consumers: home/packages.nix, home/herdr.nix, home/claude.nix (its skill).
+  herdr-fork = final.callPackage ./cli/herdr-fork.nix { };
 }
