@@ -113,14 +113,10 @@ let
       ''--set GITHUB_TOKEN ""''
     ];
 
-  # claude-code ahead of nixpkgs-unstable, which carries 2.1.278 — a binary with
-  # no claude-opus-5-5 in it. The package takes version + per-platform checksums
-  # from `manifest`, so vendoring upstream's release manifest is the whole bump;
-  # refresh it from
-  #   https://downloads.claude.ai/claude-code-releases/<version>/manifest.zst.json
-  # Drop the override once nixpkgs ships >= 2.1.280.
-  claudeCodeUpstream = unstablePkgs.claude-code.override {
-    manifest = lib.importJSON ./claude-code-manifest.zst.json;
+  # Pinned ahead of nixpkgs-unstable (2.1.278, which cannot reach Opus 5.5 at
+  # all — the server rejects the model on that client). See the package file.
+  claudeCodeUpstream = pkgs.callPackage ../pkgs/agents/claude-code.nix {
+    inherit (unstablePkgs) claude-code;
   };
 
   claudeCodePkg = claudeCodeUpstream.overrideAttrs (old: {
