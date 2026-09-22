@@ -68,6 +68,11 @@ delivery = "terminal"
 # `herdr pane split` / `tab create` / `workspace create`, so the binding shells
 # out to herdr-claude-open (home/herdr.nix).
 #
+# The keys come from the CLIENT's config, but a custom command runs on the
+# SERVER that owns the pane — so under `herdr --remote rpi5` these run rpi5's
+# herdr-claude-open, against rpi5's Claude. Nothing is copied over the SSH hop,
+# which is why the script and the zsh menu ship to every host.
+#
 # herdr only splits right or down; there is no "split left".
 [[keys.command]]
 key = 'prefix+"'
