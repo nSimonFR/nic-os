@@ -20,6 +20,8 @@
 }:
 
 let
+  zoetrope = pkgs.callPackage ../pkgs/cli/zoetrope.nix { zoetrope-src = inputs.zoetrope-src; };
+
   # Exit 1 when a herdr server already answers on the API socket, which tells
   # systemd to skip the unit instead of starting a second one that cannot bind.
   #
@@ -89,13 +91,26 @@ in
     })
 
     # zoetrope (`zoe`) — draws a Claude Code session's subagents as a graph,
-    # which neither Claude Code nor herdr shows. Packaged so the plugin's own
-    # build step (Homebrew / cargo install) finds it and no-ops. Needs the
-    # claude integration for herdr to know a pane's session id.
+    # which neither Claude Code nor herdr shows. Needs the claude integration
+    # for herdr to know a pane's session id.
     #
     # ⚠ Reads an undocumented, internal Claude Code transcript format; an
     #   update can break the graph. Nothing else here depends on it.
-    (pkgs.callPackage ../pkgs/cli/zoetrope.nix { zoetrope-src = inputs.zoetrope-src; })
+    zoetrope
+
+    # The prefix+shift+z popup. Upstream ships a herdr plugin for this and it is
+    # unusable here — see the script for why — so the binding runs this instead
+    # and no plugin is installed at all. Every tool is pinned: a popup is spawned
+    # by the server, whose PATH is not the login shell's.
+    (pkgs.writeShellApplication {
+      name = "herdr-zoe";
+      runtimeInputs = [
+        pkgs.jq
+        unstablePkgs.herdr
+        zoetrope
+      ];
+      text = builtins.readFile ./scripts/herdr-zoe.sh;
+    })
   ];
 
   # Delivery differs by host, and deliberately so.
@@ -132,28 +147,12 @@ in
         inCheckout "home/dotfiles/herdr-endpoints.json";
     };
 
-  # Plugins — the list is the setting; ~/.config/herdr/plugins.json is not. That
-  # file is a derived cache of host-absolute paths and a content hash that moves
-  # on every reinstall, in a repo three Linux hosts read. So the intent lives
-  # here, guarded per id and unable to fail a switch; delete
-  # ~/.config/herdr/plugins and switch to rebuild the cache.
-  #
-  # speardragon.herdr-status-ui-bar is installed but deliberately absent: its
-  # widget is not in tab_bar_right, so it is a leftover, not a setting.
-  home.activation.herdrPlugins = lib.mkIf pkgs.stdenv.isDarwin (
-    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      if command -v herdr >/dev/null 2>&1 && [ -S "$HOME/.config/herdr/herdr.sock" ]; then
-        for spec in "furkankly.zoetrope=furkankly/zoetrope/herdr-plugin"; do
-          id="''${spec%%=*}"
-          repo="''${spec#*=}"
-          if ! herdr plugin list --plugin "$id" --json 2>/dev/null | grep -q "$id"; then
-            $DRY_RUN_CMD herdr plugin install "$repo" --yes || \
-              echo "herdr: could not install plugin $id (continuing)"
-          fi
-        done
-      fi
-    ''
-  );
+  # No herdr plugins are declared, deliberately. ~/.config/herdr/plugins.json is
+  # a derived cache of host-absolute paths and a content hash that moves on every
+  # reinstall, so it is not versionable; and the one plugin worth having
+  # (furkankly/zoetrope) is broken on a nix install — see home/scripts/herdr-zoe.sh.
+  # Anything installed by hand (speardragon.herdr-status-ui-bar, currently) is a
+  # leftover rather than a setting: `herdr plugin list` shows what is there.
 
   systemd.user.services.herdr = lib.mkIf pkgs.stdenv.isLinux {
     Unit = {
