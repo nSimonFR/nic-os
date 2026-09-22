@@ -39,6 +39,8 @@ import json
 import re
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -68,6 +70,19 @@ REFETCHABLE = {"fetchFromGitHub": True, "fetchurl": False}  # name -> unpack?
 # skip exactly the hash this can verify. They are reported alongside the result.
 UNVERIFIABLE = ("vendorHash", "cargoHash", "pnpmDepsHash", "cargoDeps")
 
+# A second, unrelated pin shape: a package that hands nixpkgs an upstream
+# release manifest as a Nix attrset (pkgs/agents/claude-code.nix). There is no
+# fetcher in the file at all — nixpkgs owns the fetchurl — so the checksums are
+# copied from a published manifest rather than computed. Checking them is
+# therefore a JSON fetch and a string compare, with no Nix invocation and
+# nothing downloaded: cheaper than the tarball path below.
+MANIFEST_URL = "https://downloads.claude.ai/claude-code-releases/{version}/manifest.zst.json"
+MANIFEST_VERSION = re.compile(r'#\s*renovate:[^\n]*\n\s*version\s*=\s*"(?P<val>[^"]+)"\s*;')
+MANIFEST_PLATFORM = re.compile(
+    r'"(?P<key>[a-z0-9]+-[a-z0-9-]+)"\s*=\s*\{[^{}]*?checksum\s*=\s*"(?P<val>[0-9a-f]{64})"',
+    re.S,
+)
+
 
 class Problem(Exception):
     """A file this script cannot speak for. Never silently skipped."""
@@ -84,6 +99,11 @@ class Package:
     # Hashing the wrong one produces a plausible-looking value that is simply
     # never what the file pins, so this flag has to follow the fetcher.
     unpack: bool
+    # Non-empty for the upstream-manifest shape above: the version whose
+    # published manifest the checksums are compared against. Switches `fetch`
+    # and `rewrite` onto that path, where the dict keys are platform names and
+    # every pin is spelled `checksum` rather than `hash`.
+    manifest_version: str = ""
     pinned: dict[str, str] = field(default_factory=dict)
     actual: dict[str, str] = field(default_factory=dict)
     unverifiable: list[str] = field(default_factory=list)
@@ -154,6 +174,19 @@ def fetcher_blocks(text: str) -> list[tuple[str, str, str]]:
 
 def parse(path: Path) -> Package:
     text = path.read_text()
+
+    # The upstream-manifest shape short-circuits everything below: no fetcher to
+    # attribute a hash to, and the pins are per-platform `checksum` entries.
+    version = MANIFEST_VERSION.search(text)
+    platforms = {m["key"]: m["val"] for m in MANIFEST_PLATFORM.finditer(text)}
+    if version and platforms:
+        return Package(
+            path=path,
+            tarball=MANIFEST_URL.format(version=version["val"]),
+            unpack=False,
+            manifest_version=version["val"],
+            pinned=platforms,
+        )
 
     bindings = {m["key"]: m["val"] for m in BINDING.finditer(text)}
     # `rev = version;` — an unquoted reference to another binding.
@@ -234,6 +267,23 @@ def parse(path: Path) -> Package:
 
 
 def fetch(pkg: Package) -> None:
+    if pkg.manifest_version:
+        # urllib, not nix-prefetch-url: the answer is published, so there is
+        # nothing to hash and nothing to put in the store.
+        try:
+            with urllib.request.urlopen(pkg.tarball, timeout=30) as response:
+                manifest = json.load(response)
+        except (urllib.error.URLError, json.JSONDecodeError) as exc:
+            raise Problem(f"could not read {pkg.tarball}: {exc}") from exc
+        published = manifest.get("platforms", {})
+        missing = [key for key in pkg.pinned if key not in published]
+        if missing:
+            raise Problem(
+                f"{pkg.manifest_version} publishes no entry for {', '.join(sorted(missing))}"
+            )
+        pkg.actual = {key: published[key]["checksum"] for key in pkg.pinned}
+        return
+
     # --print-path prints the hash, then the store path of the fetched artifact.
     cmd = ["nix-prefetch-url", "--print-path", pkg.tarball]
     if pkg.unpack:
@@ -262,7 +312,10 @@ def fetch(pkg: Package) -> None:
 def rewrite(pkg: Package) -> None:
     text = pkg.path.read_text()
     for key, (old, new) in pkg.drift.items():
-        pattern = re.compile(rf'({key}\s*=\s*")' + re.escape(old) + r'(")')
+        # Manifest pins are all spelled `checksum`; the dict key is the platform.
+        # The old value is unique per file, so it alone anchors the match.
+        attr = "checksum" if pkg.manifest_version else key
+        pattern = re.compile(rf'({attr}\s*=\s*")' + re.escape(old) + r'(")')
         text, count = pattern.subn(rf"\g<1>{new}\g<2>", text, count=1)
         if count != 1:
             raise Problem(f"could not rewrite {key}")
