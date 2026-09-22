@@ -52,6 +52,7 @@ let
     "files_trashbin"       # safety net before permanent delete
     "files_pdfviewer"      # in-browser PDF preview
     "files_downloadlimit"  # let admin cap download counts on shares
+    "files_external"       # read-only Papra archive mount (papra.nix)
     "text"                 # collaborative text editor (md, txt)
     "systemtags"           # tag files for organisation
     "activity"             # change feed (file events) — useful as a log

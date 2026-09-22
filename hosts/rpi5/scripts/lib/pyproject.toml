@@ -11,7 +11,7 @@ requires-python = ">=3.11"
 # import used to mean a failure at 04:50 on a timer. Anything added here must be a
 # real dependency in pkgs/nicos-scripts.nix too — that is the point of declaring it.
 #
-# psycopg2: papra.tag_sync writes Nextcloud systemtags straight into Postgres. It
+# psycopg2: papra.nc_sync writes Nextcloud systemtags straight into Postgres. It
 # is imported lazily inside connect_pg(), so the module (and its tests) still load
 # without it.
 dependencies = [ "psycopg2" ]
@@ -54,7 +54,7 @@ sure-drain-keepalive = "nicos_scripts.sure.drain_keepalive:main"
 sure-derive-rules = "nicos_scripts.sure.derive_rules:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
-papra-webhook-tagsync = "nicos_scripts.papra.tag_sync:main"
+papra-nc-sync = "nicos_scripts.papra.nc_sync:main"
 # hermes-*: Hermes cron jobs that used to drive an LLM to reach a deterministic
 # answer. Invoked by the scheduler in `no_agent` mode through the `*.sh` shims in
 # hosts/rpi5/hermes/hermes.nix, so stdout is the delivered message.

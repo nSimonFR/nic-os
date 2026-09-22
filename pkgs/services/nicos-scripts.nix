@@ -31,7 +31,7 @@ python3Packages.buildPythonPackage {
 
   build-system = [ python3Packages.setuptools ];
 
-  # The one real dependency, declared in pyproject.toml too. papra.tag_sync writes
+  # The one real dependency, declared in pyproject.toml too. papra.nc_sync writes
   # Nextcloud systemtags directly into Postgres; it imports psycopg2 lazily so the
   # module stays importable (and its tests runnable) without it.
   dependencies = [ python3Packages.psycopg2 ];
@@ -58,7 +58,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.immich.adopt"
     "nicos_scripts.papra.tag_sweep"
     "nicos_scripts.papra.proton_poll"
-    "nicos_scripts.papra.tag_sync"
+    "nicos_scripts.papra.nc_sync"
     "nicos_scripts.hermes.dawarich_daily"
     "nicos_scripts.hermes.calendar_digest"
     "nicos_scripts.hermes.zen_watch"
