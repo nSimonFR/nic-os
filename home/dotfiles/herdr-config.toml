@@ -27,16 +27,11 @@ tab_bar_right = [
 ]
 tab_bar_right_separator = " · "
 
-# Claude's own session name in the agent panel. `/rename` is pushed into the
-# TERMINAL TITLE, which herdr already captures per pane — no hook needed.
+# Claude's session name (`/rename`) reaches herdr via the terminal title.
 #
-# Two rows, not herdr's documented three: the dropped one was `agent`, which
-# said "claude" under every entry. The kind moves up as a two-letter code, which
-# cannot be a literal (tokens are a closed set) — `agent` renders `display_agent`
-# and home/scripts/herdr-agent-code.sh reports `cc`.
-#
-# No `fg` on the title: a row token takes hex only, so a colour here would stop
-# following [theme]. Bold + un-dimmed inherits the theme's own colour.
+# `agent` renders `display_agent`, which home/scripts/herdr-agent-code.sh sets to
+# `cc` — a literal is not allowed here, the tokens are a closed set. No `fg` on
+# the title: a row token takes hex only, which would stop following [theme].
 [ui.sidebar.agents.rows_by_agent]
 claude = [
   [
@@ -54,15 +49,11 @@ claude = [
 [ui.toast]
 delivery = "terminal"
 
-# zoetrope — the subagent view. Focus a Claude Code pane and press it: `zoe`
-# draws that session as a flow graph with the turn's SUBAGENTS nested, which
-# nothing else shows. `q` closes the popup.
+# zoetrope — draws the focused pane's session as a flow graph with the turn's
+# SUBAGENTS nested. `q` closes the popup.
 #
-# Runs our own `herdr-zoe` (home/herdr.nix), NOT upstream's herdr plugin: that
-# plugin reaches herdr through $HERDR_BIN_PATH, which herdr fills with a
-# hardcoded /opt/homebrew/bin/herdr on macOS no matter where herdr actually is,
-# so every action dies with "No such file or directory" on a nix install.
-# See home/scripts/herdr-zoe.sh.
+# Runs `herdr-zoe` (home/herdr.nix), not upstream's herdr plugin, which is
+# broken on a nix install — see home/scripts/herdr-zoe.sh.
 [[keys.command]]
 key = "prefix+shift+z"
 type = "popup"
