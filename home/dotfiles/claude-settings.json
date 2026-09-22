@@ -1,8 +1,11 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
   "env": {
-    "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "0",
+    "CLAUDE_CODE_DISABLE_BG_EXIT_HANDOFF": "1"
   },
+  "disableAgentView": true,
+  "_comment_agent_view": "Background sessions off (`claude agents`, `--bg`, /background, the daemon, and the exit handoff that turns a closed session into a bg one): parallel sessions live in herdr panes instead.",
   "permissions": {
     "allow": [
       "Bash(*)",
