@@ -146,8 +146,14 @@ preview tracks:
 ```yaml
 # <service>/deployment/charts/preview.yaml   (or appset-preview.yaml)
 podAnnotations:
+  openfeature.dev/enabled: "true"          # without it the operator injects NO sidecar
   openfeature.dev/featureflagsource: "flagd-preview/<service>-flags-source"
 ```
+
+The source must exist in `flagd-preview` (FeatureFlag `<service>-flags` + FeatureFlagSource
+`<service>-flags-source`, rendered from `backoffice/deployment/flagd/preview/` on **master**). A pod
+pointed at a missing source gets no working sidecar — and a service with `FeatureFlagsModule`
+then dies at boot on `Failed to connect before the deadline`.
 
 The chart is read by ArgoCD from the branch, not baked into the image, so a hard refresh applies
 it — no need to wait for CI or a new tag:
@@ -177,6 +183,41 @@ kubectl --context $CTX -n <ns> get pod <pod> \
   -o jsonpath='{.metadata.annotations.openfeature\.dev/featureflagsource}{"\n"}'
 ```
 
+Change **one key** — never `kubectl apply` the whole `flagd-preview` file from the repo: it resets
+every flag in it, including ones another preview's owner raised by hand.
+
+```bash
+kubectl --context $CTX -n flagd-preview patch featureflag <service>-flags --type merge -p \
+  '{"spec":{"flagSpec":{"flags":{"<flag>":{"state":"ENABLED","defaultVariant":"on","variants":{"on":true,"off":false}}}}}}'
+```
+
+### Before probing: the flag as the ONE remaining pod sees it
+
+A rollout keeps the old pod behind the Service until the new one is ready, and the Service
+routes to **both**. A probe run then measures the old pod half the time — on 2026-09-22 that
+turned three services at 0 deviation into 12/24, 11/32 and 9/16 "deviations". `rollout status`
+is not enough: wait until one pod is left, then ask **its** sidecar over OFREP (port 8016):
+
+```bash
+pod=$(kubectl --context $CTX -n pr-<slug> get pods -l app.kubernetes.io/name=<label> \
+  --sort-by=.metadata.creationTimestamp -o name | tail -1)
+kubectl --context $CTX -n pr-<slug> exec $pod -c <container> -- node -e '
+const b=JSON.stringify({context:{targetingKey:"probe"}});
+require("http").request({host:"localhost",port:8016,path:"/ofrep/v1/evaluate/flags/<flag>",method:"POST",
+  headers:{"content-type":"application/json","content-length":b.length}},
+  r=>{let d="";r.on("data",c=>d+=c);r.on("end",()=>console.log(d))}).end(b);'
+# {"value":true,...,"variant":"on"} — and a `metadata.description` you did not write means the
+# pod still reads staging's store.
+```
+
+Label, container and store names can all differ from the Deployment name: communications is
+Deployment `communication`, label `communications`, container `communication`, store
+`communications-flags`.
+
+`FF_DISABLED: "true"` in a configmap makes the library ignore flagd entirely — raising the flag
+then changes nothing. `kubectl set env deploy/<svc> FF_DISABLED=false` overrides it (explicit
+`env` beats `envFrom`); remove it afterwards with `FF_DISABLED-`.
+
 ## `env.values[0..3]` — do not reorder
 
 The ApplicationSet injects the per-PR URLs **by index** (`--set
@@ -189,7 +230,7 @@ proxy at 503 and every flag defaulting off.
 Also note `configMaps: []` in that file: ns `appset-preview` has none of the shared ConfigMaps
 (`infra-env`, `backoffice-env`, `trusk-dynamic-config`); all env comes from Infisical secrets.
 
-## Asleep by default — wake it with the workflow, not with `kubectl scale`
+## Asleep by default — how to wake it
 
 `pr-*` namespaces are shut down every night and all weekend. **Two independent mechanisms**, and
 knowing which one you are fighting decides what works:
@@ -199,7 +240,8 @@ knowing which one you are fighting decides what works:
 | kube-green `SleepInfo/working-hours`, one per `pr-*` ns | Deployments | `sleepAt 20:00`, `wakeUpAt 07:00`, `weekdays 1-5`, Europe/Paris |
 | CronWorkflow `pr-namespace-shutdown` (ns `awf-devops`) | Deployments **and** StatefulSets (PG, RabbitMQ, Redis, MariaDB) since DO-2091 | deadline per namespace in ConfigMap `pr-namespace-shutdown-schedule` |
 
-The supported way back up is the **`wake-up-namespace` WorkflowTemplate** (ns `awf-dev`, source
+The supported way back up is the **`wake-up-namespace` WorkflowTemplate** — by day; at night it
+needs [trusk-argo-workflows#107](https://github.com/trusk-official/trusk-argo-workflows/pull/107), see the next section — (ns `awf-dev`, source
 `trusk-official/trusk-argo-workflows`). It scales in **two waves** — datastores first, then
 applications, because one pass starts services before their databases and cascades into
 CrashLoopBackOff — writes the next shutdown deadline into the ConfigMap above, hard-refreshes every

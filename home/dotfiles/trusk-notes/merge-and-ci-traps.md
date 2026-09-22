@@ -101,8 +101,48 @@ npm install --no-save --no-package-lock @trusk-official/<client>@<pinned>   # no
 Reflex when a test disagrees with CI: check the **installed** version of any enum/const you rely
 on, not the pin.
 
+## e2e dies on `Failed to connect before the deadline` after adding feature flags
+
+The message comes from `@grpc/grpc-js`: `FeatureFlagsModule` installs a gRPC flagd provider, and the
+docker-compose test stack has Postgres and RabbitMQ but no flagd sidecar. Every suite that boots the
+real `AppModule` then waits out the connect deadline and reads as "the app never came up". Seen on
+trusk-estimator-api and communications (TEC-301). Fix in the test env only — deployed envs must keep
+resolving from flagd:
+
+```bash
+printf '\nFF_DISABLED=true\n' >> tests/test.env     # the library's own escape hatch
+```
+
+## A vendored chart tarball silently drops every value
+
+`deployment/charts/charts/trusk-app-<v>.tgz` committed next to a `Chart.yaml` asking for another
+version: helm no longer resolves the **aliased** dependency, the `<service>:` values are ignored, and
+the Deployment renders with trusk-app's defaults — the pod pulls **`nginx:1.0.0`** and
+`ImagePullBackOff`s while ArgoCD says `Synced`. rating, 2026-09-22 (tgz 0.14.1, Chart.yaml 0.15.0).
+No other service vendors: delete the tarball, ArgoCD fetches the dependency. Check before pushing:
+
+```bash
+cd deployment/charts && helm dependency build >/dev/null && \
+  helm template <svc> . -f default.yaml -f preview.yaml | grep -E '^\s+image:'
+```
+
+The broken Deployment then refuses the fix: its selector (`name: trusk-app`) differs from the real one
+and a selector is immutable — `field is immutable` on sync. Delete that Deployment (preview only) and
+sync again. Staging is safe if its selector did not change between chart versions; compare both with
+`helm template` before assuming.
+
 ## zsh does not word-split unquoted variables
 
 `for x in $LIST`, `set -- $pair`, `K="kubectl …"; $K scale …` all silently misbehave. Iterate
 explicitly. Never suppress stderr while debugging — a `>/dev/null 2>&1` on a silently-failing
 `$K scale` cost real time.
+
+Two more that bit on 2026-09-22: `for a in $apps` over a newline-separated `kubectl … -o name`
+iterated **once** ("0 apps synced"), and `npx prettier --write $files` passed the whole list as a
+single argument, failed, and the `&&` chain after it reported the *next* step as broken. Use
+`… | while read -r x; do …; done`.
+
+**A probe that fails must not print a negative.** `kubectl get secret X -o jsonpath='{.data}' |
+python3 -c 'json.load(…)'` printed "absent" because `json.load` choked on the output — and a secret
+that exists in `staging` was declared missing there, then removed from a staging chart. Test
+existence by exit code: `kubectl get secret X >/dev/null 2>&1 && echo present || echo absent`.
