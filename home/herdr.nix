@@ -109,6 +109,19 @@ in
       text = builtins.readFile ./scripts/herdr-zoe.sh;
     })
 
+    # The prefix+" / % / shift+c / shift+s bindings. Same PATH caveat as
+    # herdr-zoe: the shell command is spawned by the SERVER, not the login shell.
+    # It only opens the pane — what runs in it is claude-pane-menu, a zsh
+    # function, because the pane's shell is where the claude() shim lives.
+    (pkgs.writeShellApplication {
+      name = "herdr-claude-open";
+      runtimeInputs = [
+        pkgs.jq
+        unstablePkgs.herdr
+      ];
+      text = builtins.readFile ./scripts/herdr-claude-open.sh;
+    })
+
     # Backs the `shutdown` skill (shared/skills/shutdown).
     (pkgs.writeShellApplication {
       name = "herdr-shutdown";
@@ -171,6 +184,21 @@ in
       # `herdr server` is the headless form; bare `herdr` would try to open a
       # TUI and exit for want of a terminal.
       ExecStart = "${unstablePkgs.herdr}/bin/herdr server";
+
+      # A server started by this unit inherits the systemd --user manager's
+      # environment, which on rpi5 is PATH=<systemd>/bin and nothing else (no
+      # SHELL at all). Everything herdr resolves BY NAME then misses: the
+      # tab_bar_right command, the prefix+" / % / shift+c / shift+s bindings, and
+      # `claude` inside the pane. With SHELL unset it also falls back to /bin/sh,
+      # where claude-pane-menu — a zsh function — does not exist.
+      #
+      # This only bites after a reboot: rpi5's current server was started from a
+      # login shell over SSH and carries that shell's PATH, which is why the
+      # tab-bar readout works there today.
+      Environment = [
+        "PATH=${config.home.profileDirectory}/bin:${config.home.homeDirectory}/.local/state/nix/profiles/home-manager/home-path/bin:/run/current-system/sw/bin"
+        "SHELL=${config.home.profileDirectory}/bin/zsh"
+      ];
 
       # Yield to a server that is already up rather than fighting it.
       #

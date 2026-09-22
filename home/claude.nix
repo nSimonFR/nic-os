@@ -113,7 +113,13 @@ let
       ''--set GITHUB_TOKEN ""''
     ];
 
-  claudeCodePkg = unstablePkgs.claude-code.overrideAttrs (old: {
+  # Pinned ahead of nixpkgs-unstable (2.1.278, which cannot reach Opus 5.5 at
+  # all — the server rejects the model on that client). See the package file.
+  claudeCodeUpstream = pkgs.callPackage ../pkgs/agents/claude-code.nix {
+    inherit (unstablePkgs) claude-code;
+  };
+
+  claudeCodePkg = claudeCodeUpstream.overrideAttrs (old: {
     nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
     postFixup = (old.postFixup or "") + ''
       wrapProgram $out/bin/claude ${lib.concatStringsSep " " claudeWrapperFlags}

@@ -7,6 +7,9 @@ TMPDIR=${TMPDIR:-$WORKDIR/tmp}
 CHAT_ID=${TELEGRAM_CHAT_ID:-82389391}
 MAX_GH=${MAX_GH:-20}
 MAX_BW=${MAX_BW:-20}
+# The one PR slice that survives the blanket exclusion in format_github.
+PR_ALLOW_REPO=${PR_ALLOW_REPO:-nSimonFR/nic-os}
+PR_ALLOW_TITLE=${PR_ALLOW_TITLE:-claude-code}
 DRY_RUN=0
 NO_MARK_READ=0
 RICH=0
@@ -16,7 +19,8 @@ usage() {
   cat <<'USAGE'
 Usage: daily-pending-digest.sh [--dry-run] [--no-mark-read] [--rich] [--rich-collapsible-all]
 
-Collects GitHub notifications (excluding PRs) and BlogWatcher unread articles,
+Collects GitHub notifications (PRs excluded, except the claude-code dependency
+bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE) and BlogWatcher unread articles,
 formats a Telegram digest, sends it, then marks included GitHub notifications
 and BlogWatcher articles as read only after successful send.
 
@@ -73,32 +77,42 @@ telegram_token() {
 
 format_github() {
   if ! command -v gh >/dev/null 2>&1; then
-    printf 'GitHub notifications excluding PRs:\n'
+    printf 'GitHub notifications:\n'
     printf '• error: gh not found\n'
     return 0
   fi
   if ! command -v jq >/dev/null 2>&1; then
-    printf 'GitHub notifications excluding PRs:\n'
+    printf 'GitHub notifications:\n'
     printf '• error: jq not found\n'
     return 0
   fi
 
   local err="$TMPDIR/daily_pending_digest_gh.err"
   if ! gh api notifications --paginate >"$GH_RAW" 2>"$err"; then
-    printf 'GitHub notifications excluding PRs:\n'
+    printf 'GitHub notifications:\n'
     printf '• error: %s\n' "$(one_line <"$err" | cut -c1-220 | html_escape)"
     return 0
   fi
 
-  if ! jq -s '[.[][] | select(.subject.type != "PullRequest")]' "$GH_RAW" >"$GH_ITEMS" 2>"$err"; then
-    printf 'GitHub notifications excluding PRs:\n'
+  # PRs are excluded because the inbox carries ~700 of them and they would be
+  # the whole digest. The carve-out is one repo's dependency bumps for a package
+  # whose releases gate which Claude models the CLI may ask for: a stale pin is
+  # not cosmetic, it is a 400 on the newest model. PR_ALLOW_REPO/PR_ALLOW_TITLE
+  # keep the pair tunable without editing jq.
+  if ! jq -s --arg repo "$PR_ALLOW_REPO" --arg title "$PR_ALLOW_TITLE" '
+        [ .[][]
+          | select(.subject.type != "PullRequest"
+                   or (.repository.full_name == $repo
+                       and (.subject.title | test($title; "i")))) ]
+      ' "$GH_RAW" >"$GH_ITEMS" 2>"$err"; then
+    printf 'GitHub notifications:\n'
     printf '• error: could not parse gh output\n'
     return 0
   fi
 
   local count extra
   count=$(jq 'length' "$GH_ITEMS")
-  printf 'GitHub notifications excluding PRs:\n'
+  printf 'GitHub notifications:\n'
   if [ "$count" -eq 0 ]; then
     printf '• none\n'
     return 0
@@ -217,10 +231,10 @@ build_rich_message() {
     NR == 1 { print "<h3>" $0 "</h3>"; next }
     NR == 2 { print "<footer>" $0 "</footer>"; next }
     $0 == "" { emit_p_end(); next }
-    $0 == "GitHub notifications excluding PRs:" {
+    $0 == "GitHub notifications:" {
       close_details()
-      if (layout == "collapsible-all") { print "<details open><summary>GitHub notifications excluding PRs</summary>"; in_details=1 }
-      else { print "<h4>GitHub notifications excluding PRs</h4>" }
+      if (layout == "collapsible-all") { print "<details open><summary>GitHub notifications</summary>"; in_details=1 }
+      else { print "<h4>GitHub notifications</h4>" }
       next
     }
     $0 == "BlogWatcher unread articles:" {
