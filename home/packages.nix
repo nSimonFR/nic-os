@@ -45,8 +45,6 @@
       kubectl
       kubeseal
       less
-      # Host half of the phone path to herdr: plain SSH drops on every sleep and
-      # network switch, mosh keeps the pane.
       mosh
       nano
       nixfmt-rfc-style
