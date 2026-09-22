@@ -45,5 +45,9 @@
         ]
       }
     ]
+  },
+  "_comment_permissions": "defaultMode bypassPermissions — nic-os is trusted fully, like the TRUSK tree, so tool calls here do not prompt. It lives in the tracked project settings rather than the gitignored settings.local.json so every checkout and every worktree under .claude/worktrees inherits it instead of re-accumulating one-off Bash() allow entries. This is NOT a blanket kill switch: the PreToolUse deny hook below still runs and still blocks, because hooks are evaluated independently of permission mode — bypass removes the ASK, not the DENY. The user-level settings already grant Bash(*)/Read(*)/Write(*), so what this actually removes is the residue that those globs do not cover: the workspace-boundary prompt for paths outside the project, and per-command confirmations. The red 'bypass permissions' indicator replaces the quiet 'manual mode' row that _comment_mode_banner in home/dotfiles/claude-settings.json tunes for — that tuning is unaffected everywhere else, this override is scoped to this repo.",
+  "permissions": {
+    "defaultMode": "bypassPermissions"
   }
 }
