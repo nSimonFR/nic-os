@@ -18,9 +18,24 @@
   ...
 }:
 
+let
+  # Exit 1 when a herdr server already answers on the API socket, which tells
+  # systemd to skip the unit instead of starting a second one that cannot bind.
+  herdrServerAbsent = pkgs.writeShellApplication {
+    name = "herdr-server-absent";
+    runtimeInputs = [ unstablePkgs.herdr ];
+    text = ''
+      if herdr status server 2>/dev/null | grep -q '^status: running'; then
+        exit 1
+      fi
+      exit 0
+    '';
+  };
+in
+
 {
   # ---------------------------------------------------------------------------
-  # Tab-bar plan-usage readout (darwin only)
+  # Tab-bar plan-usage readout (every host)
   #
   # `ui.tab_bar_right` is the one status surface herdr has that is not a
   # navigation target, which is why the readout lives there and not in the
@@ -43,18 +58,22 @@
   # installer edits the checkout (observed: it did, and pointed the setting at a
   # Mac-local absolute path shared with the Linux hosts).
   #
-  # Linux is excluded: rpi5 runs the headless server, where there is no client
-  # tab bar to render into and no Claude Keychain entry to read.
+  # Every host, not just darwin. A `type = "command"` entry is resolved by the
+  # SERVER, so `herdr --remote rpi5` renders rpi5's config.toml, not the Mac's —
+  # leaving every remote space without a bar until rpi5 carries this too. The
+  # reader is cross-platform for the same reason: it reads the login Keychain on
+  # darwin and ~/.claude/.credentials.json on Linux, which is the form Claude
+  # Code uses there and which rpi5 already has.
   # ---------------------------------------------------------------------------
 
   # Pins the interpreter so the command does not depend on whichever python3 the
   # server happens to find on PATH (it resolved to Xcode's). Called by NAME from
   # config.toml — a store path baked into a writable config would dangle on GC.
-  home.packages = lib.mkIf pkgs.stdenv.isDarwin [
+  home.packages = [
     (pkgs.writeShellApplication {
       name = "herdr-usage-bar";
       runtimeInputs = [ pkgs.python3 ];
-      # `codex` and `security` come from the ambient PATH, which
+      # `codex`, and `security` on darwin, come from the ambient PATH, which
       # writeShellApplication prepends to rather than replaces.
       text = ''
         exec python3 "$HOME/.config/herdr/usage-bar.py" "$@"
@@ -62,17 +81,32 @@
     })
   ];
 
-  # Both out-of-store symlinks. config.toml has to be writable because herdr
-  # rewrites it itself; usage-bar.py is writable for the same reason the Claude
-  # theme is — retune the thresholds and the next 60s tick picks it up, no
-  # rebuild.
-  home.file = lib.mkIf pkgs.stdenv.isDarwin {
-    ".config/herdr/config.toml".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/herdr-config.toml";
+  # Delivery differs by host, and deliberately so.
+  #
+  # The Mac gets out-of-store symlinks into the checkout: config.toml HAS to be
+  # writable there because herdr rewrites it itself (onboarding, the theme
+  # picker), and usage-bar.py being editable means a threshold can be retuned
+  # and picked up on the next 60s tick with no rebuild — the same trade
+  # home/dotfiles/claude-theme.json makes.
+  #
+  # The Linux hosts get store copies. An out-of-store symlink there would point
+  # into a checkout that is not guaranteed to be current — rpi5's was several
+  # commits behind when this landed, so the link would simply have dangled — and
+  # BeAsT may have no checkout at all. The cost is a read-only config.toml,
+  # which is acceptable precisely because those hosts run the HEADLESS server:
+  # the settings UI that writes to it lives in the client, which is the Mac.
+  home.file =
+    let
+      inCheckout = rel: config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/${rel}";
+      deliver = rel: stored: if pkgs.stdenv.isDarwin then inCheckout rel else stored;
+    in
+    {
+      ".config/herdr/config.toml".source =
+        deliver "home/dotfiles/herdr-config.toml" ./dotfiles/herdr-config.toml;
 
-    ".config/herdr/usage-bar.py".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/herdr/usage-bar.py";
-  };
+      ".config/herdr/usage-bar.py".source =
+        deliver "home/herdr/usage-bar.py" ./herdr/usage-bar.py;
+    };
 
   systemd.user.services.herdr = lib.mkIf pkgs.stdenv.isLinux {
     Unit = {
@@ -86,8 +120,25 @@
       # `herdr server` is the headless form; bare `herdr` would try to open a
       # TUI and exit for want of a terminal.
       ExecStart = "${unstablePkgs.herdr}/bin/herdr server";
+
+      # Yield to a server that is already up rather than fighting it.
+      #
+      # An interactive `herdr` starts a server on demand, and that one detaches
+      # from this unit's cgroup and keeps the API socket. `herdr server` then
+      # exits 1 with "herdr server is already running", Restart=on-failure fires
+      # five seconds later, and the pair loops forever: observed on rpi5 at
+      # restart counter 5072, against a stray server that had been up nine
+      # hours. A failing ExecCondition marks the start as SKIPPED rather than
+      # failed, so systemd stops retrying and the journal stays readable.
+      #
+      # ExecStartPre cannot be used for this — it would have to stop the running
+      # server, killing live panes, which is the opposite of what the unit is
+      # for.
+      ExecCondition = "${herdrServerAbsent}/bin/herdr-server-absent";
+
       Restart = "on-failure";
-      RestartSec = "5s";
+      # A genuine failure loop now costs six journal lines a minute, not thirty.
+      RestartSec = "30s";
     };
   };
 }
