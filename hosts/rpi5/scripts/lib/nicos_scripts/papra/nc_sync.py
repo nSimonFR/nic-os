@@ -313,6 +313,14 @@ def sync_tags(cfg, cur, docs, papra_tags, placed, fileids):
                             "AND objectid = %s AND systemtagid = %s", (str(fid), tid))
             removed += 1
         tagged += 1
+    # A move outside Nextcloud is a delete + create to its scanner, so the old
+    # fileid's mappings are left pointing at nothing.
+    if cfg.apply and owned:
+        cur.execute("DELETE FROM oc_systemtag_object_mapping m WHERE objecttype = 'files' "
+                    "AND systemtagid = ANY(%s) AND NOT EXISTS "
+                    "(SELECT 1 FROM oc_filecache f WHERE f.fileid::text = m.objectid)",
+                    (sorted(owned),))
+        removed += max(cur.rowcount, 0)
     return tagged, added, removed
 
 
