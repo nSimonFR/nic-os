@@ -54,6 +54,30 @@ claude = [
 [ui.toast]
 delivery = "terminal"
 
+# Every stock prefix+shift+<key> also answers to prefix+ctrl+<key>, so the ctrl
+# held for the prefix can stay down. A binding here REPLACES the default, hence
+# the shift form is restated. Not mirrored: prefix+shift+tab — ctrl+tab never
+# reaches a legacy-encoded terminal.
+[keys]
+new_workspace = ["prefix+shift+n", "prefix+ctrl+n"]
+new_worktree = ["prefix+shift+g", "prefix+ctrl+g"]
+rename_workspace = ["prefix+shift+w", "prefix+ctrl+w"]
+close_workspace = ["prefix+shift+d", "prefix+ctrl+d"]
+reload_config = ["prefix+shift+r", "prefix+ctrl+r"]
+rename_tab = ["prefix+shift+t", "prefix+ctrl+t"]
+close_tab = ["prefix+shift+x", "prefix+ctrl+x"]
+rename_pane = ["prefix+shift+p", "prefix+ctrl+p"]
+swap_pane_left = ["prefix+shift+h", "prefix+ctrl+h"]
+swap_pane_down = ["prefix+shift+j", "prefix+ctrl+j"]
+swap_pane_up = ["prefix+shift+k", "prefix+ctrl+k"]
+swap_pane_right = ["prefix+shift+l", "prefix+ctrl+l"]
+
+# Alt-tab, tmux keys: last pane (;) and previous/next session ( ). herdr has no
+# last-WORKSPACE action; last_pane crosses workspaces and tabs.
+last_pane = "prefix+;"
+previous_workspace = "prefix+("
+next_workspace = "prefix+)"
+
 # Open Claude somewhere new, in the focused pane's directory. The key picks the
 # PLACE; the pane itself then asks whether to fork the calling session, start a
 # new one, or resume (the claude-pane-menu in zsh/aliases.zsh). Placement cannot
@@ -87,13 +111,13 @@ command = "herdr-claude-open right"
 description = "split right + claude"
 
 [[keys.command]]
-key = "prefix+shift+c"
+key = ["prefix+shift+c", "prefix+ctrl+c"]
 type = "shell"
 command = "herdr-claude-open tab"
 description = "new tab + claude"
 
 [[keys.command]]
-key = "prefix+shift+s"
+key = ["prefix+shift+s", "prefix+ctrl+s"]
 type = "shell"
 command = "herdr-claude-open workspace"
 description = "new workspace + claude"
@@ -104,7 +128,7 @@ description = "new workspace + claude"
 # Runs `herdr-zoe` (home/herdr.nix), not upstream's herdr plugin, which is
 # broken on a nix install — see home/scripts/herdr-zoe.sh.
 [[keys.command]]
-key = "prefix+shift+z"
+key = ["prefix+shift+z", "prefix+ctrl+z"]
 type = "pane"
 command = "herdr-zoe"
 description = "zoetrope: session graph"
