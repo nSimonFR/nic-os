@@ -40,13 +40,15 @@
       "ProtonVPN"
       "Urban VPN Desktop"
     ];
-    # Use RPi5 blocky for DNS (ad/tracker/malware blocking)
-    # Tailscale IP first (works everywhere), LAN second (home network),
-    # Cloudflare/Quad9 last resort if RPi5 is unreachable
+    # RPi5 blocky over the tailnet; Cloudflare is the one fallback, in cleartext.
+    # It has to stay: macOS falls through on timeout, and tailscaled's own
+    # bootstrap DNS has been seen failing every hardcoded DERP IP during a link
+    # switch, so a tailnet-only resolver wedges DNS until someone intervenes.
     dns = [
       "100.122.54.2"   # RPi5 – Tailscale
-      "1.1.1.1"        # Cloudflare – fallback
-      "9.9.9.9"        # Quad9 – fallback
+      "1.0.0.1"        # Cloudflare – fallback, breaks the tailscale/DNS cycle.
+                       # Not 1.1.1.1: blackholed on some networks (iciwifi drops
+                       # it on UDP, TCP and ICMP alike), so it stalls 2s and dies.
     ];
   };
 
