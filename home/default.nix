@@ -16,6 +16,7 @@
     ./claude-aperture-shim.nix
     ./herdr.nix
     ./mcp.nix
+    ./net-diag.nix
     ./ssh.nix
     ./wakatime.nix
     ./editors.nix
