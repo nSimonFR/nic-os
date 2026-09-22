@@ -99,16 +99,14 @@ command = "herdr-claude-open workspace"
 description = "new workspace + claude"
 
 # zoetrope — draws the focused pane's session as a flow graph with the turn's
-# SUBAGENTS nested. `q` closes the popup.
+# SUBAGENTS nested, in a temporary zoomed pane. `q` closes it.
 #
 # Runs `herdr-zoe` (home/herdr.nix), not upstream's herdr plugin, which is
 # broken on a nix install — see home/scripts/herdr-zoe.sh.
 [[keys.command]]
 key = "prefix+shift+z"
-type = "popup"
+type = "pane"
 command = "herdr-zoe"
-width = "90%"
-height = "90%"
 description = "zoetrope: session graph"
 
 [theme]
