@@ -38,7 +38,6 @@ import threading
 import time
 import urllib.request
 
-BAR_CELLS = int(os.environ.get("USAGE_BAR_CELLS", "6"))
 WARN_PCT = 60
 HOT_PCT = 85
 
@@ -57,19 +56,6 @@ MAX_STALE = 6 * 3600
 # 60s poll got it answering 429 with `retry-after: 0`, and it stayed that way
 # for over fifteen minutes. Retrying every render would just extend that.
 BACKOFF = 1800
-
-FULL, EMPTY = "█", "░"
-EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"]
-
-
-def bar(pct: float, cells: int = BAR_CELLS) -> str:
-    """Eighth-block gauge; visible width is always `cells`."""
-    pct = max(0.0, min(100.0, pct))
-    units = round(pct / 100 * cells * 8)
-    full, rem = divmod(units, 8)
-    edge = EIGHTHS[rem] if full < cells else ""
-    return FULL * full + edge + EMPTY * (cells - full - (1 if edge else 0))
-
 
 def mark(pct: float) -> str:
     return " 🔴" if pct >= HOT_PCT else (" 🟡" if pct >= WARN_PCT else "")
@@ -287,7 +273,8 @@ def segment(name: str, windows: list, stale: bool) -> str:
     # below the warn threshold the reset is noise in a one-line bar.
     hot = max(windows, key=lambda w: w[1])
     when = reset_at(hot[2]) if worst >= WARN_PCT else ""
-    return f"{name} {bar(worst)} {render(windows)}{'*' if stale else ''}{mark(worst)}{when}"
+    icon = f"{mark(worst).strip()} " if mark(worst) else ""
+    return f"{icon}{name} {render(windows)}{'*' if stale else ''}{when}"
 
 
 def main() -> int:
