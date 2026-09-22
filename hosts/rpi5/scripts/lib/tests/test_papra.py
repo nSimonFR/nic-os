@@ -395,6 +395,7 @@ class FakePg:
         self.mappings = set(mappings)  # (objectid, tagid)
         self.autocommit = False
         self.writes = []
+        self.rowcount = -1
         self._rows = []
 
     def cursor(self):
@@ -421,6 +422,13 @@ class FakePg:
         elif s.startswith("INSERT INTO oc_systemtag_object_mapping"):
             self.mappings.add((params[0], params[1]))
             self.writes.append(("map", params[0], params[1]))
+        elif s.startswith("DELETE FROM oc_systemtag_object_mapping m"):
+            live = {str(f) for f in self.files.values()}
+            gone = {(o, t) for o, t in self.mappings if t in params[0] and o not in live}
+            self.mappings -= gone
+            self.rowcount = len(gone)
+            if gone:
+                self.writes.append(("orphans", len(gone)))
         elif s.startswith("DELETE FROM oc_systemtag_object_mapping"):
             self.mappings.discard((params[0], params[1]))
             self.writes.append(("unmap", params[0], params[1]))
@@ -441,12 +449,15 @@ class Scanner:
         self.archive, self.pg, self.calls = archive, pg, []
 
     def __call__(self, argv):
+        # Like Nextcloud: a path it already knows keeps its fileid, a path that
+        # appeared behind its back (a move) gets a fresh one.
         self.calls.append(argv)
-        self.pg.files = {}
+        old, self.pg.files = self.pg.files, {}
         for root, _d, files in os.walk(self.archive):
             for f in files:
                 rel = os.path.relpath(os.path.join(root, f), self.archive)
-                self.pg.files[rel] = 1000 + len(self.pg.files)
+                self.next = getattr(self, "next", 1000) + 1
+                self.pg.files[rel] = old.get(rel, self.next)
 
 
 def archive_env(tmp_path, docs, tags=(), doc_tags=(), dates=None):
@@ -515,6 +526,8 @@ def test_a_retag_moves_the_file_and_swaps_its_tags(tmp_path):
     assert listing(cfg.archive) == ["Contrat/bill.pdf"]
     fid = str(pg.files["Contrat/bill.pdf"])
     assert {t for o, t in pg.mappings if o == fid} == {pg.tags["Contrat"], pg.tags["Abonnement"]}
+    # The old fileid's mappings went with it.
+    assert {o for o, _t in pg.mappings} == {fid}
 
 
 def test_a_hand_added_nextcloud_tag_is_left_alone(tmp_path):
