@@ -247,15 +247,13 @@ in
   # hits zero and the system freezes waiting for the hardware watchdog.
   services.earlyoom = {
     enable = true;
-    # Fire early — zram-on-RPi5 starts thrashing long before "0% free", and
-    # earlyoom's AND-of-(mem,swap) gate plus its victim-selection race means
-    # it has been observing recoveries and never actually killing. Trigger
-    # SIGTERM at <10% mem (~400 MiB) and <20% swap (~1.6 GiB), SIGKILL at
-    # <5% / <10%, well above the watchdog-reset thrash zone.
-    freeMemThreshold      = 10;
-    freeMemKillThreshold  = 5;
-    freeSwapThreshold     = 20;
-    freeSwapKillThreshold = 10;
+    # Gate on memory alone (swap = 100 is always met): the 7.9G zram swap never
+    # got under 20% free before the box froze, so the mem-AND-swap gate never
+    # fired — 7 watchdog resets 2026-09-20..22.
+    freeMemThreshold      = 15;
+    freeMemKillThreshold  = 8;
+    freeSwapThreshold     = 100;
+    freeSwapKillThreshold = 100;
     extraArgs = [
       # Prefer expendable heavy processes: immich transcoding/API and ffmpeg.
       "--prefer" "(immich|ffmpeg)"
