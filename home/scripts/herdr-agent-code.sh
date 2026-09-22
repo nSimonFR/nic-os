@@ -28,4 +28,9 @@ herdr pane report-metadata "$HERDR_PANE_ID" \
   --source nicos:agent-code \
   --display-agent "$code" >/dev/null 2>&1 || true
 
+# SessionStart stdout is shown to Claude, and this hook only gets here under
+# herdr — which makes it the one place that can announce a herdr-only tool
+# without spending the line on every other session.
+echo "Running in herdr pane $HERDR_PANE_ID (workspace ${HERDR_WORKSPACE_ID:-?}). /shutdown closes this pane once the current turn finishes."
+
 exit 0
