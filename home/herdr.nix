@@ -108,6 +108,17 @@ in
       ];
       text = builtins.readFile ./scripts/herdr-zoe.sh;
     })
+
+    # Backs the `shutdown` skill (shared/skills/shutdown).
+    (pkgs.writeShellApplication {
+      name = "herdr-shutdown";
+      runtimeInputs = [
+        pkgs.jq
+        unstablePkgs.herdr
+        pkgs.coreutils
+      ];
+      text = builtins.readFile ./scripts/herdr-shutdown.sh;
+    })
   ];
 
   # Delivery differs by host, and deliberately so.
