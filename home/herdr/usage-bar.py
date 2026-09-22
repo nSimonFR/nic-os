@@ -40,6 +40,8 @@ import urllib.request
 
 WARN_PCT = 60
 HOT_PCT = 85
+# The reset shown is the 5h window's; the weekly one replaces it only past this.
+WEEKLY_RESET_PCT = 95
 
 # api.anthropic.com/api/oauth/usage answers 429 when polled hard, and a 429 is
 # indistinguishable on screen from "no data". So the fetch interval is decoupled
@@ -266,13 +268,22 @@ def codex_windows() -> list[tuple[str, float]] | None:
     return windows or None
 
 
+def reset_window(windows: list) -> tuple | None:
+    """The window whose reset is worth showing, if any. Fable never is."""
+    by_label = {w[0]: w for w in windows}
+    weekly = by_label.get("W")
+    if weekly and weekly[1] > WEEKLY_RESET_PCT:
+        return weekly
+    five = by_label.get("5")
+    # Below the warn threshold the reset is noise in a one-line bar.
+    return five if five and five[1] >= WARN_PCT else None
+
+
 def segment(name: str, windows: list, stale: bool) -> str:
     windows = norm(windows)
     worst = max(w[1] for w in windows)
-    # Only the window that is actually close to its limit says when it reopens;
-    # below the warn threshold the reset is noise in a one-line bar.
-    hot = max(windows, key=lambda w: w[1])
-    when = reset_at(hot[2]) if worst >= WARN_PCT else ""
+    shown = reset_window(windows)
+    when = reset_at(shown[2]) if shown else ""
     icon = f"{mark(worst).strip()} " if mark(worst) else ""
     return f"{name} {icon}{render(windows)}{'*' if stale else ''}{when}"
 
