@@ -222,6 +222,13 @@ in
       executable = true;
     };
 
+    # SessionStart hook: report `cc` as this pane's display agent, so herdr's
+    # agent panel shows the kind inline instead of on a row of its own.
+    ".claude/hooks/herdr-agent-code" = {
+      source = ./scripts/herdr-agent-code.sh;
+      executable = true;
+    };
+
     ".claude/hooks/memory-sync".source =
       "${pkgs.nicos-scripts}/bin/claude-memory-sync";
 

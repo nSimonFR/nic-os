@@ -1290,7 +1290,8 @@
         "showmycards-src": "showmycards-src",
         "sure-nix": "sure-nix",
         "tiny-llm-gate": "tiny-llm-gate",
-        "zen-browser": "zen-browser"
+        "zen-browser": "zen-browser",
+        "zoetrope-src": "zoetrope-src"
       }
     },
     "rtk-src": {
@@ -1687,6 +1688,23 @@
       "original": {
         "owner": "0xc000022070",
         "repo": "zen-browser-flake",
+        "type": "github"
+      }
+    },
+    "zoetrope-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1789055627,
+        "narHash": "sha256-jfzbgtZNIbDyHpXqP5QxF9o71zdYKEbY862NIaPHujo=",
+        "owner": "furkankly",
+        "repo": "zoetrope",
+        "rev": "c87c2352103c40820e279f4df672509cf04cdc20",
+        "type": "github"
+      },
+      "original": {
+        "owner": "furkankly",
+        "ref": "v0.2.0",
+        "repo": "zoetrope",
         "type": "github"
       }
     }
