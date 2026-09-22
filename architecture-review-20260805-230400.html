@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architecture review — nic-os</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script type="module">
+      import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+      mermaid.initialize({ startOnLoad: true, theme: "neutral", securityLevel: "loose" });
+    </script>
+    <style>
+      .seam { stroke-dasharray: 4 4; }
+      .leak { stroke: #dc2626; }
+      .deep { background: linear-gradient(135deg, #0f172a, #1e293b); }
+      .lbl { font-size: .625rem; text-transform: uppercase; letter-spacing: .08em; }
+      .hatch {
+        background-image: repeating-linear-gradient(45deg, #e7e5e4 0 4px, #f5f5f4 4px 8px);
+      }
+    </style>
+  </head>
+  <body class="bg-stone-50 text-slate-900 font-sans antialiased">
+    <main class="max-w-5xl mx-auto px-6 py-12 space-y-14">
+
+      <!-- ═══════════════ HEADER ═══════════════ -->
+      <header class="space-y-6">
+        <div>
+          <p class="lbl text-slate-500">Architecture review</p>
+          <h1 class="font-serif text-5xl tracking-tight mt-1">nic-os</h1>
+          <p class="text-slate-600 mt-3 max-w-2xl">
+            13,905 LOC Nix across 98 files · 6,984 LOC Python · 1,720 LOC shell ·
+            ~1,600 further lines of shell embedded in Nix strings.
+            Four targets: <span class="font-mono text-sm">BeAsT</span>,
+            <span class="font-mono text-sm">rpi5</span>,
+            <span class="font-mono text-sm">nBookPro</span>, plus standalone home configs.
+          </p>
+          <p class="text-slate-500 text-sm mt-2">2026-08-05 · branch <span class="font-mono">worktree-bridge-cse</span> · 8 candidates</p>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-5">
+          <p class="lbl text-slate-500 mb-3">Legend</p>
+          <div class="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-sm">
+            <div class="flex items-center gap-3"><span class="inline-block w-10 h-5 border-2 border-slate-400 rounded-sm bg-white"></span><span>module</span></div>
+            <div class="flex items-center gap-3"><span class="inline-block w-10 h-5 border-2 border-dashed border-slate-400 rounded-sm"></span><span>seam</span></div>
+            <div class="flex items-center gap-3"><span class="inline-block w-10 h-5 border-2 border-red-600 rounded-sm bg-red-50"></span><span>leakage</span></div>
+            <div class="flex items-center gap-3"><span class="inline-block w-10 h-5 rounded-sm deep"></span><span>deep module</span></div>
+          </div>
+        </div>
+
+        <!-- Thesis -->
+        <div class="rounded-lg border-l-4 border-indigo-500 bg-white border border-slate-200 p-6">
+          <p class="lbl text-indigo-600 mb-2">The finding under all eight candidates</p>
+          <p class="text-lg leading-relaxed">
+            This repo documents its duplication <em>impeccably</em>, in exactly the places where a
+            function should have been extracted instead.
+          </p>
+          <div class="mt-4 space-y-1 font-mono text-xs text-slate-600">
+            <p><span class="text-slate-400">airtrail.nix:55</span> &nbsp;“same fix as sure-pg-setup”</p>
+            <p><span class="text-slate-400">ryot.nix:102</span> &nbsp;&nbsp;“pattern shared with airtrail-pg-setup”</p>
+            <p><span class="text-slate-400">nextcloud.nix:100</span> &nbsp;“same caveat as sure/airtrail”</p>
+            <p><span class="text-slate-400">epicgames-freegames.nix:73</span> &nbsp;“Mirrors monitoring.nix's telegramNotify”</p>
+            <p><span class="text-slate-400">claude-account-healthcheck.nix:17</span> &nbsp;“Kept local to this module so it stays self-contained”</p>
+          </div>
+          <p class="text-slate-600 mt-4 text-sm">
+            Every one of those comments is a correct, load-bearing observation. Each one is also a
+            missing seam, written down as prose instead of code.
+          </p>
+        </div>
+
+        <!-- Confirmed defects -->
+        <div class="rounded-lg border border-red-200 bg-red-50/60 p-6">
+          <p class="lbl text-red-700 mb-3">Live defects found by this review — verified against the running host</p>
+          <ol class="space-y-3 text-sm">
+            <li><span class="font-semibold">Karakeep is unbacked.</span> 2.2 MB of live bookmark data at <span class="font-mono text-xs">/var/lib/karakeep</span>, outside <span class="font-mono text-xs">/mnt/data</span>, so <span class="font-mono text-xs">storj-backup.nix:11</span> never sees it — and no <span class="font-mono text-xs">karakeep-backup</span> unit exists anywhere. Nothing in the repo asserts “service with a DB ⇒ backup exists”.</li>
+            <li><span class="font-semibold">A dead nightly <span class="font-mono text-xs">pg_dump</span>.</span> <span class="font-mono text-xs">backups.nix:18</span> dumps a <span class="font-mono text-xs">ghostfolio</span> database; <span class="font-mono text-xs">grep</span> across the repo matches that line and nothing else.</li>
+            <li><span class="font-semibold">The OOM guard skips two services.</span> <span class="font-mono text-xs">lib/heavy-services.nix</span> omits <span class="font-mono text-xs">karakeep-web</span>, <span class="font-mono text-xs">karakeep-workers</span>, <span class="font-mono text-xs">meilisearch</span>, <span class="font-mono text-xs">showmycards-*</span> — so <span class="font-mono text-xs">nixos-rebuild-safe</span> never frees their RSS on a 3.9 GB box whose documented failure mode is exactly a rebuild-time watchdog reset.</li>
+            <li><span class="font-semibold">Shared skills ship without their assets.</span> <span class="font-mono text-xs">home/claude.nix:15-38</span> maps only <span class="font-mono text-xs">SKILL.md</span>, but its own header promises “adding a new one is just a directory”. <span class="font-mono text-xs">shared/skills/linear/assets/linear-small.svg</span> and <span class="font-mono text-xs">LICENSE.txt</span> reach Claude Code, Codex and pi as <em>nothing</em>. Only Hermes, which copies whole dirs, is correct.</li>
+            <li><span class="font-semibold">Every tailnet node is an Aperture admin.</span> <span class="font-mono text-xs">aperture-sync.nix:70-77</span> grants <span class="font-mono text-xs">role = "admin"</span> to <span class="font-mono text-xs">src = [ "*" ]</span>.</li>
+            <li><span class="font-semibold">A systemd condition in the wrong section.</span> <span class="font-mono text-xs">nixos/beszel-agent.nix:18</span> puts <span class="font-mono text-xs">ConditionPathExists</span> inside <span class="font-mono text-xs">serviceConfig</span>, so it lands in <span class="font-mono text-xs">[Service]</span> and systemd ignores it; the unit restart-loops when the env file is absent. The rpi5 copy gets it right (<span class="font-mono text-xs">monitoring.nix:45</span>, <span class="font-mono text-xs">unitConfig</span>). Found only by diffing two copies of the same module.</li>
+            <li><span class="font-semibold">The live agent reads a manual describing deleted paths.</span> <span class="font-mono text-xs">rpi5/hermes/documents/TOOLS.md</span> is rsync'd into <span class="font-mono text-xs">~/.hermes/</span> at <span class="font-mono text-xs">hermes.nix:200</span> and tells Hermes its skills live in <span class="font-mono text-xs">rpi5/picoclaw/skills/</span> — a directory removed two agent-generations ago.</li>
+            <li><span class="font-semibold">The only enforcement mechanism is broken.</span> <span class="font-mono text-xs">.githooks/commit-msg</span> invokes <span class="font-mono text-xs">commitlint.config.cjs</span>, which does not exist in the repo (nor does <span class="font-mono text-xs">package.json</span>). <span class="font-mono text-xs">core.hooksPath</span> is unset, so nothing runs it.</li>
+          </ol>
+          <p class="text-xs text-red-800/80 mt-4">
+            None of these is a coding mistake. Each is the predictable output of a fact that lives in
+            two places with nothing checking agreement.
+          </p>
+        </div>
+      </header>
+
+      <!-- ═══════════════ CANDIDATES ═══════════════ -->
+      <section id="candidates" class="space-y-12">
+        <h2 class="font-serif text-3xl tracking-tight border-b border-slate-300 pb-2">Candidates</h2>
+
+        <!-- ───── 1 ───── -->
+        <article id="c1" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">flagship</span>
+            </div>
+            <h3 class="font-serif text-2xl">1 · Give a service one module</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600 leading-relaxed">
+            rpi5/&lt;service&gt;.nix · rpi5/configuration.nix:151-214 · rpi5/services-registry.nix ·
+            rpi5/secrets.nix · rpi5/secrets/secrets.nix · rpi5/backups.nix ·
+            rpi5/lib/heavy-services.nix · rpi5/front-proxy.nix · rpi5/scripts/homepage-stats.py
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — one service, nine authoring sites</p>
+              <pre class="mermaid">
+flowchart LR
+  M["airtrail.nix<br/>servePort = 3600"]
+  C["configuration.nix<br/>imports"]
+  R["services-registry.nix<br/>port = 3600"]
+  S["secrets.nix"]
+  S2["secrets/secrets.nix"]
+  B["backups.nix<br/>databases"]
+  H["heavy-services.nix<br/>unit names"]
+  F["front-proxy.nix<br/>backend ports"]
+  P["homepage-stats.py<br/>db paths"]
+  M -.copy.-> R
+  M -.copy.-> B
+  M -.copy.-> H
+  M -.copy.-> F
+  M -.copy.-> P
+  M --> C
+  S -.pair.-> S2
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class R,B,H,F,P leak
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">Dotted red = a fact re-typed, not referenced.</p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4">
+              <p class="lbl text-emerald-700 mb-3">After — one module, everything derived</p>
+              <div class="space-y-2">
+                <div class="deep rounded-md p-4 text-white">
+                  <p class="lbl text-slate-300">declares once</p>
+                  <p class="font-mono text-xs mt-2 leading-relaxed">nic.services.airtrail = {<br/>
+                  &nbsp;&nbsp;servePort = 3600;<br/>
+                  &nbsp;&nbsp;backendPort = 8310;<br/>
+                  &nbsp;&nbsp;postgres.db = "airtrail";<br/>
+                  &nbsp;&nbsp;backup = true;<br/>
+                  &nbsp;&nbsp;heavy = true;<br/>
+                  &nbsp;&nbsp;tile = { … };<br/>
+                  };</p>
+                </div>
+                <div class="text-center text-slate-400 text-lg leading-none">↓</div>
+                <div class="hatch rounded-md p-3 border border-slate-300">
+                  <p class="lbl text-slate-500 mb-1">derived, not authored</p>
+                  <p class="text-xs text-slate-600 font-mono leading-relaxed">
+                    serve entry · homepage tile · pg role + password<br/>
+                    pgBackup entry · heavy-services entry · stats fetcher
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>A service is not a module — it is a diff smeared across up to nine files, so no single place can be checked for completeness.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>One option interface per service that owns its ports, database, backup, exposure and tile; the six central lists become derived from it.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm space-y-2">
+            <p class="lbl text-slate-500">Evidence</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>· Top three most-churned files in the last 400 commits, excluding <span class="font-mono text-xs">flake.lock</span>: <span class="font-mono text-xs">services-registry.nix</span> (42), <span class="font-mono text-xs">configuration.nix</span> (41), <span class="font-mono text-xs">flake.nix</span> (40).</li>
+              <li>· Adding ShowMyCards (<span class="font-mono text-xs">46a11cc</span>) touched 6 files. Adding scale-bridge (<span class="font-mono text-xs">740f0f0</span>) touched 6.</li>
+              <li>· Every socket-activated service writes its two ports twice, module and registry, linked by a comment — <em>“see services-registry.nix”</em> — instead of a reference. 21 such facts.</li>
+              <li>· <span class="font-mono text-xs">4a87659 fix(serve): free port 3700 collision — Ryot vs Epic Free Games</span>. Port <span class="font-mono text-xs">3700</span> was written four times across two files. Nothing allocates ports.</li>
+              <li>· Redis DB indices are tracked by prose comments in three files that <em>disagree</em> on the inventory (<span class="font-mono text-xs">databases.nix:34</span>, <span class="font-mono text-xs">gramps-web.nix:36</span>, <span class="font-mono text-xs">reactive-resume.nix:140</span>).</li>
+              <li>· <span class="font-mono text-xs">services-registry.nix:130</span> cross-references “monitoring.nix:213” by line number. It is off by 7.</li>
+              <li>· Disabling one service takes two coordinated comment-outs (<span class="font-mono text-xs">configuration.nix:194</span> + <span class="font-mono text-xs">services-registry.nix:81</span>), and the comment says so.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· locality: one service, one place</li>
+              <li>· leverage: one interface, 26 services</li>
+              <li>· ports allocated, not remembered</li>
+              <li>· backup gaps become eval errors</li>
+              <li>· registry shrinks to derived data</li>
+              <li>· deletes ~6 hand-synced lists</li>
+            </ul>
+          </div>
+
+          <div class="rounded-md bg-emerald-50 border border-emerald-200 p-4 text-sm">
+            <p class="lbl text-emerald-700 mb-1">The precedent is already in the repo</p>
+            <p class="text-slate-700">Three real seams already work this way: <span class="font-mono text-xs">services.socketActivate</span> (13 callers, one uniform shape, zero escapes), <span class="font-mono text-xs">services-registry.nix</span> → two mechanically derived consumers, and <span class="font-mono text-xs">databases.nix</span>'s <span class="font-mono text-xs">_module.args</span> (11 consumers of <span class="font-mono text-xs">pgHost</span>/<span class="font-mono text-xs">redisName</span> instead of hardcoding). This candidate extends a pattern the author already chose — it does not import a new one.</p>
+          </div>
+        </article>
+
+        <!-- ───── 2 ───── -->
+        <article id="c2" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-stone-100 text-stone-700">smallest win</span>
+            </div>
+            <h3 class="font-serif text-2xl">2 · Extract the Postgres role seam</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600">
+            airtrail.nix:45-66 · ryot.nix:103-121 · sure.nix:61-80 · nextcloud.nix:108 ·
+            reactive-resume.nix:54-75 · affine.nix:147-161
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — six copies, ~120 lines</p>
+              <div class="space-y-1.5">
+                <!-- cross-section: six identical thin bands -->
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">airtrail-pg-setup <span class="ml-auto text-slate-400">20 ln</span></div>
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">ryot-pg-setup <span class="ml-auto text-slate-400">19 ln</span></div>
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">sure-pg-setup <span class="ml-auto text-slate-400">20 ln</span></div>
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">nextcloud-pg-setup <span class="ml-auto text-slate-400">20 ln</span></div>
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">reactive-resume-pg-setup <span class="ml-auto text-slate-400">22 ln</span></div>
+                <div class="h-9 border-l-4 border-red-400 bg-red-50 flex items-center px-3 font-mono text-xs">affine-pg-setup <span class="ml-auto text-slate-400">15 ln</span></div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3">The <span class="font-mono">:'pw'</span>-only-works-via-stdin caveat is re-explained in four of them.</p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4 flex flex-col">
+              <p class="lbl text-emerald-700 mb-3">After — one deep module, six call sites</p>
+              <div class="deep rounded-md p-4 text-white flex-1 flex flex-col justify-center">
+                <p class="font-mono text-xs leading-relaxed">lib/pg-role.nix {<br/>
+                &nbsp;&nbsp;db, user, passwordFile,<br/>
+                &nbsp;&nbsp;extensions ? [ ]<br/>
+                }</p>
+                <p class="text-slate-400 text-xs mt-3">≈ 25 lines total. Owns the stdin caveat, the
+                <span class="font-mono">postgresql-setup</span> ordering, and
+                <span class="font-mono">PrivateUsers = mkForce false</span> — once.</p>
+              </div>
+              <div class="mt-3 space-y-1">
+                <div class="h-6 border-l-4 border-emerald-500 bg-emerald-50 flex items-center px-3 font-mono text-xs">6 × pgRole { … } <span class="ml-auto text-slate-400">3 ln each</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>Six near-identical oneshots whose comments cite each other as the copy source; a fix to the ordering or the quoting caveat must be applied six times.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>One <span class="font-mono text-xs">lib/pg-role.nix</span> taking <span class="font-mono text-xs">{ db, user, passwordFile }</span>; the six modules call it.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm">
+            <p class="lbl text-slate-500 mb-1">Deletion test</p>
+            <p class="text-slate-700">Concentrates. The <span class="font-mono text-xs">postgresql-setup.service</span> ordering rule is already a known-issue note in the author's own memory (“custom <span class="font-mono text-xs">*-pg-setup</span> must order after <span class="font-mono text-xs">postgresql-setup.service</span> or ALTER USER races on first boot”). That knowledge currently has six homes.</p>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· locality: the race fix lives once</li>
+              <li>· ~120 lines → ~45</li>
+              <li>· interface shrinks to three args</li>
+              <li>· smallest candidate that pays immediately</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ───── 3 ───── -->
+        <article id="c3" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-amber-50 text-amber-800">no test surface today</span>
+            </div>
+            <h3 class="font-serif text-2xl">3 · Give the scripts an interface that isn't a systemd unit</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600 leading-relaxed">
+            rpi5/scripts/*.py (11 files, ~3,900 LOC) · rpi5/scripts/*.sh (5) ·
+            scripts/immich-nextcloud-sync.py · home/scripts/ · ~1,600 lines of shell inside .nix strings
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — the only way in is a rebuild</p>
+              <pre class="mermaid">
+flowchart TB
+  E["edit moxfield-sync.py"] --> RB["nixos-rebuild switch<br/>on a 3.9 GB Pi"]
+  RB --> RS["systemctl restart"]
+  RS --> J["journalctl<br/>read the traceback"]
+  J --> E
+  RB -.->|OOM / watchdog reset| X["outage"]
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class RB,X leak
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">
+                <span class="font-mono">papra-tag-sweep.py:26</span> opens a SQLite connection
+                <em>at import</em>. It cannot be imported off-host, let alone tested.
+              </p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4">
+              <p class="lbl text-emerald-700 mb-3">After — the interface is the test surface</p>
+              <pre class="mermaid">
+flowchart TB
+  T["pytest<br/>(flake checks)"] --> I["sync(cfg, client)"]
+  N["systemd unit"] --> I
+  I --> L["scripts/lib/<br/>telegram · http · state · secrets"]
+  L --> A1["real adapter"]
+  L --> A2["in-memory fake"]
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a;
+  class I deep
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">
+                Two adapters justify the seam: real HTTP in prod, a fake in tests.
+              </p>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>~5,200 lines of imperative logic have exactly one interface — a systemd unit on the live host — and zero tests, so every change is validated in production.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>A <span class="font-mono text-xs">scripts/lib/</span> module for the five copy-pasted helper families, config injected rather than read at import, and <span class="font-mono text-xs">flake.checks</span> running pytest.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm space-y-2">
+            <p class="lbl text-slate-500">Evidence</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>· No <span class="font-mono text-xs">checks</span>, no <span class="font-mono text-xs">devShells</span>, no <span class="font-mono text-xs">formatter</span> in <span class="font-mono text-xs">flake.nix</span>. No pytest, bats, or <span class="font-mono text-xs">nixosTest</span> anywhere. One CI workflow, and it only syncs the Tailscale ACL.</li>
+              <li>· <span class="font-mono text-xs">steam-to-ryot.py:72-90</span> and <span class="font-mono text-xs">spotify-to-ryot.py:53-71</span> — <span class="font-mono text-xs">http_json</span>, <span class="font-mono text-xs">load_json</span>, <span class="font-mono text-xs">save_json</span>, <span class="font-mono text-xs">post_to_ryot</span> are character-for-character identical.</li>
+              <li>· Nine independent <span class="font-mono text-xs">log()</span> definitions. Four idioms for “read an agenix file and strip it”. Four Ryot clients speaking three protocols, one of which drops to raw destructive <span class="font-mono text-xs">psql</span> DML (<span class="font-mono text-xs">ryot-plex-import.sh:87</span>).</li>
+              <li>· Exponential backoff is implemented once, in <span class="font-mono text-xs">moxfield-sync.py:131</span>, and reimplemented as a retry loop <em>inside a Nix string</em> at <span class="font-mono text-xs">aperture-sync.nix:127</span>. Everything else has none.</li>
+              <li>· Six different wiring mechanisms for “run this script”. Only <span class="font-mono text-xs">papra-webhook-tagsync.py</span> declares a Python dependency; a stray <span class="font-mono text-xs">import requests</span> elsewhere would build, deploy, and fail at 05:20 on a timer.</li>
+              <li>· <span class="font-mono text-xs">writeShellApplication</span> runs shellcheck and is used twice. <span class="font-mono text-xs">writeShellScript</span> does not and is used 42 times.</li>
+              <li>· <span class="font-mono text-xs">moxfield-sync.py</span> — 811 lines, <span class="font-mono text-xs">DRY_RUN="0"</span> set in Nix, destructive against a 618-card collection with no soft-delete upstream, no tests.</li>
+              <li>· The only fully argv-driven script, <span class="font-mono text-xs">scripts/immich-nextcloud-sync.py</span>, is also the only one nothing runs automatically — and is referenced nowhere in the repo.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· tests hit one interface</li>
+              <li>· no rebuild to validate a change</li>
+              <li>· locality: retry and backoff live once</li>
+              <li>· destructive syncs become testable</li>
+              <li>· shellcheck covers the shell</li>
+              <li>· breaks the rebuild→OOM feedback loop</li>
+            </ul>
+          </div>
+
+          <div class="rounded-md bg-amber-50 border border-amber-200 p-4 text-sm">
+            <p class="lbl text-amber-800 mb-1">Note on the convention</p>
+            <p class="text-slate-700">“No inline Nix scripts” exists as a rule — but only in the agent's user-level memory, not in the repo. <span class="font-mono text-xs">CLAUDE.md</span> is 968 bytes and covers commit authorship and skill placement only. The rule is invisible to anyone reading the repo and enforced by nothing, and compliance tracks when a file was last touched: <span class="font-mono text-xs">papra.nix</span> externalises all five of its scripts, while <span class="font-mono text-xs">monitoring.nix</span> externalises one and keeps 95 lines of <span class="font-mono text-xs">curl</span>/<span class="font-mono text-xs">jq</span>/<span class="font-mono text-xs">sed</span> inline beside it.</p>
+          </div>
+        </article>
+
+        <!-- ───── 4 ───── -->
+        <article id="c4" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">local-substitutable</span>
+            </div>
+            <h3 class="font-serif text-2xl">4 · One notification seam</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600 leading-relaxed">
+            scripts/telegram-alert.sh · shared/telegram-notify.nix · claude-notify-aggregator.py ·
+            monitoring.nix:11 · claude-account-healthcheck.nix:19 · epicgames-freegames.nix:75 ·
+            auto-upgrade.nix:99 · travel-cal-sync.py:567 · claude-rc-boot-resume.py:110 ·
+            hermes-skill-promote.sh:120 · daily-pending-digest.sh:239
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — nine senders, four styles</p>
+              <pre class="mermaid">
+flowchart LR
+  A1["monitoring.nix"] --> AL["telegram-alert.sh<br/>(stateful, deep)"]
+  A2["account-healthcheck"] --> AL
+  B1["claude-notify.sh"] --> AG["aggregator :8088"]
+  B2["telegram-notify.nix"] --> AG
+  AL --> TG(("api.telegram.org"))
+  AG --> TG
+  C1["epicgames.nix"] -.-> TG
+  C2["auto-upgrade.nix"] -.-> TG
+  C3["travel-cal-sync.py"] -.-> TG
+  C4["boot-resume.py"] -.-> TG
+  C5["skill-promote.sh"] -.-> TG
+  C6["telegram SKILL.md<br/>(model-authored curl)"] -.-> TG
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class C1,C2,C3,C4,C5,C6 leak
+              </pre>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4 flex flex-col justify-center">
+              <p class="lbl text-emerald-700 mb-3">After — one seam, two adapters</p>
+              <div class="space-y-2">
+                <div class="hatch rounded p-2 border border-slate-300 text-center font-mono text-xs">11 callers</div>
+                <div class="text-center text-slate-400 leading-none">↓</div>
+                <div class="deep rounded-md p-4 text-white text-center">
+                  <p class="font-mono text-sm">notify { key, title, body }</p>
+                  <p class="text-slate-400 text-xs mt-2">dedup · edit-in-place · auto-resolve · debounce</p>
+                </div>
+                <div class="text-center text-slate-400 leading-none">↓</div>
+                <div class="grid grid-cols-2 gap-2 text-center font-mono text-xs">
+                  <div class="border-2 border-dashed border-slate-400 rounded p-2">telegram</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-2">in-memory (tests)</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>Nine hand-rolled <span class="font-mono text-xs">api.telegram.org</span> calls with gratuitous differences — urlencode vs JSON body, HTML vs no parse mode, timeout 10 vs 15, swallow vs log — so alert behaviour depends on which file fires.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>Promote the existing <span class="font-mono text-xs">telegram-alert.sh</span> to the one seam and route every sender through it, including its Nix wrapper.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm">
+            <p class="lbl text-slate-500 mb-1">Half of this is already built</p>
+            <p class="text-slate-700"><span class="font-mono text-xs">telegram-alert.sh</span> is genuinely deep: two args plus stdin buys the caller send-once, edit-in-place, occurrence counting and auto-resolve on empty. The problem is that its Nix wrapper is byte-for-byte duplicated between <span class="font-mono text-xs">monitoring.nix:11-18</span> and <span class="font-mono text-xs">claude-account-healthcheck.nix:19-26</span>, and that <span class="font-mono text-xs">telegramChatId</span> is threaded correctly from <span class="font-mono text-xs">flake.nix:245</span> to eleven modules — so the seam exists for the <em>configuration</em> and not for the <em>action</em>.</p>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· leverage: dedup for free, 11 call sites</li>
+              <li>· alerts stop double-firing</li>
+              <li>· one wrapper, not two</li>
+              <li>· a fake adapter makes alerts testable</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ───── 5 ───── -->
+        <article id="c5" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+            </div>
+            <h3 class="font-serif text-2xl">5 · Separate package definitions from service modules</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600 leading-relaxed">
+            nixos/tobii-native.nix (8 derivations) · nixos/rgb/*.nix (4) ·
+            rpi5/configuration.nix:75-139 (5) · scale-bridge.nix:33 · epicgames-freegames.nix:34 ·
+            affine-mcp.nix:12 · home-assistant.nix:25 · pkgs/ (3 files)
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — mass diagram, <span class="font-mono">pkgs/</span> vs reality</p>
+              <div class="flex items-end gap-6 h-56 justify-center">
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-20 bg-emerald-200 border-2 border-emerald-600 rounded-t" style="height:60px"></div>
+                  <p class="lbl text-slate-600 text-center">pkgs/<br/>3 files</p>
+                </div>
+                <div class="flex flex-col items-center gap-2">
+                  <div class="w-20 bg-red-100 border-2 border-red-500 rounded-t" style="height:180px"></div>
+                  <p class="lbl text-slate-600 text-center">inline in<br/>host configs<br/>~20 builds</p>
+                </div>
+              </div>
+              <p class="text-xs text-slate-500 mt-2 text-center">
+                <span class="font-mono">pkgs/</span> captures under a quarter of the repo's package builds.
+                <span class="font-mono">nixos/</span> contributes zero files to it while holding the largest concentration.
+              </p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4">
+              <p class="lbl text-emerald-700 mb-3">After — one seam, two roles</p>
+              <div class="space-y-3">
+                <div class="deep rounded-md p-3 text-white">
+                  <p class="lbl text-slate-300">pkgs/ — what to build</p>
+                  <p class="font-mono text-xs mt-1 text-slate-200">tobii/* · openrgb-lg · rpi-bootloader · ble-scale-sync · …</p>
+                </div>
+                <div class="text-center text-slate-400 leading-none">↓ overlay</div>
+                <div class="rounded-md border-2 border-dashed border-slate-400 p-3">
+                  <p class="lbl text-slate-500">host module — how to run it</p>
+                  <p class="font-mono text-xs mt-1 text-slate-600">systemd · udev · users · tmpfiles</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>Package builds are welded into host configs, so <span class="font-mono text-xs">rpi5/configuration.nix</span> opens with 120 lines of bootloader patching before its import list, and a Windows DLL is cross-compiled inside a host config file.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>Move the ~1,100 lines of derivations under <span class="font-mono text-xs">pkgs/</span>, expose via overlays as <span class="font-mono text-xs">flake.nix:251-272</span> already does for two packages, leave thin service modules behind.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm space-y-2">
+            <p class="lbl text-slate-500">Evidence</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>· <span class="font-mono text-xs">nixos/tobii-native.nix</span> — 531 lines, eight derivations, including a <span class="font-mono text-xs">pkgsCross.mingwW64</span> Windows DLL build. Its udev rule and UDP port leak upward into <span class="font-mono text-xs">nixos/configuration.nix:644,660</span>, so the “encapsulated” module isn't.</li>
+              <li>· <span class="font-mono text-xs">nixos/rgb/openrgb-lg.nix:9-56</span> defines a <span class="font-mono text-xs">nixpkgs.overlays</span> entry <em>inside a NixOS module</em> — exactly the overlay pattern <span class="font-mono text-xs">flake.nix</span> uses for rtk and showmycards, done ad hoc in the wrong place. Only 3 of its 61 lines are system config.</li>
+              <li>· Two incompatible wiring conventions inside a 3-file directory: <span class="font-mono text-xs">rtk</span> and <span class="font-mono text-xs">showmycards</span> go through overlays (single eval), while <span class="font-mono text-xs">mtg-mcp</span> is <span class="font-mono text-xs">callPackage</span>'d independently at two sites — two evals, no <span class="font-mono text-xs">pkgs.mtg-mcp</span>.</li>
+              <li>· <span class="font-mono text-xs">nixpkgs-unstable</span> is instantiated ten separate ways across <span class="font-mono text-xs">flake.nix</span>, both host configs, <span class="font-mono text-xs">macos/components/yabai.nix</span> and <span class="font-mono text-xs">rpi5/overlays.nix</span>.</li>
+              <li>· Three files under <span class="font-mono text-xs">rpi5/</span> (<span class="font-mono text-xs">blogwatcher.nix</span>, <span class="font-mono text-xs">gogcli.nix</span>, <span class="font-mono text-xs">goplaces.nix</span>) are pure derivations misfiled as host modules.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· <span class="font-mono text-xs">nix build .#pkg</span> per package</li>
+              <li>· heavy builds isolate from rebuilds</li>
+              <li>· host configs shrink to configuration</li>
+              <li>· one instantiation of unstable</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ───── 6 ───── -->
+        <article id="c6" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">in-process</span>
+            </div>
+            <h3 class="font-serif text-2xl">6 · Name the hosts, not the operating systems</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600">
+            nixos/ → BeAsT · rpi5/ → rpi5 · macos/ → nBookPro · shared/ (147 LOC) · home/ (the real shared dir)
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — three naming schemes, none the host</p>
+              <div class="space-y-2 font-mono text-xs">
+                <div class="flex items-center gap-2"><span class="w-24 px-2 py-1 bg-red-50 border border-red-400 rounded">nixos/</span><span class="text-slate-400">→</span><span>BeAsT &nbsp;<span class="text-slate-500">(named after the OS…</span></span></div>
+                <div class="flex items-center gap-2"><span class="w-24 px-2 py-1 bg-red-50 border border-red-400 rounded">rpi5/</span><span class="text-slate-400">→</span><span>rpi5 &nbsp;<span class="text-slate-500">…which this also runs)</span></span></div>
+                <div class="flex items-center gap-2"><span class="w-24 px-2 py-1 bg-stone-100 border border-slate-300 rounded">macos/</span><span class="text-slate-400">→</span><span>nBookPro</span></div>
+                <div class="flex items-center gap-2 pt-2"><span class="w-24 px-2 py-1 bg-amber-50 border border-amber-400 rounded">shared/</span><span class="text-slate-400">→</span><span class="text-slate-500">1% of LOC; not actually shared by all</span></div>
+                <div class="flex items-center gap-2"><span class="w-24 px-2 py-1 bg-emerald-50 border border-emerald-500 rounded">home/</span><span class="text-slate-400">→</span><span class="text-slate-500">the one dir all three import</span></div>
+              </div>
+              <p class="text-xs text-slate-500 mt-3">
+                <span class="font-mono">nixos/</span> also silently mixes NixOS modules with home-manager
+                modules, with no convention separating them.
+              </p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4">
+              <p class="lbl text-emerald-700 mb-3">After — identity where it belongs</p>
+              <pre class="mermaid">
+flowchart TB
+  CM["common/<br/>locale · zsh · users · nix.settings · ssh"]
+  CM --> B["hosts/beast"]
+  CM --> R["hosts/rpi5"]
+  CM --> M["hosts/nbookpro"]
+  H["home/"] --> B
+  H --> R
+  H --> M
+  classDef deep fill:#0f172a,color:#fff,stroke:#0f172a;
+  class CM deep
+              </pre>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>Host identity is passed in and then ignored, so shared modules hardcode one host's facts and the two NixOS hosts duplicate ~14 blocks of identical setup — with silent drift.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>Name directories after hosts, extract a <span class="font-mono text-xs">common/</span> module for the genuinely host-agnostic setup, and pass <span class="font-mono text-xs">hostname</span> into home-manager so per-host branching can be expressed.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm space-y-2">
+            <p class="lbl text-slate-500">Evidence</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>· <span class="font-mono text-xs">hostname</span> is a specialArg on all three system configs and has <em>one</em> consumer in the repo (<span class="font-mono text-xs">macos/configuration.nix:33</span>). Both NixOS hosts swallow it in <span class="font-mono text-xs">...</span> and hardcode their own name instead.</li>
+              <li>· It reaches <em>none</em> of the four home-manager configs — so no module under <span class="font-mono text-xs">home/</span> can distinguish BeAsT from rpi5. Both are Linux; <span class="font-mono text-xs">isDarwin</span> can't help.</li>
+              <li>· Consequence: <span class="font-mono text-xs">home/default.nix:46-55</span> installs <strong>Star Citizen</strong> launcher paths on the headless Pi and the Mac. <span class="font-mono text-xs">home/editors.nix</span> installs VS Code, Zed and a Cursor extension activation on a 3.9 GB server. <span class="font-mono text-xs">home/ssh.nix:9</span> points every host at a Bitwarden desktop-app socket.</li>
+              <li>· Fourteen duplicated blocks between the two NixOS hosts, with unintended drift: <span class="font-mono text-xs">trusted-users</span> is <span class="font-mono text-xs">[root, nsimon]</span> on one and <span class="font-mono text-xs">[nsimon]</span> on the other; <span class="font-mono text-xs">experimental-features</span> differs; journald caps 200M vs 500M.</li>
+              <li>· The same ed25519 public key literal appears in four files. The rpi5 substituter set plus its “garnix is dead” comment is stated twice, in <span class="font-mono text-xs">flake.nix</span> and <span class="font-mono text-xs">rpi5/configuration.nix</span>.</li>
+              <li>· The specialArgs tuple is spelled out at <strong>seven</strong> sites. <span class="font-mono text-xs">tailnetFqdn</span>, <span class="font-mono text-xs">beastOllamaUrl</span>, <span class="font-mono text-xs">apertureUrl</span> and <span class="font-mono text-xs">tinyLlmGateUrl</span> are passed to home-manager configs that have zero consumers of them — and omitted from two of the four arbitrarily.</li>
+              <li>· <span class="font-mono text-xs">beastHost</span> is consumed by <span class="font-mono text-xs">nixos/immich-ml.nix:72</span> but omitted from BeAsT's specialArgs. It doesn't fail today only because the sole reference sits inside a <span class="font-mono text-xs">#</span> comment where Nix doesn't interpolate — a latent eval failure masked by luck.</li>
+              <li>· <span class="font-mono text-xs">home/mcp.nix:21</span> hardcodes the public tailnet TLS name for a service on the same box, so the rpi5 reaches its own local MCP by going out and back. <span class="font-mono text-xs">tailnetFqdn</span> <em>is</em> available and unused.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· locality: host facts in the host dir</li>
+              <li>· drift becomes impossible, not unlikely</li>
+              <li>· <span class="font-mono text-xs">home/</span> can branch per host</li>
+              <li>· one specialArgs binding, not seven</li>
+            </ul>
+          </div>
+
+          <div class="rounded-md bg-emerald-50 border border-emerald-200 p-4 text-sm">
+            <p class="lbl text-emerald-700 mb-1">The pattern already exists, once</p>
+            <p class="text-slate-700"><span class="font-mono text-xs">shared/tailscale.nix</span> is imported by both NixOS hosts and differs only in arguments (<span class="font-mono text-xs">role</span>, <span class="font-mono text-xs">enableSSH</span>, <span class="font-mono text-xs">advertiseRoutes</span>). It shows exactly what the other fourteen blocks could look like. <span class="font-mono text-xs">rpi5Params</span> at <span class="font-mono text-xs">flake.nix:235-244</span> shows the author already knows the specialArgs fix too.</p>
+          </div>
+        </article>
+
+        <!-- ───── 7 ───── -->
+        <article id="c7" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">Worth exploring</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-slate-100 text-slate-700">ports &amp; adapters</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-indigo-50 text-indigo-700">highest churn</span>
+            </div>
+            <h3 class="font-serif text-2xl">7 · Collapse the agent surfaces onto one skill seam</h3>
+          </div>
+
+          <div class="font-mono text-xs text-slate-600 leading-relaxed">
+            home/claude.nix · home/claude-mtg.nix · claude-remote-control.nix (458 ln) ·
+            claude-oauth-keepwarm.nix · claude-oauth-2.nix · claude-account-healthcheck.nix ·
+            cyrus.nix (710 ln) · hermes/hermes.nix · shared/skills/ · shared/mtg-skills/ · home/claude-skills/
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-5">
+            <div class="rounded-lg border border-slate-200 p-4">
+              <p class="lbl text-red-600 mb-3">Before — six wirings for one concept</p>
+              <pre class="mermaid">
+flowchart LR
+  SS["shared/skills/"] -->|readDir, SKILL.md only| CC["~/.claude"]
+  SS -->|same| CX["~/.codex"]
+  SS -->|same| PI["~/.pi/agent"]
+  SS -->|runCommand + rsync, whole dirs| HE["~/.hermes"]
+  MT["shared/mtg-skills/"] -->|home.file dir symlink| MG["~/.claude-mtg"]
+  MT -->|nested under mtg/| HE
+  HS["home/claude-skills/"] -->|explicit line| CC
+  CC -->|ExecStartPre symlink loop| RC["~/.claude-rc"]
+  HE -.->|promote back, hourly| SS
+  CY["cyrus /var/lib/cyrus"]
+  classDef leak stroke:#dc2626,stroke-width:2px,fill:#fef2f2;
+  class CY leak
+              </pre>
+              <p class="text-xs text-slate-500 mt-2">Cyrus — a live Claude-driven surface — gets no skills at all.</p>
+            </div>
+            <div class="rounded-lg border-2 border-slate-800 p-4 flex flex-col justify-center">
+              <p class="lbl text-emerald-700 mb-3">After — one builder, N surfaces</p>
+              <div class="space-y-2">
+                <div class="rounded p-2 border border-slate-300 hatch text-center font-mono text-xs">shared/skills/ + mtg-skills/</div>
+                <div class="text-center text-slate-400 leading-none">↓</div>
+                <div class="deep rounded-md p-4 text-white text-center">
+                  <p class="font-mono text-sm">mkSkillTree { include, exclude }</p>
+                  <p class="text-slate-400 text-xs mt-2">whole directories · one nesting rule · one promote policy</p>
+                </div>
+                <div class="text-center text-slate-400 leading-none">↓</div>
+                <div class="grid grid-cols-3 gap-1.5 text-center font-mono text-[10px]">
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">claude</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">codex</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">pi</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">hermes</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">mtg</div>
+                  <div class="border-2 border-dashed border-slate-400 rounded p-1.5">cyrus</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="grid md:grid-cols-2 gap-6 text-sm">
+            <div>
+              <p class="lbl text-slate-500 mb-1">Problem</p>
+              <p>Eight agent surfaces and four Claude config dirs share skills and credentials through six parallel mechanisms, none of which agrees on what a skill is or which token is authoritative.</p>
+            </div>
+            <div>
+              <p class="lbl text-slate-500 mb-1">Solution</p>
+              <p>One skill-tree builder taking an include list, copying whole directories; one owner for the OAuth token with the other consumers reading from it.</p>
+            </div>
+          </div>
+
+          <div class="rounded-md bg-stone-100 p-4 text-sm space-y-2">
+            <p class="lbl text-slate-500">Evidence</p>
+            <ul class="space-y-1 text-slate-700">
+              <li>· <span class="font-mono text-xs">shared/mtg-skills/</span> reaches Hermes and claude-mtg through two independent code paths that land it at two structurally different paths. <span class="font-mono text-xs">mtg-mcp</span> is <span class="font-mono text-xs">callPackage</span>'d twice from one definition.</li>
+              <li>· <span class="font-mono text-xs">hermes-skill-promote.sh:75</span> computes its exclusion set from two directory listings that omit <span class="font-mono text-xs">shared/mtg-skills</span>. The MTG skills escape auto-publication to <em>every</em> agent only because their container dir has no <span class="font-mono text-xs">SKILL.md</span> at depth 1 — the exact outcome <span class="font-mono text-xs">CLAUDE.md</span> says must not happen.</li>
+              <li>· <span class="font-mono text-xs">claude-remote-control.nix</span> mixes twelve separable concerns in 458 lines: the bridge, config-dir shadowing, git-hook mutation, a decompiled-JS proof, boot-resume across three units, a watchdog with a documented self-inflicted outage, stale-session reaping, orphaned-worktree GC with a <em>second</em> differently-implemented recency check, OAuth keep-warm composition, activation safety, capacity tuning, and hardcoded identity constants.</li>
+              <li>· No owner for the OAuth token. <span class="font-mono text-xs">claude-remote-control.nix:23</span> says <span class="font-mono text-xs">~/.claude</span>'s copy is authoritative; <span class="font-mono text-xs">claude-rc-boot-resume.py:60-62</span> says that one “goes stale” and <span class="font-mono text-xs">~/.claude-rc</span>'s is fresh. The keep-warm extractor watches the one the other file calls stale. Freshness is maintained by two independent actors whose interaction is undocumented, and validated by a third hourly poller that talks to neither.</li>
+              <li>· Three independent Linear integrations with three credentials (shared skill via PAT, MCP over SSE, Cyrus's own OAuth app). Three routes to GitHub across surfaces.</li>
+              <li>· Retired-surface residue still live: <span class="font-mono text-xs">skills-lock.json</span> read by nothing, <span class="font-mono text-xs">rpi5/home.nix:24-31</span> exporting <span class="font-mono text-xs">CODEX_PROXY_KEY</span> for a service deleted 2026-07-15, an SSH key labelled <span class="font-mono text-xs">nsimon@rpi5-openclaw</span>, and <span class="font-mono text-xs">.cursor/rules/openclaw-config.mdc</span> giving 35 lines of “critical rules” about a directory two generations dead.</li>
+            </ul>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· skills ship with their assets</li>
+              <li>· Cyrus stops being skill-less</li>
+              <li>· one token owner, not three claims</li>
+              <li>· the promote loop gets a real exclusion set</li>
+            </ul>
+          </div>
+        </article>
+
+        <!-- ───── 8 ───── -->
+        <article id="c8" class="rounded-xl border border-slate-200 bg-white p-7 space-y-6 shadow-sm">
+          <div class="space-y-3">
+            <div class="flex flex-wrap items-center gap-2">
+              <span class="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-800">Strong</span>
+              <span class="px-2 py-0.5 rounded text-xs bg-stone-100 text-stone-700">cheapest</span>
+            </div>
+            <h3 class="font-serif text-2xl">8 · Delete the dead paths</h3>
+          </div>
+
+          <p class="text-sm text-slate-600 max-w-3xl">
+            Not a deepening — but it is the prerequisite for every other candidate, because an
+            explorer (human or agent) currently cannot tell live code from residue.
+          </p>
+
+          <div class="rounded-lg border border-slate-200 overflow-hidden">
+            <table class="w-full text-sm">
+              <thead class="bg-stone-100 text-left">
+                <tr>
+                  <th class="px-4 py-2 lbl text-slate-600 font-normal">What</th>
+                  <th class="px-4 py-2 lbl text-slate-600 font-normal">Where</th>
+                  <th class="px-4 py-2 lbl text-slate-600 font-normal">Status</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100 font-mono text-xs">
+                <tr><td class="px-4 py-2">ghostfolio pg_dump</td><td class="px-4 py-2 text-slate-500">backups.nix:18</td><td class="px-4 py-2 text-red-700">dumps a DB that doesn't exist</td></tr>
+                <tr><td class="px-4 py-2">screen-reactive-rgb.nix</td><td class="px-4 py-2 text-slate-500">nixos/rgb/ · 153 ln</td><td class="px-4 py-2 text-red-700">never imported</td></tr>
+                <tr><td class="px-4 py-2">LightDM branch</td><td class="px-4 py-2 text-slate-500">nixos/configuration.nix:407-449</td><td class="px-4 py-2 text-red-700">useLightdm = false</td></tr>
+                <tr><td class="px-4 py-2">immich-nextcloud-sync.py</td><td class="px-4 py-2 text-slate-500">scripts/ · 276 ln</td><td class="px-4 py-2 text-amber-700">referenced nowhere</td></tr>
+                <tr><td class="px-4 py-2">skills-lock.json</td><td class="px-4 py-2 text-slate-500">repo root</td><td class="px-4 py-2 text-red-700">read by nothing</td></tr>
+                <tr><td class="px-4 py-2">hermes TOOLS.md</td><td class="px-4 py-2 text-slate-500">rpi5/hermes/documents/</td><td class="px-4 py-2 text-red-700">live doc, every path wrong</td></tr>
+                <tr><td class="px-4 py-2">openclaw-config.mdc</td><td class="px-4 py-2 text-slate-500">.cursor/rules/</td><td class="px-4 py-2 text-red-700">rules for a deleted dir</td></tr>
+                <tr><td class="px-4 py-2">CODEX_PROXY_KEY</td><td class="px-4 py-2 text-slate-500">rpi5/home.nix:24-31</td><td class="px-4 py-2 text-red-700">service deleted 2026-07-15</td></tr>
+                <tr><td class="px-4 py-2">commitlint hook</td><td class="px-4 py-2 text-slate-500">.githooks/commit-msg</td><td class="px-4 py-2 text-red-700">config file absent</td></tr>
+                <tr><td class="px-4 py-2">warmupSchedule · keepAwake</td><td class="px-4 py-2 text-slate-500">lib/socket-activate.nix</td><td class="px-4 py-2 text-amber-700">zero users; enum is unary</td></tr>
+                <tr><td class="px-4 py-2">for-sure-swile-api-key.age</td><td class="px-4 py-2 text-slate-500">rpi5/secrets/</td><td class="px-4 py-2 text-amber-700">in neither secrets list</td></tr>
+                <tr><td class="px-4 py-2">wallpaper.png</td><td class="px-4 py-2 text-slate-500">nixos/dotfiles/ · 13 MB</td><td class="px-4 py-2 text-slate-500">93% of that tree's bytes</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div>
+            <p class="lbl text-slate-500 mb-2">Wins</p>
+            <ul class="grid sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-slate-700">
+              <li>· a live agent stops reading wrong paths</li>
+              <li>· grep results become trustworthy</li>
+              <li>· one silent nightly failure removed</li>
+              <li>· no design work required</li>
+            </ul>
+          </div>
+        </article>
+      </section>
+
+      <!-- ═══════════════ TOP RECOMMENDATION ═══════════════ -->
+      <section id="top-recommendation" class="space-y-5">
+        <h2 class="font-serif text-3xl tracking-tight border-b border-slate-300 pb-2">Top recommendation</h2>
+
+        <div class="rounded-xl deep text-white p-8 space-y-5">
+          <div>
+            <p class="lbl text-slate-400">Tackle first</p>
+            <h3 class="font-serif text-3xl mt-1"><a href="#c1" class="underline decoration-slate-500 decoration-1 underline-offset-4 hover:decoration-white">1 · Give a service one module</a></h3>
+          </div>
+          <p class="text-slate-200 leading-relaxed max-w-3xl">
+            Every live defect in this review — the unbacked Karakeep database, the phantom
+            <span class="font-mono text-sm">ghostfolio</span> dump, the OOM guard that skips two services, the
+            port 3700 collision — is the same failure: a fact about one service written in two
+            places with nothing checking agreement. Fix the shape and the whole class goes away,
+            rather than being patched one entry at a time.
+          </p>
+          <p class="text-slate-300 text-sm leading-relaxed max-w-3xl">
+            It is also where the churn is. The three most-edited files in the repo are the three
+            central registries, and they are edited because a service has nowhere else to declare
+            itself. The pattern to extend already exists in
+            <span class="font-mono text-xs">services.socketActivate</span> — 13 call sites, one uniform
+            interface, zero escapes.
+          </p>
+          <div class="flex flex-wrap gap-3 pt-1">
+            <a href="#c2" class="text-xs px-3 py-1.5 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700">Warm up with #2 (small, self-contained)</a>
+            <a href="#c8" class="text-xs px-3 py-1.5 rounded-full border border-slate-500 text-slate-200 hover:bg-slate-700">Clear the ground with #8 first</a>
+          </div>
+        </div>
+
+        <div class="rounded-lg border border-slate-200 bg-white p-6 text-sm space-y-3">
+          <p class="lbl text-slate-500">Two things this repo does not have, and should</p>
+          <p class="text-slate-700">
+            <span class="font-semibold">No <span class="font-mono text-xs">CONTEXT.md</span>.</span>
+            The repo has no domain glossary, so terms that clearly <em>are</em> domain concepts —
+            <em>surface</em>, <em>skill</em>, <em>service module</em>, <em>heavy service</em>,
+            <em>socket-idle</em>, <em>proxied</em> vs <em>funnel</em> — are defined only implicitly, in
+            comments, inconsistently. Several findings above are drift between two readings of one
+            undefined term.
+          </p>
+          <p class="text-slate-700">
+            <span class="font-semibold">No ADRs.</span> Nothing here contradicts a recorded decision,
+            because none are recorded — so hard-won reversals (garnix removed, Plane dropped, PicoClaw
+            retired, ChatGPT native mitm abandoned) live in commit messages and the author's private
+            memory rather than the repo. That is why the same dead paths keep resurfacing.
+          </p>
+        </div>
+      </section>
+
+      <footer class="pt-4 pb-8 text-xs text-slate-400">
+        Architecture review · nic-os · 2026-08-05 · every claim above cites file:line and was verified against the working tree.
+      </footer>
+
+    </main>
+  </body>
+</html>
