@@ -1,16 +1,19 @@
-# Preview environments (`appset-preview`)
+# Preview environments
 
-Per-PR environments driven by ArgoCD **ApplicationSets with a `pullRequest` generator**
-(GitHub, label `preview`, `requeueAfterSeconds: 60`). One pair per service:
-`preview-<service>` + `preview-<service>-overrides`, ~50 pairs, defined in
-`trusk-k8s/main/staging/argocd/applications/staging-preview-github/appset-<service>.yaml`.
+Triggers are in the index row. **There are two kinds, and almost everything below differs
+between them.** Establish which one you are looking at before reading further.
 
-Everything lands in **one namespace, `appset-preview`** (a few older ones sit in their own
-`pr-<slug>` ns). URL `https://pr-<number>-bo.trusk.com`.
+| | `appset-preview` | named `pr-<slug>` |
+| --- | --- | --- |
+| driven by | ArgoCD ApplicationSets, `pullRequest` generator (GitHub label `preview`), pairs `preview-<service>` + `-overrides` in `trusk-k8s/main/staging/argocd/applications/staging-preview-github/` | the **`trusk-preview-env`** repo, `applications/previews/helm/pr-<slug>/preview.yaml` |
+| namespace | one shared, `appset-preview` | its own, `pr-<slug>` |
+| chart values | `deployment/charts/appset-preview.yaml` | `deployment/charts/preview.yaml` |
+| URL | `https://pr-<number>-bo.trusk.com` | `https://pr-<slug>-bo.trusk.com` |
+| backend | **none of its own — calls the staging fleet** | **a full fleet of its own** |
 
-## The fact that surprises people: previews have no backend of their own
+## `appset-preview`: no backend of its own
 
-A preview pod talks to the **staging fleet**, over FQDN:
+A pod there talks to the **staging fleet**, over FQDN:
 
 ```
 IDENTITY_ACCESS_MANAGEMENT_URL=http://identity-access-management.staging.svc.cluster.local
@@ -24,6 +27,50 @@ hostnames; the override lives in the shared Infisical secret
 **Consequence: any authorization you switch on in staging applies to every open preview.**
 Confirmed 2026-08-31 — during the IN-888 rollout, 100 % of the tokenless requests reaching
 staging IAM came from previews, not from the staging back-office.
+
+## `pr-<slug>`: a full fleet, and that changes what it is good for
+
+Measured on `pr-tec296`, 2026-09-22: **64 deployments against staging's 67**, its own RabbitMQ,
+its own Postgres schemas, and the **same six cronjobs**. The only three staging carries and it
+does not are `com-fr`, `scalar`, `scalar-mcp`.
+
+So it is a real environment, not a shell — you can migrate a schema, flip a gate and break
+things in it without touching staging.
+
+**But it has no ambient traffic.** Tested the same day, IAM with enforcement on: the six
+cronjobs triggered by hand, the back-office exercised, and IAM logged **zero lines** over the
+window. The crons do not call it. Its only caller is the back-office resolving a signed-in
+user, which needs a **browser session** — an unauthenticated `curl` gets a 307 to the login and
+never reaches the service.
+
+The distinction worth keeping:
+
+- a preview **validates** that the rules you wrote are right for the paths you deliberately
+  exercise;
+- it **discovers** nothing. Finding the caller you forgot to declare needs traffic you did not
+  write, which means staging with the gate still off, reading `auth.enforcement.bypassed`.
+
+Do not read "no refusals in the preview" as "the rules are complete". Check there was traffic at
+all first — `kubectl logs <pod> --since=…​ | wc -l`.
+
+### Service label ≠ deployment name
+
+Comparing a service list against a preview by name gives false "missing" answers. Real cases:
+
+| what it is called elsewhere | deployments that actually run it |
+| --- | --- |
+| `communications` | `communication`, `communication-cron`, `communication-engine` |
+| `invoice` | `service-invoices-archiver`, `trusk-cresus*`, `trusk-mail-*invoice*`, `billing` |
+| `trusk-templates-engine` | `trusk-templates-service-{notifications,pickup,statuses}` (repo `trusk-templates-service`, **not archived**) |
+
+Diff the sets instead of grepping for a name:
+
+```bash
+CTX=trusk-staging-ts
+kubectl --context $CTX -n staging   get deploy --no-headers -o custom-columns=N:.metadata.name | sort > /tmp/stg
+kubectl --context $CTX -n pr-<slug> get deploy --no-headers -o custom-columns=N:.metadata.name | sort > /tmp/prv
+comm -23 /tmp/stg /tmp/prv    # in staging, not in the preview
+```
 
 ## `trusk-auth` (IN-888 / TEC-262): two separate traps
 
@@ -45,19 +92,90 @@ kubectl --context trusk-staging-ts -n appset-preview get secret trusk-auth \
   -o jsonpath='{.data.TRUSK_AUTH_SECRET}' | base64 -d | shasum -a 256 | cut -c1-10
 ```
 
-## Feature flags: a store of their own
+## Feature flags: a store of their own — that almost nobody reads
 
-Previews read `flagd-preview/*` (CRDs `iam-flags`, `backoffice-flags`, kept live by the
-`flagd-preview-store` app), **not** the staging `flagd` namespace — so a flag flipped in
-staging does not reach previews, and vice versa. Wiring is two pod annotations:
+There IS a `flagd-preview` namespace with its own CRDs (`iam-flags`, `backoffice-flags`, kept
+live by the `flagd-preview-store` app). **Most preview pods do not point at it.** Wiring is two
+pod annotations, set per service in `deployment/charts/{preview,appset-preview}.yaml`:
 
 ```yaml
 openfeature.dev/enabled: "true"
-openfeature.dev/featureflagsource: "flagd-preview/iam-flags-source,flagd-preview/backoffice-flags-source"
+openfeature.dev/featureflagsource: "flagd-preview/iam-flags-source"
 ```
 
-`openfeature.dev/enabled` is what activates the operator's mutating webhook; without it the
+`openfeature.dev/enabled` activates the operator's mutating webhook; without it the
 `featureflagsource` annotation is silently ignored and no sidecar is injected.
+
+Measured 2026-09-22 — which chart names which namespace:
+
+| service | `appset-preview.yaml` | `preview.yaml` |
+| --- | --- | --- |
+| backoffice | `flagd-preview/*` | **`flagd/*`** |
+| identity-access-management | **`flagd/*`** | **`flagd/*`** |
+| fleet | **`flagd/*`** | **`flagd/*`** |
+| state-status | **`flagd/*`** | **`flagd/*`** |
+
+So the isolation is real for exactly one combination — backoffice under `appset-preview`.
+Everywhere else a preview evaluates flags against **staging's** store, which means:
+
+- a flag flipped in staging changes every open preview at once, and
+- you cannot try a gate in a preview *before* staging, which is the whole reason to have one.
+
+### The symptom, when the gate is an authorization one
+
+`@trusk-official/nestjs-authentication` gates enforcement on a per-service flag
+(`<service>_backend_authz`, see the service's `authentication/authentication.options.ts`). With
+the flag off, the guard **computes the right decision and does not apply it**: the refusal is
+logged and the call succeeds.
+
+```
+{"event":"auth.enforcement.bypassed","route":"PUT /users/:id/rights",
+ "missingPermissions":["internal_users_write"],"status":403, ...}   ← 200 on the wire
+```
+
+So a token with no rights at all writes another user's rights, and nothing on the client says
+so. **A 200 in a preview proves nothing about authorization until you have checked the flag.**
+On 2026-09-22 `flagd/iam_backend_authz` was `off` while `flagd-preview/iam_backend_authz` was
+`on`, and pr-tec296 was following the first.
+
+### Eject a flag onto one preview
+
+Point that preview's service at the preview store, in **the service repo**, on the branch the
+preview tracks:
+
+```yaml
+# <service>/deployment/charts/preview.yaml   (or appset-preview.yaml)
+podAnnotations:
+  openfeature.dev/featureflagsource: "flagd-preview/<service>-flags-source"
+```
+
+The chart is read by ArgoCD from the branch, not baked into the image, so a hard refresh applies
+it — no need to wait for CI or a new tag:
+
+```bash
+CTX=trusk-staging-ts
+kubectl --context $CTX -n argocd annotate application <service>-pr-<slug> \
+  argocd.argoproj.io/refresh=hard --overwrite
+# the annotation follows onto the new pod:
+kubectl --context $CTX -n pr-<slug> get pod -l app.kubernetes.io/name=<service> \
+  -o jsonpath='{.items[-1:].metadata.annotations.openfeature\.dev/featureflagsource}'
+```
+
+Then set the value in the preview store, which is shared by **all** previews (there is no
+per-preview store):
+
+```bash
+kubectl --context $CTX -n flagd-preview get featureflag <service>-flags -o json \
+  | python3 -c "import json,sys; f=json.load(sys.stdin)['spec']['flagSpec']['flags']; \
+                print({k: v['defaultVariant'] for k, v in f.items()})"
+```
+
+Check what a pod actually follows before believing anything:
+
+```bash
+kubectl --context $CTX -n <ns> get pod <pod> \
+  -o jsonpath='{.metadata.annotations.openfeature\.dev/featureflagsource}{"\n"}'
+```
 
 ## `env.values[0..3]` — do not reorder
 
