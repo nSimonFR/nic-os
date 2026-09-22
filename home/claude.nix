@@ -19,7 +19,7 @@ let
   # Skills that should ALSO be exposed as Claude Code slash commands
   # (`/wiki-ingest`, etc.). The SKILL.md frontmatter is benign for
   # Claude Code, which only reads the `description` field.
-  claudeSlashCommandSkills = [ "wiki-ingest" "wiki-process" "wiki-lint" ];
+  claudeSlashCommandSkills = [ "wiki-ingest" "wiki-process" "wiki-lint" "ship" "pr" ];
 
   sharedSkillFiles =
     skillTree.homeFiles {
