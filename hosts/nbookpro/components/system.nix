@@ -4,16 +4,9 @@
 
   stateVersion = 5;
 
-  # Post-rebuild: reload yabai scripting addition + restart tun2proxy, and make
-  # sure Remote Login is on.
-  #
-  # sshd is the way back into a herdr session from the phone — mosh bootstraps
-  # over SSH before taking its own UDP path, and both ride the tailnet, so this
-  # never listens anywhere public. macOS exposes no nix-darwin option for it:
-  # `systemsetup -setremotelogin` is the documented switch and needs Full Disk
-  # Access for whichever terminal drives the rebuild, so it falls back to the
-  # TCC-free launchctl pair. Both are idempotent, and the guard keeps the common
-  # case down to one read.
+  # Post-rebuild: yabai scripting addition, tun2proxy, and Remote Login — mosh
+  # bootstraps over SSH, reached over the tailnet. No nix-darwin option for it,
+  # and `systemsetup` needs Full Disk Access, hence the launchctl fallback.
   activationScripts.postActivation.text = ''
     sudo yabai --load-sa 2>/dev/null || true
     launchctl kickstart -k system/org.nixos.tun2proxy-work 2>/dev/null || true
