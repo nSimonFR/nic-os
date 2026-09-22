@@ -638,7 +638,7 @@ def test_an_attachment_lands_via_a_temporary_name(tmp_path):
     # Papra's watcher must never see a partially-written file.
     seen = []
     cfg = proton_poll.Config(dest=str(tmp_path))
-    dest = proton_poll.save_attachment(cfg, b"%PDF-1.7", "bill.pdf", chown=seen.append)
+    dest = proton_poll.save_attachment(cfg.dest, b"%PDF-1.7", "bill.pdf", chown=seen.append)
     assert dest == str(tmp_path / "bill.pdf")
     assert (tmp_path / "bill.pdf").read_bytes() == b"%PDF-1.7"
     assert not (tmp_path / "bill.pdf.incoming").exists()

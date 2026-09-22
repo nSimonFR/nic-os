@@ -143,10 +143,10 @@ def attachments(msg):
     return out
 
 
-def save_attachment(cfg, payload, filename, chown=chown_papra):
+def save_attachment(dest_dir, payload, filename, chown=chown_papra):
     """Write one attachment into the drop-zone via a `.incoming` rename, so Papra's
     inotify watcher never sees a partially-written file."""
-    dest = unique_dest(os.path.join(cfg.dest, safe(filename)))
+    dest = unique_dest(os.path.join(dest_dir, safe(filename)))
     tmp = dest + ".incoming"
     with open(tmp, "wb") as fh:
         fh.write(payload)
@@ -182,7 +182,7 @@ def poll(cfg, imap, log=print, chown=chown_papra):
         if mid and mid in seen:
             continue
         for ct, fn, _disp, payload in attachments(msg):
-            dest = save_attachment(cfg, payload, fn, chown=chown)
+            dest = save_attachment(cfg.dest, payload, fn, chown=chown)
             log(f"saved: {os.path.basename(dest)} ({ct}, {len(payload)}B) "
                 f"from {msg.get('From')}")
             saved += 1

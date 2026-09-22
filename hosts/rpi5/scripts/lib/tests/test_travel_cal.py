@@ -138,9 +138,9 @@ class Boom:
         raise self.exc
 
 
-@pytest.mark.parametrize("code", [502, 503, 504])
+@pytest.mark.parametrize("code", [429, 502, 503, 504])
 def test_a_gate_5xx_is_reported_as_upstream_down(code):
-    # beast asleep → the daemon must back off, not skip the message.
+    # Model host down, or the plan quota hit → back off, not skip the message.
     import urllib.error
 
     err = urllib.error.HTTPError("http://gate", code, "down", {}, None)
@@ -468,7 +468,12 @@ class FakeImap:
                     f"{k}: {msg.get(k)}" for k in ("From", "Subject", "Message-ID")
                     if msg.get(k)
                 ).encode() + b"\r\n\r\n"
-                data.append((num + b" (BODY[HEADER.FIELDS", head))
+                struct = " ".join(
+                    f'("{p.get_content_maintype().upper()}" "{p.get_content_subtype().upper()}"'
+                    f' NIL NIL NIL "BASE64" {len(p.get_payload())})'
+                    for p in msg.walk() if not p.is_multipart())
+                data.append((num + f" (BODYSTRUCTURE ({struct}) BODY[HEADER.FIELDS".encode(),
+                             head))
             return "OK", data
         for num, msg in self.messages:
             if num == spec:
@@ -721,3 +726,147 @@ def test_a_telegram_failure_never_propagates(capsys):
 
     tc.telegram(tc.Config(telegram_send="/bin/send"), "hi", run=boom)  # must not raise
     assert "telegram error" in capsys.readouterr().err
+
+
+# ── Papra filing ──────────────────────────────────────────────────────────────
+
+
+def with_pdf(item, name="ticket.pdf", payload=b"%PDF-1.7 ticket"):
+    num, msg = item
+    import base64 as b64
+    raw = msg.as_string().replace(
+        "--B--",
+        "--B\r\nContent-Type: application/pdf\r\n"
+        f'Content-Disposition: attachment; filename="{name}"\r\n'
+        "Content-Transfer-Encoding: base64\r\n\r\n"
+        + b64.b64encode(payload).decode() + "\r\n--B--")
+    return num, email.message_from_string(raw)
+
+
+def doc_mail(num, mid, subject="Votre facture", frm="factures@edf.fr"):
+    return with_pdf(booking_mail(num, mid, subject=subject, frm=frm), name="facture.pdf")
+
+
+def filing_cfg(tmp_path, **kw):
+    dest = tmp_path / "ingest"
+    dest.mkdir()
+    return cfg_for(tmp_path, nc_cal="travel", papra_dest=str(dest),
+                   papra_poll_state=str(tmp_path / "poll-seen"), **kw), dest
+
+
+def run_scan(cfg, imap, state=None, extract=lambda t: [dict(STAY)], judge=None,
+             dry_run=False):
+    filed, asked = [], []
+
+    def judge_fn(text):
+        asked.append(text)
+        return (judge or (lambda t: None))(text)
+
+    tc.scan(cfg, imap, state or fresh_state(), dry_run=dry_run, extract=extract,
+            put=lambda u, i: None, now=NOW, judge=judge_fn, filed=filed,
+            chown=lambda p: None)
+    return filed, asked
+
+
+def test_a_pdf_is_detected_from_bodystructure_without_a_fetch():
+    assert tc.maybe_has_doc('(("TEXT" "PLAIN" NIL NIL NIL "7BIT" 10)("APPLICATION" "PDF" NIL))')
+    assert not tc.maybe_has_doc('("TEXT" "HTML" NIL NIL NIL "7BIT" 900)')
+    assert not tc.maybe_has_doc('("IMAGE" "PNG" NIL NIL NIL "BASE64" 1200)')  # a logo
+    assert tc.maybe_has_doc('("IMAGE" "JPEG" NIL NIL NIL "BASE64" 450000)')
+    assert not tc.maybe_has_doc(None)
+
+
+def test_documents_are_named_from_the_trip_or_the_judge():
+    b = {"start": "2026-08-03T07:12", "_platform": "SNCF Connect"}
+    assert tc.trip_doc_name("ticket.pdf", b) == "2026-08-03 SNCF Connect - ticket.pdf"
+    assert tc.trip_doc_name("ticket.pdf", {}) == "ticket.pdf"
+    judged = {"issuer": "EDF", "doc_date": "2026-07-31"}
+    assert tc.judged_doc_name("f.pdf", judged, date(2026, 8, 1)) == "2026-07-31 EDF - f.pdf"
+    assert tc.judged_doc_name("f.pdf", {"doc_date": "juillet"}, date(2026, 8, 1)) == \
+        "2026-08-01 - f.pdf"
+
+
+def test_a_confirmed_trip_files_its_ticket(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    filed, asked = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>"))]))
+    assert filed == ["2026-09-01 Airbnb - ticket.pdf"]
+    assert (dest / filed[0]).read_bytes() == b"%PDF-1.7 ticket"
+    assert asked == []  # a trip's documents never go through the judge
+    assert not list(dest.glob("*.incoming"))
+
+
+def test_a_reminder_for_a_known_trip_still_files_its_document(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    imap = FakeImap([with_pdf(booking_mail(b"1", "<m1@x>")),
+                     with_pdf(booking_mail(b"2", "<m2@x>"), name="boarding.pdf")])
+    filed, _ = run_scan(cfg, imap)
+    assert sorted(filed) == ["2026-09-01 Airbnb - boarding.pdf",
+                             "2026-09-01 Airbnb - ticket.pdf"]
+
+
+def test_a_document_the_label_feeder_already_filed_is_skipped(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    (tmp_path / "poll-seen").write_text("<m1@x>\n")
+    filed, _ = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>"))]))
+    assert filed == []
+
+
+def test_other_mail_with_a_document_is_filed_when_judged_worth_keeping(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    state = fresh_state()
+    extracted = []
+    filed, asked = run_scan(
+        cfg, FakeImap([doc_mail(b"1", "<m1@x>")]), state=state,
+        extract=lambda t: extracted.append(t) or [],
+        judge=lambda t: {"archive": True, "issuer": "EDF", "doc_date": "2026-07-31"})
+    assert filed == ["2026-07-31 EDF - facture.pdf"]
+    assert len(asked) == 1 and extracted == []  # never through the trip parser
+    assert state["seen"] == ["<m1@x>"]
+
+
+def test_marketing_is_judged_and_not_filed(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    filed, asked = run_scan(cfg, FakeImap([doc_mail(b"1", "<m1@x>")]),
+                            judge=lambda t: {"archive": False, "kind": "brochure"})
+    assert filed == [] and len(asked) == 1
+    assert list(dest.iterdir()) == []
+
+
+def test_file_all_mail_off_only_files_trips(tmp_path):
+    cfg, dest = filing_cfg(tmp_path, file_all_mail=False)
+    state = fresh_state()
+    filed, asked = run_scan(cfg, FakeImap([doc_mail(b"1", "<m1@x>")]), state=state)
+    assert filed == [] and asked == []
+    assert state["seen"] == ["<m1@x>"]
+
+
+def test_no_papra_dest_is_a_pure_calendar_sync(tmp_path):
+    cfg = cfg_for(tmp_path, nc_cal="travel")
+    filed, asked = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>")),
+                                           doc_mail(b"2", "<m2@x>")]))
+    assert filed == [] and asked == []
+
+
+def test_a_dry_run_lists_documents_without_writing_them(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    filed, _ = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>"))]),
+                        dry_run=True)
+    assert filed == ["2026-09-01 Airbnb - ticket.pdf (application/pdf, 15B)"]
+    assert list(dest.iterdir()) == []
+
+
+def test_a_judge_outage_stops_the_scan_and_leaves_the_message_unseen(tmp_path):
+    cfg, dest = filing_cfg(tmp_path)
+    state = fresh_state()
+
+    def down(text):
+        raise tc.UpstreamDown("gate 429")
+
+    with pytest.raises(tc.UpstreamDown):
+        run_scan(cfg, FakeImap([doc_mail(b"1", "<m1@x>")]), state=state, judge=down)
+    assert state["seen"] == []
+
+
+def test_the_summary_lists_filed_documents():
+    msg = tc.telegram_summary(tc.Config(), [], ["2026-07-31 EDF - f.pdf"])
+    assert "Filed to Papra" in msg and "EDF" in msg and "Travel bookings" not in msg

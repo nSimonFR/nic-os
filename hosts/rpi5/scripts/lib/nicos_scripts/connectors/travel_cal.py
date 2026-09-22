@@ -8,6 +8,13 @@ a Nextcloud calendar over CalDAV. Each booking gets a stable UID, so the PUT is
 idempotent — re-runs update in place and never create duplicates, even if the
 state file is lost.
 
+With PAPRA_DEST set it also files document attachments into Papra's ingestion
+folder: a confirmed upcoming booking's tickets/vouchers, named from the trip;
+and (PAPRA_FILE_ALL_MAIL=1) any other mail carrying a document, after a second
+LLM call judges it worth archiving. Candidates come from BODYSTRUCTURE in the
+batched header fetch, so most mail costs no body fetch and no LLM call. Mail
+papra-proton-poll already filed (its Message-ID ledger) is skipped.
+
 Runs as a persistent daemon: a catch-up scan on every (re)connect (first run =
 backfill over LOOKBACK_DAYS), then IMAP IDLE — waking the moment new mail lands.
 A periodic re-scan (RESCAN_SECONDS) is the safety net for any missed IDLE push.
@@ -39,6 +46,9 @@ Config via env (defaults suit rpi5):
   NEXTCLOUD_CAL         calendar collection URI (required for live writes)
   TELEGRAM_SEND         the one-shot Telegram seam (shared/notify.nix `send`);
                         no summary if unset
+  PAPRA_DEST            Papra ingestion dir <root>/<orgId>; unset = no filing
+  PAPRA_POLL_STATE      default /var/lib/papra-proton-poll/seen
+  PAPRA_FILE_ALL_MAIL   default 1; 0 = travel documents only
 """
 
 import base64
@@ -62,6 +72,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from ..logs import logger
+from ..papra import proton_poll
 from ..secrets import env_int, env_str, read_secret
 from ..state import ensure_dir, load_json, save_json
 
@@ -84,6 +95,7 @@ DEFAULT_CALDAV_HOME = (
     "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/"
 )
 DEFAULT_NC_PASS_FILE = "/run/agenix/travel-cal-nextcloud-password"
+DEFAULT_PAPRA_POLL_STATE = "/var/lib/papra-proton-poll/seen"
 
 # Socket timeout for normal IMAP commands, so a black-holed connection surfaces
 # as an error the reconnect loop can handle instead of blocking forever.
@@ -198,6 +210,9 @@ class Config:
     telegram_send: str = ""
     imap_host: str = IMAP_HOST
     imap_port: int = IMAP_PORT
+    papra_dest: str = ""
+    papra_poll_state: str = DEFAULT_PAPRA_POLL_STATE
+    file_all_mail: bool = True
 
     @classmethod
     def from_env(cls, env=None):
@@ -215,6 +230,9 @@ class Config:
             nc_pass_file=env_str("NEXTCLOUD_PASS_FILE", DEFAULT_NC_PASS_FILE, env),
             nc_cal=env_str("NEXTCLOUD_CAL", "", env),
             telegram_send=env_str("TELEGRAM_SEND", "", env),
+            papra_dest=env_str("PAPRA_DEST", "", env),
+            papra_poll_state=env_str("PAPRA_POLL_STATE", DEFAULT_PAPRA_POLL_STATE, env),
+            file_all_mail=env_str("PAPRA_FILE_ALL_MAIL", "1", env) not in ("0", "", "false"),
         )
 
     @property
@@ -278,12 +296,14 @@ def imap_connect(cfg):
 
 
 def fetch_headers(M, ids, chunk=500):
-    """Batch-fetch minimal headers for all message numbers → {num: email.Message}.
-    One IMAP round-trip per `chunk` messages (vs. one per message)."""
-    out = {}
+    """Batch-fetch minimal headers + BODYSTRUCTURE for all message numbers
+    → ({num: email.Message}, {num: bodystructure}). One IMAP round-trip per
+    `chunk` messages; BODYSTRUCTURE rides in the FETCH prelude for free."""
+    out, structs = {}, {}
     for i in range(0, len(ids), chunk):
         batch = b",".join(ids[i:i + chunk])
-        typ, data = M.fetch(batch, "(BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)])")
+        typ, data = M.fetch(
+            batch, "(BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)])")
         if typ != "OK":
             continue
         for item in data:
@@ -291,8 +311,10 @@ def fetch_headers(M, ids, chunk=500):
                 continue
             m = re.match(rb"(\d+)", item[0])
             if m:
-                out[m.group(1).decode()] = email.message_from_bytes(item[1])
-    return out
+                num = m.group(1).decode()
+                out[num] = email.message_from_bytes(item[1])
+                structs[num] = item[0].decode("utf-8", "replace")
+    return out, structs
 
 
 def is_candidate(frm, subject):
@@ -333,16 +355,18 @@ def _strip_html(s):
 # ── extraction via tiny-llm-gate ────────────────────────────────────────────
 
 class UpstreamDown(Exception):
-    """The LLM gate / local model is unreachable (e.g. beast asleep). Signals the
+    """The LLM gate or its model is unavailable (host down, plan quota hit). Signals the
     daemon to back off rather than hammer every candidate."""
 
 
-def extract_booking(cfg, text, opener=None):
+def llm_json(cfg, system_prompt, text, opener=None):
+    """One temperature-0 completion parsed as JSON (None if unparseable). Raises
+    UpstreamDown when the gate or its model is unavailable, so callers back off."""
     body = json.dumps({
         "model": cfg.model,
         "temperature": 0,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": text},
         ],
     }).encode()
@@ -356,8 +380,9 @@ def extract_booking(cfg, text, opener=None):
         with (opener or urllib.request.urlopen)(req, timeout=120) as r:
             content = json.load(r)["choices"][0]["message"]["content"]
     except urllib.error.HTTPError as e:
-        # 502/503/504 = gate reached but the (local) model upstream is down.
-        if e.code in (502, 503, 504):
+        # 502/503/504 = gate reached but the model upstream is down; 429 = the
+        # ChatGPT plan's usage limit, which resets hours later.
+        if e.code in (429, 502, 503, 504):
             raise UpstreamDown(f"gate {e.code}") from e
         raise
     except urllib.error.URLError as e:
@@ -366,7 +391,11 @@ def extract_booking(cfg, text, opener=None):
         # Slow/asleep model host — treat like upstream-down so the daemon backs
         # off instead of skipping this message as a one-off extract error.
         raise UpstreamDown(f"gate timeout: {e}") from e
-    return normalise_bookings(_parse_json(content))
+    return _parse_json(content)
+
+
+def extract_booking(cfg, text, opener=None):
+    return normalise_bookings(llm_json(cfg, SYSTEM_PROMPT, text, opener))
 
 
 def normalise_bookings(data):
@@ -632,13 +661,95 @@ def telegram(cfg, msg, run=None):
         log(f"telegram error: {e}")
 
 
+# ── Papra document filing ───────────────────────────────────────────────────
+
+DOC_SYSTEM_PROMPT = (
+    "You decide whether an email's attachment is a personal document worth "
+    "archiving in a document manager. Reply with ONLY a JSON object, no prose, "
+    "no markdown fences. Schema:\n"
+    "{\n"
+    '  "archive": bool,     // true only for a real document worth keeping\n'
+    '  "issuer": str,       // short name of the issuing organisation, e.g.\n'
+    '                       // "URSSAF", "AXA", "Storj", "IKEA"; "" if unclear\n'
+    '  "doc_date": str,     // the document\'s OWN date, YYYY-MM-DD; "" if absent\n'
+    '  "kind": str          // short type, e.g. "facture", "fiche de paie"\n'
+    "}\n"
+    "ARCHIVE=true for: invoices, bills, receipts, order confirmations with an "
+    "invoice, bank/card statements, payslips, tax documents, contracts, quotes, "
+    "insurance policies and claims, official letters from government or "
+    "administration, medical documents and test results, certificates and "
+    "attestations, warranties, delivery notes, tickets.\n"
+    "ARCHIVE=false for: marketing and promotional PDFs, newsletters, catalogues, "
+    "brochures, product advertising, event flyers, sales decks, terms-and-"
+    "conditions attached to marketing mail, email signatures, logos and other "
+    "decorative images. When the attachment is merely advertising, return false "
+    "even if the email looks official."
+)
+
+
+def judge_document(cfg, text, opener=None):
+    data = llm_json(cfg, DOC_SYSTEM_PROMPT, text, opener)
+    return data if isinstance(data, dict) else None
+
+
+# Only decides whether a body fetch is worth it; proton_poll.is_doc on the real
+# parts stays the authoritative triage, so a loose match just wastes one fetch.
+_IMG_SIZE_RE = re.compile(r'"IMAGE"\s+"[^"]*"(?:[^()]|\([^()]*\))*?\s(\d{5,})', re.I)
+
+
+def maybe_has_doc(bodystructure):
+    """PDFs always; images only above the size floor, so logos don't trigger."""
+    if not bodystructure:
+        return False
+    if "PDF" in bodystructure.upper():
+        return True
+    return any(int(m) >= proton_poll.MIN_IMG_BYTES
+               for m in _IMG_SIZE_RE.findall(bodystructure))
+
+
+def _prefixed(fn, *parts):
+    prefix = " ".join(p for p in parts if p)
+    return f"{prefix} - {fn}" if prefix else fn
+
+
+def trip_doc_name(fn, b):
+    """`2026-08-03 SNCF Connect - ticket.pdf` from an opaque `ticket.pdf`."""
+    return _prefixed(fn, (b.get("start") or "")[:10], b.get("_platform") or "")
+
+
+def judged_doc_name(fn, judged, recv_date):
+    """`<doc date> <issuer> - <original>`, the received date when none is stated."""
+    date = (judged.get("doc_date") or "")[:10]
+    if not re.match(r"^\d{4}-\d{2}-\d{2}$", date):
+        date = recv_date.isoformat() if recv_date else ""
+    return _prefixed(fn, date, (judged.get("issuer") or "").strip())
+
+
+def file_documents(cfg, msg, namer, dry_run, chown=proton_poll.chown_papra):
+    """Drop the message's document attachments into Papra. -> filed names."""
+    filed = []
+    for ct, fn, _disp, payload in proton_poll.attachments(msg):
+        name = proton_poll.safe(namer(decode_header(fn) or "attachment"))
+        if dry_run:
+            filed.append(f"{name} ({ct}, {len(payload)}B)")
+            continue
+        dest = proton_poll.save_attachment(cfg.papra_dest, payload, name, chown=chown)
+        filed.append(os.path.basename(dest))
+        log(f"papra: filed {os.path.basename(dest)} ({ct}, {len(payload)}B)")
+    return filed
+
+
 # ── scan ────────────────────────────────────────────────────────────────────
 
-def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
-    """One pass. Returns list of (booking, uid, written_bool)."""
+def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
+         judge=None, filed=None, chown=proton_poll.chown_papra):
+    """One pass. Returns list of (booking, uid, written_bool); Papra filenames are
+    appended to `filed` when given."""
     extract = extract or (lambda text: extract_booking(cfg, text))
+    judge = judge or (lambda text: judge_document(cfg, text))
     put = put or (lambda uid, ics: caldav_put(cfg, uid, ics))
     now = now or datetime.now(timezone.utc)
+    filed = [] if filed is None else filed
 
     since_epoch = state["last_scan"]
     if since_epoch:
@@ -649,11 +760,12 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
     if typ != "OK":
         raise RuntimeError("IMAP SEARCH failed")
     nums = ids[0].split()
-    heads = fetch_headers(M, nums)
+    heads, structs = fetch_headers(M, nums)
     log(f"scan: {len(nums)} message(s) since {since:%Y-%m-%d}; screening headers")
     seen = set(state["seen"])
     results = []
     done_uids = set()  # collapse multiple emails of the same booking within a scan
+    papra_seen = proton_poll.load_seen(cfg.papra_poll_state) if cfg.papra_dest else set()
     for num in nums:
         head = heads.get(num.decode())
         if head is None:
@@ -663,9 +775,13 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
             continue
         frm = decode_header(head.get("From"))
         subj = decode_header(head.get("Subject"))
-        # Drop "queries" (inquiries / pending requests / searches) up front, and
-        # non-candidates. Both are marked seen so they aren't reprocessed.
-        if NEGATIVE_SUBJECT_RE.search(subj or "") or not is_candidate(frm, subj):
+        # "Queries" (inquiries / pending requests / searches) are never bookings.
+        is_travel = bool(not NEGATIVE_SUBJECT_RE.search(subj or "")
+                         and is_candidate(frm, subj))
+        may_file = bool(cfg.papra_dest and mid not in papra_seen)
+        has_doc = may_file and maybe_has_doc(structs.get(num.decode()))
+        # Nothing to do → marked seen so it isn't reprocessed.
+        if not is_travel and not (cfg.file_all_mail and has_doc):
             if mid:
                 seen.add(mid)
                 state["seen"].append(mid)
@@ -683,17 +799,22 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
         except Exception:  # noqa: BLE001
             recv_date = None
         recent = bool(recv_date and recv_date >= now.date() - timedelta(days=60))
-        try:
-            bookings = extract(text)
-        except UpstreamDown:
-            # Model host (beast) is down — stop the scan and let the daemon back
-            # off. This message stays unseen, so it's retried once beast is up.
-            raise
-        except Exception as e:  # noqa: BLE001
-            log(f"extract error: {e} — subject: {subj}")
-            continue
+        bookings = []
+        if is_travel:  # a payslip must never go through the trip parser
+            try:
+                bookings = extract(text)
+            except UpstreamDown:
+                # Model upstream unavailable — stop the scan and let the daemon
+                # back off. This message stays unseen, so it's retried later.
+                raise
+            except Exception as e:  # noqa: BLE001
+                log(f"extract error: {e} — subject: {subj}")
+                continue
         cutoff = now.date() - timedelta(days=PAST_GRACE_DAYS)
         write_failed = False
+        # Naming context for the attachments, taken BEFORE the per-UID dedupe so a
+        # reminder whose event already exists still files its boarding pass.
+        doc_booking = None
         for b in bookings:
             if (not isinstance(b, dict) or not b.get("is_booking")
                     or not b.get("start") or b.get("type") not in TRAVEL_TYPES):
@@ -713,6 +834,8 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
             b["_source_subject"] = subj
             b["_source_date"] = recv_date.isoformat() if recv_date else None
             b["_platform"] = source_platform(frm)
+            if doc_booking is None:
+                doc_booking = b
             uid = booking_uid(b)
             if uid in done_uids:
                 continue
@@ -739,6 +862,24 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None):
             if written or dry_run:
                 done_uids.add(uid)
             results.append((b, uid, written))
+        # A filing failure is logged but never sets write_failed: the dest is a
+        # local dir, and retrying would re-run the LLM on every scan.
+        try:
+            if doc_booking is not None and may_file:
+                filed += file_documents(
+                    cfg, msg, lambda fn: trip_doc_name(fn, doc_booking), dry_run, chown)
+            elif has_doc and cfg.file_all_mail:
+                judged = judge(text)
+                if judged and judged.get("archive"):
+                    filed += file_documents(
+                        cfg, msg, lambda fn: judged_doc_name(fn, judged, recv_date),
+                        dry_run, chown)
+                elif judged:
+                    log(f"papra: not archiving {subj!r} (kind={judged.get('kind') or '?'})")
+        except UpstreamDown:
+            raise
+        except Exception as e:  # noqa: BLE001
+            log(f"papra filing error: {e} — subject: {subj}")
         # Mark the source message processed ONLY if nothing failed to write, so a
         # transient CalDAV outage doesn't permanently drop a booking — the message
         # stays unseen and is retried on the next scan.
@@ -765,13 +906,17 @@ def event_link(cfg, b):
     return f"{cfg.nc_web}/apps/calendar/dayGridMonth/{date}"
 
 
-def telegram_summary(cfg, new):
-    lines = [
-        f'• {html.escape(fmt_booking(b))}\n'
-        f'  <a href="{event_link(cfg, b)}">📅 Open in calendar</a>'
-        for b, _, _ in new
-    ]
-    return "🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(lines)
+def telegram_summary(cfg, new, filed=()):
+    parts = []
+    if new:
+        parts.append("🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(
+            f'• {html.escape(fmt_booking(b))}\n'
+            f'  <a href="{event_link(cfg, b)}">📅 Open in calendar</a>'
+            for b, _, _ in new))
+    if filed:
+        parts.append("📄 <b>Filed to Papra</b>\n" + "\n".join(
+            f"• {html.escape(n)}" for n in filed))
+    return "\n\n".join(parts)
 
 
 # ── IDLE ────────────────────────────────────────────────────────────────────
@@ -815,10 +960,11 @@ def run_dry_run(cfg, connect=None):
     # running daemon has already marked seen.
     state = {"seen": [], "last_scan": 0}
     M = (connect or imap_connect)(cfg)
+    filed = []
     try:
-        results = scan(cfg, M, state, dry_run=True)
+        results = scan(cfg, M, state, dry_run=True, filed=filed)
     except UpstreamDown as e:
-        log(f"cannot extract — LLM upstream down ({e}). Is beast awake?")
+        log(f"cannot extract — LLM upstream down ({e})")
         return 2
     finally:
         try:
@@ -829,7 +975,11 @@ def run_dry_run(cfg, connect=None):
           f"(last {cfg.lookback_days} days) ===")
     for b, uid, _ in results:
         print("  " + fmt_booking(b))
-    print("\n(dry-run — nothing was written to the calendar)")
+    if cfg.papra_dest:
+        print(f"\n=== {len(filed)} document(s) would be filed to Papra ===")
+        for name in filed:
+            print("  " + name)
+    print("\n(dry-run — nothing was written to the calendar or to Papra)")
     return 0
 
 
@@ -848,8 +998,9 @@ def run_daemon(cfg, connect=None, sleep=time.sleep, once=False):
             log("connected; running catch-up scan")
             while True:
                 state = load_state(cfg)
+                filed = []
                 try:
-                    results = scan(cfg, M, state, dry_run=False)
+                    results = scan(cfg, M, state, dry_run=False, filed=filed)
                 except UpstreamDown as e:
                     save_state(cfg, state)  # keep partial progress
                     log(f"LLM upstream down ({e}); backing off 15 min")
@@ -859,9 +1010,9 @@ def run_daemon(cfg, connect=None, sleep=time.sleep, once=False):
                     continue
                 save_state(cfg, state)
                 new = [r for r in results if r[2]]
-                if new:
-                    log(f"added {len(new)} event(s)")
-                    telegram(cfg, telegram_summary(cfg, new))
+                if new or filed:
+                    log(f"added {len(new)} event(s), filed {len(filed)} document(s)")
+                    telegram(cfg, telegram_summary(cfg, new, filed))
                 if once:
                     return 0
                 # trigger: block on IDLE until new mail or the safety-net timeout
