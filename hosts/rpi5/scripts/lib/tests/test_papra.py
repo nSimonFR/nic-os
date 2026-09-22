@@ -1,47 +1,46 @@
 """The three Papra units.
 
-All three were previously unimportable off-host: tag_sweep opened SQLite at
-module level, tag_sync and proton_poll read `os.environ[...]` at module level and
-raised KeyError. The first thing these tests prove is that importing them does
-nothing at all — the rest covers the webhook's signature check (auth), the
-sweeper's EX_TEMPFAIL contract, and the drop-zone's filename handling.
+tag_sweep and proton_poll were previously unimportable off-host (SQLite opened and
+`os.environ[...]` read at module level). These tests prove importing them does
+nothing, then cover the sweeper's EX_TEMPFAIL contract and date backfill, the
+archive reconciler, and the drop-zone's filename handling.
 """
 
 import base64
 import email
-import hashlib
-import hmac
 import json
+import os
 import sqlite3
 import urllib.error
-import urllib.request
 
 import pytest
 from conftest import FakeOpener, json_reply
 
-from nicos_scripts.papra import proton_poll, tag_sweep, tag_sync
+from nicos_scripts.papra import nc_sync, proton_poll, tag_sweep
+
+MS_2018 = 1530489600000  # 2018-07-02T00:00Z
 
 # ── importability ─────────────────────────────────────────────────────────────
 
 
 def test_the_modules_have_no_import_time_side_effects():
     # A Config built from an empty env must not raise, open a socket, or touch disk.
-    # This is the whole reason these three moved into the package.
     assert tag_sweep.Config.from_env({}).db == "/var/lib/papra/db.sqlite"
-    assert tag_sync.Config.from_env({}).secret == b""
+    assert nc_sync.Config.from_env({}).apply is False
     assert proton_poll.Config.from_env({}).dest == ""
 
 
-# ── tag_sweep ─────────────────────────────────────────────────────────────────
+# ── fixture ───────────────────────────────────────────────────────────────────
 
 
-def papra_db(tmp_path, docs, tags=(), doc_tags=()):
+def papra_db(tmp_path, docs, tags=(), doc_tags=(), dates=None, keys=None):
     """docs: (id, org, name, content, deleted_at). tags: (id, org, name, norm)."""
     path = tmp_path / "papra.sqlite"
     con = sqlite3.connect(str(path))
     con.execute(
         "create table documents (id text primary key, organization_id text, name text,"
-        " original_name text, content text, deleted_at integer)"
+        " original_name text, content text, deleted_at integer,"
+        " is_deleted integer default 0, original_storage_key text, document_date integer)"
     )
     con.execute(
         "create table tags (id text primary key, created_at integer, updated_at integer,"
@@ -54,8 +53,10 @@ def papra_db(tmp_path, docs, tags=(), doc_tags=()):
     )
     for doc_id, org, name, content, deleted in docs:
         con.execute(
-            "insert into documents values (?,?,?,?,?,?)",
-            (doc_id, org, name, name, content, deleted),
+            "insert into documents (id, organization_id, name, original_name, content,"
+            " deleted_at, original_storage_key, document_date) values (?,?,?,?,?,?,?,?)",
+            (doc_id, org, name, name, content, deleted,
+             (keys or {}).get(doc_id), (dates or {}).get(doc_id)),
         )
     for tid, org, name, norm in tags:
         con.execute(
@@ -66,6 +67,13 @@ def papra_db(tmp_path, docs, tags=(), doc_tags=()):
         con.execute("insert into documents_tags values (?,?)", (doc_id, tid))
     con.commit()
     return path, con
+
+
+def date_of(con, doc_id):
+    return con.execute("select document_date from documents where id=?", (doc_id,)).fetchone()[0]
+
+
+# ── tag_sweep ─────────────────────────────────────────────────────────────────
 
 
 def test_only_untagged_documents_are_swept(tmp_path):
@@ -194,7 +202,7 @@ def test_main_reports_the_swept_count(tmp_path, capsys):
 def test_the_schema_pins_existing_tags_to_an_enum():
     schema = tag_sweep.tag_schema(["Facture", "Assurance"])
     assert schema["properties"]["existingTags"]["items"]["enum"] == ["Facture", "Assurance"]
-    assert schema["required"] == ["existingTags", "newTags"]
+    assert schema["required"] == ["existingTags", "newTags", "documentDate"]
 
 
 def test_the_prompt_is_capped_and_carries_the_existing_tags():
@@ -214,224 +222,359 @@ def test_tag_ids_look_like_papras():
     assert tag_sweep.new_tag_id(lambda a: "a") == "tag_" + "a" * 24
 
 
-# ── tag_sync: the signature check is the auth boundary ─────────────────────────
-
-SECRET = b"s3cret"
-BODY = b'{"event":"document.tags.changed","documentId":"doc_abcdefghij123456"}'
+# ── tag_sweep: document_date ──────────────────────────────────────────────────
 
 
-def signed(secret, wid="msg_1", wts="1700000000", body=BODY):
-    signed_content = wid.encode() + b"." + wts.encode() + b"." + body
-    mac = hmac.new(secret, signed_content, hashlib.sha256).digest()
-    return f"v1,{base64.b64encode(mac).decode()}"
+def ymd(ts):
+    import datetime
+    return datetime.datetime.fromtimestamp(ts / 1000, datetime.UTC).date().isoformat()
 
 
-def test_a_correctly_signed_payload_is_accepted():
-    ok, _, _ = verify(signed(SECRET))
-    assert ok is True
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [
+        ("2018-07-02_amazon_7.99EUR_408-2852872-2207567__419.pdf", "2018-07-02"),
+        ("releve_20171009.pdf", "2017-10-09"),
+        ("facture 04-06-2017.pdf", "2017-06-04"),
+        ("free_201702.pdf", "2017-02-01"),
+        ("Attestation LMDE 2018__4.pdf", "2018-01-01"),
+        ("Passeport - 2028.08.07 - 2019.03.02.pdf", "2019-03-02"),  # expiry skipped
+        ("releve 2017-13-45.pdf", "2017-01-01"),  # impossible month → bare year
+    ],
+)
+def test_a_date_is_read_from_the_filename(name, expected):
+    assert ymd(tag_sweep.filename_date(name, max_year=2026)) == expected
 
 
-def verify(sig, secret=SECRET, wid="msg_1", wts="1700000000", body=BODY):
-    return tag_sync.verify_signature(secret, wid, wts, sig, body)
+@pytest.mark.parametrize("name", [
+    "attestation ameli 1 96 11 29 260 237 85.pdf",  # social-security number
+    "Facture MyFirmin Partie 1 - Client__189.pdf",
+    "scan 1985.pdf",  # before MIN_YEAR
+    "contrat 2031.pdf",  # after max_year
+    "",
+])
+def test_a_filename_without_a_plausible_date_yields_none(name):
+    assert tag_sweep.filename_date(name, max_year=2026) is None
 
 
-def test_a_tampered_body_is_rejected():
-    ok, _, _ = tag_sync.verify_signature(
-        SECRET, "msg_1", "1700000000", signed(SECRET), BODY + b"tampered")
-    assert ok is False
+def test_a_gate_date_is_parsed_or_rejected():
+    assert ymd(tag_sweep.parse_iso("2019-05-11", max_year=2026)) == "2019-05-11"
+    assert tag_sweep.parse_iso("2019-02-30", max_year=2026) is None
+    assert tag_sweep.parse_iso(None) is None
+    assert tag_sweep.parse_iso("mai 2019") is None
 
 
-def test_a_replayed_signature_under_a_different_id_is_rejected():
-    ok, _, _ = tag_sync.verify_signature(
-        SECRET, "msg_2", "1700000000", signed(SECRET, wid="msg_1"), BODY)
-    assert ok is False
+def test_filename_dates_never_overwrite_an_existing_one(tmp_path):
+    path, con = papra_db(tmp_path, docs=[
+        ("d1", "org", "2018-07-02_a.pdf", "x", None),
+        ("d2", "org", "2018-07-02_b.pdf", "x", None),
+        ("d3", "org", "nodate.pdf", "x", None),
+    ], dates={"d2": 42})
+    assert tag_sweep.backfill_filename_dates(con) == (1, 1)
+    assert ymd(date_of(con, "d1")) == "2018-07-02"
+    assert date_of(con, "d2") == 42
+    con.close()
 
 
-def test_a_signature_from_the_wrong_secret_is_rejected():
-    ok, _, _ = verify(signed(b"wrong"))
-    assert ok is False
+def test_the_tag_call_also_dates_the_document(tmp_path):
+    path, con = papra_db(tmp_path, docs=[("d1", "org", "a.pdf", "x", None)])
+    tried = set()
+    tag_sweep.sweep(
+        tag_sweep.Config(db=str(path)), con, now=1, tried=tried,
+        ask_fn=lambda *a: {"existingTags": [], "newTags": [], "documentDate": "2019-05-11"},
+    )
+    assert ymd(date_of(con, "d1")) == "2019-05-11"
+    assert tried == {"d1"}
+    con.close()
 
 
-def test_a_missing_or_malformed_signature_header_is_rejected():
-    for header in ("", "garbage", "v2,abc", "v1"):
-        ok, _, _ = verify(header)
-        assert ok is False
+def test_the_gate_is_asked_once_per_undated_document(tmp_path):
+    # A passport has no date at all; asking again every 15 min would hammer beast
+    # and starve the documents behind it.
+    path, con = papra_db(tmp_path, docs=[
+        ("d1", "org", "passport.pdf", "x", None),
+        ("d2", "org", "bill.pdf", "xx", None),
+        ("d3", "org", "later.pdf", "xxx", None),
+    ])
+    cfg = tag_sweep.Config(db=str(path), date_batch=2)
+    asked, tried = [], {"d1"}
+    answers = {"bill.pdf": "2019-05-11", "later.pdf": None}
+
+    def ask(name, content):
+        asked.append(name)
+        return {"documentDate": answers[name]}
+
+    assert tag_sweep.backfill_gate_dates(cfg, con, tried, ask_fn=ask) == 1
+    assert asked == ["bill.pdf", "later.pdf"]
+    assert tried == {"d1", "d2", "d3"}
+    assert tag_sweep.backfill_gate_dates(cfg, con, tried, ask_fn=ask) == 0
+    assert asked == ["bill.pdf", "later.pdf"]
+    con.close()
 
 
-def test_several_signatures_are_accepted_if_any_matches():
-    # svix sends multiple during secret rotation.
-    ok, _, sigs = verify(f"v1,AAAA {signed(SECRET)}")
-    assert ok is True
-    assert len(sigs) == 2
+def test_the_gate_date_batch_is_capped(tmp_path):
+    path, con = papra_db(tmp_path, docs=[(f"d{i}", "org", "x.pdf", "x", None) for i in range(5)])
+    asked = []
+    tag_sweep.backfill_gate_dates(
+        tag_sweep.Config(db=str(path), date_batch=2), con, set(),
+        ask_fn=lambda n, c: (asked.append(n), {"documentDate": None})[1])
+    assert len(asked) == 2
+    con.close()
 
 
-def test_a_whsec_prefixed_secret_is_base64_decoded_first():
-    raw = b"\x01\x02\x03\x04"
-    secret = b"whsec_" + base64.b64encode(raw)
-    ok, _, _ = tag_sync.verify_signature(
-        secret, "msg_1", "1700000000", signed(raw), BODY)
-    assert ok is True
+def test_main_dates_from_filenames_even_when_the_gate_is_down(tmp_path, capsys):
+    path, con = papra_db(
+        tmp_path,
+        docs=[("d1", "org", "2018-07-02_a.pdf", "x", None),
+              ("d2", "org", "untagged.pdf", "x", None)],
+    )
+    state = tmp_path / "state"
+    state.mkdir()
+
+    def down(*a):
+        raise urllib.error.URLError("beast asleep")
+
+    rc = tag_sweep.main(env={"PAPRA_DB": str(path), "STATE_DIR": str(state)},
+                        con=con, ask_fn=down, ask_date_fn=down)
+    assert rc == 75
+    check = sqlite3.connect(str(path))
+    assert ymd(date_of(check, "d1")) == "2018-07-02"
+    check.close()
 
 
-def test_doc_ids_are_extracted_in_order_without_duplicates():
-    body = b'{"a":"doc_aaaaaaaaaaaaaaaa","b":"doc_bbbbbbbbbbbbbbbb","c":"doc_aaaaaaaaaaaaaaaa"}'
-    assert tag_sync.doc_ids(body) == ["doc_aaaaaaaaaaaaaaaa", "doc_bbbbbbbbbbbbbbbb"]
+def test_main_persists_which_documents_the_gate_was_asked_about(tmp_path):
+    path, con = papra_db(tmp_path, docs=[("d1", "org", "nodate.pdf", "x", None)],
+                         tags=[("t1", "org", "Passeport", "passeport")],
+                         doc_tags=[("d1", "t1")])
+    state = tmp_path / "state"
+    state.mkdir()
+    env = {"PAPRA_DB": str(path), "STATE_DIR": str(state)}
+    assert tag_sweep.main(env=env, con=con,
+                          ask_date_fn=lambda n, c: {"documentDate": None}) == 0
+    assert json.loads((state / "date-asked.json").read_text()) == ["d1"]
 
 
-def test_a_payload_with_no_doc_id_yields_nothing():
-    assert tag_sync.doc_ids(b'{"event":"ping"}') == []
-    assert tag_sync.doc_ids(b"doc_tooshort") == []
+# ── nc_sync ───────────────────────────────────────────────────────────────────
 
 
-# ── tag_sync: the Nextcloud write path ────────────────────────────────────────
+def test_the_type_tag_picks_the_folder_and_the_date_the_year():
+    doc = {"tags": ["Abonnement", "Facture", "Facture télécom"], "date": MS_2018}
+    assert nc_sync.classify(doc) == ("Facture télécom", "2018")
+    assert nc_sync.classify({"tags": ["Streaming"], "date": MS_2018}) == ("Non classé", "2018")
+    assert nc_sync.classify({"tags": ["Facture"], "date": None}) == ("Facture", "Sans date")
 
 
-def label(sql):
-    """First few words of a statement — enough to identify it in an assertion."""
-    return " ".join(" ".join(sql.split()).split(" ")[:3])
+def test_identity_documents_file_flat_with_no_year():
+    assert nc_sync.classify({"tags": ["Passeport"], "date": MS_2018}) == ("Passeport", None)
+
+
+def test_names_are_made_safe_and_lose_the_import_suffix():
+    assert nc_sync.safe_name("bill__419.pdf") == "bill.pdf"
+    assert nc_sync.safe_name("a/b:c?.pdf") == "a_b_c_.pdf"
+    assert nc_sync.safe_name("La__ Felicita.pdf") == "La__ Felicita.pdf"
+    assert nc_sync.safe_name("  ") == "document"
+
+
+def test_a_filename_clash_gets_the_doc_id_tail():
+    taken = {}
+    doc = {"tags": ["Facture"], "date": MS_2018, "name": "bill.pdf"}
+    assert nc_sync.target_rel("doc_aaaaaa111111", doc, taken) == "Facture/2018/bill.pdf"
+    assert nc_sync.target_rel("doc_bbbbbb222222", doc, taken) == "Facture/2018/bill-222222.pdf"
+    # The first one keeps its slot on the next pass.
+    assert nc_sync.target_rel("doc_aaaaaa111111", doc, taken) == "Facture/2018/bill.pdf"
 
 
 class FakePg:
-    """Just enough psycopg2 to drive apply_systemtags/find_file.
+    """Enough psycopg2 for nc_sync: an in-memory oc_storages/oc_filecache/systemtags."""
 
-    `answers` is consulted by SQL prefix; every execute is recorded so the tests can
-    assert what would have been written to Nextcloud's database.
-    """
-
-    def __init__(self, file_row=None, existing_tag_ids=(), mapped=()):
-        self.file_row = file_row
-        self.existing = dict(existing_tag_ids)
-        self.mapped = set(mapped)
-        self.executed = []
+    def __init__(self, archive, files=None, tags=None, mappings=()):
+        self.storage_id = f"local::{archive}/"
+        self.mounted = True
+        self.files = dict(files or {})  # path -> fileid
+        self.tags = dict(tags or {})  # name -> id
+        self.mappings = set(mappings)  # (objectid, tagid)
         self.autocommit = False
-        self._next = None
-        self._new_id = 500
+        self.writes = []
+        self._rows = []
 
     def cursor(self):
         return self
 
-    def execute(self, sql, params=()):
-        self.executed.append((label(sql), params))
-        if sql.startswith("SELECT fc.fileid"):
-            self._next = self.file_row
-        elif sql.startswith("SELECT id FROM oc_systemtag "):
-            tid = self.existing.get(params[0])
-            self._next = (tid,) if tid else None
-        elif sql.startswith("INSERT INTO oc_systemtag("):
-            self._new_id += 1
-            self.existing[params[0]] = self._new_id
-            self._next = (self._new_id,)
-        elif sql.startswith("SELECT 1 FROM oc_systemtag_object_mapping"):
-            self._next = (1,) if (params[0], params[1]) in self.mapped else None
-        elif sql.startswith("INSERT INTO oc_systemtag_object_mapping"):
-            self.mapped.add((params[0], params[1]))
-            self._next = None
-        else:
-            self._next = None
-
-    def fetchone(self):
-        return self._next
-
     def close(self):
         pass
 
-    @property
-    def writes(self):
-        return [e for e in self.executed if e[0].startswith("INSERT")]
+    def execute(self, sql, params=()):
+        s = " ".join(sql.split())
+        if s.startswith("SELECT numeric_id FROM oc_storages"):
+            self._rows = [(7,)] if self.mounted and params[0] == self.storage_id else []
+        elif s.startswith("SELECT path, fileid FROM oc_filecache"):
+            self._rows = list(self.files.items())
+        elif s.startswith("SELECT name, id FROM oc_systemtag"):
+            self._rows = [(n, i) for n, i in self.tags.items() if n in params[0]]
+        elif s.startswith("INSERT INTO oc_systemtag("):
+            new = max(self.tags.values(), default=100) + 1
+            self.tags[params[0]] = new
+            self._rows = [(new,)]
+            self.writes.append(("tag", params[0]))
+        elif s.startswith("SELECT systemtagid FROM oc_systemtag_object_mapping"):
+            self._rows = [(t,) for o, t in self.mappings if o == params[0]]
+        elif s.startswith("INSERT INTO oc_systemtag_object_mapping"):
+            self.mappings.add((params[0], params[1]))
+            self.writes.append(("map", params[0], params[1]))
+        elif s.startswith("DELETE FROM oc_systemtag_object_mapping"):
+            self.mappings.discard((params[0], params[1]))
+            self.writes.append(("unmap", params[0], params[1]))
+        else:
+            raise AssertionError(f"unexpected SQL: {s}")
+
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return list(self._rows)
 
 
-def sync_db(tmp_path, original_name, tags):
-    path, con = papra_db(
-        tmp_path,
-        docs=[("doc_aaaaaaaaaaaaaaaa", "org", original_name, "x", None)],
-        tags=[(f"t{i}", "org", t, t.lower()) for i, t in enumerate(tags)],
-        doc_tags=[("doc_aaaaaaaaaaaaaaaa", f"t{i}") for i in range(len(tags))],
-    )
-    con.close()
-    return tag_sync.Config(papra_db=str(path), secret=SECRET)
+class Scanner:
+    """Fake `occ files:scan`: indexes every archive file into the FakePg."""
+
+    def __init__(self, archive, pg):
+        self.archive, self.pg, self.calls = archive, pg, []
+
+    def __call__(self, argv):
+        self.calls.append(argv)
+        self.pg.files = {}
+        for root, _d, files in os.walk(self.archive):
+            for f in files:
+                rel = os.path.relpath(os.path.join(root, f), self.archive)
+                self.pg.files[rel] = 1000 + len(self.pg.files)
 
 
-def test_tags_are_mirrored_as_systemtags(tmp_path):
-    cfg = sync_db(tmp_path, "bill.pdf", ["Facture"])
-    pg = FakePg(file_row=(42, "files/bill.pdf"))
-    out = tag_sync.sync(cfg, "doc_aaaaaaaaaaaaaaaa", connect=lambda _cfg: pg)
-    assert "tagged files/bill.pdf (fileid 42) -> ['Facture']" in out
-    assert pg.writes == [
-        ("INSERT INTO oc_systemtag(name,visibility,editable)", ("Facture",)),
-        ("INSERT INTO oc_systemtag_object_mapping(objectid,objecttype,systemtagid)", ("42", 501)),
-    ]
+def archive_env(tmp_path, docs, tags=(), doc_tags=(), dates=None):
+    blobs = tmp_path / "blobs"
+    blobs.mkdir()
+    keys = {}
+    for doc_id, *_ in docs:
+        (blobs / f"{doc_id}.pdf").write_bytes(doc_id.encode())
+        keys[doc_id] = f"{doc_id}.pdf"
+    path, con = papra_db(tmp_path, docs, tags, doc_tags, dates, keys)
+    archive = tmp_path / "archive"
+    archive.mkdir()
+    cfg = nc_sync.Config(
+        papra_db=str(path), docs_root=str(blobs), archive=str(archive),
+        state_dir=str(tmp_path / "state"), owner="no-such-user-here", apply=True)
+    pg = FakePg(str(archive))
+    return cfg, con, pg, Scanner(str(archive), pg)
+
+
+def run_sync(cfg, pg, scan, logged):
+    return nc_sync.reconcile(cfg, connect=lambda _c: pg, run=scan, log=logged.append)
+
+
+def listing(root):
+    return sorted(os.path.relpath(os.path.join(r, f), root)
+                  for r, _d, fs in os.walk(root) for f in fs)
+
+
+BILL = [("doc_bill01", "org", "bill__419.pdf", "x", None)]
+BILL_TAGS = dict(tags=[("t1", "org", "Facture", "facture"), ("t2", "org", "Abonnement", "abonnement")],
+                 doc_tags=[("doc_bill01", "t1"), ("doc_bill01", "t2")],
+                 dates={"doc_bill01": MS_2018})
+
+
+def test_a_document_is_filed_and_its_tags_mirrored(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    logged = []
+    assert run_sync(cfg, pg, scan, logged) == 0
+    assert listing(cfg.archive) == ["Facture/2018/bill.pdf"]
+    assert open(os.path.join(cfg.archive, "Facture/2018/bill.pdf"), "rb").read() == b"doc_bill01"
+    fid = str(pg.files["Facture/2018/bill.pdf"])
+    assert {t for o, t in pg.mappings if o == fid} == {pg.tags["Facture"], pg.tags["Abonnement"]}
     assert pg.autocommit is True
+    assert "+1 copied" in logged[-1]
 
 
-def test_an_existing_systemtag_is_reused_not_duplicated(tmp_path):
-    cfg = sync_db(tmp_path, "bill.pdf", ["Facture"])
-    pg = FakePg(file_row=(42, "files/bill.pdf"), existing_tag_ids={"Facture": 7})
-    tag_sync.sync(cfg, "doc_aaaaaaaaaaaaaaaa", connect=lambda _cfg: pg)
-    assert pg.writes == [
-        ("INSERT INTO oc_systemtag_object_mapping(objectid,objecttype,systemtagid)", ("42", 7)),
-    ]
+def test_a_second_pass_is_a_no_op(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    run_sync(cfg, pg, scan, [])
+    pg.writes.clear()
+    scan.calls.clear()
+    logged = []
+    run_sync(cfg, pg, scan, logged)
+    assert pg.writes == [] and scan.calls == []
+    assert "+0 copied, 0 moved, 0 pruned" in logged[-1]
 
 
-def test_an_already_mapped_tag_writes_nothing(tmp_path):
-    # Papra fires the webhook on every tag change; re-delivery must be a no-op.
-    cfg = sync_db(tmp_path, "bill.pdf", ["Facture"])
-    pg = FakePg(file_row=(42, "f/bill.pdf"), existing_tag_ids={"Facture": 7},
-                mapped=[("42", 7)])
-    tag_sync.sync(cfg, "doc_aaaaaaaaaaaaaaaa", connect=lambda _cfg: pg)
-    assert pg.writes == []
+def test_a_retag_moves_the_file_and_swaps_its_tags(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    run_sync(cfg, pg, scan, [])
+    con.execute("insert into tags values ('t3',0,0,'org','Contrat','#CCCCCC',null,'contrat')")
+    con.execute("delete from documents_tags where tag_id='t1'")
+    con.execute("insert into documents_tags values ('doc_bill01','t3')")
+    con.commit()
+    run_sync(cfg, pg, scan, [])
+    assert listing(cfg.archive) == ["Contrat/bill.pdf"]
+    fid = str(pg.files["Contrat/bill.pdf"])
+    assert {t for o, t in pg.mappings if o == fid} == {pg.tags["Contrat"], pg.tags["Abonnement"]}
 
 
-def test_a_document_with_no_nextcloud_file_is_skipped(tmp_path):
-    cfg = sync_db(tmp_path, "proton-only.pdf", ["Facture"])
-    pg = FakePg(file_row=None)
-    out = tag_sync.sync(cfg, "doc_aaaaaaaaaaaaaaaa", connect=lambda _cfg: pg)
-    assert "no Nextcloud file" in out
-    assert pg.writes == []
+def test_a_hand_added_nextcloud_tag_is_left_alone(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    run_sync(cfg, pg, scan, [])
+    fid = str(pg.files["Facture/2018/bill.pdf"])
+    pg.tags["Mine"] = 999
+    pg.mappings.add((fid, 999))
+    run_sync(cfg, pg, scan, [])
+    assert (fid, 999) in pg.mappings
 
 
-def test_an_untagged_document_is_skipped_without_touching_postgres(tmp_path):
-    cfg = sync_db(tmp_path, "bill.pdf", [])
-
-    def boom(_cfg):
-        raise AssertionError("must not connect")
-
-    assert "no tags yet" in tag_sync.sync(cfg, "doc_aaaaaaaaaaaaaaaa", connect=boom)
-
-
-def test_an_unknown_document_is_skipped_without_touching_postgres(tmp_path):
-    cfg = sync_db(tmp_path, "bill.pdf", ["Facture"])
-
-    def boom(_cfg):
-        raise AssertionError("must not connect")
-
-    assert "unknown/deleted" in tag_sync.sync(cfg, "doc_zzzzzzzzzzzzzzzz", connect=boom)
+def test_a_deleted_document_is_pruned_with_its_empty_folders(tmp_path):
+    cfg, con, pg, scan = archive_env(
+        tmp_path, BILL + [("doc_keep01", "org", "keep.pdf", "x", None)], **BILL_TAGS)
+    run_sync(cfg, pg, scan, [])
+    con.execute("update documents set deleted_at=1 where id='doc_bill01'")
+    con.commit()
+    logged = []
+    run_sync(cfg, pg, scan, logged)
+    assert listing(cfg.archive) == ["Non classé/Sans date/keep.pdf"]
+    assert not os.path.exists(os.path.join(cfg.archive, "Facture"))
+    assert "1 pruned" in logged[-1]
 
 
-def test_the_paperless_import_suffix_is_tried_as_a_fallback_name():
-    assert tag_sync.candidate_names("bill__2.pdf") == ["bill__2.pdf", "bill.pdf"]
-    assert tag_sync.candidate_names("bill.pdf") == ["bill.pdf"]
-    assert tag_sync.candidate_names("no__suffix") == ["no__suffix"]
+def test_a_missing_blob_is_skipped_not_fatal(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    os.unlink(os.path.join(cfg.docs_root, "doc_bill01.pdf"))
+    logged = []
+    assert run_sync(cfg, pg, scan, logged) == 0
+    assert listing(cfg.archive) == []
+    assert any("blob missing" in line for line in logged)
 
 
-def test_the_file_lookup_is_scoped_to_the_users_own_storage():
-    pg = FakePg(file_row=(1, "p"))
-    tag_sync.find_file(pg, "nsimon", ["bill.pdf"])
-    assert pg.executed[0][1] == ("bill.pdf", "home::nsimon")
+def test_a_dry_run_writes_nothing(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    cfg = nc_sync.Config(**{**cfg.__dict__, "apply": False})
+    logged = []
+    assert run_sync(cfg, pg, scan, logged) == 0
+    assert listing(cfg.archive) == []
+    assert pg.writes == [] and scan.calls == []
+    assert not os.path.exists(cfg.manifest)
+    assert "(dry-run) 1 filed (+1 copied" in logged[-1]
+
+
+def test_an_unmounted_archive_fails_the_unit(tmp_path):
+    cfg, con, pg, scan = archive_env(tmp_path, BILL, **BILL_TAGS)
+    pg.mounted = False
+    logged = []
+    assert run_sync(cfg, pg, scan, logged) == 1
+    assert "papra-nc-archive-mount" in logged[-1]
 
 
 def test_the_dbpassword_is_read_out_of_nextclouds_config(tmp_path):
     cfg_php = tmp_path / "config.php"
     cfg_php.write_text("<?php $CONFIG = array('dbpassword' => 'p@ss', );")
-    assert tag_sync.nc_pg_password(str(cfg_php)) == "p@ss"
+    assert nc_sync.nc_pg_password(str(cfg_php)) == "p@ss"
     cfg_php.write_text("<?php $CONFIG = array();")
     with pytest.raises(RuntimeError, match="dbpassword not found"):
-        tag_sync.nc_pg_password(str(cfg_php))
-
-
-def test_main_refuses_to_serve_without_a_webhook_secret(capsys):
-    # Serving with an empty secret would accept forged webhooks.
-    assert tag_sync.main(env={}) == 1
-    assert "refusing to accept" in capsys.readouterr().err
+        nc_sync.nc_pg_password(str(cfg_php))
 
 
 # ── proton_poll ───────────────────────────────────────────────────────────────

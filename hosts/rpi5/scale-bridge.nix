@@ -28,7 +28,7 @@
 # rendered at activation from that secret into /etc (never the Nix store / git).
 { config, pkgs, ... }:
 let
-  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only (8347 taken by papra-webhook)
+  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only 
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
   # Ryot's socket-activation listener + the /ryot/backend route Caddy strips —
   # NOT ryot-backend's own 13352. Ryot sleeps when idle (ryot.nix), and a weigh-in
