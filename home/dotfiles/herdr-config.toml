@@ -56,17 +56,20 @@ delivery = "terminal"
 
 # zoetrope — the subagent view. Focus a Claude Code pane and press it: `zoe`
 # draws that session as a flow graph with the turn's SUBAGENTS nested, which
-# nothing else shows. Needs `herdr plugin install furkankly/zoetrope/herdr-plugin`
-# (declared in home/herdr.nix); the binary is nix-managed.
+# nothing else shows. `q` closes the popup.
 #
-# Written here rather than by the plugin's `setup-keys` action, which makes the
-# same edit at runtime and leaves a config.toml.bak-* in the checkout.
-# `.open-split` / `.open-tab` place the graph beside the agent instead of over it.
+# Runs our own `herdr-zoe` (home/herdr.nix), NOT upstream's herdr plugin: that
+# plugin reaches herdr through $HERDR_BIN_PATH, which herdr fills with a
+# hardcoded /opt/homebrew/bin/herdr on macOS no matter where herdr actually is,
+# so every action dies with "No such file or directory" on a nix install.
+# See home/scripts/herdr-zoe.sh.
 [[keys.command]]
 key = "prefix+shift+z"
-type = "plugin_action"
-command = "furkankly.zoetrope.open"
-description = "zoetrope: session graph (overlay)"
+type = "popup"
+command = "herdr-zoe"
+width = "90%"
+height = "90%"
+description = "zoetrope: session graph"
 
 [theme]
 name = "tokyo-night"
