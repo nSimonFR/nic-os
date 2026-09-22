@@ -186,7 +186,9 @@ rl=$(printf '%.0f' "${rl5h:-0}" 2>/dev/null) || rl=0
 # countdown would sit there going stale between state changes.
 if [ "$rl" -ge 80 ]; then
   out="${out}${sep}${red}5h ${rl}%${reset}"
-  [ -n "$rl5h_at" ] && out="${out}${red} ↻${rl5h_at}${reset}"
+  # Space after U+21BB: it is ambiguous-width, so the font draws past the one
+  # cell the terminal reserves and clips the first digit.
+  [ -n "$rl5h_at" ] && out="${out}${red} ↻ ${rl5h_at}${reset}"
 fi
 
 printf '%s\n' "$out"
