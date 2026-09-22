@@ -37,7 +37,7 @@ let
         # from the package instead of vendoring a copy means it cannot drift:
         # a checked-in snapshot is pinned to whatever master said the day it was
         # copied, which is already a different file from what 0.9.0 ships.
-        { source = "${unstablePkgs.herdr}/share/skills/herdr"; }
+        { source = "${pkgs.herdr-fork}/share/skills/herdr"; }
       ];
     }
     // skillTree.homeFiles {

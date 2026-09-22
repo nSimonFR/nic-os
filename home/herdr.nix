@@ -33,7 +33,7 @@ let
   # because an interactive shell lends it a grep the unit never has.
   herdrServerAbsent = pkgs.writeShellApplication {
     name = "herdr-server-absent";
-    runtimeInputs = [ unstablePkgs.herdr pkgs.gnugrep ];
+    runtimeInputs = [ pkgs.herdr-fork pkgs.gnugrep ];
     text = ''
       if herdr status server 2>/dev/null | grep -q '^status: running'; then
         exit 1
@@ -103,7 +103,7 @@ in
       name = "herdr-zoe";
       runtimeInputs = [
         pkgs.jq
-        unstablePkgs.herdr
+        pkgs.herdr-fork
         zoetrope
       ];
       text = builtins.readFile ./scripts/herdr-zoe.sh;
@@ -117,7 +117,7 @@ in
       name = "herdr-claude-open";
       runtimeInputs = [
         pkgs.jq
-        unstablePkgs.herdr
+        pkgs.herdr-fork
       ];
       text = builtins.readFile ./scripts/herdr-claude-open.sh;
     })
@@ -127,7 +127,7 @@ in
       name = "herdr-shutdown";
       runtimeInputs = [
         pkgs.jq
-        unstablePkgs.herdr
+        pkgs.herdr-fork
         pkgs.coreutils
       ];
       text = builtins.readFile ./scripts/herdr-shutdown.sh;
@@ -183,7 +183,7 @@ in
       Type = "simple";
       # `herdr server` is the headless form; bare `herdr` would try to open a
       # TUI and exit for want of a terminal.
-      ExecStart = "${unstablePkgs.herdr}/bin/herdr server";
+      ExecStart = "${pkgs.herdr-fork}/bin/herdr server";
 
       # A server started by this unit inherits the systemd --user manager's
       # environment, which on rpi5 is PATH=<systemd>/bin and nothing else (no
