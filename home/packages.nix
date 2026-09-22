@@ -45,9 +45,8 @@
       kubectl
       kubeseal
       less
-      # mosh: the phone-side path to a herdr session. SSH drops on every sleep
-      # and Wi-Fi/cellular switch, which is most of what a phone does; mosh
-      # keeps the pane. Needed on the HOST — the client is Blink.
+      # Host half of the phone path to herdr: plain SSH drops on every sleep and
+      # network switch, mosh keeps the pane.
       mosh
       nano
       nixfmt-rfc-style
