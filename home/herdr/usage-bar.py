@@ -40,7 +40,7 @@ import urllib.request
 
 WARN_PCT = 60
 HOT_PCT = 85
-# The reset shown is the 5h window's; the weekly one replaces it only past this.
+# Badge and reset follow the 5h window; the weekly one replaces it only past this.
 WEEKLY_RESET_PCT = 95
 
 # api.anthropic.com/api/oauth/usage answers 429 when polled hard, and a 429 is
@@ -268,23 +268,23 @@ def codex_windows() -> list[tuple[str, float]] | None:
     return windows or None
 
 
-def reset_window(windows: list) -> tuple | None:
-    """The window whose reset is worth showing, if any. Fable never is."""
+def watched_window(windows: list) -> tuple | None:
+    """The window that drives the badge and the reset: 5h, or weekly once past
+    WEEKLY_RESET_PCT. Fable never does."""
     by_label = {w[0]: w for w in windows}
     weekly = by_label.get("W")
     if weekly and weekly[1] > WEEKLY_RESET_PCT:
         return weekly
-    five = by_label.get("5")
-    # Below the warn threshold the reset is noise in a one-line bar.
-    return five if five and five[1] >= WARN_PCT else None
+    return by_label.get("5") or weekly
 
 
 def segment(name: str, windows: list, stale: bool) -> str:
     windows = norm(windows)
-    worst = max(w[1] for w in windows)
-    shown = reset_window(windows)
-    when = reset_at(shown[2]) if shown else ""
-    icon = f"{mark(worst).strip()} " if mark(worst) else ""
+    watched = watched_window(windows)
+    pct = watched[1] if watched else 0.0
+    # Below the warn threshold the reset is noise in a one-line bar.
+    when = reset_at(watched[2]) if watched and pct >= WARN_PCT else ""
+    icon = f"{mark(pct).strip()} " if mark(pct) else ""
     return f"{name} {icon}{render(windows)}{'*' if stale else ''}{when}"
 
 
