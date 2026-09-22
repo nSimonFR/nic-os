@@ -240,8 +240,7 @@ knowing which one you are fighting decides what works:
 | kube-green `SleepInfo/working-hours`, one per `pr-*` ns | Deployments | `sleepAt 20:00`, `wakeUpAt 07:00`, `weekdays 1-5`, Europe/Paris |
 | CronWorkflow `pr-namespace-shutdown` (ns `awf-devops`) | Deployments **and** StatefulSets (PG, RabbitMQ, Redis, MariaDB) since DO-2091 | deadline per namespace in ConfigMap `pr-namespace-shutdown-schedule` |
 
-The supported way back up is the **`wake-up-namespace` WorkflowTemplate** — by day; at night it
-needs [trusk-argo-workflows#107](https://github.com/trusk-official/trusk-argo-workflows/pull/107), see the next section — (ns `awf-dev`, source
+The supported way back up is the **`wake-up-namespace` WorkflowTemplate**, day or night (ns `awf-dev`, source
 `trusk-official/trusk-argo-workflows`). It scales in **two waves** — datastores first, then
 applications, because one pass starts services before their databases and cascades into
 CrashLoopBackOff — writes the next shutdown deadline into the ConfigMap above, hard-refreshes every
@@ -273,7 +272,7 @@ spec:
       - { name: duration, value: endofnight }
 ```
 
-### At night it only works as a MANUAL sync — and the workflow does not send one
+### At night: nothing manual to add — the workflow's sync already is one
 
 AppProject `staging-preview` (and `staging`) carries three sync windows (Europe/Paris):
 
@@ -283,34 +282,36 @@ allow  0 7  * * 1-5   13h    manualSync: true
 deny   0 7  * * 6     48h    manualSync: true
 ```
 
-`manualSync: true` exempts **manual** syncs from the deny window. ArgoCD decides manual vs
-automated from `operation.initiatedBy.automated`, and the wake-up workflow patches
-`{"operation":{"sync":{…}}}` **without `initiatedBy`** — so every one of its syncs is classed
-automated and refused: `Sync operation blocked by sync window`, `initiatedBy.automated: true`.
-The `wake-up` step reports success, `check-argocd` loops on `OutOfSync`, nothing starts.
-Measured 2026-09-22 at 20:40 on `pr-tec296`: 56/56 operations stuck `Running` since the patch.
+The deny window blocks **auto-sync** only (`Sync prevented by sync window` in the controller log
+is that, and it is expected). `manualSync: true` lets any requested operation through, and ArgoCD
+v3.3.6 classes an operation as manual unless it carries `initiatedBy.automated: true`
+(`controller/sync.go`, `syncWindowPreventsSync`). The wake-up patches
+`{"operation":{"sync":{…}}}` with no `initiatedBy` → manual → allowed. Verified 2026-09-22 at
+23:19 CEST, a Tuesday inside the deny window: that exact patch on `fleet-pr-tec296` →
+`Sync operation to succeeded` in 2 s, history `initiatedBy: {}`. Do not add `initiatedBy` to the
+workflow; the unmerged trusk-argo-workflows#107 was based on a wrong diagnosis.
 
-The fix is to send the sync as a manual one. Two traps on the way:
+What *did* fail on 2026-09-22 at 20:39: 56/56 operations stuck `Running`,
+`Sync operation blocked by sync window`, with `initiatedBy.automated: true` on the operation.
+The workflow patch cannot write that field, so something else put an automated operation there;
+the origin was not found (run purged by TTL, no chart writes `operation:`). If you see it again:
 
-- a refused operation **stays** `Running`, and a new `operation` patched on top is ignored while
-  it is there — so clear it first, including `status.operationState` (patching its phase to
-  `Terminating` is not enough: it sat there for minutes);
-- the preview has **two** levels of app-of-apps: `staging-preview-gitops` renders
-  `pr-<slug>-gitops`, which renders the per-service apps. A new branch pin lands only after both
-  are synced, in that order.
+- a stuck operation **stays** `Running`, and a merge-patched `operation` lands *on top of it* and
+  inherits its `automated: true` — so clear both `/operation` and `/status/operationState` first
+  (patching the phase to `Terminating` is not enough: it sat there for minutes), then rerun the
+  wake-up;
+- the window check reads `status.operationState` — the *previous* operation — on the first pass,
+  so right after an automated sync the first attempt can be judged automated (read in the code,
+  not observed);
+- a new branch pin needs **two** app-of-apps levels synced first, in order:
+  `staging-preview-gitops` renders `pr-<slug>-gitops`, which renders the per-service apps.
 
 ```bash
-# manual sync, the only kind the night window lets through
 a=<app>   # staging-preview-gitops, then pr-<slug>-gitops, then <svc>-pr-<slug>
 kubectl -n argocd patch application $a --type json -p '[{"op":"remove","path":"/operation"}]'
 kubectl -n argocd patch application $a --type json -p '[{"op":"remove","path":"/status/operationState"}]'
-kubectl -n argocd patch application $a --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}},
-  "operation":{"initiatedBy":{"username":"<you>","automated":false},"sync":{"syncStrategy":{"apply":{"force":false}}}}}'
+kubectl -n argocd patch application $a --type merge -p '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}},"operation":{"sync":{"syncStrategy":{"apply":{"force":false}}}}}'
 ```
-
-Result on 2026-09-22 at 21:45, inside the deny window: 55/56 `successfully synced`, namespace at
-64/64 deployments, and nine new branch images rolled out the same night. `argocd-sync-namespace`
-(ns `argocd`) has the same flaw as the wake-up — it too omits `initiatedBy`.
 
 `kubectl scale` also works at any hour (ArgoCD carries `ignoreDifferences` on replicas), but it
 only restores what already runs; a new image needs a real sync. kube-green's
