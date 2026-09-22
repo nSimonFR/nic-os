@@ -24,6 +24,7 @@
     "Sikarugir-App/sikarugir"
     "RhetTbull/osxphotos"
     "manaflow-ai/cmux"
+    "rjyo/moshi"
     {
       name = "jundot/omlx";
       clone_target = "https://github.com/jundot/omlx";
@@ -36,6 +37,9 @@
     "dbt-postgres"
     "helm"
     "infisical"
+    # Moshi bridge daemon (see home/moshi.nix). Brew-only: no nixpkgs
+    # derivation, and the formula just unpacks a signed release tarball.
+    "moshi-hook"
     "omlx"
     "pinentry-touchid"
     "RhetTbull/osxphotos/osxphotos"

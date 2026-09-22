@@ -45,6 +45,9 @@
       kubectl
       kubeseal
       less
+      # mosh: Moshi (getmoshi.app) connects to this host over mosh so a phone
+      # survives sleep and network changes; it needs mosh-server on the host.
+      mosh
       nano
       nixfmt-rfc-style
       # lowPrio so a package that vendors its own node (claude-code, hermes, …)

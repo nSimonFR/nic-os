@@ -4,10 +4,26 @@
 
   stateVersion = 5;
 
-  # Post-rebuild: reload yabai scripting addition + restart tun2proxy
+  # Post-rebuild: reload yabai scripting addition + restart tun2proxy, and make
+  # sure Remote Login is on.
+  #
+  # sshd is what Moshi's Easy Pair (`moshi-hook host setup`, see home/moshi.nix)
+  # connects over before upgrading to mosh — it installs the phone's public key
+  # into ~/.ssh/authorized_keys but cannot turn the service on. macOS has no
+  # nix-darwin option for it: `systemsetup -setremotelogin` is the documented
+  # switch and needs Full Disk Access for whichever terminal drives the rebuild,
+  # so it falls back to the TCC-free launchctl pair. Both are idempotent, and
+  # the guard keeps the common case down to one read.
   activationScripts.postActivation.text = ''
     sudo yabai --load-sa 2>/dev/null || true
     launchctl kickstart -k system/org.nixos.tun2proxy-work 2>/dev/null || true
+
+    if ! systemsetup -getremotelogin 2>/dev/null | grep -qx "Remote Login: On"; then
+      systemsetup -setremotelogin on >/dev/null 2>&1 || {
+        launchctl enable system/com.apple.sshd 2>/dev/null
+        launchctl bootstrap system /System/Library/LaunchDaemons/ssh.plist 2>/dev/null
+      } || true
+    fi
   '';
   
   keyboard = {
