@@ -14,6 +14,7 @@
   config,
   pkgs,
   lib,
+  inputs,
   unstablePkgs,
   ...
 }:
@@ -86,6 +87,15 @@ in
         exec python3 "$HOME/.config/herdr/usage-bar.py" "$@"
       '';
     })
+
+    # zoetrope (`zoe`) — draws a Claude Code session's subagents as a graph,
+    # which neither Claude Code nor herdr shows. Packaged so the plugin's own
+    # build step (Homebrew / cargo install) finds it and no-ops. Needs the
+    # claude integration for herdr to know a pane's session id.
+    #
+    # ⚠ Reads an undocumented, internal Claude Code transcript format; an
+    #   update can break the graph. Nothing else here depends on it.
+    (pkgs.callPackage ../pkgs/cli/zoetrope.nix { zoetrope-src = inputs.zoetrope-src; })
   ];
 
   # Delivery differs by host, and deliberately so.
@@ -113,7 +123,37 @@ in
 
       ".config/herdr/usage-bar.py".source =
         deliver "home/herdr/usage-bar.py" ./herdr/usage-bar.py;
+    }
+    // lib.optionalAttrs pkgs.stdenv.isDarwin {
+      # Saved SSH machines (`herdr machine add`) — the Mac only, since the client
+      # is what holds them. Its sibling endpoint-selection.json stays out: that
+      # is which machine is open.
+      ".local/state/herdr/client/endpoints.json".source =
+        inCheckout "home/dotfiles/herdr-endpoints.json";
     };
+
+  # Plugins — the list is the setting; ~/.config/herdr/plugins.json is not. That
+  # file is a derived cache of host-absolute paths and a content hash that moves
+  # on every reinstall, in a repo three Linux hosts read. So the intent lives
+  # here, guarded per id and unable to fail a switch; delete
+  # ~/.config/herdr/plugins and switch to rebuild the cache.
+  #
+  # speardragon.herdr-status-ui-bar is installed but deliberately absent: its
+  # widget is not in tab_bar_right, so it is a leftover, not a setting.
+  home.activation.herdrPlugins = lib.mkIf pkgs.stdenv.isDarwin (
+    lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      if command -v herdr >/dev/null 2>&1 && [ -S "$HOME/.config/herdr/herdr.sock" ]; then
+        for spec in "furkankly.zoetrope=furkankly/zoetrope/herdr-plugin"; do
+          id="''${spec%%=*}"
+          repo="''${spec#*=}"
+          if ! herdr plugin list --plugin "$id" --json 2>/dev/null | grep -q "$id"; then
+            $DRY_RUN_CMD herdr plugin install "$repo" --yes || \
+              echo "herdr: could not install plugin $id (continuing)"
+          fi
+        done
+      fi
+    ''
+  );
 
   systemd.user.services.herdr = lib.mkIf pkgs.stdenv.isLinux {
     Unit = {

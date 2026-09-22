@@ -27,8 +27,46 @@ tab_bar_right = [
 ]
 tab_bar_right_separator = " · "
 
+# Claude's own session name in the agent panel. `/rename` is pushed into the
+# TERMINAL TITLE, which herdr already captures per pane — no hook needed.
+#
+# Two rows, not herdr's documented three: the dropped one was `agent`, which
+# said "claude" under every entry. The kind moves up as a two-letter code, which
+# cannot be a literal (tokens are a closed set) — `agent` renders `display_agent`
+# and home/scripts/herdr-agent-code.sh reports `cc`.
+#
+# No `fg` on the title: a row token takes hex only, so a colour here would stop
+# following [theme]. Bold + un-dimmed inherits the theme's own colour.
+[ui.sidebar.agents.rows_by_agent]
+claude = [
+  [
+    "state_icon",
+    "agent",
+    "machine",
+    "workspace",
+    "tab",
+  ],
+  [
+    { token = "terminal_title_stripped", bold = true, dim = false },
+  ],
+]
+
 [ui.toast]
 delivery = "terminal"
+
+# zoetrope — the subagent view. Focus a Claude Code pane and press it: `zoe`
+# draws that session as a flow graph with the turn's SUBAGENTS nested, which
+# nothing else shows. Needs `herdr plugin install furkankly/zoetrope/herdr-plugin`
+# (declared in home/herdr.nix); the binary is nix-managed.
+#
+# Written here rather than by the plugin's `setup-keys` action, which makes the
+# same edit at runtime and leaves a config.toml.bak-* in the checkout.
+# `.open-split` / `.open-tab` place the graph beside the agent instead of over it.
+[[keys.command]]
+key = "prefix+shift+z"
+type = "plugin_action"
+command = "furkankly.zoetrope.open"
+description = "zoetrope: session graph (overlay)"
 
 [theme]
 name = "tokyo-night"

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "ssh": [
+    {
+      "id": "0e3e81cfd7afc805bc1c88214a944bad",
+      "label": "rpi5",
+      "target": "rpi5",
+      "session": "default",
+      "enabled": true
+    }
+  ]
+}

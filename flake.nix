@@ -237,6 +237,17 @@
       flake = false;
     };
 
+    # zoetrope — `zoe`, the TUI that draws a Claude Code / Codex session as a
+    # flow graph with its SUBAGENTS nested. Built by pkgs/cli/zoetrope.nix
+    # (use-site callPackage from home/herdr.nix) rather than installed by the
+    # herdr plugin's ensure-zoe.sh, which uses Homebrew or `cargo install`.
+    # Bump: tag here + `version` in pkgs/cli/zoetrope.nix, then
+    # `nix flake lock --update-input zoetrope-src`.
+    zoetrope-src = {
+      url = "github:furkankly/zoetrope/v0.2.0";
+      flake = false;
+    };
+
     # ShowMyCards — self-hosted Magic: The Gathering collection manager
     # (showmycards/showmycards). Source-only input (`flake = false`): the
     # prebuilt image is amd64-only, so pkgs/services/showmycards.nix builds it from source

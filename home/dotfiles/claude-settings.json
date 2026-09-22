@@ -1,19 +1,9 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment_env": "ANTHROPIC_BASE_URL deliberately does NOT live here. A settings-file env entry wins over the process environment and over --settings, which made the Aperture gate unoverridable and silently disabled Remote Control (it requires api.anthropic.com). It is now injected as a wrapper default in home/claude.nix, so every invocation still gets the gate but a caller can override it. Telemetry (CLAUDE_CODE_ENABLE_TELEMETRY) was enabled here briefly and removed again: with no OTLP collector in the fleet it exported nothing.",
   "env": {
     "CLAUDE_CODE_ENABLE_TELEMETRY": "0"
   },
-  "_comment_permissions_ccr": "The Claude Code Remote (bridge) MCP tools are allowed for the READ-ONLY half only — get_session/list_* answer 'which session am I, what model is serving it, what else is running' without a prompt. Everything that mutates (create_session, archive/unarchive, interrupt, set_title/set_tags, send_later, create/update/delete/fire_trigger, subscribe_pr_activity, add_repo) is deliberately left prompting: those spawn containers, wake siblings or post to GitHub. Listed under BOTH name forms for the reason spelled out in .claude/settings.json's _comment_mcp_names — a claude.ai connector attaches either as 'claude.ai Claude Code Remote' (mcp__claude_ai_Claude_Code_Remote__*) or bare (mcp__Claude_Code_Remote__*), and only the bare form has been observed since 2026-07-28, so pinning one form silently stops matching if that flips back.",
-  "_comment_ro_mcps": "postgres_prod_ro and trusk-apis were added to permissions.allow when the `claude()` alias stopped passing --dangerously-skip-permissions (home/dotfiles/zsh/aliases.zsh): they were the only two MCPs in home/mcp.nix listed in neither allow nor ask, so bypass mode was the sole reason they never prompted. Both are read paths — the rw postgres twins stay in `ask` below, and trusk-apis gates DELETE behind confirm:true itself. NB comments must be object keys, never entries inside the allow/ask/deny ARRAYS, where a _comment_ string would be parsed as a permission rule.",
-  "_comment_mode_banner": "defaultMode + theme together are how the permission-mode row under the input box is made as quiet as it can be. That row CANNOT be hidden: it renders on `etl = !!dne && qMS` (dne = toolPermissionContext.mode, qMS = merely 'can this session change modes'), and every entry in the indicator table has a label — there is no falsy mode. It can only be re-labelled and re-coloured, and `default` is the quietest pairing available: indicator 'manual mode' in colour `inactive`, against auto's yellow `warning` and bypassPermissions' red `error`. The custom theme below then drags `inactive` itself down to #333333. Do NOT read defaultMode:'default' as a downgrade from 'auto' in prompt volume — permissions.allow already covers the whole tool surface, so both are near-silent here; what changes is that auto's per-action classifier no longer runs.",
-  "theme": "custom:nic-dim",
-  "_comment_theme": "~/.claude/themes/nic-dim.json, from home/dotfiles/claude-theme.json (home/claude.nix). Custom themes are {name, base, overrides} and the setting takes the slug with a literal `custom:` prefix; an override is DROPPED silently unless its key already exists in the base theme's table, so only rename keys against a real base. Overriding `inactive` is a blunt instrument — it is the generic de-emphasis colour and is used in ~33 places, not just the mode row — but every one of those is already meant to recede, so darkening them is consistent. It is an out-of-store symlink: edit the repo file and restart Claude Code to retune, no rebuild.",
   "permissions": {
-    "defaultMode": "default",
-    "ask": [
-      "mcp__postgres_prod_rw"
-    ],
     "allow": [
       "Bash(*)",
       "Read(*)",
@@ -147,7 +137,10 @@
       "Read(**/*.key)",
       "Read(**/*.p12)"
     ],
-    "_comment_deny": "Global token-saving Read denials (home-manager managed via nic-os/home/dotfiles/claude-settings.json, wired to ~/.claude/settings.json in home/claude.nix). permissions.deny Read() rules are Claude Code's real file-exclusion mechanism \u2014 .claudeignore is NOT a native feature. Rules follow gitignore semantics and apply to Read/Grep/Glob plus cat/head/tail/sed in Bash, across every project (user-level settings = global). Unanchored patterns (no // or ~ prefix) match at any depth. Conservative: dependencies, lockfiles, build output, minified/maps, caches, logs, binaries/media, and secrets only \u2014 never real source code. Secrets entries (*.enc/*.pem/*.key/*.p12) also cover sops-encrypted Trusk deployment/configurations/<env>/secrets/ payloads. Edit to extend; deny merges across scopes and a deny at any level wins.",
+    "ask": [
+      "mcp__postgres_prod_rw"
+    ],
+    "defaultMode": "default",
     "additionalDirectories": [
       "/home/nsimon/.claude/projects",
       "/home/nsimon/.claude-rc/projects",
@@ -156,10 +149,10 @@
       "/Users/nsimon/.claude-rc/projects",
       "/Users/nsimon/.claude-secondary/projects"
     ],
-    "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed \u2014 the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json. Listed under BOTH /home/nsimon and /Users/nsimon because ONE file is symlinked to every host (BeAsT + rpi5 are Linux, nBookPro is darwin) and these are absolute paths, so a single spelling silently covers only two hosts of three. That went unnoticed while the `claude()` alias passed --dangerously-skip-permissions, which skipped the boundary check outright; it surfaced the moment the flag was dropped (see home/dotfiles/zsh/aliases.zsh). A path that does not exist on a given host is inert, so listing both is free."
+    "_comment_deny": "Global token-saving Read denials (home-manager managed via nic-os/home/dotfiles/claude-settings.json, wired to ~/.claude/settings.json in home/claude.nix). permissions.deny Read() rules are Claude Code's real file-exclusion mechanism — .claudeignore is NOT a native feature. Rules follow gitignore semantics and apply to Read/Grep/Glob plus cat/head/tail/sed in Bash, across every project (user-level settings = global). Unanchored patterns (no // or ~ prefix) match at any depth. Conservative: dependencies, lockfiles, build output, minified/maps, caches, logs, binaries/media, and secrets only — never real source code. Secrets entries (*.enc/*.pem/*.key/*.p12) also cover sops-encrypted Trusk deployment/configurations/<env>/secrets/ payloads. Edit to extend; deny merges across scopes and a deny at any level wins.",
+    "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed — the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json. Listed under BOTH /home/nsimon and /Users/nsimon because ONE file is symlinked to every host (BeAsT + rpi5 are Linux, nBookPro is darwin) and these are absolute paths, so a single spelling silently covers only two hosts of three. That went unnoticed while the `claude()` alias passed --dangerously-skip-permissions, which skipped the boundary check outright; it surfaced the moment the flag was dropped (see home/dotfiles/zsh/aliases.zsh). A path that does not exist on a given host is inert, so listing both is free."
   },
-  "_comment_denied_mcp": "DEDUPLICATION, not removal — deliberately asymmetric, unlike .claude/settings.json where each connector is listed under BOTH name forms to drop it entirely. Gmail attaches TWICE per session: observed 2026-08-25 in bridge session ancc_9c9e0e76218174a1 as mcp__Gmail__* AND mcp__claude_ai_Gmail__*, the same 28 tools, the combined MCP group costing 37,178 tokens. The two registrations are attempted independently and matched by raw === on the registration name (no trim, no case fold, no 'claude.ai ' strip), and the name space is closed at two forms — so denying exactly one form leaves exactly one attachment. Denying the bare 'Gmail' is what keeps 'claude.ai Gmail', which is also the only form this file's permissions.allow lists (mcp__claude_ai_Gmail). Do NOT add 'claude.ai Gmail' here: that drops Gmail outright. Deliberately USER scope rather than nic-os project scope — a duplicate is pure waste in every repo, while Gmail itself is real work in the Trusk ones. CAVEAT, unverified: 'claude.ai Metabase Trusk' has been denied under both forms since 2f8d755 (2026-08-18) and still attached on 08-19 and again on 08-25, so this mechanism has no positive evidence of biting for claude.ai connectors. Confirm with the mcp_instructions_delta/deferred_tools_delta addedNames recipe in known_issue_claude_connector_deny_both_name_forms before counting the saving.",
-  "_comment_pg_rw": "Write-capable Trusk monodb MCPs (defined in home/mcp.nix): postgres_prod_rw stays gated per-call by permissions.ask; postgres_staging_rw was MOVED from ask to allow on 2026-09-15 at Nicolas's explicit instruction (\"never ask again for staging rights\") — staging is disposable and every write there is reversible, while the prompt cost a round-trip per statement during the IN-698 test runs. The ask gate DOES survive --dangerously-skip-permissions (measured 2026-09-03 in `claude -p` sessions: postgres_prod_ro, not in ask, ran unprompted; staging_rw, then in ask, was blocked with 'needs your approval' under the same flag, and an ask-less --settings override did not help since ask merges across scopes and any scope's rule applies). Consequence for what REMAINS in ask: prod_rw calls are unusable in ANY non-interactive session (-p, cron, bridge) because there is nobody to answer the prompt — that is the intended safety property, not a bug. Use prod_rw from an interactive session and approve the prompt; for scripted writes, drive the wrapper in home/mcp.nix directly over MCP stdio. staging_rw now runs unprompted everywhere, headless included.",
+  "model": "opus[1m]",
   "deniedMcpServers": [
     {
       "serverName": "claude-in-chrome"
@@ -255,10 +248,20 @@
             "type": "command",
             "command": "bash \"$HOME/.claude/hooks/herdr-agent-state.sh\" session",
             "timeout": 10
+          },
+          {
+            "type": "command",
+            "command": "\"$HOME/.claude/hooks/herdr-agent-code\" cc",
+            "timeout": 5
           }
         ]
       }
     ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "$HOME/.claude/hooks/statusline",
+    "padding": 0
   },
   "enabledPlugins": {
     "mattpocock-skills@mattpocock": true,
@@ -272,16 +275,19 @@
       }
     }
   },
-  "_comment_statusline": "Spaceship-styled prompt line — see home/scripts/claude-statusline.sh for the segment list and home/claude.nix for the PATH-pinning wrapper. No refreshInterval: every segment is derived from the payload Claude Code already pushes on each state change, so a timer would only re-render identical output. padding 0 aligns the status line's left edge with the input box border rather than indenting it one column.",
-  "statusLine": {
-    "type": "command",
-    "command": "$HOME/.claude/hooks/statusline",
-    "padding": 0
-  },
+  "effortLevel": "high",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
+  "theme": "custom:nic-dim",
   "agentPushNotifEnabled": true,
   "voiceEnabled": true,
-  "trustAll": true,
-  "model": "opus[1m]"
+  "_comment_env": "ANTHROPIC_BASE_URL deliberately does NOT live here. A settings-file env entry wins over the process environment and over --settings, which made the Aperture gate unoverridable and silently disabled Remote Control (it requires api.anthropic.com). It is now injected as a wrapper default in home/claude.nix, so every invocation still gets the gate but a caller can override it. Telemetry (CLAUDE_CODE_ENABLE_TELEMETRY) was enabled here briefly and removed again: with no OTLP collector in the fleet it exported nothing.",
+  "_comment_permissions_ccr": "The Claude Code Remote (bridge) MCP tools are allowed for the READ-ONLY half only — get_session/list_* answer 'which session am I, what model is serving it, what else is running' without a prompt. Everything that mutates (create_session, archive/unarchive, interrupt, set_title/set_tags, send_later, create/update/delete/fire_trigger, subscribe_pr_activity, add_repo) is deliberately left prompting: those spawn containers, wake siblings or post to GitHub. Listed under BOTH name forms for the reason spelled out in .claude/settings.json's _comment_mcp_names — a claude.ai connector attaches either as 'claude.ai Claude Code Remote' (mcp__claude_ai_Claude_Code_Remote__*) or bare (mcp__Claude_Code_Remote__*), and only the bare form has been observed since 2026-07-28, so pinning one form silently stops matching if that flips back.",
+  "_comment_ro_mcps": "postgres_prod_ro and trusk-apis were added to permissions.allow when the `claude()` alias stopped passing --dangerously-skip-permissions (home/dotfiles/zsh/aliases.zsh): they were the only two MCPs in home/mcp.nix listed in neither allow nor ask, so bypass mode was the sole reason they never prompted. Both are read paths — the rw postgres twins stay in `ask` below, and trusk-apis gates DELETE behind confirm:true itself. NB comments must be object keys, never entries inside the allow/ask/deny ARRAYS, where a _comment_ string would be parsed as a permission rule.",
+  "_comment_mode_banner": "defaultMode + theme together are how the permission-mode row under the input box is made as quiet as it can be. That row CANNOT be hidden: it renders on `etl = !!dne && qMS` (dne = toolPermissionContext.mode, qMS = merely 'can this session change modes'), and every entry in the indicator table has a label — there is no falsy mode. It can only be re-labelled and re-coloured, and `default` is the quietest pairing available: indicator 'manual mode' in colour `inactive`, against auto's yellow `warning` and bypassPermissions' red `error`. The custom theme below then drags `inactive` itself down to #333333. Do NOT read defaultMode:'default' as a downgrade from 'auto' in prompt volume — permissions.allow already covers the whole tool surface, so both are near-silent here; what changes is that auto's per-action classifier no longer runs.",
+  "_comment_theme": "~/.claude/themes/nic-dim.json, from home/dotfiles/claude-theme.json (home/claude.nix). Custom themes are {name, base, overrides} and the setting takes the slug with a literal `custom:` prefix; an override is DROPPED silently unless its key already exists in the base theme's table, so only rename keys against a real base. Overriding `inactive` is a blunt instrument — it is the generic de-emphasis colour and is used in ~33 places, not just the mode row — but every one of those is already meant to recede, so darkening them is consistent. It is an out-of-store symlink: edit the repo file and restart Claude Code to retune, no rebuild.",
+  "_comment_denied_mcp": "DEDUPLICATION, not removal — deliberately asymmetric, unlike .claude/settings.json where each connector is listed under BOTH name forms to drop it entirely. Gmail attaches TWICE per session: observed 2026-08-25 in bridge session ancc_9c9e0e76218174a1 as mcp__Gmail__* AND mcp__claude_ai_Gmail__*, the same 28 tools, the combined MCP group costing 37,178 tokens. The two registrations are attempted independently and matched by raw === on the registration name (no trim, no case fold, no 'claude.ai ' strip), and the name space is closed at two forms — so denying exactly one form leaves exactly one attachment. Denying the bare 'Gmail' is what keeps 'claude.ai Gmail', which is also the only form this file's permissions.allow lists (mcp__claude_ai_Gmail). Do NOT add 'claude.ai Gmail' here: that drops Gmail outright. Deliberately USER scope rather than nic-os project scope — a duplicate is pure waste in every repo, while Gmail itself is real work in the Trusk ones. CAVEAT, unverified: 'claude.ai Metabase Trusk' has been denied under both forms since 2f8d755 (2026-08-18) and still attached on 08-19 and again on 08-25, so this mechanism has no positive evidence of biting for claude.ai connectors. Confirm with the mcp_instructions_delta/deferred_tools_delta addedNames recipe in known_issue_claude_connector_deny_both_name_forms before counting the saving.",
+  "_comment_pg_rw": "Write-capable Trusk monodb MCPs (defined in home/mcp.nix): postgres_prod_rw stays gated per-call by permissions.ask; postgres_staging_rw was MOVED from ask to allow on 2026-09-15 at Nicolas's explicit instruction (\"never ask again for staging rights\") — staging is disposable and every write there is reversible, while the prompt cost a round-trip per statement during the IN-698 test runs. The ask gate DOES survive --dangerously-skip-permissions (measured 2026-09-03 in `claude -p` sessions: postgres_prod_ro, not in ask, ran unprompted; staging_rw, then in ask, was blocked with 'needs your approval' under the same flag, and an ask-less --settings override did not help since ask merges across scopes and any scope's rule applies). Consequence for what REMAINS in ask: prod_rw calls are unusable in ANY non-interactive session (-p, cron, bridge) because there is nobody to answer the prompt — that is the intended safety property, not a bug. Use prod_rw from an interactive session and approve the prompt; for scripted writes, drive the wrapper in home/mcp.nix directly over MCP stdio. staging_rw now runs unprompted everywhere, headless included.",
+  "_comment_statusline": "Spaceship-styled prompt line — see home/scripts/claude-statusline.sh for the segment list and home/claude.nix for the PATH-pinning wrapper. No refreshInterval: every segment is derived from the payload Claude Code already pushes on each state change, so a timer would only re-render identical output. padding 0 aligns the status line's left edge with the input box border rather than indenting it one column.",
+  "trustAll": true
 }
