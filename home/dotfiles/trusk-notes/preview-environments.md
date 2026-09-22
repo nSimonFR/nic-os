@@ -188,3 +188,109 @@ proxy at 503 and every flag defaulting off.
 
 Also note `configMaps: []` in that file: ns `appset-preview` has none of the shared ConfigMaps
 (`infra-env`, `backoffice-env`, `trusk-dynamic-config`); all env comes from Infisical secrets.
+
+## Asleep by default — wake it with the workflow, not with `kubectl scale`
+
+`pr-*` namespaces are shut down every night and all weekend. **Two independent mechanisms**, and
+knowing which one you are fighting decides what works:
+
+| | what it scales | schedule |
+| --- | --- | --- |
+| kube-green `SleepInfo/working-hours`, one per `pr-*` ns | Deployments | `sleepAt 20:00`, `wakeUpAt 07:00`, `weekdays 1-5`, Europe/Paris |
+| CronWorkflow `pr-namespace-shutdown` (ns `awf-devops`) | Deployments **and** StatefulSets (PG, RabbitMQ, Redis, MariaDB) since DO-2091 | deadline per namespace in ConfigMap `pr-namespace-shutdown-schedule` |
+
+The supported way back up is the **`wake-up-namespace` WorkflowTemplate** (ns `awf-dev`, source
+`trusk-official/trusk-argo-workflows`). It scales in **two waves** — datastores first, then
+applications, because one pass starts services before their databases and cascades into
+CrashLoopBackOff — writes the next shutdown deadline into the ConfigMap above, hard-refreshes every
+ArgoCD Application of the namespace, then calls `cwt-check-ns-argocd-app` to wait for
+`Synced/Healthy`.
+
+Launch it from Backstage ("Wake-up namespace" on the PR env card), the Argo Workflows UI, or the
+CLI. Parameters: `namespace` and `duration` ∈ `morning` (13:00) · `endofday` (19:00) ·
+`endofnight` (midnight) · `endofweek` (Friday 19:00).
+
+```bash
+argo submit --from workflowtemplate/wake-up-namespace -n awf-dev \
+  -p namespace=pr-<slug> -p duration=endofday
+```
+
+No `argo` CLI on the Mac. Submit through kubectl instead — `workflowTemplateRef` plus the service
+account, both required:
+
+```yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Workflow
+metadata: { generateName: wake-pr-<slug>-, namespace: awf-dev }
+spec:
+  serviceAccountName: argo-workflow-additional-sa
+  workflowTemplateRef: { name: wake-up-namespace }
+  arguments:
+    parameters:
+      - { name: namespace, value: pr-<slug> }
+      - { name: duration, value: endofnight }
+```
+
+### It cannot work outside the sync window, and that is not a bug in the workflow
+
+AppProject `staging-preview` carries three sync windows (Europe/Paris):
+
+```
+deny   0 20 * * 1-5   11h    manualSync: true
+allow  0 7  * * 1-5   13h    manualSync: true
+deny   0 7  * * 6     48h    manualSync: true
+```
+
+So **weeknights 20:00→07:00 and all weekend, ArgoCD refuses to sync a preview**. `manualSync: true`
+does not save you: patching an Application with an explicit `operation.initiatedBy` still comes back
+`Sync operation blocked by sync window`. The wake-up workflow's `wake-up` step succeeds, then
+`check-argocd` loops on `OutOfSync` for 20 attempts and the workflow fails. Measured 2026-09-22 at
+20:40 on `pr-tec296`.
+
+Consequence, and it is the useful part: **changing images (a new branch pin) is impossible until
+07:00**, because that needs a real sync. But `kubectl -n pr-<slug> scale deploy <x> --replicas=1`
+does work at any hour — ArgoCD carries `ignoreDifferences` on replicas, so it neither reverts nor
+needs a sync. Use it to bring up the two or three pods a read-only probe needs; never to deploy.
+
+### A pod that restarts is a pod that re-resolves `envFrom`
+
+The sleep/wake cycle is where latent chart mistakes surface. `envFrom` resolves at **container
+creation**, so a secret that stopped existing only kills the pod at its next restart — a service
+can run for months on a spec that can no longer start.
+
+Found this way on 2026-09-22: `identity-access-management`, `fleet`, `communications` and
+`centiro-orders-api` all list `staging-env` in their preview chart's `pod.envFrom.secrets`, and that
+secret exists **in no namespace** — not staging, not any preview. Every one of them died on
+`CreateContainerConfigError` the moment it was scaled back up. `pr-surge-ve` still showed IAM at
+`1/1` purely because that pod had never restarted since the reference landed. Fixed on the first
+three; centiro still carries it.
+
+Probe before blaming the wake-up:
+
+```bash
+kubectl -n pr-<slug> get deploy | awk '$2=="0/0"{print $1}'        # still asleep
+kubectl -n pr-<slug> describe pod <x> | grep -iE "Error:|Warning"  # why it will not start
+```
+
+### Populating it: `data-bo`, not SQL
+
+A woken preview has schemas and no rows. The seeder is the **`workflow-template-data-bo`**
+WorkflowTemplate (ns `awf-qa`), which runs `trusk-automation:master` driving Playwright against the
+target's BO UI — so what it creates is what the application can actually create:
+
+```bash
+argo submit --from workflowtemplate/workflow-template-data-bo -n awf-qa -p STAGING_NAME=pr-<slug>
+```
+
+Then `workflow-gen-data` for volume and `smoketest-backoffice-template` to validate. For a
+**partial** preview (some services in `pr-N`, the rest on staging), override URLs per run rather
+than editing the shared `trusk-automation-env` configmap: an Infisical folder `/qa-overrides/<group>`
+holding `QA_OVERRIDE_TRUSK_{BO,BACKOFFICE,API,TRACKING_PAGE}_BASE_URL`, an `InfisicalSecret` in
+`awf-qa`, then `-p URL_OVERRIDES_SECRET=qa-overrides-<group>`.
+
+Hand-writing SQL fixtures is the wrong reflex and costs hours: on 2026-09-22 seeding one usable
+availability meant reverse-engineering `fleet.carrier_companies` → `truskers` → `trusker_contracts`
+→ `trucks` → `availabilities` → `availability_shipment_sites` → `interop_configuration.shipment_site`
+from `information_schema`, one NOT NULL at a time, across two DB roles — and the result was still a
+row no BO screen would ever produce. Drop to SQL only to nudge a column on an entity that already
+exists.
