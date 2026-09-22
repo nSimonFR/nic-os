@@ -10,6 +10,11 @@
 onboarding = false
 
 [ui]
+# Written by herdr itself when the sidebar is collapsed — captured here because
+# writing it is what replaced the symlink with a real file, which then blocks
+# `home-manager switch`.
+sidebar_collapsed_mode = "compact"
+
 # Right-aligned status area — herdr's only session-wide, NON-CLICKABLE surface.
 # The sidebar was the other candidate and was rejected twice over: every row
 # there is a navigation target, and rate limits are per ACCOUNT, so a space row
@@ -48,6 +53,45 @@ claude = [
 
 [ui.toast]
 delivery = "terminal"
+
+# Open Claude somewhere new, in the focused pane's directory. The key picks the
+# PLACE; the pane itself then asks whether to fork the calling session, start a
+# new one, or resume (the claude-pane-menu in zsh/aliases.zsh). Placement cannot
+# be asked for afterwards — a workspace is a different container, not a pane.
+#
+# `"` and `%` are tmux muscle memory; shift+c mirrors prefix+c (new tab), and
+# shift+s is a new space. The stock prefix+v / prefix+minus / prefix+c /
+# prefix+shift+n stay as they are, for a plain shell.
+#
+# `shell`, not `pane`: a `pane` command opens a temporary ZOOMED pane with no
+# direction control and closes it when the command exits. Everything here needs
+# `herdr pane split` / `tab create` / `workspace create`, so the binding shells
+# out to herdr-claude-open (home/herdr.nix).
+#
+# herdr only splits right or down; there is no "split left".
+[[keys.command]]
+key = 'prefix+"'
+type = "shell"
+command = "herdr-claude-open down"
+description = "split down + claude"
+
+[[keys.command]]
+key = "prefix+%"
+type = "shell"
+command = "herdr-claude-open right"
+description = "split right + claude"
+
+[[keys.command]]
+key = "prefix+shift+c"
+type = "shell"
+command = "herdr-claude-open tab"
+description = "new tab + claude"
+
+[[keys.command]]
+key = "prefix+shift+s"
+type = "shell"
+command = "herdr-claude-open workspace"
+description = "new workspace + claude"
 
 # zoetrope — draws the focused pane's session as a flow graph with the turn's
 # SUBAGENTS nested. `q` closes the popup.
