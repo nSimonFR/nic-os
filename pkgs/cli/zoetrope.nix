@@ -2,12 +2,11 @@
 # or Codex session as a live flow graph, with the session's SUBAGENTS nested
 # under the main agent. Read-only, no network.
 #
-# Built from the `zoetrope-src` input rather than let the herdr plugin's
-# ensure-zoe.sh fetch it via Homebrew or `cargo install`. Single consumer
-# (home/herdr.nix), so it is not in pkgs/overlay.nix.
+# Not in nixpkgs and upstream ships no flake, so it is built here. Single
+# consumer (home/herdr.nix), so it is not in pkgs/overlay.nix.
 #
-# v0.2.0: crate is `zoetrope`, binary is `zoe`; pure crates.io deps with no git
-# sources, so `cargoLock.lockFile` alone. No OpenSSL, bindgen or system libs.
+# Crate is `zoetrope`, binary is `zoe`. No git sources in Cargo.lock, so
+# `cargoLock.lockFile` alone; no OpenSSL, bindgen or system libs.
 {
   lib,
   rustPlatform,

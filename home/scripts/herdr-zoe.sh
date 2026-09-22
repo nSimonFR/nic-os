@@ -1,27 +1,13 @@
 #!/usr/bin/env bash
-# Open the focused herdr pane's agent session in `zoe` (the subagent graph).
+# Open the focused herdr pane's agent session in `zoe`.
 #
-# WHY NOT UPSTREAM'S PLUGIN: furkankly/zoetrope ships a herdr plugin that does
-# exactly this, and it cannot work on a non-Homebrew install. Its scripts do
-# `herdr="${HERDR_BIN_PATH:-herdr}"`, and herdr COMPUTES that variable as
-# /opt/homebrew/bin/herdr on macOS regardless of where herdr actually is —
-# handed out with no -x check, so on nix every action died with
-# `/opt/homebrew/bin/herdr: No such file or directory`. The `:-` fallback never
-# fires because the value is set, just wrong. Not fixed by restarting (the
-# server carries no HERDR_* env, so the path is computed, not inherited) and not
-# patchable in place (the plugin dir is refetched on reinstall). herdr's own
-# integration scripts guard this with `[ -x "$HERDR_BIN_PATH" ]`; zoetrope's do
-# not. Upstream bug, worth reporting.
+# Upstream's herdr plugin does this and cannot work here: it resolves herdr via
+# $HERDR_BIN_PATH, which herdr computes as /opt/homebrew/bin/herdr on macOS with
+# no -x check, so on nix it points at nothing.
 #
-# WHY THE FALLBACK: upstream reads the target pane from
-# HERDR_PLUGIN_CONTEXT_JSON's `focused_pane_id`, which only exists for a plugin
-# invocation — a `popup` keybinding does not get one. `herdr pane current` is
-# the nearest equivalent, but a popup may hold focus itself, in which case it
-# answers with a pane that has no agent. So: use it when it names an agent pane
-# with a session id, and otherwise let `zoe` pick the newest session in this
-# project, which is what it does with no arguments. The second path is right
-# whenever a project has one live session, and picks the most recent when it
-# has several.
+# `herdr pane current` replaces the plugin's `focused_pane_id`, which only exists
+# for plugin invocations. It can answer with the popup's own pane, hence the
+# fallback to zoe's no-argument mode (newest session in this project).
 set -euo pipefail
 
 die() {

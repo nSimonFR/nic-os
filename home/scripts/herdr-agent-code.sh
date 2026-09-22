@@ -2,14 +2,12 @@
 # Claude Code SessionStart hook: label this herdr pane's agent `cc` instead of
 # `claude`, so the agent panel carries the kind inline on its first row.
 #
-# It has to be a hook. Sidebar row templates take a closed set of tokens, a
-# literal is rejected outright (`unknown sidebar token 'cc'`), and agent
-# manifests have no display-name field — `display_agent` on pane metadata is the
-# only source, and it is per-pane runtime state. A herdr restart drops it and
-# the row reads `claude` until the next SessionStart.
+# `display_agent` is the only source for that code and is per-pane runtime state,
+# so it has to be reported from inside the pane. A herdr restart drops it and the
+# row reads `claude` again until the next SessionStart.
 #
-# Beside herdr's own hook, never inside it: that file is herdr-managed and is
-# overwritten by every integration update.
+# Beside herdr's own hook, never inside it: that file is overwritten by every
+# integration update.
 set -eu
 
 # Hook input arrives as JSON on stdin. Drain it whether or not we use it, so the

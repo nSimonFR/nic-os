@@ -1,5 +1,15 @@
 # Trusk — global notes (Trusk-scoped: loaded only under ~/MyDocuments/TRUSK/)
 
+## Comments
+
+Keep them short. A comment earns its place by recording what the code cannot say:
+a constraint, a measured value, a thing that was tried and failed. Prefer 2–4 lines
+over a paragraph, and no comment at all over one that restates the code. Don't write
+the reasoning that led to the change — rejected alternatives and debugging narration
+belong in the commit message and the PR.
+
+---
+
 Facts spanning all Trusk repos (trusk-k8s, trusk-applications, trusk-lib, services…). Per-project memory under `~/.claude/projects/<workdir>/memory/` adds local detail. **Source of truth:** `~/nic-os/home/dotfiles/trusk-CLAUDE.md` (home-manager symlinks it to this path) — edit there.
 
 **Deep notes** — situational detail, out of this file because this one loads into *every*

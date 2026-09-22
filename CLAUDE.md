@@ -1,5 +1,18 @@
 # nic-os
 
+## Comments
+
+Keep them short. A comment earns its place by recording what the code cannot say:
+a constraint, a measured value, a thing that was tried and failed. Prefer 2–4 lines
+over a paragraph, and no comment at all over one that restates the code.
+
+Do **not** write the reasoning that led to the change — no rejected alternatives,
+no "the trap is", no narration of the debugging. That belongs in the commit message
+and the PR, which is where it stays searchable without being re-read on every visit
+to the file.
+
+---
+
 Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR — protection rejects
 an approval from the last pusher, so pushing as nSimonFR deadlocks the PR. nSimonFR
 owns/merges; nSimonFR-ai can't self-merge.

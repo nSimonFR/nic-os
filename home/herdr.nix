@@ -90,18 +90,15 @@ in
       '';
     })
 
-    # zoetrope (`zoe`) — draws a Claude Code session's subagents as a graph,
-    # which neither Claude Code nor herdr shows. Needs the claude integration
-    # for herdr to know a pane's session id.
+    # Draws a session's subagents as a graph. Needs the claude integration, so
+    # herdr knows a pane's session id.
     #
     # ⚠ Reads an undocumented, internal Claude Code transcript format; an
     #   update can break the graph. Nothing else here depends on it.
     zoetrope
 
-    # The prefix+shift+z popup. Upstream ships a herdr plugin for this and it is
-    # unusable here — see the script for why — so the binding runs this instead
-    # and no plugin is installed at all. Every tool is pinned: a popup is spawned
-    # by the server, whose PATH is not the login shell's.
+    # The prefix+shift+z popup. Tools are pinned because a popup is spawned by
+    # the server, whose PATH is not the login shell's.
     (pkgs.writeShellApplication {
       name = "herdr-zoe";
       runtimeInputs = [
@@ -147,12 +144,9 @@ in
         inCheckout "home/dotfiles/herdr-endpoints.json";
     };
 
-  # No herdr plugins are declared, deliberately. ~/.config/herdr/plugins.json is
-  # a derived cache of host-absolute paths and a content hash that moves on every
-  # reinstall, so it is not versionable; and the one plugin worth having
-  # (furkankly/zoetrope) is broken on a nix install — see home/scripts/herdr-zoe.sh.
-  # Anything installed by hand (speardragon.herdr-status-ui-bar, currently) is a
-  # leftover rather than a setting: `herdr plugin list` shows what is there.
+  # No herdr plugins are declared: plugins.json is a derived cache of absolute
+  # paths and a per-install content hash, so it is not versionable. Anything
+  # installed by hand is a leftover, not a setting — `herdr plugin list` shows it.
 
   systemd.user.services.herdr = lib.mkIf pkgs.stdenv.isLinux {
     Unit = {
