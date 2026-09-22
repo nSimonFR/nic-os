@@ -70,8 +70,10 @@ Pipe the envelopes you already collected straight in; the field names from both 
 ```bash
 gog gmail messages search 'in:inbox is:unread' --all --max 100 \
   --account ACCOUNT --json --results-only --no-input \
-  | python3 "$SKILL_DIR/scripts/jev_classify.py" --max 60
+  | python3 ~/.hermes/skills/mail-inbox-digest/scripts/jev_classify.py --max 60
 ```
+
+Always invoke it as `python3 <path>`, never as a bare executable: the seed rsync in `hermes.nix` chmods files `Fu+rw,Fgo+r`, so the script arrives `0644` with no exec bit. On the Claude surface the same file is at `~/.claude/skills/mail-inbox-digest/scripts/jev_classify.py`.
 
 - Run it **once per account** and merge, or concatenate the envelope arrays first — set each envelope's `account` field either way, because the digest reports Personal and Work separately.
 - Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
