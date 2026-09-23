@@ -13,3 +13,7 @@ cursor-style = block
 cursor-style-blink = false
 
 shell-integration = zsh
+
+# Option+Backspace arrives as a bare DEL without macos-option-as-alt, which would
+# also eat the Option dead keys (é, ç). Send ESC DEL: word-delete in zsh, herdr and Claude Code.
+keybind = alt+backspace=text:\x1b\x7f
