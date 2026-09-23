@@ -64,6 +64,8 @@ hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
 # untracked jobs.json, so nothing else can catch a renamed shim.
 hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
+# Hand-run in a herdr pane: a read-only live view of the Telegram sessions.
+hermes-watch = "nicos_scripts.hermes.watch:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

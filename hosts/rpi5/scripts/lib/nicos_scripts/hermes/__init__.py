@@ -9,4 +9,4 @@ Hermes also scrubs secret-shaped variables before spawning us, so credentials ar
 re-exported by the `*.sh` shim in hosts/rpi5/hermes/hermes.nix, not inherited.
 """
 
-__all__ = ["calendar_digest", "dawarich_daily", "zen_watch"]
+__all__ = ["calendar_digest", "dawarich_daily", "watch", "zen_watch"]

@@ -497,7 +497,14 @@ let
   '';
 in
 {
-  home.packages = [ hermes ];
+  home.packages = [
+    hermes
+    # Read-only live view of the Telegram sessions, for a herdr pane.
+    (pkgs.writeShellApplication {
+      name = "hermes-watch";
+      text = ''exec ${pkgs.nicos-scripts}/bin/hermes-watch "$@"'';
+    })
+  ];
 
   systemd.user.services.hermes = {
     Unit = {
