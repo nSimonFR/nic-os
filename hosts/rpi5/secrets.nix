@@ -178,6 +178,12 @@
       file = ./secrets/affine-mcp-http-token.age;
       mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
     };
+    asale-api-key = {
+      file = ./secrets/asale-api-key.age;
+      # tiny-llm-gate is a DynamicUser, so this must be world-readable inside
+      # /run/agenix. The bearer is still absent from the Nix store and config.
+      mode = "0444";
+    };
     dawarich-geoapify = {
       file  = ./secrets/dawarich-geoapify.age;
       owner = "dawarich";

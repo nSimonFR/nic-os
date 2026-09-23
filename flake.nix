@@ -268,7 +268,7 @@
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
     # Pinned to a tag; bump the ref to roll forward.
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.9.4";
+      url = "github:nSimonFR/tiny-llm-gate/v0.9.6";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
