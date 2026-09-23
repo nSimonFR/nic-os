@@ -266,9 +266,11 @@
     };
 
     # tiny-llm-gate: memory-conscious replacement for LiteLLM.
-    # Pinned to a tag; bump the ref to roll forward.
+    # Pinned to a tag; bump the ref to roll forward. Tags must sit on main:
+    # v0.9.5/v0.9.6 did not contain v0.9.4's codex provider.
+    # v0.9.7 restores the codex provider and adds versioned Anthropic routes.
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.9.6";
+      url = "github:nSimonFR/tiny-llm-gate/v0.9.7";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
