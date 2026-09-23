@@ -82,6 +82,9 @@
           # usage budget to spend.
           - id: gpt-6            # GPT-6 Astra, flagship
           - id: gpt-reserve      # fast/affordable GPT-6 tier
+          - id: asale-gpt-6-astra # paid Asale market, manual opt-in
+          - id: asale-gpt-6-luna
+          - id: asale-gpt-6-sol
           # gpt-5.5-mini is deliberately absent. A hand-declared model takes
           # the route's 262144 fallback, and the mini answered dsh's system
           # prompt + tool schemas with a hard 400 CONTEXT_WINDOW_EXCEEDED.

@@ -53,7 +53,7 @@ let
     # `models` block. `gpt-5.5-mini` is NOT a fallback to reach for: the
     # upstream rejects it outright with "not supported when using Codex with a
     # ChatGPT account" (probed 2026-09-21), despite being declared there.
-    OPENAI_MODEL        = "gpt-5.6-luna";
+    OPENAI_MODEL        = "gpt-5.6";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
     # prompt (full category list) needs ~1352 → categories were never assigned.

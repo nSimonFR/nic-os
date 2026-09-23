@@ -8,6 +8,7 @@
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
+
 in
 {
   imports = [ inputs.tiny-llm-gate.nixosModules.default ];
@@ -18,7 +19,10 @@ in
 
     memoryMax = "60M";
     goMemLimit = "40MiB";
-    secretPaths = [ "/run/agenix/affine-mcp-http-token" ];
+    secretPaths = [
+      "/run/agenix/affine-mcp-http-token"
+      "/run/agenix/asale-api-key"
+    ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
@@ -45,6 +49,17 @@ in
           auth = {
             type = "oauth_chatgpt";
             file = "/var/lib/tiny-llm-gate/codex-credentials.json";
+          };
+        };
+
+        # Asale's shared-capacity market, explicitly selected by model id.
+        # No automatic fallback points here: spending USDT is a manual switch.
+        asale = {
+          type = "openai";
+          base_url = "https://gw.asale.ai/v1";
+          auth = {
+            type = "bearer";
+            token_file = "/run/agenix/asale-api-key";
           };
         };
 
@@ -122,16 +137,16 @@ in
         #    there is a single model to reason about. The GPT-6 switch of
         #    2026-09-07 was rolled back here on 2026-09-09 (see below).
         #
-        #    ONE deliberate exception, added 2026-09-21: Sure names
-        #    `gpt-5.6-luna`. It is not an interactive client — it batches 20
-        #    transactions per strict-json_schema call and does that for its
-        #    whole history on every rule run, which made it 3202 of the 3225
-        #    gpt-5.6 requests Aperture saw tailnet-wide over 2026-09-08→21.
-        #    Luna is the tier meant for that, and scored identically to Sol on
-        #    the real prompt (hosts/rpi5/sure.nix). Terra remains unreferenced.
-        "gpt-5.6"            = { provider = "codex"; upstream_model = "gpt-5.6-sol";   fallback = [ "gemma4:e4b" ]; };
-        "gpt-5.6-terra"      = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
-        "gpt-5.6-luna"       = { provider = "codex"; upstream_model = "gpt-5.6-luna";  fallback = [ "gemma4:e4b" ]; };
+        #    Sure used to be the only 5.6-Luna caller, but that is gone too:
+        #    all standing 5.6 use now lands on Sol, and cheaper/larger tiers are
+        #    explicit model choices rather than hidden defaults.
+        "gpt-5.6" = { provider = "codex"; upstream_model = "gpt-5.6-sol"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-5.6-terra" = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
+
+        # Manual paid Asale choices. They stay out of automatic fallbacks: a
+        # session spends USDT only after selecting one of these ids.
+        "asale-gpt-5.6-sol"   = { provider = "asale"; upstream_model = "gpt-5.6-sol"; };
+        "asale-gpt-5.6-terra" = { provider = "asale"; upstream_model = "gpt-5.6-terra"; };
 
         # -- GPT-6 generation. The codex surface offers TWO tiers, not 5.6's
         #    three: `gpt-6-astra` ("our most capable model for complex,
@@ -166,8 +181,11 @@ in
         #    model list. Both are per-conversation opt-ins that fall back to
         #    gpt-5.6 on restart — no path where GPT-6 becomes the standing
         #    model without someone editing Nix.
-        "gpt-6"              = { provider = "codex"; upstream_model = "gpt-6-astra";   fallback = [ "gemma4:e4b" ]; };
-        "gpt-reserve"        = { provider = "codex"; upstream_model = "gpt-reserve";   fallback = [ "gemma4:e4b" ]; };
+        "gpt-6" = { provider = "codex"; upstream_model = "gpt-6-astra"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-reserve" = { provider = "codex"; upstream_model = "gpt-reserve"; fallback = [ "gemma4:e4b" ]; };
+        "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
+        "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
+        "asale-gpt-6-sol"   = { provider = "asale"; upstream_model = "gpt-6-sol"; };
 
         # -- Anthropic (Claude) via the shared OAuth account pool --
         # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
@@ -213,13 +231,18 @@ in
         "openai/gpt-5.6"             = "gpt-5.6";
         "openai/gpt-5.6-sol"         = "gpt-5.6";
         "openai/gpt-5.6-terra"       = "gpt-5.6-terra";
-        "openai/gpt-5.6-luna"        = "gpt-5.6-luna";
         # GPT-6. `gpt-6-astra` (the upstream slug) resolves to the same
         # client-facing `gpt-6`, mirroring the gpt-5.6-sol → gpt-5.6 aliasing.
         "gpt-6-astra"                = "gpt-6";
         "openai/gpt-6"               = "gpt-6";
         "openai/gpt-6-astra"         = "gpt-6";
         "openai/gpt-reserve"         = "gpt-reserve";
+        "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
+        "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
+        "openai/asale-gpt-6-sol"     = "asale-gpt-6-sol";
+        "asale/gpt-6-astra"          = "asale-gpt-6-astra";
+        "asale/gpt-6-luna"           = "asale-gpt-6-luna";
+        "asale/gpt-6-sol"            = "asale-gpt-6-sol";
 
         # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
         # THREAD-TITLE model (`titleModelId` in the provider catalog baked into
@@ -292,6 +315,29 @@ in
       # rejected as ToS-adjacent, and is not what this ever did).
       anthropic = {
         upstream = "https://api.anthropic.com";
+
+        # Silent cheap-tier override for Claude Code: keep Claude-shaped
+        # /v1/messages, but send Haiku requests to Asale's Anthropic-compatible
+        # endpoint as GPT-6 Luna. Other Claude models stay on the OAuth pool.
+        routes = {
+          "claude-haiku-4-5" = {
+            upstream = "https://gw.asale.ai";
+            model = "gpt-6-luna";
+            auth = {
+              type = "bearer";
+              token_file = "/run/agenix/asale-api-key";
+            };
+          };
+          haiku = {
+            upstream = "https://gw.asale.ai";
+            model = "gpt-6-luna";
+            auth = {
+              type = "bearer";
+              token_file = "/run/agenix/asale-api-key";
+            };
+          };
+        };
+
         accounts = [
           {
             name = "acct1";
