@@ -41,7 +41,7 @@ IFS= read -r -d '' input
 # key (fast_mode, effort, agent, pr) would silently shift every later field left.
 # A non-whitespace IFS char preserves empty fields positionally.
 IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
-  fast effort agent_name pr_num rl5h rl5h_at < <(
+  fast effort agent_name pr_num rl5h rl5h_at session_id session_name < <(
   printf '%s' "$input" | jq -r '
     [ .cwd // "",
       (.model.display_name // .model.id // ""),
@@ -59,10 +59,25 @@ IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
       (.rate_limits.five_hour.resets_at // "" |
         if . == "" then "" else
           (sub("\\.[0-9]+";"") | sub("\\+00:00$";"Z") | fromdateiso8601 | strflocaltime("%H:%M"))
-        end)
+        end),
+      (.session_id // ""),
+      (.session_name // "")
     ] | map(tostring) | join("\u001f")' 2>/dev/null
 )
 [ -z "$cwd" ] && cwd="$PWD"
+
+# ── herdr workspace label ← /rename ────────────────────────────────────────
+# Fires only when the name changes, so a render still forks nothing extra. The
+# sync (home/scripts/herdr-title-sync.sh) decides whether the label is ours.
+if [ -n "$session_name" ] && [ "${HERDR_ENV:-}" = "1" ] && [ -n "${HERDR_PANE_ID:-}" ]; then
+  seen="${TMPDIR:-/tmp}/herdr-title-sync.${session_id}.${HERDR_PANE_ID}"
+  last=""
+  [ -f "$seen" ] && IFS= read -r last <"$seen"
+  if [ "$last" != "$session_name" ]; then
+    printf '%s\n' "$session_name" >"$seen"
+    "$HOME/.claude/hooks/herdr-title-sync" "$session_name" </dev/null >/dev/null 2>&1 &
+  fi
+fi
 
 out=""
 sep=" ${dim}·${reset} "

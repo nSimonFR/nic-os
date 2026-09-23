@@ -242,6 +242,17 @@ in
       executable = true;
     };
 
+    # Spawned by the status line when the session name changes: /rename becomes
+    # the herdr workspace label, unless that label was set by hand.
+    ".claude/hooks/herdr-title-sync" = {
+      executable = true;
+      source = lib.getExe (pkgs.writeShellApplication {
+        name = "herdr-title-sync";
+        runtimeInputs = [ pkgs.herdr-fork pkgs.jq ];
+        text = builtins.readFile ./scripts/herdr-title-sync.sh;
+      });
+    };
+
     ".claude/hooks/memory-sync".source =
       "${pkgs.nicos-scripts}/bin/claude-memory-sync";
 
