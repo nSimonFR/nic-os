@@ -3,8 +3,9 @@
 # same commit as the version bump.
 #
 # Runs on the runner, not in the renovate container, so the tasks see the Nix
-# installed below. The token is nSimonFR-ai's PAT: a push with GITHUB_TOKEN
-# would not trigger the required checks.
+# installed below. The token is nSimonFR-ai's CLASSIC PAT (repo, workflow):
+# fine-grained PATs cannot reach a repo nSimonFR-ai only collaborates on, and a
+# push with GITHUB_TOKEN would not trigger the required checks.
 name: Renovate
 
 on:
@@ -40,6 +41,9 @@ jobs:
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_BINARY_SOURCE: global
           RENOVATE_GIT_AUTHOR: "nSimonFR-ai <265587706+nSimonFR-ai@users.noreply.github.com>"
+          # Adopt the branches the Mend app left behind instead of treating them
+          # as hand-modified and freezing them.
+          RENOVATE_GIT_IGNORED_AUTHORS: '["29139614+renovate[bot]@users.noreply.github.com"]'
           RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write pkgs/\\S+\\.nix$"]'
           LOG_LEVEL: info
         run: npx --yes "renovate@${RENOVATE_VERSION}"
