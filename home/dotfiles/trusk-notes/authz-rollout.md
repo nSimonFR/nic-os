@@ -44,13 +44,34 @@ Three conditions, all needed (details: `prod-vs-staging-prerequisites.md`, prér
 3. the generated client used for the call carries the interceptor
    (`Symbol.for('trusk.auth.tokenProvider')` — `grep -rl "trusk.auth.tokenProvider" node_modules/@trusk-official/api-*`).
 
-Plus one that no caller can fix: **gateway strips `authorization`** in its forwarder
-(`headersToRemove`), so anything reaching a service through it arrives unsigned — Quivr webhooks,
-`/transport/push`. `services: ['gateway']` is dead code until the forwarder changes.
+**gateway**: on `master` it strips `authorization` (`headersToRemove`), so everything through it
+arrives unsigned. gateway#108 (on #101) replaces that with a **user** token minted from the IAM user
+each route names (`iamUserId`): `sub` = that user's email, `perms` = its IAM rights, never a service
+token. Consequences: a `kinds: ['service'], services: ['gateway']` rule refuses it ("not open to user
+tokens"); the route's IAM user must hold the route's rights (no `expandRights` in #108 — list read
+AND write). Validated on pr-tec296 2026-09-24: webhooks pass with gates up; empty the IAM user's
+rights → `403 Missing required permissions` after the 60 s cache.
 
-Measured 2026-09-22 on `pr-tec296` pods, from the env and not the charts: roundtrip, fleet,
-centiro-orders-api, communications (×3 aliases) sign; IAM, state-status, interop-configuration,
-interop-engine, trusk-estimator-api verify only.
+Legacy services sign by hand (auth-tokens 2.x + `transformRequest` / per-call headers, generated
+clients frozen when the image's node is older than the client's `engines`): shipment-reader,
+service-onfleet, trusk-calendar, trusk-api, front-tracking-page, trusk-cresus (3 workers),
+centiro-status-warehouse, centiro-delivery-form, trusk-auto-status, trusk-templates-service
+(1 issuer per alias), trusk-api-warehouse, trusk-business. Each was found the same way: a
+`401 no-token` in a target's log with the gates up. The artifact's "Qui signe" table is the list.
+
+## Relayed tokens — the chain counts, not the neighbour
+
+Inside a request, nestjs-core relays the **incoming** token on outgoing calls. A service that
+enriches its answer by calling a neighbour sends its *caller's* `sub`, so the neighbour's list must
+hold whoever opened the chain. Measured: trusk-cresus → order-mission `GET /missions/:id` → fleet
+`GET /availability/:id` (403 → OM 503 → no trusker invoice); tracking page → trusk-api → centiro →
+state-status `PUT /status`. Two readings, not decided (artifact, « À déterminer ») : call as the
+service (`runOutsideRequestContext`, used today only for shared caches in order-mission and centiro)
+or extend lists. **Until decided: extend lists**, commented `TEC-301 relay, to settle`.
+
+The refusal log has no caller. Find it from the other side: scan every deployment's log for
+`status code 40[13]` over the run window (`for d in $(kubectl get deploy -o name)…`), or match the
+refused request's query string to the code that builds it (`select=id,label,type` → fleet).
 
 ## The probe protocol
 
@@ -81,6 +102,20 @@ only". Staging's store (`flagd`) must read the same before and after; the cycle 
 Allowed identities get past the guard, so the probe's representatives **really execute** — among
 them `DELETE /status/` (state-status) and `DELETE /missions/:id` (order-mission). One more reason it
 runs on a preview and nowhere else.
+
+## End-to-end: data-bo + smoke with every gate up
+
+`backoffice/.artifact-rights/final_run.py` (raise all → `workflow-template-data-bo` →
+`smoketest-backoffice-template` → refusals per deployment → lower). Before trusting a run:
+- **Auth0 dev tenant** (`dev-l6u5nr9zrgvn`) intermittently serves `/u/login/identifier`; the QA
+  login page object expects email+password on one page → login fails, everything cascades.
+  `curl -sL -o /dev/null -w '%{url_effective}' https://pr-<slug>-bo.trusk.com/auth/login` must end
+  in `/u/login`.
+- **Wake race**: at 07:00 some pods start before the OpenFeature webhook (`failurePolicy: Ignore`)
+  → 1/1 without flagd, OFREP never answers, `up` waits 15 min. Restart the pod.
+- **Sleep**: kube-green at 20:00 and the `pr-namespace-shutdown` deadline. A run started after
+  ~18:15 is void (run 6).
+- 0 guard refusals + mass failure = environment, not authz.
 
 ## Before raising a flag in staging
 
