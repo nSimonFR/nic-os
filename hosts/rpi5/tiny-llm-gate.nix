@@ -187,6 +187,7 @@ in
         # only with client_version=1.0.0). Luna passed strict json_schema, tools
         # and streaming here on 2026-09-24.
         "gpt-6-luna" = { provider = "codex"; upstream_model = "gpt-6-luna"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-6-sol"  = { provider = "codex"; upstream_model = "gpt-6-sol";  fallback = [ "gemma4:e4b" ]; };
         "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
         "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
         "asale-gpt-6-sol"   = { provider = "asale"; upstream_model = "gpt-6-sol"; };
@@ -242,6 +243,7 @@ in
         "openai/gpt-6-astra"         = "gpt-6";
         "openai/gpt-reserve"         = "gpt-reserve";
         "openai/gpt-6-luna"          = "gpt-6-luna";
+        "openai/gpt-6-sol"           = "gpt-6-sol";
         "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
         "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
         "openai/asale-gpt-6-sol"     = "asale-gpt-6-sol";
