@@ -41,9 +41,10 @@ jobs:
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_BINARY_SOURCE: global
           RENOVATE_GIT_AUTHOR: "nSimonFR-ai <265587706+nSimonFR-ai@users.noreply.github.com>"
-          # Adopt the branches the Mend app left behind instead of treating them
-          # as hand-modified and freezing them.
+          # Adopt the branches and PRs the Mend app left behind: without these,
+          # its commits read as hand edits and its PRs are not even listed.
           RENOVATE_GIT_IGNORED_AUTHORS: '["29139614+renovate[bot]@users.noreply.github.com"]'
+          RENOVATE_IGNORE_PR_AUTHOR: "true"
           RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write pkgs/\\S+\\.nix$"]'
           LOG_LEVEL: info
         run: npx --yes "renovate@${RENOVATE_VERSION}"
