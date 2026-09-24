@@ -9,7 +9,7 @@
   ...
 }:
 {
-  imports = [ ./components/homebrew-cleanup.nix ];
+  imports = [ ./components/homebrew.nix ];
 
   nixpkgs.config.allowUnfree = true;
 
@@ -120,7 +120,6 @@
   environment.etc."resolver/cluster.local".text = "nameserver 192.168.64.10\n";
 
   system = import ./components/system.nix { inherit pkgs username; };
-  homebrew = import ./components/homebrew.nix { inherit pkgs; };
   services.yabai = import ./components/yabai.nix { inherit pkgs inputs; };
 
   # Homebrew 6 refuses to load formulae/casks from non-official taps unless they
