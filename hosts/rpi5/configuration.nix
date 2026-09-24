@@ -386,17 +386,18 @@ in
   # stateVersion, experimental-features (the base two), auto-optimise-store, and
   # the nix.gc schedule come from ../../common/nixos.nix.
   nix.settings = {
-    # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; everything
-    # else comes from cache.nixos.org or is built locally on the Pi.
-    # DEPRECATED: cache.garnix.io — REMOVED (garnix shut down 2026-07-15). If a
-    # prebuild cache is wanted for heavy local builds, use Cachix or attic.
+    # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; whatever
+    # cache.nixos.org lacks is built by CI's `substitutes` job and pushed to
+    # nsimon-nicos, so the Pi only compiles what never went through a PR.
     substituters = [
       "https://cache.nixos.org"
       "https://nixos-raspberrypi.cachix.org"
+      "https://nsimon-nicos.cachix.org"
     ];
     trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
+      "nsimon-nicos.cachix.org-1:Tu8TcLIpv9Kx+oiyyMkB0Y2KKPYNoc0Ni9E+s/p7LxY="
     ];
     # mkAfter so this lands behind common/nixos.nix's [ "nix-command" "flakes" ]
     # rather than in front of it: the list is rendered verbatim into nix.conf, so

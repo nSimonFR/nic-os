@@ -300,16 +300,14 @@
       # This is the binary cache for the whole rpi5 build — populated upstream via
       # `cachix push` (the nvmd/nixos-raspberrypi repo uses no CI cache service).
       "https://nixos-raspberrypi.cachix.org"
+      # Our own: what CI's `substitutes` job built because nothing else had it.
+      "https://nsimon-nicos.cachix.org"
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
+      "nsimon-nicos.cachix.org-1:Tu8TcLIpv9Kx+oiyyMkB0Y2KKPYNoc0Ni9E+s/p7LxY="
     ];
-    # DEPRECATED: garnix (CI + cache.garnix.io) — REMOVED. garnix shut down
-    # 2026-07-15. Nothing here was ever served by it: the kernel is on
-    # nixos-raspberrypi.cachix.org (above) and our own heavy builds (e.g. ryot)
-    # are compiled locally on the Pi. If a prebuild cache is wanted again, use
-    # Cachix (`cachix push`) or a self-hosted attic — same model as the kernel.
   };
 
   outputs =
