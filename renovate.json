@@ -24,6 +24,14 @@
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+version = \"(?<currentValue>[^\"]+)\";"
       ],
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "The Renovate version the self-hosted workflow runs (.github/workflows/renovate.yml), so Renovate keeps itself current.",
+      "managerFilePatterns": [".github/workflows/renovate.yml"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+RENOVATE_VERSION: (?<currentValue>\\S+)"
+      ]
     }
   ],
   "lockFileMaintenance": {
@@ -53,12 +61,16 @@
       "followTag": "next"
     },
     {
-      "description": "pkgs/ bumps do NOT build as opened. Renovate rewrites `version` but has no way to recompute a Nix fixed-output hash, so `hash`/`npmDepsHash`/`vendorHash` next to it go stale and the build fails on a mismatch. That is the intended shape: the PR is the notification that an upgrade exists — before this, these pins drifted silently for months (affine-mcp-server sat two majors behind). The note below travels with every such PR so the extra step is never a surprise. It is no longer only a note: three of these merged unfixed on 2026-08-19 and broke main outright, because eval-only CI cannot see a stale fixed-output hash. The `hashes` check now blocks that, and scripts/nix-fix-hashes.py does the recomputation Renovate can't. The `src` half of that promise only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'. Drop the `name` and a stale src hash goes back to silently reusing the old tree.",
+      "description": "pkgs/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. The `hashes` check stays as the gate for what the script cannot derive (vendorHash, pnpmDepsHash). The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
       "matchFileNames": ["pkgs/**"],
+      "postUpgradeTasks": {
+        "commands": ["python3 scripts/nix-fix-hashes.py --write {{{packageFile}}}"],
+        "fileFilters": ["pkgs/**/*.nix"],
+        "executionMode": "update"
+      },
       "prBodyNotes": [
-        "⚠️ **Does not build as-is.** Renovate cannot recompute Nix fixed-output hashes — the `hash` / `npmDepsHash` / `vendorHash` beside this `version` are still the old ones, and the build will fail with a hash mismatch.",
-        "The `hashes` check (.github/workflows/nix-hashes.yml) is red until they are fixed, and comments the correct values on this PR. Apply them with `scripts/nix-fix-hashes.py --write <changed files>`, then push.",
-        "`vendorHash` (Go) and `pnpmDepsHash` are the exceptions that script cannot derive from a fetch — it says so per package. Those still need `lib.fakeHash` + a real build, and the `got:` value from the error.",
+        "`hash` / `npmDepsHash` were recomputed in this same commit by `scripts/nix-fix-hashes.py` (postUpgradeTasks, self-hosted Renovate in .github/workflows/renovate.yml).",
+        "`vendorHash` (Go) and `pnpmDepsHash` are the exceptions that script cannot derive from a fetch — if this package pins one, the `hashes` check stays red. Fix it with `lib.fakeHash` + a real build, and the `got:` value from the error.",
         "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
       ]
     }

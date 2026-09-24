@@ -1,0 +1,45 @@
+# Self-hosted Renovate. Replaces the Mend-hosted app, which cannot run
+# postUpgradeTasks: here the pkgs/** hash recompute (renovate.json) lands in the
+# same commit as the version bump.
+#
+# Runs on the runner, not in the renovate container, so the tasks see the Nix
+# installed below. The token is nSimonFR-ai's PAT: a push with GITHUB_TOKEN
+# would not trigger the required checks.
+name: Renovate
+
+on:
+  schedule:
+    - cron: "23 */2 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - name: Run Renovate
+        env:
+          # renovate: datasource=npm depName=renovate
+          RENOVATE_VERSION: 44.112.2
+          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_PLATFORM: github
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: required
+          RENOVATE_BINARY_SOURCE: global
+          RENOVATE_GIT_AUTHOR: "nSimonFR-ai <265587706+nSimonFR-ai@users.noreply.github.com>"
+          RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write pkgs/\\S+\\.nix$"]'
+          LOG_LEVEL: info
+        run: npx --yes "renovate@${RENOVATE_VERSION}"

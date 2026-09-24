@@ -20,13 +20,10 @@
 # all on PRs that miss the filter, which leaves them stuck on "Expected — waiting
 # for status" forever. It quick-exits instead, before installing anything.
 #
-# It reports; it does not push a fix. A commit pushed with GITHUB_TOKEN does not
-# trigger workflows, so an auto-fixup would replace one stuck PR with another —
-# the new head commit would never get the four required checks from nix.yml. The
-# corrected hashes are printed in the PR comment, and `--write` applies them in
-# one command. Wiring the push properly means a GitHub App token (app-id +
-# private key as secrets, minted per run); worth doing if these bumps get
-# frequent, unnecessary while they are monthly.
+# It reports; it does not push. The fix happens upstream of this check: the
+# self-hosted Renovate (renovate.yml) runs `--write` as a postUpgradeTask, so its
+# PRs arrive with hashes already recomputed. This stays the gate for what that
+# cannot derive (vendorHash, pnpmDepsHash) and for hand-edited pins.
 name: Nix hashes
 
 on:
