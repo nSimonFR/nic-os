@@ -183,6 +183,10 @@ in
         #    model without someone editing Nix.
         "gpt-6" = { provider = "codex"; upstream_model = "gpt-6-astra"; fallback = [ "gemma4:e4b" ]; };
         "gpt-reserve" = { provider = "codex"; upstream_model = "gpt-reserve"; fallback = [ "gemma4:e4b" ]; };
+        # Luna/Sol joined the plan's codex listing after the 09-06 probe (seen
+        # only with client_version=1.0.0). Luna passed strict json_schema, tools
+        # and streaming here on 2026-09-24.
+        "gpt-6-luna" = { provider = "codex"; upstream_model = "gpt-6-luna"; fallback = [ "gemma4:e4b" ]; };
         "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
         "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
         "asale-gpt-6-sol"   = { provider = "asale"; upstream_model = "gpt-6-sol"; };
@@ -237,6 +241,7 @@ in
         "openai/gpt-6"               = "gpt-6";
         "openai/gpt-6-astra"         = "gpt-6";
         "openai/gpt-reserve"         = "gpt-reserve";
+        "openai/gpt-6-luna"          = "gpt-6-luna";
         "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
         "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
         "openai/asale-gpt-6-sol"     = "asale-gpt-6-sol";

@@ -32,6 +32,10 @@ let
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
     OPENAI_URI_BASE     = "${apertureUrl}/v1/";
+    # GPT-6 Luna, served by the plan's codex surface since ~2026-09 (4/4 strict
+    # categorisations, same as gpt-6-sol, 2026-09-24). Notes below are the
+    # 5.6-era evaluation that picked the Luna tier for this workload.
+    #
     # Luna — GPT-5.6's high-volume/extraction tier, which is exactly the shape
     # of this workload: 20-transaction batches under a strict json_schema, no
     # reasoning required. "auto" (gemma4:e4b) had 55-80% JSON validation
@@ -53,7 +57,7 @@ let
     # `models` block. `gpt-5.5-mini` is NOT a fallback to reach for: the
     # upstream rejects it outright with "not supported when using Codex with a
     # ChatGPT account" (probed 2026-09-21), despite being declared there.
-    OPENAI_MODEL        = "gpt-5.6";
+    OPENAI_MODEL        = "gpt-6-luna";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
     # prompt (full category list) needs ~1352 → categories were never assigned.
