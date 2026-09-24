@@ -4,19 +4,11 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/release-25.11";
 
-    # Left on the branch on purpose, and guarded by CI rather than by a pin. The
-    # channel gates on Hydra but not on every aarch64 job, so a rev can advance
-    # with a core package missing from cache.nixos.org and nothing says so until
-    # the Pi starts compiling: 0a3468a4 (2026-09-20) put papra's toolchain on
-    # nodejs 26.9.0, narinfo 404 for aarch64, ~4h of V8 with earlyoom killing the
-    # first attempt. The lock therefore sits one rev back, at f8e81fc7.
-    #
-    # Pinning this line was the first answer and it was the wrong one — freezing
-    # the shared tree also forces freezing whatever follows it (llm-agents needed
-    # an electron only the newer tree has), and it leaves a hold nobody remembers
-    # to lift. The `substitutes` job in .github/workflows/nix.yml makes the cost
-    # visible instead: it fails a PR that adds a from-source build on rpi5. So
-    # bump this freely — the check is what decides whether the bump is cheap.
+    # Left on the branch on purpose. The channel gates on Hydra but not on every
+    # aarch64 job, so a rev can land a core package missing from cache.nixos.org
+    # (0a3468a4, 2026-09-20: nodejs 26.9.0, ~4h of V8 on the Pi). CI's
+    # `substitutes` job now builds such packages into nsimon-nicos before merge,
+    # so bump this freely; a slow PR check is the only cost.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
     # Ollama only. The nixpkgs-unstable pin above carries ollama 0.32.4, which
@@ -197,8 +189,7 @@
     # (container-only upstream, not in nixpkgs). Same pattern as the others.
     # Published at github:nSimonFR/ryot-nix (self-hosted Renovate bumps the version;
     # nSimonFR-ai has push access). Bump with `nix flake lock --update-input ryot-nix`.
-    # Heavy Rust/Node compile is built locally on the Pi (no prebuild cache — see the
-    # garnix deprecation note in nixConfig below).
+    # The heavy Rust/Node compile runs in CI (`substitutes` → nsimon-nicos), not on the Pi.
     ryot-nix = {
       url = "github:nSimonFR/ryot-nix";
       inputs.nixpkgs.follows = "nixpkgs";

@@ -56,7 +56,7 @@
       "ignoreUnstable": true
     },
     {
-      "description": "claude-code follows the `next` dist-tag, not `latest`. The two diverge by days and the gap is load-bearing: Anthropic gates models on the client version, so `latest` (2.1.278 when this was written) answers --model claude-opus-5-5 with a 400 telling you to upgrade, while `next` (2.1.280) serves it and resolves the bare `opus` alias to it. Following `latest` would mean the newest model is unreachable for as long as the tags disagree. The cost is riding a pre-release channel on purpose — read the release notes on the PR, and note that `substitutes` is red on EVERY bump of this package, because a version newer than nixpkgs' is by definition not in any cache. That one is a download plus an unzstd, not a compile; merge past it.",
+      "description": "claude-code follows the `next` dist-tag, not `latest`. The two diverge by days and the gap is load-bearing: Anthropic gates models on the client version, so `latest` (2.1.278 when this was written) answers --model claude-opus-5-5 with a 400 telling you to upgrade, while `next` (2.1.280) serves it and resolves the bare `opus` alias to it. Following `latest` would mean the newest model is unreachable for as long as the tags disagree. The cost is riding a pre-release channel on purpose — read the release notes on the PR.",
       "matchDepNames": ["@anthropic-ai/claude-code"],
       "followTag": "next"
     },
