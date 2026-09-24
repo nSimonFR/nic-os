@@ -19,13 +19,13 @@ owns/merges; nSimonFR-ai can't self-merge.
 
 - commit — `git -c user.name="nSimonFR-ai" commit …`
 - push — `./scripts/push-ai` (takes any `git push` args)
-- PR — `GH_TOKEN=$(gh auth token --user nSimonfr-ai) gh pr create …` (per-command, keeps
-  nSimonFR active for merging)
+- PR — `GH_TOKEN=$(gh auth token --user "$(gh auth status 2>&1 | grep -oiE 'nSimonFR-ai' | head -1)") gh pr create …`
+  (per-command, keeps nSimonFR active for merging)
 
-⚠️ `--user` matches gh's `hosts.yml` key — **`nSimonfr-ai`** (lowercase `fr`), not the
-canonical `nSimonFR-ai`, which mints nothing while `gh pr create` hides the failure by
-falling back to the active account. Check `gh auth status`; never hardcode a case —
-`push-ai` resolves it case-insensitively.
+⚠️ `--user` matches gh's `hosts.yml` key **exactly**, and gh stores whatever spelling the
+account was logged in with (`nSimonfr-ai` until 2026-09-24, now `nSimonFR-ai`). A miss
+mints an empty token and `gh pr create` silently falls back to the active account — you.
+Hence the case-insensitive lookup; `push-ai` does the same.
 
 ## Agent skills
 
