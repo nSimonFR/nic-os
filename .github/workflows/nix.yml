@@ -66,32 +66,46 @@ jobs:
 
   substitutes:
     name: substitutes
-    # PRs only — the question is "what does this PR newly make the Pi compile",
-    # which needs a base to compare against.
-    if: github.event_name == 'pull_request'
+    # Build what the Pi would otherwise compile, and push it to our Cachix so the
+    # Pi only ever downloads. PRs compare against their base; pushes to main
+    # against the previous main, so the cache also holds what gets deployed.
+    # Fails only if a build fails or outruns the timeout.
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-24.04-arm
+    # The 6h job cap minus headroom. nodejs/V8 is the known worst case.
+    timeout-minutes: 345
+    # Job-level so the push step's `if` can see it; empty on fork PRs.
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      # The arm runner starts with ~14GB free; a V8-sized build needs more.
+      - name: Free runner disk
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache /usr/local/share/boost || true
+          df -h /
       - uses: DeterminateSystems/nix-installer-action@v22
-      - name: Compare what would be built from source, PR vs base
+      # Adds nsimon-nicos as a substituter, so paths already pushed read as
+      # fetched below and are not rebuilt. Pushing is the explicit step at the end.
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nsimon-nicos
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+      - name: Find what rpi5 would newly build from source
+        id: find
         env:
-          BASE: ${{ github.event.pull_request.base.sha }}
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           set -euo pipefail
 
-          # --dry-run splits the closure in two: paths that will be FETCHED and
-          # derivations that will be BUILT because no substituter has them. Only
-          # the second half costs the Pi anything, and it is invisible from a
-          # diff — a flake bump that reads as fifteen harmless rev changes can
-          # land a core package the aarch64 Hydra jobs have not caught up on.
-          # Compare by name, not by store path: an input bump rewrites the hash
-          # of everything downstream, so path-level diffing is all noise.
-          # --dry-run writes both halves to stderr, so it has to be captured to a
-          # file rather than piped: piping it into the parser swallows Nix's own
-          # error text, and `set -o pipefail` then kills the job with no output
-          # at all. That is not hypothetical — it is how this job first failed.
+          # --dry-run splits the closure into paths FETCHED and derivations BUILT
+          # because no substituter has them. Compare by name, not store path: an
+          # input bump rewrites every downstream hash. Output goes to a file, not
+          # a pipe — piping it hid Nix's own error text under `pipefail`.
           built() {
             local out=$1
             if ! nix build --accept-flake-config --dry-run \
@@ -103,7 +117,8 @@ jobs:
             fi
             awk '/will be built/{f=1;next} /will be fetched/{f=0}
                  f && /^ *\/nix\/store\//{sub(/^ */,"");print}' "$out.raw" \
-              | sed -E 's|^/nix/store/[a-z0-9]{32}-||; s|\.drv$||' \
+              | sort -u > "$out.drvs"
+            sed -E 's|^/nix/store/[a-z0-9]{32}-||; s|\.drv$||' "$out.drvs" \
               | sort -u > "$out"
           }
 
@@ -114,27 +129,36 @@ jobs:
           git checkout --quiet --force "$head_sha"
 
           comm -23 /tmp/head.txt /tmp/base.txt > /tmp/new.txt
+          # Back from names to the head's .drv paths, which is what gets built.
+          awk 'NR==FNR{want[$0];next}
+               {n=$0; sub(/^\/nix\/store\/[a-z0-9]{32}-/,"",n); sub(/\.drv$/,"",n)}
+               n in want' /tmp/new.txt /tmp/head.txt.drvs > /tmp/new.drvs
 
-          if [ ! -s /tmp/new.txt ]; then
+          if [ ! -s /tmp/new.drvs ]; then
             echo "No new from-source builds on rpi5." >> "$GITHUB_STEP_SUMMARY"
+            echo "count=0" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
+          # shellcheck disable=SC2016  # literal backticks: markdown code spans
           {
-            echo "### Newly built from source on rpi5"
-            echo
-            echo 'Not substitutable from any configured cache, so the Pi compiles them:'
+            echo "### Built here instead of on rpi5"
             echo
             sed 's/^/- `/; s/$/`/' /tmp/new.txt
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "count=$(wc -l < /tmp/new.drvs)" >> "$GITHUB_OUTPUT"
 
-          echo "::error::This PR adds $(wc -l < /tmp/new.txt) from-source build(s) on rpi5 (see the job summary)."
-          sed 's/^/  /' /tmp/new.txt
+      - name: Build them
+        if: steps.find.outputs.count != '0'
+        run: |
+          sed 's|$|^*|' /tmp/new.drvs \
+            | xargs nix build --accept-flake-config --print-build-logs \
+                --no-link --print-out-paths > /tmp/outs.txt
+          wc -l < /tmp/outs.txt
 
-          # Not a lint. nodejs 26.9.0 arrived exactly this way and cost ~4h of V8
-          # on the Pi, with earlyoom killing the first attempt. If the build is
-          # genuinely wanted, say so in the PR and merge past this check.
-          exit 1
+      # Fork PRs get no secrets: they still build, they just cannot push.
+      - name: Push to Cachix
+        if: steps.find.outputs.count != '0' && env.CACHIX_AUTH_TOKEN != ''
+        run: cachix push nsimon-nicos < /tmp/outs.txt
 
   scripts:
     name: scripts
