@@ -47,7 +47,8 @@ let
     # tunnelling inference straight to Anthropic and silently bypassing Aperture
     # while every functional check still passed.
     "--set" ''allow_hosts=api\.anthropic\.com''
-    "-s" "${./claude-aperture-shim/aperture_shim.py}"
+    # The whole directory, so the addon can import session_link.py.
+    "-s" "${./claude-aperture-shim}/aperture_shim.py"
   ];
 
 in
