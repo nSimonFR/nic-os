@@ -1,5 +1,8 @@
 # Infisical CLI — `inf-stg` / `inf-prod`
 
+Infisical is where Trusk services' secrets and env vars live (staging and prod instances);
+these wrappers are how to read, set or inject them from the Mac.
+
 Triggers: `infisical: command not found` · CLI prints an **empty table** with no error ·
 `302` to `staging-auth` / `prod-auth.trusk.com` · `inf: … expired` · `403 Forbidden` from
 `/api/v4/secrets` · read or set a staging/prod secret from the Mac · `infisical run` on a local
