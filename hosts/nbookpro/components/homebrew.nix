@@ -8,10 +8,9 @@
   onActivation = {
     # autoUpdate = true;
     # upgrade = true;
-    cleanup = "zap";
-    # Homebrew 5.x requires --force / --force-cleanup / $HOMEBREW_ASK
-    # for `brew bundle install --cleanup`.
-    extraFlags = [ "--force-cleanup" ];
+    # Homebrew 7 removed `brew bundle --cleanup`, which nix-darwin 25.11 still passes
+    # (fixed on master, 2026-06). The zap now runs in ./homebrew-cleanup.nix.
+    cleanup = "none";
   };
 
   taps = [
