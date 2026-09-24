@@ -318,6 +318,11 @@ only restores what already runs; a new image needs a real sync. kube-green's
 `sleepinfo-working-hours` secret remembers only the deployments that were up at 20:00, not the
 whole namespace — it is not a reliable list of what to scale back.
 
+The wake is also a race with the OpenFeature webhook (`failurePolicy: Ignore`): a pod that starts
+before the operator is up comes back **1/1 without its flagd sidecar** — no error, it just never
+answers OFREP. Seen 2026-09-24 on communication-engine. After a wake, `awk '$2=="1/1"'` the services
+that should be 2/2 and restart them.
+
 ### A pod that restarts is a pod that re-resolves `envFrom`
 
 The sleep/wake cycle is where latent chart mistakes surface. `envFrom` resolves at **container
