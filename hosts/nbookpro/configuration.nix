@@ -9,6 +9,8 @@
   ...
 }:
 {
+  imports = [ ./components/homebrew-cleanup.nix ];
+
   nixpkgs.config.allowUnfree = true;
 
   # Homebrew 5.x's `brew bundle` invokes `mas get <id>` to install Mac App Store
