@@ -92,6 +92,25 @@ alias trusk-staging-rabbit="_trusk_tunnel bastion-lzrn trusk-playground europe-w
 alias trusk-staging-postgres="_trusk_tunnel bastion-lzrn trusk-playground europe-west1-b /tmp/bastion-lzrn-pg.socket 5432 10.104.48.13:5432 && proxy-up \$TRUSK_PROXY_PORT_STAGING"
 alias proxy-tools-down="unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY && for s in rabbit pg; do ssh -S /tmp/bastion-lzrn-\$s.socket -O exit bastion-lzrn -q 2>/dev/null; done"
 
+# Infisical per instance. The public *infisical.trusk.com hosts are oauth2-gated UIs
+# (the CLI gets a 302 and prints an empty table); the APIs are tailnet-only.
+# One `infisical login` can't cover both: the keychain entry is keyed by email alone,
+# so tokens come from agenix (secrets.zsh.age) — user JWTs, 10-day TTL.
+# Passed as env, not flags: `inf-stg run -- cmd` would hand trailing flags to cmd.
+# The CLI itself is off PATH (~/.local/libexec, hosts/nbookpro/home.nix).
+export INFISICAL_STG_URL=http://infisical-infisical.infisical.svc.cluster.local:8080
+export INFISICAL_PROD_URL=https://infisical-prod.tail271d7a.ts.net
+_inf() { # <url> <token-var> <infisical args...>
+  local url=$1 var=$2 tok=${(P)2} p exp; shift 2
+  [ -n "$tok" ] || { print -u2 -r -- "inf: \$$var is unset (shared/secrets.zsh.age)"; return 1; }
+  p=${${tok#*.}%%.*}; p=${${p//-/+}//_//}; while (( ${#p} % 4 )); do p+='='; done
+  exp=$(print -rn -- "$p" | base64 -d 2>/dev/null | jq -r '.exp // empty' 2>/dev/null)
+  [[ -z $exp || $exp -gt $(date +%s) ]] || { print -u2 -r -- "inf: \$$var expired $(date -r "$exp" '+%F %R' 2>/dev/null || date -d "@$exp" '+%F %R')"; return 1; }
+  INFISICAL_DOMAIN=$url INFISICAL_TOKEN=$tok INFISICAL_DISABLE_UPDATE_CHECK=true ~/.local/libexec/infisical "$@"
+}
+inf-stg()  { _inf "$INFISICAL_STG_URL"  INFISICAL_STG_TRUSK  "$@"; }
+inf-prod() { _inf "$INFISICAL_PROD_URL" INFISICAL_PROD_TRUSK "$@"; }
+
 function decrypt() {
   # Decrypt a file from a path, using kubeseal.
   # Takes an env to use a proxy and a relative filepath to decrypt.
