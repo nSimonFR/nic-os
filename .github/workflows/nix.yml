@@ -81,12 +81,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      # The arm runner starts with ~14GB free; a V8-sized build needs more.
-      - name: Free runner disk
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /opt/hostedtoolcache /usr/local/share/boost || true
-          df -h /
       - uses: DeterminateSystems/nix-installer-action@v22
       # Adds nsimon-nicos as a substituter, so paths already pushed read as
       # fetched below and are not rebuilt. Pushing is the explicit step at the end.
