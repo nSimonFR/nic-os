@@ -24,7 +24,7 @@ jobs:
   renovate:
     runs-on: ubuntu-latest
     steps:
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       - uses: actions/setup-node@v5
         with:
