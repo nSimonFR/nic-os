@@ -27,8 +27,11 @@ stubs by hand — `strictNullChecks` is off, so `tsc` passes where e2e won't.
 
 ```bash
 unset GH_TOKEN && git push -u origin <branch>
-gh pr create --repo trusk-official/<repo> --title "Type(Scope): desc" --body-file -
+gh pr create --draft --repo trusk-official/<repo> --title "Type(Scope): desc" --body-file -
 ```
+
+Always `--draft`, and no need to be asked: once a fix is green locally, open it. Undraft
+(`gh pr ready <n>`) only when Nicolas says "review" or "merge". (Nicolas, 2026-09-24.)
 
 `Closes IN-XXX` goes at the **top of the body** — that is what wires Linear; the title and
 branch do nothing. Body: what changed, how it was verified, what the reviewer must know

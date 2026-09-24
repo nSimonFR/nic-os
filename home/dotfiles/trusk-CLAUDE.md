@@ -180,6 +180,13 @@ Writing: use the `postgres_staging_rw` MCP (`mcp_readwrite` holds `pg_write_all_
 - **No Linear prefix** on commit messages unless asked — plain `Type(Scope): desc`. Repos are **rebase-only** (`squash:false merge:false rebase:true` — verified on front-tracking-page, centiro-orders-api, backoffice, communications, rating, order-mission, trusk-applications, state-status, 2026-08-26), so each commit lands verbatim and semantic-release parses **commit messages, never the PR title**. A prefixed commit = no release, no deploy. Keep PR titles clean too, but that is legibility, not the failure mode.
 - **Link a PR to its Linear issue via the PR body, not the title/branch.** Put `Closes IN-XXX` (or `Fixes IN-XXX`) at the **top of the PR description** — the Linear↔GitHub integration auto-attaches the PR to the issue and advances its status on merge. Keeps the title clean (above rule) while still wiring the ticket. No need to touch Linear by hand.
 
+## PRs — open them unasked, as drafts
+
+Once a fix is written and green locally, commit, push and open the PR **as a draft**
+without asking (`gh pr create --draft`, `Closes IN-XXX` at the top of the body), then watch
+CI to a verdict (Monitor pattern below). Undraft (`gh pr ready <n>`) only when Nicolas says
+"review" or "merge". Does not cover merging — that still waits for his word. (Nicolas, 2026-09-24.)
+
 ## Code style — brace every `if`
 
 Always brace `if` bodies, even one-liners. No `if (cond) doThing();`. All Trusk TS repos.
