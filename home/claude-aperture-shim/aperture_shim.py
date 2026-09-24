@@ -13,12 +13,18 @@ Claude Code alone — no system trust store change), and inference requests are
 re-targeted at Aperture. The guard sees api.anthropic.com; Aperture sees and
 captures the request.
 
+Also keeps one Aperture session across auto-compactions (session_link.py).
+
 Driven by home/claude-aperture-shim.nix; use the `claude-gated` wrapper.
 """
 
+import json
 import os
+from pathlib import Path
 
-from mitmproxy import http
+from mitmproxy import ctx, http
+
+from session_link import SessionLinks
 
 APERTURE_HOST = os.environ.get("APERTURE_SHIM_HOST", "ai.gate-mintaka.ts.net")
 # https/443 rather than http/80: the inbound flow arrives over a CONNECT tunnel,
@@ -38,12 +44,38 @@ APERTURE_SCHEME = os.environ.get("APERTURE_SHIM_SCHEME", "https")
 # bypasses the gateway.
 INFERENCE_PREFIXES = ("/v1/messages", "/v1/complete")
 
+_links: SessionLinks | None = None
+
+
+def _link_session(flow: http.HTTPFlow) -> None:
+    global _links
+    if _links is None:
+        confdir = Path(os.path.expanduser(ctx.options.confdir))
+        _links = SessionLinks(confdir / "session-links.json")
+    try:
+        body = json.loads(flow.request.content or b"")
+    except ValueError:
+        return
+    if not isinstance(body, dict):
+        return
+    root = _links.link(body)
+    if root is None:
+        return
+    # Re-serialising is safe for prompt caching, which keys on content, not bytes.
+    flow.request.content = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
+    flow.request.headers["X-Claude-Code-Session-Id"] = root
+
 
 def request(flow: http.HTTPFlow) -> None:
     if flow.request.pretty_host != "api.anthropic.com":
         return
     if not flow.request.path.startswith(INFERENCE_PREFIXES):
         return
+    if flow.request.path.startswith("/v1/messages"):
+        try:
+            _link_session(flow)
+        except Exception as e:  # never fail inference over session grouping
+            ctx.log.warn(f"session link skipped: {e!r}")
     flow.request.scheme = APERTURE_SCHEME
     flow.request.host = APERTURE_HOST
     flow.request.port = APERTURE_PORT

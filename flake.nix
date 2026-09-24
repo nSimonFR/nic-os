@@ -451,6 +451,18 @@
       # expensive on a 3.9 GB Pi.
       checks = nixpkgs.lib.genAttrs checkSystems (system: {
         inherit (self.packages.${system}) nicos-scripts;
+        # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
+        claude-aperture-shim =
+          let
+            pkgs = nixpkgs.legacyPackages.${system};
+          in
+          pkgs.runCommand "claude-aperture-shim-tests"
+            { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ]; }
+            ''
+              cp ${./home/claude-aperture-shim}/session_link.py ${./home/claude-aperture-shim}/test_session_link.py .
+              pytest -q -p no:cacheprovider
+              touch $out
+            '';
       });
 
       # `nix develop` — python3 + pytest to run the script tests in-tree:
