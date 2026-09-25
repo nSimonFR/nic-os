@@ -10,7 +10,7 @@
 buildNpmPackage rec {
   pname = "affine-mcp-server";
   # renovate: datasource=github-releases depName=DAWNCR0W/affine-mcp-server extractVersion=^v(?<version>.+)$
-  version = "3.2.2";
+  version = "3.8.2";
 
   src = fetchFromGitHub {
     # `name` embeds the version on purpose: without it the fetch is keyed on
@@ -20,10 +20,10 @@ buildNpmPackage rec {
     owner = "DAWNCR0W";
     repo = "affine-mcp-server";
     rev = "v${version}";
-    hash = "sha256-6iZ6IsKHftCJjVhAumtKyt5cYwOZuOz6npULB29xX+I=";
+    hash = "sha256-DySzJuFtWAo00KvNXhAtzbeGlDbE1P10dbfkDlNZ6Rs=";
   };
 
-  npmDepsHash = "sha256-Flj6yUve6DRvXejRUIw/6W4RsckNVD0fJjVMfK28wJA=";
+  npmDepsHash = "sha256-6YziUuoq39D2pOe61MXYTvDI4ytc8XgI8U3eMP1Iavo=";
 
   # The package's "build" script runs `tsc -p tsconfig.json`. buildNpmPackage
   # invokes `npm run build` automatically; the resulting dist/ + bin/ are
