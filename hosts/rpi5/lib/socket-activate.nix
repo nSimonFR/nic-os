@@ -6,7 +6,7 @@
 # Lifecycle per service:
 #   1. <name>-proxy.socket listens on cfg.listen (e.g. 127.0.0.1:3100).
 #   2. First connection activates <name>-proxy.service.
-#   3. <name>-proxy.service Requires/After realUnit (and an optional ready
+#   3. <name>-proxy.service BindsTo/After realUnit (and an optional ready
 #      probe), then exec systemd-socket-proxyd → cfg.backend.
 #   4. After cfg.idleSec without an active connection, the proxy exits.
 #   5. realUnit becomes unneeded (unitConfig.StopWhenUnneeded = true) and stops.
@@ -155,8 +155,10 @@ let
       execStartPre = lib.optional (c.readyProbe != null) (readyProbeScript name c);
     in {
       description = "Socket-activation proxy for ${name} (→ ${c.realUnit})";
-      requires = [ c.realUnit ];
-      after    = [ c.realUnit ];
+      # bindsTo, not requires: earlyoom's SIGTERM is a clean exit, so Requires=
+      # left the proxy forwarding to a dead backend and the socket never re-armed.
+      bindsTo = [ c.realUnit ];
+      after   = [ c.realUnit ];
       serviceConfig = {
         ExecStartPre = execStartPre;
         ExecStart    = "${proxyExec} ${idleFlag}${c.backend}";
