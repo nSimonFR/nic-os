@@ -1,7 +1,39 @@
 # Merge and CI traps
 
 Triggers: `gh pr merge` refused · "can't be rebased" · CI red but local green ·
-`mockResolvedValue(null)` · peer-dep resolution failure · `-pr.` version pins.
+`mockResolvedValue(null)` · peer-dep resolution failure · `-pr.` version pins ·
+`The job was not started because recent account payments have failed` · a job failed with 0 steps ·
+push lands but no CI run appears · `no checks reported on the '<branch>' branch` · `CONFLICTING DIRTY` ·
+merge cut no release / no image · `git stash pop` brought back unrelated changes.
+
+## Billing block: `The job was not started because recent account payments have failed`
+
+Org-level GitHub Actions billing, not your code. GitHub-hosted jobs (`ubuntu-latest`) are refused
+with **0 steps** and no log (`/logs` → `BlobNotFound`). Self-hosted jobs still run, so `Trusk CI` can
+be green while the required `CI Gate` fails through `Security & Quality Scans`. The reason is only in
+the annotations:
+
+```bash
+gh api "repos/trusk-official/<repo>/actions/runs/<id>/jobs" --jq '.jobs[]|select(.conclusion=="failure")|.id' |
+  while read -r j; do gh api repos/trusk-official/<repo>/check-runs/$j/annotations --jq '.[].message'; done
+```
+
+It also stops **releases**: `Check runner availability` is GitHub-hosted and gates `Trusk CD` and the
+image build. Seen 2026-09-25: merges cut no version (roundtrip, state-status), and order-mission got
+its `1.74.0` tag but no image. `gh run rerun --failed` hits the same block until someone with billing
+access fixes Settings → Billing & plans. Afterwards, rerun the failed runs (failed ones rerun correctly,
+skipped ones do not) and assert the image tag before any trusk-applications bump.
+
+## A PR with conflicts runs no CI
+
+GitHub does not fire `pull_request` workflows on a PR it cannot merge. The push lands, the PR head
+moves, and `gh pr checks` says `no checks reported`. Check `gh pr view <n> --json mergeable` →
+`CONFLICTING`, then rebase.
+
+Recurring cause: semantic-release rewrites `truskInitContainers[].image` in
+`deployment/charts/default.yaml` on every release, so a PR touching those lines (renaming the init
+container, changing its command) conflicts after each release. Resolve by keeping your change and
+**master's image tag**. A rebase force-push also dismisses existing approvals (`REVIEW_REQUIRED`).
 
 ## Merge methods differ per repo
 
@@ -37,10 +69,19 @@ They need the docker-compose Postgres → `POSTGRES_URL must be a string`. On or
 7 of 29 suites. Normal, not a regression. Prove it:
 
 ```bash
-git stash -u -q; npx jest 2>&1 | grep -cE '^FAIL'; git stash pop -q
+git stash push -u -q -m jest-ab && { npx jest 2>&1 | grep -cE '^FAIL'; git stash pop -q; }
 ```
 
 Same count on `origin/master` = environmental.
+
+**Never run `git stash pop` unless your own push succeeded.** With nothing to stash, `git stash`
+creates no entry, and the pop applies whatever is on top of the list. That list is **shared by every
+worktree of the repo**, so the pop can bring back someone else's months-old stash. Seen 2026-09-25:
+`pre-IN-614 local edits` was popped into a roundtrip worktree (conflict in `tsconfig.build.json`).
+Chain with `&&` as above. To test old code, prefer `git worktree add --detach <tmp> HEAD` with
+`node_modules` symlinked in. If a pop lands anyway, `git restore --staged --worktree --source=HEAD
+<files>` (git keeps the entry after a conflicted pop), then delete the rerere entry the conflict
+recorded under `$(git rev-parse --git-common-dir)/rr-cache/`.
 
 ## Peer-pinning across `@trusk-official/nestjs-*`
 
