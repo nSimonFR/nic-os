@@ -177,6 +177,10 @@ in
       Description = "herdr headless server";
       After = [ "network-online.target" ];
       Wants = [ "network-online.target" ];
+      # A switch that restarts the server kills every pane, and an attached
+      # client respawns one in the gap, outside this unit (seen 2026-09-22: a
+      # stray in tailscaled.service's cgroup). New binaries land at next boot.
+      X-RestartIfChanged = false;
     };
     Install.WantedBy = [ "default.target" ];
     Service = {
