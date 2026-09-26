@@ -73,7 +73,9 @@ in
       };
       Service = {
         Type = "simple";
-        ExecStart = "${atuinBin} daemon start";
+        # An unclean exit leaves the socket behind, and a plain start then fails
+        # "Address already in use" forever (17k restarts, 2026-09-23→26).
+        ExecStart = "${atuinBin} daemon start --force";
         Restart = "on-failure";
         RestartSec = "5s";
       };

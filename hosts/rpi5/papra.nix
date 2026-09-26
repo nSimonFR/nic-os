@@ -199,6 +199,8 @@ in
       WorkingDirectory = "/var/lib/papra";
       StateDirectory = "papra-tag-sweep";
       ExecStart = "${pkgs.nicos-scripts}/bin/papra-tag-sweep";
+      # EX_TEMPFAIL = beast is off, its normal state — not a unit failure.
+      SuccessExitStatus = [ 75 ];
     };
     environment.STATE_DIR = "/var/lib/papra-tag-sweep";
   };
