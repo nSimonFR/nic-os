@@ -27,6 +27,11 @@ account was logged in with (`nSimonfr-ai` until 2026-09-24, now `nSimonFR-ai`). 
 mints an empty token and `gh pr create` silently falls back to the active account — you.
 Hence the case-insensitive lookup; `push-ai` does the same.
 
+**Always print the PR's full URL** in the reply that touched it — created, pushed to,
+retitled, commented on, merged. `#638` is not a link, and the number alone is a search.
+Before opening a PR, check whether the branch already has one (`gh pr list --head
+<branch>`) and update that instead of opening a second.
+
 ## Agent skills
 
 A skill is a **directory** — `SKILL.md` plus whatever it needs at runtime (`assets/`,

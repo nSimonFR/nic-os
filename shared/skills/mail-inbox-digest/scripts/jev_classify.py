@@ -384,18 +384,19 @@ def message_url(env, thread):
     """Deep link for the message, from the envelope's `source` field.
 
     `gmail:<address>` resolves the right account without depending on the
-    /u/<n>/ index. IMAP has no per-message web URL — the UID is not the id
-    Proton's web client addresses — so those get the inbox.
+    /u/<n>/ index. `proton[:<n>]` can only reach that account's inbox: the web
+    client addresses messages by a Proton-internal id, and the Bridge exposes
+    no X-Pm-* header carrying it, so the IMAP UID cannot be turned into one.
     """
     source = _first(env, "source", "provider")
-    if source.startswith("gmail:") and thread:
-        address = source.split(":", 1)[1]
+    kind, _, arg = source.partition(":")
+    if kind == "gmail" and arg and thread:
         return (
             "https://mail.google.com/mail/u/?authuser="
-            f"{urllib.parse.quote(address)}#all/{thread}"
+            f"{urllib.parse.quote(arg)}#all/{thread}"
         )
-    if source == "proton":
-        return "https://mail.proton.me/u/0/inbox"
+    if kind == "proton":
+        return f"https://mail.proton.me/u/{arg or '0'}/inbox"
     return ""
 
 
@@ -527,6 +528,11 @@ def self_test():
             "imap link falls back to the inbox",
             message_url({"source": "proton"}, "")
             == "https://mail.proton.me/u/0/inbox",
+        ),
+        (
+            "proton account index is honoured",
+            message_url({"source": "proton:1"}, "")
+            == "https://mail.proton.me/u/1/inbox",
         ),
         ("no source means no link", message_url({}, "1a0d") == ""),
         (
