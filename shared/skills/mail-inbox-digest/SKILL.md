@@ -78,9 +78,10 @@ Always invoke it as `python3 <path>`, never as a bare executable: the seed rsync
 
 - Run it **once per account** and merge, or concatenate the envelope arrays first. Set two fields on every envelope as you merge:
   - `account` — `personal` or `work`, because the digest reports the two separately;
-  - `source` — `gmail:<the account address>` or `proton`, which is what the deep link is built from.
+  - `source` — `gmail:<the account address>` or `proton:<n>`, which is what the deep link is built from. `<n>` is the account index in the Proton web URL (`https://mail.proton.me/u/1/…` → `proton:1`); it defaults to `0`, which is the wrong account when several are signed in.
 - Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
-- Each entry carries a `url`. Gmail gets a real per-message link (`#all/<threadId>`, so it survives archiving, and `?authuser=` so it opens under the right account when several are signed in). IMAP has no per-message web URL — the UID is not the id Proton's web client addresses — so those link to the inbox. Put the link on the message name in the digest; never invent one when `url` is empty.
+- Each entry carries a `url`. Gmail gets a real per-message link (`#all/<threadId>`, so it survives archiving, and `?authuser=` so it opens under the right account when several are signed in). Put the link on the message name in the digest; never invent one when `url` is empty.
+- **Proton links reach the inbox, not the message, and this is not fixable from here.** Its web client addresses a message by a Proton-internal id (`https://mail.proton.me/u/1/inbox/B-upk5Js…==`), and the Bridge exposes no `X-Pm-*` header carrying it — a message read through `himalaya` shows only the sender's original `Message-Id`. Checked; don't re-investigate without a source of that id other than IMAP.
 - It already **deduplicates** threads and resent reminders, so take its buckets as-is rather than collapsing them again.
 - `himalaya envelope list` carries no body, so IMAP messages are ranked on sender and subject alone and sit lower than Gmail ones for the same content. Fetch bodies per message if an IMAP account ever needs to compete fairly.
 - `--max` (default 150) caps the run. Anything past the cap is never ranked, so check it against the actual unread count before trusting a busy inbox's picks; `usage.truncated` says whether it bit.
