@@ -63,26 +63,31 @@ If `--output json` follows the query, Himalaya parses it as query text and may f
 
 ## Classification via Jev (`scripts/jev_classify.py`)
 
-Which messages are urgent is decided by [TypeSafe's Jev](https://docs.typesafe.ai/models), a decision model that returns calibrated probabilities instead of prose, not by reading the list and forming an opinion. Same three messages in, same three picks out — the buckets stop drifting between mornings.
+Which messages are urgent is decided by [TypeSafe's Jev](https://docs.typesafe.ai/models), a decision model that returns calibrated probabilities instead of prose, not by reading the list and forming an opinion. Same inbox in, same Top actions out — they stop drifting between mornings.
 
-Pipe the envelopes you already collected straight in; the field names from both CLIs are understood as-is:
+Pipe the envelopes you already collected straight in; the field names from both CLIs are understood as-is. **Fetch bodies** — without `--include-body` a search returns only sender, subject and date, and the ranking gets measurably worse:
 
 ```bash
-gog gmail messages search 'in:inbox is:unread' --all --max 100 \
-  --account ACCOUNT --json --results-only --no-input \
-  | python3 ~/.hermes/skills/mail-inbox-digest/scripts/jev_classify.py --max 60
+gog gmail messages search 'in:inbox is:unread' --all --max 150 \
+  --account ACCOUNT --include-body --body-format text --wrap-untrusted \
+  --json --results-only --no-input \
+  | python3 ~/.hermes/skills/mail-inbox-digest/scripts/jev_classify.py
 ```
 
 Always invoke it as `python3 <path>`, never as a bare executable: the seed rsync in `hermes.nix` chmods files `Fu+rw,Fgo+r`, so the script arrives `0644` with no exec bit. On the Claude surface the same file is at `~/.claude/skills/mail-inbox-digest/scripts/jev_classify.py`.
 
 - Run it **once per account** and merge, or concatenate the envelope arrays first — set each envelope's `account` field either way, because the digest reports Personal and Work separately.
 - Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
-- Cost is ~$0.042 per million input tokens with output free, so a 60-message run is a small fraction of a cent. `--max` caps the run regardless; raise it only deliberately.
+- It already **deduplicates** threads and resent reminders, so take its buckets as-is rather than collapsing them again.
+- `--max` (default 150) caps the run. Anything past the cap is never ranked, so check it against the actual unread count before trusting a busy inbox's picks; `usage.truncated` says whether it bit.
+- Cost is ~$0.042 per million input tokens with output free — measured at **$0.0074 for a 150-message run with bodies**, about $0.22/month daily.
 - The key comes from `$TYPESAFE_API_KEY`, falling back to the `TYPESAFE_API_KEY=` line in `/run/agenix/agent-env`. The fallback is load-bearing on the Hermes cron path: `code_execution_tool.py`'s `_scrub_child_env` strips any env name containing `KEY`/`TOKEN`/`SECRET` before the model's shell sees it, exactly as it does for `GOG_KEYRING_PASSWORD`.
 - `python3 scripts/jev_classify.py --self-test` exercises the full pipeline offline — no key, no network. Run it after touching the file.
 - The call goes **straight to TypeSafe, not through Aperture**: Aperture answers `405 Method Not Allowed` on `/v1/decisions`, and its only compatibility modes are `openai_chat`, `gemini_generate_content` and `anthropic_messages`. Making Jev observable needs a chat-completions shim in tiny-llm-gate — tracked as NSI-89. Until then this is the one LLM-ish call on the box that Aperture cannot see.
 
 **Do not treat a probability as permission.** The numbers order messages against each other; they are not trustworthy as absolute confidences (measured expected calibration error ~0.107, roughly 4.4x the noise floor, with yes/no answers running underconfident). Nothing is archived, deleted or marked read on Jev's say-so — the skill still only ever *suggests* cleanup, and the read-only rule in Principles is unchanged.
+
+Top actions and Read-if-time follow the composite `rank`, which is built from the yes/no signals. The `disposition` choice only vetoes a message into cleanup: on repeated runs over one fixed inbox it flipped buckets whenever its confidence was low, while `rank` held. Expect Top actions to be stable morning to morning and the tail of Read-if-time to shuffle when two ranks are near-tied.
 
 The question set in `QUESTIONS` is the actual program. Eight narrow questions beat one broad one by a wide margin on Jev specifically, and a vague criterion is worse than no question at all — a miswritten set has benchmarked below the random floor. Change that block deliberately, and re-read the note above it first.
 

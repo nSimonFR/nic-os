@@ -173,6 +173,22 @@ CLEANUP_MIN_CONFIDENCE = 0.70
 # ---------------------------------------------------------------- input
 
 
+# gog --wrap-untrusted wraps every text field, subject included, so an unwrapped
+# subject reaches the digest as the marker instead of the text.
+UNWRAP_RE = re.compile(
+    r'^<<<EXTERNAL_UNTRUSTED_CONTENT id="[0-9a-f]+">>>\n'
+    r"(?:Source: [^\n]*\n)?(?:---\n)?"
+    r"(.*?)"
+    r'\n?<<<END_EXTERNAL_UNTRUSTED_CONTENT id="[0-9a-f]+">>>$',
+    re.DOTALL,
+)
+
+
+def unwrap(text):
+    m = UNWRAP_RE.match(text.strip())
+    return m.group(1).strip() if m else text
+
+
 def _first(d, *names):
     for n in names:
         v = d.get(n)
@@ -183,7 +199,7 @@ def _first(d, *names):
             if isinstance(v, dict):
                 v = v.get("name") or v.get("address") or v.get("email")
         if v:
-            return str(v)
+            return unwrap(str(v))
     return ""
 
 
@@ -315,6 +331,7 @@ def classify(envelopes, key, endpoint, model, post=http_post, workers=8):
         disp = answers.get("disposition") or {}
         return {
             "id": _first(env, "id", "uid", "messageId", "message_id"),
+            "thread": _first(env, "threadId", "thread_id", "thread"),
             "account": _first(env, "account", "mailbox", "role"),
             "from": _first(env, "from", "sender", "From"),
             "subject": _first(env, "subject", "Subject", "title"),
@@ -360,30 +377,53 @@ def classify(envelopes, key, endpoint, model, post=http_post, workers=8):
     return results, usage
 
 
+RESEND_RE = re.compile(r"^\s*((re|fwd?|tr)\s*:\s*)+", re.IGNORECASE)
+
+
+def dedupe(results):
+    """Collapse a thread, and repeats of one reminder, to their best-ranked message.
+
+    A resent reminder gets a fresh thread id each time, so the subject key has to
+    apply too rather than as a fallback.
+    """
+    threads, subjects, out = set(), set(), []
+    for r in results:  # already rank-sorted
+        subject = RESEND_RE.sub("", r["subject"]).strip().lower()
+        skey = (r["account"], r["from"], subject)
+        tkey = r.get("thread")
+        if skey in subjects or (tkey and tkey in threads):
+            continue
+        subjects.add(skey)
+        if tkey:
+            threads.add(tkey)
+        out.append(r)
+    return out
+
+
+# Buckets follow `rank`, not `disposition`: the choice answer flips between
+# identical runs when its confidence is low, which reshuffled Top actions.
+# Disposition only vetoes into cleanup.
+JUNK = ("delete_spam", "archive")
+
+
 def assign(results, top=3, read=3):
     """Bucket ranked results into the digest's three sections."""
-    top_actions = [
-        r for r in results if r["disposition"] == "top_action"
-    ][:top]
-    chosen = {id(r) for r in top_actions}
-    read_if_time = [
-        r
-        for r in results
-        if id(r) not in chosen and r["disposition"] in ("top_action", "read_if_time")
-    ][:read]
-    chosen |= {id(r) for r in read_if_time}
+    results = dedupe(results)
     cleanup = {"delete_spam": [], "archive": []}
+    keep = []
     for r in results:
-        if id(r) in chosen:
-            continue
         d = r["disposition"]
-        if d in cleanup and r["disposition_confidence"] >= CLEANUP_MIN_CONFIDENCE:
-            if d == "delete_spam" and r["signals"]["bulk"] < CLEANUP_MIN_BULK:
-                continue
+        if (
+            d in JUNK
+            and r["disposition_confidence"] >= CLEANUP_MIN_CONFIDENCE
+            and not (d == "delete_spam" and r["signals"]["bulk"] < CLEANUP_MIN_BULK)
+        ):
             cleanup[d].append(r)
+        else:
+            keep.append(r)
     return {
-        "top_actions": top_actions,
-        "read_if_time": read_if_time,
+        "top_actions": keep[:top],
+        "read_if_time": keep[top : top + read],
         "delete_spam": cleanup["delete_spam"],
         "archive": cleanup["archive"],
     }
@@ -434,7 +474,18 @@ def self_test():
 
     results, usage = classify(envelopes, "k", "http://x", DEFAULT_MODEL, post=fake_post)
     buckets = assign(results)
+    wrapped = (
+        '<<<EXTERNAL_UNTRUSTED_CONTENT id="0123456789abcdef">>>\n'
+        "Source: google_api\n---\nA wrapped subject line\n"
+        '<<<END_EXTERNAL_UNTRUSTED_CONTENT id="0123456789abcdef">>>'
+    )
     checks = [
+        ("gog wrapper stripped", unwrap(wrapped) == "A wrapped subject line"),
+        ("unwrap leaves plain text", unwrap("Plain subject") == "Plain subject"),
+        (
+            "wrapped subject reaches output clean",
+            _first({"subject": wrapped}, "subject") == "A wrapped subject line",
+        ),
         ("quoted chain trimmed", "> old" not in build_state({"snippet": "new\n> old"})),
         ("state is guarded", "untrusted email" in build_state(envelopes[0])),
         ("state is capped", len(build_state({"snippet": "x" * 9000})) < MAX_STATE_CHARS + 300),
@@ -445,6 +496,34 @@ def self_test():
         ("bulk offered for deletion", [r["id"] for r in buckets["delete_spam"]] == ["2"]),
         ("cost computed", usage["input_tokens"] == 240 and usage["usd"] > 0),
         ("eight questions", len(QUESTIONS) == 8),
+        (
+            "repeat reminder collapses despite new thread ids",
+            len(
+                dedupe(
+                    [
+                        {"account": "w", "from": "a@b.c", "subject": "Timesheet due",
+                         "thread": "t1", "rank": 2},
+                        {"account": "w", "from": "a@b.c", "subject": "Timesheet due",
+                         "thread": "t2", "rank": 1},
+                    ]
+                )
+            )
+            == 1,
+        ),
+        (
+            "Re: prefix collapses onto its thread",
+            len(
+                dedupe(
+                    [
+                        {"account": "w", "from": "a@b.c", "subject": "Specs",
+                         "thread": "", "rank": 2},
+                        {"account": "w", "from": "a@b.c", "subject": "Re: Specs",
+                         "thread": "", "rank": 1},
+                    ]
+                )
+            )
+            == 1,
+        ),
         ("choice has a none-of-these", "leave" in QUESTIONS["disposition"]["criteria"]),
     ]
     failed = [name for name, ok in checks if not ok]
@@ -458,8 +537,10 @@ def self_test():
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--max", type=int, default=60,
-                   help="cap envelopes per run (cost control, default 60)")
+    # Anything past the cap is never ranked, so it must clear a normal unread
+    # backlog. ~$0.00005 per message.
+    p.add_argument("--max", type=int, default=150,
+                   help="cap envelopes per run (cost control, default 150)")
     p.add_argument("--top", type=int, default=3)
     p.add_argument("--read", type=int, default=3)
     p.add_argument("--endpoint",
