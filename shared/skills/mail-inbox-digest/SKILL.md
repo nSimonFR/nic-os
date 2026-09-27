@@ -99,26 +99,38 @@ The question set in `QUESTIONS` is the actual program. Eight narrow questions be
 
 When a format is prescribed, reproduce it exactly. For the standard daily digest:
 
-```text
-📬 Daily mail — {{weekday}} {{date}}
+```markdown
+# 📬 Daily mail — {{weekday}} {{date}}
 
-⚡ Top actions
-• {{top_action_1}}
-• {{top_action_2}}
-• {{top_action_3}}
+## ⚡ Top actions
 
-📖 Read if time
-• {{read_item_1}}
-• {{read_item_2}}
-• {{read_item_3}}
+- [ ] [{{top_action_1}}]({{url_1}})
+- [ ] [{{top_action_2}}]({{url_2}})
+- [ ] [{{top_action_3}}]({{url_3}})
 
-🧹 Suggested cleanup
-• Delete/spam: {{delete_spam_items}}
-• Archive: {{archive_items}}
+## 📖 Read if time
 
-📊 Inbox
-• Personal: {{personal_unread}} unread, {{personal_important}} important
-• Work: {{work_unread}} unread, {{work_important}} important
+- [{{read_item_1}}]({{url_4}})
+- [{{read_item_2}}]({{url_5}})
+- [{{read_item_3}}]({{url_6}})
+
+<details><summary>🧹 Suggested cleanup ({{cleanup_count}})</summary>
+
+- Delete/spam: {{delete_spam_items}}
+- Archive: {{archive_items}}
+
+</details>
+
+| Inbox | Unread | Important |
+|---|---|---|
+| Personal | {{personal_unread}} | {{personal_important}} |
+| Work | {{work_unread}} | {{work_important}} |
 ```
 
-Send with `telegram-send -m html`, and keep the markup to one thing: wrap each message name in `<a href="URL">…</a>`, in every section including cleanup, taking `URL` from that entry's `url` and omitting the anchor when it is empty. Everything else is plain text, and any `&`, `<` or `>` in a subject must be escaped or Telegram rejects the whole message. Keep action phrases short. Populate all three action/read bullets with an item or `none`; do not add prose outside the requested format. If no new mail merits a digest and the scheduler permits silent delivery, return exactly `[SILENT]`.
+Send it with **`telegram-send -m rich`** — a Bot API 10.1 Rich Message, not `sendMessage` with a `parse_mode`. The input is rich Markdown and Telegram parses it into real blocks: `#`/`##` become `heading`, `- [ ]` becomes a list with `has_checkbox` so Top actions are tappable, `<details><summary>` becomes a collapsible `details` block, `|…|` becomes a `table`, and `---` becomes a `divider`. Link text with `[label](url)`, taking the URL from that entry's `url` and leaving the label bare when it is empty.
+
+Two things that do **not** work, both verified against the API rather than assumed: `>!` is not an expandable blockquote (the `!` lands in the text), and `is_expandable` on a `blockquote` block is silently dropped. Use `<details>` for anything collapsible.
+
+Keep action phrases short. Populate all three action/read bullets with an item or `none`; do not add prose outside the requested format. If no new mail merits a digest and the scheduler permits silent delivery, return exactly `[SILENT]`.
+
+The API echoes the parsed `rich_message.blocks` back in its response, so a send that silently degraded is visible: check that the blocks you expected are there rather than trusting the Markdown.

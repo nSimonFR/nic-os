@@ -2,8 +2,10 @@
 # telegram-send — post ONE message (or photo) to Telegram. See shared/notify.nix
 # for when this is the wrong seam.
 #
-# Usage: telegram-send [-c CHAT] [-m html|markdown|plain] [-p PHOTO] [TEXT]
+# Usage: telegram-send [-c CHAT] [-m html|markdown|plain|rich] [-p PHOTO] [TEXT]
 #   TEXT is read from stdin when omitted; with -p it becomes the caption.
+#   `rich` sends a Bot API 10.1 Rich Message: TEXT is rich Markdown, and
+#   headings, tables, `- [ ]` checkboxes and <details> become real blocks.
 # Env:   TELEGRAM_CHAT_ID, TELEGRAM_TOKEN_FILE (defaults to the agenix path,
 #        then the per-user runtime one).
 #
@@ -40,10 +42,11 @@ done
 [ -n "$chat" ] || die "no chat id (pass --chat or set TELEGRAM_CHAT_ID)"
 
 # `plain` omits parse_mode entirely — Telegram rejects an empty one.
+# `rich` carries no parse_mode at all: it is a different method below.
 case $mode in
   html)     set -- -d parse_mode=HTML ;;
   markdown) set -- -d parse_mode=Markdown ;;
-  plain)    set -- ;;
+  plain|rich) set -- ;;
   *)        die "unknown --mode $mode" ;;
 esac
 
@@ -52,6 +55,14 @@ if [ -n "$photo" ]; then
   method=sendPhoto
   set -- "$@" -F "chat_id=$chat" -F "photo=@$photo"
   [ -n "$text" ] && set -- "$@" -F "caption=$text"
+elif [ "$mode" = rich ]; then
+  [ -n "$text" ] || die "empty message body"
+  method=sendRichMessage
+  # python3 does the JSON quoting; a bare printf would break on any " or newline.
+  rich=$(printf '%s' "$text" | python3 -c \
+    'import json,sys; print(json.dumps({"markdown": sys.stdin.read()}))') \
+    || die "could not encode rich message"
+  set -- "$@" -d "chat_id=$chat" --data-urlencode "rich_message=$rich"
 else
   [ -n "$text" ] || die "empty message body"
   method=sendMessage
