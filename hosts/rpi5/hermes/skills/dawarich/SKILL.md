@@ -188,19 +188,20 @@ curl -fsS -X POST "${AUTH[@]}" -H "Content-Type: application/json" \
 
 ## Sending the daily message to Telegram (rich)
 
-When this runs as the daily job (channel `telegram`), send the recap yourself via the Bot
-API so you get HTML formatting and clickable links — don't rely on Hermes' plain-text
-channel rendering. Token is at `/run/agenix/telegram-bot-token`; the chat id is in
-`$TELEGRAM_CHAT_ID` (exported for the service).
+When this runs as the daily job (channel `telegram`), send the recap yourself rather than
+relying on Hermes' plain-text channel rendering. Use `telegram-send -m rich` — a Rich
+Message, per the Message format section of SOUL.md — so the recap arrives with a real
+heading and list rather than emoji standing in for structure. Token lookup is the
+sender's job; the chat id is in `$TELEGRAM_CHAT_ID` (exported for the service).
 
 The header and each place name are **links** into Dawarich (deep links from the section above) —
 those links are the only navigation; do **not** attach inline-keyboard buttons. Build the message
 body in a file (avoids `$(...)`), then send it with `telegram-send`, which owns the token lookup,
-HTML parse mode, and link-preview suppression:
+encoding and link-preview suppression:
 
 ```bash
-# ...after writing $work/message.html ...
-telegram-send --chat "$TELEGRAM_CHAT_ID" < "$work/message.html"
+# ...after writing $work/message.md ...
+telegram-send -m rich --chat "$TELEGRAM_CHAT_ID" < "$work/message.md"
 ```
 
 Do not hand-roll `curl https://api.telegram.org/...` — see `shared/scripts/telegram-send.sh`.
@@ -226,20 +227,24 @@ No count line, no reply legend, no numbers — the ❓/✅ emoji and the links s
 human date (`date -d DAY '+%a %-d %b'`, its own command) linking to the day; then a place line
 with the city and point count (`(sparse)` when tracking is thin, < ~50/day).
 
-HTML body shape:
+Body shape:
 
-```
-🗺 <b><a href="…date=DAY&status=all">Dawarich · Sat 11 Apr</a></b>
-📍 <b>Paris, France</b> · 13 pts (sparse)
+```markdown
+## 🗺 [Dawarich · Sat 11 Apr](…date=DAY&status=all)
 
-• 16:39–17:23 · 43min · ✅ <a href="…date=DAY&status=all">Maison de Victor Hugo</a>
-• 17:46–18:03 · 16min · ❓ <a href="…date=DAY&status=suggested">Place Des Vosges</a>
+📍 **Paris, France** · 13 pts (sparse)
+
+- 16:39–17:23 · 43min · ✅ [Maison de Victor Hugo](…date=DAY&status=all)
+- 17:46–18:03 · 16min · ❓ [Place Des Vosges](…date=DAY&status=suggested)
 ```
+
+Past about eight visits, fold the list into `<details><summary>Visits (n)</summary>` and leave
+only the ❓ ones outside — they are the ones needing a reply.
 
 If the day has no visits at all, send a one-liner and check the point count (don't invent stops).
 
-> **HTML-escape** names before embedding: `&`→`&amp;`, `<`→`&lt;`, `>`→`&gt;` (Dawarich names
-> can contain `&`). Only `<b> <a>` tags are used. No inline-keyboard buttons.
+> A name containing `]`, `[` or `)` breaks the link syntax — escape those, or fall back to
+> `-m html` for that one send. No inline-keyboard buttons.
 
 ### Applying replies
 

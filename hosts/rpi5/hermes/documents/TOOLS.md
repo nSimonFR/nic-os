@@ -61,6 +61,36 @@ so no plan-cap 429. Non-empty stdout is sent verbatim, empty stdout is silent, a
 non-zero exit is sent as an alert; the ones that send their own message redirect
 stdout to `/dev/null`.
 
+## Sending a message
+
+`telegram-send [-c CHAT] [-m rich|html|markdown|plain] [-p PHOTO] [TEXT]`, stdin
+when TEXT is omitted. It owns the token lookup, urlencoding and link-preview
+suppression — do not hand-roll `curl https://api.telegram.org/...`.
+
+`-m rich` posts `sendRichMessage` with `rich_message={"markdown": …}`; the same
+parameter also accepts `{"html": …, "skip_entity_detection": false}`. SOUL.md
+says when to reach for it. Markdown maps to blocks like this:
+
+| Markdown | Block |
+|---|---|
+| `#` / `##` | `heading` + `size` |
+| `- item` / `1. item` | `list` |
+| `- [ ]` / `- [x]` | `list` item with `has_checkbox` / `is_checked` |
+| `[t](u)` | inline `url` run |
+| `> quote` | `blockquote` |
+| ```` ``` ```` | `pre` |
+| `\|a\|b\|` | `table` (`is_header`, `align`) |
+| `---` | `divider` |
+| `<details><summary>s</summary>…` | `details` |
+
+Two that silently do not work: `>!` is not an expandable blockquote (the `!`
+lands in the text), and `is_expandable` on a `blockquote` is dropped. Use
+`<details>`.
+
+The API echoes the parsed `rich_message.blocks` back in its response, so check
+those rather than trusting the Markdown — a degraded send looks identical to a
+good one otherwise.
+
 ## Useful Commands
 
 - `systemctl --user status hermes` — check health

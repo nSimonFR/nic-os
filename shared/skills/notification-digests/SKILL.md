@@ -12,7 +12,7 @@ Use for scheduled or on-demand digests that gather notifications from APIs/RSS a
 1. Collect items without mutating their read state.
 2. Normalize each item to a presentation record: source, title, type, canonical public URL, timestamp, and source-specific ID.
 3. Escape user/API-provided text for the destination format, while preserving only links that the formatter generated.
-4. Deliver the digest and validate the delivery response.
+4. Deliver the digest as a Rich Message (`telegram-send -m rich`) per the Message format section of Hermes' SOUL.md: a heading per source, one list under each, `<details>` around any source running past about five items. Validate the delivery response — the API echoes the parsed `rich_message.blocks`, so check those rather than assuming the Markdown landed.
 5. Only after confirmed delivery, mark exactly the included source IDs as read.
 
 If a collection or delivery stage fails, surface a concise error and leave notification state unchanged.

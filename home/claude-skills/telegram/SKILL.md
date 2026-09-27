@@ -16,11 +16,22 @@ so token lookup, urlencoding, parse modes and timeouts are already handled —
 and the bot token never lands in a command line or shell transcript.
 
 ```
-telegram-send [-c CHAT] [-m html|markdown|plain] [-p PHOTO] [TEXT]
+telegram-send [-c CHAT] [-m rich|html|markdown|plain] [-p PHOTO] [TEXT]
 ```
 
 `TEXT` is read from stdin when omitted; with `-p` it becomes the caption. The
 raw API response is printed, so check it: `telegram-send "hi" | jq .ok`.
+
+**Anything with structure goes out as `-m rich`** — a Bot API Rich Message
+(`sendRichMessage`), not `sendMessage` with a parse mode. Write it as Markdown:
+`#`/`##` become real headings, `- item` a list, `|a|b|` a table, `[t](u)` a link,
+`<details><summary>s</summary>…` a collapsible block. Put secondary material in
+`<details>` rather than making the reader scroll it. A one-liner stays `-m plain`.
+
+Two that silently do not work: `>!` is not an expandable blockquote, and
+`is_expandable` on a `blockquote` is dropped. Use `<details>`. The response
+echoes the parsed `rich_message.blocks` — check them, a degraded send otherwise
+looks identical to a good one.
 
 ## Targets (`-c`)
 

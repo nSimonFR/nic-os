@@ -104,9 +104,9 @@ When a format is prescribed, reproduce it exactly. For the standard daily digest
 
 ## ⚡ Top actions
 
-- [ ] [{{top_action_1}}]({{url_1}})
-- [ ] [{{top_action_2}}]({{url_2}})
-- [ ] [{{top_action_3}}]({{url_3}})
+- [{{top_action_1}}]({{url_1}})
+- [{{top_action_2}}]({{url_2}})
+- [{{top_action_3}}]({{url_3}})
 
 ## 📖 Read if time
 
@@ -127,9 +127,9 @@ When a format is prescribed, reproduce it exactly. For the standard daily digest
 | Work | {{work_unread}} | {{work_important}} |
 ```
 
-Send it with **`telegram-send -m rich`** — a Bot API 10.1 Rich Message, not `sendMessage` with a `parse_mode`. The input is rich Markdown and Telegram parses it into real blocks: `#`/`##` become `heading`, `- [ ]` becomes a list with `has_checkbox` so Top actions are tappable, `<details><summary>` becomes a collapsible `details` block, `|…|` becomes a `table`, and `---` becomes a `divider`. Link text with `[label](url)`, taking the URL from that entry's `url` and leaving the label bare when it is empty.
+Send it with **`telegram-send -m rich`**, per the Message format section of SOUL.md; the Markdown→block mapping is in `TOOLS.md`. Link text with `[label](url)`, taking the URL from that entry's `url` and leaving the label bare when it is empty.
 
-Two things that do **not** work, both verified against the API rather than assumed: `>!` is not an expandable blockquote (the `!` lands in the text), and `is_expandable` on a `blockquote` block is silently dropped. Use `<details>` for anything collapsible.
+Scale the collapsing to the inbox. Cleanup always lives in `<details>`; when a section runs past about five items — a backlog morning, or a `Read if time` that has grown — fold that one too, keeping the count in the summary so the size is visible without opening it. The three Top actions never collapse.
 
 Keep action phrases short. Populate all three action/read bullets with an item or `none`; do not add prose outside the requested format. If no new mail merits a digest and the scheduler permits silent delivery, return exactly `[SILENT]`.
 

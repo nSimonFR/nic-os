@@ -83,6 +83,6 @@ Before enabling a scheduler:
 
 ## Delivery
 
-Keep Telegram output compact: title, date/time, venue, price, seats, and link. Only mention source errors in operational logs unless the user asks for diagnostics.
+Keep Telegram output compact: title, date/time, venue, price, seats, and link. Send it as a Rich Message (`telegram-send -m rich`) per the Message format section of Hermes' SOUL.md — one list, a heading only if there are several sources, and `<details>` around anything past about five events so a busy week stays one screen. Only mention source errors in operational logs unless the user asks for diagnostics.
 
 See `references/wordpress-product-events.md` for a verified WordPress product-feed investigation pattern.
