@@ -32,6 +32,7 @@
     "d /mnt/data/backups/karakeep 0750 karakeep karakeep -"
     "d /mnt/data/backups/wealthfolio 0750 wealthfolio wealthfolio -"
     "d /mnt/data/backups/blogwatcher 0750 nsimon users -"
+    "d /mnt/data/backups/mail-digest 0750 nsimon users -"
     "d /mnt/data/backups/hermes 0750 nsimon users -"
   ];
 
@@ -182,6 +183,40 @@
   nic.services.hermes = {
     backup = [ "unit" ];
     backupUnits = [ "hermes-backup.service" ];
+  };
+
+  # Same reason as blogwatcher: the digest is a Hermes cron script, and Hermes'
+  # module is home-manager, where `nic.services` does not exist.
+  nic.services.mail-digest = {
+    backup = [ "unit" ];
+    backupUnits = [ "mail-digest-backup.service" ];
+  };
+
+  # ── mail-digest (SQLite in $HOME) ──────────────────────────────────────
+  # Every mail Jev has classified, with its signals, rank and surfaced count.
+  # Nothing upstream can rebuild it: re-fetching the mailbox gives the messages
+  # back but not their verdicts, and re-classifying costs money and returns
+  # different numbers, which is exactly what the stored jev_model is there to
+  # make visible. Also the only corpus for scoring Jev at all.
+  #
+  # Runs as nsimon because the DB is in that home; `.backup` is the online
+  # backup API, safe against the 08:30 digest running concurrently.
+  systemd.services.mail-digest-backup = {
+    description = "mail-digest database backup";
+    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      ${pkgs.sqlite}/bin/sqlite3 /home/nsimon/.mail-digest/mail.db ".backup '/mnt/data/backups/mail-digest/mail-digest-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/mail-digest/mail-digest-$STAMP.db"
+      ${pkgs.findutils}/bin/find /mnt/data/backups/mail-digest -name "mail-digest-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.mail-digest-backup = {
+    description = "Daily mail-digest backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 03:30:00"; Persistent = true; };
   };
 
   # ── blogwatcher (SQLite in $HOME) ──────────────────────────────────────
