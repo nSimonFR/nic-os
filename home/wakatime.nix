@@ -6,6 +6,27 @@
   # wakatime.com) is honoured. Editor-embedded wakatime clients already run 2.x.
   home.packages = [ unstablePkgs.wakatime-cli ];
 
+  # AI transcript sync (Claude, Codex, Hermes…) — off the Claude Code hook,
+  # where it took >30s per tool call. Resumes from ai_logs_last_parsed_at:
+  # ~1s after a short gap, ~80s after 2h.
+  systemd.user.services.wakatime-ai-sync = lib.mkIf pkgs.stdenv.isLinux {
+    Unit.Description = "Sync AI agent activity to WakaTime/Wakapi";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${unstablePkgs.wakatime-cli}/bin/wakatime-cli --sync-ai-activity --plugin Claude-Code-wakatime/1.0";
+      Nice = 19;
+      IOSchedulingClass = "idle";
+    };
+  };
+  systemd.user.timers.wakatime-ai-sync = lib.mkIf pkgs.stdenv.isLinux {
+    Unit.Description = "Periodic WakaTime AI activity sync";
+    Timer = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "15min";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   # ~/.wakatime.cfg — written from agenix-managed encrypted INI.
   # Plugins (Cursor, VS Code, Zed, Vim, browser ext, Claude Code hook) all
   # read this file. Editor-specific wiring lives in ./editors.nix.
