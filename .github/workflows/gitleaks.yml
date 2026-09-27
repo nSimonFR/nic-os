@@ -1,0 +1,34 @@
+# Fail a PR that adds a secret. The repo is public: a key in any commit of the
+# PR is leaked the moment it's pushed, even if a later commit removes it.
+# Scans only the PR's commits — history already holds dead keys (see .gitleaks.toml).
+name: Gitleaks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: gitleaks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: scan
+        env:
+          RANGE: ${{ github.event_name == 'pull_request' && format('{0}..{1}', github.event.pull_request.base.sha, github.event.pull_request.head.sha) || github.event_name == 'push' && format('{0}..{1}', github.event.before, github.event.after) || format('{0}~1..{0}', github.sha) }}
+          VERSION: 8.28.0
+        run: |
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${VERSION}/gitleaks_${VERSION}_linux_x64.tar.gz" \
+            | tar -xz gitleaks
+          ./gitleaks git --config .gitleaks.toml --log-opts="$RANGE" --redact --no-banner -v
