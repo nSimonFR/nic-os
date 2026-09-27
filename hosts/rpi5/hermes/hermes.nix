@@ -305,6 +305,15 @@ let
       headers.Authorization = "Bearer @WEALTHFOLIO_MCP_TOKEN@";
     };
 
+    # AirTrail's stateless Streamable HTTP MCP, via the socket-activate proxy so
+    # a call wakes it. The 180s default ping would keep that proxy's 600s idle
+    # timer from ever firing; the server holds no session, so ping daily.
+    mcp_servers.airtrail = {
+      url = "http://127.0.0.1:8310/api/mcp";
+      headers.Authorization = "Bearer @AIRTRAIL_MCP_TOKEN@";
+      keepalive_interval = 86400;
+    };
+
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
     # single-chat-ID Telegram allowlist, not workspace isolation).
@@ -373,6 +382,8 @@ let
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
     wf_tok="$(${pkgs.gnused}/bin/sed -n 's/^WEALTHFOLIO_MCP_TOKEN=//p' /run/agenix/wealthfolio-mcp-token)"
     ${pkgs.gnused}/bin/sed -i "s|@WEALTHFOLIO_MCP_TOKEN@|$wf_tok|" ${hermesHome}/config.yaml
+    at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
+    ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
 
     # .env — bot token (secret) + sender allowlist. TELEGRAM_BOT_TOKEN presence
     # auto-enables the Telegram platform. Allowlist = nSimon + Alfie.

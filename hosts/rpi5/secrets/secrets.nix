@@ -13,6 +13,7 @@ in {
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "airtrail-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "airtrail-pg-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "airtrail-mcp-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "ryot-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "ryot-import-env.age".publicKeys     = [ nsimon-age nsimon-ed25519 ];
   "ryot-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
