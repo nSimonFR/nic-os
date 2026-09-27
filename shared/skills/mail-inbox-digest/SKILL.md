@@ -76,8 +76,11 @@ gog gmail messages search 'in:inbox is:unread' --all --max 150 \
 
 Always invoke it as `python3 <path>`, never as a bare executable: the seed rsync in `hermes.nix` chmods files `Fu+rw,Fgo+r`, so the script arrives `0644` with no exec bit. On the Claude surface the same file is at `~/.claude/skills/mail-inbox-digest/scripts/jev_classify.py`.
 
-- Run it **once per account** and merge, or concatenate the envelope arrays first — set each envelope's `account` field either way, because the digest reports Personal and Work separately.
+- Run it **once per account** and merge, or concatenate the envelope arrays first. Set two fields on every envelope as you merge:
+  - `account` — `personal` or `work`, because the digest reports the two separately;
+  - `source` — `gmail:<the account address>` or `proton`, which is what the deep link is built from.
 - Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
+- Each entry carries a `url`. Gmail gets a real per-message link (`#all/<threadId>`, so it survives archiving, and `?authuser=` so it opens under the right account when several are signed in). IMAP has no per-message web URL — the UID is not the id Proton's web client addresses — so those link to the inbox. Put the link on the message name in the digest; never invent one when `url` is empty.
 - It already **deduplicates** threads and resent reminders, so take its buckets as-is rather than collapsing them again.
 - `himalaya envelope list` carries no body, so IMAP messages are ranked on sender and subject alone and sit lower than Gmail ones for the same content. Fetch bodies per message if an IMAP account ever needs to compete fairly.
 - `--max` (default 150) caps the run. Anything past the cap is never ranked, so check it against the actual unread count before trusting a busy inbox's picks; `usage.truncated` says whether it bit.
@@ -118,4 +121,4 @@ When a format is prescribed, reproduce it exactly. For the standard daily digest
 • Work: {{work_unread}} unread, {{work_important}} important
 ```
 
-Use plain text only. Keep action phrases short. Populate all three action/read bullets with an item or `none`; do not add prose outside the requested format. If no new mail merits a digest and the scheduler permits silent delivery, return exactly `[SILENT]`.
+Send with `telegram-send -m html`, and keep the markup to one thing: wrap each message name in `<a href="URL">…</a>`, in every section including cleanup, taking `URL` from that entry's `url` and omitting the anchor when it is empty. Everything else is plain text, and any `&`, `<` or `>` in a subject must be escaped or Telegram rejects the whole message. Keep action phrases short. Populate all three action/read bullets with an item or `none`; do not add prose outside the requested format. If no new mail merits a digest and the scheduler permits silent delivery, return exactly `[SILENT]`.
