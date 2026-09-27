@@ -70,6 +70,12 @@
       owner = "wealthfolio";
       mode = "0400";
     };
+    airtrail-mcp-token = {
+      file = ./secrets/airtrail-mcp-token.age;
+      # Scoped AirTrail API key for Hermes' MCP server; nsimon runs hermes.service.
+      owner = "nsimon";
+      mode = "0400";
+    };
     wealthfolio-mcp-token = {
       file = ./secrets/wealthfolio-mcp-token.age;
       # Read-only agent PAT (wfp_…) for Hermes' Wealthfolio MCP server. Owned by

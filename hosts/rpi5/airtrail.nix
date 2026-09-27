@@ -92,7 +92,7 @@ in
         name        = "AirTrail";
         # AirTrail isn't in dashboard-icons, so point at its favicon.svg via
         # jsdelivr (pinned tag).
-        icon        = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.11.1/static/favicon.svg";
+        icon        = "https://cdn.jsdelivr.net/gh/johanohly/AirTrail@v3.13.0/static/favicon.svg";
         category    = "Apps";
         description = "Personal flight tracker";
         widget = {
