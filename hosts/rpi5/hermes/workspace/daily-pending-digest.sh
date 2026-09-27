@@ -12,20 +12,20 @@ PR_ALLOW_REPO=${PR_ALLOW_REPO:-nSimonFR/nic-os}
 PR_ALLOW_TITLE=${PR_ALLOW_TITLE:-claude-code}
 DRY_RUN=0
 NO_MARK_READ=0
-RICH=0
+RICH=1
 RICH_LAYOUT=default
 
 usage() {
   cat <<'USAGE'
-Usage: daily-pending-digest.sh [--dry-run] [--no-mark-read] [--rich] [--rich-collapsible-all]
+Usage: daily-pending-digest.sh [--dry-run] [--no-mark-read] [--plain] [--rich-collapsible-all]
 
 Collects GitHub notifications (PRs excluded, except the claude-code dependency
 bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE) and BlogWatcher unread articles,
 formats a Telegram digest, sends it, then marks included GitHub notifications
 and BlogWatcher articles as read only after successful send.
 
---rich sends via Bot API sendRichMessage with native headings/collapsible sections;
-the default remains compact sendMessage HTML.
+Sends via Bot API sendRichMessage with native headings/collapsible sections, per
+the Message format section of SOUL.md. --plain falls back to sendMessage HTML.
 --rich-collapsible-all uses collapsible GitHub and BlogWatcher sections; combine
 with high MAX_GH/MAX_BW to display all items.
 USAGE
@@ -36,6 +36,7 @@ while [ $# -gt 0 ]; do
     --dry-run) DRY_RUN=1 ;;
     --no-mark-read) NO_MARK_READ=1 ;;
     --rich) RICH=1 ;;
+    --plain) RICH=0 ;;
     --rich-collapsible-all) RICH=1; RICH_LAYOUT=collapsible-all ;;
     -h|--help) usage; exit 0 ;;
     *) echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
