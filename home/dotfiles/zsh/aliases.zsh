@@ -54,7 +54,11 @@ _claude_shim() {
       command claude --remote-control "$@"
   else
     print -u2 "claude: Aperture shim unavailable — continuing WITHOUT Remote Control."
-    print -u2 "  restart it: launchctl kickstart -k gui/\$(id -u)/org.nix-community.home.claude-aperture-shim"
+    if [[ $OSTYPE == darwin* ]]; then
+      print -u2 "  restart it: launchctl kickstart -k gui/\$(id -u)/org.nix-community.home.claude-aperture-shim"
+    else
+      print -u2 "  restart it: systemctl --user restart claude-aperture-shim"
+    fi
     command claude "$@"
   fi
 }
