@@ -68,7 +68,9 @@ in
     Unit.Description = "Claude Code → Aperture inference shim (keeps Remote Control usable)";
     Service = {
       ExecStart = lib.escapeShellArgs shimCmd;
-      Restart = "on-failure";
+      # mitmdump exits 0 on SIGTERM, so an earlyoom kill looked like a clean stop
+      # and on-failure left it dead (2026-09-27, during the weekly auto-upgrade).
+      Restart = "always";
       RestartSec = 5;
     };
     Install.WantedBy = [ "default.target" ];
