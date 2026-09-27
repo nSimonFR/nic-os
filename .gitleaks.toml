@@ -1,0 +1,14 @@
+[extend]
+useDefault = true
+
+# The default ruleset missed this key embedded in an MCP URL path (af864ef).
+[[rules]]
+id = "firecrawl-api-key"
+description = "Firecrawl API key"
+regex = '''\bfc-[0-9a-f]{32}\b'''
+keywords = ["fc-"]
+
+[[allowlists]]
+description = "GPG signing key fingerprint (public)"
+regexTarget = "match"
+regexes = ['''DA790614A5E94643A86333BBFDA7E6C61C9(EA664)?''']
