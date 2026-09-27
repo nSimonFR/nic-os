@@ -46,6 +46,7 @@ import os
 import re
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 
 DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
@@ -329,9 +330,11 @@ def classify(envelopes, key, endpoint, model, post=http_post, workers=8):
         resp = post(endpoint, key, payload)
         answers = resp.get("answers") or resp.get("results") or {}
         disp = answers.get("disposition") or {}
+        thread = _first(env, "threadId", "thread_id", "thread")
         return {
             "id": _first(env, "id", "uid", "messageId", "message_id"),
-            "thread": _first(env, "threadId", "thread_id", "thread"),
+            "thread": thread,
+            "url": message_url(env, thread),
             "account": _first(env, "account", "mailbox", "role"),
             "from": _first(env, "from", "sender", "From"),
             "subject": _first(env, "subject", "Subject", "title"),
@@ -375,6 +378,25 @@ def classify(envelopes, key, endpoint, model, post=http_post, workers=8):
     # not reshuffle between runs.
     results.sort(key=lambda r: (-r["rank"], r["date"], r["subject"]))
     return results, usage
+
+
+def message_url(env, thread):
+    """Deep link for the message, from the envelope's `source` field.
+
+    `gmail:<address>` resolves the right account without depending on the
+    /u/<n>/ index. IMAP has no per-message web URL — the UID is not the id
+    Proton's web client addresses — so those get the inbox.
+    """
+    source = _first(env, "source", "provider")
+    if source.startswith("gmail:") and thread:
+        address = source.split(":", 1)[1]
+        return (
+            "https://mail.google.com/mail/u/?authuser="
+            f"{urllib.parse.quote(address)}#all/{thread}"
+        )
+    if source == "proton":
+        return "https://mail.proton.me/u/0/inbox"
+    return ""
 
 
 RESEND_RE = re.compile(r"^\s*((re|fwd?|tr)\s*:\s*)+", re.IGNORECASE)
@@ -496,6 +518,17 @@ def self_test():
         ("bulk offered for deletion", [r["id"] for r in buckets["delete_spam"]] == ["2"]),
         ("cost computed", usage["input_tokens"] == 240 and usage["usd"] > 0),
         ("eight questions", len(QUESTIONS) == 8),
+        (
+            "gmail link carries account and thread",
+            message_url({"source": "gmail:a.b@c.io"}, "1a0d")
+            == "https://mail.google.com/mail/u/?authuser=a.b%40c.io#all/1a0d",
+        ),
+        (
+            "imap link falls back to the inbox",
+            message_url({"source": "proton"}, "")
+            == "https://mail.proton.me/u/0/inbox",
+        ),
+        ("no source means no link", message_url({}, "1a0d") == ""),
         (
             "repeat reminder collapses despite new thread ids",
             len(
