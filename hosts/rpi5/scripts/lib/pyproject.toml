@@ -64,6 +64,12 @@ hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
 # untracked jobs.json, so nothing else can catch a renamed shim.
 hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
+# The morning digest. Classification is Jev's, not a model's, and every message
+# is classified once into ~/.mail-digest/mail.db — so a re-run costs nothing and
+# the store accumulates the evidence needed to score Jev at all.
+hermes-mail-digest = "nicos_scripts.mail.digest:main"
+# Same classifier, hand-runnable over envelopes on stdin (the skill's ad-hoc path).
+mail-jev-classify = "nicos_scripts.mail.jev:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

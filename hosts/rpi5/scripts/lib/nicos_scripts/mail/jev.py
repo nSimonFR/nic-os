@@ -47,7 +47,9 @@ import re
 import sys
 import urllib.error
 import urllib.parse
-import urllib.request
+
+from ..httpjson import post_json
+from ..secrets import env_str
 
 DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 DEFAULT_MODEL = "jev-1.13.0"
@@ -259,11 +261,15 @@ def build_state(env):
 
 
 def resolve_key(env=None, env_file=None):
-    env = os.environ if env is None else env
-    key = (env.get("TYPESAFE_API_KEY") or "").strip()
+    """The key, from $TYPESAFE_API_KEY or the KEY=VAL line in the agenix file.
+
+    The file fallback is load-bearing on the model-driven cron path, where
+    code_execution_tool.py strips any env name containing KEY/TOKEN/SECRET.
+    """
+    key = env_str("TYPESAFE_API_KEY", "", env).strip()
     if key:
         return key
-    path = env_file or env.get("TYPESAFE_ENV_FILE") or DEFAULT_ENV_FILE
+    path = env_file or env_str("TYPESAFE_ENV_FILE", "", env) or DEFAULT_ENV_FILE
     try:
         with open(path, encoding="utf-8") as fh:
             for line in fh:
@@ -274,24 +280,21 @@ def resolve_key(env=None, env_file=None):
     return ""
 
 
-def http_post(url, key, payload, timeout=30):
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {key}",
-        },
-        method="POST",
-    )
+def http_post(url, key, payload, timeout=30, opener=None):
+    """POST one evaluation. `opener` is the seam the tests fake."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
+        status, raw = post_json(
+            url, payload, headers={"Authorization": f"Bearer {key}"},
+            timeout=timeout, opener=opener,
+        )
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:300]
         raise RuntimeError(f"jev HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"jev unreachable: {exc.reason}") from exc
+    if status >= 400:
+        raise RuntimeError(f"jev HTTP {status}: {raw[:300]}")
+    return json.loads(raw) if raw else {}
 
 
 # ---------------------------------------------------------------- scoring
