@@ -79,6 +79,7 @@ Always invoke it as `python3 <path>`, never as a bare executable: the seed rsync
 - Run it **once per account** and merge, or concatenate the envelope arrays first — set each envelope's `account` field either way, because the digest reports Personal and Work separately.
 - Output is JSON: `top_actions`, `read_if_time`, `delete_spam`, `archive`, each ranked, plus `usage` with `input_tokens` and `usd`.
 - It already **deduplicates** threads and resent reminders, so take its buckets as-is rather than collapsing them again.
+- `himalaya envelope list` carries no body, so IMAP messages are ranked on sender and subject alone and sit lower than Gmail ones for the same content. Fetch bodies per message if an IMAP account ever needs to compete fairly.
 - `--max` (default 150) caps the run. Anything past the cap is never ranked, so check it against the actual unread count before trusting a busy inbox's picks; `usage.truncated` says whether it bit.
 - Cost is ~$0.042 per million input tokens with output free — measured at **$0.0074 for a 150-message run with bodies**, about $0.22/month daily.
 - The key comes from `$TYPESAFE_API_KEY`, falling back to the `TYPESAFE_API_KEY=` line in `/run/agenix/agent-env`. The fallback is load-bearing on the Hermes cron path: `code_execution_tool.py`'s `_scrub_child_env` strips any env name containing `KEY`/`TOKEN`/`SECRET` before the model's shell sees it, exactly as it does for `GOG_KEYRING_PASSWORD`.
