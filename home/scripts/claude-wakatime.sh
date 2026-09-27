@@ -38,8 +38,13 @@ branch=$(git -C "$cwd" rev-parse --abbrev-ref HEAD 2>/dev/null)
 # with that exact suffix. The old "claude-code-wrapper/1.0" failed the regex
 # entirely, so wakapi filed these heartbeats under a blank editor + blank OS
 # ("Unknown"). "Claude-Code-wakatime/1.0" parses as editor "Claude-Code".
+#
+# --sync-ai-disabled: 2.26 re-parses every agent's transcripts on each --write
+# (207MB of ~/.claude/projects) — >30s on rpi5, so the 5s hook timeout killed
+# every run and each tool call stalled 5s. With it: ~50ms.
 wakatime-cli \
   --write \
+  --sync-ai-disabled \
   --entity "$cwd" \
   --entity-type app \
   --plugin "Claude-Code-wakatime/1.0" \
