@@ -29,3 +29,16 @@ gh pr view "$PR" --repo trusk-official/trusk-applications --json body --jq .body
 Only refresh **after** the services you want have actually released (their tags exist) — a service whose tag isn't cut yet simply won't appear in the diff. Then admin-merge (`gh pr merge "$PR" --repo … --rebase --admin` — squash disabled here). Merging = ArgoCD reconciles those services to the new revs on the next sweep.
 
 **Sync windows gate the actual rollout — staging/preprod only.** The staging/preprod AppProjects carry ArgoCD **sync windows** (deny weekdays 20:00–07:00 + **all weekend** Sat 07:00→Mon 07:00 Europe/Paris; allow weekdays 07:00–20:00). **Prod has NO deny window** (AppProject window = `allow */* * * *`, `automated{selfHeal:true}` on `production-gitops` + child apps) → a `production.yaml` bump auto-deploys immediately, no manual sync / window wait (verified 2026-07). Outside the allow window, merging the renovate PR changes nothing until it opens — `staging-gitops` sits `OutOfSync` with `operationState.message = "Sync operation blocked by sync window"`, and the child `<svc>-staging` apps keep the old `targetRevision`. `manualSync:true` permits manual overrides, but a raw `kubectl patch application … -p '{"operation":{"sync":{…}}}'` is **not** treated as manual and stays blocked — force it via the ArgoCD **UI** (`staging-argocd.trusk.com`) or `argocd app sync`, else just wait for the window. Independently, staging is **downscaled to 0 replicas off-hours** (a `downscaling-staging` app), so off-hours a service is both un-synced and scaled to 0. `state-status-staging` is an app-of-apps child rendered by `staging-gitops` (targetRevision comes from staging.yaml as a param), so the **parent** must sync first to propagate a bump.
+
+### After the merge: the release notes, and why a ticket may be missing from them
+
+The **Trusk Release Notes** post in `#staging-events` comes from trusk-applications'
+`linear-stage.yml` workflow (`on: push: master`): one `sync` job per bumped app, then a `complete` job
+that posts. For a 44-app batch the matrix sits `queued` behind runner concurrency; it posted about 12
+min after the merge (2026-09-28). `queued` there is not stuck: read `gh run view <id> --json jobs`.
+
+The Linear staging release only lists the tickets it attributes. A ticket whose PRs were linked with
+`Part of IN-…` (a fix split across several PRs) got the per-service releases but **not** the env
+release, and stayed `To Test`. Its siblings, linked with `Closes`, moved to `To Release`. This was
+observed once, on IN-1051 and IN-1052. The likely rule: put `Closes` on the last PR of a split fix,
+or attach the ticket to the release by hand.

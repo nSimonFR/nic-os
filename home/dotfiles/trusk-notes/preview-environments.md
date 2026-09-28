@@ -367,3 +367,37 @@ availability meant reverse-engineering `fleet.carrier_companies` → `truskers` 
 from `information_schema`, one NOT NULL at a time, across two DB roles — and the result was still a
 row no BO screen would ever produce. Drop to SQL only to nudge a column on an entity that already
 exists.
+
+## Migration containers left on `:master` break at the next wake-up
+
+COA and order-mission ship `truskInitContainers[0].image: …:master` in `deployment/charts/preview.yaml`.
+A preview pinned to a branch still runs **`master`'s migrations**. The first pod restart after
+`master` gains a migration (the nightly sleep/wake is enough) runs it against the preview DB. On
+`pr-in1047`, 2026-09-25: COA hit `42501 … shipment_site` (see schema-migrations, cross-schema grants),
+and order-mission hit its TypeORM cutover replay.
+
+When you pin a service, pin its migration image to the same tag as the app. Helm's `--set` by index
+keeps the element's other fields (checked on the rendered Deployment: `name` and `command` were
+kept):
+
+```yaml
+- name: centiro-orders-api.truskInitContainers[0].image
+  value: "europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry/centiro-orders-api:<branch_tag>"
+```
+
+## `staging-preview-gitops` stuck behind someone else's preview
+
+The app-of-apps sync waits for **every** child to be healthy, so a single preview with a
+crash-looping pod (`pr-conformite`'s backoffice, then `pr-tec296`) holds every other preview's
+new pin or teardown indefinitely: `waiting for healthy state of …/pr-<other>-gitops`. Sync only your
+own child. Clear the stuck op first (see "At night" above), then:
+
+```bash
+kubectl -n argocd patch application staging-preview-gitops --type merge -p '{"operation":{"sync":{
+  "prune":true,"resources":[{"group":"argoproj.io","kind":"Application","name":"pr-<slug>-gitops","namespace":"argocd"}],
+  "syncStrategy":{"apply":{"force":false}}}}}'
+```
+
+`prune:true` is what makes a teardown go through: the child is gone from git and must be deleted.
+A new pin needs the same thing without prune, then a hard refresh of `pr-<slug>-gitops`, which renders
+from `applications/previews/helm/pr-<slug>` on `master` directly.

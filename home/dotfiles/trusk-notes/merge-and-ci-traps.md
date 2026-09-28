@@ -187,3 +187,31 @@ single argument, failed, and the `&&` chain after it reported the *next* step as
 python3 -c 'json.load(…)'` printed "absent" because `json.load` choked on the output — and a secret
 that exists in `staging` was declared missing there, then removed from a staging chart. Test
 existence by exit code: `kubectl get secret X >/dev/null 2>&1 && echo present || echo absent`.
+
+## A release tag is not an image: check the registry before merging a batch
+
+`renovate/release-to-staging` bumps every service to its newest **git tag**. If the CI run on a
+release's `Chore(Version)` commit failed, no image was pushed, and the bump turns into
+`ImagePullBackOff`. The old pod keeps serving and the app goes `Degraded`. On 2026-09-28, 3 of 44 were
+missing:
+- trusk-api 3.34.0: a flaky S3 test;
+- order-mission 1.74.0: runner availability;
+- centiro-delivery-form 1.43.0: a real Docker break, `apt-get install chromium` exit 100 because
+  bullseye's security pool is gone (fixed by moving to bookworm, centiro-delivery-form#224 → 1.43.1).
+
+The first two were days old and nobody had noticed. Check the whole diff before merging:
+
+```bash
+R=europe-west1-docker.pkg.dev/trusk-tools-tpfqef/trusk-registry
+gh pr diff <n> --repo trusk-official/trusk-applications | …   # → "svc new_version" lines
+gcloud artifacts docker tags list $R/<svc> --format='value(tag)' | grep -x <version>   # list, then grep
+```
+
+Re-run a *failed* version-commit run with `gh run rerun <id>`; it builds and tags on success. A trusk-api
+release has **two** images (`trusk-api` and `trusk-api-assignation-sync`); the second is built in a
+later job of the same run and lands about 10 min after the first. An image name can differ from the repo
+name (`trusk-mailer` has no image by that name), so check `images list` before concluding it's missing.
+
+**Read a version from the commit's first line only.** `jq '.commit.message | split(" ")[1]'` returns
+`1.43.1\n\nRef:…` when the body continues (semantic-release adds a `Ref:` line). That broke two
+image watchers here. Use `.commit.message | split("\n")[0] | split(" ")[1]`.

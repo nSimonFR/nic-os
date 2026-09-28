@@ -180,3 +180,17 @@ Et attention au volume : staging crée ~17 missions/24 h. Une sonde de non-régr
 « 0 emballement sur 48 h » n'y démontre **rien** — le chemin fautif n'y est simplement jamais
 emprunté. Voir [state-status-mirrors](state-status-mirrors.md) et
 [metastable-staging](metastable-staging.md) pour la même mise en garde sur les mesures staging.
+
+## The auto-triggered pipeline waits on every app
+
+`qa-automation-backoffice-argocd-github-*` (started by a push to trusk-applications or
+trusk-preview-env) stays at `check-argocd` until **every** app of the target is Synced/Healthy. One
+crash-looping service, or one image that never got built, holds it indefinitely. On 2026-09-24,
+`awf-qa` held 35 of them `Running`, some 3 days old, never past that step. It posts to
+`#qa_report_st`, not `#staging-events`.
+
+For a preview, submit the seeding directly (`workflow-template-data-bo`, `STAGING_NAME=pr-<slug>`,
+`ENABLE_NEW_MISSION_SYSTEM=true` for the new-mission chain). Its first call through
+`pr-<slug>-api.trusk.com` can time out at 65 s on a cold trusk-api. The calendar step fails and
+everything after it is skipped. Rerun: the second pass on `pr-in1047` was 32/32 green, tour and
+assignment included.
