@@ -188,8 +188,10 @@ def section(title, emoji, rows):
     return [f"## {emoji} {title}", ""] + body + [""]
 
 
-def render(buckets, counts, today):
+def render(buckets, counts, today, warning=""):
     lines = [f"# 📬 Daily mail — {today:%A %-d %B}", ""]
+    if warning:
+        lines += [f"> ⚠️ {warning}", ""]
     lines += section("Top actions", "⚡", buckets["top_actions"])
     lines += section("Read if time", "📖", buckets["read_if_time"])
     cleanup = buckets["delete_spam"] + buckets["archive"]
@@ -272,8 +274,23 @@ def main(argv=None, env=None):
     for row in pending:
         row["body"] = bodies.get(row["key"], "")
     usage = classify_pending(cfg, conn, pending, now)
-    log(f"fetched {len(envelopes)}, classified {usage['messages']}, "
-        f"${usage['usd']:.4f}")
+    failed = usage["failed"]
+    log(f"fetched {len(envelopes)}, {len(pending)} pending, "
+        f"classified {usage['messages']}, failed {failed}, ${usage['usd']:.4f}")
+
+    # "classified 0" is the signature of a healthy re-run AND of a dead API.
+    # Only the pending count tells them apart, so branch on it rather than on
+    # the count of successes.
+    warning = ""
+    if failed:
+        first = (usage["errors"][0] or {}).get("error", "unknown")
+        log(f"WARN: {failed} classification(s) failed — {first}")
+        if usage["messages"] == 0:
+            # Nothing got through. Exit non-zero: the cron scheduler turns that
+            # into a Telegram alert, and stdout is /dev/null'd in the shim.
+            log(f"FATAL: no message could be classified ({first})")
+            return 1
+        warning = f"{failed} message(s) non classé(s) — {first[:120]}"
 
     if not args.backfill:
         store.reconcile(conn, [r for r, _ in cfg.gmail] + [cfg.proton_role],
@@ -292,7 +309,7 @@ def main(argv=None, env=None):
     for role, n in important_counts(cfg).items():
         counts.setdefault(role, {"unread": 0, "important": 0})["important"] = n
 
-    text = render(buckets, counts, datetime.now())
+    text = render(buckets, counts, datetime.now(), warning=warning)
     if args.dry_run:
         print(text)
         return 0
