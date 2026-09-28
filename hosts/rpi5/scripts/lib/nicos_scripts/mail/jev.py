@@ -288,10 +288,16 @@ def http_post(url, key, payload, timeout=30, opener=None):
             timeout=timeout, opener=opener,
         )
     except urllib.error.HTTPError as exc:
-        detail = exc.read().decode(errors="replace")[:300]
+        detail = exc.read().decode(errors="replace")[:200]
+        if exc.code in (401, 402, 403):
+            raise RuntimeError(f"jev rejected the key (HTTP {exc.code}) — "
+                               f"expired, revoked or out of credit: {detail}") from exc
         raise RuntimeError(f"jev HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"jev unreachable: {exc.reason}") from exc
+    if status in (401, 402, 403):
+        raise RuntimeError(f"jev rejected the key (HTTP {status}) — "
+                           f"expired, revoked or out of credit: {raw[:200]}")
     if status >= 400:
         raise RuntimeError(f"jev HTTP {status}: {raw[:300]}")
     return json.loads(raw) if raw else {}

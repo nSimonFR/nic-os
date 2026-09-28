@@ -244,3 +244,59 @@ def test_blank_proton_user_skips_imap_entirely(cfg):
 
     assert digest.collect(cfg, "in:inbox", run=lambda *a, **k: Proc(),
                           connect=boom) == []
+
+
+# ── a dead or unpaid Jev must not look like a calm morning ──────────────────
+
+def dead_post(message="jev unreachable: [Errno 111] Connection refused"):
+    def post(url, key, payload, timeout=30, opener=None):
+        raise RuntimeError(message)
+    return post
+
+
+def test_total_classification_failure_exits_non_zero(cfg, conn, monkeypatch):
+    """`classified 0` is also what a healthy re-run prints. Only the exit code
+    reaches Nico, because the cron shim sends stdout to /dev/null."""
+    store.upsert_seen(conn, [gmail_env("1"), gmail_env("2")], NOW)
+    usage = digest.classify_pending(cfg, conn, store.unclassified(conn), NOW,
+                                    post=dead_post())
+    assert usage["messages"] == 0
+    assert usage["failed"] == 2
+    assert "Connection refused" in usage["errors"][0]["error"]
+
+
+def test_out_of_credit_is_named_not_guessed():
+    """402/403 is an account problem, not a blip worth retrying quietly."""
+    class Resp:
+        status = 402
+
+        def read(self):
+            return b'{"error":"insufficient credit"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    with pytest.raises(RuntimeError, match="out of credit"):
+        jev.http_post("http://x", "k", {}, opener=lambda *a, **k: Resp())
+
+
+def test_partial_failure_warns_inside_the_digest():
+    out = digest.render(
+        {"top_actions": [], "read_if_time": [], "delete_spam": [], "archive": []},
+        {"work": {"unread": 1, "important": 0}},
+        datetime.datetime(2026, 9, 28),
+        warning="3 message(s) non classé(s) — jev HTTP 429",
+    )
+    assert "⚠️" in out and "429" in out
+
+
+def test_healthy_rerun_carries_no_warning():
+    out = digest.render(
+        {"top_actions": [], "read_if_time": [], "delete_spam": [], "archive": []},
+        {"work": {"unread": 1, "important": 0}},
+        datetime.datetime(2026, 9, 28),
+    )
+    assert "⚠️" not in out
