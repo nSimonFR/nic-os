@@ -1,6 +1,6 @@
 # Schema migrations
 
-Triggers: editing anything under `schema/migrations` · `42703 column does not exist` after a deploy · `_migrations` table · schema drift between envs · `ALTER COLUMN … TYPE` · `AccessExclusiveLock` · `lock_timeout` · pg-migrate → TypeORM · `lib-pg-migrate` · `_knex_migrations` · `migration:run --fake` · init container replays `CREATE TABLE` · `OmitType` `Cannot read properties of undefined (reading 'prototype')` during `migration:run`
+Triggers: editing anything under `schema/migrations` · `42703 column does not exist` after a deploy · `_migrations` table · schema drift between envs · `ALTER COLUMN … TYPE` · `AccessExclusiveLock` · `lock_timeout` · pg-migrate → TypeORM · `lib-pg-migrate` · `_knex_migrations` · `migration:run --fake` · init container replays `CREATE TABLE` · `OmitType` `Cannot read properties of undefined (reading 'prototype')` during `migration:run` · `42501 permission denied for table shipment_site` · `CreatePlanConfig20260921100000` · cross-schema foreign key
 
 ## `ALTER COLUMN ... TYPE numeric(p,s)` réécrit la table dès que le scale change
 
@@ -38,7 +38,39 @@ roundtrip (IN-1053), order-mission (IN-1054). Runbook with the pre-flight query 
 - **A cross-schema relation needs `TYPEORM_CROSS_SCHEMAS`.** roundtrip's shared entity points at a
   fleet table, so its `typeorm` script sets `TYPEORM_CROSS_SCHEMAS=fleet`; without it the CLI fails with
   `Entity metadata for … was not found`.
+- **A preview created before the cutover keeps its knex history too.** Its init container
+  replays `Init…` and dies on `relation "journey_order" already exists` (order-mission 1.74.0 on
+  `pr-in1047`, 2026-09-25). A preview created after the cutover replays all migrations from scratch
+  and needs nothing. For an old preview, either run the `--fake` Job there, or pin the service (chart
+  `targetRevision`, `image.tag` **and** `truskInitContainers[0].image`) to the last pre-cutover tag.
+  The chart changed in the same commit (`order-mission-pgm` → `order-mission-typeorm-migration`), so
+  pinning only the image isn't enough.
 - Leftovers after a cutover: inert `_knex_migrations` / `_knex_migrations_lock` tables (dropping them
   is a separate DB write), and prod `state_status._migrations` holds
   `UnifySourceLabelEnumMigration1784500000000` twice (ids 17/18, staging has one). Both tracked in
   IN-1055.
+
+## Cross-schema foreign keys need a grant from the owning role
+
+A migration that adds a FK to another service's table needs `REFERENCES` on that table, and only the
+table's **owner** can grant it. `pg_write_all_data` (the `mcp_readwrite` role behind
+`postgres_staging_rw`) can't. Without the grant, `migration:run` fails with `42501 permission denied
+for table <t>`. The pod never starts, and CI stays green because CI builds a fresh schema as a
+superuser.
+
+Real case: COA's TransportPlan (`CreatePlanConfig20260921100000`, IN-932, released in 4.76.0) points
+at `interop_configuration.shipment_site` and `.contract`. Neither the PR nor interop-configuration
+shipped the grant. Result: COA crash-looped on staging when the 2026-09-28 batch rolled out, and on
+every preview running COA's `master` migrations.
+
+The app role is `centiro_orders` on staging (`POSTGRES_USER` in the pod) and `ikea_orders` on
+previews. Grant it as the owner, from the owner's own pod:
+
+```bash
+# in the interop-configuration pod (its POSTGRES_USER owns the tables); assert the DB first
+node -e 'const {Client}=require("pg");const c=new Client({host:process.env.POSTGRES_URL,user:process.env.POSTGRES_USER,password:process.env.POSTGRES_PASSWORD,database:process.env.POSTGRES_DB});
+(async()=>{await c.connect();await c.query("GRANT REFERENCES ON interop_configuration.shipment_site, interop_configuration.contract TO centiro_orders");await c.end()})()'
+```
+
+Check it: `select has_table_privilege('centiro_orders','interop_configuration.shipment_site','REFERENCES')`.
+Done on staging 2026-09-28. **Prod needs it before COA ≥ 4.76.0 ships.** Previews still lack it.
