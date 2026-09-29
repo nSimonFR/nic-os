@@ -8,7 +8,9 @@ merge cut no release / no image · `git stash pop` brought back unrelated change
 PR says MERGED but master didn't move · forcing a release with an empty commit ·
 `includes invalid characters for a local volume name` · every back-office PR red at once ·
 `Init:ImagePullBackOff` right after a prod bump · a CI rerun cancelled again after 40 min · `eslint .` never
-returns · master HEAD newer than the latest tag · `check-runs` total 0 on a merged SHA.
+returns · master HEAD newer than the latest tag · `check-runs` total 0 on a merged SHA ·
+PR closed after a branch rename · `Could not open the pull request` · `EADDRINUSE :::3000` in e2e ·
+`migration:run` applies nothing · `npm_package_name must be a string` · full e2e suite locally.
 
 ## Billing block: `The job was not started because recent account payments have failed`
 
@@ -266,3 +268,40 @@ latest tag stayed on the commit *before* it. Symptom: master HEAD is newer than 
 **Read a version from the commit's first line only.** `jq '.commit.message | split(" ")[1]'` returns
 `1.43.1\n\nRef:…` when the body continues (semantic-release adds a `Ref:` line). That broke two
 image watchers here. Use `.commit.message | split("\n")[0] | split(" ")[1]`.
+
+## Renaming a PR's head branch closes the PR
+
+`gh api -X POST repos/<o>/<r>/branches/<b>/rename -f new_name=…` moves PRs whose **base** is that
+branch, but a PR whose **head** it is gets **closed**, and `gh pr reopen` then fails with
+`GraphQL: Could not open the pull request`. Recreating the old branch name to reopen it undoes the
+point of the rename. Seen 2026-09-29, centiro-orders-api #605 → #606.
+
+To move a PR onto another Linear ticket: open a new PR from the renamed branch, and keep the old ID
+out of **everything Linear parses** — branch name, PR title and body (any mention links, not only
+`Closes`), and commit messages (reword them, then `--force-with-lease`). Then `attachmentDelete`
+the PR attachment left on the old ticket; the new one attaches itself within seconds.
+
+## Running a Nest service's full e2e suite locally (COA recipe)
+
+It works — 62 suites / 893 tests on centiro-orders-api, 2026-09-29 — with throwaway containers
+instead of the compose image, whose build needs `TRUSK_NPM_TOKEN`:
+
+```bash
+docker run -d --rm --name x-redis -p 16379:6379 redis:8-alpine
+docker run -d --rm --name x-rabbit -p 15673:5672 rabbitmq:4-alpine
+docker run -d --rm --name x-pg -p 15432:5432 -e POSTGRES_USER=… -e POSTGRES_DB=… -e POSTGRES_PASSWORD=… \
+  -v "$PWD/tests/docker/init-db.sql:/docker-entrypoint-initdb.d/1-init.sql" postgres:18-alpine
+(set -a; . tests/docker/envfile.env; POSTGRES_URL=localhost; POSTGRES_PORT=15432; \
+ RABBIT_URL=amqp://guest:guest@localhost:15673; REDIS_URL=redis://localhost:16379; set +a; \
+ npm run build && npm run migration:run && npm run test -- --coverage=false)
+```
+
+- Go through **`npm run`**, never `./node_modules/.bin/jest`: config validation needs the
+  `npm_package_name` / `npm_package_version` vars npm injects, else every suite fails to load on
+  `npm_package_name must be a string`.
+- **Build first in a fresh worktree**: `migration:run` reads `dist/`; without it, it exits 0 having
+  applied nothing, and every suite then fails on missing tables.
+- **One run per machine, or distinct ports**: suites bind `SERVER_PORT=3000`; parallel runs (e.g.
+  several agents) die on `EADDRINUSE :::3000` in `default.test.ts`. Override `SERVER_PORT`, and give
+  each run its own container names and host ports.
+- `rtk` can't find `npx jest` / `npx prettier` / `npx eslint`; call `./node_modules/.bin/<tool>`.
