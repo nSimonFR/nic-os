@@ -6,7 +6,9 @@ these wrappers are how to read, set or inject them from the Mac.
 Triggers: `infisical: command not found` · CLI prints an **empty table** with no error ·
 `302` to `staging-auth` / `prod-auth.trusk.com` · `inf: … expired` · `403 Forbidden` from
 `/api/v4/secrets` · read or set a staging/prod secret from the Mac · `infisical run` on a local
-service · « which projectId / env ? » · agent shell says `INFISICAL_BIN: not set`.
+service · « which projectId / env ? » · agent shell says `INFISICAL_BIN: not set` ·
+`Init:CrashLoopBackOff` right after a `secrets set` · `failed the validation` with a
+`Value: ***rivate***p/…` · does a service folder override `infra-env`? · will this write restart pods?
 
 ## Use the wrappers — bare `infisical` is gone on purpose
 
@@ -25,12 +27,32 @@ the root is empty, so always pass `--path`. `secrets folders get` lists them.
 
 ```zsh
 inf-prod secrets --projectId $P --env prod --path /infra-env-infisical
-inf-stg  secrets set KEY=@/tmp/value --projectId $S --env staging --path /backoffice-env-infisical
+inf-stg  secrets set KEY=value --projectId $S --env staging --path /backoffice-env-infisical
+inf-stg  secrets get KEY --plain --projectId $S --env staging --path /backoffice-env-infisical
 inf-stg  run --projectId $S --env staging --path /backoffice-env-infisical -- npm run dev
 ```
 
-**Set values from a file** (`KEY=@file`, `--file vars.env`), not inline: argv lands in atuin
-history, which syncs to rpi5, and atuin only filters known token shapes.
+**`KEY=@file` is not read as a file.** The CLI stores the literal string `@/path` (or the path)
+and prints `SECRET CREATED` all the same. Seen 2026-09-29: `LOGGER_HTTP_OPTIONS=@/tmp/…/payload.txt`
+on three prod folders, Reloader rolled them, every new pod failed config validation
+(`Value: ***rivate***p/clau***…`). The old pods kept serving, so nothing went down.
+
+- Non-secret value: set it inline.
+- Real secret: keep it out of argv, because argv lands in atuin history, which syncs to rpi5, and
+  atuin only filters known token shapes. `--file vars.env` is untested: try it on staging first.
+- **Always read back** with `secrets get KEY --plain` before the pods roll (≈60 s, next section).
+
+## Every write restarts pods, and the service folder wins
+
+Checked on prod 2026-09-29:
+
+- Pods load `envFrom: [infra-env-infisical, <svc>-env-infisical]`. The later source wins, so
+  setting a key in a service's folder overrides `infra-env` for that service only.
+- Every deployment carries `reloader.stakater.com/auto: "true"`. The operator syncs the k8s
+  Secret about 60 s after the write, then Reloader rolls the deployment. A write to
+  `infra-env-infisical` rolls **every service at once**.
+- A value that one service's config validator rejects therefore crashes that service's next pods
+  within a minute. Before touching `infra-env`, check that every consumer accepts the new value.
 
 ## Why the public URLs don't work
 
