@@ -1,6 +1,6 @@
 # Prod vs staging — prérequis d'infra qu'un bump n'emmène pas
 
-Triggers: bump prod isolé d'un service Nest 11 · `CreateContainerConfigError` / `FailedMount` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` sans erreur applicative · sidecar flagd qui ne démarre pas · source `flagd/shared-flags` introuvable · « pourquoi ça marche en staging et pas en prod » · `flagd-<svc>-<env>` bloqué `OutOfSync` avec `health=Healthy` · `spec.flagSpec.flags.<flag>.variants: Required value` · une release qui **retire** un flag · bascule d'un service vers Infisical
+Triggers: bump prod isolé d'un service Nest 11 · `CreateContainerConfigError` / `FailedMount` sur `/etc/trusk-auth` · rollout prod bloqué en `ContainerCreating` sans erreur applicative · sidecar flagd qui ne démarre pas · source `flagd/shared-flags` introuvable · « pourquoi ça marche en staging et pas en prod » · `flagd-<svc>-<env>` bloqué `OutOfSync` avec `health=Healthy` · `spec.flagSpec.flags.<flag>.variants: Required value` · une release qui **retire** un flag · bascule d'un service vers Infisical · `secret "production-env" not found` · un Secret/SealedSecret « Pruned » par la sync d'une autre app · CronJob en `Error` sur `Failed to connect before the deadline` · app `Degraded` à cause d'un CronJob alors que le fix est déployé
 
 ## La règle
 
@@ -100,6 +100,66 @@ aucun, et aurait planté dans les trois. La source nommée doit exister dans le 
 Un service à plusieurs alias (communications : api, cron, engine) demande le sidecar **sous chaque
 alias**.
 
+**Les CronJobs n'ont pas le sidecar** : l'annotation est posée sur le pod template du Deployment, pas
+sur celui du CronJob. Un job qui démarre `AppModule` meurt pareil, en `Error` (7 retries), sans que le
+service lui-même ne bronche. Fix côté chart : `FF_DISABLED=true` dans l'env de chaque cronjob (fleet
+1.84.1, `ea0d33f Fix(Cronjob): disable flagd and mount the auth secret on every fleet cronjob`).
+`dotfile-sync` n'avait pas réussi depuis le 2026-07-07, `scores-capa` depuis le 2026-08-25.
+
+Et **ArgoCD garde l'app `Degraded` tant que le dernier Job planifié a échoué**, même une fois le fix
+déployé : le Job raté tournait l'ancienne image. Ça se répare seul au prochain créneau du cron (fleet :
+`dotfile-sync` 11:00, `scores-capa` 12:00 → `Healthy` à 12:00:00 le 2026-09-29), ou tout de suite en
+supprimant le Job raté (`kubectl delete job <cj>-<n>`). Vérifier l'image du Job raté avant de conclure
+que le fix ne marche pas :
+
+```bash
+kubectl --context $CTX -n production get job <cj>-<n> -o jsonpath='{.spec.template.spec.containers[0].image}'
+kubectl --context $CTX -n production get cronjob <cj> -o jsonpath='{.status.lastSuccessfulTime}'
+```
+
+## Prérequis 6 — une bascule Infisical peut supprimer un Secret dont d'autres dépendent
+
+Les releases « Infisical cutover » retirent les SealedSecrets / ConfigMaps du chart. Si l'un d'eux était
+**partagé**, ArgoCD le prune avec l'app qui le possédait, et tous les autres consommateurs cassent — pas
+tout de suite : au prochain démarrage de pod.
+
+Le 2026-09-29, trusk-api 3.34.0 a retiré le SealedSecret `production-env` (vide, `encryptedData: {}`) ;
+`trusk-api-production` l'a prune à 07:33:22Z, le Secret est parti avec. Trois Deployments le lisaient
+encore en `envFrom: secretRef` **non optionnel** :
+
+| consommateur | effet |
+| --- | --- |
+| trusk-webhooks-dispatcher 1.25.1 | un pod démarré 70 s trop tard → `CreateContainerConfigError: secret "production-env" not found`, app `Degraded` |
+| service-ratings-typeform 1.18.1 | pods vivants, cassent au prochain restart / drain |
+| service-calendar | `replicas: 0`, rien à casser |
+
+Les pods déjà lancés survivent (l'env est lu au démarrage), donc la casse est latente et arrive par un
+drain de nœud. Qui possédait la ressource prunée :
+
+```bash
+kubectl --context $CTX -n argocd get applications -o json | python3 -c '
+import json,sys
+for a in json.load(sys.stdin)["items"]:
+  for r in (a.get("status",{}).get("operationState",{}).get("syncResult",{}) or {}).get("resources",[]) or []:
+    if r.get("name")=="<secret>": print(a["metadata"]["name"], r["kind"], r["status"], r.get("message"))'
+```
+
+Avant de merger une bascule, lister les consommateurs du Secret qu'elle retire :
+
+```bash
+kubectl --context $CTX -n production get deploy,cronjob -o json | python3 -c '
+import json,sys
+for it in json.load(sys.stdin)["items"]:
+  if "\"<secret>\"" in json.dumps(it["spec"]): print(it["kind"], it["metadata"]["name"])'
+```
+
+Correctifs, du plus rapide au plus propre : recréer le Secret à l'identique hors ArgoCD (s'il était vide,
+`kubectl create secret generic <nom>` est sans perte, et sans label de tracking aucune app ne le reprune) ;
+sinon releaser la bascule des consommateurs. Pour le dispatcher, la bascule (`cf86cde`) était mergée
+depuis le 18/09 mais **jamais taguée** : le merge n'avait déclenché aucun `push`, donc ni `cd.yaml` ni
+semantic-release (`check-runs` = 0 sur le SHA). `workflow_dispatch` ajouté à son `cd.yaml` (#187), 1.26.0
+coupée, trusk-applications#2088 → pods sur `infra-env-infisical` + `<svc>-env-infisical`.
+
 ## Checklist avant un bump prod
 
 ```bash
@@ -127,7 +187,10 @@ git -C ~/MyDocuments/TRUSK/$SVC show <vercible>:deployment/charts/Chart.yaml | g
 # 5. Chaque chart demande-t-il le sidecar flagd ? — cf. prérequis 5
 for e in staging production; do git -C ~/MyDocuments/TRUSK/$SVC show <vercible>:deployment/charts/$e.yaml | grep -c 'openfeature.dev/enabled'; done
 
-# 6. Qu'est-ce qui monte avec ? (les releases intermédiaires, pas juste ton fix)
+# 6. La cible retire-t-elle un Secret/ConfigMap partagé ? (bascule Infisical) — cf. prérequis 6
+git -C ~/MyDocuments/TRUSK/$SVC diff --name-status <verprod>..<vercible> -- deployment/configurations/production/ | grep '^D'
+
+# 7. Qu'est-ce qui monte avec ? (les releases intermédiaires, pas juste ton fix)
 git -C ~/MyDocuments/TRUSK/$SVC log --oneline <verprod>..<vercible> | grep -v 'Chore(Version)'
 ```
 

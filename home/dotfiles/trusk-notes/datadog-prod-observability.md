@@ -1,6 +1,6 @@
 # Datadog prod — ce que chaque service loggue vraiment, et le bruit à exclure
 
-Triggers: « pas d'erreurs sur Datadog » comme preuve de santé · vérifier un déploiement prod dans les logs · pic d'erreurs juste après un rollout · `auth.enforcement.bypassed` en volume · monitor `[LOGS] — … burst` qui alerte · comparer un taux d'erreurs à une baseline · `service:backoffice` vs `service:trusk-backoffice` · `@version` absent d'un service
+Triggers: « pas d'erreurs sur Datadog » comme preuve de santé · vérifier un déploiement prod dans les logs · pic d'erreurs juste après un rollout · `auth.enforcement.bypassed` en volume · monitor `[LOGS] — … burst` qui alerte · comparer un taux d'erreurs à une baseline · `service:backoffice` vs `service:trusk-backoffice` · `@version` absent d'un service · surveillance MEP toutes les 5 min · un service absent d'un `groupBy ["service"]` · `0d@HH:MM` UTC ou local ? · ce motif est-il nouveau ?
 
 ## La règle
 
@@ -92,6 +92,23 @@ from: "3d@09:45:00"   to: "3d@10:00:00"
 
 Mesuré ainsi : order-mission 5,5 erreurs/min vendredi 09:45–10:00 contre 8,5 pendant la bascule — écart entièrement expliqué par la redélivrance AMQP au redémarrage des pods, retombé ensuite.
 
+⚠ Le 2026-09-29, `0d@07:00` a au contraire été lu en **UTC**. Les deux comportements ont été observés : ne se fier à aucun, passer des timestamps ISO explicites (`"2026-09-29T07:40:00Z"`) et relire `meta.from`.
+
+**Une salve se compare à la pointe de la matinée, pas au même créneau de 5 min.** service-onfleet : 255 warns à 07:40Z contre 1 « la veille à 07:40 » — mais la veille la salve du dispatch matinal était tombée à 06:55–07:10 (256), et le mardi précédent à 06:10 (366). Pour un service à salves, comparer le **pic** de la même matinée sur 2-3 jours, et le total d'une fenêtre d'1 h.
+
+## `groupBy ["service"]` plafonne à 10 buckets
+
+Un `aggregate` groupé par service ne renvoie que **10 services**, sans rien signaler : les suivants disparaissent du résultat, et un service qui déraille peut ne jamais apparaître. Balayer en plusieurs requêtes de ≤ 10 services, plus une requête complément qui exclut toutes les listes :
+
+```
+… service:(api-pusher OR billing OR … )          # A, 10 services
+… service:(fleet OR front-tracking-page OR … )    # B
+… service:(service-onfleet OR trusk-api OR … )    # C
+… -service:(<A> OR <B> OR <C>)                    # D : tout le reste — c'est là qu'apparaissent les surprises
+```
+
+La requête D a remonté les trusk-mail-*, trusk-cresus-*, trusk-auto-status, trusk-webhook-dispatcher : aucun n'était dans la liste de départ. En `search`, passer `compact: true` : sans, un échantillon « diverse » de centiro-orders-api a fait 1 Mo (listes d'ids dans le message).
+
 ## Motifs de bruit pré-existants, par service (2026-09-07)
 
 À connaître pour ne pas les prendre pour des régressions :
@@ -100,6 +117,27 @@ Mesuré ainsi : order-mission 5,5 erreurs/min vendredi 09:45–10:00 contre 8,5 
 - **centiro-orders-api** — `GET /order/<id> 404`, en warn, plusieurs milliers/h.
 - **roundtrip** — `GET /roundtrips/order/<id> 404` + `Roundtrip not found for order_id`.
 - **front-tracking-page** — `Failed to get trusker infos … order_error_notexist`, `Failed to fetch appointments: appointment_not_handled`.
+
+Complété pendant la MEP du 2026-09-29 (44 services), chaque motif vérifié par `groupBy ["@version"]` sur 3-14 j — l'ancienne version l'émettait déjà :
+
+| service | motif | ordre de grandeur (ancienne version) |
+| --- | --- | --- |
+| centiro-orders-api | `error: bind message has <N> parameter formats but 0 parameters` (IN géant), `GET /delivery-zone … 500` | ~590 erreurs/sem |
+| trusk-templates-pickup | `Error checking is_communication_migrated … 404`, err + warn | ~100 k/j, ~1 100 / 5 min |
+| trusk-calendar | `Validation schema error for headers/updated_order/trusk_api.updated_order`, par salves de 60+ | ~9 000/sem |
+| service-onfleet | warn `resource_busy` (lib-lock, `(1/100)` puis `finally executed after 1 retries`) + `roundtrip.ordering_context_no_mission_type` : salve du dispatch matinal, jusqu'à ~350 / 5 min | ~23 k warns / 3 j |
+| service-onfleet | erreur `trusker_location_hotspot_queue` par salves de ~25 | ~440/j |
+| trusk-webhook-dispatcher | `[Logger] Warning! Only 2 first parameters are processed` — suit le trafic webhook, 200-1 400 / 5 min | ~4 000/h en matinée |
+| trusk-auto-status | `Failed creating the status, discarding the job!` (404 order-mission) | ~1 200/j |
+| interop-configuration | `GET /contract-pricing-zones/search-by-client?… 404` | ~15 / 5 min |
+| trusk-estimator-api | `POST /estimates/order/<id> 404` | ~30-90 / 5 min |
+| trusk-cresus-upsert-transaction-missions-sync | `No service provider found for siret`, par salves | ~2 500/sem |
+| api-pusher | `Woop - Update status of delivery error : <id>` = Woop 403 `Delivery #<id> is outdated`, une livraison à la fois | ~64 / 14 j |
+| trusk-api-warehouse | `[Quote] Error creating quote … 400` = géocodage Google refusé sur une adresse dont l'accent a été supprimé (`SURS` pour `SœURS`) | ~50 / 14 j |
+| trusk-mail-*, trusk-mailer | `(node:1) NOTE: The AWS SDK for JavaScript (v2)…` (5 lignes `error`) et `SIGTERM` à chaque redémarrage de pod | 10 / pod |
+| billing 1.4.0 | `No client/fleet billing account for mission <id>` ×4 par mission — attendu tant que `billing.billing_account` est vide en prod (lignes rattachées rétroactivement à la création du compte) | ∝ missions |
+
+Deux faux signaux de la même matinée : **trusk-webhook-dispatcher** et **order-mission** à ~3× la semaine précédente, mais à volume égal entre pods ancienne/nouvelle version (2 366 vs 2 370) → c'est le trafic, pas la version. Et `trusk-backoffice` (legacy) remonte des `npm ERR!` : à ignorer comme tout le legacy.
 
 ## Next.js — le faux positif de déploiement à connaître
 

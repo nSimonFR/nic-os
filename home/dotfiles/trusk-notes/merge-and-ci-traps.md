@@ -6,7 +6,9 @@ Triggers: `gh pr merge` refused · "can't be rebased" · CI red but local green 
 push lands but no CI run appears · `no checks reported on the '<branch>' branch` · `CONFLICTING DIRTY` ·
 merge cut no release / no image · `git stash pop` brought back unrelated changes ·
 PR says MERGED but master didn't move · forcing a release with an empty commit ·
-`includes invalid characters for a local volume name` · every back-office PR red at once.
+`includes invalid characters for a local volume name` · every back-office PR red at once ·
+`Init:ImagePullBackOff` right after a prod bump · a CI rerun cancelled again after 40 min · `eslint .` never
+returns · master HEAD newer than the latest tag · `check-runs` total 0 on a merged SHA.
 
 ## Billing block: `The job was not started because recent account payments have failed`
 
@@ -240,6 +242,26 @@ Re-run a *failed* version-commit run with `gh run rerun <id>`; it builds and tag
 release has **two** images (`trusk-api` and `trusk-api-assignation-sync`); the second is built in a
 later job of the same run and lands about 10 min after the first. An image name can differ from the repo
 name (`trusk-mailer` has no image by that name), so check `images list` before concluding it's missing.
+
+**The tag check is not the image check.** trusk-applications#2088 (2026-09-29) "verified all three target
+tags exist" — true, and service-ratings-typeform 1.19.0 still had no image: its version-commit CI had been
+`cancelled` on 2026-09-18. The bump went straight to `Init:ImagePullBackOff` and the app to `Degraded`.
+
+**A rerun doesn't help when the repo's CI can never finish.** The typeform rerun sat in `npm run lint`
+(`eslint .`) for 40 min and was cancelled again: the repo carries `swagger-ui/` (14 minified files,
+19 MB) and no `.eslintignore`, so ESLint 8 lints all of it. Last green CI there was 2026-06-01; every run
+since is `cancelled` or `failure`. Look at the repo's CI history before you rerun:
+
+```bash
+gh run list --repo trusk-official/<svc> --workflow ci.yaml --status success --limit 1   # last green, ever
+gh api repos/trusk-official/<svc>/actions/runs/<id>/jobs --jq '.jobs[]|.steps[]|select(.conclusion=="cancelled")|.name'
+```
+
+**A merge can fire no workflow at all.** trusk-webhooks-dispatcher's cutover `cf86cde` sat on master from
+09-18 with 0 check-runs and 0 runs for its SHA: no `push` event, so no `cd.yaml`, no semantic-release, and the
+latest tag stayed on the commit *before* it. Symptom: master HEAD is newer than the latest tag and
+`gh api repos/<r>/commits/<sha>/check-runs --jq .total_count` is 0. Fixed by adding `workflow_dispatch` to
+`cd.yaml` (#187) — its merge fired the event.
 
 **Read a version from the commit's first line only.** `jq '.commit.message | split(" ")[1]'` returns
 `1.43.1\n\nRef:…` when the body continues (semantic-release adds a `Ref:` line). That broke two
