@@ -323,6 +323,39 @@ before the operator is up comes back **1/1 without its flagd sidecar** — no er
 answers OFREP. Seen 2026-09-24 on communication-engine. After a wake, `awk '$2=="1/1"'` the services
 that should be 2/2 and restart them.
 
+### "Wake-up complete, 56/56 synced" does not mean awake
+
+Seen 2026-09-29 at 20:27 CEST on pr-tec296, woken right after kube-green put it to sleep: the
+workflow printed `Synced 56/56 apps (0 failures)`, `check-argocd` then failed, and **36
+Deployments were still `0/0`**. The workflow restores the datastores itself (wave A) but leaves
+the Deployments to ArgoCD, and ArgoCD's operations were stuck on `Sync operation blocked by sync
+window` (the `initiatedBy.automated` case above). So "synced" only means "operation requested".
+Measure it: `kubectl -n pr-<slug> get deploy --no-headers | awk '{print $2}' | sort | uniq -c`.
+
+Scaling each `0/0` Deployment back to the `replicas` of its own `last-applied-configuration`
+restores exactly the chart's intent (all 36 were `1`). That is safer than the kube-green secret,
+per the previous paragraph.
+
+**At night, a new pin also stalls one level up.** `rabbitmq-operator` (and its
+messaging-topology operator) in `rabbitmq-system` is scaled to `0/0` outside working hours on
+staging. The `RabbitmqCluster` status then never refreshes: it keeps `AllReplicasReady=False` /
+`ClusterAvailable=False` while the pod has been `1/1` for half an hour. So `rabbitmq-pr-<slug>`
+stays `Progressing`, and `pr-<slug>-gitops` stays `Running`, `waiting for healthy state of
+argoproj.io/Application/rabbitmq-pr-<slug>`, until morning. The per-service apps are never
+re-rendered and a pin merged tonight does not reach them. Leave the shared operator alone; apply
+the pin to the one child app instead. These are the values the gitops app renders anyway at the
+next pass:
+
+```bash
+a=backoffice-pr-<slug>   # check the indexes first: sources[0] carries the helm parameters
+kubectl -n argocd patch application $a --type json -p '[
+ {"op":"replace","path":"/spec/sources/0/targetRevision","value":"<branch>"},
+ {"op":"replace","path":"/spec/sources/1/targetRevision","value":"<branch>"},
+ {"op":"test","path":"/spec/sources/0/helm/parameters/0/name","value":"backoffice.image.tag"},
+ {"op":"replace","path":"/spec/sources/0/helm/parameters/0/value","value":"<sanitized_tag>"}]'
+# then the manual sync patch above
+```
+
 ### A pod that restarts is a pod that re-resolves `envFrom`
 
 The sleep/wake cycle is where latent chart mistakes surface. `envFrom` resolves at **container
