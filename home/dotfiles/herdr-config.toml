@@ -133,6 +133,16 @@ type = "pane"
 command = "herdr-zoe"
 description = "zoetrope: session graph"
 
+# Aggregate saved machines' agents into this server. This fork refuses
+# `ssh://` under federation.peers — an SSH peer must be a saved_machines entry
+# keyed by the `herdr machine list` profile id, pinned to the remote's
+# ~/.config/herdr/machine.json. A reinstall there changes it and fails closed.
+[federation]
+coordinator = true
+
+[federation.saved_machines.0e3e81cfd7afc805bc1c88214a944bad] # rpi5
+expected_machine_id = "machine_3975716c5420eb40ed48e2021c6e96b9"
+
 [theme]
 name = "tokyo-night"
 auto_switch = false
