@@ -4,7 +4,9 @@ Triggers: `gh pr merge` refused · "can't be rebased" · CI red but local green 
 `mockResolvedValue(null)` · peer-dep resolution failure · `-pr.` version pins ·
 `The job was not started because recent account payments have failed` · a job failed with 0 steps ·
 push lands but no CI run appears · `no checks reported on the '<branch>' branch` · `CONFLICTING DIRTY` ·
-merge cut no release / no image · `git stash pop` brought back unrelated changes.
+merge cut no release / no image · `git stash pop` brought back unrelated changes ·
+PR says MERGED but master didn't move · forcing a release with an empty commit ·
+`includes invalid characters for a local volume name` · every back-office PR red at once.
 
 ## Billing block: `The job was not started because recent account payments have failed`
 
@@ -53,6 +55,33 @@ git push --force-with-lease
 ```
 
 Check `git rev-parse HEAD^{tree}` before and after — you must merge the tree CI validated.
+
+## An empty commit never lands through a rebase merge
+
+Rebase merge drops empty commits. `gh pr merge --rebase --admin` succeeds, the PR shows
+MERGED, but its `mergeCommit` is the old master head: nothing landed, so no release and no
+client. Seen 2026-09-29 on five `--allow-empty` "republish the client" PRs (TEC-315…319).
+
+Check `gh pr view <n> --json mergeCommit` against the master head before waiting on a release.
+To force a release, push the reviewed commit straight to master (admin bypass; the
+`Changes must be made through a pull request` warning still lets it land). Where a ruleset
+requires `CI Gate` on the commit itself (interop-configuration: `GH013 … "CI Gate" is expected`),
+open the PR only to get CI onto that SHA, then `git push origin <sha>:master` once it's green.
+
+## Shared `check` action: a `$VAR` in the runner input
+
+The back-office passes `runner: docker run -v $GITHUB_WORKSPACE/coverage:/app/coverage …` and
+must: `${{ github.workspace }}` is empty in a reusable workflow's caller, so the mount would land
+on `/coverage`. It is the only caller of 92 repos with a shell variable there. Anything in
+`github-actions/.github/actions/check/action.yaml` that wraps `${{ inputs.runner }}` in single
+quotes leaves it literal, and every back-office PR fails before lint:
+
+```
+docker: Error response from daemon: create $GITHUB_WORKSPACE/coverage: "$GITHUB_WORKSPACE/coverage" includes invalid characters for a local volume name
+```
+
+Broke 2026-09-29 with DO-1713 (`RUNNER='${{ inputs.runner }}'`), fixed by double quotes in
+github-actions#106 (TEC-320). None of the 54 runner inputs contains a `"`, so double quotes are safe.
 
 ## `strictNullChecks` is off
 
