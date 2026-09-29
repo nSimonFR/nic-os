@@ -3,7 +3,7 @@
 
 Prints one line, e.g.
 
-    claude ██▏░░░ 5:36%/W:24%/F:3% │ codex ██████ 5:0%/W:100% 🔴
+    claude 5:36%/W:24%/F:3% ↻ 13:20 │ codex 🔴 5:0%/W:100% ↻ Mon 09:00
 
 and exits non-zero when nothing at all could be read, so herdr clears the entry
 rather than leaving a number on screen that has stopped meaning anything.
@@ -282,8 +282,7 @@ def segment(name: str, windows: list, stale: bool) -> str:
     windows = norm(windows)
     watched = watched_window(windows)
     pct = watched[1] if watched else 0.0
-    # Below the warn threshold the reset is noise in a one-line bar.
-    when = reset_at(watched[2]) if watched and pct >= WARN_PCT else ""
+    when = reset_at(watched[2]) if watched else ""
     icon = f"{mark(pct).strip()} " if mark(pct) else ""
     return f"{name} {icon}{render(windows)}{'*' if stale else ''}{when}"
 
