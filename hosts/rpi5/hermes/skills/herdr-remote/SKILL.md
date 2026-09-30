@@ -38,7 +38,9 @@ herdr agent prompt <name> "<the task>" --wait --timeout 600000
 herdr agent read <name> --source recent-unwrapped --lines 120
 ```
 
-- `--cwd`: the repo the task is about; default `$HOME`.
+- `--cwd`: the repo the task is about; default `$HOME/nic-os`. Claude stops at a
+  "trust this folder?" dialog (`agent_not_ready`) in any dir not yet trusted — `$HOME`
+  included. Read it with `herdr agent read <name> --source visible` and ask the user.
 - `<name>`: unique, `[a-z][a-z0-9_-]{0,31}`; check `herdr agent list` first.
 - `--kind`: what the user asked for; `claude` otherwise. `herdr agent` lists kinds.
 - A second agent for the same task: `herdr pane split "$pane" --direction right --no-focus`,
