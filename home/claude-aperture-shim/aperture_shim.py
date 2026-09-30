@@ -13,7 +13,8 @@ Claude Code alone — no system trust store change), and inference requests are
 re-targeted at Aperture. The guard sees api.anthropic.com; Aperture sees and
 captures the request.
 
-Also keeps one Aperture session across auto-compactions (session_link.py).
+Also keeps one Aperture session across auto-compactions (session_link.py), and
+streams SSE responses through instead of buffering them.
 
 Driven by home/claude-aperture-shim.nix; use the `claude-gated` wrapper.
 """
@@ -64,6 +65,14 @@ def _link_session(flow: http.HTTPFlow) -> None:
     # Re-serialising is safe for prompt caching, which keys on content, not bytes.
     flow.request.content = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
     flow.request.headers["X-Claude-Code-Session-Id"] = root
+
+
+def responseheaders(flow: http.HTTPFlow) -> None:
+    # mitmproxy buffers whole bodies by default, and an SSE body never ends:
+    # Remote Control's inbound GET .../worker/events/stream then delivers nothing,
+    # so sends from claude.ai / the app hang.
+    if flow.response.headers.get("content-type", "").startswith("text/event-stream"):
+        flow.response.stream = True
 
 
 def request(flow: http.HTTPFlow) -> None:
