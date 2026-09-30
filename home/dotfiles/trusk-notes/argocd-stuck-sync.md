@@ -35,6 +35,12 @@ kubectl --context $CTX -n argocd patch application production-gitops --type merg
 ```
 
 The child's `targetRevision` flipped within seconds. The rollout followed (RollingUpdate, no
-downtime), and the parent's operation then closed properly (`finishedAt` set). Don't leave
-`initiatedBy` in the patch: `preview-environments.md` explains why an `automated: true` operation
-can end up blocked by a sync window.
+downtime), and the parent's operation then closed properly (`finishedAt` set).
+
+That was **prod, in daytime**: production AppProjects carry no sync window, and the old operation
+was `Succeeded`, not `Running`. On **staging/preprod** (deny weeknights 20:00–07:00 and weekends,
+`client-libs-and-renovate.md`) the raw patch is not enough when the old operation is still
+`Running`. The patch merges onto it and inherits `initiatedBy.automated: true`, so the window blocks
+it (`preview-environments.md`, "stuck `Running`"). There, either use the UI / `argocd app sync
+<parent> --resource argoproj.io:Application:<child>`, or first remove `/operation` and
+`/status/operationState`, then patch as above. Never add `initiatedBy` yourself.
