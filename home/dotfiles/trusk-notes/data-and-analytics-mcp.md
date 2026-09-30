@@ -1,6 +1,6 @@
 # Data & analytics MCPs — Steampipe and Metabase
 
-Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase · `execute_query` · `create_question` · pMBQL · `The token request is invalid` · clear authentication · `This tool is not available` · `conflict with recovery` · `prod-warehouse` · dbhub · cross-schema join
+Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Metabase · `execute_query` · `create_question` · pMBQL · `The token request is invalid` · clear authentication · `This tool is not available` · `conflict with recovery` · `prod-warehouse` · dbhub · cross-schema join · `Native queries are not supported here` · `Generated program is invalid` · a new column missing from `get_table`
 
 ## Steampipe — GCP-as-SQL (`trusk-steampipe` MCP)
 
@@ -11,8 +11,9 @@ Triggers: GCP inventory as SQL · warehouse / analytics query · Steampipe · Me
 Analytics SQL on the data-warehouse goes through the **`metabase` MCP** (`mcp__metabase__*`, OAuth — first call → `authenticate` returns a browser URL to approve). Replaced the retired cookie `metabase` skill; wired in nic-os `home/mcp.nix` + allowlisted in `claude-settings.json`.
 
 - Endpoint is **`/api/mcp`** (docs' `/api/metabase-mcp` 404s on v0.61.2.10). Warehouse = **database id 6**.
-- Flow: `search` → `get_table {with-fields:true}` → `construct_query`/`query` → `execute_query` → `create_question`. `execute_query` caps at **200 rows** (saved cards show all). `create_question` `collection_id:null` → root "Our analytics" (no collection-lookup tool; move in UI). Link: `metabase.trusk.com/question/<id>`.
-- **Joins are unbuildable via `construct_query`** (`String cannot be cast to Associative`). Workaround — save any SQL (incl. joins) as a question by hand-crafting the base64 `query` as a native pMBQL stage, then pass to `execute_query`/`create_question`:
+- Flow: `search` → `get_table {with-fields:true}` → `construct_query`/`query` → `execute_query` → `create_question`. `execute_query` caps at **200 rows** (saved cards show all). `create_question` `collection_id:null` → **your Personal Collection** (verified 2026-09-30, card 10503; not root "Our analytics" any more); no collection-lookup tool, move it in the UI or others won't see it. Link: `metabase.trusk.com/question/<id>`.
+- **`construct_query` only sees synced fields.** A column added by a migration is absent from `get_table` until Metabase's next schema sync (≈ nightly), so `["field", N]` has no id to point at (`Generated program is invalid`). That is **metadata only**: native SQL on db 6 reads it right away — don't file it as "not synced" to the data team.
+- **Joins are unbuildable via `construct_query`** (`String cannot be cast to Associative`). Workaround for any SQL (joins, CTEs, unsynced columns): hand-craft the base64 `query` as a native pMBQL stage and pass it to **`create_question`** — which saves it. **`execute_query` now refuses it** (`Native queries are not supported here; use execute_sql instead`, and no `execute_sql` tool is exposed, 2026-09-30), so test the SQL on `prod-warehouse` via dbhub first:
   ```bash
   jq -nc --arg q "$SQL" '{"lib/type":"mbql/query","database":6,"stages":[{"lib/type":"mbql.stage/native","native":$q}]}' | base64 | tr -d '\n'
   ```
