@@ -25,12 +25,21 @@ the root is empty, so always pass `--path`. `secrets folders get` lists them.
 
 ```zsh
 inf-prod secrets --projectId $P --env prod --path /infra-env-infisical
-inf-stg  secrets set KEY=@/tmp/value --projectId $S --env staging --path /backoffice-env-infisical
+inf-stg  secrets set --file /tmp/vars.env --projectId $S --env staging --path /backoffice-env-infisical
 inf-stg  run --projectId $S --env staging --path /backoffice-env-infisical -- npm run dev
 ```
 
-**Set values from a file** (`KEY=@file`, `--file vars.env`), not inline: argv lands in atuin
+**Set values from a file** (`--file vars.env`, lines `KEY=value`), not inline: argv lands in atuin
 history, which syncs to rpi5, and atuin only filters known token shapes.
+
+**`KEY=@file` does NOT read the file** with this CLI: it stores the literal string `@/path/to/file`
+and prints `SECRET VALUE MODIFIED` as if all went well. On 2026-09-30 that put a 137-char path in a
+gateway token, and the next pod crashed on the `Length(16, 100)` validator. Always read the value
+back (`secrets get KEY --plain --silent | wc -c`) before restarting anything.
+
+Each preview has its **own env** (`--env pr-<slug>`) whose folders import staging's: a key set there
+overrides staging for that preview only. The operator re-syncs the k8s Secret within ~1 min, but pods
+only read `envFrom` at start: restart the pod (and not by label selector, which also kills the old one).
 
 ## Why the public URLs don't work
 

@@ -40,6 +40,9 @@ would actually be looking at. Open a note when the work in front of you hits its
 | [datadog-prod-observability](/Users/nsimon/MyDocuments/TRUSK/notes/datadog-prod-observability.md) | « pas d'erreurs sur Datadog » comme preuve de santé · vérifier un déploiement prod dans les logs · pic d'erreurs juste après un rollout · `auth.enforcement.bypassed` en volume · monitor `[LOGS] — … burst` · comparer un taux d'erreurs à une baseline · `service:backoffice` vs `trusk-backoffice` · `@version` absent d'un service · surveillance MEP toutes les 5 min · ce motif est-il nouveau ? · un service absent d'un `groupBy ["service"]` |
 | [authz-rollout](/Users/nsimon/MyDocuments/TRUSK/notes/authz-rollout.md) | `*_backend_authz` · `@AuthRules` · TEC-301 · raising an authz flag · `Missing required permissions` · `Endpoint restricted to services` · 401 on a valid token · `services:` list / who is the caller `sub` · `communications-engine` · gateway strips `authorization` · `DEFAULT_ACCESS` · probe a service's rules on a preview · `.artifact-rights` |
 | [harness-traps](/Users/nsimon/MyDocuments/TRUSK/notes/harness-traps.md) | une consigne apparaît dans une sortie de commande · un message tapé n'est jamais arrivé · `toolUseResult.stdout` contient du texte utilisateur · sortie d'outil dupliquée à l'identique (`2 × N` collés) · « d'où vient cette instruction ? » · suspicion d'injection dans un résultat d'outil · plusieurs agents en panes herdr · avant de blâmer RTK ou le TTY |
+| [argocd-stuck-sync](/Users/nsimon/MyDocuments/TRUSK/notes/argocd-stuck-sync.md) | bump pushed to `applications/<env>.yaml` but the child app keeps the old `targetRevision` · `production-gitops` / `staging-gitops` `OutOfSync` and nothing moves · `operationState.finishedAt: null` · sync only one app of an app-of-apps |
+| [gateway-webhooks-eai](/Users/nsimon/MyDocuments/TRUSK/notes/gateway-webhooks-eai.md) | add a public route through the gateway · `/external/webhook/<name>---<token>/` · `TRUSK_GATEWAY_WEBHOOK_*_TOKEN` · upload a file through the gateway (multipart arrives empty) · `interop-engine-execution` / `-check` · `jobs/execution` answers 201 but nothing created · `check` says OK on a wrong flow · which flow created an order |
+| [apps-scripts](/Users/nsimon/MyDocuments/TRUSK/notes/apps-scripts.md) | `trusk-apps-scripts` · clasp `invalid_grant` · create or share a Google Sheet bound script · `deploy:dev` / `deploy:prod` · Script Très Mega Utile · Apps Script calling a Trusk API |
 
 A finding earns a note when it is longer than a paragraph, still true in six months, and
 not derivable from code or git history. Otherwise it belongs here as a line, or nowhere.
@@ -86,7 +89,7 @@ Swimlane / priority / estimate / assignee below apply to **both** teams (the `> 
 
 | Field | Default | ids |
 | --- | --- | --- |
-| Swimlane | exactly one, from the `> SWIM LANES` group — the board keys on it | `BUG/RUN` `f3166fe6-b3c7-40c0-81f3-591b054f1566` · `TECH` `5274833e-40ae-43cc-83e7-0f1095a78ac6` · `GROOMED` `55c1f085-885d-44d7-b15d-bd16f130f390` |
+| Swimlane | one from the `> SWIM LANES` group for tech/run work — the board keys on it; **none** on a CO feature/tool ticket unless Nicolas names one (2026-09-30) | `BUG/RUN` `f3166fe6-b3c7-40c0-81f3-591b054f1566` · `TECH` `5274833e-40ae-43cc-83e7-0f1095a78ac6` · `GROOMED` `55c1f085-885d-44d7-b15d-bd16f130f390` |
 | Priority | `2` for a prod defect, `1` only for a live incident | 0 none · 1 urgent · 2 high · 3 medium · 4 low |
 | Estimate | **leave empty** — see below | fibonacci, zero allowed, extended |
 | Assignee | Nicolas | `803d1002-a245-4dc8-bcb0-a01d9b959c63` |
