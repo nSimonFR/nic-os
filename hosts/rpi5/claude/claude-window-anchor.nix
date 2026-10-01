@@ -2,8 +2,8 @@
 # 13:30–20:00 day splits ~3.5h / 3.5h / 3h across three budgets. If a window is
 # still open at an anchor, the run sleeps until it resets and pings then.
 #
-# Separate from claude-token-refresh on purpose: that one pings Haiku, which the
-# gate routes to Asale, so it never touches the Anthropic account.
+# Separate from claude-token-refresh on purpose: that one pings asale-luna, so
+# it never touches the Anthropic account.
 #
 # On-demand: sudo systemctl start claude-window-anchor
 # Logic: hosts/rpi5/scripts/lib/nicos_scripts/claude/window_anchor.py

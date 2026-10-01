@@ -13,7 +13,7 @@ alone its phase is wherever the day's first message landed. Fired at each anchor
 A ping whose time falls outside [DAY_START, DAY_END) is skipped: a window opened
 at night would still be open at the 07:00 anchor and push the whole day back.
 
-The ping must reach Anthropic: the gate sends Haiku to Asale, so it uses Sonnet.
+The ping must reach Anthropic, so it names a Claude model, never an asale-* id.
 
 Config via environment:
   ANCHOR_TOKEN_FILE   OAuth access token     (default /run/claude-oauth/token)

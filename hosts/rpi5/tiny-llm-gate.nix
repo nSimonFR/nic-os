@@ -334,16 +334,16 @@ in
         # Opt-in Asale models on the Anthropic surface, picked by `claude-asale`
         # (zsh/aliases.zsh). Not Haiku: Claude Code forces tool_choice for
         # WebSearch, which Asale answers with a 400.
-        routes = lib.listToAttrs (map
-          (tier: lib.nameValuePair "asale-${tier}" {
+        # Also claude-token-refresh's ping (asale-luna), so it opens no 5h window.
+        routes = lib.mapAttrs' (tier: model: lib.nameValuePair "asale-${tier}" {
             upstream = "https://gw.asale.ai";
-            model = "gpt-6-${tier}";
+            inherit model;
             auth = {
               type = "bearer";
               token_file = "/run/agenix/asale-api-key";
             };
           })
-          [ "luna" "sol" "astra" ]);
+          { luna = "gpt-6-luna"; sol = "gpt-6.1-sol"; astra = "gpt-6-astra"; };
 
         accounts = [
           {
