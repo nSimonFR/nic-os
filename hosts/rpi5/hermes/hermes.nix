@@ -87,7 +87,7 @@ let
     "gpt-6"   = 131072;
     "asale-gpt-6-astra" = 131072;
     "asale-gpt-6-luna"  = 131072;
-    "asale-gpt-6-sol"   = 131072;
+    "asale-gpt-6.1-sol" = 131072;
   };
 
   # NO Anthropic fallback here, deliberately — do not re-add one without

@@ -187,13 +187,13 @@ in
         # only with client_version=1.0.0). Luna passed strict json_schema, tools
         # and streaming here on 2026-09-24.
         "gpt-6-luna" = { provider = "codex"; upstream_model = "gpt-6-luna"; fallback = [ "gemma4:e4b" ]; };
-        "gpt-6-sol"  = { provider = "codex"; upstream_model = "gpt-6-sol";  fallback = [ "gemma4:e4b" ]; };
-        # Codex CLI only lists 6.1 from 0.159.0; the gate's Codex Desktop
-        # fingerprint already gets it (probed OK 2026-10-01, Plus).
+        # Sol is 6.1 only; `gpt-6-sol` is an alias to it below. Codex CLI only
+        # lists 6.1 from 0.159.0; the gate's Codex Desktop fingerprint already
+        # gets it (probed OK 2026-10-01, Plus).
         "gpt-6.1-sol" = { provider = "codex"; upstream_model = "gpt-6.1-sol"; fallback = [ "gemma4:e4b" ]; };
         "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
         "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
-        "asale-gpt-6-sol"   = { provider = "asale"; upstream_model = "gpt-6-sol"; };
+        "asale-gpt-6.1-sol" = { provider = "asale"; upstream_model = "gpt-6.1-sol"; };
 
         # -- Anthropic (Claude) via the shared OAuth account pool --
         # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
@@ -246,14 +246,18 @@ in
         "openai/gpt-6-astra"         = "gpt-6";
         "openai/gpt-reserve"         = "gpt-reserve";
         "openai/gpt-6-luna"          = "gpt-6-luna";
-        "openai/gpt-6-sol"           = "gpt-6-sol";
+        "gpt-6-sol"                  = "gpt-6.1-sol";
+        "openai/gpt-6-sol"           = "gpt-6.1-sol";
         "openai/gpt-6.1-sol"         = "gpt-6.1-sol";
         "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
         "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
-        "openai/asale-gpt-6-sol"     = "asale-gpt-6-sol";
+        "asale-gpt-6-sol"            = "asale-gpt-6.1-sol";
+        "openai/asale-gpt-6-sol"     = "asale-gpt-6.1-sol";
+        "openai/asale-gpt-6.1-sol"   = "asale-gpt-6.1-sol";
         "asale/gpt-6-astra"          = "asale-gpt-6-astra";
         "asale/gpt-6-luna"           = "asale-gpt-6-luna";
-        "asale/gpt-6-sol"            = "asale-gpt-6-sol";
+        "asale/gpt-6-sol"            = "asale-gpt-6.1-sol";
+        "asale/gpt-6.1-sol"          = "asale-gpt-6.1-sol";
 
         # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
         # THREAD-TITLE model (`titleModelId` in the provider catalog baked into
