@@ -39,7 +39,7 @@
 stdenv.mkDerivation (finalAttrs: {
   pname = "calino";
   # renovate: datasource=github-releases depName=Ivan-Malinovski/calino extractVersion=^v(?<version>.+)$
-  version = "0.33.6";
+  version = "0.36.0";
 
   src = fetchFromGitHub {
     owner = "Ivan-Malinovski";
@@ -51,7 +51,7 @@ stdenv.mkDerivation (finalAttrs: {
     # re-serves the OLD tree under the new version number. See
     # known_issue_nix_fod_hash_desync; that trap shipped sure-0.7.3 as v0.7.2.
     name = "calino-${finalAttrs.version}-source";
-    hash = "sha256-W4Rd7SxAE2eKK3X3adJHatk1BITs/Zs5hIfd+TsL8wM=";
+    hash = "sha256-Bsh2j3dtDcdlXgr0+4iMUSJC3bOgo8MLbJbOvv10oVo=";
   };
 
   pnpmDeps = pnpm_10.fetchDeps {
