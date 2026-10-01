@@ -15,38 +15,16 @@ let
     exec npx -y @k-jarzyna/mcp-miro
   '';
 
-  # Trusk mutualised PG ("monodb") MCPs — crystaldba/postgres-mcp, run natively.
-  # Staging = CloudSQL trusk-common-325eac79 @ 10.106.0.3, main DB `trusk_staging`;
-  # prod = CloudSQL trusk-production @ 10.206.0.21, main DB `trusk`. Both hold one
-  # schema per service and are reachable directly over the corp VPN. Users:
-  # mcp_readonly (pg_read_all_data + pg_monitor; staging one pre-existed for
-  # ToolHive's dbhub) and mcp_readwrite (adds pg_write_all_data; created
-  # 2026-09-03 via `gcloud sql users create`, self-granted the predefined roles —
-  # CloudSQL API users are cloudsqlsuperuser members so no postgres pwd needed).
-  # ro pairs the readonly role with --access-mode=restricted (read-only SQL,
-  # statement timeouts); rw is unrestricted. Passwords live in mcp-secrets.age.
-  # NO postgres_staging_ro: ToolHive's dbhub already serves read-only staging
-  # trusk_staging (Yvan, #tech 2026-09-03) — redundant here. dbhub's prod source
-  # is the warehouse replica, NOT the live prod monodb, so postgres_prod_ro
-  # stays; dbhub has no write path, so both rw servers stay. If crystaldba's
-  # extra tools (explain/health/index advisor) are ever needed on staging,
-  # postgres_staging_rw exposes the same set (ask-gated).
-  # Native via uvx, no docker daemon needed. postgres-mcp 0.3.0 (latest PyPI
-  # release) declares an open `mcp` dep and the mcp 2.x SDK removed FastMCP, so
-  # unpinned resolution crashes on import — hence `--with mcp<2`. First run
-  # downloads into ~/.cache/uv; proxy vars are unset because the Aperture shim
-  # (HTTPS_PROXY=127.0.0.1:18888 in claude sessions) blocks PyPI, and the DB is
-  # reached directly over the corp VPN anyway. Verified 2026-09-03: handshake +
-  # write test green over MCP stdio against staging with mcp_readwrite.
-  postgresMcp = name: user: pwVar: hostDb: mode: pkgs.writeShellScript "postgres-mcp-${name}" ''
+  # Runs an MCP server with the agenix secrets loaded and uv on PATH. A fixed path,
+  # so configs outside this repo (the private trusk checkout's mcp.json) can use it.
+  # set -a: the secrets file has bare KEY=value lines, which must reach the child.
+  mcpEnv = pkgs.writeShellScript "mcp-env" ''
+    set -a
     [ -f "${secretsPath}" ] && . "${secretsPath}"
-    unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy
-    export DATABASE_URI="postgresql://${user}:''${${pwVar}}@${hostDb}?sslmode=require"
-    exec ${pkgs.uv}/bin/uvx --with 'mcp<2' postgres-mcp@0.3.0 --access-mode=${mode}
+    set +a
+    export PATH=${pkgs.uv}/bin''${PATH:+:$PATH}
+    exec "$@"
   '';
-  postgresStagingRw = postgresMcp "staging-rw" "mcp_readwrite" "PG_MCP_STAGING_RW_PW" "10.106.0.3:5432/trusk_staging" "unrestricted";
-  postgresProdRo    = postgresMcp "prod-ro"    "mcp_readonly"  "PG_MCP_PROD_RO_PW"    "10.206.0.21:5432/trusk"        "restricted";
-  postgresProdRw    = postgresMcp "prod-rw"    "mcp_readwrite" "PG_MCP_PROD_RW_PW"    "10.206.0.21:5432/trusk"        "unrestricted";
 
   # AFFiNE MCP — write-capable. tiny-llm-gate exposes an SSE bridge at
   # tailnet :7020 that proxies to affine-mcp.service (DAWNCR0W) on the rpi5.
@@ -67,47 +45,10 @@ let
   mcpServers = {
     # Public — no secrets
     Linear              = { type = "sse"; url = "https://mcp.linear.app/sse"; };
-    # Metabase built-in MCP server. Streamable-HTTP at /api/mcp (the v0.61 docs'
-    # /api/metabase-mcp path 404s on v0.61.2.10; /api/mcp is the live route and
-    # returns a 401 OAuth challenge — `www-authenticate: Bearer realm="mcp"`).
-    # Auth via Metabase's embedded OAuth server (browser handshake on first call,
-    # token scoped to the connecting user's permissions) — no secret in config.
-    # Replaces the cookie-based `metabase` skill. Enabled instance-side
-    # (agent-api-enabled? / mcp-enabled? both true on metabase.trusk.com).
-    metabase            = { type = "http"; url = "https://metabase.trusk.com/api/mcp"; };
-    # ToolHive — unified MCP proxy (Tristan's 2026-07-17 announcement). Fronts
-    # ~140 underlying tools behind just 2 meta-tools (find_tool / call_tool).
-    # We cut over to it and DROPPED the individual tailnet gateways it fronts:
-    # grafana, datadog, argocd, k8s, github (gitnexus), context7, firecrawl are
-    # now all reached via ToolHive. Reachable over the work Tailscale tunnel
-    # (resolves over utun, valid TLS via `tailscale serve`); OAuth route also
-    # exists at staging-toolhive-tech.trusk.com/mcp.
-    "toolhive-tech"     = { type = "http"; url = "https://ai-toolhive-tech.tail271d7a.ts.net/mcp"; };
-    # trusk-apis — aggregator over the 17 staging OpenAPI specs (Andy, #tech
-    # 2026-09-08). 6 tools: list-apis / search-operations / list-endpoints /
-    # get-endpoint-schema / get-schema / invoke-endpoint. invoke-endpoint really
-    # calls staging; DELETE needs `confirm: true`. Holds no token — you paste
-    # your Scalar-portal JWT into the conversation and it forwards it as-is
-    # (only a fingerprint is audited); unauthenticated calls still work on the
-    # staging routes that aren't gated yet. Specs read live, 5 min cache.
-    # Cluster-internal DNS, resolved over the work Tailscale tunnel (the
-    # trusk-staging-ts operator) — plain http, so the Aperture shim's
-    # HTTPS_PROXY doesn't intercept it. Adding an API = one line in
-    # `conf/apis.json` of the open-api-scalar repo, nothing to change here.
-    "trusk-apis"        = { type = "http"; url = "http://scalar-mcp.staging.svc.cluster.local/mcp"; };
-    # Steampipe — query GCP as live SQL (only the turbot/gcp plugin is
-    # installed): `SELECT … FROM gcp_compute_instance / gcp_kubernetes_cluster
-    # / gcp_service_account …`, read-only, hits the real GCP API per query.
-    # NOT fronted by ToolHive (no GCP; dbhub is real-DB only), so kept direct.
-    "trusk-steampipe"   = { type = "sse";  url = "https://ai-steampipe-mcp.tail271d7a.ts.net/sse"; };
-
     # Private — secrets loaded at runtime via wrapper scripts
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
     affine  = { type = "sse"; url = affineMcpUrl; };
-    postgres_staging_rw = { command = "${postgresStagingRw}"; };
-    postgres_prod_ro    = { command = "${postgresProdRo}"; };
-    postgres_prod_rw    = { command = "${postgresProdRw}"; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
@@ -118,11 +59,19 @@ in
   # Claude Code: declarative MCP via home-manager plugin mechanism
   programs.claude-code.mcpServers = mcpServers;
 
+  home.file.".local/libexec/mcp-env".source = mcpEnv;
+
   # Cursor: write ~/.cursor/mcp.json as a real file (Cursor can't follow symlinks)
   # Also sync the affine command entry into ~/.claude.json (user-level Claude Code config)
   home.activation.cursor-mcp = config.lib.dag.entryAfter [ "writeBoundary" ] ''
     mkdir -p "$HOME/.cursor"
-    cat ${cursorMcpBase} > "$HOME/.cursor/mcp.json"
+    TRUSK_MCP="$HOME/MyDocuments/TRUSK/trusk/mcp.json"
+    if [ -r "$TRUSK_MCP" ]; then
+      ${pkgs.jq}/bin/jq -s '.[0].mcpServers += .[1].mcpServers | .[0]' \
+        ${cursorMcpBase} "$TRUSK_MCP" > "$HOME/.cursor/mcp.json"
+    else
+      cat ${cursorMcpBase} > "$HOME/.cursor/mcp.json"
+    fi
 
     # Keep ~/.claude.json affine entry pointing to shared SSE gateway
     CLAUDE_USER="$HOME/.claude.json"

@@ -23,14 +23,37 @@ let
     "wiki-ingest"
     "wiki-process"
     "wiki-lint"
-    "ship"
-    "pr"
     "shutdown"
   ];
 
+  skillTargets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
+
+  # Trusk lives in the private nSimonFR/trusk checkout (Mac only), never in this
+  # public repo. Out-of-store links keep it out of the store too; without the clone
+  # they just dangle. Skills are named here because nix cannot read the checkout.
+  truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK/trusk";
+  truskSkills = [ "pr" "ship" "trusk-data-glossary" "trusk-preview-deploy" ];
+  truskSlashCommandSkills = [ "pr" "ship" ];
+  truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
+
+  truskFiles = lib.optionalAttrs pkgs.stdenv.isDarwin (
+    {
+      # CLAUDE.md loads by walking UP the tree, so it reaches every Trusk repo and
+      # nothing else; notes/ is read on demand.
+      "MyDocuments/TRUSK/CLAUDE.md".source = truskLink "CLAUDE.md";
+      "MyDocuments/TRUSK/notes".source = truskLink "notes";
+    }
+    // lib.listToAttrs (lib.concatMap (name: map (t:
+      lib.nameValuePair "${t}/${name}" { source = truskLink "skills/${name}"; }
+    ) skillTargets) truskSkills)
+    // lib.listToAttrs (map (name:
+      lib.nameValuePair ".claude/commands/${name}.md" { source = truskLink "skills/${name}/SKILL.md"; }
+    ) truskSlashCommandSkills)
+  );
+
   sharedSkillFiles =
     skillTree.homeFiles {
-      targets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
+      targets = skillTargets;
       lineages = [
         { source = sharedSkillsDir; }
         # herdr ships its own skill, version-matched to the binary. Taking it
@@ -102,6 +125,12 @@ let
       "--prefix PATH : ${pkgs.ripgrep}/bin"
       "--set USE_BUILTIN_RIPGREP 0"
     ]
+    # The Trusk MCP servers come from the private checkout's mcp.json. Spliced into
+    # the HM wrapper's own `--mcp-config <store json>` (always $1 $2 here) rather
+    # than prepended: a fresh variadic flag swallows `remote-control` from claude-rc.
+    ++ lib.optionals pkgs.stdenv.isDarwin [
+      ''--run 'p=${truskDir}/mcp.json; if [ "$1" = --mcp-config ] && [ -r "$p" ]; then set -- "$1" "$2" "$p" "''${@:3}"; fi' ''
+    ]
     ++ [
       ''--set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net"''
       ''--set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none"''
@@ -145,7 +174,7 @@ in
   # above (shared + Claude-only), Claude slash commands (curated subset), and
   # Claude Code's own settings/hooks. The Hermes agent picks up the same shared
   # lineage via hosts/rpi5/hermes/hermes.nix.
-  home.file = sharedSkillFiles // claudeCommandFiles // {
+  home.file = sharedSkillFiles // claudeCommandFiles // truskFiles // {
     # Writable settings.json — symlinked to the repo checkout so /voice etc.
     # can update it at runtime.
     ".claude/settings.json".source =
@@ -290,23 +319,6 @@ in
         exec ${pkgs.bash}/bin/bash ${./scripts/claude-statusline.sh} "$@"
       '';
     };
-  } // lib.optionalAttrs pkgs.stdenv.isDarwin {
-    # Trusk infra notes — only the Mac (nBookPro) has the Trusk repos under
-    # ~/MyDocuments/TRUSK/. CLAUDE.md is loaded by walking UP the dir tree, so it
-    # loads for every Trusk repo/subfolder and nowhere else. Gated off the Linux
-    # hosts (BeAsT/rpi5), where it would otherwise create a stray/dangling symlink.
-    # Writable out-of-store symlink so the "keep it fresh" workflow edits live.
-    #
-    # NB: the same entry also used to sit ungated in the base set above, and `//`
-    # takes the right operand — so on Linux the base definition simply survived
-    # and this gate did nothing. Removed there; this is now the only definition.
-    "MyDocuments/TRUSK/CLAUDE.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-CLAUDE.md";
-
-    # Long-form companions to the file above, linked from it and read on demand — they do
-    # NOT load into every session. Same out-of-store symlink so both paths stay editable.
-    "MyDocuments/TRUSK/notes".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/trusk-notes";
   };
 
 }
