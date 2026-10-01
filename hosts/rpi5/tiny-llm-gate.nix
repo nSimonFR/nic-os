@@ -188,6 +188,9 @@ in
         # and streaming here on 2026-09-24.
         "gpt-6-luna" = { provider = "codex"; upstream_model = "gpt-6-luna"; fallback = [ "gemma4:e4b" ]; };
         "gpt-6-sol"  = { provider = "codex"; upstream_model = "gpt-6-sol";  fallback = [ "gemma4:e4b" ]; };
+        # Codex CLI only lists 6.1 from 0.159.0; the gate's Codex Desktop
+        # fingerprint already gets it (probed OK 2026-10-01, Plus).
+        "gpt-6.1-sol" = { provider = "codex"; upstream_model = "gpt-6.1-sol"; fallback = [ "gemma4:e4b" ]; };
         "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
         "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
         "asale-gpt-6-sol"   = { provider = "asale"; upstream_model = "gpt-6-sol"; };
@@ -244,6 +247,7 @@ in
         "openai/gpt-reserve"         = "gpt-reserve";
         "openai/gpt-6-luna"          = "gpt-6-luna";
         "openai/gpt-6-sol"           = "gpt-6-sol";
+        "openai/gpt-6.1-sol"         = "gpt-6.1-sol";
         "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
         "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
         "openai/asale-gpt-6-sol"     = "asale-gpt-6-sol";
