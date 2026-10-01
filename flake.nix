@@ -84,28 +84,20 @@
     # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
     #
-    # ⚠ HELD AT A TAG — see the `ref` in the url below, not this comment, for
-    #   which one. Upstream tracks its default branch, and once `nix flake
-    #   update` walked this input onto a rev whose nix/lib.nix asks for a nodejs
-    #   major our nixpkgs release does not carry, the rpi5 config stopped
-    #   EVALUATING entirely — not just hermes:
+    # ⚠ HELD AT A TAG, on nixpkgs-UNSTABLE. Since v2026.8.3 upstream's
+    #   nix/lib.nix asks for `nodejs_26`, which our release nixpkgs does not
+    #   carry; following `nixpkgs` there makes the WHOLE rpi5 config fail to
+    #   evaluate (hermes.nix puts the package in home.packages):
     #     error: Function called without required argument "nodejs_26" …
-    #   toplevel forces the package (hermes.nix puts it in home.packages), so
-    #   `nixos-rebuild` could not even start.
+    #   Upstream itself builds against nixos-unstable, so Hermes gets its own
+    #   unstable package set rather than an alias of an older node major.
     #
-    #   So the ref is the newest upstream TAG whose nix/lib.nix still takes a
-    #   plain `nodejs` argument — a name that says what it is and moves in
-    #   reviewable steps, where the bare rev this used to carry read to Renovate
-    #   as a digest to be walked forward. Before advancing it, diff that
-    #   argument list: a node major we don't have breaks eval system-wide, and
-    #   renovate.json disables the bot here for exactly that reason.
-    #
-    #   Do NOT "fix" this by aliasing the missing nodejs major to an older one:
-    #   upstream moved deliberately and the runtime may depend on it. Unpin once
-    #   nixpkgs carries the major it wants, or upstream relaxes the requirement.
+    #   Advance the tag by hand: before a bump, check that our
+    #   nixpkgs-unstable carries every nodejs_* its nix/lib.nix names.
+    #   renovate.json keeps the bot off this input.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/v2026.7.30";
-      inputs.nixpkgs.follows = "nixpkgs";
+      url = "github:NousResearch/hermes-agent/v2026.9.24";
+      inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
     mac-app-util.url = "github:hraban/mac-app-util";
