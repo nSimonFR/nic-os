@@ -1,17 +1,24 @@
 ---
 name: herdr-handoff
-description: "Hand off, pick up or commit coding work in a Herdr pane."
+description: "Hand off, pick up or commit work in a Herdr pane."
 ---
 
 # Hand a task to a Herdr agent
 
 A **handoff** gives one coding agent one task in its own workspace, and ends with a
-report you can back with tool output. `herdr-remote` holds the rules for driving Herdr
-from outside a pane; they all apply here. `herdr agent`, `herdr pane` and
-`herdr workspace` (run bare) print the exact syntax.
+report you can back with tool output.
+
+You (Hermes) do not run in a Herdr pane, so `HERDR_ENV` is unset and the `herdr` skill
+tells you to stop. That check exists because an outside caller has no pane of its own,
+so `--current` or the focused pane would land on the user's work. The rules below
+remove that risk, so you **may** use `herdr` here; keep the `herdr` skill as the command
+reference. `herdr agent`, `herdr pane` and `herdr workspace` (run bare) print the exact
+syntax.
 
 ## Rules
 
+- Name every target explicitly; `--current` and omitted targets resolve to whatever
+  the user has focused.
 - Every ID and name you use came from JSON Herdr returned in this task, or from the
   user. When two candidates fit, ask which one.
 - Touch only the workspace you created, or the one the user named for a pickup.
@@ -24,8 +31,8 @@ from outside a pane; they all apply here. `herdr agent`, `herdr pane` and
 
 All of these, before creating anything:
 
-- `herdr status` shows the server running. If not, tell the user and stop; the
-  server is theirs to start.
+- `herdr status` shows the server running (it listens on `~/.config/herdr/herdr.sock`).
+  If not, tell the user and stop; starting, stopping and restarting it is theirs.
 - The repo exists: `git -C <repo> rev-parse --show-toplevel`. Default `$HOME/nic-os`.
   Note `git -C <repo> status --short` and the current branch: another session's
   uncommitted work there is not the agent's to commit.
@@ -43,8 +50,12 @@ herdr agent start <name> --kind <kind> --pane "$pane"
 
 `jq -e` fails on a missing field: stop there and show the user `$r`, rather than
 carrying an empty ID forward. `agent_not_ready` means the agent stopped at a startup
-dialog (Claude's folder trust in an untrusted dir): read it with
+dialog (Claude's folder trust in an untrusted dir, `$HOME` included): read it with
 `herdr agent read <name> --source visible` and ask the user.
+
+A second agent on the same task gets a split of that pane:
+`herdr pane split "$pane" --direction right --no-focus`, then `agent start` in the
+returned `.result.pane.pane_id`.
 
 ## 3. The prompt
 
@@ -123,3 +134,13 @@ Send the user:
   agent claimed that you could not confirm, marked as such.
 
 Close the workspace only if the user asks.
+
+## A plain command instead of an agent
+
+Same preflight and workspace; then, in place of `agent start` and the prompt:
+
+```bash
+herdr pane run "$pane" "<command>"
+herdr pane wait-output "$pane" --match "<text>" --timeout 120000
+herdr pane read "$pane" --source recent-unwrapped --lines 120   # plain text, not JSON
+```
