@@ -96,18 +96,20 @@ cr()     { _claude_shim --resume "$@"; }
 #
 # --fork-session copies the caller's history into a NEW session id, so the two
 # panes diverge instead of writing over each other.
+#
+# $3 is the launcher, `claude` unless herdr-claude-open was asked for another.
 claude-pane-menu() {
-  local key
-  print -P "\n  %B${PWD:t}%b · forked from $1\n"
+  local key run=${3:-claude}
+  print -P "\n  %B${PWD:t}%b · forked from $1 · $run\n"
   print "    [enter]  fork that session"
   print "    [n]      new session"
   print "    [r]      resume a session…\n"
   read -s -k 1 "key?  ctrl-c for a plain shell › "
   print
   case $key in
-    n | N) claude ;;
-    r | R) claude --resume ;;
-    *) claude --resume "$2" --fork-session ;;
+    n | N) $run ;;
+    r | R) $run --resume ;;
+    *) $run --resume "$2" --fork-session ;;
   esac
 }
 
@@ -126,6 +128,21 @@ alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=l
 # claude-settings.json env entry; the old --settings form could not win over that
 # entry, so this alias silently stayed on the gate and never got Remote Control.
 alias claude-direct='ANTHROPIC_BASE_URL=https://api.anthropic.com command claude --dangerously-skip-permissions --remote-control'
+
+# claude-asale: the session's models on Asale (tiny-llm-gate `anthropic.routes`),
+# GPT-6 Luna unless CLAUDE_ASALE_TIER=sol|astra. Haiku side calls stay on Anthropic.
+# Straight at Aperture, so no Remote Control: through the shim Claude Code sends
+# `thread: continue` deltas, which Asale 400s from the second turn.
+# ENABLE_TOOL_SEARCH: off api.anthropic.com every MCP schema goes inline (~570 KB/turn).
+claude-asale() {
+  local m=asale-${CLAUDE_ASALE_TIER:-luna}
+  ANTHROPIC_BASE_URL=https://ai.gate-mintaka.ts.net \
+  ENABLE_TOOL_SEARCH=true \
+  ANTHROPIC_MODEL=$m \
+  ANTHROPIC_DEFAULT_OPUS_MODEL=$m \
+  ANTHROPIC_DEFAULT_SONNET_MODEL=$m \
+    command claude "$@"
+}
 
 # pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
 # All routes go through https://ai.gate-mintaka.ts.net for observability.

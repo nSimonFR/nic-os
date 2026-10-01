@@ -122,6 +122,14 @@ type = "shell"
 command = "herdr-claude-open workspace"
 description = "new workspace + claude"
 
+# Same menu, but the session runs on Asale (claude-asale in zsh/aliases.zsh) —
+# for when the Anthropic quota is gone.
+[[keys.command]]
+key = ["prefix+shift+a", "prefix+ctrl+a"]
+type = "shell"
+command = "herdr-claude-open right asale"
+description = "split right + claude on Asale"
+
 # zoetrope — draws the focused pane's session as a flow graph with the turn's
 # SUBAGENTS nested, in a temporary zoomed pane. `q` closes it.
 #
