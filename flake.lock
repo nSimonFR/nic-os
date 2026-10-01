@@ -942,6 +942,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-codex": {
+      "locked": {
+        "lastModified": 1790862534,
+        "narHash": "sha256-h0lKKMEYiz/5JMJrFKO+0NJA0zCidm1zG9PbbGbCtCc=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "a0dfce9edd4d356b84ecce4aa49368ecdfc1b7d9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "a0dfce9edd4d356b84ecce4aa49368ecdfc1b7d9",
+        "type": "github"
+      }
+    },
     "nixpkgs-hass": {
       "locked": {
         "lastModified": 1787814960,
@@ -1302,6 +1318,7 @@
         "nix-gaming": "nix-gaming",
         "nixos-raspberrypi": "nixos-raspberrypi",
         "nixpkgs": "nixpkgs_7",
+        "nixpkgs-codex": "nixpkgs-codex",
         "nixpkgs-hass": "nixpkgs-hass",
         "nixpkgs-ollama": "nixpkgs-ollama",
         "nixpkgs-unstable": "nixpkgs-unstable",

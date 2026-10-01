@@ -42,6 +42,12 @@
     # replace this with a rev carrying an equal or newer HA.
     nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
 
+    # Codex only. The ChatGPT backend hides gpt-6.1-sol from clients below
+    # 0.159.0 (models endpoint, measured 2026-10-01); nixpkgs-unstable is on
+    # 0.158.0. Rev is nixpkgs master @ 2026-10-01, codex 0.159.3. Drop this once
+    # nixpkgs-unstable catches up.
+    nixpkgs-codex.url = "github:NixOS/nixpkgs/a0dfce9edd4d356b84ecce4aa49368ecdfc1b7d9";
+
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-25.11";
       inputs.nixpkgs.follows = "nixpkgs";

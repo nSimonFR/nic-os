@@ -21,7 +21,8 @@
       btop
       coreutils-full
       curl
-      unstablePkgs.codex
+      # gpt-6.1-sol needs codex >= 0.159.0 — see the nixpkgs-codex input.
+      (import inputs.nixpkgs-codex { inherit (pkgs.stdenv.hostPlatform) system; }).codex
       unstablePkgs.cursor-cli
       ctop
       direnv
