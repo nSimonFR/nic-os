@@ -29,7 +29,7 @@
 }:
 let
   # renovate: datasource=npm depName=agent-browser
-  version = "0.34.0";
+  version = "0.38.2";
 
   # The tarball ships one binary per platform under bin/. Map the Nix system
   # onto upstream's naming; glibc only (the musl variants are for Alpine).
@@ -55,7 +55,7 @@ stdenvNoCC.mkDerivation {
   src = fetchurl {
     name = "agent-browser-${version}.tgz";
     url = "https://registry.npmjs.org/agent-browser/-/agent-browser-${version}.tgz";
-    hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
+    hash = "sha256-K7HW5GYLKhCckSyLtVL3JxJdvNaBxtHu/Br1c7RUbEk=";
   };
 
   # The Rust binary needs only glibc (libc/libm/libpthread/libdl), but it is
