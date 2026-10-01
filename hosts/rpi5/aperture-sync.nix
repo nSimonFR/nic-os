@@ -43,6 +43,8 @@ let
       "claude-opus-5"
       "claude-opus-5-5"
     ]
+    # Asale routes have to be listed here too, or Aperture refuses them on /v1/messages.
+    ++ builtins.attrNames (gateCfg.anthropic.routes or { })
   );
 
   # The inner config that Aperture manages — this gets JSON-encoded into a
