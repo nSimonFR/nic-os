@@ -323,27 +323,19 @@ in
       anthropic = {
         upstream = "https://api.anthropic.com";
 
-        # Silent cheap-tier override for Claude Code: keep Claude-shaped
-        # /v1/messages, but send Haiku requests to Asale's Anthropic-compatible
-        # endpoint as GPT-6 Luna. Other Claude models stay on the OAuth pool.
-        routes = {
-          "claude-haiku-4-5" = {
+        # Opt-in Asale models on the Anthropic surface, picked by `claude-asale`
+        # (zsh/aliases.zsh). Not Haiku: Claude Code forces tool_choice for
+        # WebSearch, which Asale answers with a 400.
+        routes = lib.listToAttrs (map
+          (tier: lib.nameValuePair "asale-${tier}" {
             upstream = "https://gw.asale.ai";
-            model = "gpt-6-luna";
+            model = "gpt-6-${tier}";
             auth = {
               type = "bearer";
               token_file = "/run/agenix/asale-api-key";
             };
-          };
-          haiku = {
-            upstream = "https://gw.asale.ai";
-            model = "gpt-6-luna";
-            auth = {
-              type = "bearer";
-              token_file = "/run/agenix/asale-api-key";
-            };
-          };
-        };
+          })
+          [ "luna" "sol" "astra" ]);
 
         accounts = [
           {
