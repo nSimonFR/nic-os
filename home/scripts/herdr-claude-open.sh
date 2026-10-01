@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Open a pane running Claude, in the focused pane's directory.
 #
-# Usage: herdr-claude-open <down|right|tab|workspace>
+# Usage: herdr-claude-open <down|right|tab|workspace> [asale]
+#
+# `asale` launches claude-asale instead of claude (zsh/aliases.zsh).
 #
 # Bound to prefix+" / % / shift+c / shift+s in herdr-config.toml. A
 # `type = "shell"` keybind is DETACHED, so there is no HERDR_PANE_ID here —
@@ -14,6 +16,15 @@ set -euo pipefail
 
 from="$HERDR_ACTIVE_PANE_ID"
 cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
+
+case "${2:-}" in
+  "") run=claude ;;
+  asale) run=claude-asale ;;
+  *)
+    echo "usage: herdr-claude-open <down|right|tab|workspace> [asale]" >&2
+    exit 1
+    ;;
+esac
 
 case "${1:-down}" in
   down | right)
@@ -44,7 +55,7 @@ session=$(herdr pane get "$from" | jq -r '.result.pane.agent_session.value // em
 # wait for readiness, which this gives up — in practice the new shell has its
 # prompt well before the split returns.
 if [ -n "$session" ]; then
-  herdr pane run "$pane" "claude-pane-menu $from $session" >/dev/null
+  herdr pane run "$pane" "claude-pane-menu $from $session $run" >/dev/null
 else
-  herdr pane run "$pane" claude >/dev/null
+  herdr pane run "$pane" "$run" >/dev/null
 fi
