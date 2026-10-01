@@ -160,6 +160,7 @@ in
     ./dsh.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
+    ./cachix-agent.nix
     # Everything Claude Code on this host — bridge, OAuth keep-warm, the two
     # alert oneshots — lives under ./claude/ (same shape as ./hermes/).
     ./claude/claude-remote-control.nix
