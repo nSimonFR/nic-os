@@ -25,6 +25,7 @@ in {
   "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "affine-mcp-http-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
 "asale-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
+  "cachix-agent-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
   "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 ];
   "for-sure-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "dawarich-geoapify.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];

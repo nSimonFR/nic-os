@@ -184,6 +184,7 @@
       file = ./secrets/affine-mcp-http-token.age;
       mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
     };
+    cachix-agent-token.file = ./secrets/cachix-agent-token.age; # CACHIX_AGENT_TOKEN=…
     asale-api-key = {
       file = ./secrets/asale-api-key.age;
       # tiny-llm-gate is a DynamicUser, so this must be world-readable inside

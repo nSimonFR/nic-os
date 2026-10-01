@@ -1,0 +1,107 @@
+# Build rpi5's system here, push it to nsimon-nicos, and have the Cachix Deploy
+# agent on the Pi (hosts/rpi5/cachix-agent.nix) download and activate it.
+#
+# The Pi cannot evaluate its own config: the eval peaks at ~2.1 GiB RSS and
+# earlyoom SIGTERMs it, heavy-shed or not (2026-10-01). Its closure is ~25 GiB,
+# hence the disk cleanup before the build.
+name: Deploy rpi5
+
+on:
+  push:
+    branches: [main]
+  # Auto-merge lands commits as GITHUB_TOKEN, which starts no workflow run, so
+  # `push` alone misses every auto-merged PR. The schedule is what catches them.
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Activate even if this system is already in nsimon-nicos
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-rpi5
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy rpi5
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nsimon-nicos
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      # "Already in nsimon-nicos" stands for "already deployed": only this job
+      # pushes a toplevel there. A failed activation is retried with `force`.
+      - name: Evaluate
+        id: eval
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          out=$(nix eval --accept-flake-config --raw \
+            .#nixosConfigurations.rpi5.config.system.build.toplevel.outPath)
+          echo "out=$out" >> "$GITHUB_OUTPUT"
+          echo "System: \`$out\`" >> "$GITHUB_STEP_SUMMARY"
+          hash=${out#/nix/store/}
+          hash=${hash%%-*}
+          if [ "$FORCE" != true ] &&
+             curl -sfI -o /dev/null "https://nsimon-nicos.cachix.org/$hash.narinfo"; then
+            echo "Already pushed, nothing to deploy." >> "$GITHUB_STEP_SUMMARY"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Free disk space
+        if: steps.eval.outputs.skip != 'true'
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/.ghcup /opt/hostedtoolcache /usr/local/share/boost
+          df -h /
+
+      - name: Build
+        if: steps.eval.outputs.skip != 'true'
+        run: |
+          nix build --accept-flake-config --no-link --print-build-logs \
+            .#nixosConfigurations.rpi5.config.system.build.toplevel
+          df -h /
+
+      # Push only what no cache the Pi reads already serves: the free plan holds 5 GB.
+      - name: Push to Cachix
+        if: steps.eval.outputs.skip != 'true'
+        env:
+          OUT: ${{ steps.eval.outputs.out }}
+        run: |
+          set -euo pipefail
+          absent_from() {
+            # shellcheck disable=SC2016  # expanded by the inner sh, not here
+            xargs -P 32 -I{} sh -c '
+              h=${1#/nix/store/}; h=${h%%-*}
+              curl -sfI -o /dev/null "$2/$h.narinfo" || echo "$1"' _ {} "$1"
+          }
+          nix path-info -r "$OUT" \
+            | absent_from https://cache.nixos.org \
+            | absent_from https://nixos-raspberrypi.cachix.org \
+            | absent_from https://nsimon-nicos.cachix.org > /tmp/push.txt
+          mib=$(xargs -r nix path-info -s < /tmp/push.txt | awk '{s+=$2} END {printf "%.0f", s/1048576}')
+          echo "Pushing $(wc -l < /tmp/push.txt) paths, ${mib:-0} MiB (NAR)." >> "$GITHUB_STEP_SUMMARY"
+          cachix push nsimon-nicos < /tmp/push.txt
+
+      - name: Activate
+        if: steps.eval.outputs.skip != 'true'
+        env:
+          CACHIX_ACTIVATE_TOKEN: ${{ secrets.CACHIX_ACTIVATE_TOKEN }}
+          OUT: ${{ steps.eval.outputs.out }}
+        run: |
+          jq -n --arg out "$OUT" '{agents: {rpi5: $out}}' > deploy.json
+          cachix deploy activate deploy.json
