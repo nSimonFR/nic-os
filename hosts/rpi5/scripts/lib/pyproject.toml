@@ -36,6 +36,7 @@ claude-notify-aggregator = "nicos_scripts.claude.notify_aggregator:main"
 claude-rc-boot-resume = "nicos_scripts.claude.boot_resume:main"
 claude-memory-sync = "nicos_scripts.claude.memory_sync:main"
 claude-context-baseline = "nicos_scripts.claude.context_baseline:main"
+claude-window-anchor = "nicos_scripts.claude.window_anchor:main"
 # Hand-run, not on a timer: adopting someone else's shared-album photos into my
 # own library is a deliberate act (it makes a second copy on disk). Lives here
 # anyway so it gets the shared helpers and the tests.

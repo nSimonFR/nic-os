@@ -166,6 +166,7 @@ in
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix
     ./claude/claude-context-baseline.nix
+    ./claude/claude-window-anchor.nix
     ./gramps-web.nix
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix

@@ -7,13 +7,17 @@ on a 3.9 GB box, so its caps and its dry-run default are safety properties.
 """
 
 import json
+import subprocess
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from conftest import FakeOpener, json_reply
 
 from nicos_scripts.claude import boot_resume as br
 from nicos_scripts.claude import context_baseline as cb
 from nicos_scripts.claude import notify_aggregator as na
+from nicos_scripts.claude import window_anchor as wa
 
 # ── notify_aggregator ─────────────────────────────────────────────────────────
 
@@ -1024,3 +1028,100 @@ def test_the_threshold_and_lookback_come_from_the_environment(tmp_path):
 
 def test_a_garbage_threshold_falls_back_instead_of_crashing_the_timer():
     assert cb.Config.from_env({"CTXB_THRESHOLD": "lots"}).threshold == cb.DEFAULT_THRESHOLD
+
+
+# ── window_anchor ─────────────────────────────────────────────────────────────
+
+PARIS = timezone(timedelta(hours=2))
+
+
+def at(hh, mm=0):
+    return datetime(2026, 10, 1, hh, mm, tzinfo=PARIS)
+
+
+def usage(reset=None):
+    return json_reply({"five_hour": {"utilization": 18.0,
+                                     "resets_at": reset.isoformat() if reset else None}})
+
+
+def anchor_env(tmp_path, **extra):
+    tok = tmp_path / "token"
+    tok.write_text("tok\n")
+    return {"ANCHOR_TOKEN_FILE": str(tok), "ANCHOR_DRY_RUN": "0", **extra}
+
+
+class Ran:
+    def __init__(self, code=0):
+        self.argvs, self.code = [], code
+
+    def __call__(self, argv, **kw):
+        self.argvs.append(argv)
+        return subprocess.CompletedProcess(argv, self.code, "", "")
+
+
+def test_no_open_window_pings_right_away(tmp_path):
+    ran, slept = Ran(), []
+    opener = FakeOpener([usage(None), usage(at(12))])
+    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
+                   run=ran, sleep=slept.append, log=lambda m: None) == 0
+    assert slept == [] and len(ran.argvs) == 1
+    assert ran.argvs[0][ran.argvs[0].index("--model") + 1] == "sonnet"
+
+
+def test_an_open_window_is_chained_one_slack_after_its_reset(tmp_path):
+    ran, slept = Ran(), []
+    opener = FakeOpener([usage(at(8, 10)), usage(at(13, 11))])
+    wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
+            run=ran, sleep=slept.append, log=lambda m: None)
+    assert slept == [70 * 60 + 60] and len(ran.argvs) == 1
+
+
+def test_a_reset_after_day_end_is_not_chained(tmp_path):
+    ran, lines = Ran(), []
+    opener = FakeOpener([usage(at(21, 52))])
+    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(17), opener=opener,
+                   run=ran, sleep=lambda s: None, log=lines.append) == 0
+    assert ran.argvs == [] and lines[0].startswith("skip:")
+
+
+def test_a_night_catch_up_run_does_not_ping():
+    cfg = wa.Config()
+    assert wa.plan(cfg, at(3), None)[0] is None
+
+
+def test_unreadable_usage_still_pings(tmp_path):
+    ran = Ran()
+    env = anchor_env(tmp_path, ANCHOR_TOKEN_FILE=str(tmp_path / "missing"))
+    assert wa.main(env=env, clock=lambda: at(12), opener=FakeOpener(), run=ran,
+                   sleep=lambda s: None, log=lambda m: None) == 0
+    assert len(ran.argvs) == 1
+
+
+def test_a_ping_that_opens_no_window_fails_the_unit(tmp_path):
+    opener = FakeOpener([usage(None), usage(None)])
+    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
+                   run=Ran(), sleep=lambda s: None, log=lambda m: None) == 1
+
+
+def test_the_usage_request_carries_the_oauth_beta_header(tmp_path):
+    opener = FakeOpener([usage(None)])
+    wa.fetch_reset(wa.Config.from_env(anchor_env(tmp_path)), opener=opener)
+    assert opener.last.get_header("Authorization") == "Bearer tok"
+    assert opener.last.get_header("Anthropic-beta") == "oauth-2025-04-20"
+
+
+def test_the_anchor_defaults_to_a_dry_run(tmp_path):
+    ran = Ran()
+    env = anchor_env(tmp_path)
+    del env["ANCHOR_DRY_RUN"]
+    wa.main(env=env, clock=lambda: at(7), opener=FakeOpener([usage(None)]),
+            run=ran, sleep=lambda s: None, log=lambda m: None)
+    assert ran.argvs == []
+
+
+def test_a_dry_run_never_sleeps_until_the_reset(tmp_path):
+    slept = []
+    env = anchor_env(tmp_path, ANCHOR_DRY_RUN="1")
+    wa.main(env=env, clock=lambda: at(14), opener=FakeOpener([usage(at(18, 40))]),
+            run=Ran(), sleep=slept.append, log=lambda m: None)
+    assert slept == []
