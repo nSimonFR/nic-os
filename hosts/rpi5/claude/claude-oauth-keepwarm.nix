@@ -29,14 +29,6 @@ let
   oauthDirName = "claude-oauth${suffix}";
   oauthPath = "/run/${oauthDirName}/token";
 
-  # Batching seam (shared/notify.nix). Not a direct send: :8088 is the only
-  # thing here holding the root-only bot token, and a session cap is exactly
-  # the kind of agent event that should batch with the others.
-  agentNotify = (import ../../../shared/notify.nix { inherit pkgs; }).agent {
-    name = "claude-gate${suffix}";
-    source = "Claude gate";
-  };
-
   extractScript = pkgs.writeShellScript "claude-oauth-extract${suffix}" ''
     set -eu
     umask 0333  # -r--r--r-- so tiny-llm-gate (DynamicUser) can read it
@@ -73,42 +65,14 @@ let
     mv "$tmp" "$dest"
   '';
 
-  # For the 5h-cap alert below: which account this sidecar drives (suffix "" =
-  # the daily-driver primary; "-2" = the gate-only spare) and what failover
-  # state a cap on it implies.
-  acctLabel = if suffix == "" then "acct1 (daily-driver)" else "acct2 (gate spare)";
-  failoverNote =
-    if suffix == ""
-    then "gate failing over to acct2"
-    else "no failover headroom left — acct2 is the last resort";
-
   tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh${suffix}" ''
     set -u
-    # This headless query keeps the OAuth token warm/rotated AND — because it is
-    # a REAL request — trips the Anthropic 5h session cap when the account is
-    # exhausted. The OAuth refresh alone can't reveal a cap (it succeeds
-    # regardless), so this reply is the signal. If it's a session-limit error,
-    # notify via the aggregator (:8088 holds the root-only Telegram token; this
-    # unit runs as ${username} and can't read it directly), then exit 0 so the
-    # expected cap doesn't also trip the systemd-failed alert. Any OTHER failure
-    # keeps its non-zero exit so it surfaces normally.
-    # Most minimal invocation possible: --setting-sources "" skips user/project/
-    # local settings AND CLAUDE.md auto-discovery (no hooks, no gate base-URL —
-    # goes direct to Anthropic on this account's own OAuth), --strict-mcp-config
-    # spawns no MCP servers, --tools "" drops all tool schemas from the request,
-    # and --model haiku uses the cheapest model. A cap on any model still trips
-    # the account-wide 5h session limit, so detection is unaffected.
-    out=$(claude -p "say hello world" --dangerously-skip-permissions \
-      --setting-sources "" --strict-mcp-config --tools "" --model haiku 2>&1)
-    rc=$?
-    if printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -qiE "hit your (session|usage) limit|session limit ·|usage limit|rate.?limit"; then
-      resets=$(printf '%s' "$out" | ${pkgs.gnugrep}/bin/grep -oiE "resets[^.]*" | head -1)
-      msg="⚠️ Claude ${acctLabel} hit its 5h session limit — ${failoverNote}.''${resets:+ ($resets)}"
-      ${agentNotify} --project claude-gate --immediate --message "$msg"
-      echo "claude-token-refresh${suffix}: session cap detected, alerted" >&2
-      exit 0
-    fi
-    exit $rc
+    # Only job: make `claude` refresh credentials.json near expiry, for the gate.
+    # asale-luna (gate route to Asale) so the ping never opens an Anthropic 5h
+    # window — claude-window-anchor owns those. --setting-sources "" keeps hooks
+    # and CLAUDE.md out; the wrapper's gate base URL still applies.
+    exec claude -p "say hello world" --dangerously-skip-permissions \
+      --setting-sources "" --strict-mcp-config --tools "" --model asale-luna
   '';
 in
 {
