@@ -21,7 +21,7 @@
 # app and cron keep the wrapper's plain Aperture default.
 let
   # 18888, deliberately NOT 8888: that port is a busy default (Jupyter, and the
-  # Trusk bastion tunnels in home/dotfiles/zsh/trusk.zsh forward to it), and a
+  # work ssh tunnels forward to it), and a
   # permanently-held 8888 made `ssh -L8888` fail with "Address already in use"
   # while silently swallowing every other tool's proxied traffic — the shim
   # allow-lists api.anthropic.com, so anything else got a TLS handshake timeout.
