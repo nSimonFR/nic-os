@@ -134,7 +134,9 @@ zcode() {
   (z $* && code .)
 }
 
-copy() {
+# Not `copy`/`paste`: `paste` is a coreutil, and a function shadowing it turns every
+# `… | paste - -` (including an agent's) into a dump of the clipboard.
+clip-copy() {
   if [[ "$OSTYPE" == darwin* ]]; then
     pbcopy
   elif [[ -n "$WAYLAND_DISPLAY" ]]; then
@@ -144,7 +146,7 @@ copy() {
   fi
 }
 
-paste() {
+clip-paste() {
   if [[ "$OSTYPE" == darwin* ]]; then
     pbpaste
   elif [[ -n "$WAYLAND_DISPLAY" ]]; then
