@@ -6,6 +6,7 @@ usage() {
   cat <<'EOF'
 usage: pbpaste                 clipboard text to stdout
        pbpaste --image [FILE]  save the clipboard image as PNG, print its path
+       pbpaste --screenshot [FILE]  fetch the latest saved screenshot, print its path
        pbpaste --files [DIR]   copy the files copied in Finder, print their paths
        pbpaste --types         list the clipboard's types
 EOF
@@ -25,6 +26,22 @@ case "${1:-}" in
       exit 1
     fi
     base64 -d <<<"$b64" >"$out"
+    echo "$out"
+    ;;
+  --screenshot)
+    # ⌘⇧4 saves a file instead of touching the clipboard. /tmp, the location
+    # set on this Mac, isn't indexed by Spotlight, hence matching by name.
+    shot=$(mac sh -s <<'EOF'
+loc=$(defaults read com.apple.screencapture location 2>/dev/null || echo "$HOME/Desktop")
+ls -t "$loc"/Screenshot*.png "$loc"/Capture*.png 2>/dev/null | head -1
+EOF
+    )
+    if [[ -z "$shot" ]]; then
+      echo "pbpaste: no saved screenshot found" >&2
+      exit 1
+    fi
+    out=${2:-$(mktemp --tmpdir pbpaste-XXXXXX.png)}
+    mac cat -- "$(printf %q "$shot")" </dev/null >"$out"
     echo "$out"
     ;;
   --files)
