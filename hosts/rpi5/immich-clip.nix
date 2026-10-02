@@ -23,12 +23,25 @@
 #   * the step is SELF-CONTAINED (it does its own type check and its own album
 #     add) because Immich reads workflow_step with no ORDER BY, so a filter cannot
 #     reliably gate a later action step. Do not chain assetAddToAlbums after it.
-{ config, ... }:
+{ config, pkgs, beastHost, ... }:
 
 let
   stateDir = "/var/lib/immich-clip";
+
+  beastMlUp = pkgs.writeShellApplication {
+    name = "immich-clip-beast-ml-up";
+    runtimeInputs = [ pkgs.curl ];
+    text = ''
+      curl -sf -o /dev/null --max-time 5 "http://${beastHost}:3003/ping" || exit 1
+    '';
+  };
 in
 {
+  # Each pass wakes the socket-activated immich-server (~400MB cold start, a
+  # frequent earlyoom kill). With beast off there is nothing new to embed.
+  systemd.services.immich-clip-drain.serviceConfig.ExecCondition =
+    "${beastMlUp}/bin/immich-clip-beast-ml-up";
+
   services.immich-clip-filter = {
     enable = true;
 
