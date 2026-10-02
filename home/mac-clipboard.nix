@@ -12,6 +12,7 @@
       ];
       text = ''
         MAC_CLIP_JS=${./scripts/mac-clip.js}
+        MAC_LAST_SCREENSHOT=${./scripts/mac-last-screenshot.sh}
       ''
       + builtins.readFile ./scripts/pbpaste.sh;
     })
