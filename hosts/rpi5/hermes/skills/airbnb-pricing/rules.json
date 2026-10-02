@@ -1,0 +1,28 @@
+{
+ "listing": "Zen 2-Room Flat — 82 rue Alexandre Dumas, Paris 20e",
+ "season_end": "2026-12-31",
+ "cap_nights": 90,
+ "min_stay": 2,
+ "cleaning_fee": 45,
+ "host_fee_pct": 15.5,
+ "vat_pct": 20,
+ "default_base_price": 139,
+ "base_price": {
+  "2026-10": 128,
+  "2026-11": 139,
+  "2026-12": 150
+ },
+ "weekend_pct": 10,
+ "floor": {
+  "cap_binding": 128,
+  "cap_free": 105
+ },
+ "lead_time_ladder": [
+  {"max_lead_days": 3, "discount_pct": 15},
+  {"max_lead_days": 7, "discount_pct": 10},
+  {"max_lead_days": 14, "discount_pct": 5}
+ ],
+ "orphan_premium_pct": 10,
+ "urgent_lead_days": 7,
+ "weekly_weekday": 0
+}
