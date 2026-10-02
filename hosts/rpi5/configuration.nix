@@ -252,8 +252,10 @@ in
     # Gate on memory alone (swap = 100 is always met): the 7.9G zram swap never
     # got under 20% free before the box froze, so the mem-AND-swap gate never
     # fired — 7 watchdog resets 2026-09-20..22.
-    freeMemThreshold      = 15;
-    freeMemKillThreshold  = 8;
+    # 15/8 sat at the idle floor: 26 kills on 2026-10-02, mostly Immich cold
+    # starts killed ~1s after boot.
+    freeMemThreshold      = 10;
+    freeMemKillThreshold  = 5;
     freeSwapThreshold     = 100;
     freeSwapKillThreshold = 100;
     extraArgs = [
