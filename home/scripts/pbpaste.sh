@@ -36,7 +36,7 @@ case "${1:-}" in
       exit 1
     fi
     while IFS= read -r p; do
-      mac "tar -cf - -C $(printf %q "$(dirname "$p")") $(printf %q "$(basename "$p")")" |
+      mac "tar -cf - -C $(printf %q "$(dirname "$p")") $(printf %q "$(basename "$p")")" </dev/null |
         tar -xf - -C "$out"
       echo "$out/$(basename "$p")"
     done <<<"$paths"
