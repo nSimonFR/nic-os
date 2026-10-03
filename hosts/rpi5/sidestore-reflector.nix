@@ -18,7 +18,7 @@
 # Design notes:
 #   - Implemented as an INDEPENDENT nftables table loaded by a oneshot, NOT via
 #     networking.nftables.*: enabling the nftables firewall backend would break the
-#     iptables-string rules in sumeria-mitm.nix. An independent table coexists fine
+#     iptables-string rules in tailnet-mitm.nix. An independent table coexists fine
 #     with the default iptables-nft firewall and Tailscale's own netfilter tables.
 #   - Scoped to iifname "tailscale0" so ordinary LAN traffic to 10.7.0.1 is left
 #     alone (on the LAN it currently routes out the default gateway, unchanged).

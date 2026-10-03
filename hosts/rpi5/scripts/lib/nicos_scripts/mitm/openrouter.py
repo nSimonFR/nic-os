@@ -41,16 +41,6 @@ class OpenRouterToGate:
         self.gate_host = gate_host
         self.gate_port = gate_port
 
-    def load(self, loader):
-        loader.add_option("gate_host", str, self.gate_host, "tiny-llm-gate host")
-        loader.add_option("gate_port", int, self.gate_port, "tiny-llm-gate port")
-
-    def configure(self, updated):
-        from mitmproxy import ctx
-
-        self.gate_host = ctx.options.gate_host
-        self.gate_port = ctx.options.gate_port
-
     def request(self, flow):
         req = flow.request
         # In transparent mode req.host is the destination IP; pretty_host is the SNI.
