@@ -1050,13 +1050,18 @@ def anchor_env(tmp_path, **extra):
     return {"ANCHOR_TOKEN_FILE": str(tok), "ANCHOR_DRY_RUN": "0", **extra}
 
 
+def claude_result(models=("claude-sonnet-5",), is_error=False):
+    return json.dumps({"is_error": is_error, "modelUsage": {m: {} for m in models}})
+
+
 class Ran:
-    def __init__(self, code=0):
+    def __init__(self, code=0, stdout=None):
         self.argvs, self.code = [], code
+        self.stdout = claude_result() if stdout is None else stdout
 
     def __call__(self, argv, **kw):
         self.argvs.append(argv)
-        return subprocess.CompletedProcess(argv, self.code, "", "")
+        return subprocess.CompletedProcess(argv, self.code, self.stdout, "")
 
 
 def test_no_open_window_pings_right_away(tmp_path):
@@ -1097,10 +1102,23 @@ def test_unreadable_usage_still_pings(tmp_path):
     assert len(ran.argvs) == 1
 
 
-def test_a_ping_that_opens_no_window_fails_the_unit(tmp_path):
-    opener = FakeOpener([usage(None), usage(None)])
+def test_the_ping_is_confirmed_without_rereading_usage(tmp_path):
+    opener = FakeOpener([usage(None)])
     assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
-                   run=Ran(), sleep=lambda s: None, log=lambda m: None) == 1
+                   run=Ran(), sleep=lambda s: None, log=lambda m: None) == 0
+    assert len(opener.requests) == 1
+
+
+@pytest.mark.parametrize("stdout", [
+    claude_result(models=("asale-codex",)),
+    claude_result(is_error=True),
+    claude_result(models=()),
+    "not json",
+])
+def test_a_ping_that_does_not_reach_anthropic_fails_the_unit(tmp_path, stdout):
+    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7),
+                   opener=FakeOpener([usage(None)]), run=Ran(stdout=stdout),
+                   sleep=lambda s: None, log=lambda m: None) == 1
 
 
 def test_the_usage_request_carries_the_oauth_beta_header(tmp_path):
