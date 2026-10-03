@@ -63,6 +63,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.dawarich_daily"
     "nicos_scripts.hermes.calendar_digest"
     "nicos_scripts.hermes.zen_watch"
+    "nicos_scripts.mitm.openrouter"
   ];
 
   meta = {

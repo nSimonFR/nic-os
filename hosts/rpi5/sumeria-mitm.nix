@@ -10,52 +10,12 @@ let
   # Regex for mitmproxy --allow-hosts, which matches against "host:port".
   apiDomainRe = "lydia-app\\.com";
 
-  # Periodically resolve the API host and update the Tailscale subnet route if
-  # the IPs changed. Keeps interception working if Sumeria migrates the API.
-  # lc.lydia-app.com round-robins across several VIPs, so advertise all of them
-  # — picking one with `head -1` would flap with DNS ordering.
-  #
-  # `tailscale set --advertise-routes=` is ABSOLUTE: it replaces the node's whole
-  # route list. Advertising only the Lydia IPs therefore withdrew 10.7.0.1/32 and
-  # silently killed SideStore refresh (2026-09-14). So this reconciles instead of
-  # overwriting: take what the node advertises today, drop the previous run's
-  # Lydia IPs, add the current ones, and leave every other route alone. The
-  # comparison is against live prefs rather than the state file so it also heals
-  # the reverse clobber — tailscale-autoconnect runs `tailscale up
-  # --advertise-routes=<static list>` on every boot, which drops the Lydia IPs.
-  routeUpdateScript = pkgs.writeShellApplication {
-    name = "sumeria-route-update";
-    runtimeInputs = with pkgs; [ dig gnugrep coreutils jq tailscale ];
-    text = ''
-      STATE_FILE="/var/lib/sumeria-mitm/lydia-ip.txt"
-
-      # `|| true` is load-bearing: writeShellApplication sets `-o pipefail`, so an
-      # empty dig — DNS not up yet on the boot run — makes `grep` exit 1 and kills
-      # the script *at the assignment*, before the guard below. That is how the
-      # 2026-09-21 boot left the Lydia routes withdrawn (interception silently
-      # down) until the next daily timer, which is exactly what the boot run is
-      # supposed to prevent.
-      NEW_IPS=$(dig +short lc.${apiDomain} | grep -E '^[0-9.]+$' | sed 's|$|/32|' | sort || true)
-      if [ -z "$NEW_IPS" ]; then
-        echo "[sumeria-route] DNS lookup failed, keeping current routes"
-        exit 0
-      fi
-
-      # Exit-node advertisement is rendered into AdvertiseRoutes as the two
-      # default routes but is a separate pref — never pass it back to --advertise-routes.
-      CURRENT=$(tailscale debug prefs \
-        | jq -r '.AdvertiseRoutes[]?' \
-        | grep -vE '^(0\.0\.0\.0/0|::/0)$' | sort)
-      PREV=$(tr ',' '\n' < "$STATE_FILE" 2>/dev/null | grep -v '^$' | sort || true)
-      OTHERS=$(comm -23 <(echo "$CURRENT") <(echo "$PREV"))
-      DESIRED=$(printf '%s\n%s\n' "$OTHERS" "$NEW_IPS" | grep -v '^$' | sort -u)
-
-      if [ "$DESIRED" != "$CURRENT" ]; then
-        echo "[sumeria-route] routes changed: $(echo "$CURRENT" | paste -sd, -) -> $(echo "$DESIRED" | paste -sd, -)"
-        tailscale set --advertise-routes="$(echo "$DESIRED" | paste -sd, -)"
-      fi
-      echo "$NEW_IPS" | paste -sd, - > "$STATE_FILE"
-    '';
+  # Keeps lc.${apiDomain}'s VIPs advertised as subnet routes (it round-robins across
+  # several, so all of them), without clobbering other routes.
+  routeUpdateScript = import ./lib/tailnet-routes.nix { inherit pkgs; } {
+    name = "sumeria";
+    hosts = [ "lc.${apiDomain}" ];
+    stateFile = "/var/lib/sumeria-mitm/lydia-ip.txt";
   };
 
   # Intercepts requests to lydia-app.com and extracts the three static session
