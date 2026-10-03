@@ -137,9 +137,15 @@
 		// change, and an unapproved route fails silently (the phone just talks to
 		// Lydia directly and the tokens freeze). Octopuce, Lydia's host, holds
 		// 91.194.60.0/23 — a resolved IP outside this /24 will need a new entry.
+		// 104.16.0.0/13 and 2606:4700::/32 are Cloudflare's ranges, which front
+		// openrouter.ai (tailnet-mitm.nix's openrouter target). Approving the
+		// enclosing ranges keeps a Cloudflare re-IP from silently ending interception;
+		// only what rpi5 actually advertises becomes a route.
 		"routes": {
 			"10.7.0.1/32":    ["autogroup:member"],
 			"91.194.60.0/24": ["autogroup:member"],
+			"104.16.0.0/13":  ["autogroup:member"],
+			"2606:4700::/32": ["autogroup:member"],
 		},
 	},
 }

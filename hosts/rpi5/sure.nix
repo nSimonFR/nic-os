@@ -70,7 +70,6 @@ in
   # Single service on port 8340; Sure connects to http://127.0.0.1:8340/api/v1
   services.sumeria-mitm = {
     enable           = true;
-    exitNodeClients  = [ "100.112.22.60" ]; # nphone
     tokenFileGroup   = "for-sure";
   };
 

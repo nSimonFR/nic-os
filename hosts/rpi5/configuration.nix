@@ -148,8 +148,8 @@ in
     ./nextcloud.nix
     ./calino.nix
     ./front-proxy.nix
+    ./tailnet-mitm.nix
     ./sumeria-mitm.nix
-    ./openrouter-mitm.nix
     ./hydroxide.nix
     ./vaultwarden.nix
     ./forgejo.nix
@@ -186,9 +186,9 @@ in
     #   - 10.7.0.1/32: SideStore's fixed "virtual computer" address. Advertising
     #     it lets the phone reach 10.7.0.1 over the tailnet; sidestore-reflector.nix
     #     then hairpins that traffic back so SideStore refreshes with no on-device VPN.
-    # The Sumeria MITM routes are NOT listed here: lc.lydia-app.com round-robins
-    # across VIPs that change, so sumeria-mitm.nix's route-update unit resolves
-    # them and merges them into this list at runtime. (34.117.84.152/32 used to
+    # The tailnet-mitm routes (Sumeria, openrouter.ai) are NOT listed here: their
+    # VIPs change, so tailnet-mitm.nix's route-update unit resolves them and merges
+    # them into this list at runtime. (34.117.84.152/32 used to
     # live here for the old api.lydia-app.com — dead since the 2026-09-08 move.)
     (import ../../shared/tailscale.nix {
       role = "server";
@@ -288,13 +288,18 @@ in
   # as defaults in ./cyrus.nix (single-host bespoke module). Override there.
   services.cyrus.enable = true;
 
-  # Apps calling openrouter.ai directly run on tiny-llm-gate (openrouter-mitm.nix).
-  services.openrouter-mitm = {
-    enable = true;
-    clients = [
-      "100.112.22.60" # nPhone
-      "100.78.185.89" # MacBook Pro
-    ];
+  # Transparent interception for these devices (tailnet-mitm.nix). Sumeria's
+  # target lives in sumeria-mitm.nix.
+  services.tailnet-mitm.clients = [
+    "100.112.22.60" # nPhone
+    "100.78.185.89" # MacBook Pro
+  ];
+  # Apps calling openrouter.ai's API directly are served by tiny-llm-gate.
+  services.tailnet-mitm.targets.openrouter = {
+    hosts = [ "openrouter.ai" ];
+    allowHosts = "^openrouter\\.ai:";
+    addon = "${pkgs.nicos-scripts}/${pkgs.python3.sitePackages}/nicos_scripts/mitm/openrouter.py";
+    ipv6 = true;
   };
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
