@@ -149,6 +149,7 @@ in
     ./calino.nix
     ./front-proxy.nix
     ./sumeria-mitm.nix
+    ./openrouter-mitm.nix
     ./hydroxide.nix
     ./vaultwarden.nix
     ./forgejo.nix
@@ -286,6 +287,15 @@ in
   # Model (opus), ultracode mode, and the managed repository set are configured
   # as defaults in ./cyrus.nix (single-host bespoke module). Override there.
   services.cyrus.enable = true;
+
+  # Apps calling openrouter.ai directly run on tiny-llm-gate (openrouter-mitm.nix).
+  services.openrouter-mitm = {
+    enable = true;
+    clients = [
+      "100.112.22.60" # nPhone
+      "100.78.185.89" # MacBook Pro
+    ];
+  };
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
   services.journald.extraConfig = ''
