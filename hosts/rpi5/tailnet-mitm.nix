@@ -12,7 +12,7 @@ let
   user = "sumeria-mitm";
   stateDir = "/var/lib/sumeria-mitm";
   v6Hosts = lib.concatMap (t: t.hosts) (lib.filter (t: t.ipv6) targets);
-  ipset = "${pkgs.ipset}/bin/ipset";
+  ipsetBin = "${pkgs.ipset}/bin/ipset";
 
   # `tailscale set --advertise-routes=` is ABSOLUTE: it replaces the node's whole
   # route list. Advertising only the Lydia IPs therefore withdrew 10.7.0.1/32 and
@@ -169,7 +169,7 @@ in
         iptables -t mangle -I PREROUTING -i tailscale0 -s ${ip} -p udp --dport 443 -j DROP
       '') cfg.clients
       + lib.optionalString (v6Hosts != [ ]) ''
-        ${ipset} create -exist tailnet-mitm6 hash:ip family inet6
+        ${ipsetBin} create -exist tailnet-mitm6 hash:ip family inet6
         ip6tables -t mangle -I PREROUTING -i tailscale0 -m set --match-set tailnet-mitm6 dst -j DROP
       ''
     );
