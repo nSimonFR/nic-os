@@ -13,7 +13,8 @@ alone its phase is wherever the day's first message landed. Fired at each anchor
 A ping whose time falls outside [DAY_START, DAY_END) is skipped: a window opened
 at night would still be open at the 07:00 anchor and push the whole day back.
 
-The ping must reach Anthropic, so it names a Claude model, never an asale-* id.
+The ping must reach Anthropic, so it names a Claude model, never an asale-* id,
+and only counts when a claude-* model answered it.
 
 Config via environment:
   ANCHOR_TOKEN_FILE   OAuth access token     (default /run/claude-oauth/token)
@@ -26,6 +27,7 @@ Config via environment:
   ANCHOR_DRY_RUN      "0" to actually ping   (default dry run)
 """
 
+import json
 import subprocess
 import sys
 import time
@@ -119,10 +121,15 @@ def plan(cfg, now, reset):
 
 
 def ping(cfg, run=None, log=log):
-    """One minimal request. Returns True on a zero exit (or in a dry run)."""
+    """One minimal request. True when a Claude model answered (or in a dry run).
+
+    Confirmed from claude's own JSON result: the usage endpoint lags the ping
+    and still showed no window 8s after one that had opened it.
+    """
     argv = [
         cfg.claude, "-p", "hi", "--model", cfg.model,
         "--setting-sources", "", "--strict-mcp-config", "--tools", "",
+        "--output-format", "json",
     ]
     if cfg.dry_run:
         log(f"DRY RUN — would run {' '.join(argv)}")
@@ -134,7 +141,18 @@ def ping(cfg, run=None, log=log):
         return False
     if res.returncode != 0:
         log(f"ping exited {res.returncode}: {(res.stdout + res.stderr).strip()[:300]}")
-    return res.returncode == 0
+        return False
+    try:
+        result = json.loads(res.stdout)
+        models = list(result.get("modelUsage") or {})
+    except (ValueError, AttributeError):
+        log(f"ping: unreadable result: {res.stdout.strip()[:300]}")
+        return False
+    if result.get("is_error") or not any(m.startswith("claude-") for m in models):
+        log(f"ping did not reach Anthropic: is_error={result.get('is_error')} models={models}")
+        return False
+    log(f"pinged {', '.join(models)}")
+    return True
 
 
 def main(env=None, clock=None, opener=None, run=None, sleep=time.sleep, log=log):
@@ -160,20 +178,7 @@ def main(env=None, clock=None, opener=None, run=None, sleep=time.sleep, log=log)
     else:
         log(f"{why} — pinging now")
 
-    if not ping(cfg, run=run, log=log):
-        return 1
-    if cfg.dry_run:
-        return 0
-    try:
-        after = fetch_reset(cfg, opener=opener)
-    except UsageUnavailable as e:
-        log(f"pinged; could not confirm the new window ({e})")
-        return 0
-    if after is None:
-        log("pinged but no window is open — did the request reach Anthropic?")
-        return 1
-    log(f"window open, resets at {after.astimezone(now.tzinfo):%H:%M}")
-    return 0
+    return 0 if ping(cfg, run=run, log=log) else 1
 
 
 if __name__ == "__main__":
