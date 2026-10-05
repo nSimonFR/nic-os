@@ -81,6 +81,8 @@ in
       allowHosts  = apiDomainRe;
       addon       = "${tokenExtractor}";
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
+      # lc.lydia-app.com has AAAA records since ~2026-10; without this, v6 clients bypass rpi5.
+      ipv6        = true;
     };
   };
 }
