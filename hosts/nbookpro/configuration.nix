@@ -59,6 +59,8 @@
   environment.systemPackages = [ pkgs.gcc pkgs.gnupg ];
 
   security.pam.services.sudo_local.touchIdAuth = true;
+  # pam_reattach: without it pam_tid falls back to a password inside herdr/tmux.
+  security.pam.services.sudo_local.reattach = true;
 
   services.skhd = {
     enable = true;
