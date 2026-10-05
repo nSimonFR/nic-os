@@ -50,7 +50,7 @@ inputs: final: _prev: {
   # …), with its pytest suite in checkPhase.
   # Consumers: eleven rpi5 units (ryot-connectors, papra, moxfield-sync,
   # travel-cal-sync, homepage, claude-remote-control, claude-notify-aggregator,
-  # scale-bridge), home/claude.nix's memory-sync hook, and
+  # scale-bridge), and
   # `nix build .#nicos-scripts` — which is also the flake check.
   nicos-scripts = final.callPackage ./services/nicos-scripts.nix { };
 

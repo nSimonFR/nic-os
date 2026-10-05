@@ -6,7 +6,6 @@ only observable by watching Telegram. boot_resume spawns 70-200 MB bridge worker
 on a 3.9 GB box, so its caps and its dry-run default are safety properties.
 """
 
-import io
 import json
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -510,113 +509,6 @@ def test_no_telegram_when_the_seam_is_not_wired():
 def test_an_unknown_subcommand_prints_the_manual(tmp_path, capsys):
     assert br.main(argv=["nonsense"], env={"HOME": str(tmp_path)}) == 2
     assert "boot-resume" in capsys.readouterr().out
-
-
-# ── memory_sync ───────────────────────────────────────────────────────────────
-
-from nicos_scripts.claude import memory_sync as ms  # noqa: E402
-
-
-def ms_cfg(tmp_path):
-    return ms.Config(
-        projects_dir=tmp_path / "projects",
-        project="proj",
-        dest=tmp_path / "notes" / "Claude Memory",
-        log_path=tmp_path / "log.txt",
-    )
-
-
-def ms_memory(cfg, name, text):
-    p = cfg.projects_dir / cfg.project / "memory" / name
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(text)
-    return p
-
-
-@pytest.mark.parametrize("rel,expected", [
-    ("proj/memory/note.md", "note.md"),
-    ("other/memory/note.md", None),
-    ("proj/memory/sub/note.md", None),
-    ("proj/memory/note.txt", None),
-    ("proj/notes/note.md", None),
-])
-def test_memory_file_only_matches_the_configured_project(tmp_path, rel, expected):
-    cfg = ms_cfg(tmp_path)
-    assert ms.memory_file(cfg, cfg.projects_dir / rel) == expected
-    assert ms.memory_file(cfg, "/etc/passwd") is None
-
-
-@pytest.mark.parametrize("name,rel", [
-    ("known_issue_x.md", "Known issues/known_issue_x.md"),
-    ("known-issue-y.md", "Known issues/known-issue-y.md"),
-    ("project_a.md", "Projects/project_a.md"),
-    ("todo-b.md", "Projects/todo-b.md"),
-    ("reference_c.md", "References/reference_c.md"),
-    ("feedback_d.md", "Feedback/feedback_d.md"),
-    ("MEMORY.md", "MEMORY.md"),
-    ("loose note.md", "loose note.md"),
-])
-def test_files_are_grouped_by_filename_prefix(name, rel):
-    assert ms.relpath_for(name) == rel
-
-
-def test_sync_writes_into_the_group_folder(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = ms_memory(cfg, "known_issue_x.md", "body\n")
-    target = ms.sync(cfg, p, "known_issue_x.md", log=lambda _m: None)
-    assert target == cfg.dest / "Known issues" / "known_issue_x.md"
-    assert target.read_text() == "body\n"
-
-
-def test_sync_skips_an_unchanged_file(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = ms_memory(cfg, "note.md", "same")
-    logged = []
-    ms.sync(cfg, p, "note.md", log=logged.append)
-    ms.sync(cfg, p, "note.md", log=logged.append)
-    assert len(logged) == 1
-
-
-def test_index_links_follow_the_grouping(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = ms_memory(cfg, "MEMORY.md",
-                  "- [a](known_issue_a.md) · [b](project_b.md) · [c](https://x/y.md) · [d](plain.md)\n")
-    out = ms.sync(cfg, p, "MEMORY.md", log=lambda _m: None).read_text()
-    assert out == ("- [a](Known%20issues/known_issue_a.md) · [b](Projects/project_b.md)"
-                   " · [c](https://x/y.md) · [d](plain.md)\n")
-
-
-def test_main_mirrors_a_memory_write_and_ignores_other_tools(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = ms_memory(cfg, "feedback_x.md", "fb")
-    env = {"HOME": str(tmp_path), "MEMORY_SYNC_PROJECTS_DIR": str(cfg.projects_dir),
-           "MEMORY_SYNC_PROJECT": "proj", "MEMORY_SYNC_DEST": str(cfg.dest),
-           "MEMORY_SYNC_LOG_PATH": str(cfg.log_path)}
-    payload = {"tool_name": "Read", "tool_input": {"file_path": str(p)}}
-    assert ms.main(env=env, stdin=io.StringIO(json.dumps(payload)), argv=[]) == 0
-    assert not cfg.dest.exists()
-    payload["tool_name"] = "Write"
-    assert ms.main(env=env, stdin=io.StringIO(json.dumps(payload)), argv=[]) == 0
-    assert (cfg.dest / "Feedback" / "feedback_x.md").read_text() == "fb"
-
-
-def test_main_never_fails_the_hook(tmp_path):
-    env = {"HOME": str(tmp_path), "MEMORY_SYNC_LOG_PATH": str(tmp_path / "log.txt")}
-    assert ms.main(env=env, stdin=io.StringIO("not json"), argv=[]) == 0
-    assert "bad-stdin" in (tmp_path / "log.txt").read_text()
-
-
-def test_all_backfills_every_memory_file(tmp_path, capsys):
-    cfg = ms_cfg(tmp_path)
-    ms_memory(cfg, "project_a.md", "a")
-    ms_memory(cfg, "reference_b.md", "b")
-    env = {"HOME": str(tmp_path), "MEMORY_SYNC_PROJECTS_DIR": str(cfg.projects_dir),
-           "MEMORY_SYNC_PROJECT": "proj", "MEMORY_SYNC_DEST": str(cfg.dest),
-           "MEMORY_SYNC_LOG_PATH": str(cfg.log_path)}
-    assert ms.main(env=env, argv=["--all"]) == 0
-    assert sorted(str(p.relative_to(cfg.dest)) for p in cfg.dest.rglob("*.md")) == \
-        ["Projects/project_a.md", "References/reference_b.md"]
-    assert "mirrored 2" in capsys.readouterr().out
 
 
 # ── context_baseline ──────────────────────────────────────────────────────────

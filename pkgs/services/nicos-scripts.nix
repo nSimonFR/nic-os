@@ -54,7 +54,6 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
     "nicos_scripts.claude.boot_resume"
-    "nicos_scripts.claude.memory_sync"
     "nicos_scripts.claude.window_anchor"
     "nicos_scripts.immich.adopt"
     "nicos_scripts.papra.tag_sweep"
