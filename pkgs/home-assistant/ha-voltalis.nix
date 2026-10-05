@@ -24,7 +24,7 @@ buildHomeAssistantComponent rec {
   owner = "ppaglier";
   domain = "voltalis";
   # renovate: datasource=github-releases depName=ppaglier/voltalis-homeassistant
-  version = "0.6.6";
+  version = "0.6.8";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
     # See "Fixed-output names" in pkgs/README.md.
@@ -32,7 +32,7 @@ buildHomeAssistantComponent rec {
     owner = "ppaglier";
     repo = "voltalis-homeassistant";
     rev = version;
-    hash = "sha256-uliKbPrgTYSJ8J+Mv9z3hLzdVz/dNJolNChjPNKroBE=";
+    hash = "sha256-RWFuuzUUc4Bj1e8FbRqkfCqxdg5qSlFwyEBJhYUOGe8=";
   };
   dependencies = with python3Packages; [
     aiohttp
