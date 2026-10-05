@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """t3-settle-retro — run mattpocock's /retro on each T3 Code thread you settle.
 
-T3 Code (0.0.45) has no on-settle hook, so this polls its state DB, read-only.
+T3 Code (0.0.46) has no on-settle hook, so this polls its state DB, read-only.
 A settled Claude thread is reviewed by forking its session — never persisted, so
 the original thread is untouched — in plan mode with read-only tools. Findings
 land in RETRO_DIR as markdown and are never pushed: nic-os is public, and a retro
@@ -11,7 +11,7 @@ A thread is reviewed again only when it is re-settled with more turns. The first
 run records what is already settled without reviewing it.
 
 Config via environment:
-  RETRO_T3_DB        T3 state DB              (default ~/.t3/userdata/state.sqlite)
+  RETRO_T3_DB        T3 state DB              (default ~/.t3/userdata/statev2.sqlite)
   RETRO_DIR          output dir               (default ~/retros)
   RETRO_STATE        reviewed-thread ledger   (default $RETRO_DIR/.state.json)
   RETRO_CLAUDE       claude binary            (default claude)
@@ -44,14 +44,18 @@ PROMPT = (
 )
 
 QUERY = """
-SELECT t.thread_id, t.title, t.branch, t.worktree_path, t.settled_at,
-       p.title, p.workspace_root, r.resume_cursor_json
-FROM projection_threads t
-JOIN provider_session_runtime r ON r.thread_id = t.thread_id
-LEFT JOIN projection_projects p ON p.project_id = t.project_id
-WHERE t.settled_at IS NOT NULL AND t.deleted_at IS NULL
-  AND r.provider_name = 'claudeAgent'
-ORDER BY t.settled_at
+SELECT t.thread_id, t.title, t.payload_json, pr.title,
+       pt.payload_json, ps.payload_json,
+       (SELECT count(*) FROM orchestration_v2_projection_runs r WHERE r.thread_id = t.thread_id)
+FROM orchestration_v2_projection_threads t
+JOIN orchestration_v2_projection_provider_threads pt ON pt.provider_thread_id = (
+  SELECT provider_thread_id FROM orchestration_v2_projection_provider_threads
+  WHERE thread_id = t.thread_id AND provider = 'claudeAgent'
+  ORDER BY updated_at DESC LIMIT 1)
+LEFT JOIN orchestration_v2_projection_provider_sessions ps ON ps.provider_session_id = pt.provider_session_id
+LEFT JOIN projection_projects pr ON pr.project_id = t.project_id
+WHERE t.deleted_at IS NULL AND json_extract(t.payload_json, '$.settledAt') IS NOT NULL
+ORDER BY json_extract(t.payload_json, '$.settledAt')
 """
 
 
@@ -72,7 +76,7 @@ class Config:
         home = Path(env_str("HOME", "", env) or Path.home())
         out_dir = Path(env_str("RETRO_DIR", "", env) or home / "retros")
         return cls(
-            db=Path(env_str("RETRO_T3_DB", "", env) or home / ".t3/userdata/state.sqlite"),
+            db=Path(env_str("RETRO_T3_DB", "", env) or home / ".t3/userdata/statev2.sqlite"),
             out_dir=out_dir,
             state_file=Path(env_str("RETRO_STATE", "", env) or out_dir / ".state.json"),
             claude=env_str("RETRO_CLAUDE", "", env) or "claude",
@@ -104,19 +108,20 @@ def settled_threads(db, connect=sqlite3.connect):
     finally:
         con.close()
     out = []
-    for tid, title, branch, worktree, settled, project, root, cursor in rows:
+    for tid, title, thread_json, project, pt_json, ps_json, runs in rows:
         try:
-            cur = json.loads(cursor or "{}")
+            thread, pt, ps = (json.loads(j or "{}") for j in (thread_json, pt_json, ps_json))
         except ValueError:
             continue
-        if not cur.get("resume"):
+        session = (pt.get("nativeThreadRef") or {}).get("nativeId")
+        if not session:
             continue
         out.append(Thread(
-            thread_id=tid, title=title or "", branch=branch or "",
+            thread_id=tid, title=title or "", branch=thread.get("branch") or "",
             # The fork must run where the session lives: Claude Code finds it by cwd.
-            cwd=worktree or root or "", settled_at=settled,
-            project=project or "", session_id=cur["resume"],
-            turns=int(cur.get("turnCount") or 0),
+            cwd=ps.get("cwd") or thread.get("worktreePath") or "",
+            settled_at=thread["settledAt"], project=project or "",
+            session_id=session, turns=int(runs or 0),
         ))
     return out
 
