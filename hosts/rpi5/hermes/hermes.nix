@@ -314,7 +314,7 @@ let
       keepalive_interval = 86400;
     };
 
-    # Notes (hosts/rpi5/notes.nix) — OpenKnowledge's MCP over the markdown notes, used
+    # Notes (hosts/rpi5/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
     # by the wiki-* skills. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 

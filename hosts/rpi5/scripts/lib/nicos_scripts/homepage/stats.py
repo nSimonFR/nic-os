@@ -166,9 +166,9 @@ class Config:
     # a 3.9 GB box. The DB is 0750 showmycards:showmycards; this service runs as root.
     # Lives on /mnt/data, never / (the catalogue is ~0.9 GB).
     showmycards_db: str = "/mnt/data/showmycards/database.db"
-    # Notes (hosts/rpi5/notes.nix): plain markdown, counted from the filesystem so the
-    # poll never touches OpenKnowledge.
-    notes_dir: str = "/mnt/data/notes"
+    # OpenKnowledge notes (hosts/rpi5/open-knowledge.nix): plain markdown, counted from
+    # the filesystem so the poll never touches the app.
+    notes_dir: str = "/mnt/data/cloud/NOTES"
 
     # Reactive Resume's Postgres role/db (hosts/rpi5/reactive-resume.nix, shared cluster).
     # pg_hba requires scram-sha-256 for this role (see pg_hba_file_rules), so the
@@ -299,7 +299,7 @@ class Stats:
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
-        "nextcloud", "calino", "affine", "notes", "beszel",
+        "nextcloud", "calino", "affine", "openknowledge", "beszel",
         "freereps", "aperture", "dsh",
     )
 
@@ -1040,7 +1040,7 @@ def fetch_beszel(cfg, run):
     }
 
 
-def fetch_notes(cfg, run, now=None):
+def fetch_openknowledge(cfg, run, now=None):
     # Dot-dirs hold OpenKnowledge's config and shadow git repo; _assets holds images,
     # which count toward storage but are not docs.
     now = time.time() if now is None else now
@@ -1784,7 +1784,7 @@ FETCHERS = {
     "nextcloud": fetch_nextcloud,
     "calino": fetch_calino,
     "affine": fetch_affine,
-    "notes": fetch_notes,
+    "openknowledge": fetch_openknowledge,
     "beszel": fetch_beszel,
     "karakeep": fetch_karakeep,
     "homeassistant": fetch_homeassistant,

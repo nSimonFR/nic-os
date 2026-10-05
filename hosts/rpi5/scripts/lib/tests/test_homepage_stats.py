@@ -464,7 +464,7 @@ def test_beaverhabits_reads_the_json_blob_and_skips_archived_habits():
     assert out == {"habits": 2, "done_today": 1, "checkins": 3}
 
 
-def test_notes_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
+def test_openknowledge_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
     import os
     old = time.time() - 30 * 86400
     (tmp_path / "Cuisine").mkdir()
@@ -476,7 +476,7 @@ def test_notes_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
     (tmp_path / "_assets" / "stray.md").write_text("w")
     (tmp_path / ".ok").mkdir()
     (tmp_path / ".ok" / "config.md").write_text("ignored" * 100)
-    out = hs.fetch_notes(hs.Config(notes_dir=str(tmp_path)), None)
+    out = hs.fetch_openknowledge(hs.Config(notes_dir=str(tmp_path)), None)
     assert out == {"docs": 2, "edited_7d": 1, "storage": 116}
 
 

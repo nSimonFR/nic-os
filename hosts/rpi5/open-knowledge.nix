@@ -1,7 +1,7 @@
-# hosts/rpi5/notes.nix
+# hosts/rpi5/open-knowledge.nix
 #
-# Notes — a plain-markdown folder (/mnt/data/notes) served by OpenKnowledge: web editor,
-# live collaboration and an MCP endpoint at /mcp. Replaces AFFiNE.
+# OpenKnowledge serving the markdown notes in the Nextcloud folder (/mnt/data/cloud/NOTES):
+# web editor, live collaboration and an MCP endpoint at /mcp. Replaces AFFiNE.
 #
 # ⚠ NO AUTHENTICATION: anyone who reaches the port can read and edit every note, and the
 #   MCP is unauthenticated too. Tailnet-only (never funnel); shared users are limited to
@@ -13,7 +13,8 @@
 let
   pkg = pkgs.callPackage ../../pkgs/services/open-knowledge { };
   internalPort = 13354;
-  notesDir = "/mnt/data/notes";
+  notesDir = "/mnt/data/cloud/NOTES";
+  occ = "${config.services.nextcloud.occ}/bin/nextcloud-occ";
   stateDir = "/var/lib/open-knowledge";
 
   # Telemetry: no remote export without OTEL_* vars; this also stops the local span log,
@@ -27,14 +28,11 @@ let
   '';
 in
 {
-  systemd.tmpfiles.rules = [
-    "d ${notesDir} 0750 nsimon users -"
-  ];
-
   systemd.services.open-knowledge = {
     description = "OpenKnowledge — markdown notes editor + MCP";
     wantedBy = [ "multi-user.target" ];
     after = [ "network.target" ];
+    # /mnt/data/cloud is a bind mount of the Nextcloud files dir (nextcloud.nix).
     unitConfig.RequiresMountsFor = [ notesDir ];
 
     environment = {
@@ -64,7 +62,7 @@ in
         "-p ${toString internalPort}"
         "--no-open-browser"
         "--idle-shutdown off"
-        "--external-url ${config.nic.services.notes.public.publicUrl}"
+        "--external-url ${config.nic.services.open-knowledge.public.publicUrl}"
       ];
       # earlyoom's SIGTERM ends it with exit 0, which on-failure would not restart.
       Restart = "always";
@@ -79,7 +77,26 @@ in
     };
   };
 
-  nic.services.notes = {
+  # Files written here (editor, agents) stay invisible to Nextcloud's apps until scanned;
+  # the folder is small (~1k files, ~3 s).
+  systemd.services.open-knowledge-nc-scan = {
+    description = "Index the notes folder into Nextcloud";
+    after = [ "phpfpm-nextcloud.service" ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = "root";
+      ExecStart = "${occ} files:scan --path /nsimon/files/NOTES --quiet";
+    };
+  };
+  systemd.timers.open-knowledge-nc-scan = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "15min";
+    };
+  };
+
+  nic.services.open-knowledge = {
     backup = [ "mnt-data" ];
     heavyUnits = [ "open-knowledge.service" ];
     heavyPriority = 70;
@@ -96,7 +113,7 @@ in
         description = "Markdown notes & wiki (OpenKnowledge)";
         widget = {
           type = "customapi";
-          url = "http://127.0.0.1:8087/notes";
+          url = "http://127.0.0.1:8087/openknowledge";
           refreshInterval = 3600000;
           mappings = [
             { field = "docs"; label = "Docs"; format = "number"; }
