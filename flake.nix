@@ -632,25 +632,9 @@
           ];
         };
 
-        "${username}@${rpiconfig}" = home-manager.lib.homeManagerConfiguration {
-          pkgs = import nixpkgs {
-            system = "aarch64-linux";
-            config.allowUnfree = true;
-            overlays = [ nicOsOverlay ];
-          };
-          extraSpecialArgs = baseArgs rpiconfig // {
-            # Same module set as the NixOS-integrated config above, so the same
-            # hermes arguments are required.
-            inherit (rpi5Params) tailnetFqdn apertureUrl tinyLlmGateUrl;
-            devSetup = false;
-            unstablePkgs = unstableFor "aarch64-linux";
-          };
-          modules = [
-            inputs.ragenix.homeManagerModules.default
-            ./home
-            ./hosts/rpi5/home.nix
-          ];
-        };
+        # No standalone "nsimon@rpi5": rpi5's Home Manager is the NixOS module
+        # above, activated by deploy-rpi5.yml with the system. A second profile
+        # went stale and shadowed it (PATH, user units).
 
         "${username}@${macconfig}" = home-manager.lib.homeManagerConfiguration {
           pkgs = import nixpkgs {

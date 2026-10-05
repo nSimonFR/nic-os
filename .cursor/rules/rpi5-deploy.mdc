@@ -1,46 +1,19 @@
 ---
-description: Auto-deploy RPi5 NixOS + Home Manager configuration via SSH after changes
+description: How RPi5 NixOS + Home Manager changes reach the Pi
 globs: hosts/rpi5/**/*.nix, home/**/*.nix
 alwaysApply: false
 ---
 
 # RPi5 Deployment
 
-After making changes to RPi5 or shared home configuration files, apply them.
+Merge to `main`. `.github/workflows/deploy-rpi5.yml` builds the system in CI, pushes
+it to the nsimon-nicos Cachix, and the Cachix Deploy agent on the Pi activates it.
+Home Manager is the NixOS module, so it is activated with the system
+(`home-manager-nsimon.service`). There is no standalone `nsimon@rpi5` config.
 
-`nixos-rebuild` is **not available on macOS**. The correct workflow is to rsync changed files to the rpi5, then run the rebuild remotely over SSH.
+The Pi cannot evaluate its own config (~2.1 GiB eval RSS, earlyoom kills it), so
+do not run `nixos-rebuild` or `home-manager switch` there.
 
-**Important:** Always use `path:` prefix so Nix reads files from disk without requiring `git add`.
-
-## Deploy system locally (on rpi5)
-
-```sh
-sudo nixos-rebuild switch --flake 'path:.#rpi5'
-```
-
-## Deploy Home Manager locally (on rpi5)
-
-```sh
-home-manager switch --flake 'path:.#nsimon@rpi5'
-```
-
-## Deploy remotely (from another machine via SSH)
-
-```sh
-# 1. Sync changed files (adjust path as needed for what changed)
-rsync -av /Users/nsimon/nic-os/hosts/rpi5/ nsimon@rpi5:~/nic-os/hosts/rpi5/
-
-# 2. System config
-ssh nsimon@rpi5 "cd ~/nic-os && sudo nixos-rebuild switch --flake path:.#rpi5 2>&1"
-
-# 3. Home Manager config (user packages, dotfiles)
-ssh nsimon@rpi5 "cd ~/nic-os && home-manager switch --flake path:.#nsimon@rpi5 2>&1"
-```
-
-If only specific files changed, sync just those files instead of the whole directory to save time:
-
-```sh
-rsync -av /Users/nsimon/nic-os/hosts/rpi5/some-file.nix nsimon@rpi5:~/nic-os/hosts/rpi5/some-file.nix
-```
-
-If the build fails, read the error output and fix the Nix configuration before retrying.
+Auto-merged PRs start no workflow run; the 30-minute schedule picks them up.
+Check `stat -c %y /run/current-system` after a deploy, and re-run with
+`gh workflow run deploy-rpi5.yml --ref main -f force=true` if it did not activate.
