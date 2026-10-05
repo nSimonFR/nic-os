@@ -507,9 +507,12 @@ def eur(amount, signed=True):
 
     Sign leads, symbol trails ("+9,783€", "316€) — the main half of the value
     keeps the leading € it has always had; only what is in brackets is written
-    the French way round.
+    the French way round. From 10k it shortens to "+10.0k€": "€26,250
+    (+10,027€)" is one character too wide and wraps the tile onto two lines.
     """
     sign = ("+" if amount >= 0 else "-") if signed else ""
+    if abs(amount) >= 10_000:
+        return f"{sign}{abs(amount) / 1000:.1f}k€"
     return f"{sign}{abs(amount):,.0f}€"
 
 
