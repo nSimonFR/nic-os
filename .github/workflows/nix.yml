@@ -67,10 +67,9 @@ jobs:
   substitutes:
     name: substitutes
     # Build what the Pi would otherwise compile, and push it to our Cachix so the
-    # Pi only ever downloads. PRs compare against their base; pushes to main
-    # against the previous main, so the cache also holds what gets deployed.
-    # Fails only if a build fails or outruns the timeout.
-    if: github.event_name != 'workflow_dispatch'
+    # Pi only ever downloads. PRs only: on main, deploy-rpi5 builds and pushes the
+    # whole system. Fails only if a build fails or outruns the timeout.
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04-arm
     # The 6h job cap minus headroom. nodejs/V8 is the known worst case.
     timeout-minutes: 345
@@ -92,7 +91,7 @@ jobs:
       - name: Find what rpi5 would newly build from source
         id: find
         env:
-          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
 

@@ -405,9 +405,9 @@ in
   # stateVersion, experimental-features (the base two), auto-optimise-store, and
   # the nix.gc schedule come from ../../common/nixos.nix.
   nix.settings = {
-    # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; whatever
-    # cache.nixos.org lacks is built by CI's `substitutes` job and pushed to
-    # nsimon-nicos, so the Pi only compiles what never went through a PR.
+    # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; the rest
+    # of the system is built by deploy-rpi5.yml and pushed to nsimon-nicos, which
+    # the cachix-agent then downloads from.
     substituters = [
       "https://cache.nixos.org"
       "https://nixos-raspberrypi.cachix.org"
