@@ -7,6 +7,9 @@
 # linux-arm64 only: the rpi5 is the one host that runs it; the Mac uses the
 # desktop app. Bumps come from Renovate; `t3 update` must not be used, it
 # installs a second copy under ~/.t3/runtime.
+#
+# Tracks the nightly channel, matching the Mac's "T3 Code (Nightly)" app: a
+# stable server behind a nightly client loses access to its sessions.
 { lib
 , stdenv
 , fetchurl
@@ -14,7 +17,7 @@
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.0.45";
+  version = "0.0.46-nightly.20261005.2689";
 in
 stdenv.mkDerivation {
   pname = "t3code";
@@ -23,7 +26,7 @@ stdenv.mkDerivation {
   src = fetchurl {
     name = "t3-${version}-linux-arm64.tar.gz";
     url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-linux-arm64.tar.gz";
-    hash = "sha256-kTNZEBfn1HdSX9pmGkbMlSj9YqDEImgHnkNf+zW5Wsk=";
+    hash = "sha256-Bk0jCNS43BBEDtn5AkFVi++B0PsNMzv+Yo5wcEO/hOM=";
   };
 
   nativeBuildInputs = [ autoPatchelfHook ];

@@ -61,6 +61,11 @@
       "followTag": "next"
     },
     {
+      "description": "t3code follows nightly pre-releases on purpose: the Mac runs the T3 Code (Nightly) app, and a stable rpi5 server behind it loses access to its sessions over T3 Connect.",
+      "matchDepNames": ["pingdotgg/t3code"],
+      "ignoreUnstable": false
+    },
+    {
       "description": "pkgs/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. The `hashes` check stays as the gate for what the script cannot derive (vendorHash, pnpmDepsHash). The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
       "matchFileNames": ["pkgs/**"],
       "postUpgradeTasks": {
