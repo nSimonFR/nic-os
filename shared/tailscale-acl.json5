@@ -137,6 +137,7 @@
 		// change, and an unapproved route fails silently (the phone just talks to
 		// Lydia directly and the tokens freeze). Octopuce, Lydia's host, holds
 		// 91.194.60.0/23 — a resolved IP outside this /24 will need a new entry.
+		// 34.117.84.152/32 is api.lydia-app.com (a Google LB anycast IP).
 		// 2001:67c:288::/48 holds the same VIPs' AAAA records (v6 is only routed
 		// here to be dropped, so the app falls back to the intercepted v4).
 		// 104.16.0.0/13 and 2606:4700::/32 are Cloudflare's ranges, which front
@@ -147,6 +148,7 @@
 			"10.7.0.1/32":    ["autogroup:member"],
 			"91.194.60.0/24": ["autogroup:member"],
 			"2001:67c:288::/48": ["autogroup:member"],
+			"34.117.84.152/32":  ["autogroup:member"],
 			"104.16.0.0/13":  ["autogroup:member"],
 			"2606:4700::/32": ["autogroup:member"],
 		},

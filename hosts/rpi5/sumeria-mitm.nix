@@ -77,7 +77,9 @@ in
     services.tailnet-mitm.stateGroup = cfg.tokenFileGroup;
     services.tailnet-mitm.targets.sumeria = {
       # lc.lydia-app.com round-robins across several VIPs; all are advertised.
-      hosts       = [ "lc.${apiDomain}" ];
+      # The authenticated calls are back on api.lydia-app.com (2026-10-05): with
+      # only lc routed, the app's lc calls carried no tokens.
+      hosts       = [ "lc.${apiDomain}" "api.${apiDomain}" ];
       allowHosts  = apiDomainRe;
       addon       = "${tokenExtractor}";
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
