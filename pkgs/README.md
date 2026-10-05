@@ -64,10 +64,53 @@ that name to the constant `"source"` — so a bumped `rev` beside a stale `hash`
 silently reuses the old tree rather than failing. `sure-0.7.3` ran as v0.7.2 for
 a day exactly this way.
 
-The rule, the reasoning and the procedure for verifying a hash when you add a
-`name` live in **`.cursor/rules/fixed-output-names.mdc`**, which auto-attaches
-when an agent edits anything under `pkgs/`. Kept there rather than duplicated
-here: the moment it matters is while the file is being written.
+```nix
+src = fetchFromGitHub {
+  name = "${pname}-${version}-source";   # ← without this, a stale hash is silent
+  owner = "…";
+  rev = "v${version}";
+  hash = "sha256-…";
+};
+```
+
+Renovate rewrites `version` on `pkgs/` packages but cannot recompute the hash, so
+every such PR arrives with a new `rev` beside a stale `hash`.
+
+### What counts as version-bearing
+
+- `"${pname}-${version}-source"` — the default; use it unless something prevents it.
+- A literal version, where no `version` attr is in scope: `"xplane-sdk-411-source"`,
+  `"openrgb-${version}-source"` after hoisting `version` into a `let`.
+- For a plain file, keep the extension: `"${pname}-${version}.pkg.tar.zst"`.
+
+`fetchurl` names itself after the URL's basename, which *often* carries the
+version — don't rely on that. Name it explicitly like everything else.
+
+### When adding `name` to an existing fetcher
+
+Renaming a fixed-output derivation changes its store path, which forces a
+re-fetch and re-verifies the declared hash against upstream. **Verify before you
+commit**, or a hash that is already stale turns into a build failure someone else
+has to diagnose:
+
+```sh
+# unpacked (fetchFromGitHub / fetchFromGitLab / fetchzip)
+nix-prefetch-url --unpack "https://github.com/<owner>/<repo>/archive/<rev>.tar.gz"
+nix hash to-sri --type sha256 <base32-from-above>
+
+# flat file (fetchurl)
+nix store prefetch-file --hash-type sha256 "<url>"
+```
+
+### Exceptions
+
+A source that comes from a `flake = false` input (`rtk`, `gogcli`, `goplaces`,
+`showmycards`) needs none of this — `flake.lock` pins it by `narHash`, so there
+is no fetcher call and no hash for a bump to leave behind.
+
+An upstream that genuinely has no versions (a file tracked off `master`, like the
+Forgejo theme in `hosts/rpi5/forgejo.nix`) cannot satisfy the rule. Say so in a
+comment on the fetcher rather than leaving it looking like an oversight.
 
 ## Verifying a move
 
