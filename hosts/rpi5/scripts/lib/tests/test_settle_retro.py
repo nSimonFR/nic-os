@@ -15,19 +15,32 @@ def make_db(path, threads):
     con = sqlite3.connect(path)
     con.executescript("""
         CREATE TABLE projection_projects (project_id TEXT, title TEXT, workspace_root TEXT);
-        CREATE TABLE projection_threads (thread_id TEXT, project_id TEXT, title TEXT,
-            branch TEXT, worktree_path TEXT, settled_at TEXT, deleted_at TEXT);
-        CREATE TABLE provider_session_runtime (thread_id TEXT, provider_name TEXT,
-            resume_cursor_json TEXT);
+        CREATE TABLE orchestration_v2_projection_threads (thread_id TEXT, project_id TEXT,
+            title TEXT, deleted_at TEXT, payload_json TEXT);
+        CREATE TABLE orchestration_v2_projection_provider_threads (provider_thread_id TEXT,
+            thread_id TEXT, provider TEXT, provider_session_id TEXT, updated_at TEXT,
+            payload_json TEXT);
+        CREATE TABLE orchestration_v2_projection_provider_sessions (provider_session_id TEXT,
+            payload_json TEXT);
+        CREATE TABLE orchestration_v2_projection_runs (run_id TEXT, thread_id TEXT);
         INSERT INTO projection_projects VALUES ('p1', 'nic-os', '/repo');
     """)
     for t in threads:
-        con.execute("INSERT INTO projection_threads VALUES (?,?,?,?,?,?,?)", (
-            t["id"], "p1", t.get("title", "fix it"), "br", t.get("worktree", "/wt"),
-            t.get("settled"), t.get("deleted")))
-        con.execute("INSERT INTO provider_session_runtime VALUES (?,?,?)", (
-            t["id"], t.get("provider", "claudeAgent"),
-            json.dumps({"resume": "sess-" + t["id"], "turnCount": t.get("turns", 5)})))
+        tid = t["id"]
+        con.execute("INSERT INTO orchestration_v2_projection_threads VALUES (?,?,?,?,?)", (
+            tid, "p1", t.get("title", "fix it"), t.get("deleted"), json.dumps({
+                "branch": "br", "worktreePath": t.get("worktree", "/wt"),
+                "settledAt": t.get("settled")})))
+        for n, (provider, session) in enumerate(t.get("sessions", [("claudeAgent", "sess-" + tid)])):
+            con.execute(
+                "INSERT INTO orchestration_v2_projection_provider_threads VALUES (?,?,?,?,?,?)",
+                (f"pt-{tid}-{n}", tid, provider, f"ps-{tid}-{n}", f"2026-10-05T0{n}:00:00Z",
+                 json.dumps({"nativeThreadRef": {"nativeId": session}})))
+            if "cwd" in t:
+                con.execute("INSERT INTO orchestration_v2_projection_provider_sessions VALUES (?,?)",
+                            (f"ps-{tid}-{n}", json.dumps({"cwd": t["cwd"]})))
+        con.executemany("INSERT INTO orchestration_v2_projection_runs VALUES (?,?)",
+                        [(f"{tid}-r{i}", tid) for i in range(t.get("turns", 5))])
     con.commit()
     con.close()
 
@@ -59,11 +72,22 @@ def test_only_settled_live_claude_threads_are_read(tmp_path):
         {"id": "a", "settled": "2026-10-05T10:00:00Z"},
         {"id": "b"},                                                  # not settled
         {"id": "c", "settled": "2026-10-05T11:00:00Z", "deleted": "x"},
-        {"id": "d", "settled": "2026-10-05T12:00:00Z", "provider": "codex"},
+        {"id": "d", "settled": "2026-10-05T12:00:00Z", "sessions": [("codex", "x")]},
+        {"id": "e", "settled": "2026-10-05T13:00:00Z", "sessions": []},  # imported, never resumed
     ])
     got = sr.settled_threads(tmp_path / "t3.sqlite")
     assert [t.thread_id for t in got] == ["a"]
     assert got[0].session_id == "sess-a" and got[0].cwd == "/wt" and got[0].project == "nic-os"
+    assert got[0].turns == 5
+
+
+def test_the_latest_claude_session_is_forked_where_it_lives(tmp_path):
+    make_db(tmp_path / "t3.sqlite", [{
+        "id": "a", "settled": "2026-10-05T10:00:00Z", "cwd": "/other-wt",
+        "sessions": [("claudeAgent", "old"), ("codex", "cx"), ("claudeAgent", "new")],
+    }])
+    [t] = sr.settled_threads(tmp_path / "t3.sqlite")
+    assert (t.session_id, t.cwd) == ("new", "/other-wt")
 
 
 def test_due_skips_short_threads_and_reviews_a_resettle_only_after_more_turns():
