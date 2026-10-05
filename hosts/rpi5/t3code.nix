@@ -44,6 +44,8 @@ in
       KillMode = "mixed";
       Restart = "always";
       RestartSec = 5;
+      # SIGTERM exits 130, which would mark every clean stop as failed.
+      SuccessExitStatus = 130;
 
       Environment = [
         "HOME=${homeDir}"
