@@ -576,9 +576,15 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     """net_contribution is the obvious field and is flat ZERO in holdings mode."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.02240884}}))
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
-        "net_worth": "€66,551 (35,610€)",
+        "net_worth": "€66,551 (35.6k€)",
         "invested": "€25,827 (+9,783€)",
         "return_30d": "2.24% (+881€)"}
+
+
+def test_bracketed_amounts_from_10k_are_compact_so_the_tile_stays_one_line():
+    assert hs.eur(10027) == "+10.0k€"
+    assert hs.eur(-9999) == "-9,999€"
+    assert hs.eur(36277, signed=False) == "36.3k€"
 
 
 def test_a_loss_is_shown_with_a_minus_not_a_negative_inside_the_brackets(tmp_path):
