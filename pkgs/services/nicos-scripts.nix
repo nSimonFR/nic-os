@@ -56,6 +56,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.claude.boot_resume"
     "nicos_scripts.claude.memory_sync"
     "nicos_scripts.claude.window_anchor"
+    "nicos_scripts.claude.settle_retro"
     "nicos_scripts.immich.adopt"
     "nicos_scripts.papra.tag_sweep"
     "nicos_scripts.papra.proton_poll"
