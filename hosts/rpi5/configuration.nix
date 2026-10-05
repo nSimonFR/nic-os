@@ -171,6 +171,7 @@ in
     ./claude/claude-notify-aggregator.nix
     ./claude/claude-context-baseline.nix
     ./claude/claude-window-anchor.nix
+    ./claude/t3-settle-retro.nix
     ./gramps-web.nix
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
