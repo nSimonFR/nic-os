@@ -20,6 +20,7 @@ let
   # (`/wiki-ingest`, etc.). The SKILL.md frontmatter is benign for
   # Claude Code, which only reads the `description` field.
   claudeSlashCommandSkills = [
+    "pr"
     "wiki-ingest"
     "wiki-process"
     "wiki-lint"
@@ -31,8 +32,8 @@ let
   # public repo. Out-of-store links keep it out of the store too; without the clone
   # they just dangle. Skills are named here because nix cannot read the checkout.
   truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK/trusk";
-  truskSkills = [ "pr" "ship" "trusk-data-glossary" "trusk-preview-deploy" ];
-  truskSlashCommandSkills = [ "pr" "ship" ];
+  truskSkills = [ "ship" "trusk-data-glossary" "trusk-preview-deploy" ];
+  truskSlashCommandSkills = [ "ship" ];
   truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
 
   truskFiles = lib.optionalAttrs pkgs.stdenv.isDarwin (
