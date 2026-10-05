@@ -166,6 +166,9 @@ class Config:
     # a 3.9 GB box. The DB is 0750 showmycards:showmycards; this service runs as root.
     # Lives on /mnt/data, never / (the catalogue is ~0.9 GB).
     showmycards_db: str = "/mnt/data/showmycards/database.db"
+    # Notes (hosts/rpi5/notes.nix): plain markdown, counted from the filesystem so the
+    # poll never touches OpenKnowledge.
+    notes_dir: str = "/mnt/data/notes"
 
     # Reactive Resume's Postgres role/db (hosts/rpi5/reactive-resume.nix, shared cluster).
     # pg_hba requires scram-sha-256 for this role (see pg_hba_file_rules), so the
@@ -258,6 +261,7 @@ class Config:
             beszel_db=s("BESZEL_DB", cls.beszel_db),
             beaverhabits_db=s("BEAVERHABITS_DB", cls.beaverhabits_db),
             showmycards_db=s("SHOWMYCARDS_DB", cls.showmycards_db),
+            notes_dir=s("NOTES_DIR", cls.notes_dir),
             rxresume_db=s("RXRESUME_DB", cls.rxresume_db),
             rxresume_role=s("RXRESUME_ROLE", cls.rxresume_role),
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
@@ -295,7 +299,7 @@ class Stats:
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
-        "nextcloud", "calino", "affine", "beszel",
+        "nextcloud", "calino", "affine", "notes", "beszel",
         "freereps", "aperture", "dsh",
     )
 
@@ -1036,6 +1040,23 @@ def fetch_beszel(cfg, run):
     }
 
 
+def fetch_notes(cfg, run, now=None):
+    # Dot-dirs hold OpenKnowledge's config and shadow git repo; _assets holds images,
+    # which count toward storage but are not docs.
+    now = time.time() if now is None else now
+    docs = edited = size = 0
+    for dirpath, dirnames, filenames in os.walk(cfg.notes_dir):
+        dirnames[:] = [d for d in dirnames if not d.startswith(".")]
+        in_assets = os.path.relpath(dirpath, cfg.notes_dir).split(os.sep)[0] == "_assets"
+        for name in filenames:
+            st = os.stat(os.path.join(dirpath, name))
+            size += st.st_size
+            if name.endswith(".md") and not in_assets:
+                docs += 1
+                edited += st.st_mtime > now - 7 * 86400
+    return {"docs": docs, "edited_7d": edited, "storage": size}
+
+
 def fetch_karakeep(cfg, run):
     # Read-only direct SQLite query — no API key, never wakes karakeep.
     #
@@ -1763,6 +1784,7 @@ FETCHERS = {
     "nextcloud": fetch_nextcloud,
     "calino": fetch_calino,
     "affine": fetch_affine,
+    "notes": fetch_notes,
     "beszel": fetch_beszel,
     "karakeep": fetch_karakeep,
     "homeassistant": fetch_homeassistant,

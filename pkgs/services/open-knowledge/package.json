@@ -1,0 +1,8 @@
+{
+  "name": "open-knowledge-wrapper",
+  "private": true,
+  "description": "Lockfile wrapper: the npm tarball ships no lockfile, buildNpmPackage needs one.",
+  "dependencies": {
+    "@inkeep/open-knowledge": "0.82.1"
+  }
+}

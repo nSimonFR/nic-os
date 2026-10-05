@@ -314,6 +314,10 @@ let
       keepalive_interval = 86400;
     };
 
+    # Notes (hosts/rpi5/notes.nix) — OpenKnowledge's MCP over the markdown notes, used
+    # by the wiki-* skills. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
+    mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
+
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
     # single-chat-ID Telegram allowlist, not workspace isolation).

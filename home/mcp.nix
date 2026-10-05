@@ -41,6 +41,10 @@ let
   # its own commit, not a side effect of this one.
   affineMcpUrl = "https://${tailnetFqdn}:7020/sse";
 
+  # Notes (hosts/rpi5/notes.nix): OpenKnowledge's own streamable-HTTP MCP over the
+  # markdown notes folder. Unauthenticated; reachable on the tailnet only.
+  notesMcpUrl = "https://${tailnetFqdn}:3980/mcp";
+
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
     # Public — no secrets
@@ -49,6 +53,7 @@ let
     GitHub  = { command = "${githubMcp}"; };
     Miro    = { command = "${miroMcp}"; };
     affine  = { type = "sse"; url = affineMcpUrl; };
+    notes   = { type = "http"; url = notesMcpUrl; };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
