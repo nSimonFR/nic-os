@@ -9,13 +9,20 @@
 #
 # Runs as nsimon because Claude and Hermes edit the same files directly. HOME is the state dir: `open-knowledge start` installs skill bundles into
 # $HOME, which must not be ~/.claude.
-{ config, pkgs, lib, ... }:
+#
+# The editor's agent panel runs Claude through ACP (`npx -y @agentclientprotocol/claude-agent-acp`,
+# inheriting this unit's env): it talks to Aperture like Cyrus, the gate injects the OAuth
+# token, and CLAUDE_CODE_EXECUTABLE swaps the SDK's downloaded binary for the Nix one.
+{ config, pkgs, lib, unstablePkgs, apertureUrl, ... }:
 let
   pkg = pkgs.callPackage ../../pkgs/services/open-knowledge { };
   internalPort = 13354;
   notesDir = "/mnt/data/cloud/NOTES";
   occ = "${config.services.nextcloud.occ}/bin/nextcloud-occ";
   stateDir = "/var/lib/open-knowledge";
+  claudeCode = pkgs.callPackage ../../pkgs/agents/claude-code.nix {
+    inherit (unstablePkgs) claude-code;
+  };
 
   # Telemetry: no remote export without OTEL_* vars; this also stops the local span log,
   # which otherwise grows inside the notes folder (.ok/local/telemetry, ~34 MB in a week).
@@ -34,6 +41,8 @@ in
     after = [ "network.target" ];
     # /mnt/data/cloud is a bind mount of the Nextcloud files dir (nextcloud.nix).
     unitConfig.RequiresMountsFor = [ notesDir ];
+    # npx launches the ACP agent; rg replaces claude's vendored one (4K-page jemalloc aborts here).
+    path = [ pkgs.nodejs_24 pkgs.ripgrep pkgs.git ];
 
     environment = {
       HOME = stateDir;
@@ -46,6 +55,11 @@ in
       # Required to serve on the tailnet URL; reachability is gated by Tailscale instead.
       OK_ALLOW_EXTERNAL = "1";
       SSL_CERT_FILE = "/etc/ssl/certs/ca-certificates.crt";
+      CLAUDE_CODE_EXECUTABLE = lib.getExe claudeCode;
+      USE_BUILTIN_RIPGREP = "0";
+      ANTHROPIC_BASE_URL = apertureUrl;
+      ANTHROPIC_API_KEY = "injected-by-tiny-llm-gate";
+      CLAUDE_CODE_ENABLE_TELEMETRY = "0";
     };
 
     serviceConfig = {
