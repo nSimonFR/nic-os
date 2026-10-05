@@ -264,7 +264,9 @@ in
       # Prefer expendable heavy processes: immich transcoding/API and ffmpeg.
       "--prefer" "(immich|ffmpeg)"
       # Protect critical infrastructure from being the first killed.
-      "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
+      # hermes: ~270MB RSS made it the top pick — 5 kills on 2026-10-05, one
+      # freeing room for an interactive `nix eval`.
+      "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald|hermes)"
     ];
   };
 
