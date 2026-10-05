@@ -275,7 +275,8 @@
       "source": {
         "source": "github",
         "repo": "mattpocock/skills"
-      }
+      },
+      "autoUpdate": true
     }
   },
   "effortLevel": "high",
