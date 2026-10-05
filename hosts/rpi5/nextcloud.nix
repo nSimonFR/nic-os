@@ -173,6 +173,10 @@ in
       # warning otherwise).
       default_phone_region = "FR";
 
+      # OpenKnowledge keeps its config and edit history in these inside NOTES/
+      # (open-knowledge.nix); they are not user files.
+      excluded_directories = [ ".git" ".ok" ];
+
       # Wire shared redis (databases.nix) for distributed cache + locking.
       # `configureRedis = false` above suppresses the module's auto-spawned
       # redis-nextcloud instance, so we set these keys ourselves.

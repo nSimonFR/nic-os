@@ -144,7 +144,7 @@ in
     ./wealthfolio-sync.nix
     ./showmycards.nix
     ./searxng.nix
-    ./notes.nix
+    ./open-knowledge.nix
     ./moxfield-sync.nix
     ./nextcloud.nix
     ./calino.nix

@@ -2,7 +2,7 @@
 #
 # The npm tarball ships no lockfile, so package.json/package-lock.json here are a one-dep
 # wrapper (regenerate with `npm install --package-lock-only --ignore-scripts` after a bump).
-# Service module: hosts/rpi5/notes.nix.
+# Service module: hosts/rpi5/open-knowledge.nix.
 {
   lib,
   buildNpmPackage,
