@@ -26,6 +26,7 @@ in
       "Sikarugir-App/sikarugir"
       "RhetTbull/osxphotos"
       "manaflow-ai/cmux"
+      "stablyai/orca"
       {
         name = "jundot/omlx";
         clone_target = "https://github.com/jundot/omlx";
@@ -72,6 +73,8 @@ in
       "maccy"
       "macmediakeyforwarder"
       "obsidian"
+      # Qualified: the bare `orca` cask is plotly's, not Stably's agent IDE.
+      "stablyai/orca/orca"
       "plex"
       "postman"
       "qbittorrent"
