@@ -165,11 +165,9 @@ darwin-rebuild switch --flake path:.#nBookPro
 
 ### Raspberry Pi 5
 
-Builds on the Pi itself to avoid cross-compilation, then activates remotely:
-
-```sh
-nixos-rebuild switch --flake path:.#rpi5 --build-host nsimon@rpi5.local --target-host nsimon@rpi5.local --use-remote-sudo
-```
+Merge to `main`: `.github/workflows/deploy-rpi5.yml` builds the system (Home
+Manager included) in CI, pushes it to Cachix, and the Cachix Deploy agent on the
+Pi activates it.
 
 ## Update packages
 
