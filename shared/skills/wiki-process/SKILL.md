@@ -11,7 +11,7 @@ Walk the **Wiki Inbox** and promote each item into the curated `Pages/` tree. Th
 ## Wiki location
 
 - Notes folder `8 🧠 Wiki/` (plain markdown, served by OpenKnowledge on rpi5):
-  `Schema` (rules), `Inbox/` (captures), `Pages/` (curated), `Reports/` (lint).
+  `Schema` (rules), `Inbox/` (captures), `Pages/` (curated).
 - MCP server: `notes`. Paths are relative to the notes root, without `.md`
   (e.g. `8 🧠 Wiki/Schema`). Read with `exec` (`cat`, `ls`, `grep`, `find`) or `search`;
   write with `write` / `edit`; rename with `move` (rewrites inbound links); `delete`.
@@ -25,7 +25,7 @@ Walk the **Wiki Inbox** and promote each item into the curated `Pages/` tree. Th
 
    a. **Read its body and source(s)**.
 
-   b. **Search the wiki** with `search` (and `exec` → `grep -ril`) for related pages under `8 🧠 Wiki/Pages` — concept-level, not just title-level. Ignore `Pages/Claude Memory/` (mirrored, read-only).
+   b. **Search the wiki** with `search` (and `exec` → `grep -ril`) for related pages under `8 🧠 Wiki/Pages` — concept-level, not just title-level. Ignore `Pages/Claude Memory/` (an archived snapshot).
 
    c. **Decide one action**:
       - **Merge**: an existing page already covers ≥70% of this content. `edit` it: append new facts under a dated note, refresh `updated`, add the new source.

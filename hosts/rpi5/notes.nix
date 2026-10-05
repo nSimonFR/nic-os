@@ -7,8 +7,7 @@
 #   MCP is unauthenticated too. Tailnet-only (never funnel); shared users are limited to
 #   this port by shared/tailscale-acl.json5.
 #
-# Runs as nsimon because Claude, Hermes and the memory-sync hook edit the same files
-# directly. HOME is the state dir: `open-knowledge start` installs skill bundles into
+# Runs as nsimon because Claude and Hermes edit the same files directly. HOME is the state dir: `open-knowledge start` installs skill bundles into
 # $HOME, which must not be ~/.claude.
 { config, pkgs, lib, ... }:
 let

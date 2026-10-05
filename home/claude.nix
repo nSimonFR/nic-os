@@ -17,13 +17,11 @@ let
   sharedSkillsDir = ../shared/skills;
 
   # Skills that should ALSO be exposed as Claude Code slash commands
-  # (`/wiki-ingest`, etc.). The SKILL.md frontmatter is benign for
+  # (`/wiki-process`, etc.). The SKILL.md frontmatter is benign for
   # Claude Code, which only reads the `description` field.
   claudeSlashCommandSkills = [
     "pr"
-    "wiki-ingest"
     "wiki-process"
-    "wiki-lint"
   ];
 
   skillTargets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
@@ -274,9 +272,6 @@ in
         text = builtins.readFile ./scripts/herdr-title-sync.sh;
       });
     };
-
-    ".claude/hooks/memory-sync".source =
-      "${pkgs.nicos-scripts}/bin/claude-memory-sync";
 
     # PostToolUse hook on Bash: register each command with atuin under a
     # separate host (ATUIN_HOST_NAME=claude-code) plus a sentinel cwd
