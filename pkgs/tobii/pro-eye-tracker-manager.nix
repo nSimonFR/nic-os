@@ -32,7 +32,7 @@ stdenv.mkDerivation rec {
   src = fetchurl {
     # fetchurl names itself after the URL's basename, which carries the
     # version here — but rely on it explicitly, not incidentally.
-    # See .cursor/rules/fixed-output-names.mdc.
+    # See "Fixed-output names" in pkgs/README.md.
     name = "${pname}-${version}.pkg.tar.zst";
     url = "https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer/releases/download/v1/tobiiproeyetrackermanager-2.6.1-1-x86_64.pkg.tar.zst";
     hash = "sha256-IiDsq1GFKEQQCmwev9I0sJgRvqgJm5M1oNvG1dIU7ys=";

@@ -27,7 +27,7 @@ buildHomeAssistantComponent rec {
   version = "0.6.6";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
-    # See .cursor/rules/fixed-output-names.mdc.
+    # See "Fixed-output names" in pkgs/README.md.
     name = "ha-${domain}-${version}-source";
     owner = "ppaglier";
     repo = "voltalis-homeassistant";

@@ -18,7 +18,7 @@ buildNpmPackage rec {
   version = "1.8.0";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
-    # See .cursor/rules/fixed-output-names.mdc.
+    # See "Fixed-output names" in pkgs/README.md.
     name = "${pname}-${version}-source";
     owner = "bokub";
     repo = "ha-linky";

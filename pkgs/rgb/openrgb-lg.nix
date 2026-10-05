@@ -12,7 +12,7 @@
 let
   # Hoisted out of the override so `src.name` can interpolate it — the fetch and
   # the version it claims to be must move together.
-  # See .cursor/rules/fixed-output-names.mdc.
+  # See "Fixed-output names" in pkgs/README.md.
   version = "1.0rc2";
 in
 openrgb-with-all-plugins.overrideAttrs (_: {

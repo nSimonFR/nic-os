@@ -23,7 +23,7 @@ buildHomeAssistantComponent rec {
   version = "0.9.3";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
-    # See .cursor/rules/fixed-output-names.mdc.
+    # See "Fixed-output names" in pkgs/README.md.
     name = "ha-${domain}-${version}-source";
     owner = "GuiHash";
     repo = "ha-intratone";
