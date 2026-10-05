@@ -125,6 +125,16 @@ stdenv.mkDerivation (finalAttrs: {
       if (probe && (probe.status === 404 || probe.status === 410)) return
     }
     // 404/410 mean the resource is already gone — the outcome a delete wants."
+
+    # sw.js caches EVERY same-origin 200 GET cache-first, forever — including
+    # the `/feeds/*.ics` mirrors, so a webcal subscription froze at its first
+    # SW-era fetch (TRUSK: no request reached nginx after 2026-09-29). Honour
+    # `no-store`; the CACHE_NAME bump makes `activate` purge the pinned copy.
+    substituteInPlace public/sw.js \
+      --replace-fail "const CACHE_NAME = 'calino-v7'" "const CACHE_NAME = 'calino-v7-nostore'" \
+      --replace-fail \
+    "if (response.ok && response.status === 200 && response.type === 'basic') {" \
+    "if (response.ok && response.status === 200 && response.type === 'basic' && !/no-store/i.test(response.headers.get('Cache-Control') || \"\")) {"
   '';
 
   env = {
