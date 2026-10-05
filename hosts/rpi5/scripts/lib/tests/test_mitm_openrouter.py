@@ -32,10 +32,10 @@ def test_other_hosts_pass_through(host):
     assert mod.route(host, "/api/v1/chat/completions") == "passthrough"
 
 
-def flow(path, **headers):
+def flow(path, method="POST", **headers):
     # Lowercase keys, as mitmproxy's Headers matches case-insensitively.
     req = SimpleNamespace(pretty_host="openrouter.ai", host="104.18.2.115", port=443, scheme="https",
-                          method="POST", path=path, headers={k.lower().replace("_", "-"): v for k, v in headers.items()})
+                          method=method, path=path, headers={k.lower().replace("_", "-"): v for k, v in headers.items()})
     return SimpleNamespace(request=req)
 
 
@@ -69,10 +69,43 @@ def test_passthrough_request_untouched():
     assert f.request.headers["authorization"] == "Bearer sk-or-v1-x"
 
 
+def test_gate_preflight_answered_locally():
+    f = flow("/api/v1/responses", method="OPTIONS", origin="https://app.example")
+    mod.OpenRouterToGate(make_response=lambda status, headers: (status, headers)).request(f)
+    status, headers = f.response
+    assert status == 204
+    assert headers["Access-Control-Allow-Origin"] == "*"
+    assert "POST" in headers["Access-Control-Allow-Methods"]
+    assert f.request.host == "104.18.2.115"  # never reaches the gate
+
+
+def test_passthrough_preflight_untouched():
+    f = flow("/api/v1/auth/keys", method="OPTIONS")
+    mod.OpenRouterToGate(make_response=lambda *a: pytest.fail("answered locally")).request(f)
+    assert not hasattr(f, "response")
+
+
+def response_flow(host, port, ctype="application/json"):
+    return SimpleNamespace(request=SimpleNamespace(host=host, port=port),
+                           response=SimpleNamespace(headers=Headers({"content-type": ctype}), stream=False))
+
+
+def test_gate_responses_get_cors():
+    f = response_flow("127.0.0.1", 4001)
+    mod.OpenRouterToGate().responseheaders(f)
+    assert f.response.headers["access-control-allow-origin"] == "*"
+
+
+def test_passthrough_responses_keep_upstream_cors():
+    f = response_flow("104.18.2.115", 443)
+    mod.OpenRouterToGate().responseheaders(f)
+    assert "access-control-allow-origin" not in f.response.headers
+
+
 @pytest.mark.parametrize("ctype, streamed", [
     ("text/event-stream", True), ("text/event-stream; charset=utf-8", True), ("application/json", False),
 ])
 def test_sse_responses_stream(ctype, streamed):
-    f = SimpleNamespace(response=SimpleNamespace(headers={"content-type": ctype}, stream=False))
+    f = response_flow("127.0.0.1", 4001, ctype)
     mod.OpenRouterToGate().responseheaders(f)
     assert f.response.stream is streamed
