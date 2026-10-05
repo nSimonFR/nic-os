@@ -6,6 +6,7 @@ only observable by watching Telegram. boot_resume spawns 70-200 MB bridge worker
 on a 3.9 GB box, so its caps and its dry-run default are safety properties.
 """
 
+import io
 import json
 import subprocess
 from datetime import datetime, timedelta, timezone
@@ -519,298 +520,103 @@ from nicos_scripts.claude import memory_sync as ms  # noqa: E402
 def ms_cfg(tmp_path):
     return ms.Config(
         projects_dir=tmp_path / "projects",
-        map_path=tmp_path / "map.json",
+        project="proj",
+        dest=tmp_path / "notes" / "Claude Memory",
         log_path=tmp_path / "log.txt",
-        token_path=tmp_path / "token",
     )
 
 
-class FakeMcp:
-    """An in-memory AFFiNE: docs by id, searchable by exact title."""
-
-    def __init__(self, docs=None):
-        self.docs = dict(docs or {})  # id -> {title, markdown}
-        self.calls = []
-        self._next = 0
-
-    def call(self, name, args):
-        self.calls.append((name, args))
-        if name == "list_workspaces":
-            return [{"id": "ws1"}]
-        if name == "search_docs":
-            return {"results": [
-                {"id": did, "title": d["title"]} for did, d in self.docs.items()
-                if d["title"] == args["query"]
-            ]}
-        if name == "create_doc_from_markdown":
-            self._next += 1
-            did = f"doc{self._next}"
-            self.docs[did] = {"title": args["title"], "markdown": args["markdown"],
-                              "parent": args.get("parentDocId")}
-            return {"docId": did}
-        if name == "replace_doc_with_markdown":
-            self.docs[args["docId"]]["markdown"] = args["markdown"]
-            return {"ok": True}
-        raise AssertionError(f"unexpected tool {name}")
-
-    def init(self):
-        pass
-
-    def tools(self):
-        return [c[0] for c in self.calls]
-
-
-def memory_file(cfg, project, name, content="body"):
-    p = cfg.projects_dir / project / "memory" / name
+def ms_memory(cfg, name, text):
+    p = cfg.projects_dir / cfg.project / "memory" / name
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(content)
+    p.write_text(text)
     return p
 
 
-@pytest.mark.parametrize(
-    ("rel", "expected"),
-    [
-        ("proj/memory/note.md", ("proj", "note.md")),
-        ("proj/memory/MEMORY.md", ("proj", "MEMORY.md")),
-        ("proj/memory/sub/deep.md", ("proj", "deep.md")),
-        ("proj/notes/note.md", None),          # not the memory dir
-        ("proj/memory/note.txt", None),        # not markdown
-        ("proj/memory", None),                 # too shallow
-    ],
-)
-def test_only_memory_markdown_is_mirrored(tmp_path, rel, expected):
+@pytest.mark.parametrize("rel,expected", [
+    ("proj/memory/note.md", "note.md"),
+    ("other/memory/note.md", None),
+    ("proj/memory/sub/note.md", None),
+    ("proj/memory/note.txt", None),
+    ("proj/notes/note.md", None),
+])
+def test_memory_file_only_matches_the_configured_project(tmp_path, rel, expected):
     cfg = ms_cfg(tmp_path)
-    assert ms.project_and_file(cfg, cfg.projects_dir / rel) == expected
+    assert ms.memory_file(cfg, cfg.projects_dir / rel) == expected
+    assert ms.memory_file(cfg, "/etc/passwd") is None
 
 
-def test_a_path_outside_the_projects_dir_is_ignored(tmp_path):
+@pytest.mark.parametrize("name,rel", [
+    ("known_issue_x.md", "Known issues/known_issue_x.md"),
+    ("known-issue-y.md", "Known issues/known-issue-y.md"),
+    ("project_a.md", "Projects/project_a.md"),
+    ("todo-b.md", "Projects/todo-b.md"),
+    ("reference_c.md", "References/reference_c.md"),
+    ("feedback_d.md", "Feedback/feedback_d.md"),
+    ("MEMORY.md", "MEMORY.md"),
+    ("loose note.md", "loose note.md"),
+])
+def test_files_are_grouped_by_filename_prefix(name, rel):
+    assert ms.relpath_for(name) == rel
+
+
+def test_sync_writes_into_the_group_folder(tmp_path):
     cfg = ms_cfg(tmp_path)
-    assert ms.project_and_file(cfg, "/etc/passwd") is None
-    assert ms.project_and_file(cfg, tmp_path / "elsewhere/memory/x.md") is None
+    p = ms_memory(cfg, "known_issue_x.md", "body\n")
+    target = ms.sync(cfg, p, "known_issue_x.md", log=lambda _m: None)
+    assert target == cfg.dest / "Known issues" / "known_issue_x.md"
+    assert target.read_text() == "body\n"
 
 
-def test_the_title_comes_from_the_frontmatter_name(tmp_path):
+def test_sync_skips_an_unchanged_file(tmp_path):
     cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "known_issue_x.md",
-                    "---\nname: known-issue-x\ndescription: y\n---\n\nbody")
-    assert ms.title_for(p, p.read_text()) == "known-issue-x"
+    p = ms_memory(cfg, "note.md", "same")
+    logged = []
+    ms.sync(cfg, p, "note.md", log=logged.append)
+    ms.sync(cfg, p, "note.md", log=logged.append)
+    assert len(logged) == 1
 
 
-def test_the_index_gets_a_readable_title(tmp_path):
+def test_index_links_follow_the_grouping(tmp_path):
     cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "MEMORY.md", "# index")
-    assert ms.title_for(p, p.read_text()) == "MEMORY (index)"
+    p = ms_memory(cfg, "MEMORY.md",
+                  "- [a](known_issue_a.md) · [b](project_b.md) · [c](https://x/y.md) · [d](plain.md)\n")
+    out = ms.sync(cfg, p, "MEMORY.md", log=lambda _m: None).read_text()
+    assert out == ("- [a](Known%20issues/known_issue_a.md) · [b](Projects/project_b.md)"
+                   " · [c](https://x/y.md) · [d](plain.md)\n")
 
 
-def test_a_file_without_frontmatter_falls_back_to_its_stem(tmp_path):
+def test_main_mirrors_a_memory_write_and_ignores_other_tools(tmp_path):
     cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "loose-note.md", "just text")
-    assert ms.title_for(p, p.read_text()) == "loose-note"
-
-
-def test_a_first_sync_creates_a_child_doc_under_the_parent(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "---\nname: note\n---\nbody")
-    mcp = FakeMcp()
-    mapping = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    parent_id = mapping["parent_doc_id"]
-    assert mcp.docs[parent_id]["title"] == "Claude Memory"
-    doc_id = mapping["files"]["proj/note.md"]
-    assert mcp.docs[doc_id]["parent"] == parent_id
-    assert mcp.docs[doc_id]["markdown"] == "---\nname: note\n---\nbody"
-
-
-def test_a_second_sync_replaces_in_place(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "v1")
-    mcp = FakeMcp()
-    first = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    p.write_text("v2")
-    second = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    assert first["files"] == second["files"]  # same doc, not a new one
-    assert mcp.docs[second["files"]["proj/note.md"]]["markdown"] == "v2"
-    assert mcp.tools().count("create_doc_from_markdown") == 2  # parent + the doc
-
-
-def test_two_projects_with_the_same_filename_get_separate_docs(tmp_path):
-    # Both projects have a MEMORY.md; namespacing the key is what stops one
-    # stomping on the other.
-    cfg = ms_cfg(tmp_path)
-    a = memory_file(cfg, "proj-a", "MEMORY.md", "a")
-    b = memory_file(cfg, "proj-b", "MEMORY.md", "b")
-    mcp = FakeMcp()
-    ms.sync(cfg, a, "proj-a", "MEMORY.md", client=mcp, log=lambda _m: None)
-    mapping = ms.sync(cfg, b, "proj-b", "MEMORY.md", client=mcp, log=lambda _m: None)
-    ids = mapping["files"]
-    assert ids["proj-a/MEMORY.md"] != ids["proj-b/MEMORY.md"]
-    assert mcp.docs[ids["proj-a/MEMORY.md"]]["markdown"] == "a"
-    assert mcp.docs[ids["proj-b/MEMORY.md"]]["markdown"] == "b"
-
-
-def test_a_lost_map_rebinds_to_the_existing_doc_instead_of_duplicating(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "v1")
-    mcp = FakeMcp()
-    first = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    doc_id = first["files"]["proj/note.md"]
-    cfg.map_path.unlink()  # lose the map
-    again = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    assert again["files"]["proj/note.md"] == doc_id
-    assert len([d for d in mcp.docs.values() if d["title"] == "note"]) == 1
-
-
-def test_a_title_already_claimed_by_another_project_is_not_reused(tmp_path):
-    # Otherwise proj-b's sync would overwrite proj-a's page.
-    cfg = ms_cfg(tmp_path)
-    a = memory_file(cfg, "proj-a", "note.md", "a")
-    b = memory_file(cfg, "proj-b", "note.md", "b")
-    mcp = FakeMcp()
-    ms.sync(cfg, a, "proj-a", "note.md", client=mcp, log=lambda _m: None)
-    mapping = ms.sync(cfg, b, "proj-b", "note.md", client=mcp, log=lambda _m: None)
-    assert mapping["files"]["proj-a/note.md"] != mapping["files"]["proj-b/note.md"]
-    assert mcp.docs[mapping["files"]["proj-a/note.md"]]["markdown"] == "a"
-
-
-def test_a_legacy_unnamespaced_key_is_migrated(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "v2")
-    cfg.map_path.write_text(json.dumps({
-        "workspace_id": "ws1", "parent_doc_id": "parent",
-        "files": {"note.md": "legacy-doc"},
-    }))
-    mcp = FakeMcp({"legacy-doc": {"title": "note", "markdown": "v1"},
-                   "parent": {"title": "Claude Memory", "markdown": ""}})
-    mapping = ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    assert mapping["files"] == {"proj/note.md": "legacy-doc"}
-    assert mcp.docs["legacy-doc"]["markdown"] == "v2"
-
-
-def test_the_workspace_and_parent_are_cached_after_the_first_run(tmp_path):
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "v1")
-    mcp = FakeMcp()
-    ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    mcp.calls.clear()
-    ms.sync(cfg, p, "proj", "note.md", client=mcp, log=lambda _m: None)
-    assert "list_workspaces" not in mcp.tools()
-
-
-def test_the_hook_ignores_everything_that_is_not_a_memory_write(tmp_path):
-    import io
-
-    cfg_env = {"MEMORY_SYNC_PROJECTS_DIR": str(tmp_path / "projects"),
-               "MEMORY_SYNC_MAP_PATH": str(tmp_path / "map.json"),
-               "MEMORY_SYNC_LOG_PATH": str(tmp_path / "log.txt")}
-    mcp = FakeMcp()
-    for payload in (
-        {"tool_name": "Bash", "tool_input": {"file_path": "x"}},
-        {"tool_name": "Write", "tool_input": {}},
-        {"tool_name": "Write", "tool_input": {"file_path": "/etc/hosts"}},
-        {"tool_name": "Write"},
-        {},
-    ):
-        assert ms.main(env=cfg_env, stdin=io.StringIO(json.dumps(payload)),
-                       client=mcp) == 0
-    assert mcp.calls == []
-
-
-def test_the_hook_never_fails_on_bad_stdin_or_a_broken_mcp(tmp_path):
-    import io
-
-    cfg = ms_cfg(tmp_path)
-    p = memory_file(cfg, "proj", "note.md", "v1")
-    env = {"MEMORY_SYNC_PROJECTS_DIR": str(cfg.projects_dir),
-           "MEMORY_SYNC_MAP_PATH": str(cfg.map_path),
+    p = ms_memory(cfg, "feedback_x.md", "fb")
+    env = {"HOME": str(tmp_path), "MEMORY_SYNC_PROJECTS_DIR": str(cfg.projects_dir),
+           "MEMORY_SYNC_PROJECT": "proj", "MEMORY_SYNC_DEST": str(cfg.dest),
            "MEMORY_SYNC_LOG_PATH": str(cfg.log_path)}
-    # Garbage on stdin.
-    assert ms.main(env=env, stdin=io.StringIO("not json")) == 0
-
-    class Broken:
-        def init(self):
-            pass
-
-        def call(self, name, args):
-            raise RuntimeError("affine down")
-
-    payload = json.dumps({"tool_name": "Write", "tool_input": {"file_path": str(p)}})
-    # A dead AFFiNE must not block Claude Code.
-    assert ms.main(env=env, stdin=io.StringIO(payload), client=Broken()) == 0
-    assert "FAIL" in cfg.log_path.read_text()
+    payload = {"tool_name": "Read", "tool_input": {"file_path": str(p)}}
+    assert ms.main(env=env, stdin=io.StringIO(json.dumps(payload)), argv=[]) == 0
+    assert not cfg.dest.exists()
+    payload["tool_name"] = "Write"
+    assert ms.main(env=env, stdin=io.StringIO(json.dumps(payload)), argv=[]) == 0
+    assert (cfg.dest / "Feedback" / "feedback_x.md").read_text() == "fb"
 
 
-def test_the_mcp_client_parses_sse_frames_and_raises_on_errors():
-    class Resp:
-        def __init__(self, body):
-            self.body = body
-            self.headers = {"Mcp-Session-Id": "sess1"}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return self.body
-
-    frames = [
-        b'event: message\ndata: {"jsonrpc":"2.0","id":1,"result":{"content":'
-        b'[{"text":"[{\\"id\\":\\"ws1\\"}]"}]}}\n\n',
-    ]
-    seen = []
-
-    def opener(req, timeout=None):
-        seen.append(req)
-        return Resp(frames[min(len(seen) - 1, len(frames) - 1)])
-
-    client = ms.MCP("http://mcp", "tok", opener=opener)
-    assert client.call("list_workspaces", {}) == [{"id": "ws1"}]
-    assert seen[0].get_header("Authorization") == "Bearer tok"
-    # The session id from the first response is echoed on the next request.
-    client.call("list_workspaces", {})
-    assert seen[1].get_header("Mcp-session-id") == "sess1"
+def test_main_never_fails_the_hook(tmp_path):
+    env = {"HOME": str(tmp_path), "MEMORY_SYNC_LOG_PATH": str(tmp_path / "log.txt")}
+    assert ms.main(env=env, stdin=io.StringIO("not json"), argv=[]) == 0
+    assert "bad-stdin" in (tmp_path / "log.txt").read_text()
 
 
-def test_an_mcp_error_frame_becomes_an_exception():
-    class Resp:
-        headers = {}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return b'data: {"jsonrpc":"2.0","id":1,"error":{"message":"nope"}}\n'
-
-    client = ms.MCP("http://mcp", "tok", opener=lambda req, timeout=None: Resp())
-    with pytest.raises(RuntimeError):
-        client.call("list_workspaces", {})
-
-
-def test_a_tool_level_error_surfaces_its_message_not_a_json_parse_error():
-    # affine-mcp reports a failed tool as isError with the message in PLAIN TEXT.
-    # json.loads() on that raised "Expecting value: line 1 column 1 (char 0)", so for
-    # two days the log blamed a parse bug while AFFiNE was really saying the token
-    # 0.27.3 had removed no longer authenticated anything.
-    class Resp:
-        headers = {}
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *exc):
-            return False
-
-        def read(self):
-            return (b'data: {"jsonrpc":"2.0","id":1,"result":{"isError":true,"content":'
-                    b'[{"type":"text","text":"You must sign in first to access this '
-                    b'resource."}]}}\n')
-
-    client = ms.MCP("http://mcp", "tok", opener=lambda req, timeout=None: Resp())
-    with pytest.raises(RuntimeError, match="must sign in first"):
-        client.call("search_docs", {})
+def test_all_backfills_every_memory_file(tmp_path, capsys):
+    cfg = ms_cfg(tmp_path)
+    ms_memory(cfg, "project_a.md", "a")
+    ms_memory(cfg, "reference_b.md", "b")
+    env = {"HOME": str(tmp_path), "MEMORY_SYNC_PROJECTS_DIR": str(cfg.projects_dir),
+           "MEMORY_SYNC_PROJECT": "proj", "MEMORY_SYNC_DEST": str(cfg.dest),
+           "MEMORY_SYNC_LOG_PATH": str(cfg.log_path)}
+    assert ms.main(env=env, argv=["--all"]) == 0
+    assert sorted(str(p.relative_to(cfg.dest)) for p in cfg.dest.rglob("*.md")) == \
+        ["Projects/project_a.md", "References/reference_b.md"]
+    assert "mirrored 2" in capsys.readouterr().out
 
 
 # ── context_baseline ──────────────────────────────────────────────────────────

@@ -28,10 +28,21 @@
 	// are explicit about autogroup:self and SILENT about autogroup:member, so the
 	// rules are written to be correct either way rather than on an assumption that
 	// could only be tested by breaking rpi5 -> beast:3003 (the Immich ML server).
+	"hosts": {
+		"rpi5": "100.122.54.2",
+	},
 	"tagOwners": {
 		"tag:beast": ["autogroup:member"],
 	},
 	"acls": [
+		{
+			// Notes (hosts/rpi5/notes.nix) for people the rpi5 is shared with
+			// (Alfie, Hugo): that one port and nothing else. The app has no login,
+			// so this grant is all of its access control.
+			"action": "accept",
+			"src":    ["autogroup:shared"],
+			"dst":    ["rpi5:3980"],
+		},
 		{
 			"action": "accept",
 			"src":    ["autogroup:member"],

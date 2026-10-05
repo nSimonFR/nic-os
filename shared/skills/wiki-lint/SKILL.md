@@ -10,28 +10,32 @@ Audit the wiki for the kinds of rot that accumulate when an agent grows it unsup
 
 ## Wiki location
 
-- AFFiNE workspace: `35d244cd-e6d5-4b3d-b1c2-fa50cab50621`
-- `Wiki/Schema` — the rules being audited against.
-- `Wiki/Pages/*` — the corpus to scan.
-- MCP server: `affine` (write-capable).
+- Notes folder `8 🧠 Wiki/` (plain markdown, served by OpenKnowledge on rpi5):
+  `Schema` (rules), `Inbox/` (captures), `Pages/` (curated), `Reports/` (lint).
+- MCP server: `notes`. Paths are relative to the notes root, without `.md`
+  (e.g. `8 🧠 Wiki/Schema`). Read with `exec` (`cat`, `ls`, `grep`, `find`) or `search`;
+  write with `write` / `edit`; rename with `move` (rewrites inbound links); `delete`.
+- Browser URL of a page: `https://rpi5.gate-mintaka.ts.net:3980/#/<url-encoded path>`.
 
 ## What to look for
 
-1. **Schema violations** — pages missing required frontmatter; titles that don't follow the naming convention.
-2. **Broken `[[wikilinks]]`** — links pointing at nonexistent pages.
-3. **Orphan pages** — pages with zero inbound links *and* no `top-level: true` marker.
-4. **Duplicates / near-duplicates** — pages whose semantic content overlaps ≥70% (use `semantic_search` against each page's body to find candidates).
-5. **Stale low-confidence pages** — `confidence: low` or `updated` older than 90 days, not yet revisited.
+1. **Schema violations** — pages missing required frontmatter; names that don't follow the convention.
+2. **Broken `[[wikilinks]]`** and **orphan pages** — use the `links` tool (dead links, orphans) and `audit`; orphans with `top-level: true` are fine.
+3. **Markdown problems** — the `lint` tool.
+4. **Duplicates / near-duplicates** — pages whose content overlaps ≥70% (`search` each page's key terms).
+5. **Stale low-confidence pages** — `confidence: low` or `updated` older than 90 days.
 6. **Inbox items aged >30 days** — `wiki-process` is falling behind.
+
+Scope: `8 🧠 Wiki/Pages/` excluding `Claude Memory/` (mirrored from Claude's memory files).
 
 ## What to do
 
-1. Read `Wiki/Schema`.
-2. Walk `Wiki/Pages/*` (paginated if needed).
-3. Collect issues into one report page: `Wiki/Reports/lint-<YYYY-MM-DD>`.
+1. Read `8 🧠 Wiki/Schema`.
+2. Run the checks above.
+3. `write` one report page `8 🧠 Wiki/Reports/lint-<YYYY-MM-DD>`:
    - Group by issue type, not by page.
    - For each issue: cite the page(s), the rule violated, and a one-line suggested fix.
-4. **Do not auto-fix.** This skill is read-mostly. The only writes it performs are creating the report page and tagging audited pages with the lint date in frontmatter.
+4. **Do not auto-fix.** The only write is the report page.
 5. **Reply** with the report URL and a top-3 of the most actionable issues.
 
 ## Notes

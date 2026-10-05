@@ -1,18 +1,16 @@
 ---
 name: courses
-description: Read and update the shared shopping list ("Liste de courses" / "Courses") in AFFiNE's Burgie Land workspace. Use when the user wants to see, add, check off (mark as bought), un-check, or remove shopping-list items.
-homepage: https://rpi5.gate-mintaka.ts.net/workspace/0b8e6d06-c5e9-475f-a772-7c467e0c247e/_ssS4PUSXQoAU8P8xL32q
+description: Read and update the shared shopping list ("Liste de courses" / "Courses"), a markdown checklist in the notes (Burgie Land folder). Use when the user wants to see, add, check off (mark as bought), un-check, or remove shopping-list items.
+homepage: https://rpi5.gate-mintaka.ts.net:3980/#/2%20%F0%9F%8F%A0%20Perso/BurgieLand/Courses
 metadata: {"openclaw":{"emoji":"🛒","requires":{"bins":["python3"]}}}
 ---
 
 # Liste de courses (Burgie Land)
 
-Read and edit the household shopping list stored in **AFFiNE**. The list is the
-doc titled **"Courses"** inside the **Burgie Land** workspace (shared space).
-The script talks to the local `affine-mcp` server (already running on
-`127.0.0.1:7021` and wired into Hermes), so there is no token to set up — it
-reads the world-readable MCP bearer from `/run/agenix/affine-mcp-http-token`
-itself.
+Read and edit the household shopping list: the markdown checklist
+`/mnt/data/notes/2 🏠 Perso/BurgieLand/Courses.md` in the notes folder (served by
+OpenKnowledge, shared with Alfie). The script edits the file directly; the web
+editor shows the change live. No token or server needed.
 
 Hermes reads the script's stdout and relays it to the user; the script never
 sends Telegram messages on its own.
@@ -70,23 +68,14 @@ python3 {baseDir}/scripts/courses.py clear-done
 
 ## Notes
 
-- **Workspace / doc**: Burgie Land = `0b8e6d06-c5e9-475f-a772-7c467e0c247e`,
-  Courses doc = `_ssS4PUSXQoAU8P8xL32q`. These are the script defaults; override
-  with `COURSES_WORKSPACE_ID` / `COURSES_DOC_ID` for a different list. If the doc
-  is ever recreated, re-find its id with the affine-mcp `get_doc_by_title` tool
-  (query "Courses" in that workspace) and update `COURSES_DOC_ID`.
-- Only this Burgie Land list is canonical. There is an older "COURSES" copy in
-  the personal workspace — ignore it; do **not** use it.
-- Mutations use `read_doc` + `replace_doc_with_markdown`; `add` uses
-  `append_markdown` (purely additive, safe against concurrent edits).
+- **File**: `/mnt/data/notes/2 🏠 Perso/BurgieLand/Courses.md` — override with
+  `COURSES_FILE`. Its YAML frontmatter is preserved; only the checklist body is
+  rewritten.
 - Open the list in a browser:
-  <https://rpi5.gate-mintaka.ts.net/workspace/0b8e6d06-c5e9-475f-a772-7c467e0c247e/_ssS4PUSXQoAU8P8xL32q>
+  <https://rpi5.gate-mintaka.ts.net:3980/#/2%20%F0%9F%8F%A0%20Perso/BurgieLand/Courses>
 
 ## Troubleshooting
 
-- `urllib ... 401/403` — the MCP bearer changed; `/run/agenix/affine-mcp-http-token`
-  is regenerated on rebuild/secret rotation. Restart `affine-mcp.service` if stale.
-- `Connection refused` — `affine-mcp.service` is down (`systemctl status affine-mcp`),
-  or AFFiNE itself (`affine.service`) is not up yet.
-- Empty / unexpected list — confirm `COURSES_DOC_ID` still resolves via the
-  affine-mcp `read_doc` tool.
+- `FileNotFoundError` — the list was moved or renamed in the editor; find it with
+  `find /mnt/data/notes -name 'Courses.md'` and set `COURSES_FILE`.
+- `PermissionError` — the notes folder is `nsimon:users 0750`; Hermes must run as nsimon.
