@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
     paths: [shared/tailscale-acl.json5]
+  # Auto-merge lands commits as GITHUB_TOKEN, which starts no workflow run, so
+  # `push` never fired for an auto-merged ACL change (PR#735). Re-apply main hourly.
+  schedule:
+    - cron: "23 * * * *"
   pull_request:
     branches: [main]
     paths: [shared/tailscale-acl.json5]
@@ -30,6 +34,6 @@ jobs:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tailnet:         nsimonfr.github
-          # workflow_dispatch → chosen input; PR → test (dry-run); push main → apply.
+          # workflow_dispatch → chosen input; PR → test (dry-run); push/schedule → apply.
           action:          ${{ github.event_name == 'workflow_dispatch' && inputs.action || github.event_name == 'pull_request' && 'test' || 'apply' }}
           policy-file:     shared/tailscale-acl.json5
