@@ -121,17 +121,6 @@ in
       ];
       text = builtins.readFile ./scripts/herdr-claude-open.sh;
     })
-
-    # Backs the `shutdown` skill (shared/skills/shutdown).
-    (pkgs.writeShellApplication {
-      name = "herdr-shutdown";
-      runtimeInputs = [
-        pkgs.jq
-        pkgs.herdr-fork
-        pkgs.coreutils
-      ];
-      text = builtins.readFile ./scripts/herdr-shutdown.sh;
-    })
   ];
 
   # Delivery differs by host, and deliberately so.
