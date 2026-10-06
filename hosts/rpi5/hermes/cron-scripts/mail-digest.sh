@@ -5,7 +5,7 @@
 # hermes.nix — with a read of /run/agenix/agent-env as the fallback.
 export TELEGRAM_CHAT_ID=@chatId@
 export TELEGRAM_SEND=@tgSend@
-export MAIL_GMAIL_ACCOUNTS="personal=hemeraude@gmail.com,work=nicolas.simon@trusk.com"
+export MAIL_GMAIL_ACCOUNTS="personal=hemeraude@gmail.com"
 export PROTON_USER="nsimon@protonmail.com"
 export MAIL_PROTON_ROLE=personal
 export MAIL_PROTON_INDEX=1
