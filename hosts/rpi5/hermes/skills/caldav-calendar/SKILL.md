@@ -7,8 +7,8 @@ metadata: {"hermes":{"emoji":"📅","os":["linux"],"requires":{"bins":["python3"
 # CalDAV Calendar (nc-cal.py)
 
 > **PERSONAL calendar only.** Wired to the user's Nextcloud
-> (`https://rpi5.gate-mintaka.ts.net/nextcloud`). Work/Trusk calendar access
-> goes through the `gog` skill instead.
+> (`https://rpi5.gate-mintaka.ts.net/nextcloud`). There is no work calendar access
+> on this host.
 
 `scripts/nc-cal.py` is a small, standard-CalDAV (RFC 4791) client using only the
 Python standard library. It talks straight to the server on every call — there

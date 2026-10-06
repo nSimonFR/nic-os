@@ -24,7 +24,7 @@ metadata:
 
 # gog
 
-> **WORK ONLY.** This skill is scoped to the Trusk Google Workspace account (`nicolas.simon@trusk.com`). For personal calendar use the `caldav-calendar` skill (Nextcloud) instead. The hemeraude@gmail.com personal account refresh token has been revoked locally; do not re-add it.
+> **PERSONAL GMAIL ONLY.** The only account on this host is `hemeraude@gmail.com` (`GOG_ACCOUNT`). The Trusk work account was removed; do not re-add it. For personal calendar use the `caldav-calendar` skill (Nextcloud) instead.
 
 Use `gog` for Gmail/Calendar/Drive/Contacts/Sheets/Docs. Requires OAuth setup.
 
