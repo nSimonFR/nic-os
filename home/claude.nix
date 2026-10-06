@@ -21,6 +21,7 @@ let
   # Claude Code, which only reads the `description` field.
   claudeSlashCommandSkills = [
     "pr"
+    "snooze"
   ];
 
   skillTargets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
@@ -60,7 +61,9 @@ let
 
   claudeCommandFiles = lib.listToAttrs (map (name: {
     name = ".claude/commands/${name}.md";
-    value.source = "${sharedSkillsDir}/${name}/SKILL.md";
+    value.source =
+      let shared = sharedSkillsDir + "/${name}";
+      in (if builtins.pathExists shared then shared else ./claude-skills + "/${name}") + "/SKILL.md";
   }) claudeSlashCommandSkills);
 
   # Batching seam (→ the :8088 aggregator). `source` is null because
