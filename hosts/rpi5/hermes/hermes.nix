@@ -315,7 +315,7 @@ let
     };
 
     # Notes (hosts/rpi5/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
-    # by the wiki-* skills. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
+    # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 
     # Local shell backend so the agent can shell out to system tools (mirrors

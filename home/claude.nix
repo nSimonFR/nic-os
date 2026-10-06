@@ -17,11 +17,10 @@ let
   sharedSkillsDir = ../shared/skills;
 
   # Skills that should ALSO be exposed as Claude Code slash commands
-  # (`/wiki-process`, etc.). The SKILL.md frontmatter is benign for
+  # (`/pr`, etc.). The SKILL.md frontmatter is benign for
   # Claude Code, which only reads the `description` field.
   claudeSlashCommandSkills = [
     "pr"
-    "wiki-process"
   ];
 
   skillTargets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
