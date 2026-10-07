@@ -796,11 +796,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1791377212,
-        "narHash": "sha256-UAj01DA83cFXwIwuNHSVt/Kc/rUaVlJKLjA64FyZTps=",
+        "lastModified": 1791378224,
+        "narHash": "sha256-NOABSu6yLWq47ZZiMwTQemihNE+IKMWZoNIa4aTpr1w=",
         "owner": "nSimonFR",
         "repo": "linear-t3-relay",
-        "rev": "f785895a65c2b3fc01c057ed89d8a3f2b2a3fcab",
+        "rev": "688a498c553105dfa980e96504a053ee4cad24e2",
         "type": "github"
       },
       "original": {
