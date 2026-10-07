@@ -23,6 +23,7 @@ inputs: final: _prev: {
   # T3 Code CLI/server. Consumers: hosts/rpi5/t3code.nix (server) and
   # hosts/nbookpro/linear-t3-relay.nix (pairing codes on the Mac).
   t3code = final.callPackage ./agents/t3code.nix { };
+  t3code-desktop = final.callPackage ./agents/t3code-desktop.nix { };
 
   # ShowMyCards (MTG collection manager) — built from the showmycards-src flake
   # input; the prebuilt upstream image is amd64-only.

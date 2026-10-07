@@ -11,6 +11,11 @@
 #
 # Tracks the nightly channel, matching the Mac's "T3 Code (Nightly)" app: a
 # stable server behind a nightly client loses access to its sessions.
+#
+# linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead:
+# the same nightly plus pingdotgg/t3code#6315 and Bil0000/t3code#111 (Issues
+# page, Linear trees), matching ./t3code-desktop.nix. A version bump needs that
+# release rebuilt first; see its notes.
 { lib
 , stdenv
 , fetchurl
@@ -20,9 +25,15 @@ let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
   version = "0.0.46-nightly.20261007.2761";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
-  hashes = {
-    linux-arm64 = "sha256-Y50ooX8pQSQVol0hBO4CNSqUO8GPXsn7Iku3zhJ6w7k=";
-    darwin-arm64 = "sha256-AsGR4qPtXD2MmAjWA5iEzaGOckJhMNBiv70bAkpdw/4=";
+  sources = {
+    linux-arm64 = {
+      url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
+      hash = "sha256-5tseGlJutVnec4XwIU9Ej/NJ13JvQBHA3aPdkmCMdlk=";
+    };
+    darwin-arm64 = {
+      url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
+      hash = "sha256-AsGR4qPtXD2MmAjWA5iEzaGOckJhMNBiv70bAkpdw/4=";
+    };
   };
 in
 stdenv.mkDerivation {
@@ -31,8 +42,7 @@ stdenv.mkDerivation {
 
   src = fetchurl {
     name = "t3-${version}-${platform}.tar.gz";
-    url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-${platform}.tar.gz";
-    hash = hashes.${platform};
+    inherit (sources.${platform}) url hash;
   };
 
   nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
