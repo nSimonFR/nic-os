@@ -1,4 +1,4 @@
-{ username, unstablePkgs, ... }:
+{ pkgs, username, unstablePkgs, ... }:
 {
   imports = [
     ./applications-patch.nix
@@ -8,6 +8,9 @@
   home = {
     username = username;
     homeDirectory = "/Users/${username}";
+
+    # T3 Code desktop with the Issues page; replaces the manually installed nightly.
+    packages = [ pkgs.t3code-desktop ];
 
     sessionVariables = {
       SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
