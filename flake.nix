@@ -267,11 +267,11 @@
       flake = false;
     };
 
-    # linear-t3-relay — Linear Agent Sessions → T3 Code over its MCP server.
-    # Built by pkgs/agents/linear-t3-relay.nix; run by hosts/nbookpro/linear-t3-relay.nix.
-    linear-t3-relay-src = {
+    # linear-t3-relay — Linear Agent Sessions → T3 Code; its home-manager module
+    # runs in hosts/nbookpro/linear-t3-relay.nix.
+    linear-t3-relay = {
       url = "github:nSimonFR/linear-t3-relay";
-      flake = false;
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     # llm-agents.nix: numtide's daily-updated flake of AI coding agent
