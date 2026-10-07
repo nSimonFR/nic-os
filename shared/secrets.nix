@@ -7,4 +7,7 @@ in {
   "mcp-secrets.age".publicKeys        = [ nsimon-age nsimon-ed25519 ];
   "wakatime.cfg.age".publicKeys       = [ nsimon-age nsimon-ed25519 ];
   "terradex-convex-deploy-key.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  # linear-t3-relay instance environments (hosts/nbookpro/linear-t3-relay.nix).
+  "linear-t3-relay-nsimon.env.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "linear-t3-relay-work.env.age".publicKeys   = [ nsimon-age nsimon-ed25519 ];
 }

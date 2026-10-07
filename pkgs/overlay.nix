@@ -20,6 +20,10 @@ inputs: final: _prev: {
   # Consumers: hosts/rpi5/cyrus.nix, home/, and `nix build .#rtk`.
   rtk = final.callPackage ./agents/rtk.nix { rtk-src = inputs.rtk-src; };
 
+  # T3 Code CLI/server. Consumers: hosts/rpi5/t3code.nix (server) and
+  # hosts/nbookpro/linear-t3-relay.nix (pairing codes on the Mac).
+  t3code = final.callPackage ./agents/t3code.nix { };
+
   # ShowMyCards (MTG collection manager) — built from the showmycards-src flake
   # input; the prebuilt upstream image is amd64-only.
   # Consumers: hosts/rpi5/showmycards.nix and `nix build .#showmycards`.

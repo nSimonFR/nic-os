@@ -770,6 +770,22 @@
         "type": "github"
       }
     },
+    "linear-t3-relay-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1791376435,
+        "narHash": "sha256-izHaWMiVkPT3jliTrxSUhrX33H2fqkIthJSG/A4M5iU=",
+        "owner": "nSimonFR",
+        "repo": "linear-t3-relay",
+        "rev": "45b29b12a4d8e35c80d47b15fc8b3e8a153d3d92",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nSimonFR",
+        "repo": "linear-t3-relay",
+        "type": "github"
+      }
+    },
     "llm-agents": {
       "inputs": {
         "bun2nix": "bun2nix",
@@ -1295,6 +1311,7 @@
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager_2",
         "immich-clip-filter": "immich-clip-filter",
+        "linear-t3-relay-src": "linear-t3-relay-src",
         "llm-agents": "llm-agents",
         "mac-app-util": "mac-app-util",
         "nix-citizen": "nix-citizen",

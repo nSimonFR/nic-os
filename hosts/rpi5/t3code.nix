@@ -13,7 +13,7 @@
   ...
 }:
 let
-  t3code = pkgs.callPackage ../../pkgs/agents/t3code.nix { };
+  inherit (pkgs) t3code;
   homeDir = config.users.users.${username}.home;
 in
 {
