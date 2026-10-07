@@ -2,6 +2,7 @@
 {
   imports = [
     ./applications-patch.nix
+    ./linear-t3-relay.nix
   ];
 
   home = {
