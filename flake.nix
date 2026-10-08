@@ -252,8 +252,10 @@
     # Pinned to a tag; bump the ref to roll forward. Tags must sit on main:
     # v0.9.5/v0.9.6 did not contain v0.9.4's codex provider.
     # v0.9.7 restores the codex provider and adds versioned Anthropic routes.
+    # e3bd4a0 = v0.10.1 + tiny-llm-gate#13 (parallel tool-call args); swap for
+    # the next tag once it's on main.
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.10.1";
+      url = "github:nSimonFR/tiny-llm-gate/e3bd4a01455c7ecc357772c41b88e7eae3468f5e";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
