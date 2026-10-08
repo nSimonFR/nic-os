@@ -54,6 +54,12 @@ in
         "SHELL=/etc/profiles/per-user/${username}/bin/zsh"
         # Otherwise T3 Connect downloads its own cloudflared into ~/.t3.
         "T3CODE_CLOUDFLARED_PATH=${pkgs.cloudflared}/bin/cloudflared"
+        # T3 Connect's public config. Official builds bake these in; the
+        # nSimonFR-ai `-issues` builds may not, and without them the server
+        # silently runs with T3 Connect off. Values from the official build.
+        "T3CODE_RELAY_URL=https://relay.t3.codes"
+        "T3CODE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsudDMuY29kZXMk"
+        "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID=hzxSgY2cH10sDU2r"
       ];
     };
   };
