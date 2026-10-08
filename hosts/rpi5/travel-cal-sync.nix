@@ -41,8 +41,8 @@ in
       # Cloud, on the ChatGPT plan: the beast-only gemma4:e4b stalled every scan
       # from 2026-09-05 while beast was down. So candidate email bodies (names,
       # addresses, and with PAPRA_FILE_ALL_MAIL any mail carrying a PDF) now go
-      # to OpenAI. Luna = the 5.6 extraction tier; a plan 429 backs off 15 min.
-      MODEL = "gpt-5.6-luna";
+      # to OpenAI. Luna = the extraction tier; a plan 429 backs off 15 min.
+      MODEL = "gpt-6-luna";
       LOOKBACK_DAYS = "365";
       TELEGRAM_SEND = "${telegramSend}";
       NEXTCLOUD_CALDAV_URL = "https://${tailnetFqdn}/nextcloud/remote.php/dav/calendars/nsimon/";
