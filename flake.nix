@@ -96,7 +96,7 @@
     #   nixpkgs-unstable carries every nodejs_* its nix/lib.nix names.
     #   renovate.json keeps the bot off this input.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/v2026.9.24";
+      url = "github:NousResearch/hermes-agent/v0.21.6";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
