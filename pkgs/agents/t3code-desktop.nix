@@ -2,6 +2,9 @@
 # release: the official nightly app with its server and web client rebuilt from
 # the nightly plus pingdotgg/t3code#6315 and Bil0000/t3code#111 (Issues page,
 # Linear trees). Same version as ./t3code.nix, which the rpi5 server runs.
+# Build it with T3 Connect's public config (T3CODE_RELAY_URL,
+# T3CODE_CLERK_PUBLISHABLE_KEY, T3CODE_CLERK_JWT_TEMPLATE,
+# T3CODE_CLERK_CLI_OAUTH_CLIENT_ID) or the app runs with T3 Connect off.
 #
 # Ad-hoc signed and without app-update.yml, so it never updates itself back to
 # the official nightly. Same bundle id as the official "T3 Code (Nightly)" app,
@@ -17,8 +20,8 @@ stdenvNoCC.mkDerivation {
   inherit (t3code) version;
 
   src = fetchurl {
-    url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.1/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
-    hash = "sha256-Sg2CXQF91X9YaHaGxoixIgGOHgOCCHz+knjmlA9Shyw=";
+    url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.3/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
+    hash = "sha256-95LyuAQezgxTBcDTJFuEICbm827A48kUCezsc7cNTpo=";
   };
 
   nativeBuildInputs = [ unzip ];
