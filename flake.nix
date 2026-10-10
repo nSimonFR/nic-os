@@ -19,7 +19,7 @@
     # hosts/beast/immich-ml.nix, whose immich must stay in lock-step with the
     # rpi5's — so keep the newer tree scoped to the one package that needs it.
     # Rev is nixpkgs-unstable @ 2026-08-22, ollama 0.32.14.
-    nixpkgs-ollama.url = "github:NixOS/nixpkgs/a831408e6378bc02ebf8cc09b52c96ca86f6bab4";
+    nixpkgs-ollama.url = "github:NixOS/nixpkgs/19edd90401f2cb94c178dcad5e99bfde53fbe1e6";
 
     # Home Assistant only, same reasoning as nixpkgs-ollama above — and the same
     # reason it cannot just ride the shared nixpkgs-unstable pin.
