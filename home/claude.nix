@@ -135,8 +135,8 @@ let
       ''--set GITHUB_TOKEN ""''
     ];
 
-  # Pinned ahead of nixpkgs-unstable (2.1.278, which cannot reach Opus 5.5 at
-  # all — the server rejects the model on that client). See the package file.
+  # Pinned ahead of nixpkgs-unstable so the CLI understands current model IDs,
+  # including Haiku. See the package file.
   claudeCodeUpstream = pkgs.callPackage ../pkgs/agents/claude-code.nix {
     inherit (unstablePkgs) claude-code;
   };
