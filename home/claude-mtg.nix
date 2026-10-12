@@ -8,6 +8,7 @@
 # shared/skills/, which home/claude.nix auto-wires into every general agent.
 let
   configDir = "${config.home.homeDirectory}/.claude-mtg";
+  globalPrompt = builtins.readFile ./claude-global-prompt.md;
 
   mcpConfig = pkgs.writeText "claude-mtg-mcp.json" (
     builtins.toJSON {
@@ -54,7 +55,7 @@ in
       exec ${config.programs.claude-code.package}/bin/claude \
         --strict-mcp-config --mcp-config ${mcpConfig} \
         --settings ${settings} --setting-sources user \
-        --append-system-prompt 'You are a Magic: The Gathering Commander assistant. Load the mtg-commander-deckbuilding skill to build, upgrade or validate a deck, and mtg-commander-strategy to pilot a finished one. Every card, price, legality and rules fact must come from the mcp__mtg__* tools; there is no shell or web access.' \
+        --append-system-prompt 'You are a Magic: The Gathering Commander assistant. Load the mtg-commander-deckbuilding skill to build, upgrade or validate a deck, and mtg-commander-strategy to pilot a finished one. Every card, price, legality and rules fact must come from the mcp__mtg__* tools; there is no shell or web access. ${globalPrompt}' \
         "$@"
     '')
   ];

@@ -173,6 +173,14 @@ in
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
+    # Standing user instructions for every regular Claude Code session.
+    ".claude/CLAUDE.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
+    ".claude/claude-global-prompt.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/claude-global-prompt.md";
+    ".claude-secondary/CLAUDE.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
+
     # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
     # spare login (see hosts/rpi5/claude/claude-oauth-2.nix). Its settings.json was previously
     # unmanaged; point it at the SAME baseline as ~/.claude so it inherits the
