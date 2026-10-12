@@ -7,7 +7,10 @@ TMPDIR=${TMPDIR:-$WORKDIR/tmp}
 CHAT_ID=${TELEGRAM_CHAT_ID:-82389391}
 MAX_GH=${MAX_GH:-20}
 MAX_BW=${MAX_BW:-20}
-# The one PR slice that survives the blanket exclusion in format_github.
+# Renovate PRs are identified by their generated branch, not a title convention.
+RENOVATE_REPO=${RENOVATE_REPO:-nSimonFR/nic-os}
+RENOVATE_BRANCH_PREFIX=${RENOVATE_BRANCH_PREFIX:-renovate/}
+# Keep the Claude Code title carve-out for manually opened model-access bumps.
 PR_ALLOW_REPO=${PR_ALLOW_REPO:-nSimonFR/nic-os}
 PR_ALLOW_TITLE=${PR_ALLOW_TITLE:-claude-code}
 DRY_RUN=0
@@ -19,8 +22,9 @@ usage() {
   cat <<'USAGE'
 Usage: daily-pending-digest.sh [--dry-run] [--no-mark-read] [--plain] [--rich-collapsible-all]
 
-Collects GitHub notifications (PRs excluded, except the claude-code dependency
-bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE) and BlogWatcher unread articles,
+Collects GitHub notifications (PRs excluded, except Renovate branches in
+RENOVATE_REPO and claude-code bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE)
+and BlogWatcher unread articles,
 formats a Telegram digest, sends it, then marks included GitHub notifications
 and BlogWatcher articles as read only after successful send.
 
@@ -76,6 +80,23 @@ telegram_token() {
   fi
 }
 
+is_renovate_pr() {
+  local repo="$1" subject_url="$2" pr_json
+  local errors="$TMPDIR/daily_pending_digest_renovate_lookup_errors"
+
+  [ "$repo" = "$RENOVATE_REPO" ] || return 1
+  [[ "$subject_url" == "https://api.github.com/repos/$RENOVATE_REPO/pulls/"* ]] || return 1
+  [[ "${subject_url##*/}" =~ ^[0-9]+$ ]] || return 1
+
+  if ! pr_json=$(gh api "$subject_url" 2>/dev/null); then
+    printf '%s\n' "$subject_url" >>"$errors"
+    return 2
+  fi
+
+  jq -e --arg prefix "$RENOVATE_BRANCH_PREFIX" \
+    '.head.ref | startswith($prefix)' <<<"$pr_json" >/dev/null
+}
+
 format_github() {
   if ! command -v gh >/dev/null 2>&1; then
     printf 'GitHub notifications:\n'
@@ -95,17 +116,26 @@ format_github() {
     return 0
   fi
 
-  # PRs are excluded because the inbox carries ~700 of them and they would be
-  # the whole digest. The carve-out is one repo's dependency bumps for a package
-  # whose releases gate which Claude models the CLI may ask for: a stale pin is
-  # not cosmetic, it is a 400 on the newest model. PR_ALLOW_REPO/PR_ALLOW_TITLE
-  # keep the pair tunable without editing jq.
-  if ! jq -s --arg repo "$PR_ALLOW_REPO" --arg title "$PR_ALLOW_TITLE" '
-        [ .[][]
-          | select(.subject.type != "PullRequest"
-                   or (.repository.full_name == $repo
-                       and (.subject.title | test($title; "i")))) ]
-      ' "$GH_RAW" >"$GH_ITEMS" 2>"$err"; then
+  # The inbox carries hundreds of PRs, so include only Renovate's generated
+  # branches in nic-os plus the existing manual Claude Code model-access carve-out.
+  local renovate_errors="$TMPDIR/daily_pending_digest_renovate_lookup_errors"
+  : >"$renovate_errors"
+  if ! jq -s -c '.[][]' "$GH_RAW" 2>"$err" |
+    while IFS= read -r notification; do
+      subject_type=$(jq -r '.subject.type' <<<"$notification")
+      if [ "$subject_type" != "PullRequest" ]; then
+        printf '%s\n' "$notification"
+        continue
+      fi
+
+      repo=$(jq -r '.repository.full_name' <<<"$notification")
+      title=$(jq -r '.subject.title' <<<"$notification")
+      subject_url=$(jq -r '.subject.url' <<<"$notification")
+      if { [ "$repo" = "$PR_ALLOW_REPO" ] && [[ "$title" =~ $PR_ALLOW_TITLE ]]; } ||
+        is_renovate_pr "$repo" "$subject_url"; then
+        printf '%s\n' "$notification"
+      fi
+    done | jq -s '.' >"$GH_ITEMS" 2>"$err"; then
     printf 'GitHub notifications:\n'
     printf '• error: could not parse gh output\n'
     return 0
@@ -114,6 +144,10 @@ format_github() {
   local count extra
   count=$(jq 'length' "$GH_ITEMS")
   printf 'GitHub notifications:\n'
+  if [ -s "$renovate_errors" ]; then
+    printf '• warning: could not inspect %s PR notification(s); they remain unread\n' \
+      "$(wc -l <"$renovate_errors" | tr -d ' ')"
+  fi
   if [ "$count" -eq 0 ]; then
     printf '• none\n'
     return 0

@@ -4,6 +4,7 @@
     "config:recommended"
   ],
   "separateMajorMinor": true,
+  "branchPrefix": "renovate/",
   "enabledManagers": [
     "nix",
     "github-actions",
