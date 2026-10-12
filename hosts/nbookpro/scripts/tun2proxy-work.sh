@@ -33,14 +33,14 @@ for p in (data.get('Peer') or {}).values():
             if name: print(f'DNS {a} {name}')
 " | while read -r type value extra; do
   case "$type" in
-    SUBNET) /sbin/route add -net "$value" "$GW" 2>/dev/null || true ;;
-    HOST)   /sbin/route add -host "$value" "$GW" 2>/dev/null || true ;;
+    SUBNET) /sbin/route add -net "$value" "$GW" >/dev/null 2>&1 || true ;;
+    HOST)   /sbin/route add -host "$value" "$GW" >/dev/null 2>&1 || true ;;
     DNS)    echo "$value $extra $MARKER" ;;
   esac
 done > /tmp/hosts.work
 
-# Update /etc/hosts atomically
-grep -v "$MARKER" /etc/hosts > /tmp/hosts.clean 2>/dev/null || true
+# Update /etc/hosts atomically (also drops `route` output leaked here by older versions)
+grep -v "$MARKER" /etc/hosts | grep -vE "^(add|delete) (host|net) " > /tmp/hosts.clean 2>/dev/null || true
 cat /tmp/hosts.clean /tmp/hosts.work > /tmp/hosts.new
 cp /tmp/hosts.new /etc/hosts
 rm -f /tmp/hosts.work /tmp/hosts.clean /tmp/hosts.new
