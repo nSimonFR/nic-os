@@ -212,11 +212,11 @@
     # RTK — Rust Token Killer (rtk-ai/rtk). Source-only input (`flake = false`);
     # pkgs/agents/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
     # as `pkgs.rtk` via pkgs/overlay.nix. Bumping is a 2-step edit:
-    #   1. change the tag in the URL below (e.g. v0.42.4 → v0.43.0)
+    #   1. change the tag in the URL below
     #   2. bump `version` in pkgs/agents/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
     rtk-src = {
-      url = "github:rtk-ai/rtk/v0.42.4";
+      url = "github:rtk-ai/rtk/v0.51.0";
       flake = false;
     };
 
