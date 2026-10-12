@@ -62,29 +62,21 @@ let
   # Aperture rejects /v1/embeddings — harmless here because memory.provider is
   # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
   gateBase = "${apertureUrl}/v1";
-  # Default model, normalized on `gpt-5.6` (the gate's flagship Sol alias) with
-  # every other agent — dsh, pi-coding-agent, sure, wealthfolio and the gate's
-  # own "auto" fallback all name this same id, so there is one model id to
-  # reason about instead of a per-agent mix of 5.5 / -terra / -luna. The small
-  # gemma models are not options here: hermes rejects sub-64k models at startup
-  # and they don't clear that bar.
-  gateModel = "gpt-5.6";
+  # Hermes defaults to GPT-6 Luna through tiny-llm-gate's Codex route. Other
+  # agents keep their own defaults; this only changes Hermes.
+  gateModel = "gpt-6-luna";
 
-  # Hermes is the ONE agent that keeps GPT-6 within reach. `/model` in Telegram
-  # switches the session to any id declared here — hermes_cli/model_switch.py
-  # `_declared_model_ids` takes this mapping's KEYS as the picker's list — so
-  # Astra is one command away for a hard task without being the default that
-  # burned through the ChatGPT plan quota in September (see the note in
-  # hosts/rpi5/tiny-llm-gate.nix). The switch is session-scoped, so a /new or a
-  # restart lands back on gateModel; nothing silently stays on the expensive
-  # tier. Cron jobs pin their own model and are unaffected either way.
+  # `/model` in Telegram switches the session to any id declared here —
+  # hermes_cli/model_switch.py `_declared_model_ids` takes this mapping's KEYS
+  # as the picker's list. The switch is session-scoped, so a /new or restart
+  # returns to gateModel. Cron jobs pin their own model and are unaffected.
   #
-  # Both context lengths are declared BELOW the models' real windows (5.6 and
-  # Astra both exceed 128k) — 131072 was proven in service here and there is no
-  # reason to push it.
+  # Context lengths are declared below these models' real windows — 131072 was
+  # proven in service here and there is no reason to push it.
   gateModels = {
     "gpt-5.6" = 131072;
     "gpt-6"   = 131072;
+    "gpt-6-luna" = 131072;
     "asale-gpt-6-astra" = 131072;
     "asale-gpt-6-luna"  = 131072;
     "asale-gpt-6.1-sol" = 131072;
@@ -264,6 +256,7 @@ let
       model = gateModel;
       api_key = "unused";
     };
+    agent.reasoning_effort = "medium";
     custom_providers = [
       {
         name = "tiny-llm-gate";
