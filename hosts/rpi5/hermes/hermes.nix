@@ -114,10 +114,9 @@ let
   # cron jobs depend on. These local skills moved here from the retired PicoClaw
   # module (hosts/rpi5/hermes/skills). All descend from OpenClaw's SKILL.md format.
   #
-  # The MTG Commander pair lives in shared/mtg-skills instead: it is shared with
-  # the Mac's `claude-mtg` CLI (home/claude-mtg.nix) but must stay OUT of
+  # The MTG Commander pair lives in shared/mtg-skills and stays OUT of
   # shared/skills, which home/claude.nix auto-wires into every general-purpose
-  # agent. Kept under mtg/ here so the runtime layout is unchanged.
+  # agent. Kept under mtg/ here for Hermes' runtime layout.
   #
   # This list is the single declaration of what the repo seeds into
   # ~/.hermes/skills; hermes-skill-promote below derives its exclusion set from
@@ -206,9 +205,8 @@ let
   # All public data — no auth or API keys. Hermes' built-in MCP client
   # (mcp_servers, below) launches it over stdio and registers its tools as
   # mcp__mtg__* in every conversation. The package definition moved to
-  # pkgs/agents/mtg-mcp.nix when the Mac's `claude-mtg` CLI started sharing it, and is
-  # now exposed as `pkgs.mtg-mcp` (pkgs/overlay.nix) so both share one eval.
-  mtgMcp = pkgs.mtg-mcp;
+  # pkgs/agents/mtg-mcp.nix.
+  mtgMcp = pkgs.callPackage ../../../pkgs/agents/mtg-mcp.nix { };
 
   # FreeReps MCP — 20 read-only Apple Health query tools, as mcp__freereps__*.
   #

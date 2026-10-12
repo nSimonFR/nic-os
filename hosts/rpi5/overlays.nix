@@ -81,7 +81,7 @@
       });
     })
 
-    # This repo's own packages — `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp`.
+    # This repo's packages — `pkgs.rtk` and `pkgs.showmycards`.
     # Defined once in pkgs/overlay.nix (exposed as outputs.overlays.nic-os) and
     # reused here so NixOS modules (cyrus, showmycards, hermes) and the
     # NixOS-integrated home-manager generation resolve the same packages as the

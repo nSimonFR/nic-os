@@ -418,7 +418,7 @@
       devSystems = checkSystems ++ [ "aarch64-darwin" ];
 
       # This repo's own packages (pkgs/) as one overlay — single source of truth
-      # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
+      # so `pkgs.rtk`, `pkgs.showmycards` and `pkgs.openrgb-lg`
       # resolve identically in NixOS modules (via hosts/rpi5/overlays.nix and
       # hosts/beast/overlays.nix) and in the standalone home-manager configs below.
       # See pkgs/overlay.nix for what does and does not belong in it.
