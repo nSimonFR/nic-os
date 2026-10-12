@@ -43,9 +43,7 @@ evaluation. Applied by `hosts/rpi5/overlays.nix`, `hosts/beast/overlays.nix` and
 `homeConfigurations` in `flake.nix`, all via `outputs.overlays.nic-os`.
 
 Move a package from the first form to the second the moment a second consumer
-appears — that, not "is it important", is the rule. `mtg-mcp` was `callPackage`d
-independently from two places (Hermes and the `claude-mtg` CLI), which evaluated
-it twice with no single source of truth; it is an overlay entry now.
+appears — that, not "is it important", is the rule.
 
 ## Platforms
 

@@ -37,12 +37,6 @@ inputs: final: _prev: {
     go = final.go_1_26;
   };
 
-  # mtg-mcp — MCP server for Magic: The Gathering / Commander.
-  # Consumers: hosts/rpi5/hermes/hermes.nix (the Hermes agent) and home/claude-mtg.nix
-  # (the Mac's `claude-mtg` CLI). Both used to callPackage it independently,
-  # which evaluated the derivation twice with no single source of truth.
-  mtg-mcp = final.callPackage ./agents/mtg-mcp.nix { };
-
   # FreeReps (self-hosted Apple Health server) — built from source; upstream
   # publishes only a docker-compose stack.
   # Consumers: hosts/rpi5/freereps.nix (the service) and

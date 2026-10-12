@@ -43,9 +43,8 @@ A skill is a **directory** — `SKILL.md` plus whatever it needs at runtime (`as
 - slash command too? add the name to `claudeSlashCommandSkills`.
 - Claude-only (e.g. `telegram`) → `home/claude-skills/<name>/`, also auto-discovered.
 - **`shared/mtg-skills/`** is deliberately NOT auto-discovered: those belong only to
-  Hermes' `~/.hermes/skills/mtg/` and the `claude-mtg` CLI (`home/claude-mtg.nix`).
-  Enforced — `hermes-skill-promote`'s exclusion set comes from `hermes.nix`'s
-  `skillLineages`.
+  Hermes' `~/.hermes/skills/mtg/`. Enforced — `hermes-skill-promote`'s exclusion set
+  comes from `hermes.nix`'s `skillLineages`.
 
 ## Python scripts
 

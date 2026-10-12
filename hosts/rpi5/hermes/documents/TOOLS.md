@@ -28,7 +28,7 @@ no HTTP gateway to curl.
 - **Skills** deploy into `~/.hermes/skills/` from three sources:
   - `~/nic-os/shared/skills/<name>/SKILL.md` — shared across every agent
   - `~/nic-os/hosts/rpi5/hermes/skills/<name>/SKILL.md` — Hermes-local
-  - `~/nic-os/shared/mtg-skills/` → `~/.hermes/skills/mtg/` (MTG surfaces only)
+  - `~/nic-os/shared/mtg-skills/` → `~/.hermes/skills/mtg/` (Hermes MTG skills)
 - **Models / routing:** configured inline in `hermes.nix`. Hermes points at
   **Aperture** (`http://ai.gate-mintaka.ts.net/v1`), which forwards to
   tiny-llm-gate so usage and cost land on the observability dashboard. Current
