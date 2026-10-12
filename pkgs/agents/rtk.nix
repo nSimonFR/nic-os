@@ -21,6 +21,7 @@
 }:
 rustPlatform.buildRustPackage {
   pname = "rtk";
+  # renovate: datasource=github-releases depName=rtk-ai/rtk extractVersion=^v(?<version>.+)$
   version = "0.51.0"; # keep in sync with the rtk-src tag in flake.nix
 
   src = rtk-src;
