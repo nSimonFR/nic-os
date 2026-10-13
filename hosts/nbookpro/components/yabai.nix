@@ -7,7 +7,18 @@ let
 in
 {
   enable = true;
-  package = unstablePkgs.yabai;
+  # macOS 27 changed Dock internals used by the scripting addition (#2822).
+  # Bassepeder's fork tracks the 27.0/27.1 Dock offsets and 27.2 changes.
+  # Remove the pin when upstream ships macOS 27 support.
+  # https://github.com/asmvik/yabai/issues/2822
+  package = unstablePkgs.yabai.overrideAttrs {
+    src = unstablePkgs.fetchFromGitHub {
+      owner = "bassepeder";
+      repo = "yabai";
+      rev = "79dff965f780efdcfbce26626f2026769407b417";
+      hash = "sha256-qg30wimV8NX2Sx6/pOu6DwLCgOAR767gwu91OohHrN4=";
+    };
+  };
   enableScriptingAddition = true;
   config = {
     layout = "stack";
