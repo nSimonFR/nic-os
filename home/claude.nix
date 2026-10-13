@@ -126,6 +126,7 @@ let
     ]
     ++ [
       ''--set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net"''
+      ''--set CLAUDE_CODE_PLUGIN_PREFER_HTTPS 1''
       ''--set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none"''
       ''--set GIT_AUTHOR_NAME "nSimonFR-ai"''
       ''--set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
