@@ -254,7 +254,7 @@
     # v0.9.7 restores the codex provider and adds versioned Anthropic routes.
     # v0.10.2 streams parallel tool-call args sent only in .done (#13).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.10.2";
+      url = "github:nSimonFR/tiny-llm-gate/v0.10.3";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
