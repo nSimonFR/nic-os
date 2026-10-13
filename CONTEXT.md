@@ -90,7 +90,7 @@ tile config.
 `home/claude-skills`.
 
 **surface** — an agent installation with its own skills directory (Claude Code,
-Codex, pi, Hermes, `claude-mtg`). One builder fans a lineage out to every
+Codex, pi, Hermes). One builder fans a lineage out to every
 surface: `shared/skill-tree.nix`.
 
 ## Notification

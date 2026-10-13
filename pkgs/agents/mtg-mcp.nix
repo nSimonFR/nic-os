@@ -4,8 +4,8 @@
 # All public data, no auth. Upstream ships static Go binaries, so we install those
 # rather than buildGoModule (no vendorHash, no Go toolchain).
 #
-# Used by both hosts/rpi5/hermes/hermes.nix and home/claude-mtg.nix — hence the
-# per-platform table. Bump: change `version`, then refresh each hash with
+# Used by hosts/rpi5/hermes/hermes.nix. Bump `version`, then refresh each
+# platform hash with:
 #   nix store prefetch-file https://github.com/nathanmartins/mtg-mcp/releases/download/v<ver>/mtg-mcp_<asset>.tar.gz
 #
 # Deliberately NOT given a `# renovate:` comment (see renovate.json): four

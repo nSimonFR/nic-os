@@ -12,7 +12,6 @@
     ./zsh.nix
     ./atuin.nix
     ./claude.nix
-    ./claude-mtg.nix
     ./claude-aperture-shim.nix
     ./herdr.nix
     ./mac-clipboard.nix

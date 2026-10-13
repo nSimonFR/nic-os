@@ -96,7 +96,7 @@
     #   nixpkgs-unstable carries every nodejs_* its nix/lib.nix names.
     #   renovate.json keeps the bot off this input.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/v2026.9.24";
+      url = "github:NousResearch/hermes-agent/v0.21.6";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
@@ -212,11 +212,11 @@
     # RTK — Rust Token Killer (rtk-ai/rtk). Source-only input (`flake = false`);
     # pkgs/agents/rtk.nix builds it with rustPlatform.buildRustPackage and it's exposed
     # as `pkgs.rtk` via pkgs/overlay.nix. Bumping is a 2-step edit:
-    #   1. change the tag in the URL below (e.g. v0.42.4 → v0.43.0)
+    #   1. change the tag in the URL below
     #   2. bump `version` in pkgs/agents/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
     rtk-src = {
-      url = "github:rtk-ai/rtk/v0.42.4";
+      url = "github:rtk-ai/rtk/v0.51.0";
       flake = false;
     };
 
@@ -418,7 +418,7 @@
       devSystems = checkSystems ++ [ "aarch64-darwin" ];
 
       # This repo's own packages (pkgs/) as one overlay — single source of truth
-      # so `pkgs.rtk`, `pkgs.showmycards`, `pkgs.mtg-mcp` and `pkgs.openrgb-lg`
+      # so `pkgs.rtk`, `pkgs.showmycards` and `pkgs.openrgb-lg`
       # resolve identically in NixOS modules (via hosts/rpi5/overlays.nix and
       # hosts/beast/overlays.nix) and in the standalone home-manager configs below.
       # See pkgs/overlay.nix for what does and does not belong in it.

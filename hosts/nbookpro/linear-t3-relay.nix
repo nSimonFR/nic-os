@@ -20,6 +20,14 @@ let
     nsimon = 8787;
     work = 8788;
   };
+  relayWithSonnetDefault = pkgs.writeShellApplication {
+    name = "linear-t3-relay";
+    text = ''
+      # process.loadEnvFile preserves inherited environment values.
+      export T3CODE_MODEL="claudeAgent/claude-sonnet-5-5"
+      exec ${lib.getExe inputs.linear-t3-relay.packages.${pkgs.system}.default} "$@"
+    '';
+  };
 in
 {
   imports = [ inputs.linear-t3-relay.homeManagerModules.default ];
@@ -33,6 +41,7 @@ in
 
   services.linear-t3-relay = {
     enable = true;
+    package = relayWithSonnetDefault;
     instances = lib.mapAttrs (name: port: {
       inherit port;
       environmentFile = config.age.secrets."linear-t3-relay-${name}".path;

@@ -6,7 +6,7 @@
 # NOT a prebuilt release binary — keeps the build in-tree and reproducible like
 # the repo's other source inputs (picoclaw-src, cyrus-src, gogcli-src).
 #
-# Build notes (verified against v0.42.4):
+# Build notes (verified against v0.51.0):
 #   - Pure-Rust crates.io deps; Cargo.lock has no git sources, so
 #     `cargoLock.lockFile` alone suffices (no outputHashes/vendorHash).
 #   - `rusqlite { features = ["bundled"] }` compiles SQLite's C via the `cc`
@@ -21,7 +21,8 @@
 }:
 rustPlatform.buildRustPackage {
   pname = "rtk";
-  version = "0.42.4"; # keep in sync with the rtk-src tag in flake.nix
+  # renovate: datasource=github-releases depName=rtk-ai/rtk extractVersion=^v(?<version>.+)$
+  version = "0.51.0"; # keep in sync with the rtk-src tag in flake.nix
 
   src = rtk-src;
 

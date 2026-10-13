@@ -14,6 +14,7 @@
 }:
 rustPlatform.buildRustPackage {
   pname = "zoetrope";
+  # renovate: datasource=github-releases depName=furkankly/zoetrope extractVersion=^v(?<version>.+)$
   version = "0.2.0"; # keep in sync with the zoetrope-src tag in flake.nix
 
   src = zoetrope-src;

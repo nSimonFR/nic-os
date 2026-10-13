@@ -135,8 +135,8 @@ let
       ''--set GITHUB_TOKEN ""''
     ];
 
-  # Pinned ahead of nixpkgs-unstable (2.1.278, which cannot reach Opus 5.5 at
-  # all — the server rejects the model on that client). See the package file.
+  # Pinned ahead of nixpkgs-unstable so the CLI understands current model IDs,
+  # including Haiku. See the package file.
   claudeCodeUpstream = pkgs.callPackage ../pkgs/agents/claude-code.nix {
     inherit (unstablePkgs) claude-code;
   };
@@ -172,6 +172,14 @@ in
     # can update it at runtime.
     ".claude/settings.json".source =
       config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+
+    # Standing user instructions for every regular Claude Code session.
+    ".claude/CLAUDE.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
+    ".claude/claude-global-prompt.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/claude-global-prompt.md";
+    ".claude-secondary/CLAUDE.md".source =
+      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
 
     # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
     # spare login (see hosts/rpi5/claude/claude-oauth-2.nix). Its settings.json was previously

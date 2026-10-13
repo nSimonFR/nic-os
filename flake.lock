@@ -689,16 +689,16 @@
         "uv2nix": "uv2nix_2"
       },
       "locked": {
-        "lastModified": 1790244527,
-        "narHash": "sha256-y6NaoG+HCeMPhxRsBXrRFef4hp3FF1svSPNKpI6Xz/E=",
+        "lastModified": 1791456051,
+        "narHash": "sha256-nET4+PalQSZ4xfhdg2Rb5NB40XxINAkSvpUYHf947Io=",
         "owner": "NousResearch",
         "repo": "hermes-agent",
-        "rev": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+        "rev": "818c13be1dc4fd28987e1e881a9408224afd4535",
         "type": "github"
       },
       "original": {
         "owner": "NousResearch",
-        "ref": "v2026.9.24",
+        "ref": "v0.21.6",
         "repo": "hermes-agent",
         "type": "github"
       }
@@ -1359,16 +1359,16 @@
     "rtk-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1781280365,
-        "narHash": "sha256-8nLJ5PVefXmoXQyw6HERfCP06C+l4I+7XLwKFNVNpew=",
+        "lastModified": 1790947987,
+        "narHash": "sha256-KMDj+M23ZI2Oyglfyt6V9s1P6MMs6LOFBo3oYFMh8sU=",
         "owner": "rtk-ai",
         "repo": "rtk",
-        "rev": "8a7dd7e5570d7744d4b6508479a3674fe8c49286",
+        "rev": "e001f773f80b22b7dc4c7a79521b30e35aaef026",
         "type": "github"
       },
       "original": {
         "owner": "rtk-ai",
-        "ref": "v0.42.4",
+        "ref": "v0.51.0",
         "repo": "rtk",
         "type": "github"
       }
