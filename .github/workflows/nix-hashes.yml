@@ -69,7 +69,7 @@ jobs:
             echo "files=$files" >>"$GITHUB_OUTPUT"
           fi
 
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@v23
         if: steps.changed.outputs.mode != 'skip'
 
       - name: Verify the pinned hashes
