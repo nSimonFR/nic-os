@@ -36,19 +36,23 @@
 let
   # Upstream has cut no tags — pinned to a commit, hence the nixpkgs
   # "unstable" version convention. Bump `rev` and the date together.
-  version = "0-unstable-2026-10-14";
+  version = "0-unstable-2026-10-20";
 
+  # nSimonFR-ai's fork: upstream 6fd817f plus the climbing ingest (bad6de6),
+  # which feeds hosts/rpi5/arkose-sync.nix. Upstream takes no outside PRs (its
+  # source of truth is a private Forgejo; GitHub is a mirror), so rebase the
+  # fork onto upstream to update, and drop it if upstream adopts the feature.
   src = fetchFromGitHub {
-    owner = "meltforce";
+    owner = "nSimonFR-ai";
     repo = "FreeReps";
-    rev = "6fd817f06df34ba6c070fefac8c8f5ceba24eda5";
+    rev = "bad6de691714feae12d6511ee84c2bf36921a018";
     # An FOD's store path is keyed on (outputHash, name), NOT on what it
     # fetched, and fetchFromGitHub defaults name="source". Without a
     # version-bearing name, moving `rev` while forgetting the hash silently
     # re-serves the OLD tree. See known_issue_nix_fod_hash_desync — that trap
     # shipped sure-0.7.3 as v0.7.2.
     name = "freereps-${version}-source";
-    hash = "sha256-luVawDBQ2OtpPrKtPrth/q/Nf9T4WQCRat6dCmUXPK0=";
+    hash = "sha256-+1KjkM3UGzM03sM5bsYYfeetW7kx8Sp/nE1Co1G7fW4=";
   };
 
   # React 19 + Vite 6 + Tailwind 4. Output is a plain directory of static
@@ -162,7 +166,7 @@ buildGoModule {
 
   meta = {
     description = "Self-hosted Apple Health data server with dashboard and MCP interface";
-    homepage = "https://github.com/meltforce/FreeReps";
+    homepage = "https://github.com/nSimonFR-ai/FreeReps";
     license = lib.licenses.mit;
     mainProgram = "freereps";
     platforms = lib.platforms.linux;

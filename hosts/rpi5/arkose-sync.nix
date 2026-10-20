@@ -1,4 +1,5 @@
-# Arkose+ (SocialBoulder) climbing sessions -> /var/lib/arkose-sync/sessions.json.
+# Arkose+ (SocialBoulder) climbing sessions -> /var/lib/arkose-sync/sessions.json,
+# then pushed to FreeReps' climbing ingest (the fork in pkgs/services/freereps.nix).
 #
 # No password is stored. The tailnet-mitm addon captures the app's resume token
 # when the phone opens Arkose+ on the tailnet (expiry 2126, so valid until the
@@ -33,9 +34,13 @@ in
 
   systemd.services.arkose-sync = {
     description = "Sync Arkose+ climbing sessions";
-    after = [ "network-online.target" ];
+    after = [ "network-online.target" "freereps-proxy.socket" ];
     wants = [ "network-online.target" ];
-    environment.ARKOSE_DIR = dir;
+    environment = {
+      ARKOSE_DIR = dir;
+      # The socket-activation proxy: the only address that wakes FreeReps.
+      ARKOSE_FREEREPS_URL = "http://127.0.0.1:8370";
+    };
     serviceConfig = {
       Type = "oneshot";
       User = "arkose-sync";

@@ -134,3 +134,69 @@ def test_token_for_another_account_is_refused(tmp_path):
     server = FakeServer({}, user="U2")
     assert run(setup(tmp_path), server) == 1
     assert [m for m, _ in server.calls] == ["login"]
+
+
+def stored_session(sid, start, **lists):
+    return {"_id": sid, "startDate": start, "endDate": None, "gymName": "Arkose Saint-Denis",
+            "gym": "arkose/saint-denis", "gymLabels": {"4": "vert", "5": "bleu"}, **lists}
+
+
+def boulder(bid, label, grade, num, **kw):
+    return {"_id": bid, "label": label, "grade": grade, "boulderNum": num, **kw}
+
+
+def test_to_freereps_maps_results_and_sends_a_route_once():
+    store = {"sessions": {
+        "s2": stored_session("s2", "2026-09-30T10:26:00+00:00",
+                             boulders=[boulder("a", 4, "4", 4), boulder("b", 5, "2", 18, flashed=True)],
+                             retopBoulders=[boulder("a", 4, "4", 4)],
+                             triedBoulders=[boulder("c", 5, "5", 7)]),
+        "s1": stored_session("s1", "2026-09-04T15:55:00+00:00"),
+    }}
+    p = mod.to_freereps(store)
+    assert p["source"] == "Arkose+"
+    assert [s["id"] for s in p["sessions"]] == ["s1", "s2"]
+    assert p["sessions"][0]["ascents"] == []
+    got = {a["route_id"]: (a["result"], a["grade"], a["grade_rank"], a["name"]) for a in p["sessions"][1]["ascents"]}
+    assert got == {"a": ("repeat", "vert 4", 44, "4"), "b": ("flash", "bleu 2", 52, "18"),
+                   "c": ("attempt", "bleu 5", 55, "7")}
+    assert p["sessions"][1]["gym"] == "Arkose Saint-Denis" and p["sessions"][1]["end"] is None
+
+
+class FakeResponse:
+    def __init__(self, status, body):
+        self.status, self.body = status, body
+
+    def read(self):
+        return self.body.encode()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def test_sync_pushes_to_freereps_when_configured(tmp_path):
+    sessions = [session("s0", days_ago=1, tops=5)]
+    server = FakeServer({"_users.getUserSessions": paged(sessions),
+                         "_users.getUserSessionBoulders": boulders})
+    env = {**setup(tmp_path), "ARKOSE_FREEREPS_URL": "http://fr:8370/"}
+    sent = []
+
+    def opener(req, timeout):
+        sent.append((req.full_url, json.loads(req.data)))
+        return FakeResponse(200, '{"climbing_sessions_received":1,"climbing_ascents_inserted":1}')
+
+    assert mod.main(env=env, connect=lambda url: server, clock=lambda: NOW, opener=opener) == 0
+    assert sent[0][0] == "http://fr:8370/api/v1/ingest/climbing"
+    assert [a["route_id"] for a in sent[0][1]["sessions"][0]["ascents"]] == ["Bs0"]
+
+
+def test_failed_push_fails_the_run_but_keeps_the_store(tmp_path):
+    server = FakeServer({"_users.getUserSessions": paged([session("s0", days_ago=1, tops=5)]),
+                         "_users.getUserSessionBoulders": boulders})
+    env = {**setup(tmp_path), "ARKOSE_FREEREPS_URL": "http://fr:8370"}
+    opener = lambda req, timeout: FakeResponse(500, '{"error":"db down"}')
+    assert mod.main(env=env, connect=lambda url: server, clock=lambda: NOW, opener=opener) == 1
+    assert json.loads((tmp_path / "sessions.json").read_text())["sessions"]["s0"]["boulders"]
