@@ -59,7 +59,7 @@ let
     # ChatGPT account" (probed 2026-09-21), despite being declared there.
     # `openai/` prefix is load-bearing too: Aperture resolves a bare
     # `gpt-6-luna` to the gate's `asale/gpt-6-luna` alias, which 402'd every
-    # call from 2026-10-01 (1638 failures, nothing categorized).
+    # call from 2026-10-18 (1638 failures, nothing categorized).
     OPENAI_MODEL        = "openai/gpt-6-luna";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
