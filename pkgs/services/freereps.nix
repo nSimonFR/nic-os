@@ -36,19 +36,19 @@
 let
   # Upstream has cut no tags — pinned to a commit, hence the nixpkgs
   # "unstable" version convention. Bump `rev` and the date together.
-  version = "0-unstable-2026-08-10";
+  version = "0-unstable-2026-10-14";
 
   src = fetchFromGitHub {
     owner = "meltforce";
     repo = "FreeReps";
-    rev = "d50316d835f84f263c81f4a7fb7268ae26bfe11f";
+    rev = "6fd817f06df34ba6c070fefac8c8f5ceba24eda5";
     # An FOD's store path is keyed on (outputHash, name), NOT on what it
     # fetched, and fetchFromGitHub defaults name="source". Without a
     # version-bearing name, moving `rev` while forgetting the hash silently
     # re-serves the OLD tree. See known_issue_nix_fod_hash_desync — that trap
     # shipped sure-0.7.3 as v0.7.2.
     name = "freereps-${version}-source";
-    hash = "sha256-liQ87Qd0WQkbF0If/T4clQJgZMUonV2BU0HDKSby5uM=";
+    hash = "sha256-luVawDBQ2OtpPrKtPrth/q/Nf9T4WQCRat6dCmUXPK0=";
   };
 
   # React 19 + Vite 6 + Tailwind 4. Output is a plain directory of static
@@ -58,7 +58,7 @@ let
     inherit version src;
     sourceRoot = "${src.name}/server/web";
 
-    npmDepsHash = "sha256-jjZ7fchjmFpazvH/uB7ojPPqDsjYLX/xqa2HBp9TKx0=";
+    npmDepsHash = "sha256-wcTXEPJj9k2jDPkJyOcUbXRNbrakplep881LihDjNC8=";
 
     nodejs = nodejs_22;
     npmBuildScript = "build"; # tsc -b && vite build
@@ -82,7 +82,7 @@ buildGoModule {
   inherit version src;
 
   modRoot = "server";
-  vendorHash = "sha256-EdxUn7JYGaxs8PqiLqAtQqw1MFKGivvxwRB0rNelUAA=";
+  vendorHash = "sha256-GN0dk7IcxP+u5wN4kxbQXdTzjtADGKulsZCi9eiQ3bo=";
 
   # cmd/freereps-upload is a dev helper for replaying exports by hand; the
   # server binary carries the MCP mode (-mcp) and the migrator (-migrate-only).

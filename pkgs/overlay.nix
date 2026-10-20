@@ -42,7 +42,12 @@ inputs: final: _prev: {
   # Consumers: hosts/rpi5/freereps.nix (the service) and
   # hosts/rpi5/hermes/hermes.nix (the `-mcp` stdio server), plus
   # `nix build .#freereps`.
-  freereps = final.callPackage ./services/freereps.nix { };
+  # server/go.mod requires go 1.27.2; nixpkgs has 1.26, nixpkgs-unstable 1.27.2.
+  freereps = final.callPackage ./services/freereps.nix {
+    buildGoModule = final.buildGoModule.override {
+      go = inputs.nixpkgs-unstable.legacyPackages.${final.stdenv.hostPlatform.system}.go_1_27;
+    };
+  };
 
   # nicos-scripts — this repo's own Python: one package holding the shared
   # library plus a console script per unit (bin/steam-to-ryot, bin/homepage-stats,
