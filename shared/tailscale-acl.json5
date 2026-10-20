@@ -145,7 +145,7 @@
 		// enclosing ranges keeps a Cloudflare re-IP from silently ending interception;
 		// only what rpi5 actually advertises becomes a route.
 		// 57.130.73.159/32 is Meteor Galaxy's EU ingress (plus.arkose.com), for
-		// the temporary Arkose+ capture target.
+		// the Arkose+ token capture (hosts/rpi5/arkose-sync.nix).
 		"routes": {
 			"10.7.0.1/32":    ["autogroup:member"],
 			"91.194.60.0/24": ["autogroup:member"],

@@ -151,6 +151,7 @@ in
     ./front-proxy.nix
     ./tailnet-mitm.nix
     ./sumeria-mitm.nix
+    ./arkose-sync.nix
     ./hydroxide.nix
     ./vaultwarden.nix
     ./forgejo.nix
@@ -303,15 +304,6 @@ in
     allowHosts = "^openrouter\\.ai:";
     addon = "${pkgs.nicos-scripts}/${pkgs.python3.sitePackages}/nicos_scripts/mitm/openrouter.py";
     ipv6 = true;
-  };
-  # Temporary: log the Arkose+ app's DDP frames to find its session-history calls
-  # (FreeReps sync study). Output: /var/lib/sumeria-mitm/arkose-capture.jsonl.
-  # Both hosts sit on Meteor Galaxy's shared ingress, so the phone's other Galaxy
-  # apps also route via rpi5 — passed through undecrypted.
-  services.tailnet-mitm.targets.arkose = {
-    hosts = [ "plus.arkose.com" "www.sboulder.com" ];
-    allowHosts = "^(plus\\.arkose\\.com|(www\\.)?sboulder\\.com):";
-    addon = "${pkgs.nicos-scripts}/${pkgs.python3.sitePackages}/nicos_scripts/mitm/arkose_capture.py";
   };
 
   # Cap journal size to reduce RSS and disk usage on 4 GB RPi5
