@@ -21,6 +21,8 @@ fields not seen yet (how a flash is marked) are kept.
   ARKOSE_URL             DDP endpoint                 (default wss://plus.arkose.com/websocket)
   ARKOSE_FOLLOWUP_HOURS  re-sync window after a capture (default 3)
   ARKOSE_DAILY_HOURS     fallback interval              (default 24)
+  ARKOSE_FREEREPS_URL    FreeReps base URL; when set, every sync pushes all
+                         sessions to its /api/v1/ingest/climbing (unset: no push)
 """
 
 import itertools
@@ -28,9 +30,11 @@ import json
 import os
 import sys
 import time
+import urllib.error
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
+from ..httpjson import post_json
 from ..logs import logger
 from ..secrets import env_int, env_str
 from ..state import load_json, save_json
@@ -58,6 +62,7 @@ class Config:
     url: str = "wss://plus.arkose.com/websocket"
     followup_s: int = 3 * 3600
     daily_s: int = 24 * 3600
+    freereps_url: str = ""
 
     @classmethod
     def from_env(cls, env=None):
@@ -66,6 +71,7 @@ class Config:
             url=env_str("ARKOSE_URL", cls.url, env),
             followup_s=env_int("ARKOSE_FOLLOWUP_HOURS", 3, env) * 3600,
             daily_s=env_int("ARKOSE_DAILY_HOURS", 24, env) * 3600,
+            freereps_url=env_str("ARKOSE_FREEREPS_URL", "", env).rstrip("/"),
         )
 
     @property
@@ -197,13 +203,59 @@ def sync(ddp, token, store, now):
     return fetched
 
 
+def _ascent(b, labels, result):
+    label, sub = b.get("label"), b.get("grade")
+    level = labels.get(str(label), str(label))
+    try:
+        rank = int(label) * 10 + int(sub)
+    except (TypeError, ValueError):
+        rank = None
+    return {"route_id": b["_id"], "discipline": "boulder", "result": result,
+            "grade": f"{level} {sub}" if sub else level, "grade_rank": rank,
+            "name": str(b.get("boulderNum", ""))}
+
+
+def to_freereps(store):
+    """The climbing ingest payload (FreeReps server/specs/climbing-ingest.md).
+
+    A route can be in both boulders and retopBoulders (seen 2026-09-30); a
+    repeat wins, so each route is sent once.
+    """
+    out = []
+    for s in sorted(store.get("sessions", {}).values(), key=lambda s: s["startDate"]):
+        labels = s.get("gymLabels") or {}
+        ascents, seen = [], set()
+        lists = [("retopBoulders", lambda b: "repeat"),
+                 ("boulders", lambda b: "flash" if b.get("flashed") else "top"),
+                 ("triedBoulders", lambda b: "attempt")]
+        for key, result in lists:
+            for b in s.get(key) or []:
+                if b["_id"] not in seen:
+                    seen.add(b["_id"])
+                    ascents.append(_ascent(b, labels, result(b)))
+        out.append({"id": s["_id"], "start": s["startDate"], "end": s.get("endDate"),
+                    "gym": s.get("gymName") or s.get("gym", ""), "ascents": ascents})
+    return {"source": "Arkose+", "sessions": out}
+
+
+def push(cfg, store, opener=None):
+    try:
+        status, body = post_json(f"{cfg.freereps_url}/api/v1/ingest/climbing",
+                                 to_freereps(store), opener=opener)
+    except urllib.error.HTTPError as e:
+        status, body = e.code, e.read().decode("utf-8", "replace")
+    if status != 200:
+        raise ArkoseError(f"FreeReps answered {status}: {body[:300]}")
+    return json.loads(body)
+
+
 def _open_ws(url):
     import websocket  # websocket-client; imported here so the module loads without it
 
     return websocket.create_connection(url, timeout=30)
 
 
-def main(env=None, connect=None, clock=time.time):
+def main(env=None, connect=None, clock=time.time, opener=None):
     cfg = Config.from_env(env)
     token = load_json(cfg.token_file, {})
     store = load_json(cfg.store_file, {})
@@ -224,6 +276,16 @@ def main(env=None, connect=None, clock=time.time):
     save_json(cfg.store_file, store, indent=1, sort_keys=True)
     total = sum(1 for s in store["sessions"].values() if not s.get("isEmpty"))
     log(f"{len(store['sessions'])} sessions ({total} with tops), {fetched} fetched")
+    if cfg.freereps_url:
+        # The local store is already saved, so a failed push is retried in full
+        # by the next run.
+        try:
+            res = push(cfg, store, opener)
+        except (ArkoseError, OSError) as e:
+            log(f"FATAL FreeReps push: {e}")
+            return 1
+        log(f"pushed {res.get('climbing_sessions_received', 0)} sessions, "
+            f"{res.get('climbing_ascents_inserted', 0)} ascents to FreeReps")
     return 0
 
 
