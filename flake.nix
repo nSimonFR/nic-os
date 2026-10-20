@@ -253,6 +253,9 @@
     # v0.9.5/v0.9.6 did not contain v0.9.4's codex provider.
     # v0.9.7 restores the codex provider and adds versioned Anthropic routes.
     # v0.10.2 streams parallel tool-call args sent only in .done (#13).
+    # v0.10.3 skipped Codex's additional_tools — left gpt-6-luna with NO tools.
+    # v0.10.4 forwards /v1/responses on codex hops unchanged (#15). Test bumps
+    # with a prompt that needs shell calls; "say hi" passes with zero tools.
     tiny-llm-gate = {
       url = "github:nSimonFR/tiny-llm-gate/v0.10.4";
       inputs.nixpkgs.follows = "nixpkgs";

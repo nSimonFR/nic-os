@@ -38,8 +38,10 @@ in
         # Codex: native ChatGPT/Codex Responses API. The gate POSTs directly
         # to chatgpt.com/backend-api/codex/responses, translating OpenAI chat
         # ↔ Codex Responses in-process (tool calls, streaming, token counts,
-        # reasoning effort). Authenticated by a self-refreshing ChatGPT OAuth
-        # credential — the gate refreshes against auth.openai.com and persists
+        # reasoning effort). /v1/responses on a codex hop skips translation and
+        # forwards the body as-is: Codex CLI's code-mode tools (additional_tools,
+        # custom `exec`) only survive that path. Authenticated by a
+        # self-refreshing ChatGPT OAuth credential — the gate refreshes against auth.openai.com and persists
         # the rotated token BACK to `file`, so it must live on writable state
         # (StateDirectory below), not a read-only secret path. Seeded once from
         # a valid ChatGPT refresh token.
