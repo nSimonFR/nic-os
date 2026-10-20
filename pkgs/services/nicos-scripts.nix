@@ -31,10 +31,10 @@ python3Packages.buildPythonPackage {
 
   build-system = [ python3Packages.setuptools ];
 
-  # The one real dependency, declared in pyproject.toml too. papra.nc_sync writes
-  # Nextcloud systemtags directly into Postgres; it imports psycopg2 lazily so the
-  # module stays importable (and its tests runnable) without it.
-  dependencies = [ python3Packages.psycopg2 ];
+  # Declared in pyproject.toml too. papra.nc_sync writes Nextcloud systemtags
+  # directly into Postgres; connectors.arkose speaks DDP over a websocket. Both
+  # import lazily so the modules stay importable (and testable) without them.
+  dependencies = [ python3Packages.psycopg2 python3Packages.websocket-client ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
 
@@ -51,6 +51,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.travel_cal"
     "nicos_scripts.connectors.ics_mirror"
     "nicos_scripts.connectors.wealthfolio"
+    "nicos_scripts.connectors.arkose"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
     "nicos_scripts.claude.boot_resume"
@@ -64,7 +65,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.calendar_digest"
     "nicos_scripts.hermes.zen_watch"
     "nicos_scripts.mitm.openrouter"
-    "nicos_scripts.mitm.arkose_capture"
+    "nicos_scripts.mitm.arkose"
   ];
 
   meta = {
