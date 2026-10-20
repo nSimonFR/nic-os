@@ -1,0 +1,1460 @@
+From bad6de691714feae12d6511ee84c2bf36921a018 Mon Sep 17 00:00:00 2001
+From: nSimonFR-ai <265587706+nSimonFR-ai@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 21:47:03 +0200
+Subject: [PATCH] climbing: ingest gym logbook sessions and show them on a
+ Climbing screen
+
+POST /api/v1/ingest/climbing takes sessions from a climbing logbook app,
+pushed by a client in a format FreeReps defines (server/specs/
+climbing-ingest.md), into climbing_sessions and climbing_ascents
+(migration 000040). Each push replaces the sessions it names, ascents
+included, in one transaction. Grades are stored as the gym labels them,
+with an optional client-supplied rank within that gym's scale.
+
+Read back through GET /api/v1/climbing/sessions, the get_climbing_sessions
+MCP tool, and a Climbing screen (desktop nav; linked from Workouts on the
+phone). Reasoning in DECISIONS.md, 2026-10-20; pairing with Apple Health
+climbing workouts is a ROADMAP row.
+
+Verified: go build/vet/test, the storage integration suite against
+TimescaleDB on PG (migrations 1-40 from empty), tools/lint.sh (0 issues),
+frontend tsc + build, tools/check-docs.sh, and an end-to-end push of 23
+real Arkose+ sessions (107 ascents) rendered on the new screen.
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+---
+ DECISIONS.md                                  |  32 +++
+ README.md                                     |  19 +-
+ ROADMAP.md                                    |   1 +
+ docs/index.html                               |   2 +-
+ docs/mcp-server.md                            |  13 ++
+ server/CLAUDE.md                              |   2 +-
+ server/internal/ingest/climbing/parse.go      | 111 ++++++++++
+ server/internal/ingest/climbing/parse_test.go |  53 +++++
+ server/internal/ingest/climbing/provider.go   |  38 ++++
+ server/internal/ingest/provider.go            |   4 +
+ server/internal/mcp/server.go                 |   1 +
+ server/internal/mcp/tools.go                  |  25 +++
+ server/internal/server/handlers_climbing.go   |  52 +++++
+ server/internal/server/server.go              |   5 +
+ server/internal/storage/climbing.go           | 138 ++++++++++++
+ .../storage/climbing_integration_test.go      | 113 ++++++++++
+ server/migrations/000040_climbing.down.sql    |   2 +
+ server/migrations/000040_climbing.up.sql      |  38 ++++
+ server/specs/climbing-ingest.md               | 116 ++++++++++
+ server/specs/database-schema.md               |  52 +++++
+ server/web/src/App.tsx                        |   9 +
+ server/web/src/api.ts                         |  32 +++
+ server/web/src/components/Layout.tsx          |   4 +-
+ server/web/src/pages/ClimbingPage.tsx         | 207 ++++++++++++++++++
+ server/web/src/pages/WorkoutsPage.tsx         |  16 +-
+ 25 files changed, 1078 insertions(+), 7 deletions(-)
+ create mode 100644 server/internal/ingest/climbing/parse.go
+ create mode 100644 server/internal/ingest/climbing/parse_test.go
+ create mode 100644 server/internal/ingest/climbing/provider.go
+ create mode 100644 server/internal/server/handlers_climbing.go
+ create mode 100644 server/internal/storage/climbing.go
+ create mode 100644 server/internal/storage/climbing_integration_test.go
+ create mode 100644 server/migrations/000040_climbing.down.sql
+ create mode 100644 server/migrations/000040_climbing.up.sql
+ create mode 100644 server/specs/climbing-ingest.md
+ create mode 100644 server/web/src/pages/ClimbingPage.tsx
+
+diff --git a/DECISIONS.md b/DECISIONS.md
+index 822c11b..17d5132 100644
+--- a/DECISIONS.md
++++ b/DECISIONS.md
+@@ -19,6 +19,38 @@ is as recorded there; where the record named no alternative, none is claimed.
+ 
+ ---
+ 
++## 2026-10-20 — Climbing logbooks are pushed into tables of their own, one session replaced at a time
++
++**Decided:** 2026-10-20
++
++**Decision.** Sessions from a climbing logbook app arrive through
++`POST /api/v1/ingest/climbing` in a format FreeReps defines
++(`server/specs/climbing-ingest.md`) and land in `climbing_sessions` and
++`climbing_ascents`. Each push replaces the sessions it names, ascents included.
++Grades are stored as the gym labels them, with an optional client-supplied rank
++that orders them within that gym's scale only.
++
++**Reasoning.** The first source, Arkose+, has no public API; its data is
++reachable only with the app's own login, so polling it from the server would put
++that login into FreeReps. A push endpoint keeps it in the client, and the
++endpoint sits behind the tailnet identity like every other route — the objection
++that rejected Hevy's webhook (2026-08-04: a public endpoint with its own auth)
++does not apply. The two existing homes do not fit. A `workouts` row needs an
++end, and Arkose+ records one for 1 of 23 sessions measured on 2026-10-20;
++`workout_sets` models weight times reps and feeds the tonnage series, which a
++route would corrupt. Replacing per session follows Hevy's delete-then-insert
++(2026-08-04): the app is edited after the first push — tops are logged during
++the visit — and `ON CONFLICT DO NOTHING` would keep the first version. No
++conversion between grade scales: a converted grade is a judgement, which
++"Data and visualization, no computed scores" (2026-02-19) keeps out.
++
++**Trigger to re-open.** A second logbook source whose sessions span several
++gyms or whose routes repeat within one session, which the per-session route key
++cannot hold; or pairing with Apple Health climbing workouts (`ROADMAP.md`)
++needing a stored link rather than a match at read time.
++
++---
++
+ ## 2026-10-14 — CI rebuilds weekly and govulncheck blocks
+ 
+ **Decided:** 2026-10-14
+diff --git a/README.md b/README.md
+index a087d5d..a51c92b 100644
+--- a/README.md
++++ b/README.md
+@@ -351,6 +351,19 @@ instant is part of a row's natural key. `ingest.session_timezone` in
+ host that imports the same export — reading one export in two zones stores every
+ session twice ([`INCIDENTS.md`](INCIDENTS.md), 2026-08-10).
+ 
++### Climbing logbooks
++
++Bouldering and climbing gyms keep their own logbooks — which routes were
++topped, flashed or tried, at which grade. A client that reads such an app
++pushes its sessions to `/api/v1/ingest/climbing`; the format is
++[`server/specs/climbing-ingest.md`](server/specs/climbing-ingest.md). Each push
++replaces the sessions it names, so a route logged after the first push is
++picked up by the next one.
++
++Grades are stored as the gym labels them and are never converted between
++scales. The sessions are kept apart from workouts: an Apple Watch climbing
++workout and the logbook session of the same visit are two records.
++
+ ## Supported Metrics
+ 
+ 124 metric names are on the allowlist. `GET /api/v1/metrics/available` returns
+@@ -393,13 +406,13 @@ There is no SSE endpoint. `/mcp/sse` matches no route, so the request reaches
+ the dashboard handler and the response is HTML — which a client reports as a
+ protocol error rather than as a wrong URL.
+ 
+-**Tools (20):**
++**Tools (21):**
+ 
+ | Group | Tools |
+ |---|---|
+ | Metrics | `get_health_metrics`, `get_metric_stats`, `list_available_metrics`, `get_correlation`, `compare_periods` |
+ | Sleep | `get_sleep_data`, `get_sleep_summary` |
+-| Workouts | `get_workouts`, `get_workout_sets` |
++| Workouts | `get_workouts`, `get_workout_sets`, `get_climbing_sessions` |
+ | Strength | `get_strength_summary`, `get_strength_volume`, `get_strength_intensity`, `get_strength_1rm` |
+ | Clinical records | `get_ecg_recordings`, `get_audiograms`, `get_medications`, `get_vision_prescriptions` |
+ | Other samples | `get_activity_summaries`, `get_state_of_mind`, `get_category_samples` |
+@@ -661,6 +674,7 @@ an identity, so a health check needs no credentials.
+ | `/api/v1/ingest/` | POST | Ingest health data JSON (Health Auto Export REST; the iOS app with `X-FreeReps-Client: freereps-ios`) |
+ | `/api/v1/sync-state` | GET | Where the calling client's stored data ends, per domain (see `server/specs/hae-rest-api.md`) |
+ | `/api/v1/ingest/alpha` | POST | Ingest Alpha Progression CSV |
++| `/api/v1/ingest/climbing` | POST | Ingest climbing logbook sessions (see `server/specs/climbing-ingest.md`) |
+ | `/api/v1/import` | POST | Unified import (auto-detects format) |
+ | `/api/v1/import/hae-tcp/check` | POST | Probe a Health Auto Export TCP server |
+ | `/api/v1/import/hae-tcp` | POST/DELETE | Start or cancel a TCP backfill |
+@@ -680,6 +694,7 @@ an identity, so a health check needs no credentials.
+ | `/api/v1/workouts/zones` | GET | Heart rate zone distribution |
+ | `/api/v1/workouts/{id}` | GET | Workout detail |
+ | `/api/v1/workouts/{id}/sets` | GET | Strength sets of a session |
++| `/api/v1/climbing/sessions` | GET | Climbing sessions with their ascents |
+ | `/api/v1/training-metrics/rebuild` | POST | Recompute the derived training series |
+ | `/api/v1/ecg` | GET | ECG recordings |
+ | `/api/v1/audiograms` | GET | Audiograms |
+diff --git a/ROADMAP.md b/ROADMAP.md
+index a9730ed..87cea55 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -36,4 +36,5 @@ each becomes its own `[open]` row before the entry is moved out.
+ | `[open]` | Source deduplication in the training aggregates | `server/internal/storage/training_summary.go`, `training_intensity.go` | Two sources cover one period | Both queries sum across `workout_sets` without filtering on `source`. The cutoff currently keeps the periods disjoint; if they ever overlap, tonnage and set counts double. Same failure shape as [`INCIDENTS.md`](INCIDENTS.md), 2026-03-26. |
+ | `[open]` | `Bench Press` names two different exercises | `server/internal/storage/training_metrics.go`, `exercise_name_map` | | Barbell through 2026-06-23, dumbbells from 2026-07-03 at 30 kg per hand. The estimated-1RM series for that exercise mixes both, so the drop at the changeover reads as lost strength rather than a different lift. Alpha writes the equipment into its own column, which is what separates the two; the exercise name alone does not. Found 2026-08-10 alongside [`INCIDENTS.md`](INCIDENTS.md), 2026-08-10, and deliberately left out of that change. |
+ | `[open]` | 2026-05-02 holds nine sets, all flagged as warm-ups | `server/internal/storage/training_summary.go`, `training_volume.go`, or the data | | Four exercises, each ramping in weight, with no working set after them — either an abandoned session or a logging gap. Every aggregate filters on `NOT is_warmup`, so the day contributes nothing and appears as a rest day; the session is not visible as an anomaly anywhere. Decide whether it is data to correct or a case the aggregates should surface, and do not fix it by relaxing the warm-up filter, which would inflate every other period. Found 2026-08-10. |
++| `[open]` | Pair a climbing session with the Apple Health climbing workout of the same visit | `server/internal/storage/climbing.go`, `server/web/src/pages/ClimbingPage.tsx` | A climbing workout recorded on the Watch | A logbook session ([`DECISIONS.md`](DECISIONS.md), 2026-10-20) has a start and usually no end; the watch workout has duration, energy and heart rate. Showing both as one visit needs a match rule — the workout whose interval contains the session's start, or the nearest start within a window — decided against real pairs. None existed on the first instance to ingest climbing sessions, on 2026-10-20: every workout there was cycling. |
+ | `[open]` | Detail view for sessions without a workout row | `server/web/src/pages/WorkoutDetailPage.tsx` | | Alpha and Hevy sessions render from route state because `GET /api/v1/workouts/{id}` cannot resolve a synthetic id. Reloading such a page loses the data. Hevy now supplies a stable `external_id` to resolve against. |
+diff --git a/docs/index.html b/docs/index.html
+index 08edd3a..4e69e74 100644
+--- a/docs/index.html
++++ b/docs/index.html
+@@ -288,7 +288,7 @@
+       </div>
+       <div class="feature">
+         <h3>MCP for AI</h3>
+-        <p>Query your health data from Claude or any MCP-compatible assistant. 20 tools and 3 resources over stdio and Streamable HTTP.</p>
++        <p>Query your health data from Claude or any MCP-compatible assistant. 21 tools and 3 resources over stdio and Streamable HTTP.</p>
+       </div>
+     </div>
+     <div class="feature-col">
+diff --git a/docs/mcp-server.md b/docs/mcp-server.md
+index 7ee670c..c49e66f 100644
+--- a/docs/mcp-server.md
++++ b/docs/mcp-server.md
+@@ -125,6 +125,19 @@ Strength training set data from Hevy and from imported Alpha Progression exports
+ 
+ Returns per-set detail: exercise name, weight, reps, RIR, equipment.
+ 
++### get_climbing_sessions
++
++Climbing sessions from a gym logbook app, newest first, each with its routes.
++
++| Parameter | Required | Default | Description |
++|-----------|----------|---------|-------------|
++| `start` | no | 7 days ago | Start date |
++| `end` | no | now | End date |
++
++Returns per session: source, gym, start, end (often null), and ascents with
++result (`flash`, `top`, `repeat`, `attempt`), grade as the gym labels it, and
++`grade_rank`, which orders grades within that gym's scale only.
++
+ ### compare_periods
+ 
+ Compare a metric's statistics between two time periods.
+diff --git a/server/CLAUDE.md b/server/CLAUDE.md
+index 776f9b0..d5c7e68 100644
+--- a/server/CLAUDE.md
++++ b/server/CLAUDE.md
+@@ -4,7 +4,7 @@
+ 
+ **`specs/` is the source of truth for wire formats** — `hae-export-format.md`,
+ `hae-rest-api.md`, `alpha-progression.md`, `hevy-api.md`, `withings-api.md`,
+-`database-schema.md`. Read the spec before changing an ingest path. *Why:* the
++`climbing-ingest.md`, `database-schema.md`. Read the spec before changing an ingest path. *Why:* the
+ payloads come from third-party apps whose shape is not derivable from this repo,
+ and a mismatch surfaces as silently dropped rows rather than an error (see
+ [`INCIDENTS.md`](../INCIDENTS.md), 2026-04-08).
+diff --git a/server/internal/ingest/climbing/parse.go b/server/internal/ingest/climbing/parse.go
+new file mode 100644
+index 0000000..711ee28
+--- /dev/null
++++ b/server/internal/ingest/climbing/parse.go
+@@ -0,0 +1,111 @@
++// Package climbing ingests sessions from a climbing logbook app, pushed by a
++// client as JSON. The wire format is server/specs/climbing-ingest.md.
++package climbing
++
++import (
++	"encoding/json"
++	"errors"
++	"fmt"
++	"io"
++	"strings"
++	"time"
++
++	"github.com/claude/freereps/internal/storage"
++)
++
++// maxBodyBytes bounds the request body. A year of sessions from one gym app
++// measured 100 KB (Arkose+, 23 sessions, 2026-10-20).
++const maxBodyBytes = 8 << 20
++
++// Payload is the request body of POST /api/v1/ingest/climbing.
++type Payload struct {
++	Source   string    `json:"source"`
++	Sessions []Session `json:"sessions"`
++}
++
++// Session is one visit as the client sends it.
++type Session struct {
++	ID      string     `json:"id"`
++	Start   time.Time  `json:"start"`
++	End     *time.Time `json:"end"`
++	Gym     string     `json:"gym"`
++	Ascents []Ascent   `json:"ascents"`
++}
++
++// Ascent is one route in a session as the client sends it.
++type Ascent struct {
++	RouteID    string `json:"route_id"`
++	Discipline string `json:"discipline"`
++	Result     string `json:"result"`
++	Grade      string `json:"grade"`
++	GradeRank  *int   `json:"grade_rank"`
++	Color      string `json:"color"`
++	Name       string `json:"name"`
++	Attempts   *int   `json:"attempts"`
++}
++
++var results = map[string]bool{"flash": true, "top": true, "repeat": true, "attempt": true}
++
++// Parse decodes and validates a payload. Any invalid session rejects the whole
++// request, so a client bug cannot store half of a push.
++func Parse(r io.Reader) ([]storage.ClimbingSession, error) {
++	dec := json.NewDecoder(io.LimitReader(r, maxBodyBytes))
++	dec.DisallowUnknownFields()
++	var p Payload
++	if err := dec.Decode(&p); err != nil {
++		return nil, fmt.Errorf("decoding climbing payload: %w", err)
++	}
++	source := strings.TrimSpace(p.Source)
++	if source == "" {
++		return nil, errors.New("source is required")
++	}
++
++	out := make([]storage.ClimbingSession, 0, len(p.Sessions))
++	seen := map[string]bool{}
++	for i, s := range p.Sessions {
++		if s.ID == "" {
++			return nil, fmt.Errorf("sessions[%d]: id is required", i)
++		}
++		if seen[s.ID] {
++			return nil, fmt.Errorf("sessions[%d]: duplicate id %q", i, s.ID)
++		}
++		seen[s.ID] = true
++		if s.Start.IsZero() {
++			return nil, fmt.Errorf("session %s: start is required", s.ID)
++		}
++		if s.End != nil && s.End.Before(s.Start) {
++			return nil, fmt.Errorf("session %s: end is before start", s.ID)
++		}
++		cs := storage.ClimbingSession{
++			Source: source, ExternalID: s.ID, StartTime: s.Start, EndTime: s.End, Gym: s.Gym,
++			Ascents: make([]storage.ClimbingAscent, 0, len(s.Ascents)),
++		}
++		routes := map[string]bool{}
++		for j, a := range s.Ascents {
++			if a.RouteID == "" {
++				return nil, fmt.Errorf("session %s, ascents[%d]: route_id is required", s.ID, j)
++			}
++			if routes[a.RouteID] {
++				return nil, fmt.Errorf("session %s: route %s appears twice", s.ID, a.RouteID)
++			}
++			routes[a.RouteID] = true
++			if !results[a.Result] {
++				return nil, fmt.Errorf("session %s, route %s: result %q is not flash, top, repeat or attempt",
++					s.ID, a.RouteID, a.Result)
++			}
++			if a.Attempts != nil && *a.Attempts < 1 {
++				return nil, fmt.Errorf("session %s, route %s: attempts must be at least 1", s.ID, a.RouteID)
++			}
++			discipline := a.Discipline
++			if discipline == "" {
++				discipline = "boulder"
++			}
++			cs.Ascents = append(cs.Ascents, storage.ClimbingAscent{
++				RouteID: a.RouteID, Discipline: discipline, Result: a.Result, Grade: a.Grade,
++				GradeRank: a.GradeRank, Color: a.Color, Name: a.Name, Attempts: a.Attempts,
++			})
++		}
++		out = append(out, cs)
++	}
++	return out, nil
++}
+diff --git a/server/internal/ingest/climbing/parse_test.go b/server/internal/ingest/climbing/parse_test.go
+new file mode 100644
+index 0000000..36a3276
+--- /dev/null
++++ b/server/internal/ingest/climbing/parse_test.go
+@@ -0,0 +1,53 @@
++package climbing
++
++import (
++	"strings"
++	"testing"
++)
++
++const valid = `{"source":"Arkose+","sessions":[{"id":"s1","start":"2026-10-18T08:48:57Z","end":null,
++ "gym":"Arkose Chevaleret","ascents":[
++  {"route_id":"r1","result":"flash","grade":"bleu 2","grade_rank":52,"color":"bleu","name":"18"},
++  {"route_id":"r2","discipline":"boulder","result":"attempt","attempts":3}]}]}`
++
++// TestParseValid checks the field mapping and the boulder default, which is
++// what lets a bouldering-only client omit discipline.
++func TestParseValid(t *testing.T) {
++	got, err := Parse(strings.NewReader(valid))
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 1 || got[0].Source != "Arkose+" || got[0].ExternalID != "s1" || got[0].EndTime != nil {
++		t.Fatalf("unexpected session: %+v", got)
++	}
++	a := got[0].Ascents
++	if len(a) != 2 || a[0].Discipline != "boulder" || *a[0].GradeRank != 52 || a[0].Attempts != nil {
++		t.Fatalf("unexpected ascents: %+v", a)
++	}
++	if *a[1].Attempts != 3 || a[1].GradeRank != nil {
++		t.Fatalf("unexpected second ascent: %+v", a[1])
++	}
++}
++
++// TestParseRejects covers each rule that would otherwise store a row the
++// replace-per-session model cannot express: a duplicate route breaks the
++// primary key mid-transaction, and an unknown result breaks the CHECK.
++func TestParseRejects(t *testing.T) {
++	cases := map[string]string{
++		"no source":       `{"sessions":[]}`,
++		"no id":           `{"source":"a","sessions":[{"start":"2026-10-18T08:00:00Z"}]}`,
++		"duplicate id":    `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z"},{"id":"s","start":"2026-10-18T08:00:00Z"}]}`,
++		"no start":        `{"source":"a","sessions":[{"id":"s"}]}`,
++		"end before":      `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z","end":"2026-10-18T07:00:00Z"}]}`,
++		"no route id":     `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z","ascents":[{"result":"top"}]}]}`,
++		"duplicate route": `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z","ascents":[{"route_id":"r","result":"top"},{"route_id":"r","result":"flash"}]}]}`,
++		"bad result":      `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z","ascents":[{"route_id":"r","result":"sent"}]}]}`,
++		"zero attempts":   `{"source":"a","sessions":[{"id":"s","start":"2026-10-18T08:00:00Z","ascents":[{"route_id":"r","result":"top","attempts":0}]}]}`,
++		"unknown field":   `{"source":"a","sessions":[],"extra":1}`,
++	}
++	for name, body := range cases {
++		if _, err := Parse(strings.NewReader(body)); err == nil {
++			t.Errorf("%s: expected an error", name)
++		}
++	}
++}
+diff --git a/server/internal/ingest/climbing/provider.go b/server/internal/ingest/climbing/provider.go
+new file mode 100644
+index 0000000..d7f84bb
+--- /dev/null
++++ b/server/internal/ingest/climbing/provider.go
+@@ -0,0 +1,38 @@
++package climbing
++
++import (
++	"context"
++	"fmt"
++	"io"
++
++	"github.com/claude/freereps/internal/ingest"
++	"github.com/claude/freereps/internal/storage"
++)
++
++// Provider stores pushed climbing sessions.
++type Provider struct {
++	db *storage.DB
++}
++
++// NewProvider creates a climbing ingest provider.
++func NewProvider(db *storage.DB) *Provider {
++	return &Provider{db: db}
++}
++
++// Ingest parses a payload and replaces the sessions it names.
++func (p *Provider) Ingest(ctx context.Context, r io.Reader, userID int) (*ingest.Result, error) {
++	sessions, err := Parse(r)
++	if err != nil {
++		return nil, err
++	}
++	result := &ingest.Result{ClimbingSessionsReceived: len(sessions)}
++	for _, s := range sessions {
++		result.ClimbingAscentsReceived += len(s.Ascents)
++	}
++	n, err := p.db.ReplaceClimbingSessions(ctx, userID, sessions)
++	if err != nil {
++		return result, fmt.Errorf("storing climbing sessions: %w", err)
++	}
++	result.ClimbingAscentsInserted = n
++	return result, nil
++}
+diff --git a/server/internal/ingest/provider.go b/server/internal/ingest/provider.go
+index 6d1e9c8..00ad7ac 100644
+--- a/server/internal/ingest/provider.go
++++ b/server/internal/ingest/provider.go
+@@ -19,6 +19,10 @@ type Result struct {
+ 	SetsReceived int   `json:"sets_received"`
+ 	SetsInserted int64 `json:"sets_inserted"`
+ 
++	ClimbingSessionsReceived int   `json:"climbing_sessions_received,omitempty"`
++	ClimbingAscentsReceived  int   `json:"climbing_ascents_received,omitempty"`
++	ClimbingAscentsInserted  int64 `json:"climbing_ascents_inserted,omitempty"`
++
+ 	ECGRecordingsInserted    int   `json:"ecg_recordings_inserted,omitempty"`
+ 	AudiogramsInserted       int   `json:"audiograms_inserted,omitempty"`
+ 	ActivitySummariesInserted int64 `json:"activity_summaries_inserted,omitempty"`
+diff --git a/server/internal/mcp/server.go b/server/internal/mcp/server.go
+index 1b46deb..37be11c 100644
+--- a/server/internal/mcp/server.go
++++ b/server/internal/mcp/server.go
+@@ -44,6 +44,7 @@ func New(ds *storage.DB, version string, log *slog.Logger) *server.MCPServer {
+ 		server.ServerTool{Tool: toolGetSleepData, Handler: h.getSleepData},
+ 		server.ServerTool{Tool: toolGetWorkouts, Handler: h.getWorkouts},
+ 		server.ServerTool{Tool: toolGetWorkoutSets, Handler: h.getWorkoutSets},
++		server.ServerTool{Tool: toolGetClimbingSessions, Handler: h.getClimbingSessions},
+ 		server.ServerTool{Tool: toolListAvailableMetrics, Handler: h.listAvailableMetrics},
+ 		server.ServerTool{Tool: toolComparePeriods, Handler: h.comparePeriods},
+ 		server.ServerTool{Tool: toolGetStrengthSummary, Handler: h.getStrengthSummary},
+diff --git a/server/internal/mcp/tools.go b/server/internal/mcp/tools.go
+index 205c6d0..4dda805 100644
+--- a/server/internal/mcp/tools.go
++++ b/server/internal/mcp/tools.go
+@@ -112,6 +112,12 @@ var toolGetWorkoutSets = newReadTool("get_workout_sets",
+ 	mcp.WithString("exercise", mcp.Description("Filter by exercise name (partial match, e.g. 'bench press')")),
+ )
+ 
++var toolGetClimbingSessions = newReadTool("get_climbing_sessions",
++	mcp.WithDescription("FreeReps database: climbing sessions from a gym logbook app, each with its routes — result (flash, top, repeat, attempt), the grade as the gym labels it, and grade_rank, which orders grades within that gym's scale only. Grades are not comparable across gyms."),
++	mcp.WithString("start", mcp.Description(descStart + " Defaults to 7 days ago.")),
++	mcp.WithString("end", mcp.Description(descEnd + " Defaults to now.")),
++)
++
+ var toolListAvailableMetrics = newReadTool("list_available_metrics",
+ 	mcp.WithDescription("List every health metric with its category, enabled status, display_unit, display_multiplier and is_cumulative. The other tools return stored values: multiply by display_multiplier to get display_unit (e.g. a stored fraction becomes a percentage), and read is_cumulative to know whether an avg field is a total."),
+ )
+@@ -367,6 +373,25 @@ func (h *handlers) getWorkoutSets(ctx context.Context, req mcp.CallToolRequest)
+ 	return result, nil
+ }
+ 
++func (h *handlers) getClimbingSessions(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
++	start, end, err := defaultTimeRange(req.GetString("start", ""), req.GetString("end", ""))
++	if err != nil {
++		return mcp.NewToolResultError("invalid date format: " + err.Error()), nil
++	}
++
++	sessions, err := h.ds.QueryClimbingSessions(ctx, start, end, UserIDFromContext(ctx))
++	if err != nil {
++		h.log.Error("mcp get_climbing_sessions", "error", err)
++		return mcp.NewToolResultError("query failed: " + err.Error()), nil
++	}
++
++	result, err := mcp.NewToolResultJSON(map[string]any{"data": sessions})
++	if err != nil {
++		return mcp.NewToolResultError("serialization failed"), nil
++	}
++	return result, nil
++}
++
+ func (h *handlers) listAvailableMetrics(ctx context.Context, _ mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+ 	metrics, err := h.ds.GetAllowedMetrics(ctx)
+ 	if err != nil {
+diff --git a/server/internal/server/handlers_climbing.go b/server/internal/server/handlers_climbing.go
+new file mode 100644
+index 0000000..c0ffd43
+--- /dev/null
++++ b/server/internal/server/handlers_climbing.go
+@@ -0,0 +1,52 @@
++package server
++
++import (
++	"net/http"
++	"time"
++)
++
++// handleClimbingIngest stores sessions pushed by a climbing logbook client
++// (server/specs/climbing-ingest.md). A malformed payload is a 400; nothing of
++// it is stored.
++func (s *Server) handleClimbingIngest(w http.ResponseWriter, r *http.Request) {
++	uid, ok := mustUserID(w, r)
++	if !ok {
++		return
++	}
++
++	start := time.Now()
++	result, err := s.climbing.Ingest(r.Context(), r.Body, uid)
++	durationMs := int(time.Since(start).Milliseconds())
++	if err != nil {
++		s.log.Error("climbing ingest error", "error", err)
++		status := http.StatusBadRequest
++		if result != nil {
++			// Parsed, so the failure was the database's.
++			status = http.StatusInternalServerError
++			go s.logImport(uid, "climbing", result, err, durationMs)
++		}
++		writeJSON(w, status, map[string]string{"error": err.Error()})
++		return
++	}
++
++	go s.logImport(uid, "climbing", result, nil, durationMs)
++	writeJSON(w, http.StatusOK, result)
++}
++
++func (s *Server) handleQueryClimbingSessions(w http.ResponseWriter, r *http.Request) {
++	start, end, err := parseTimeRange(r)
++	if err != nil {
++		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
++		return
++	}
++	uid, ok := mustUserID(w, r)
++	if !ok {
++		return
++	}
++	sessions, err := s.db.QueryClimbingSessions(r.Context(), start, end, uid)
++	if err != nil {
++		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
++		return
++	}
++	writeJSON(w, http.StatusOK, sessions)
++}
+diff --git a/server/internal/server/server.go b/server/internal/server/server.go
+index f5b8f64..c914a7e 100644
+--- a/server/internal/server/server.go
++++ b/server/internal/server/server.go
+@@ -11,6 +11,7 @@ import (
+ 	"github.com/claude/freereps/internal/alerts"
+ 	"github.com/claude/freereps/internal/hevy"
+ 	"github.com/claude/freereps/internal/ingest/alpha"
++	"github.com/claude/freereps/internal/ingest/climbing"
+ 	"github.com/claude/freereps/internal/ingest/health"
+ 	freerepsmcp "github.com/claude/freereps/internal/mcp"
+ 	"github.com/claude/freereps/internal/oura"
+@@ -26,6 +27,7 @@ type Server struct {
+ 	db     *storage.DB
+ 	health *health.Provider
+ 	alpha  *alpha.Provider
++	climbing *climbing.Provider
+ 	log    *slog.Logger
+ 	lc     *local.Client
+ 	router chi.Router
+@@ -138,6 +140,7 @@ func New(db *storage.DB, healthProvider *health.Provider, alphaProvider *alpha.P
+ 		db:     db,
+ 		health: healthProvider,
+ 		alpha:  alphaProvider,
++		climbing: climbing.NewProvider(db),
+ 		log:    log,
+ 		router: chi.NewRouter(),
+ 	}
+@@ -203,6 +206,7 @@ func (s *Server) routes() {
+ 		r.Route("/api/v1/ingest", func(r chi.Router) {
+ 			r.Post("/", s.handleIngest)
+ 			r.Post("/alpha", s.handleAlphaIngest)
++			r.Post("/climbing", s.handleClimbingIngest)
+ 		})
+ 		r.Get("/api/v1/sync-state", s.handleSyncState)
+ 
+@@ -220,6 +224,7 @@ func (s *Server) routes() {
+ 		r.Get("/api/v1/workouts/zones", s.handleWorkoutZones)
+ 		r.Get("/api/v1/workouts/{id}", s.handleGetWorkout)
+ 		r.Get("/api/v1/workouts/{id}/sets", s.handleWorkoutSets)
++		r.Get("/api/v1/climbing/sessions", s.handleQueryClimbingSessions)
+ 		r.Get("/api/v1/metrics/stats", s.handleMetricStats)
+ 		r.Get("/api/v1/timeseries", s.handleTimeSeries)
+ 		r.Get("/api/v1/correlation", s.handleCorrelation)
+diff --git a/server/internal/storage/climbing.go b/server/internal/storage/climbing.go
+new file mode 100644
+index 0000000..16c7f8e
+--- /dev/null
++++ b/server/internal/storage/climbing.go
+@@ -0,0 +1,138 @@
++package storage
++
++import (
++	"context"
++	"fmt"
++	"time"
++
++	"github.com/jackc/pgx/v5"
++)
++
++// ClimbingSession is one visit logged in a climbing app, with every route the
++// app records for it. See server/specs/climbing-ingest.md.
++type ClimbingSession struct {
++	Source     string           `json:"source"`
++	ExternalID string           `json:"id"`
++	StartTime  time.Time        `json:"start"`
++	EndTime    *time.Time       `json:"end"`
++	Gym        string           `json:"gym"`
++	Ascents    []ClimbingAscent `json:"ascents"`
++}
++
++// ClimbingAscent is one route in a session. Result is flash, top, repeat or
++// attempt; GradeRank and Attempts are nil when the app does not provide them.
++type ClimbingAscent struct {
++	RouteID    string `json:"route_id"`
++	Discipline string `json:"discipline"`
++	Result     string `json:"result"`
++	Grade      string `json:"grade"`
++	GradeRank  *int   `json:"grade_rank"`
++	Color      string `json:"color"`
++	Name       string `json:"name"`
++	Attempts   *int   `json:"attempts"`
++}
++
++// ReplaceClimbingSessions writes each session and replaces all of its ascents,
++// in one transaction. Replacing rather than ON CONFLICT DO NOTHING is what lets
++// a route logged or removed in the app after an earlier push reach the
++// database. Sessions absent from the call are left alone.
++func (db *DB) ReplaceClimbingSessions(ctx context.Context, userID int, sessions []ClimbingSession) (int64, error) {
++	tx, err := db.Pool.Begin(ctx)
++	if err != nil {
++		return 0, fmt.Errorf("beginning transaction: %w", err)
++	}
++	defer func() { _ = tx.Rollback(ctx) }()
++
++	var ascents int64
++	for _, s := range sessions {
++		if _, err := tx.Exec(ctx,
++			`INSERT INTO climbing_sessions (user_id, source, external_id, start_time, end_time, gym, updated_at)
++			 VALUES ($1, $2, $3, $4, $5, $6, NOW())
++			 ON CONFLICT (user_id, source, external_id) DO UPDATE SET
++			   start_time = EXCLUDED.start_time, end_time = EXCLUDED.end_time,
++			   gym = EXCLUDED.gym, updated_at = NOW()`,
++			userID, s.Source, s.ExternalID, s.StartTime, s.EndTime, s.Gym); err != nil {
++			return 0, fmt.Errorf("upserting climbing session %s: %w", s.ExternalID, err)
++		}
++		if _, err := tx.Exec(ctx,
++			`DELETE FROM climbing_ascents WHERE user_id = $1 AND source = $2 AND session_external_id = $3`,
++			userID, s.Source, s.ExternalID); err != nil {
++			return 0, fmt.Errorf("clearing ascents of %s: %w", s.ExternalID, err)
++		}
++		rows := make([][]any, 0, len(s.Ascents))
++		for _, a := range s.Ascents {
++			rows = append(rows, []any{userID, s.Source, s.ExternalID, a.RouteID, a.Discipline,
++				a.Result, a.Grade, a.GradeRank, a.Color, a.Name, a.Attempts})
++		}
++		n, err := tx.CopyFrom(ctx, pgx.Identifier{"climbing_ascents"},
++			[]string{"user_id", "source", "session_external_id", "route_external_id", "discipline",
++				"result", "grade", "grade_rank", "color", "name", "attempts"},
++			pgx.CopyFromRows(rows))
++		if err != nil {
++			return 0, fmt.Errorf("inserting ascents of %s: %w", s.ExternalID, err)
++		}
++		ascents += n
++	}
++	if err := tx.Commit(ctx); err != nil {
++		return 0, fmt.Errorf("committing climbing sessions: %w", err)
++	}
++	return ascents, nil
++}
++
++// QueryClimbingSessions returns the sessions starting in [start, end), newest
++// first, each with its ascents ordered hardest first.
++func (db *DB) QueryClimbingSessions(ctx context.Context, start, end time.Time, userID int) ([]ClimbingSession, error) {
++	rows, err := db.Pool.Query(ctx,
++		`SELECT source, external_id, start_time, end_time, gym
++		 FROM climbing_sessions
++		 WHERE user_id = $1 AND start_time >= $2 AND start_time < $3
++		 ORDER BY start_time DESC`,
++		userID, start, end)
++	if err != nil {
++		return nil, fmt.Errorf("querying climbing sessions: %w", err)
++	}
++	result := []ClimbingSession{}
++	index := map[[2]string]int{}
++	for rows.Next() {
++		s := ClimbingSession{Ascents: []ClimbingAscent{}}
++		if err := rows.Scan(&s.Source, &s.ExternalID, &s.StartTime, &s.EndTime, &s.Gym); err != nil {
++			rows.Close()
++			return nil, fmt.Errorf("scanning climbing session: %w", err)
++		}
++		index[[2]string{s.Source, s.ExternalID}] = len(result)
++		result = append(result, s)
++	}
++	rows.Close()
++	if err := rows.Err(); err != nil {
++		return nil, fmt.Errorf("reading climbing sessions: %w", err)
++	}
++	if len(result) == 0 {
++		return result, nil
++	}
++
++	rows, err = db.Pool.Query(ctx,
++		`SELECT a.source, a.session_external_id, a.route_external_id, a.discipline, a.result,
++		        a.grade, a.grade_rank, a.color, a.name, a.attempts
++		 FROM climbing_ascents a
++		 JOIN climbing_sessions s
++		   ON s.user_id = a.user_id AND s.source = a.source AND s.external_id = a.session_external_id
++		 WHERE s.user_id = $1 AND s.start_time >= $2 AND s.start_time < $3
++		 ORDER BY a.grade_rank DESC NULLS LAST, a.name`,
++		userID, start, end)
++	if err != nil {
++		return nil, fmt.Errorf("querying climbing ascents: %w", err)
++	}
++	defer rows.Close()
++	for rows.Next() {
++		var source, session string
++		var a ClimbingAscent
++		if err := rows.Scan(&source, &session, &a.RouteID, &a.Discipline, &a.Result,
++			&a.Grade, &a.GradeRank, &a.Color, &a.Name, &a.Attempts); err != nil {
++			return nil, fmt.Errorf("scanning climbing ascent: %w", err)
++		}
++		if i, ok := index[[2]string{source, session}]; ok {
++			result[i].Ascents = append(result[i].Ascents, a)
++		}
++	}
++	return result, rows.Err()
++}
+diff --git a/server/internal/storage/climbing_integration_test.go b/server/internal/storage/climbing_integration_test.go
+new file mode 100644
+index 0000000..ce25739
+--- /dev/null
++++ b/server/internal/storage/climbing_integration_test.go
+@@ -0,0 +1,113 @@
++//go:build integration
++
++// A climbing session is edited in the app after the first push — tops are
++// logged during the visit — so an ingest replaces the session's ascents rather
++// than adding to them. These tests pin that replacement, and that it leaves
++// other sessions alone, against the real keys and foreign key.
++//
++// Run with:
++//
++//	FREEREPS_TEST_DSN=postgres://user:pass@host:port/db?sslmode=disable \
++//	  go test -tags integration ./internal/storage/
++package storage
++
++import (
++	"context"
++	"testing"
++	"time"
++)
++
++const climbingTestUser = 4249
++
++func climbingTestDB(t *testing.T) *DB {
++	t.Helper()
++	db := aggTestDB(t)
++	ctx := context.Background()
++	if _, err := db.Pool.Exec(ctx,
++		`INSERT INTO users (id, login) VALUES ($1, 'climbing-test') ON CONFLICT (id) DO NOTHING`,
++		climbingTestUser); err != nil {
++		t.Fatalf("creating test user: %v", err)
++	}
++	if _, err := db.Pool.Exec(ctx, `DELETE FROM climbing_sessions WHERE user_id = $1`, climbingTestUser); err != nil {
++		t.Fatalf("clearing climbing_sessions: %v", err)
++	}
++	return db
++}
++
++func rank(n int) *int { return &n }
++
++func climbingSession(id string, start time.Time, routes ...string) ClimbingSession {
++	s := ClimbingSession{Source: "Test", ExternalID: id, StartTime: start, Gym: "Gym"}
++	for i, r := range routes {
++		s.Ascents = append(s.Ascents, ClimbingAscent{
++			RouteID: r, Discipline: "boulder", Result: "top", Grade: "g", GradeRank: rank(i),
++		})
++	}
++	return s
++}
++
++func TestClimbingPushReplacesTheSessionsAscents(t *testing.T) {
++	db := climbingTestDB(t)
++	ctx := context.Background()
++	day := time.Date(2026, 10, 18, 8, 48, 0, 0, time.UTC)
++
++	if n, err := db.ReplaceClimbingSessions(ctx, climbingTestUser, []ClimbingSession{
++		climbingSession("a", day, "r1", "r2"),
++		climbingSession("b", day.Add(-72*time.Hour), "r9"),
++	}); err != nil || n != 3 {
++		t.Fatalf("first push: n=%d err=%v", n, err)
++	}
++
++	// Later push of session a only: r2 removed in the app, r3 and r4 logged.
++	edited := climbingSession("a", day, "r1", "r3", "r4")
++	edited.Gym = "Renamed"
++	if n, err := db.ReplaceClimbingSessions(ctx, climbingTestUser, []ClimbingSession{edited}); err != nil || n != 3 {
++		t.Fatalf("second push: n=%d err=%v", n, err)
++	}
++
++	got, err := db.QueryClimbingSessions(ctx, day.Add(-7*24*time.Hour), day.Add(time.Hour), climbingTestUser)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 2 || got[0].ExternalID != "a" || got[1].ExternalID != "b" {
++		t.Fatalf("want sessions a then b, got %+v", got)
++	}
++	if got[0].Gym != "Renamed" || len(got[0].Ascents) != 3 {
++		t.Fatalf("session a not replaced: %+v", got[0])
++	}
++	// Hardest first: r4 carries the highest rank.
++	if got[0].Ascents[0].RouteID != "r4" || got[0].Ascents[2].RouteID != "r1" {
++		t.Fatalf("ascents not ordered by grade_rank: %+v", got[0].Ascents)
++	}
++	if len(got[1].Ascents) != 1 || got[1].Ascents[0].RouteID != "r9" {
++		t.Fatalf("session b must be untouched: %+v", got[1])
++	}
++}
++
++func TestClimbingPushIsAtomic(t *testing.T) {
++	db := climbingTestDB(t)
++	ctx := context.Background()
++	day := time.Date(2026, 10, 18, 8, 48, 0, 0, time.UTC)
++
++	if _, err := db.ReplaceClimbingSessions(ctx, climbingTestUser, []ClimbingSession{
++		climbingSession("a", day, "r1"),
++	}); err != nil {
++		t.Fatal(err)
++	}
++	// A result the CHECK constraint rejects, in the second session of the push.
++	bad := climbingSession("c", day.Add(time.Hour), "r5")
++	bad.Ascents[0].Result = "sent"
++	if _, err := db.ReplaceClimbingSessions(ctx, climbingTestUser, []ClimbingSession{
++		climbingSession("a", day), bad,
++	}); err == nil {
++		t.Fatal("expected the CHECK constraint to reject the push")
++	}
++
++	got, err := db.QueryClimbingSessions(ctx, day.Add(-time.Hour), day.Add(2*time.Hour), climbingTestUser)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if len(got) != 1 || len(got[0].Ascents) != 1 {
++		t.Fatalf("a failed push must change nothing, got %+v", got)
++	}
++}
+diff --git a/server/migrations/000040_climbing.down.sql b/server/migrations/000040_climbing.down.sql
+new file mode 100644
+index 0000000..b14eab8
+--- /dev/null
++++ b/server/migrations/000040_climbing.down.sql
+@@ -0,0 +1,2 @@
++DROP TABLE IF EXISTS climbing_ascents;
++DROP TABLE IF EXISTS climbing_sessions;
+diff --git a/server/migrations/000040_climbing.up.sql b/server/migrations/000040_climbing.up.sql
+new file mode 100644
+index 0000000..0b5f524
+--- /dev/null
++++ b/server/migrations/000040_climbing.up.sql
+@@ -0,0 +1,38 @@
++-- Climbing sessions and the routes climbed in them, pushed by a client through
++-- POST /api/v1/ingest/climbing (server/specs/climbing-ingest.md). Separate from
++-- workouts and workout_sets: a gym logbook session carries no duration, energy
++-- or heart rate, and a route is not a set of weight times reps. Pairing with an
++-- Apple Health climbing workout happens at query time, by start time.
++--
++-- A session is the unit of correction. An ingest replaces the session's row and
++-- all of its ascents, so a route logged or removed in the source app after the
++-- first push reaches the database on the next one.
++CREATE TABLE climbing_sessions (
++    user_id     INTEGER     NOT NULL REFERENCES users(id),
++    source      TEXT        NOT NULL,              -- the logbook app, e.g. 'Arkose+'
++    external_id TEXT        NOT NULL,              -- the session's id in that app
++    start_time  TIMESTAMPTZ NOT NULL,
++    end_time    TIMESTAMPTZ,                       -- NULL when the app records none
++    gym         TEXT        NOT NULL DEFAULT '',
++    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    PRIMARY KEY (user_id, source, external_id)
++);
++
++CREATE INDEX idx_climbing_sessions_time ON climbing_sessions (user_id, start_time DESC);
++
++CREATE TABLE climbing_ascents (
++    user_id             INTEGER NOT NULL,
++    source              TEXT    NOT NULL,
++    session_external_id TEXT    NOT NULL,
++    route_external_id   TEXT    NOT NULL,          -- the route's id in the app
++    discipline          TEXT    NOT NULL DEFAULT 'boulder',
++    result              TEXT    NOT NULL CHECK (result IN ('flash', 'top', 'repeat', 'attempt')),
++    grade               TEXT    NOT NULL DEFAULT '', -- as the gym labels it
++    grade_rank          INTEGER,                     -- client-supplied order within the gym's scale
++    color               TEXT    NOT NULL DEFAULT '', -- hold colour
++    name                TEXT    NOT NULL DEFAULT '', -- route number or name at the gym
++    attempts            INTEGER,                     -- NULL when the app does not count them
++    PRIMARY KEY (user_id, source, session_external_id, route_external_id),
++    FOREIGN KEY (user_id, source, session_external_id)
++        REFERENCES climbing_sessions (user_id, source, external_id) ON DELETE CASCADE
++);
+diff --git a/server/specs/climbing-ingest.md b/server/specs/climbing-ingest.md
+new file mode 100644
+index 0000000..2d6f3b4
+--- /dev/null
++++ b/server/specs/climbing-ingest.md
+@@ -0,0 +1,116 @@
++# Climbing ingest — Wire Format Spec
++
++`POST /api/v1/ingest/climbing` takes sessions from a climbing logbook app,
++pushed by a client that reads the app's data — FreeReps polls no climbing
++service itself. The format is FreeReps' own: it is defined here, not derived
++from a third-party API. Written 2026-10-20 against the first client, which reads
++Arkose+ (the logbook of the Arkose bouldering gyms).
++
++## Request
++
++`Content-Type: application/json`, body at most 8 MiB, behind the same identity
++middleware as every other route.
++
++```json
++{
++  "source": "Arkose+",
++  "sessions": [
++    {
++      "id": "83bx7J5mAXRF2Makx",
++      "start": "2026-10-18T08:48:57Z",
++      "end": null,
++      "gym": "Arkose Chevaleret",
++      "ascents": [
++        {
++          "route_id": "tkzgDtBT9x6eqorka",
++          "discipline": "boulder",
++          "result": "top",
++          "grade": "bleu 2",
++          "grade_rank": 52,
++          "color": "bleu",
++          "name": "18",
++          "attempts": null
++        }
++      ]
++    }
++  ]
++}
++```
++
++| Field | Required | Meaning |
++|---|---|---|
++| `source` | yes | The app the sessions come from. Part of every row's key. |
++| `sessions[].id` | yes | The session's id in that app; unique within the request. |
++| `sessions[].start` | yes | RFC 3339 instant. |
++| `sessions[].end` | no | RFC 3339 instant, not before `start`. `null` when the app records no end — Arkose+ records one for about one session in twenty. |
++| `sessions[].gym` | no | Display name of the gym. |
++| `ascents[].route_id` | yes | The route's id in the app; unique within the session. |
++| `ascents[].discipline` | no | `boulder` when omitted. |
++| `ascents[].result` | yes | `flash` (topped first try), `top`, `repeat` (topped, and topped in an earlier session), `attempt` (tried, not topped). |
++| `ascents[].grade` | no | The grade as the gym labels it, untranslated. Gym scales are not converted to a common scale. |
++| `ascents[].grade_rank` | no | Integer order of `grade` within the gym's own scale, higher is harder. Only comparable within one gym's scale. |
++| `ascents[].color` | no | Hold colour. |
++| `ascents[].name` | no | The route's number or name at the gym. |
++| `ascents[].attempts` | no | At least 1. `null` when the app does not count attempts — Arkose+ does not. |
++
++Unknown fields are rejected, so a client that renames a field fails loudly
++instead of storing empty columns.
++
++## Semantics
++
++**A session is the unit of correction.** Each session in the request replaces
++the stored session with the same `(source, id)` and all of its ascents, in one
++transaction. A route logged or removed in the app after an earlier push
++therefore reaches the database on the next push of that session. Sessions not
++named in the request are left alone, so a client may push only the sessions that
++changed. Nothing is deleted when a session disappears from the app.
++
++**Validation is all or nothing.** One invalid session or ascent rejects the
++request with 400 and stores nothing.
++
++## Response
++
++200 with the shared ingest result. The climbing fields:
++
++```json
++{
++  "climbing_sessions_received": 1,
++  "climbing_ascents_received": 1,
++  "climbing_ascents_inserted": 1,
++  "sets_received": 0,
++  "sets_inserted": 0,
++  "metrics_received": 0,
++  "metrics_inserted": 0,
++  "metrics_skipped": 0,
++  "metrics_rejected": 0
++}
++```
++
++400 with `{"error": "..."}` for a payload that does not parse or validate; 500
++when the database write fails.
++
++## Reading it back
++
++`GET /api/v1/climbing/sessions?start=…&end=…` returns the sessions starting in
++the range, newest first, each with its ascents ordered by `grade_rank`
++descending. Range defaults as for `/api/v1/workouts`.
++
++## Arkose+ mapping (first client)
++
++Arkose+ is a Meteor app; the client reads it over DDP with the app's own login.
++Per session, `_users.getUserSessionBoulders` returns three lists, which map as:
++
++| Arkose+ | `result` |
++|---|---|
++| `retopBoulders[]` | `repeat` |
++| `boulders[]` with `flashed: true` | `flash` |
++| `boulders[]` otherwise | `top` |
++| `triedBoulders[]` | `attempt` |
++
++The first matching row wins. A route can sit in both `boulders[]` and
++`retopBoulders[]` — seen 2026-09-30 for a boulder first topped on 2026-09-16 —
++and Arkose+ then counts it in the session's `tops` too; it is sent once, as
++`repeat`.
++
++`grade` is the gym's level name (`gymLabels[label]`, e.g. `bleu`) and the
++sub-level (`grade`, 1–5); `grade_rank` is `label * 10 + sub-level`.
+diff --git a/server/specs/database-schema.md b/server/specs/database-schema.md
+index 9c2c5dc..a2c0fcc 100644
+--- a/server/specs/database-schema.md
++++ b/server/specs/database-schema.md
+@@ -392,6 +392,53 @@ CREATE TABLE ingest_checkpoints (
+ );
+ ```
+ 
++### `climbing_sessions` (Regular)
++
++Sessions pushed through `POST /api/v1/ingest/climbing`
++([`climbing-ingest.md`](climbing-ingest.md)). `external_id` is the session's id
++in `source`, the logbook app. `end_time` is NULL when the app records no end.
++Kept apart from `workouts`: a logbook session has no duration, energy or heart
++rate of its own.
++
++```sql
++CREATE TABLE climbing_sessions (
++    user_id     INTEGER     NOT NULL REFERENCES users(id),
++    source      TEXT        NOT NULL,
++    external_id TEXT        NOT NULL,
++    start_time  TIMESTAMPTZ NOT NULL,
++    end_time    TIMESTAMPTZ,
++    gym         TEXT        NOT NULL DEFAULT '',
++    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
++    PRIMARY KEY (user_id, source, external_id)
++);
++```
++
++### `climbing_ascents` (Regular)
++
++The routes of a `climbing_sessions` row, one per route. `result` is `flash`,
++`top`, `repeat` or `attempt`. `grade` is the gym's own label, untranslated;
++`grade_rank` orders it within that gym's scale only. `attempts` is NULL when the
++app does not count them.
++
++```sql
++CREATE TABLE climbing_ascents (
++    user_id             INTEGER NOT NULL,
++    source              TEXT    NOT NULL,
++    session_external_id TEXT    NOT NULL,
++    route_external_id   TEXT    NOT NULL,
++    discipline          TEXT    NOT NULL DEFAULT 'boulder',
++    result              TEXT    NOT NULL CHECK (result IN ('flash', 'top', 'repeat', 'attempt')),
++    grade               TEXT    NOT NULL DEFAULT '',
++    grade_rank          INTEGER,
++    color               TEXT    NOT NULL DEFAULT '',
++    name                TEXT    NOT NULL DEFAULT '',
++    attempts            INTEGER,
++    PRIMARY KEY (user_id, source, session_external_id, route_external_id),
++    FOREIGN KEY (user_id, source, session_external_id)
++        REFERENCES climbing_sessions (user_id, source, external_id) ON DELETE CASCADE
++);
++```
++
+ ## Deduplication Strategy
+ 
+ Unique constraints on natural keys prevent duplicate data from repeated syncs.
+@@ -407,6 +454,11 @@ within one call keep the last occurrence. The count returned to the client as
+ `activity_summaries` upserts on `(user_id, date)` the same way: a day's
+ summary grows until the day ends and is sent on every sync.
+ 
++`climbing_sessions` and `climbing_ascents` are replaced per session: an ingest
++upserts the session row, deletes its ascents and inserts the ones sent, in one
++transaction, so a route corrected in the app after an earlier push is corrected
++here too.
++
+ The other tables use `INSERT ... ON CONFLICT DO NOTHING`; their keys are the
+ UUIDs of HealthKit samples, which do not change once written.
+ 
+diff --git a/server/web/src/App.tsx b/server/web/src/App.tsx
+index f55c6a4..ecb175c 100644
+--- a/server/web/src/App.tsx
++++ b/server/web/src/App.tsx
+@@ -8,6 +8,7 @@ import DashboardPage from "./pages/DashboardPage";
+ const SleepPage = lazy(() => import("./pages/SleepPage"));
+ const WorkoutsPage = lazy(() => import("./pages/WorkoutsPage"));
+ const WorkoutDetailPage = lazy(() => import("./pages/WorkoutDetailPage"));
++const ClimbingPage = lazy(() => import("./pages/ClimbingPage"));
+ const MetricsPage = lazy(() => import("./pages/MetricsPage"));
+ const CorrelationPage = lazy(() => import("./pages/CorrelationPage"));
+ const TrendsPage = lazy(() => import("./pages/TrendsPage"));
+@@ -59,6 +60,14 @@ export default function App() {
+             </Page>
+           }
+         />
++        <Route
++          path="/climbing"
++          element={
++            <Page>
++              <ClimbingPage />
++            </Page>
++          }
++        />
+         <Route
+           path="/workouts/:id"
+           element={
+diff --git a/server/web/src/api.ts b/server/web/src/api.ts
+index 4d96c01..b847a6f 100644
+--- a/server/web/src/api.ts
++++ b/server/web/src/api.ts
+@@ -308,6 +308,38 @@ export async function fetchWorkouts(
+   return res.json();
+ }
+ 
++/** One route of a climbing session (server/specs/climbing-ingest.md). */
++export interface ClimbingAscent {
++  route_id: string;
++  discipline: string;
++  result: "flash" | "top" | "repeat" | "attempt";
++  grade: string;
++  /** Orders grades within one gym's scale only. */
++  grade_rank: number | null;
++  color: string;
++  name: string;
++  attempts: number | null;
++}
++
++export interface ClimbingSession {
++  source: string;
++  id: string;
++  start: string;
++  end: string | null;
++  gym: string;
++  ascents: ClimbingAscent[];
++}
++
++export async function fetchClimbingSessions(
++  start: string,
++  end: string,
++): Promise<ClimbingSession[]> {
++  const params = new URLSearchParams({ start, end });
++  const res = await fetch(`${BASE}/climbing/sessions?${params}`);
++  if (!res.ok) throw new Error(`${res.status}: ${res.statusText}`);
++  return res.json();
++}
++
+ /** One session's share of time per heart rate zone, five fractions summing to 1. */
+ export interface WorkoutZones {
+   workout_id: string;
+diff --git a/server/web/src/components/Layout.tsx b/server/web/src/components/Layout.tsx
+index ee89d84..b9c1b56 100644
+--- a/server/web/src/components/Layout.tsx
++++ b/server/web/src/components/Layout.tsx
+@@ -8,13 +8,15 @@ const NAV_ITEMS = [
+   { to: "/", label: "Today", end: true },
+   { to: "/sleep", label: "Sleep" },
+   { to: "/workouts", label: "Workouts" },
++  { to: "/climbing", label: "Climbing" },
+   { to: "/metrics", label: "Metrics" },
+   { to: "/correlations", label: "Correlations" },
+   { to: "/trends", label: "Trends" },
+ ];
+ 
+ /* Metrics and Correlations are absent: they need width the phone does not have,
+-   so below 768px they stay reachable by URL only. Settings sits under More. */
++   so below 768px they stay reachable by URL only. Settings sits under More;
++   Climbing is linked from the Workouts screen. */
+ const TAB_ITEMS = [
+   { to: "/", label: "Today", end: true },
+   { to: "/sleep", label: "Sleep" },
+diff --git a/server/web/src/pages/ClimbingPage.tsx b/server/web/src/pages/ClimbingPage.tsx
+new file mode 100644
+index 0000000..ecfc39e
+--- /dev/null
++++ b/server/web/src/pages/ClimbingPage.tsx
+@@ -0,0 +1,207 @@
++import { useQuery } from "@tanstack/react-query";
++import { useMemo } from "react";
++import { useSearchParams } from "react-router-dom";
++import {
++  fetchClimbingSessions,
++  type ClimbingAscent,
++  type ClimbingSession,
++} from "../api";
++import PageHeader from "../components/PageHeader";
++import RangeControl from "../components/RangeControl";
++import { useIsDesktop } from "../hooks/useMediaQuery";
++import { formatClock, formatDateWithYear, formatShortDate } from "../utils/format";
++import { queryMessage, queryState } from "../utils/queryState";
++
++const RANGES = ["30d", "90d", "1y"] as const;
++type Range = (typeof RANGES)[number];
++const RANGE_DAYS: Record<Range, number> = { "30d": 30, "90d": 90, "1y": 365 };
++
++const RESULT_LABEL: Record<ClimbingAscent["result"], string> = {
++  flash: "flashed",
++  top: "topped",
++  repeat: "repeated",
++  attempt: "tried",
++};
++
++/** Routes topped in the session, first try or not; repeats count separately. */
++function isTop(a: ClimbingAscent) {
++  return a.result === "flash" || a.result === "top";
++}
++
++function counts(ascents: ClimbingAscent[]) {
++  const c = { flash: 0, top: 0, repeat: 0, attempt: 0 };
++  for (const a of ascents) c[a.result] += 1;
++  return c;
++}
++
++/**
++ * The grades of the routes topped, hardest first, with a count per grade.
++ * Ordered by grade_rank, which only compares grades within one gym's scale —
++ * so this is computed per session, never across sessions.
++ */
++function gradeLine(ascents: ClimbingAscent[]) {
++  const byGrade = new Map<string, { rank: number; n: number }>();
++  for (const a of ascents.filter(isTop)) {
++    const key = a.grade || "ungraded";
++    const g = byGrade.get(key) ?? { rank: a.grade_rank ?? -1, n: 0 };
++    g.n += 1;
++    byGrade.set(key, g);
++  }
++  return [...byGrade.entries()]
++    .sort((a, b) => b[1].rank - a[1].rank)
++    .map(([grade, g]) => (g.n > 1 ? `${grade} ×${g.n}` : grade))
++    .join(" · ");
++}
++
++export default function ClimbingPage() {
++  const isDesktop = useIsDesktop();
++  const [params, setParams] = useSearchParams();
++  const range = (params.get("range") as Range) ?? "90d";
++
++  const end = new Date();
++  const start = new Date(end.getTime() - RANGE_DAYS[range] * 86400000);
++  // The end bound is exclusive, so tomorrow's date keeps today's sessions in.
++  const endISO = new Date(end.getTime() + 86400000).toISOString().split("T")[0];
++  const startISO = start.toISOString().split("T")[0];
++
++  const query = useQuery({
++    queryKey: ["climbing-sessions", startISO, endISO],
++    queryFn: () => fetchClimbingSessions(startISO, endISO),
++  });
++  const message = queryMessage(queryState(query), query.error);
++  // Logbook apps also record visits with nothing logged; they carry no data.
++  const sessions = useMemo(
++    () => (query.data ?? []).filter((s) => s.ascents.length > 0),
++    [query.data],
++  );
++
++  const total = useMemo(
++    () => counts(sessions.flatMap((s) => s.ascents)),
++    [sessions],
++  );
++
++  return (
++    <>
++      <PageHeader
++        kicker={`${formatDateWithYear(start)} – ${formatDateWithYear(end)}`}
++        title="Climbing"
++        actions={
++          <RangeControl
++            options={RANGES}
++            value={range}
++            onChange={(v) => {
++              const p = new URLSearchParams(params);
++              p.set("range", v);
++              setParams(p, { replace: true });
++            }}
++            name="climbing-range"
++          />
++        }
++      />
++
++      <div
++        style={{
++          display: "grid",
++          gridTemplateColumns: isDesktop ? "repeat(4, 1fr)" : "repeat(2, 1fr)",
++          borderTop: "2px solid var(--color-text)",
++          borderBottom: "2px solid var(--color-text)",
++        }}
++      >
++        <Cell label="Sessions" value={sessions.length} isDesktop={isDesktop} />
++        <Cell label="Tops" value={total.flash + total.top} isDesktop={isDesktop} />
++        <Cell label="Flashes" value={total.flash} isDesktop={isDesktop} />
++        <Cell label="Tried" value={total.attempt} isDesktop={isDesktop} />
++      </div>
++
++      {message ? (
++        <p className="page-x" style={{ color: "var(--color-neutral-600)", fontSize: 13 }}>
++          {message}
++        </p>
++      ) : sessions.length === 0 ? (
++        <p className="page-x" style={{ color: "var(--color-neutral-600)", fontSize: 13 }}>
++          No climbing sessions in this window.
++        </p>
++      ) : (
++        <div>
++          {sessions.map((s) => (
++            <SessionRow key={`${s.source}/${s.id}`} session={s} />
++          ))}
++        </div>
++      )}
++    </>
++  );
++}
++
++function Cell({
++  label,
++  value,
++  isDesktop,
++}: {
++  label: string;
++  value: number;
++  isDesktop: boolean;
++}) {
++  return (
++    <div
++      className="page-x"
++      style={{
++        paddingTop: isDesktop ? 24 : 14,
++        paddingBottom: isDesktop ? 22 : 14,
++        borderRight: "1px solid var(--color-divider)",
++      }}
++    >
++      <div className="kick">{label}</div>
++      <div
++        className="num"
++        style={{
++          font: `800 ${isDesktop ? 44 : 26}px/1 var(--font-heading)`,
++          letterSpacing: "-0.03em",
++          marginTop: isDesktop ? 14 : 8,
++        }}
++      >
++        {value}
++      </div>
++    </div>
++  );
++}
++
++function SessionRow({ session }: { session: ClimbingSession }) {
++  const c = counts(session.ascents);
++  const summary = (Object.keys(RESULT_LABEL) as ClimbingAscent["result"][])
++    .filter((r) => c[r] > 0)
++    .map((r) => `${c[r]} ${RESULT_LABEL[r]}`)
++    .join(" · ");
++  const grades = gradeLine(session.ascents);
++
++  return (
++    <div
++      className="page-x"
++      style={{
++        paddingTop: 12,
++        paddingBottom: 12,
++        borderBottom: "1px solid var(--color-divider)",
++      }}
++    >
++      <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
++        <span style={{ font: "600 14px var(--font-body)", flex: 1 }}>
++          {formatShortDate(new Date(session.start))} · {session.gym || session.source}
++        </span>
++        <span className="num" style={{ font: "500 11.5px var(--font-body)", color: "var(--color-neutral-600)" }}>
++          {formatClock(session.start)}
++        </span>
++      </div>
++      <div style={{ font: "400 12.5px var(--font-body)", marginTop: 4 }}>{summary}</div>
++      {grades ? (
++        <div
++          style={{
++            font: "400 11.5px var(--font-body)",
++            color: "var(--color-neutral-600)",
++            marginTop: 2,
++          }}
++        >
++          {grades}
++        </div>
++      ) : null}
++    </div>
++  );
++}
+diff --git a/server/web/src/pages/WorkoutsPage.tsx b/server/web/src/pages/WorkoutsPage.tsx
+index a66b37b..317b73b 100644
+--- a/server/web/src/pages/WorkoutsPage.tsx
++++ b/server/web/src/pages/WorkoutsPage.tsx
+@@ -1,6 +1,6 @@
+ import { useQuery } from "@tanstack/react-query";
+ import { Fragment, useMemo } from "react";
+-import { useNavigate, useSearchParams } from "react-router-dom";
++import { Link, useNavigate, useSearchParams } from "react-router-dom";
+ import { fetchWorkoutZones, fetchWorkouts, type Workout } from "../api";
+ import PageHeader from "../components/PageHeader";
+ import RangeControl from "../components/RangeControl";
+@@ -215,7 +215,19 @@ export default function WorkoutsPage() {
+             {typeFilter ? `Filtered to ${typeFilter}` : "All types"} · newest
+             first
+           </span>
+-        ) : null}
++        ) : (
++          <Link
++            to="/climbing"
++            style={{
++              marginLeft: "auto",
++              font: "500 12px var(--font-body)",
++              color: "var(--color-neutral-600)",
++              whiteSpace: "nowrap",
++            }}
++          >
++            Climbing →
++          </Link>
++        )}
+       </div>
+ 
+       {message ? (
+-- 
+2.51.2
+
