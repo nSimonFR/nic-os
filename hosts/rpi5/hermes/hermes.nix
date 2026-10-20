@@ -63,8 +63,9 @@ let
   # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
   gateBase = "${apertureUrl}/v1";
   # Hermes defaults to GPT-6 Luna through tiny-llm-gate's Codex route. Other
-  # agents keep their own defaults; this only changes Hermes.
-  gateModel = "gpt-6-luna";
+  # agents keep their own defaults; this only changes Hermes. The `openai/`
+  # prefix keeps Aperture from resolving it to the `asale/gpt-6-luna` alias.
+  gateModel = "openai/gpt-6-luna";
 
   # `/model` in Telegram switches the session to any id declared here —
   # hermes_cli/model_switch.py `_declared_model_ids` takes this mapping's KEYS
@@ -76,7 +77,7 @@ let
   gateModels = {
     "gpt-5.6" = 131072;
     "gpt-6"   = 131072;
-    "gpt-6-luna" = 131072;
+    "openai/gpt-6-luna" = 131072;
     "asale-gpt-6-astra" = 131072;
     "asale-gpt-6-luna"  = 131072;
     "asale-gpt-6.1-sol" = 131072;
