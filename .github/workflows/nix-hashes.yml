@@ -22,8 +22,9 @@
 #
 # It reports; it does not push. The fix happens upstream of this check: the
 # self-hosted Renovate (renovate.yml) runs `--write` as a postUpgradeTask, so its
-# PRs arrive with hashes already recomputed. This stays the gate for what that
-# cannot derive (vendorHash, pnpmDepsHash) and for hand-edited pins.
+# PRs arrive with hashes already recomputed. This stays the gate for hand-edited
+# pins, and for dependency stores (pnpmDeps, vendorHash), which the script
+# builds rather than fetches — calino v0.40.0 merged past a report-only gate.
 name: Nix hashes
 
 on:
