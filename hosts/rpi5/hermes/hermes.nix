@@ -330,6 +330,7 @@ let
       env_passthrough = [
         "GOG_KEYRING_PASSWORD"
         "GOG_ACCOUNT"
+        "GOOGLE_PLACES_API_KEY"
       ];
     };
 
