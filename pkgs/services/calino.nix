@@ -131,7 +131,7 @@ stdenv.mkDerivation (finalAttrs: {
     # SW-era fetch (TRUSK: no request reached nginx after 2026-09-29). Honour
     # `no-store`; the CACHE_NAME bump makes `activate` purge the pinned copy.
     substituteInPlace public/sw.js \
-      --replace-fail "const CACHE_NAME = 'calino-v7'" "const CACHE_NAME = 'calino-v7-nostore'" \
+      --replace-fail "const CACHE_NAME = 'calino-v8'" "const CACHE_NAME = 'calino-v8-nostore'" \
       --replace-fail \
     "if (response.ok && response.status === 200 && response.type === 'basic') {" \
     "if (response.ok && response.status === 200 && response.type === 'basic' && !/no-store/i.test(response.headers.get('Cache-Control') || \"\")) {"
