@@ -342,7 +342,12 @@ in
     fi
   '';
 
-  services.openssh.settings.PermitRootLogin = "prohibit-password";
+  # Port 22 is open on the LAN (nixos-fw). Keys only; root uses sudo or the console.
+  services.openssh.settings = {
+    PermitRootLogin = "no";
+    PasswordAuthentication = false;
+    KbdInteractiveAuthentication = false;
+  };
 
 
   environment.systemPackages = with pkgs; [
