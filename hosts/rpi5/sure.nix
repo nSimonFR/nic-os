@@ -415,6 +415,7 @@ in
       port    = 443;
       backend = "http://127.0.0.1:13334";
       proxied = true;
+      authenticated = true;
       muxPath = "/sure";
       tile = {
         name        = "Sure";

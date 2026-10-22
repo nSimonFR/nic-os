@@ -429,6 +429,7 @@ in
       port     = 443;
       backend  = "http://127.0.0.1:8091";
       proxied  = true;
+      authenticated = true;
       muxPath  = "/nextcloud";
       tile = {
         name        = "Nextcloud";

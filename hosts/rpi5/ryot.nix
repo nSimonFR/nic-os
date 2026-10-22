@@ -236,6 +236,7 @@ in
       # while Ryot happened to be awake, and 502 the rest of the time.
       backend = "http://127.0.0.1:${toString externalPort}";
       proxied = true;
+      authenticated = true;
       muxPath = "/ryot";
       tile = {
         name        = "Ryot";

@@ -172,6 +172,7 @@ in
       port    = 443;
       backend = "http://127.0.0.1:13336";
       proxied = true;
+      authenticated = true;
       muxPath = basePath;
       tile = {
         name        = "Reactive Resume";

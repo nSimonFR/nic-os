@@ -224,6 +224,7 @@ in
       port = 3960;
       backend = "http://127.0.0.1:${toString proxyPort}";
       funnel = false; # NEVER — there is no authentication, see the header
+      authenticated = false;
       tile = {
         name = "FreeReps";
         # Not in dashboard-icons; mdi is the cheap option that needs no pinned

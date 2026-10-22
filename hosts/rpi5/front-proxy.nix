@@ -204,6 +204,7 @@ in
       port    = 443;
       backend = "http://127.0.0.1:8092";
       funnel  = true;
+      authenticated = true;
     };
   };
 }
