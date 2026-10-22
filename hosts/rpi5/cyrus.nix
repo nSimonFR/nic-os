@@ -954,6 +954,7 @@ in
         port    = 443;
         backend = "http://127.0.0.1:${toString cfg.port}";
         proxied = true;
+        authenticated = true; # webhooks are signature-checked (LINEAR_/GITHUB_WEBHOOK_SECRET)
         muxPath = "/cyrus";
         tile = {
           name        = "Cyrus";

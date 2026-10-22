@@ -153,6 +153,7 @@ in
       port    = 10000;
       backend = "http://127.0.0.1:2283";
       funnel  = true;
+      authenticated = true;
       tile = {
         name        = "Immich";
         icon        = "immich.svg";

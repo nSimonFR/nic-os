@@ -355,6 +355,17 @@ let
         '';
       };
 
+      authenticated = lib.mkOption {
+        type = lib.types.nullOr lib.types.bool;
+        default = null;
+        description = ''
+          Whether the service makes its own users log in. Must be `true` for
+          anything internet-reachable (funnel or proxied), so a new public
+          service has to answer it. `false` documents a tailnet-only service
+          that trusts the tailnet as its auth (FreeReps).
+        '';
+      };
+
       proxied = lib.mkOption {
         type = lib.types.bool;
         default = false;
@@ -672,6 +683,14 @@ in
           "nic.services.${e.name}.public sets both proxied and funnel. The "
           + "path-mux already sits behind the single 443 funnel — a second bind "
           + "on the same port would conflict. Pick one.";
+      })
+      ++ assertForPublic (e: {
+        assertion = (e.funnel || e.proxied) -> e.authenticated == true;
+        message =
+          "nic.services.${e.name}.public is internet-reachable (funnel or "
+          + "proxied) but authenticated is not true. Set authenticated = true "
+          + "once the service makes its users log in; otherwise keep it "
+          + "tailnet-only.";
       })
       ++ assertForPublic (e: {
         assertion = e.funnel -> lib.elem e.port [ 443 8443 10000 ];
