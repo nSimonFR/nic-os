@@ -118,11 +118,16 @@ let
       "--prefix PATH : ${pkgs.ripgrep}/bin"
       "--set USE_BUILTIN_RIPGREP 0"
     ]
-    # The Trusk MCP servers come from the private checkout's mcp.json. Spliced into
-    # the HM wrapper's own `--mcp-config <store json>` (always $1 $2 here) rather
-    # than prepended: a fresh variadic flag swallows `remote-control` from claude-rc.
+    # The HM wrapper passes `--mcp-config <store json>` as $1 $2; the variadic flag
+    # swallows any subcommand after it (`claude auth status` → "config file not
+    # found: auth", so T3 Code reports Claude unauthenticated). The `=` form takes
+    # exactly one value, and repeated flags still accumulate.
+    ++ [
+      ''--run 'if [ "$1" = --mcp-config ]; then f=$2; shift 2; set -- "--mcp-config=$f" "$@"; fi' ''
+    ]
+    # The Trusk MCP servers come from the private checkout's mcp.json.
     ++ lib.optionals pkgs.stdenv.isDarwin [
-      ''--run 'p=${truskDir}/mcp.json; if [ "$1" = --mcp-config ] && [ -r "$p" ]; then set -- "$1" "$2" "$p" "''${@:3}"; fi' ''
+      ''--run 'p=${truskDir}/mcp.json; if [ -r "$p" ]; then set -- "--mcp-config=$p" "$@"; fi' ''
     ]
     ++ [
       ''--set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net"''
