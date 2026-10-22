@@ -148,6 +148,7 @@ in
     ./moxfield-sync.nix
     ./nextcloud.nix
     ./calino.nix
+    ./death-plan-switch.nix
     ./front-proxy.nix
     ./tailnet-mitm.nix
     ./sumeria-mitm.nix
