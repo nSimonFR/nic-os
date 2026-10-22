@@ -1,14 +1,19 @@
-# Weekly CVE scan of rpi5's system with vulnix.
+# Daily CVE scan of rpi5's system with vulnix.
 #
 # Runs here, not on the Pi: vulnix reads each store path's .drv, and the Pi only
-# ever downloads outputs from Cachix, so it has no derivers to read. Only
-# CVSS >= 9 fails the job; whitelist reviewed entries in
-# hosts/rpi5/vulnix-whitelist.toml (with an `until` so they come back).
+# ever downloads outputs from Cachix, so it has no derivers to read.
+#
+# The scan covers build inputs too and matches by name (Haskell `zlib`, Rust
+# `curl`), so the first run on 2026-10-22 found ~60 packages at CVSS >= 9. The
+# job therefore fails only on a NEW (pname, CVE) pair at CVSS >= 9, against the
+# set seen last run (Actions cache — daily, so it outlives the 7-day eviction).
+# A missing cache re-baselines silently. Whitelist reviewed entries in
+# hosts/rpi5/vulnix-whitelist.toml.
 name: Vulnix
 
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * *"
   workflow_dispatch:
   pull_request:
     branches: [main]
@@ -48,30 +53,49 @@ jobs:
             -w hosts/rpi5/vulnix-whitelist.toml "${{ steps.drv.outputs.drv }}" \
             > vulnix.json || [ $? -eq 2 ]
 
+      - uses: actions/cache/restore@v6
+        with:
+          path: vulnix-seen.txt
+          key: vulnix-seen-${{ github.run_id }}
+          restore-keys: vulnix-seen-
+
       - name: Report
         id: report
         run: |
           # vulnix also exits 2 on an internal error; don't read that as "clean".
           jq -e 'type == "array"' vulnix.json > /dev/null
-          crit=$(jq -r --argjson min "$MIN_CVSS" '
-            [ .[] | {name, cves: [ .affected_by[] as $c
-                | select((.cvssv3_basescore[$c] // 0) >= $min)
-                | "\($c) (\(.cvssv3_basescore[$c]))" ]}
-              | select(.cves != []) ]
-            | .[] | "\(.name): \(.cves | join(", "))"' vulnix.json)
-          total=$(jq '[.[].affected_by[]] | length' vulnix.json)
+          jq -r --argjson min "$MIN_CVSS" '.[] | . as $p | .affected_by[]
+            | select(($p.cvssv3_basescore[.] // 0) >= $min)
+            | "\($p.pname) \(.) \($p.cvssv3_basescore[.])"' vulnix.json \
+            | sort -u > current.txt
+          if [ -f vulnix-seen.txt ]; then
+            # Keyed on pname + CVE: a version bump alone is not news.
+            new=$(awk 'NR==FNR { seen[$1" "$2]; next } !(($1" "$2) in seen)' \
+              vulnix-seen.txt current.txt)
+          else
+            new=""
+            echo "No previous run cached: recording a baseline."
+          fi
+          cp current.txt vulnix-seen.txt
           {
             echo "### vulnix rpi5"
-            echo "$total CVE matches in total, CVSS >= $MIN_CVSS shown."
+            echo "$(jq '[.[].affected_by[]] | length' vulnix.json) matches; $(wc -l < current.txt) at CVSS >= $MIN_CVSS."
+            echo "New since last run:"
             echo '```'
-            echo "${crit:-none}"
+            echo "${new:-none}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "${crit:-none}"
-          if [ -n "$crit" ]; then
-            { echo "crit<<EOF"; echo "$crit"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+          echo "new: ${new:-none}"
+          if [ -n "$new" ]; then
+            { echo "crit<<EOF"; echo "$new"; echo "EOF"; } >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
+      - uses: actions/cache/save@v6
+        if: always() && hashFiles('vulnix-seen.txt') != ''
+        with:
+          path: vulnix-seen.txt
+          key: vulnix-seen-${{ github.run_id }}
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -86,6 +110,6 @@ jobs:
           CRIT: ${{ steps.report.outputs.crit }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          text=$(printf 'vulnix: critical CVEs on rpi5\n%s\n%s' "${CRIT:-scan failed}" "$RUN_URL")
+          text=$(printf 'vulnix: new critical CVEs on rpi5\n%s\n%s' "${CRIT:-scan failed}" "$RUN_URL")
           curl -sf -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${text}"
