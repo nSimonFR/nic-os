@@ -78,6 +78,8 @@ hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
 hermes-mail-digest = "nicos_scripts.mail.digest:main"
 # Same classifier, hand-runnable over envelopes on stdin (the skill's ad-hoc path).
 mail-jev-classify = "nicos_scripts.mail.jev:main"
+# Daily: SSH keys, funnels and SSH sources that live outside the Nix config.
+security-drift = "nicos_scripts.security.drift:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

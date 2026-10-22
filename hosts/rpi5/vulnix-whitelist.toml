@@ -1,0 +1,7 @@
+# CVEs reviewed and accepted for rpi5 (.github/workflows/vulnix.yml).
+# Always give `until`, so an entry is re-reviewed instead of hiding forever:
+#
+# ["pname"]
+# cve = ["CVE-2026-0000"]
+# until = "2026-12-31"
+# comment = "why it does not apply / what we wait for"

@@ -1,0 +1,83 @@
+# Weekly CVE scan of rpi5's system with vulnix.
+#
+# Runs here, not on the Pi: vulnix reads each store path's .drv, and the Pi only
+# ever downloads outputs from Cachix, so it has no derivers to read. Only
+# CVSS >= 9 fails the job; whitelist reviewed entries in
+# hosts/rpi5/vulnix-whitelist.toml (with an `until` so they come back).
+name: Vulnix
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/vulnix.yml
+      - hosts/rpi5/vulnix-whitelist.toml
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    name: vulnix rpi5
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    env:
+      MIN_CVSS: "9.0"
+      # Optional: same bot as the Pi's alerts. Unset → the failed run is the alert.
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: "82389391"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+
+      - name: Instantiate
+        id: drv
+        run: |
+          drv=$(nix eval --accept-flake-config --raw \
+            .#nixosConfigurations.rpi5.config.system.build.toplevel.drvPath)
+          echo "drv=$drv" >> "$GITHUB_OUTPUT"
+
+      - name: Scan
+        run: |
+          set -o pipefail
+          # Exit 2 = findings; anything else non-zero is a real failure.
+          nix run --inputs-from . nixpkgs#vulnix -- --json \
+            -w hosts/rpi5/vulnix-whitelist.toml "${{ steps.drv.outputs.drv }}" \
+            > vulnix.json || [ $? -eq 2 ]
+
+      - name: Report
+        id: report
+        run: |
+          # vulnix also exits 2 on an internal error; don't read that as "clean".
+          jq -e 'type == "array"' vulnix.json > /dev/null
+          crit=$(jq -r --argjson min "$MIN_CVSS" '
+            [ .[] | {name, cves: [ .affected_by[] as $c
+                | select((.cvssv3_basescore[$c] // 0) >= $min)
+                | "\($c) (\(.cvssv3_basescore[$c]))" ]}
+              | select(.cves != []) ]
+            | .[] | "\(.name): \(.cves | join(", "))"' vulnix.json)
+          total=$(jq '[.[].affected_by[]] | length' vulnix.json)
+          {
+            echo "### vulnix rpi5"
+            echo "$total CVE matches in total, CVSS >= $MIN_CVSS shown."
+            echo '```'
+            echo "${crit:-none}"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$crit" ]; then
+            { echo "crit<<EOF"; echo "$crit"; echo "EOF"; } >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Notify
+        if: failure() && env.TELEGRAM_BOT_TOKEN != '' && github.event_name != 'pull_request'
+        env:
+          CRIT: ${{ steps.report.outputs.crit }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          text=$(printf 'vulnix: critical CVEs on rpi5\n%s\n%s' "${CRIT:-scan failed}" "$RUN_URL")
+          curl -sf -o /dev/null "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            --data-urlencode "chat_id=${TELEGRAM_CHAT_ID}" --data-urlencode "text=${text}"
