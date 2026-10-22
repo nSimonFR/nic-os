@@ -202,6 +202,41 @@ in
     };
   };
 
+  # ── Alert: security drift outside the Nix config ────────────────────────────
+  # Hand-placed authorized_keys, manual funnels, SSH from outside the LAN/tailnet.
+  # Eval-time rules are in security-policy.nix; logic in nicos_scripts/security/drift.py.
+  systemd.services.security-drift-alert = {
+    description = "Alert on security state the Nix config cannot see";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = lib.getExe (pkgs.writeShellApplication {
+        name = "security-drift-alert";
+        text = ''
+          BODY=$(${pkgs.nicos-scripts}/bin/security-drift || true)
+          [ -n "$BODY" ] && BODY="<code>$BODY</code>"
+          printf '%s' "$BODY" | ${telegramAlert} security-drift "Security drift on rpi5"
+        '';
+      });
+      Environment = [
+        "SSH_USERS=${toString (lib.attrNames config.users.users)}"
+        "FUNNEL_PORTS=${toString (map (e: e.port) (lib.filter (e: e.funnel) config.nic.publicEntries))}"
+        # Keys reviewed and kept in a user's own ~/.ssh/authorized_keys, by fingerprint.
+        "ALLOWED_KEY_FINGERPRINTS="
+        "TAILSCALE_BIN=${config.services.tailscale.package}/bin/tailscale"
+        "JOURNALCTL_BIN=${config.systemd.package}/bin/journalctl"
+        "SSH_KEYGEN_BIN=${config.programs.ssh.package}/bin/ssh-keygen"
+        "IP_BIN=${pkgs.iproute2}/bin/ip"
+      ];
+    };
+  };
+  systemd.timers.security-drift-alert = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "10m";
+      OnUnitActiveSec = "1d";
+    };
+  };
+
   # ── Beszel SMART refresh (workaround for henrygd/beszel#1800) ───────────────
   # TODO(beszel#1800): DELETE THIS WHOLE BLOCK (service + timer) once Beszel
   #   0.19.0+ with a verified fix lands in nixpkgs and a natural background
