@@ -69,7 +69,7 @@ stdenv.mkDerivation (finalAttrs: {
     # showmycards.nix this hash is ONE value across aarch64 and x86_64 — no
     # per-system attrset needed.
     fetcherVersion = 3;
-    hash = "sha256-YPz46fYGSoZptQXnsXFWySDgVjx1VTIT11T6l0dYGZA=";
+    hash = "sha256-VB/DQoqIv5OWmoSqBr0LEHxtxrG9C/4MUPUu8N+9up4=";
   };
 
   nativeBuildInputs = [
