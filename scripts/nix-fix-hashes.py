@@ -18,11 +18,14 @@ that turns such a PR red, and `--write` is the one command that finishes it.
 It works from what the package file already states — owner, repo, rev — rather
 than from a flake attribute, because most files under pkgs/ are callPackage'd at
 their single use site (see pkgs/overlay.nix) and have no `packages.<system>`
-output to build. It also doesn't build anything: a `hash` pin covers exactly the
-unpacked tag tarball, and an `npmDepsHash` pin exactly the closure of a
-package-lock.json, so fetching those two is enough. That keeps the gate at a few
-seconds per package on any architecture — which matters, since the packages this
-guards are aarch64 and the cheap runners are not.
+output to build. A `hash` pin covers exactly the unpacked tag tarball, and an
+`npmDepsHash` pin exactly the closure of a package-lock.json, so fetching those
+two is enough.
+
+The dependency stores (pnpmDeps, vendorHash, cargoHash) have no such shortcut:
+those alone are built, as the one fixed-output derivation, from
+`callPackage <file> { }` on the flake's locked nixpkgs. calino v0.40.0 merged
+with a stale pnpmDeps hash on 2026-10-22 while this gate only reported it.
 
 Usage:
     scripts/nix-fix-hashes.py                  # check every package under pkgs/
@@ -70,6 +73,13 @@ REFETCHABLE = {"fetchFromGitHub": True, "fetchurl": False}  # name -> unpack?
 # skip exactly the hash this can verify. They are reported alongside the result.
 UNVERIFIABLE = ("vendorHash", "cargoHash", "pnpmDepsHash", "cargoDeps")
 
+# Of those, the ones derive() can build: pin name -> the derivation attribute
+# that holds it. A fetcher-scoped `<attr>.hash` (pnpmDeps) builds `<attr>`.
+DERIVABLE = {"vendorHash": "goModules", "cargoHash": "cargoDeps"}
+DERIVABLE_FETCHERS = ("fetchDeps", "fetchPnpmDeps")
+MISMATCH = re.compile(r"hash mismatch in fixed-output derivation '(?P<drv>[^']+)'")
+GOT = re.compile(r"got:\s+(?P<val>sha256-\S+)")
+
 # A second, unrelated pin shape: a package that hands nixpkgs an upstream
 # release manifest as a Nix attrset (pkgs/agents/claude-code.nix). There is no
 # fetcher in the file at all — nixpkgs owns the fetchurl — so the checksums are
@@ -107,6 +117,8 @@ class Package:
     pinned: dict[str, str] = field(default_factory=dict)
     actual: dict[str, str] = field(default_factory=dict)
     unverifiable: list[str] = field(default_factory=list)
+    # pin key -> derivation attribute to build for it (see derive()).
+    derived: dict[str, str] = field(default_factory=dict)
 
     @property
     def drift(self) -> dict[str, tuple[str, str]]:
@@ -195,6 +207,12 @@ def parse(path: Path) -> Package:
             bindings[match["key"]] = bindings[match["val"]]
 
     unverifiable = [key for key in UNVERIFIABLE if re.search(rf"\b{key}\s*=", text)]
+    derived_pins: dict[str, str] = {}
+    derived_attrs: dict[str, str] = {}
+    for key, attr in DERIVABLE.items():
+        match = re.search(rf'\b{key}\s*=\s*"(?P<val>sha256-[^"]+)"', text)
+        if match:
+            derived_pins[key], derived_attrs[key] = match["val"], attr
 
     # Attribute every `hash` to the fetcher that owns it. A flat scan of the
     # file cannot: calino pins two hashes, both spelled `hash`, one under
@@ -210,10 +228,16 @@ def parse(path: Path) -> Package:
     # A fetcher whose hash is a build output (pnpm store, npm closure, Go vendor
     # tree) is reported, never verified — same treatment as a named vendorHash.
     for attr, fetcher, body in derived:
-        if HASH_LINE.search(body):
+        match = HASH_LINE.search(body)
+        if not match:
+            continue
+        if fetcher.split(".")[-1] in DERIVABLE_FETCHERS and match["val"].startswith("sha256-"):
+            derived_pins[f"{attr}.hash"], derived_attrs[f"{attr}.hash"] = match["val"], attr
+        else:
             # Bare label: main() supplies the "a build output, not a fetch;
             # recompute with lib.fakeHash" explanation for every entry.
             unverifiable.append(f"{attr}.hash ({fetcher})")
+    unverifiable = [key for key in unverifiable if key not in derived_attrs]
 
     if not refetchable:
         raise Problem("no fetchFromGitHub or fetchurl — nothing this script knows how to fetch")
@@ -261,8 +285,9 @@ def parse(path: Path) -> Package:
         path=path,
         tarball=tarball,
         unpack=unpack,
-        pinned=pinned,
+        pinned=pinned | derived_pins,
         unverifiable=unverifiable,
+        derived=derived_attrs,
     )
 
 
@@ -309,12 +334,48 @@ def fetch(pkg: Package) -> None:
     ).splitlines()[-1]
 
 
+def nixpkgs_ref() -> str:
+    lock = json.loads(Path("flake.lock").read_text())
+    locked = lock["nodes"][lock["nodes"]["root"]["inputs"]["nixpkgs"]]["locked"]
+    return f"github:{locked['owner']}/{locked['repo']}/{locked['rev']}"
+
+
+def derive(pkg: Package) -> None:
+    """Build each dependency store and take the hash Nix reports.
+
+    A stale pin fails with `got: <hash>`; a correct one builds (or substitutes).
+    The mismatch must name the store's own drv — a stale `src` would otherwise
+    hand back the source hash under the store's name.
+    """
+    for key, attr in pkg.derived.items():
+        expr = (
+            f'(builtins.getFlake "{nixpkgs_ref()}").legacyPackages.${{builtins.currentSystem}}'
+            f'.callPackage {pkg.path.resolve()} {{ }}'
+        )
+        try:
+            drv = run("nix", "eval", "--impure", "--raw", "--expr", f"({expr}).{attr}.drvPath")
+        except Problem as exc:
+            raise Problem(f"cannot evaluate {attr} via callPackage {{ }}: {exc}") from exc
+        proc = subprocess.run(
+            ["nix", "build", "--no-link", "--impure", "--expr", f"({expr}).{attr}"],
+            capture_output=True, text=True,
+        )
+        if proc.returncode == 0:
+            pkg.actual[key] = pkg.pinned[key]
+            continue
+        mismatch, got = MISMATCH.search(proc.stderr), GOT.search(proc.stderr)
+        if not (mismatch and got and mismatch["drv"] == drv):
+            tail = proc.stderr.strip().splitlines()[-3:]
+            raise Problem(f"building {attr} failed without a usable hash mismatch: {tail}")
+        pkg.actual[key] = got["val"]
+
+
 def rewrite(pkg: Package) -> None:
     text = pkg.path.read_text()
     for key, (old, new) in pkg.drift.items():
         # Manifest pins are all spelled `checksum`; the dict key is the platform.
         # The old value is unique per file, so it alone anchors the match.
-        attr = "checksum" if pkg.manifest_version else key
+        attr = "checksum" if pkg.manifest_version else key.rsplit(".", 1)[-1]
         pattern = re.compile(rf'({attr}\s*=\s*")' + re.escape(old) + r'(")')
         text, count = pattern.subn(rf"\g<1>{new}\g<2>", text, count=1)
         if count != 1:
@@ -354,6 +415,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             pkg = parse(path)
             fetch(pkg)
+            # The stores are built from `src`, so `src` has to be right first.
+            if pkg.derived and args.write and pkg.drift:
+                rewrite(pkg)
+                pkg.pinned.update(pkg.actual)
+            if pkg.derived and not pkg.drift:
+                derive(pkg)
         except Problem as exc:
             # Never silent: a file we cannot verify can still break the rebuild,
             # so it is always printed and always in the report.

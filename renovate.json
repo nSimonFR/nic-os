@@ -77,7 +77,7 @@
       "groupName": "Zoetrope source and package version"
     },
     {
-      "description": "pkgs/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. The `hashes` check stays as the gate for what the script cannot derive (vendorHash, pnpmDepsHash). The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
+      "description": "pkgs/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. Dependency-store hashes (pnpmDeps, vendorHash, cargoHash) are recomputed by building that one fixed-output derivation; the `hashes` check stays as the gate for anything the script still cannot speak for. The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
       "matchFileNames": ["pkgs/**"],
       "postUpgradeTasks": {
         "commands": ["python3 scripts/nix-fix-hashes.py --write {{{packageFile}}}"],
@@ -85,8 +85,8 @@
         "executionMode": "update"
       },
       "prBodyNotes": [
-        "`hash` / `npmDepsHash` were recomputed in this same commit by `scripts/nix-fix-hashes.py` (postUpgradeTasks, self-hosted Renovate in .github/workflows/renovate.yml).",
-        "`vendorHash` (Go) and `pnpmDepsHash` are the exceptions that script cannot derive from a fetch — if this package pins one, the `hashes` check stays red. Fix it with `lib.fakeHash` + a real build, and the `got:` value from the error.",
+        "`hash` / `npmDepsHash` / `pnpmDeps.hash` / `vendorHash` / `cargoHash` were recomputed in this same commit by `scripts/nix-fix-hashes.py` (postUpgradeTasks, self-hosted Renovate in .github/workflows/renovate.yml).",
+        "A package the script cannot `callPackage` with `{ }` (e.g. one fed by a flake input) is reported, not fixed — check the `hashes` log, and fix it with `lib.fakeHash` + a real build.",
         "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
       ]
     }
