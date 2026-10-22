@@ -419,6 +419,7 @@ in
       port    = 8443;
       backend = "http://127.0.0.1:13010";
       funnel  = true;
+      authenticated = true;
       tile = {
         name        = "AFFiNE";
         icon        = "affine.svg";

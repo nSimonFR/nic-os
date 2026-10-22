@@ -194,6 +194,7 @@ in
       order   = 230;
       port    = 3550;
       backend = "http://127.0.0.1:8331";
+      authenticated = false;
       tile = {
         name        = "ShowMyCards";
         icon        = "mdi-cards-playing-outline";
