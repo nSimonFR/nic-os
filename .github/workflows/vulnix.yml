@@ -67,10 +67,18 @@ jobs:
             echo "${crit:-none}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          echo "${crit:-none}"
           if [ -n "$crit" ]; then
             { echo "crit<<EOF"; echo "$crit"; echo "EOF"; } >> "$GITHUB_OUTPUT"
             exit 1
           fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vulnix
+          path: vulnix.json
+          if-no-files-found: ignore
 
       - name: Notify
         if: failure() && env.TELEGRAM_BOT_TOKEN != '' && github.event_name != 'pull_request'
