@@ -130,8 +130,9 @@ stdenv.mkDerivation (finalAttrs: {
     # the `/feeds/*.ics` mirrors, so a webcal subscription froze at its first
     # SW-era fetch (TRUSK: no request reached nginx after 2026-09-29). Honour
     # `no-store`; the CACHE_NAME bump makes `activate` purge the pinned copy.
+    # Prefix only: upstream bumps the name itself (v7 → v8 in 0.40.0).
     substituteInPlace public/sw.js \
-      --replace-fail "const CACHE_NAME = 'calino-v8'" "const CACHE_NAME = 'calino-v8-nostore'" \
+      --replace-fail "const CACHE_NAME = '" "const CACHE_NAME = 'nostore-" \
       --replace-fail \
     "if (response.ok && response.status === 200 && response.type === 'basic') {" \
     "if (response.ok && response.status === 200 && response.type === 'basic' && !/no-store/i.test(response.headers.get('Cache-Control') || \"\")) {"
