@@ -174,6 +174,14 @@ in
         '';
       };
 
+      # Death Plan Switch (PHP-FPM). Prefix KEPT: its vhost serves /switch/* from
+      # the package's share/ root, and the app builds its links from SCRIPT_NAME.
+      "= /switch" = { return = "301 /switch/"; };
+      "/switch/" = {
+        proxyPass = "http://127.0.0.1:8094";
+        extraConfig = fwdHeaders;
+      };
+
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
