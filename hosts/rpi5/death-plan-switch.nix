@@ -114,6 +114,7 @@ in
       port    = 443;
       backend = "http://127.0.0.1:${toString port}";
       proxied = true;
+      authenticated = true; # admin pages 404 to funnel; contact pages need their secret link
       muxPath = "/switch";
     };
   };
