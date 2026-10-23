@@ -37,7 +37,7 @@ def server(routes):
 def cfg(tmp_path):
     (tmp_path / "out").mkdir()
     (tmp_path / "s.json").write_text(json.dumps(SERVICES))
-    (tmp_path / "creds").write_text("# x\nLINEAR_KEY=lin-1\nLINEAR_KEY_TRUSK=a=b\nHA_TOKEN=x\n")
+    (tmp_path / "creds").write_text('# x\nLINEAR_KEY="lin-1"\nLINEAR_KEY_TRUSK=a=b\nHA_TOKEN=x\n')
     (tmp_path / "pw").write_text("hunter22\n")
     (tmp_path / "roots").write_text("ROOTS\n")
     return mod.Config(addr="http://av", admin_password_file=str(tmp_path / "pw"),
