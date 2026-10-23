@@ -45,3 +45,8 @@ comment = "Haskell zlib binding (build-time); C zlib is tracked separately"
 cve = ["CVE-2025-8220", "CVE-2026-2750"]
 until = "2027-04-23"
 comment = "an app's private workspace package named \"web\"; the CVEs are unrelated products"
+
+["thrift-0.24.0"]
+cve = ["CVE-2021-24028"]
+until = "2027-04-23"
+comment = "Apache Thrift (via HA 2026.10); the CVE is Facebook's fbthrift C++ (date-versioned)"
