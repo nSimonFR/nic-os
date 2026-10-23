@@ -123,12 +123,14 @@ let
 
       # A trap, not a branch after the command: callers run `set -e`, and an
       # aborting script never reaches the next line but does run its trap. On
-      # success the new generation's activation restarts them instead.
+      # success the new generation's activation restarts them instead, unless
+      # HEAVY_SHED_RESTORE=always (a deploy that leaves those units unchanged).
       restore_heavy() {
         status=$?
         trap - EXIT
-        if [ "$status" -ne 0 ] && [ "''${#restore[@]}" -gt 0 ]; then
-          echo "heavy-shed: failed (exit $status) — restarting ''${#restore[@]} service(s)" >&2
+        if { [ "$status" -ne 0 ] || [ "''${HEAVY_SHED_RESTORE:-}" = always ]; } \
+          && [ "''${#restore[@]}" -gt 0 ]; then
+          echo "heavy-shed: exit $status — restarting ''${#restore[@]} service(s)" >&2
           "''${as_root[@]}" systemctl start "''${restore[@]}" || true
         fi
         exit "$status"
