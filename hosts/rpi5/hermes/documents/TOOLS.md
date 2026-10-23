@@ -14,6 +14,9 @@
   that API only. Never read the real value from `/run/agenix/agent-env`, and never
   unset `HTTPS_PROXY`/`SSL_CERT_FILE`. A 401 from one of those APIs means the
   broker, not the key: check `journalctl -u agent-vault-bootstrap`.
+- **Web search = the native `web_search` / `web_extract` tools** (Tavily). Your
+  terminal never sees `TAVILY_API_KEY` or `GEMINI_API_KEY`: Hermes strips its own
+  provider keys from subprocesses, so don't script Tavily from the shell.
 
 ## Hermes Architecture
 
