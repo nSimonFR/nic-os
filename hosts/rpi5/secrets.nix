@@ -130,6 +130,15 @@
       owner = "nsimon";
       mode = "0400";
     };
+    # AGENT_VAULT_MASTER_PASSWORD — wraps the key that encrypts the vault DB.
+    # Changing it needs `agent-vault master-password change` with the server stopped.
+    agent-vault-env = {
+      file = ./secrets/agent-vault-env.age;
+    };
+    # Owner login of the Agent Vault UI (admin@agent-vault.local).
+    agent-vault-admin-password = {
+      file = ./secrets/agent-vault-admin-password.age;
+    };
     searxng-env = {
       file = ./secrets/searxng-env.age;
       # SEARXNG_SECRET — signs the preferences cookie and the link token.

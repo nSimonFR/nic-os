@@ -61,4 +61,6 @@ in {
   "freereps-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 ];
   "freereps-env.age".publicKeys            = [ nsimon-age nsimon-ed25519 ];
   "searxng-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
+  "agent-vault-env.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
+  "agent-vault-admin-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }
