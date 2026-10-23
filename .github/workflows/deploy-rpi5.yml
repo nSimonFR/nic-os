@@ -41,7 +41,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
           skipPush: true
 
-      # A toplevel in nsimon-nicos is not proof it was activated: the `substitutes`
+      # A toplevel in nsimon-nicos is not proof it was activated: the `build rpi5`
       # job pushes one whenever a nixpkgs bump renames it. Only a successful
       # Activate writes the marker, so a failed one is retried on the next run.
       - name: Evaluate

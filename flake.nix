@@ -7,7 +7,7 @@
     # Left on the branch on purpose. The channel gates on Hydra but not on every
     # aarch64 job, so a rev can land a core package missing from cache.nixos.org
     # (0a3468a4, 2026-09-20: nodejs 26.9.0, ~4h of V8 on the Pi). CI's
-    # `substitutes` job now builds such packages into nsimon-nicos before merge,
+    # `build rpi5` job now builds such packages into nsimon-nicos before merge,
     # so bump this freely; a slow PR check is the only cost.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
 
@@ -181,7 +181,7 @@
     # (container-only upstream, not in nixpkgs). Same pattern as the others.
     # Published at github:nSimonFR/ryot-nix (self-hosted Renovate bumps the version;
     # nSimonFR-ai has push access). Bump with `nix flake lock --update-input ryot-nix`.
-    # The heavy Rust/Node compile runs in CI (`substitutes` → nsimon-nicos), not on the Pi.
+    # The heavy Rust/Node compile runs in CI (`build rpi5` → nsimon-nicos), not on the Pi.
     ryot-nix = {
       url = "github:nSimonFR/ryot-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -294,7 +294,7 @@
       # This is the binary cache for the whole rpi5 build — populated upstream via
       # `cachix push` (the nvmd/nixos-raspberrypi repo uses no CI cache service).
       "https://nixos-raspberrypi.cachix.org"
-      # Our own: what CI's `substitutes` job built because nothing else had it.
+      # Our own: what CI's `build rpi5` job built because nothing else had it.
       "https://nsimon-nicos.cachix.org"
     ];
     extra-trusted-public-keys = [

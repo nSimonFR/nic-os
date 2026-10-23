@@ -109,14 +109,14 @@ branches:
           - eval nBookPro
           - scripts
           - hashes
-          # `substitutes` is the only check that builds: eval passes on a
+          # `build rpi5` is the only check that builds: eval passes on a
           # package that fails to build. It also builds what Hydra has not
           # (nodejs 26.9.0 = ~4h of V8) within its 345 min, before deploy-rpi5's
           # 180 min run on main has to.
           # Like `hashes`, it reports on every PR rather than filtering on
           # paths, because a required context that never arrives leaves a PR
           # waiting forever.
-          - substitutes
+          - build rpi5
       # Off, deliberately, and this is a change from what this file used to
       # declare. It is the escape hatch: with a required review and four required
       # checks, `true` means a CI outage — a runner incident, a bad flake input,

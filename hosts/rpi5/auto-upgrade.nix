@@ -10,7 +10,7 @@
 #      unit exits cleanly first. The weekly reboot is unconditional.
 #
 # It deploys main, never a lock of its own: inputs move through Renovate's
-# lock-file-maintenance PR, whose `substitutes` job builds anything
+# lock-file-maintenance PR, whose `build rpi5` job builds anything
 # cache.nixos.org lacks into nsimon-nicos. So this only downloads. It also
 # ignores the live checkout, which is often on a feature branch.
 #
