@@ -68,11 +68,10 @@ let
   tokenRefreshScript = pkgs.writeShellScript "claude-token-refresh${suffix}" ''
     set -u
     # Only job: make `claude` refresh credentials.json near expiry, for the gate.
-    # asale-luna (gate route to Asale) so the ping never opens an Anthropic 5h
-    # window — claude-window-anchor owns those. --setting-sources "" keeps hooks
-    # and CLAUDE.md out; the wrapper's gate base URL still applies.
-    exec claude -p "say hello world" --dangerously-skip-permissions \
-      --setting-sources "" --strict-mcp-config --tools "" --model asale-luna
+    # `auth status` refreshes without a model call, so it spends no tokens and
+    # never opens an Anthropic 5h window (claude-window-anchor owns those).
+    # Verified 2026-10-23: 5 min left → new 8h token.
+    exec claude auth status
   '';
 in
 {
