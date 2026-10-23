@@ -13,10 +13,12 @@ let
 in {
   services.wakapi = {
     enable = true;
-    passwordSaltFile = "/run/agenix/wakapi-password-salt";
-    # SMTP password (Proton Bridge token) supplied via EnvironmentFile as
-    # WAKAPI_MAIL_SMTP_PASS, see secrets.nix → wakapi-smtp-env.
-    smtpPasswordFile = "/run/agenix/wakapi-smtp-env";
+    # WAKAPI_PASSWORD_SALT and WAKAPI_MAIL_SMTP_PASS (Proton Bridge token),
+    # see secrets.nix → wakapi-password-salt / wakapi-smtp-env.
+    environmentFiles = [
+      "/run/agenix/wakapi-password-salt"
+      "/run/agenix/wakapi-smtp-env"
+    ];
     settings = {
       server = {
         listen_ipv4 = "127.0.0.1";
