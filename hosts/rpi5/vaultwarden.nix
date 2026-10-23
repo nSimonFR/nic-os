@@ -1,4 +1,4 @@
-{ tailnetFqdn, ... }:
+{ pkgs, tailnetFqdn, username, ... }:
 # Vaultwarden — self-hosted Bitwarden-compatible password manager.
 # Tailscale Serve exposes HTTPS :8222 → the socket-activate proxy on
 # 127.0.0.1:8222 → vaultwarden's actual bind at 127.0.0.1:8223.
@@ -38,6 +38,22 @@ in {
 
       # SSH key vault + SSH agent feature (desktop ≥ 2024.12.0).
       EXPERIMENTAL_CLIENT_FEATURE_FLAGS = "ssh-key-vault-item,ssh-agent";
+
+      # Mail via hydroxide (hosts/rpi5/hydroxide.nix): plaintext on loopback, and
+      # Proton only accepts the account address as From. Emergency Access needs it
+      # to tell the grantor a request was made.
+      SMTP_HOST          = "127.0.0.1";
+      SMTP_PORT          = 1025;
+      SMTP_SECURITY      = "off";
+      SMTP_USERNAME      = "${username}@protonmail.com";
+      SMTP_FROM          = "${username}@protonmail.com";
+      SMTP_FROM_NAME     = "Vaultwarden";
+      SMTP_PASSWORD_FILE = "/run/credentials/vaultwarden.service/smtp-password";
+
+      # Defaults run hourly at :03/:07, but the service sleeps after 10 idle min,
+      # so they'd almost never fire. Every 5 min lands inside each wake below.
+      EMERGENCY_NOTIFICATION_REMINDER_SCHEDULE = "0 */5 * * * *";
+      EMERGENCY_REQUEST_TIMEOUT_SCHEDULE       = "0 */5 * * * *";
     };
 
     # ADMIN_TOKEN is injected at runtime from agenix.
@@ -62,6 +78,29 @@ in {
       url          = "http://127.0.0.1:${toString backendPort}/alive";
       expectStatus = 200;
       timeoutSec   = 30;
+    };
+  };
+
+  # LoadCredential, not the hydroxide group: the module sets PrivateUsers, which
+  # maps every supplementary group to nobody.
+  systemd.services.vaultwarden.serviceConfig.LoadCredential =
+    [ "smtp-password:/run/agenix/protonmail-bridge-password" ];
+
+  # Wake it hourly so an Emergency Access wait period elapses and gets granted
+  # even when nobody opens the vault.
+  systemd.services.vaultwarden-wake = {
+    description = "Wake Vaultwarden for its scheduled jobs";
+    serviceConfig = {
+      Type = "oneshot";
+      DynamicUser = true;
+      ExecStart = "${pkgs.curl}/bin/curl -fsS -o /dev/null --max-time 60 http://127.0.0.1:${toString externalPort}/alive";
+    };
+  };
+  systemd.timers.vaultwarden-wake = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "hourly";
+      RandomizedDelaySec = "5m";
     };
   };
 
