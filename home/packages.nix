@@ -52,7 +52,7 @@
       # wins the profile collision instead of erroring. Originally added for
       # OpenClaw (retired — ADR 0001); kept because the hazard outlived it.
       (lib.lowPrio nodejs_22)
-      nodePackages.node-gyp
+      node-gyp
       nmap
       openssh
       p7zip
