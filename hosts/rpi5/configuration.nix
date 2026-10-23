@@ -247,6 +247,10 @@ in
     # → ARCH_MMAP_RND_BITS_MAX=30, so writing 33 fails with EINVAL and
     # crashes systemd-sysctl. Force the kernel's true max.
     "vm.mmap_rnd_bits"          = lib.mkForce 30;
+    # dirty_ratio 20% (~800 MB) let a store unpack flush in bursts long enough
+    # to starve PID 1 past the 30s watchdog (2026-10-23); keep writeback steady.
+    "vm.dirty_bytes"            = 134217728;
+    "vm.dirty_background_bytes" = 33554432;
   };
 
   # ── OOM management ────────────────────────────────────────────────────────
@@ -430,6 +434,10 @@ in
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
       "nsimon-nicos.cachix.org-1:Tu8TcLIpv9Kx+oiyyMkB0Y2KKPYNoc0Ni9E+s/p7LxY="
     ];
+    # Default 16. The 26.05 deploy (1887 paths) hit the 30s watchdog at 16 and
+    # again at 2, leaving 0-byte files in the store; 1 (plus vm.dirty_bytes in
+    # boot.kernel.sysctl) held.
+    max-substitution-jobs = 1;
     # mkAfter so this lands behind common/nixos.nix's [ "nix-command" "flakes" ]
     # rather than in front of it: the list is rendered verbatim into nix.conf, so
     # the order is part of the system derivation even though nix treats the
