@@ -59,6 +59,7 @@ in
       "sfr_box"      # sfrbox_api
       "mobile_app"
       "google_translate" # gtts
+      "prometheus"   # prometheus_client — configuration.yaml has `prometheus:`
       # Installs python-telegram-bot so the telegram_bot config-flow handler
       # loads in the UI. Configuration itself is done via Settings → Devices &
       # Services (YAML setup was removed in HA 2025.7).
