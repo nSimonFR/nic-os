@@ -133,9 +133,9 @@
   # The stub listener is disabled so Blocky can bind port 53.
   # Queries to 127.0.0.53 (from stub-resolv.conf) still reach Blocky
   # because it listens on 0.0.0.0:53.
-  services.resolved.extraConfig = lib.mkAfter ''
-    DNSStubListener=no
-    DNS=127.0.0.1
-  '';
+  services.resolved.settings.Resolve = {
+    DNSStubListener = "no";
+    DNS = [ "127.0.0.1" ];
+  };
 
 }
