@@ -91,10 +91,8 @@ in
       AGENT_VAULT_CREDS_FILE = config.age.secrets.agent-env.path;
       AGENT_VAULT_SERVICES_FILE = "${servicesFile}";
       AGENT_VAULT_OUT_DIR = hermesDir;
-      AGENT_VAULT_AGENT = "hermes";
       # Telegram is Hermes' lifeline; .ts.net covers Aperture (the LLM path).
       AGENT_VAULT_NO_PROXY = "api.telegram.org,.ts.net";
-      AGENT_VAULT_ON_TOKEN_CHANGE = "${pkgs.systemd}/bin/systemctl --user -M nsimon@ restart hermes.service";
       SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
       AGENT_VAULT_BOOTSTRAP_APPLY = "1";
     };
@@ -102,6 +100,19 @@ in
       Type = "oneshot";
       RemainAfterExit = true;
       ExecStart = "${pkgs.nicos-scripts}/bin/agent-vault-bootstrap";
+    };
+  };
+
+  # Hermes reads proxy.env only at start; bootstrap rewrites it only on change.
+  systemd.paths.agent-vault-hermes-restart = {
+    wantedBy = [ "paths.target" ];
+    pathConfig.PathChanged = "${hermesDir}/proxy.env";
+  };
+  systemd.services.agent-vault-hermes-restart = {
+    description = "Restart Hermes onto a new Agent Vault proxy env";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.systemd}/bin/systemctl --user -M nsimon@ restart hermes.service";
     };
   };
 
