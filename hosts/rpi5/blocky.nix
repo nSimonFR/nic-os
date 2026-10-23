@@ -1,4 +1,20 @@
 { lib, ... }:
+let
+  # Keep Yahoo Finance provider reachable for Ghostfolio.
+  # Must be listed under every group in clientGroupsBlock to override its denylist.
+  allowed = ''
+    fc.yahoo.com
+    finance.yahoo.com
+    query1.finance.yahoo.com
+    query2.finance.yahoo.com
+    guce.yahoo.com
+    consent.yahoo.com
+    api.datadoghq.com
+  '';
+  # jsDelivr 403s files over its size cap, which Hagezi's lists exceed.
+  # Wildcard format: blocky matches a bare `foo.com` exactly, `*.foo.com` covers subdomains.
+  hagezi = name: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/${name}.txt";
+in
 {
   # ── Blocky: network-wide DNS ad/tracker/malware blocker ─────────────
   services.blocky = {
@@ -50,43 +66,21 @@
             # Steven Black unified hosts — ads + malware
             "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
             # Hagezi Ultimate — most comprehensive ads/tracking/analytics blocking
-            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/hosts/ultimate.txt"
+            (hagezi "ultimate")
             # OISD Big — aggregated meta-blocklist covering gaps in the above
             "https://big.oisd.nl/domainswild2"
           ];
           # Malware, phishing, cryptojacking, scam
           threats = [
-            # Hagezi Threat Intelligence Feeds — real-time malware/phishing/scam
-            "https://cdn.jsdelivr.net/gh/hagezi/dns-blocklists@latest/hosts/tif.txt"
+            # Hagezi Threat Intelligence Feeds — malware/phishing/scam.
+            # medium = 620k domains; the full feed is 2M (35 MB).
+            (hagezi "tif.medium")
           ];
         };
 
         allowlists = {
-          # Keep Yahoo Finance provider reachable for Ghostfolio.
-          # These must be in active clientGroupsBlock groups so they
-          # override matching denylist entries.
-          ads = [
-            ''
-              fc.yahoo.com
-              finance.yahoo.com
-              query1.finance.yahoo.com
-              query2.finance.yahoo.com
-              guce.yahoo.com
-              consent.yahoo.com
-              api.datadoghq.com
-            ''
-          ];
-          threats = [
-            ''
-              fc.yahoo.com
-              finance.yahoo.com
-              query1.finance.yahoo.com
-              query2.finance.yahoo.com
-              guce.yahoo.com
-              consent.yahoo.com
-              api.datadoghq.com
-            ''
-          ];
+          ads = [ allowed ];
+          threats = [ allowed ];
         };
 
         # Apply all denylist groups to every client on the network
