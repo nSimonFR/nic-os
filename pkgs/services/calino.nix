@@ -18,7 +18,8 @@
 #   `pnpmDeps` only surfaces once `src` is right.
 #
 # ⚠ pnpm VERSION SKEW. package.json declares `packageManager: pnpm@10.30.3`;
-#   nixpkgs' pnpm_10 is 10.28.0. lockfileVersion 9.0 reads on any 10.x, and the
+#   we build with pnpm_10_latest (10.34.x; 26.05's pnpm_10 is a CVE-flagged
+#   10.34.0 compat pin). lockfileVersion 9.0 reads on any 10.x, and the
 #   fetcher, the config hook and buildPhase each disable
 #   `manage-package-manager-versions` so the declaration is never enforced —
 #   without that, pnpm tries to fetch 10.30.3 from the registry and the sandbox
@@ -28,7 +29,7 @@
   stdenv,
   fetchFromGitHub,
   nodejs_24,
-  pnpm_10,
+  pnpm_10_latest,
   # The public origin Calino is served at, baked into index.html at build time
   # (canonical link, OG/Twitter cards, JSON-LD). MUST NOT end in a slash — the
   # template interpolates `%VITE_SITE_URL%/`. hosts/rpi5/calino.nix passes the
@@ -54,7 +55,7 @@ stdenv.mkDerivation (finalAttrs: {
     hash = "sha256-jmprIOhVKAMm7a6nTE/BCQ2pslfUELMeN0hcAZDi2mU=";
   };
 
-  pnpmDeps = pnpm_10.fetchDeps {
+  pnpmDeps = pnpm_10_latest.fetchDeps {
     inherit (finalAttrs) version src;
     # ⚠ THE SAME DESYNC TRAP AS `src`, AND IT BIT THE 0.33.4 → 0.33.6 BUMP.
     # fetchPnpmDeps hardcodes `name = "${pname}-pnpm-deps"` and drops `version`
@@ -74,8 +75,8 @@ stdenv.mkDerivation (finalAttrs: {
 
   nativeBuildInputs = [
     nodejs_24
-    pnpm_10
-    pnpm_10.configHook
+    pnpm_10_latest
+    pnpm_10_latest.configHook
   ];
 
   # ⚠ THE `envPrefix` PATCH IS GONE — upstream fixed it. Through 0.30.0
