@@ -14,7 +14,9 @@ let
   dataDir = "/var/lib/affine";
   appDir = "${dataDir}/app";
 
-  openssl3 = pkgs.openssl_3;
+  # Prisma's "openssl-3.0.x" engines need libssl.so.3, which any OpenSSL 3.x provides;
+  # openssl_3 (3.0) is EOL and refused as insecure since 26.05.
+  openssl3 = pkgs.openssl;
   nodejs = pkgs.nodejs_22;
   rpath = lib.makeLibraryPath [ openssl3 pkgs.glibc pkgs.stdenv.cc.cc.lib ];
   interpreter = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
