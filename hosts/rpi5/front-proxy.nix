@@ -182,6 +182,29 @@ in
         extraConfig = fwdHeaders;
       };
 
+      # Vaultwarden (socket-activated). Prefix KEPT: DOMAIN=…/vaultwarden makes it
+      # serve under the prefix. X-Client-IP feeds its login rate limit (IP_HEADER).
+      "= /vaultwarden" = { return = "301 /vaultwarden/"; };
+      "/vaultwarden/" = {
+        proxyPass = "http://127.0.0.1:8222";
+        proxyWebsockets = true;
+        extraConfig = ''
+          ${fwdHeaders}
+          proxy_set_header X-Client-IP $http_x_forwarded_for;
+          client_max_body_size 525m;
+        '';
+      };
+      # tailscaled sets Tailscale-Funnel-Request on funnel traffic only (and strips
+      # a client-sent one), so this keeps the admin panel tailnet-only.
+      "/vaultwarden/admin" = {
+        proxyPass = "http://127.0.0.1:8222";
+        extraConfig = ''
+          if ($http_tailscale_funnel_request) { return 404; }
+          ${fwdHeaders}
+          proxy_set_header X-Client-IP $http_x_forwarded_for;
+        '';
+      };
+
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
       "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
       "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
