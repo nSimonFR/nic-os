@@ -19,7 +19,7 @@
 # waking on first request and stopping after 10 min idle. Tradeoff: scheduled
 # tasks / ingestion pause while asleep and resume on wake; Better Auth sessions
 # are SQLite-backed so a cold wake is safe.
-{ config, lib, pkgs, inputs, tailnetFqdn, pgHost, pgPort, apertureUrl, ... }:
+{ config, lib, pkgs, tailnetFqdn, pgHost, pgPort, apertureUrl, ... }:
 let
   # Tailscale Serve (HTTPS :3450) → socket-activate proxy (:8220) → papra (:8221).
   externalPort = 3450;
@@ -55,13 +55,6 @@ let
   };
 in
 {
-  # Bring in the upstream `services.papra` module (absent from our 25.11 nixpkgs).
-  # The module is self-contained (options + a single systemd unit); it evaluates
-  # cleanly under our lib. If this cross-version import ever breaks, the fallback
-  # is to inline its ~30-line service here using `unstablePkgs.papra`
-  # (ExecStartPre = papra-migrate-up, ExecStart = papra).
-  imports = [ "${inputs.nixpkgs-unstable}/nixos/modules/services/web-apps/papra.nix" ];
-
   services.papra = {
     enable  = true;
     # pkgs.papra resolves to unstablePkgs.papra via the overlay (overlays.nix) —
