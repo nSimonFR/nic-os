@@ -111,8 +111,8 @@ in
   # Replaces onActivation.cleanup = "zap"; same content as nix-darwin's Brewfile,
   # so the same store path.
   system.activationScripts.homebrew.text = lib.mkAfter ''
-    if [ -f "${cfg.brewPrefix}/brew" ]; then
-      PATH="${cfg.brewPrefix}:$PATH" \
+    if [ -f "${cfg.prefix}/bin/brew" ]; then
+      PATH="${cfg.prefix}/bin:$PATH" \
       sudo --preserve-env=PATH --user=${lib.escapeShellArg cfg.user} --set-home \
         env HOMEBREW_NO_AUTO_UPDATE=1 \
         brew bundle cleanup --file='${pkgs.writeText "Brewfile" cfg.brewfile}' --force --zap
