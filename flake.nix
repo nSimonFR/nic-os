@@ -38,9 +38,9 @@
     # cached counts. Scoping HA to its own input means a shared-pin bump can no
     # longer walk it backwards.
     #
-    # Rev is nixpkgs-unstable @ 2026-08-27, home-assistant 2026.8.3. Only ever
+    # Rev is nixpkgs-unstable @ 2026-10-20, home-assistant 2026.10.2. Only ever
     # replace this with a rev carrying an equal or newer HA.
-    nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
+    nixpkgs-hass.url = "github:NixOS/nixpkgs/5adc50831c259f87faeb09ddf930d43597197473";
 
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-26.05";

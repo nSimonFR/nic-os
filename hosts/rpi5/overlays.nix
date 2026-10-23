@@ -59,6 +59,20 @@
       });
     })
 
+    # libraw 0.22.1 (26.05) carries CVE-2026-20884/20911/21413/24450; 0.22.2
+    # fixes them. Same tree's build recipe, newer tag. Drop once 26.05 ships it.
+    (final: prev: {
+      libraw = prev.libraw.overrideAttrs (_: {
+        version = "0.22.2";
+        src = prev.fetchFromGitHub {
+          owner = "LibRaw";
+          repo = "LibRaw";
+          tag = "0.22.2";
+          hash = "sha256-mtDQ3NaHB1ogl61SI0KlKjWlOsNVxeAKal+7YanXJ+s=";
+        };
+      });
+    })
+
     # Redis/Valkey cluster tests are flaky in the Nix sandbox
     (final: prev: {
       redis = prev.redis.overrideAttrs (_: {

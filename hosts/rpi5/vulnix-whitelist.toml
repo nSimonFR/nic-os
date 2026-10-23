@@ -5,3 +5,43 @@
 # cve = ["CVE-2026-0000"]
 # until = "2026-12-31"
 # comment = "why it does not apply / what we wait for"
+
+# Name collisions, reviewed 2026-10-23 on the 26.05 closure. Version-pinned so the
+# real package of the same name (e.g. the redis server) still reports.
+
+["orc-0.4.41"]
+cve = ["CVE-2025-47436"]
+until = "2027-04-23"
+comment = "GStreamer orc; the CVE is Apache ORC (Java/C++ columnar format)"
+
+["orc-0.4.44"]
+cve = ["CVE-2025-47436"]
+until = "2027-04-23"
+comment = "GStreamer orc; the CVE is Apache ORC"
+
+["lapack-3"]
+cve = ["CVE-2021-4048"]
+until = "2027-04-23"
+comment = "nixpkgs' lapack-3 is the API-level wrapper over OpenBLAS; fixed in OpenBLAS 0.3.18"
+
+["snappy-1.2.2"]
+cve = ["CVE-2023-28115", "CVE-2023-41330"]
+until = "2027-04-23"
+comment = "Google snappy (compression); the CVEs are KnpLabs Snappy (PHP PDF wrapper)"
+
+["redis-8.0.0"]
+until = "2027-04-23"
+comment = "redis-py 8.0.0 client in beaverhabits-env; every CVE listed is the Redis server's"
+
+["redis-8.0.0-py3-none-any.whl"]
+until = "2027-04-23"
+comment = "same redis-py wheel"
+
+["zlib-0.7.1.1"]
+until = "2027-04-23"
+comment = "Haskell zlib binding (build-time); C zlib is tracked separately"
+
+["web-0.0.0"]
+cve = ["CVE-2025-8220", "CVE-2026-2750"]
+until = "2027-04-23"
+comment = "an app's private workspace package named \"web\"; the CVEs are unrelated products"
