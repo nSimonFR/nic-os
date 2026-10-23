@@ -62,10 +62,16 @@ def placeholder(key):
 
 
 def parse_env_file(text):
-    return dict(
-        line.split("=", 1) for line in text.splitlines()
-        if "=" in line and not line.lstrip().startswith("#")
-    )
+    """As `. file` reads it: agent-env has `KEY="value"` lines too."""
+    out = {}
+    for line in text.splitlines():
+        if "=" not in line or line.lstrip().startswith("#"):
+            continue
+        k, v = line.split("=", 1)
+        if len(v) >= 2 and v[0] == v[-1] and v[0] in "\"'":
+            v = v[1:-1]
+        out[k] = v
+    return out
 
 
 def call(cfg, method, path, body=None, token=None, headers=None, opener=None):
