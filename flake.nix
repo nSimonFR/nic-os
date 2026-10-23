@@ -2,7 +2,7 @@
   description = "nSimon nix config";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/release-25.11";
+    nixpkgs.url = "github:nixos/nixpkgs/release-26.05";
 
     # Left on the branch on purpose. The channel gates on Hydra but not on every
     # aarch64 job, so a rev can land a core package missing from cache.nixos.org
@@ -43,12 +43,12 @@
     nixpkgs-hass.url = "github:NixOS/nixpkgs/c27cdad491a991b11ed731760aa2ef8db0cb0410";
 
     darwin = {
-      url = "github:lnl7/nix-darwin/nix-darwin-25.11";
+      url = "github:lnl7/nix-darwin/nix-darwin-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
