@@ -404,7 +404,7 @@ in
         # surfacing through pnpm as the opaque `exit code -2`.
         pkgs.bash
         pkgs.nodejs_22
-        pkgs.pnpm_10
+        pkgs.pnpm_10_latest
         pkgs.git
         pkgs.gcc
         pkgs.gnumake
@@ -614,7 +614,7 @@ in
         pkgs.nodejs_22
         # Many cyrus-managed repos use pnpm workspaces; agent shells need it
         # on PATH (corepack can't write into the read-only nix-store node).
-        pkgs.pnpm_10
+        pkgs.pnpm_10_latest
         # @anthropic-ai/claude-agent-sdk spawns the `claude` CLI as a child.
         # Without it the SDK exits 127 ("command not found") on every session.
         unstablePkgs.claude-code
