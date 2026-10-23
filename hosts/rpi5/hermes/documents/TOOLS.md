@@ -7,6 +7,13 @@
 - **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
 - Secrets: agenix — `/run/agenix/` (read-only, system-managed). Skill/tool creds
   live in `/run/agenix/agent-env`, sourced into the service environment.
+- **Brokered keys are placeholders on purpose.** `TAVILY_API_KEY`,
+  `GOOGLE_PLACES_API_KEY`, `GEMINI_API_KEY`, `LINEAR_KEY`, `LINEAR_KEY_TRUSK` and
+  `TYPESAFE_API_KEY` hold values like `__tavily_api_key__`. Use them as-is: your
+  HTTPS goes through Agent Vault (`HTTPS_PROXY`), which swaps in the real key for
+  that API only. Never read the real value from `/run/agenix/agent-env`, and never
+  unset `HTTPS_PROXY`/`SSL_CERT_FILE`. A 401 from one of those APIs means the
+  broker, not the key: check `journalctl -u agent-vault-bootstrap`.
 
 ## Hermes Architecture
 

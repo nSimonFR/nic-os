@@ -165,6 +165,7 @@ in
     ./dsh.nix
     ./t3code.nix
     ./tiny-llm-gate.nix
+    ./agent-vault.nix
     ./aperture-sync.nix
     ./cachix-agent.nix
     # Everything Claude Code on this host — bridge, OAuth keep-warm, the two

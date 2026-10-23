@@ -80,6 +80,8 @@ hermes-mail-digest = "nicos_scripts.mail.digest:main"
 mail-jev-classify = "nicos_scripts.mail.jev:main"
 # Daily: SSH keys, funnels and SSH sources that live outside the Nix config.
 security-drift = "nicos_scripts.security.drift:main"
+# Started after agent-vault: credentials, services and Hermes' proxy env.
+agent-vault-bootstrap = "nicos_scripts.agent_vault.bootstrap:main"
 
 [tool.setuptools.packages.find]
 include = [ "nicos_scripts*" ]

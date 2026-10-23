@@ -66,6 +66,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.zen_watch"
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"
+    "nicos_scripts.agent_vault.bootstrap"
   ];
 
   meta = {
