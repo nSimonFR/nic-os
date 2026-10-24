@@ -4,7 +4,11 @@
 # cookie path from that). Data lives outside the store via config.local.php.
 #
 # BUMPING: upstream has no tags yet — change `rev` AND `hash`. Renovate skips pkgs/.
-{ lib, stdenvNoCC, fetchFromGitHub, dataDir ? "/var/lib/death-plan-switch" }:
+#
+# vault-access.patch adds a {vault_access} placeholder, filled at send time by
+# `vaultHook access <contact-id>` (dps-ea-bridge); without a hook it says the
+# details follow separately.
+{ lib, stdenvNoCC, fetchFromGitHub, dataDir ? "/var/lib/death-plan-switch", vaultHook ? null }:
 stdenvNoCC.mkDerivation rec {
   pname = "death-plan-switch";
   version = "1.0.0-unstable-2026-10-20";
@@ -18,6 +22,8 @@ stdenvNoCC.mkDerivation rec {
     hash = "sha256-5nf/hXXEYcWZqpQnvZrsFqIyztPUHzJ6g0NLypJJHEw=";
   };
 
+  patches = [ ./death-plan-switch-vault-access.patch ];
+
   installPhase = ''
     runHook preInstall
     mkdir -p $out/share
@@ -26,6 +32,7 @@ stdenvNoCC.mkDerivation rec {
     cat > $out/share/switch/config.local.php <<'EOF'
     <?php
     define('DPS_DATA', '${dataDir}');
+    ${lib.optionalString (vaultHook != null) "define('DPS_VAULT_HOOK', '${vaultHook}');"}
     EOF
     runHook postInstall
   '';
