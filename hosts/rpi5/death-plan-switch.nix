@@ -20,44 +20,47 @@
 let
   name    = "death-plan-switch";
   dataDir = "/mnt/data/death-plan-switch";
-  pkg     = pkgs.callPackage ../../pkgs/services/death-plan-switch.nix { inherit dataDir; };
+  pkg     = pkgs.callPackage ../../pkgs/services/death-plan-switch.nix {
+    inherit dataDir;
+    vaultHook = "${bridgeBin}/bin/dps-ea-bridge";
+  };
   appDir  = "${pkg}/share/switch";
   php     = pkgs.php;
   port    = 8094;  # backend vhost; the path-mux forwards /switch/* here unchanged
   socket  = config.services.phpfpm.pools.${name}.socket;
-
-  # Emergency Access bridge (nicos_scripts/vaultwarden/ea_bridge.py). Runs as the
-  # switch's user: it reads the switch's state and reuses its SMTP settings.
-  # One-time seed, with the grantee password on the Mac clipboard:
-  #   pbpaste | sudo -u death-plan-switch env $(systemctl show -p Environment --value dps-ea-bridge) \
-  #     <nicos-scripts>/bin/dps-ea-bridge seed
-  bridge = cmd: {
-    description = "Death Plan Switch → Vaultwarden Emergency Access (${cmd})";
-    unitConfig.RequiresMountsFor = [ dataDir ];
-    environment = {
-      SWITCH_DIR    = dataDir;
-      STATE_DIR     = "/var/lib/dps-ea-bridge";
-      VAULT_URL     = "http://127.0.0.1:8222/vaultwarden";
-      PUBLIC_URL    = "https://${tailnetFqdn}/vaultwarden";
-      GRANTEE_EMAIL = "${username}+ea@pm.me";
-      GRANTOR_EMAIL = "${username}@pm.me";
-      DRY_RUN       = "0";
-    };
-    serviceConfig = {
-      Type = "oneshot";
-      User = name;
-      Group = name;
-      StateDirectory = "dps-ea-bridge";
-      StateDirectoryMode = "0700";
-      ExecStart = "${pkgs.nicos-scripts}/bin/dps-ea-bridge ${cmd}";
-    };
-  };
 
   fastcgi = ''
     include ${config.services.nginx.package}/conf/fastcgi.conf;
     fastcgi_param HTTPS on;
     fastcgi_pass unix:${socket};
   '';
+
+  # Emergency Access bridge (nicos_scripts/vaultwarden/ea_bridge.py), as the
+  # switch's user: it reads the switch's state and reuses its SMTP settings. The
+  # switch calls it from PHP-FPM too, which clears the env, hence the wrapper.
+  # One-time seed, with the grantee password on the Mac clipboard:
+  #   pbpaste | sudo -u death-plan-switch dps-ea-bridge seed
+  bridgeState = "/var/lib/dps-ea-bridge";
+  bridgeBin = pkgs.writeShellApplication {
+    name = "dps-ea-bridge";
+    text = ''
+      export SWITCH_DIR=${dataDir} STATE_DIR=${bridgeState} DRY_RUN=0
+      export VAULT_URL=http://127.0.0.1:8222/vaultwarden
+      export PUBLIC_URL=https://${tailnetFqdn}/vaultwarden
+      export GRANTEE_EMAIL=${username}+ea@pm.me GRANTOR_EMAIL=${username}@pm.me
+      exec ${pkgs.nicos-scripts}/bin/dps-ea-bridge "$@"
+    '';
+  };
+  bridge = cmd: {
+    description = "Death Plan Switch → Vaultwarden Emergency Access (${cmd})";
+    unitConfig.RequiresMountsFor = [ dataDir ];
+    serviceConfig = {
+      Type = "oneshot";
+      User = name;
+      Group = name;
+      ExecStart = "${bridgeBin}/bin/dps-ea-bridge ${cmd}";
+    };
+  };
 in
 {
   users.users.${name} = {
@@ -66,7 +69,11 @@ in
   };
   users.groups.${name} = { };
 
-  systemd.tmpfiles.rules = [ "d ${dataDir} 0700 ${name} ${name} -" ];
+  systemd.tmpfiles.rules = [
+    "d ${dataDir} 0700 ${name} ${name} -"
+    "d ${bridgeState} 0700 ${name} ${name} -"
+  ];
+  environment.systemPackages = [ bridgeBin ];
 
   services.phpfpm.pools.${name} = {
     user = name;

@@ -248,6 +248,64 @@ def test_dry_run_is_the_default():
     assert eb.Config.from_env({}).dry_run is True
 
 
+# ── {vault_access} hook ──────────────────────────────────────────────────────
+
+def hook(tmp, server, contact="c1"):
+    printed = []
+    rc = eb.main(["access", contact], env={
+        "SWITCH_DIR": str(tmp / "switch"), "STATE_DIR": str(tmp / "state"),
+        "VAULT_URL": "http://vw/vw", "PUBLIC_URL": "https://pub/vaultwarden",
+        "GRANTEE_EMAIL": GRANTEE, "GRANTOR_EMAIL": GRANTOR, "DRY_RUN": "0"},
+        opener=server, log=lambda m: None, out=printed.append)
+    return rc, "\n".join(printed)
+
+
+def test_the_hook_puts_a_working_password_in_the_switch_message(world):
+    tmp, write = world
+    write({"stage": "fired", "fired_at": 1000, "notified": {}})
+    server = FakeServer("old-pass")
+    rc, block = hook(tmp, server)
+    password = state_of(tmp)["password"]
+    assert rc == 0 and server.ea["status"] == eb.EA_INITIATED
+    assert password in block and GRANTEE in block and "https://pub/vaultwarden" in block
+    assert server.opens_with(password) and not server.opens_with("old-pass")
+
+
+def test_every_contact_gets_the_same_password_from_one_rotation(world):
+    tmp, write = world
+    write({"stage": "fired", "fired_at": 1000, "notified": {}})
+    server = FakeServer("old-pass")
+    _, first = hook(tmp, server, "c1")
+    _, second = hook(tmp, server, "c2")
+    assert first == second
+    assert server.calls.count(("POST", "/api/accounts/password")) == 1
+
+
+def test_no_separate_mail_for_a_contact_whose_message_carried_it(world):
+    tmp, write = world
+    write({"stage": "fired", "fired_at": 1000, "notified": {}})
+    server, mails = FakeServer("old-pass"), []
+    hook(tmp, server, "c1")
+    write({"stage": "fired", "fired_at": 1000, "notified": {"c1": 1001, "c2": 1002}})
+    go(tmp, server, mails=mails)
+    assert [to for to, _ in mails] == ["dad@example.com"]
+
+
+def test_the_hook_refuses_before_a_firing(world):
+    tmp, write = world
+    write({"stage": "checkin"})
+    server = FakeServer("old-pass")
+    rc, block = hook(tmp, server)
+    assert rc == 1 and block == "" and server.calls == []
+
+
+def test_a_failing_hook_prints_nothing_so_the_switch_uses_its_fallback(world):
+    tmp, write = world
+    write({"stage": "fired", "fired_at": 1000, "notified": {}})
+    rc, block = hook(tmp, FakeServer("someone-changed-it"))
+    assert rc == 1 and block == ""
+
+
 # ── false alarm ──────────────────────────────────────────────────────────────
 
 def test_a_check_in_after_firing_kills_the_mailed_password(world):

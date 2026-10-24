@@ -1,0 +1,55 @@
+diff -ruN a/app/Engine.php b/app/Engine.php
+--- a/app/Engine.php	2026-10-24 13:06:41.757404822 +0200
++++ b/app/Engine.php	2026-10-24 13:06:49.715927852 +0200
+@@ -332,6 +332,7 @@
+                 continue;
+             }
+             $vars = Messages::vars($config, $state, $all, $contact);
++            $vars['{vault_access}'] = VaultHook::access((string) $contact['id']);
+             if ($this->outbox->send((string) $contact['email'], Messages::fired($config, $contact, $vars), 'contact')) {
+                 $state['cycle']['notified'][$contact['id']] = Clock::now();
+                 $this->saveState($state);
+diff -ruN a/app/Messages.php b/app/Messages.php
+--- a/app/Messages.php	2026-10-24 13:06:41.756909391 +0200
++++ b/app/Messages.php	2026-10-24 13:06:49.713497046 +0200
+@@ -30,6 +30,7 @@
+         '{nok_details}' => 'Next of kin: name, email, phone',
+         '{technical_details}' => 'Technical contact: name, email, phone',
+         '{contacts_list}' => 'Everyone else on your list, one per line',
++        '{vault_access}' => 'Login details for your password vault, created when the switch fires',
+     ];
+ 
+     /** @return array{subject: string, body: string} */
+@@ -123,6 +124,7 @@
+             '{nok_details}' => Contacts::details($nok),
+             '{technical_details}' => Contacts::details($technical),
+             '{contacts_list}' => $others ? implode("\n", $others) : '(nobody else is listed)',
++            '{vault_access}' => '(password vault login, created when the switch fires)',
+         ];
+     }
+ 
+diff -ruN a/app/VaultHook.php b/app/VaultHook.php
+--- a/app/VaultHook.php	1970-01-01 01:00:00.000000000 +0100
++++ b/app/VaultHook.php	2026-10-24 13:06:49.729497231 +0200
+@@ -0,0 +1,21 @@
++<?php
++declare(strict_types=1);
++
++namespace DPS;
++
++/** nic-os: {vault_access} comes from the Emergency Access bridge (dps-ea-bridge). */
++final class VaultHook
++{
++    public const FALLBACK = 'Your access to the password vault will follow in a separate email.';
++
++    public static function access(string $contactId): string
++    {
++        if (!defined('DPS_VAULT_HOOK')) {
++            return self::FALLBACK;
++        }
++        $out = [];
++        $rc = 1;
++        exec(escapeshellarg(DPS_VAULT_HOOK) . ' access ' . escapeshellarg($contactId) . ' 2>/dev/null', $out, $rc);
++        return $rc === 0 && $out !== [] ? implode("\n", $out) : self::FALLBACK;
++    }
++}
