@@ -16,7 +16,7 @@
 # FIRST-TIME SETUP (from a tailnet device): open <publicUrl>/install.php. SMTP is
 # hydroxide on 127.0.0.1:1025, no TLS, login = proton address, password = bridge
 # password. Skip the installer's crontab step — the timer below already runs it.
-{ config, pkgs, ... }:
+{ config, pkgs, tailnetFqdn, username, ... }:
 let
   name    = "death-plan-switch";
   dataDir = "/mnt/data/death-plan-switch";
@@ -25,6 +25,33 @@ let
   php     = pkgs.php;
   port    = 8094;  # backend vhost; the path-mux forwards /switch/* here unchanged
   socket  = config.services.phpfpm.pools.${name}.socket;
+
+  # Emergency Access bridge (nicos_scripts/vaultwarden/ea_bridge.py). Runs as the
+  # switch's user: it reads the switch's state and reuses its SMTP settings.
+  # One-time seed, with the grantee password on the Mac clipboard:
+  #   pbpaste | sudo -u death-plan-switch env $(systemctl show -p Environment --value dps-ea-bridge) \
+  #     <nicos-scripts>/bin/dps-ea-bridge seed
+  bridge = cmd: {
+    description = "Death Plan Switch → Vaultwarden Emergency Access (${cmd})";
+    unitConfig.RequiresMountsFor = [ dataDir ];
+    environment = {
+      SWITCH_DIR    = dataDir;
+      STATE_DIR     = "/var/lib/dps-ea-bridge";
+      VAULT_URL     = "http://127.0.0.1:8222/vaultwarden";
+      PUBLIC_URL    = "https://${tailnetFqdn}/vaultwarden";
+      GRANTEE_EMAIL = "${username}+ea@pm.me";
+      GRANTOR_EMAIL = "${username}@pm.me";
+      DRY_RUN       = "0";
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      User = name;
+      Group = name;
+      StateDirectory = "dps-ea-bridge";
+      StateDirectoryMode = "0700";
+      ExecStart = "${pkgs.nicos-scripts}/bin/dps-ea-bridge ${cmd}";
+    };
+  };
 
   fastcgi = ''
     include ${config.services.nginx.package}/conf/fastcgi.conf;
@@ -99,6 +126,21 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*:0/15";
+      Persistent = true;
+    };
+  };
+
+  systemd.services.dps-ea-bridge = bridge "run";
+  systemd.timers.dps-ea-bridge = {
+    wantedBy = [ "timers.target" ];
+    timerConfig.OnCalendar = "*:0/5";
+  };
+  # Non-zero exit = the systemd-failed alert on Telegram.
+  systemd.services.dps-ea-bridge-check = bridge "check";
+  systemd.timers.dps-ea-bridge-check = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 10:00";
       Persistent = true;
     };
   };
