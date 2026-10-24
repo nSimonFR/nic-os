@@ -15,7 +15,8 @@ requires-python = ">=3.11"
 # is imported lazily inside connect_pg(), so the module (and its tests) still load
 # without it.
 # websocket-client: arkose-sync speaks Meteor DDP over a websocket (lazy import too).
-dependencies = [ "psycopg2", "websocket-client" ]
+# cryptography: dps-ea-bridge rewraps a Bitwarden user key (AES-CBC, Argon2id).
+dependencies = [ "psycopg2", "websocket-client", "cryptography" ]
 
 # One console script per connector. This is the interface the systemd units use
 # (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
@@ -78,6 +79,8 @@ hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
 hermes-mail-digest = "nicos_scripts.mail.digest:main"
 # Same classifier, hand-runnable over envelopes on stdin (the skill's ad-hoc path).
 mail-jev-classify = "nicos_scripts.mail.jev:main"
+# Death Plan Switch → Vaultwarden Emergency Access (hosts/rpi5/death-plan-switch.nix).
+dps-ea-bridge = "nicos_scripts.vaultwarden.ea_bridge:main"
 # Daily: SSH keys, funnels and SSH sources that live outside the Nix config.
 security-drift = "nicos_scripts.security.drift:main"
 # Started after agent-vault: credentials, services and Hermes' proxy env.

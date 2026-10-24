@@ -34,7 +34,8 @@ python3Packages.buildPythonPackage {
   # Declared in pyproject.toml too. papra.nc_sync writes Nextcloud systemtags
   # directly into Postgres; connectors.arkose speaks DDP over a websocket. Both
   # import lazily so the modules stay importable (and testable) without them.
-  dependencies = [ python3Packages.psycopg2 python3Packages.websocket-client ];
+  # vaultwarden.ea_bridge needs cryptography for the Bitwarden key wrap.
+  dependencies = [ python3Packages.psycopg2 python3Packages.websocket-client python3Packages.cryptography ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
 
@@ -66,6 +67,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.zen_watch"
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"
+    "nicos_scripts.vaultwarden.ea_bridge"
     "nicos_scripts.agent_vault.bootstrap"
   ];
 
