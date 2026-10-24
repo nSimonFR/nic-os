@@ -302,7 +302,8 @@ let
                                             Vaultwarden
               170–200  making             — Aperture, DeepSeek Harness, Wakapi,
                                             Reactive Resume
-              210–230  the rest           — Forgejo, Gramps Web, ShowMyCards
+              210–240  the rest           — Forgejo, Gramps Web, ShowMyCards, Notes
+              250–260  the journal, then the switch — Memos, Death Plan Switch
 
             The rows are the OWNER'S CHOICE and not derivable from anything in
             the tree, which is the whole reason they are written down here. Do not
@@ -312,12 +313,10 @@ let
             walks the file cabinet from the DAV root out through photos and notes
             to scanned paper. A row has to be one thought, not one word.
 
-            The last row is short because 23 does not divide by four, and the
-            three that ended up there are the ones with no neighbour rather than
-            whichever sorted last.
+            The last row is short because 26 does not divide by four.
 
             ADDING A TILE means deciding which row it joins and renumbering that
-            row's neighbours, not appending after 230.
+            row's neighbours, not appending after 260.
 
             300–380  Backend tiles and the untiled routed services. Backend is
                      three tiles now that dsh moved into Apps (an interactive
