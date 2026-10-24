@@ -146,6 +146,7 @@ in
     ./showmycards.nix
     ./searxng.nix
     ./open-knowledge.nix
+    ./memos.nix
     ./moxfield-sync.nix
     ./nextcloud.nix
     ./calino.nix

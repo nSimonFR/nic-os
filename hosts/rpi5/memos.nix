@@ -1,0 +1,86 @@
+# hosts/rpi5/memos.nix
+#
+# Memos — self-hosted timeline of short notes (usememos/memos): the work
+# journal's feed. Collectors and agents write to it over REST / MCP (`/mcp`),
+# screenshots arrive as attachments, entries carry a location for the Map page.
+#
+# nixpkgs module; package from unstable because release-26.05 ships 0.25.3,
+# older than MCP (0.27) and the Calendar/Map pages (0.31). Always-on, no socket
+# activation: a Go binary at tens of MB, and MCP clients would pin it awake.
+{ config, pkgs, unstablePkgs, ... }:
+let
+  internalPort = 13356;
+  dataDir = "/var/lib/memos";
+  # Attachments land in $MEMOS_DATA/assets (upstream default template); bound
+  # from the HDD so restic covers them without a dump step.
+  assetsDir = "/mnt/data/memos/assets";
+in
+{
+  services.memos = {
+    enable = true;
+    package = unstablePkgs.memos;
+    inherit dataDir;
+    # Replaces the module default wholesale. MEMOS_MODE is gone upstream: the
+    # SQLite file is memos_prod.db unless --demo.
+    settings = {
+      MEMOS_ADDR = "127.0.0.1";
+      MEMOS_PORT = toString internalPort;
+      MEMOS_DATA = dataDir;
+      MEMOS_DRIVER = "sqlite";
+      MEMOS_INSTANCE_URL = config.nic.services.memos.public.publicUrl;
+    };
+  };
+
+  systemd.tmpfiles.rules = [
+    "d /mnt/data/memos 0750 memos memos -"
+    "d ${assetsDir} 0750 memos memos -"
+    "d /mnt/data/backups/memos 0750 memos memos -"
+  ];
+
+  systemd.services.memos = {
+    unitConfig.RequiresMountsFor = [ assetsDir ];
+    serviceConfig = {
+      BindPaths = [ "${assetsDir}:${dataDir}/assets" ];
+      # The module sets RestartSec but no Restart; earlyoom's SIGTERM exits 0.
+      Restart = "always";
+    };
+  };
+
+  systemd.services.memos-backup = {
+    description = "Memos database backup";
+    serviceConfig = { Type = "oneshot"; User = "memos"; };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/memos
+      ${pkgs.sqlite}/bin/sqlite3 ${dataDir}/memos_prod.db ".timeout 60000" ".backup '$OUT/memos-$STAMP.db'"
+      ${pkgs.gzip}/bin/gzip -f "$OUT/memos-$STAMP.db"
+      ${pkgs.findutils}/bin/find "$OUT" -name "memos-*.db.gz" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.memos-backup = {
+    description = "Daily Memos backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+  };
+
+  nic.services.memos = {
+    backup      = [ "unit" "mnt-data" ];
+    backupUnits = [ "memos-backup.service" ];
+
+    public = {
+      # Alone on a seventh Apps row until it is given a place in one of the six.
+      order         = 250;
+      port          = 4020;
+      backend       = "http://127.0.0.1:${toString internalPort}";
+      authenticated = true;
+      tile = {
+        name        = "Memos";
+        icon        = "memos.png";
+        category    = "Apps";
+        description = "Work journal";
+      };
+    };
+  };
+}
