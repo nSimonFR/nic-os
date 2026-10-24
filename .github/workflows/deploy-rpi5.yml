@@ -9,8 +9,8 @@ name: Deploy rpi5
 on:
   push:
     branches: [main]
-  # Auto-merge lands commits as GITHUB_TOKEN, which starts no workflow run, so
-  # `push` alone misses every auto-merged PR. The schedule is what catches them.
+  # Safety net for pushes that start no run (anything landed via GITHUB_TOKEN).
+  # Auto-merge arms with a PAT, so its merges trigger `push` directly.
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:

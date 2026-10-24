@@ -35,7 +35,10 @@ jobs:
     steps:
       - name: Enable auto-merge (rebase)
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The merge is attributed to whoever armed it. Armed with GITHUB_TOKEN,
+          # the push to main starts no workflow run, so Deploy and nix.yml never
+          # fired on auto-merged PRs. nSimonFR-ai's PAT (as in renovate.yml) does.
+          GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
         # --rebase because the repo allows only rebase merges (settings.yml).
         # Re-arming an already-armed PR is a no-op, which is why `synchronize`
         # can be in the trigger list: it re-arms a PR that lost auto-merge to a
