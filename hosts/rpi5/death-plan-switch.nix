@@ -156,15 +156,20 @@ in
     backup = [ "mnt-data" ];
     heavyUnits = [ ];
 
-    # No tile: the owner reaches it from the weekly email, and an
-    # admin-only page has no place on a shared dashboard.
     public = {
-      order   = 340;
+      order   = 260;
       port    = 443;
       backend = "http://127.0.0.1:${toString port}";
       proxied = true;
       authenticated = true; # admin pages 404 to funnel; contact pages need their secret link
       muxPath = "/switch";
+      tile = {
+        name        = "Death Plan Switch";
+        icon        = "mdi-timer-sand";
+        category    = "Apps";
+        description = "Dead man's switch";
+        deepLink    = "/index.php?p=contacts";
+      };
     };
   };
 }
