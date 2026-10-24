@@ -163,45 +163,6 @@ in
     };
   };
 
-  # ── Alert: Sure auto-categorization stalled ──────────────────────────────────
-  # Asserts on the QUEUE, not on a log line. The previous version of this alert
-  # grepped sure-worker for "Failed to auto-categorize", so it could only fire
-  # when an AutoCategorizeJob ran and errored — and the failure that actually
-  # happened was the job never running at all: on 2026-09-02 a full-history rule
-  # run put 219 AutoCategorizeJob behind 691 AutoDetectMerchantsJob on the shared
-  # medium_priority queue, and a queued job logs nothing. This timer reported
-  # success every 15 minutes for eight days while `standard` uncategorized went
-  # 142 -> 892. Logic + the ms-vs-seconds created_at trap are tested in
-  # nicos_scripts/sure/categorize_health.py. sure-drain-keepalive (hosts/rpi5/
-  # sure.nix) fixes the cause — the worker slept with the web tier regardless of
-  # queue depth — and this catches the next variant of it.
-  systemd.services.sure-autocategorize-alert = {
-    description = "Alert on stalled Sure auto-categorization";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "sure-autocategorize-alert" ''
-        BODY=$(${pkgs.nicos-scripts}/bin/sure-categorize-health || true)
-        [ -n "$BODY" ] && BODY="<code>$BODY</code>"
-        printf '%s' "$BODY" | ${telegramAlert} sure-autocategorize "Sure auto-categorization stalled on rpi5"
-      '';
-      Environment = [
-        "PSQL_BIN=${pkgs.postgresql}/bin/psql"
-        "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
-        "REDIS_CLI_BIN=${pkgs.redis}/bin/redis-cli"
-      ];
-    };
-  };
-  systemd.timers.sure-autocategorize-alert = {
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnBootSec = "5m";
-      # The check is a queue read plus two SELECTs, and its threshold is 24h, so
-      # a 15m cadence bought nothing. Hourly is still ~24 chances to catch a
-      # stall on its first day.
-      OnUnitActiveSec = "1h";
-    };
-  };
-
   # ── Alert: security drift outside the Nix config ────────────────────────────
   # Hand-placed authorized_keys, manual funnels, SSH from outside the LAN/tailnet.
   # Eval-time rules are in security-policy.nix; logic in nicos_scripts/security/drift.py.
