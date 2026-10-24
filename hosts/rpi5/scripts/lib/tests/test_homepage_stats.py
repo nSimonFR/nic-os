@@ -480,6 +480,32 @@ def test_openknowledge_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
     assert out == {"docs": 2, "edited_7d": 1, "storage": 116}
 
 
+def switch_dir(tmp_path, state, contacts):
+    (tmp_path / "state.json").write_text(json.dumps(state))
+    (tmp_path / "config.json").write_text(json.dumps({"timezone": "Europe/Paris"}))
+    (tmp_path / "contacts.json").write_text(json.dumps({"contacts": contacts}))
+    return hs.Config(switch_dir=str(tmp_path))
+
+
+def test_switch_armed_shows_the_next_check_in_and_confirmed_contacts(tmp_path):
+    cfg = switch_dir(tmp_path, {"armed": True, "next_due_at": 1792915200, "cycle": None},
+                     [{"status": "confirmed"}, {"status": "unconfirmed"}])
+    assert hs.fetch_switch(cfg, None, now=1792800000) == {
+        "status": "armed", "next_due": "Sun 25/10 09:00", "contacts": "1/2"}
+
+
+def test_switch_cycle_stage_wins_over_armed(tmp_path):
+    for stage, status in [("checkin", "overdue"), ("verify", "asking next of kin"),
+                          ("fired", "fired")]:
+        cfg = switch_dir(tmp_path, {"armed": True, "next_due_at": 1, "cycle": {"stage": stage}}, [])
+        assert hs.fetch_switch(cfg, None, now=0)["status"] == status
+
+
+def test_switch_disarmed_has_no_due_date(tmp_path):
+    cfg = switch_dir(tmp_path, {"armed": False, "next_due_at": None, "cycle": None}, [])
+    assert hs.fetch_switch(cfg, None, now=0) == {"status": "off", "next_due": "-", "contacts": "0/0"}
+
+
 def test_beaverhabits_sums_across_users():
     one = json.dumps({"habits": [{"name": "a", "records": [{"day": "x", "done": True}]}]})
     run = FakeRun([("habit_list", one + "\n" + one + "\n\n")])

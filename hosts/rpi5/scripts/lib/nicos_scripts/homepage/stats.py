@@ -28,6 +28,7 @@ Endpoints (one per homepage tile, three stats each):
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
   /dsh       — DeepSeek Harness (sessions, prompts, days since the last) — zstd JSONL on disk
+  /switch    — Death Plan Switch (status, next check-in, contacts confirmed) — its JSON files
 
 A NOTE ON WHAT BELONGS ON A TILE. Three of these used to spend a field on a
 number that cannot change: Nextcloud's `users` (1 on a single-user server),
@@ -87,6 +88,7 @@ import sys
 import threading
 import time
 import xml.etree.ElementTree as ET
+import zoneinfo
 from dataclasses import dataclass
 
 from .. import state
@@ -160,6 +162,7 @@ class Config:
     # BeaverHabits (hosts/rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
     # user in habit_list.data — read-only, so polling never wakes the idle service.
     beaverhabits_db: str = "/var/lib/beaverhabits/habits.db"
+    switch_dir: str = "/mnt/data/death-plan-switch"
     # ShowMyCards (hosts/rpi5/showmycards.nix): socket-activated with a 600s idle timer, so
     # the same read-only-SQLite trick applies — its HTTP API is the ONLY thing that can
     # wake it, and a widget polling :8330 would pin both processes awake permanently on
@@ -260,6 +263,7 @@ class Config:
             wakapi_db=s("WAKAPI_DB", cls.wakapi_db),
             beszel_db=s("BESZEL_DB", cls.beszel_db),
             beaverhabits_db=s("BEAVERHABITS_DB", cls.beaverhabits_db),
+            switch_dir=s("SWITCH_DIR", cls.switch_dir),
             showmycards_db=s("SHOWMYCARDS_DB", cls.showmycards_db),
             notes_dir=s("NOTES_DIR", cls.notes_dir),
             rxresume_db=s("RXRESUME_DB", cls.rxresume_db),
@@ -300,7 +304,7 @@ class Stats:
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
         "beaverhabits", "ryot", "showmycards",
         "nextcloud", "calino", "affine", "openknowledge", "beszel",
-        "freereps", "aperture", "dsh",
+        "freereps", "aperture", "dsh", "switch",
     )
 
     def __init__(self):
@@ -1777,6 +1781,41 @@ def fetch_homeassistant(cfg, run):
 # Single source for "which fetcher owns which stats key", used by both the daily
 # refresh and the startup backfill. Keeping it a dict rather than a call list means
 # a newly added widget cannot be wired into one and forgotten in the other.
+def fetch_switch(cfg, run, now=None):
+    # Death Plan Switch keeps its state in JSON files (hosts/rpi5/death-plan-switch.nix);
+    # this service runs as root, so it reads them past their 0700 directory.
+    def load(name):
+        with open(os.path.join(cfg.switch_dir, name + ".json")) as f:
+            return json.load(f)
+
+    st, config = load("state"), load("config")
+    contacts = load("contacts").get("contacts", [])
+    now = time.time() if now is None else now
+    stage = (st.get("cycle") or {}).get("stage")
+
+    if stage == "fired":
+        status = "fired"
+    elif stage == "verify":
+        status = "asking next of kin"
+    elif stage == "checkin":
+        status = "overdue"
+    elif (st.get("paused_until") or 0) > now:
+        status = "paused"
+    else:
+        status = "armed" if st.get("armed") else "off"
+
+    due = st.get("next_due_at") if st.get("armed") else None
+    if due:
+        tz = zoneinfo.ZoneInfo(config.get("timezone") or "UTC")
+        next_due = datetime.datetime.fromtimestamp(due, tz).strftime("%a %d/%m %H:%M")
+    else:
+        next_due = "-"
+
+    confirmed = sum(1 for c in contacts if c.get("status") == "confirmed")
+    return {"status": status, "next_due": next_due,
+            "contacts": f"{confirmed}/{len(contacts)}"}
+
+
 FETCHERS = {
     "sure": fetch_sure,
     "wealthfolio": fetch_wealthfolio,
@@ -1802,6 +1841,7 @@ FETCHERS = {
     "freereps": fetch_freereps,
     "aperture": fetch_aperture,
     "dsh": fetch_dsh,
+    "switch": fetch_switch,
 }
 
 # NOTE: every published key must have a fetcher and vice versa. The two used to be

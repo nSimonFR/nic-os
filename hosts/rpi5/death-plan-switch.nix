@@ -169,6 +169,17 @@ in
         category    = "Apps";
         description = "Dead man's switch";
         deepLink    = "/index.php?p=contacts";
+        # homepage-stats reads the switch's JSON files (daily cache).
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/switch";
+          refreshInterval = 3600000;
+          mappings = [
+            { field = "status";   label = "Status";   format = "text"; }
+            { field = "next_due"; label = "Check-in"; format = "text"; }
+            { field = "contacts"; label = "Contacts"; format = "text"; }
+          ];
+        };
       };
     };
   };
