@@ -165,6 +165,13 @@
       file  = ./secrets/vaultwarden-admin-token.age;
       owner = "vaultwarden";
     };
+    # Master password of nsimon+agents@pm.me, the bot behind `vault-agent`. It
+    # opens the "Agents" org only, so the agents (nsimon) may read it.
+    vaultwarden-agent-password = {
+      file  = ./secrets/vaultwarden-agent-password.age;
+      owner = "nsimon";
+      mode  = "0400";
+    };
     rclone-storj = {
       file = ./secrets/rclone-storj.age;
     };

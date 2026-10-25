@@ -79,3 +79,45 @@ def encrypt(data, enc_key, mac_key, iv=None):
     mac = hmac.new(mac_key, iv + ct, hashlib.sha256).digest()
     b64 = lambda b: base64.b64encode(b).decode()  # noqa: E731
     return f"2.{b64(iv)}|{b64(ct)}|{b64(mac)}"
+
+
+def split(sym_key):
+    """A 64-byte user/org key is (enc_key, mac_key)."""
+    return sym_key[:32], sym_key[32:]
+
+
+def _oaep():
+    from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    return padding.OAEP(mgf=padding.MGF1(hashes.SHA1()), algorithm=hashes.SHA1(), label=None)
+
+
+def rsa_encrypt(data, public_b64):
+    """Type-4 EncString: how an org key is handed to a member."""
+    from cryptography.hazmat.primitives.serialization import load_der_public_key
+
+    pub = load_der_public_key(base64.b64decode(public_b64))
+    return "4." + base64.b64encode(pub.encrypt(data, _oaep())).decode()
+
+
+def rsa_decrypt(encstring, private_der):
+    from cryptography.hazmat.primitives.serialization import load_der_private_key
+
+    kind, _, rest = encstring.partition(".")
+    if kind != "4":
+        raise ValueError(f"unsupported asymmetric EncString type {kind}")
+    return load_der_private_key(private_der, None).decrypt(base64.b64decode(rest), _oaep())
+
+
+def new_keypair(sym_key):
+    """(public key b64, private key wrapped by `sym_key`), as accounts and orgs store them."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    der = priv.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8,
+                             serialization.NoEncryption())
+    pub = priv.public_key().public_bytes(serialization.Encoding.DER,
+                                         serialization.PublicFormat.SubjectPublicKeyInfo)
+    return base64.b64encode(pub).decode(), encrypt(der, *split(sym_key))

@@ -1,4 +1,4 @@
-{ pkgs, tailnetFqdn, username, ... }:
+{ config, pkgs, tailnetFqdn, username, ... }:
 # Vaultwarden — self-hosted Bitwarden-compatible password manager.
 # Public at https://<tailnetFqdn>/vaultwarden via the 443 path-mux (front-proxy.nix)
 # → the socket-activate proxy on 127.0.0.1:8222 → vaultwarden on 127.0.0.1:8223.
@@ -21,7 +21,21 @@
 let
   externalPort = 8222;
   backendPort  = 8223;
+
+  # Agents write logins into the "Agents" org (shared/skills/vaultwarden).
+  vaultAgent = pkgs.writeShellApplication {
+    name = "vault-agent";
+    text = ''
+      export VAULT_URL=http://127.0.0.1:${toString externalPort}/vaultwarden
+      export VAULT_AGENT_EMAIL=${username}+agents@pm.me VAULT_OWNER_EMAIL=${username}@pm.me
+      export VAULT_AGENT_PASSWORD_FILE=${config.age.secrets.vaultwarden-agent-password.path}
+      export DRY_RUN=0
+      exec ${pkgs.nicos-scripts}/bin/vault-agent "$@"
+    '';
+  };
 in {
+  environment.systemPackages = [ vaultAgent ];
+
   services.vaultwarden = {
     enable    = true;
     dbBackend = "sqlite";
