@@ -185,13 +185,29 @@ def _hm(minutes):
     return f"{h} h {m:02d}" if h else f"{m} min"
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url=""):
+def photo_time(asset):
+    """Local HH:MM a photo was taken."""
+    t = datetime.fromisoformat(asset["fileCreatedAt"].replace("Z", "+00:00"))
+    return f"{t.astimezone(TZ):%H:%M}"
+
+
+def photo_line(total, shown, all_url):
+    """`📷 08:12 · 12:31 · all 10 in Immich`: one time per attached photo, in
+    gallery order, each linking to that photo. `shown` = [(HH:MM, url)]."""
+    bits = [f"[{hm}]({url})" if url else hm for hm, url in shown]
+    if all_url and total > len(shown):
+        bits.append(f"[all {total} in Immich]({all_url})")
+    elif all_url and not shown:
+        bits.append(f"[{total} in Immich]({all_url})")
+    return "📷 " + " · ".join(bits)
+
+
+def content(day, ws, legs, web_url, photos=0, photos_url="", shown=()):
     """Memo markdown. `legs` = [(from_label, to_label) or None] per workout;
-    `photos` = the day's timeline photo count, linked to `photos_url`."""
+    `photos` = the day's timeline photo count, `shown` = [(HH:MM, url)] of the
+    attached ones, `photos_url` = the first of the day in Immich."""
     if not ws:
-        lines = [f"📷 **Photos — {photos}**", ""]
-        if photos_url:
-            lines.append(f"[Open them in Immich]({photos_url})")
+        lines = [f"📷 **Photos — {photos}**", "", photo_line(photos, shown, photos_url)]
         return "\n".join(lines + ["", "#photos"]) + "\n"
     kinds = {kind(w.name) for w in ws}
     emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Workouts", "workout", "")
@@ -223,8 +239,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url=""):
             tags.append("commute")
     lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
     if photos:
-        noun = f"{photos} photo{'s' if photos > 1 else ''}"
-        lines.append(f"[📷 {noun} in Immich]({photos_url})" if photos_url else f"📷 {noun}")
+        lines.append(photo_line(photos, shown, photos_url))
         tags.append("photos")
     lines += ["", " ".join(f"#{t}" for t in tags)]
     return "\n".join(lines) + "\n"
@@ -246,7 +261,8 @@ def render(tracks, path):
         for at, fill in ((ll[0], color), (ll[-1], "#111827")):
             m.add_marker(CircleMarker(at, "white", 14))
             m.add_marker(CircleMarker(at, fill, 9))
-    m.render().save(path)
+    # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).
+    m.render().convert("RGB").save(path, "JPEG", quality=85, optimize=True)
 
 
 class Immich:
@@ -357,19 +373,21 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
             for t in tracks]
     link = immich.link(day_photos[0]["id"]) if day_photos else ""
-    text = content(key, ws, legs, cfg.web_url, len(day_photos), link)
+    shown = [(photo_time(p), immich.link(p["id"])) for p in photos]
+    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shown)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
         return None
 
     files = []
     if any(len(t) >= 2 for t in tracks):
-        png_path = f"{tmpdir}/day-{key}.png"
+        png_path = f"{tmpdir}/day-{key}.jpg"
         render_fn(tracks, png_path)
         with open(png_path, "rb") as f:
-            files.append((f"map-{key}.png", "image/png", f.read()))
+            files.append((f"map-{key}.jpg", "image/jpeg", f.read()))
     for i, p in enumerate(photos, 1):
-        files.append((f"photo-{key}-{i}.jpg", "image/jpeg", immich.preview(p["id"])))
+        hm = photo_time(p).replace(":", "h")
+        files.append((f"photo-{key}-{hm}-{i}.jpg", "image/jpeg", immich.preview(p["id"])))
 
     last = next((t for t in reversed(tracks) if t), None)
     if last:
