@@ -36,7 +36,9 @@
     }
   ],
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": true,
+    "description": "All day Monday, not the default 'before 4am': GitHub drops most of the 2-hourly scheduled runs, and none landed in 00:00–04:00 UTC on a Monday from 2026-09-28 to 2026-10-19, so no lock-file PR was opened for four weeks.",
+    "schedule": ["* * * * 1"]
   },
   "packageRules": [
     {
