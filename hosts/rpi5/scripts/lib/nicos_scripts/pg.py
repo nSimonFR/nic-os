@@ -1,4 +1,4 @@
-"""Read-only Postgres SELECTs over the local socket, as the postgres superuser.
+"""Postgres statements over the local socket, as the postgres superuser.
 
 Peer auth: the invoking service user generally cannot read the per-app
 `*-pg-password` agenix secret (those are postgres-owned) and does not need to
