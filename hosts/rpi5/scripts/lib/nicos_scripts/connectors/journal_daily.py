@@ -440,11 +440,15 @@ class Memos:
         return http_json(req, opener=self.opener)
 
     def upload(self, files):
-        """`files` = [(filename, mime, bytes)] -> attachment names, same order."""
-        return [self.call("POST", "/attachments", {
-            "filename": name, "type": mime,
-            "content": base64.b64encode(data).decode()})["name"]
-            for name, mime, data in files]
+        """`files` = [(filename, mime, bytes, media_metadata or None)] ->
+        attachment names, same order."""
+        names = []
+        for name, mime, data, meta in files:
+            body = {"filename": name, "type": mime, "content": base64.b64encode(data).decode()}
+            if meta:
+                body["mediaMetadata"] = meta
+            names.append(self.call("POST", "/attachments", body)["name"])
+        return names
 
     def create(self, text, atts, when, location=None):
         body = {"content": text, "visibility": "PRIVATE",
@@ -486,6 +490,35 @@ class Memos:
         return kept
 
 
+def media_metadata(data, taken, location=None, camera=None):
+    """Memos `mediaMetadata` for one of our images: what its details panel
+    shows. `taken` = epoch s, rendered as Europe/Paris wall time + offset —
+    from the UTC instant, since a screenshot's Immich local time is UTC.
+    `location` = (lat, lon); `camera` = (make, model)."""
+    local = datetime.fromtimestamp(taken, TZ)
+    off = int(local.utcoffset().total_seconds() // 60)
+    photo = {"captureTime": {"localDateTime": local.strftime("%Y-%m-%dT%H:%M:%S"),
+                             "utcOffset": f"{'+' if off >= 0 else '-'}{abs(off) // 60:02d}:{abs(off) % 60:02d}"}}
+    if location:
+        photo["location"] = {"latitude": location[0], "longitude": location[1]}
+    if camera and all((c or "").strip() for c in camera):
+        photo["cameraMake"], photo["cameraModel"] = (c.strip() for c in camera)
+    meta = {"photo": photo}
+    try:
+        import io
+
+        from PIL import Image  # lazy: Pillow
+        meta["width"], meta["height"] = Image.open(io.BytesIO(data)).size
+    except Exception:  # size is optional; never lose the upload over it
+        pass
+    return meta
+
+
+def photo_gps(asset):
+    e = asset.get("exifInfo") or {}
+    return (e["latitude"], e["longitude"]) if e.get("latitude") and e.get("longitude") else None
+
+
 def _utc(t):
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -522,13 +555,22 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         png_path = f"{tmpdir}/day-{key}.jpg"
         render_fn(tracks, png_path)
         with open(png_path, "rb") as f:
-            files.append((f"map-{key}.jpg", "image/jpeg", f.read()))
+            data = f.read()
+        end = next(t for t in reversed(tracks) if len(t) >= 2)[-1]
+        files.append((f"map-{key}.jpg", "image/jpeg", data,
+                      media_metadata(data, ws[-1].end, location=end)))
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
         collage_fn([immich.preview(p["id"]) for p in photos],
                    [tile_label(p) for p in photos], collage_path)
         with open(collage_path, "rb") as f:
-            files.append((f"photos-{key}.jpg", "image/jpeg", f.read()))
+            data = f.read()
+        gps = next((g for g in map(photo_gps, reversed(photos)) if g), None)
+        cams = {((p.get("exifInfo") or {}).get("make"), (p.get("exifInfo") or {}).get("model"))
+                for p in photos if (p.get("exifInfo") or {}).get("make")}
+        files.append((f"photos-{key}.jpg", "image/jpeg", data,
+                      media_metadata(data, _taken(photos[-1]), location=gps,
+                                     camera=next(iter(cams)) if len(cams) == 1 else None)))
 
     last = next((t for t in reversed(tracks) if t), None)
     if last:

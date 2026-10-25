@@ -325,3 +325,41 @@ def test_map_follows_the_route_shape():
     assert wm.map_size(north_south) == (750, 1000)
     east_west = [[(48.83, 2.34), (48.83, 2.37)]]
     assert wm.map_size(east_west) == (1000, 750)
+
+
+def test_media_metadata_is_paris_wall_time_with_offset():
+    meta = wm.media_metadata(b"not an image", 1792390421, location=(48.9, 2.33),
+                             camera=("Apple", "iPhone 11 Pro"))
+    assert meta == {"photo": {"captureTime": {"localDateTime": "2026-10-19T08:13:41", "utcOffset": "+02:00"},
+                              "location": {"latitude": 48.9, "longitude": 2.33},
+                              "cameraMake": "Apple", "cameraModel": "iPhone 11 Pro"}}
+    winter = wm.media_metadata(b"", 1793000000)["photo"]["captureTime"]
+    assert winter["utcOffset"] == "+01:00"
+
+
+def test_media_metadata_reads_the_image_size():
+    import io
+
+    from PIL import Image
+    buf = io.BytesIO()
+    Image.new("RGB", (30, 20)).save(buf, "JPEG")
+    meta = wm.media_metadata(buf.getvalue(), 1792390421)
+    assert (meta["width"], meta["height"]) == (30, 20)
+
+
+def test_map_and_collage_carry_metadata(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    p1, p2 = photo(1), photo(2, gps=False)
+    for p in (p1, p2):
+        p["exifInfo"].update({"make": "Apple", "model": "iPhone 11 Pro"})
+    op = FakeOpener([json_reply({"name": "attachments/MAP"}), json_reply({"name": "attachments/COL"}),
+                     json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path), FakeImmich([p1, p2]),
+                   collage_fn=lambda imgs, labels, path: no_render(None, path))
+    map_meta, col_meta = op.body_of(0)["mediaMetadata"]["photo"], op.body_of(1)["mediaMetadata"]["photo"]
+    assert map_meta["location"] == {"latitude": 48.91, "longitude": 2.33}
+    assert map_meta["captureTime"]["localDateTime"] == "2026-10-19T08:50:41"
+    assert col_meta["captureTime"]["localDateTime"] == "2026-10-19T14:00:00"
+    assert col_meta["location"] == {"latitude": 48.85, "longitude": 2.35}  # p2 has none
+    assert (col_meta["cameraMake"], col_meta["cameraModel"]) == ("Apple", "iPhone 11 Pro")
