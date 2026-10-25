@@ -64,4 +64,5 @@ in {
   "searxng-env.age".publicKeys             = [ nsimon-age nsimon-ed25519 ];
   "agent-vault-env.age".publicKeys         = [ nsimon-age nsimon-ed25519 ];
   "agent-vault-admin-password.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
+  "rpi5-healthcheck.age".publicKeys = [ nsimon-age nsimon-ed25519 ];
 }

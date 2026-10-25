@@ -10,8 +10,8 @@
 # itself on funnel requests only.
 #
 # ⚠ Upstream says host it apart from what it watches: a Pi or tailnet outage
-#   silences it too. Point an outside uptime monitor at the secret health URL
-#   (Settings) — that is the only alarm for that case.
+#   silences it too. The server-wide Healthchecks.io heartbeat (monitoring.nix)
+#   is the alarm for that case.
 #
 # FIRST-TIME SETUP (from a tailnet device): open <publicUrl>/install.php. SMTP is
 # hydroxide on 127.0.0.1:1025, no TLS, login = proton address, password = bridge

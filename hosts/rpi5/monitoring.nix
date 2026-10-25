@@ -1,4 +1,4 @@
-{ config, pkgs, lib, telegramChatId, ... }:
+{ config, pkgs, lib, telegramChatId, tailnetFqdn, ... }:
 let
   beszelHubPort = 8090;
   beszelAgentPort = 45876;
@@ -332,5 +332,32 @@ in
         };
       };
     };
+  };
+
+  # ── Healthchecks.io heartbeat ────────────────────────────────────────────────
+  # The only alarm that fires when the Pi or its network is down: Healthchecks
+  # alerts on its own when pings stop. `/` answering at all (301 → /nextcloud/)
+  # proves the front proxy is up; an HTTP error pings /fail at once.
+  systemd.services.healthchecks-heartbeat = {
+    description = "Server heartbeat → Healthchecks.io";
+    serviceConfig = {
+      Type = "oneshot";
+      DynamicUser = true;
+      LoadCredential = "ping:${config.age.secrets.rpi5-healthcheck.path}";
+      ExecStart = lib.getExe (pkgs.writeShellApplication {
+        name = "healthchecks-heartbeat";
+        runtimeInputs = [ pkgs.curl ];
+        text = ''
+          ping=$(cat "$CREDENTIALS_DIRECTORY/ping")
+          code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' https://${tailnetFqdn}/ || true)
+          if [ "$code" = 000 ] || [ "$code" -ge 400 ]; then ping="$ping/fail"; fi
+          curl -fsS -m 30 --retry 3 --data-raw "GET / → $code" "$ping" >/dev/null
+        '';
+      });
+    };
+  };
+  systemd.timers.healthchecks-heartbeat = {
+    wantedBy = [ "timers.target" ];
+    timerConfig.OnCalendar = "*:0/5";
   };
 }
