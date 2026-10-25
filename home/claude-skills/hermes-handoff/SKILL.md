@@ -8,15 +8,16 @@ metadata:
 # Hermes handoff
 
 ```bash
-ssh rpi5 'set -a; . /run/agenix/agent-env; set +a; cd ~; hermes -c mac-handoff -z "$(cat)"' <<'EOF'
+ssh rpi5 'set -a; . /run/agenix/agent-env; . /var/lib/agent-vault-hermes/proxy.env; set +a; cd ~; hermes -c mac-handoff -z "$(cat)"' <<'EOF'
 check dawarich ingested yesterday's points, fix it if not
 EOF
 ```
 
 Two halves of that line are not decoration. The prompt travels on **stdin**,
 because an ssh command line is re-parsed by the login shell over there and any
-quote, `$` or backtick in an argument would be re-interpreted. `agent-env` is
-what gives Hermes' skills their credentials — without it they fail halfway.
+quote, `$` or backtick in an argument would be re-interpreted. The two env files
+are what give Hermes' skills their credentials (Agent Vault placeholders and proxy)
+— without them they fail halfway.
 
 `-c NAME` continues a session (same name = same thread), `-m gpt-6` buys a harder
 model, `-s <skill>` preloads one. Slow task? Run it as a background Bash task,

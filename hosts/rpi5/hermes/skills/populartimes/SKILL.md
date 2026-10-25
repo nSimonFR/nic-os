@@ -43,10 +43,9 @@ not provide popularity for that place.
 
 ## Requirements and limitations
 
-- `GOOGLE_PLACES_API_KEY` must be present in Hermes' environment. If it is
-  missing, ask Nico to add a Google Places API key to the encrypted
-  `/run/agenix/agent-env` source; never ask them to paste it into chat or commit
-  it to the repository.
+- `GOOGLE_PLACES_API_KEY` is Agent Vault's placeholder, swapped for the real key
+  on the way to Google; it must be present in Hermes' environment. If it is
+  missing, tell Nico; never ask them to paste a key into chat or commit it.
 - Google Maps behavior can change and this unofficial library may stop working.
 - Follow Google Maps Platform terms and current billing/quota rules. Do not
   batch-scrape areas or repeatedly poll; query only the place the user asked for.

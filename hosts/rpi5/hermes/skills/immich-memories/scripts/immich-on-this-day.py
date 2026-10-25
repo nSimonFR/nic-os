@@ -8,9 +8,8 @@ script talks to Telegram directly. --download just fetches + prints a JSON manif
 (no send); text/--json modes are kept for ad-hoc "what's on this day?" queries.
 
 Config (env):
-  IMMICH_API_KEY        the key; if unset, read from IMMICH_API_KEY_FILE
-  IMMICH_API_KEY_FILE   default /run/agenix/immich-api-key (read when the var is unset)
-  IMMICH_INTERNAL_URL   default http://127.0.0.1:2283
+  IMMICH_API_KEY        default Agent Vault's placeholder, swapped in on the way
+  IMMICH_INTERNAL_URL   default http://immich.home.arpa:2283 (through Agent Vault)
   IMMICH_PUBLIC_URL     default https://rpi5.gate-mintaka.ts.net:10000  (text/--json links only)
 
   --send-album only:
@@ -345,22 +344,11 @@ def main():
                     help="emit structured JSON (with links) instead of human-readable text")
     args = ap.parse_args()
 
-    api_key = os.environ.get("IMMICH_API_KEY")
-    if not api_key:
-        # Read the agenix key file directly so the skill can run as a plain
-        # `python3 ... --download` with no `IMMICH_API_KEY=$(cat ...)` prefix —
-        # the agent's exec safety guard blocks any `$(...)` command substitution.
-        key_file = os.environ.get("IMMICH_API_KEY_FILE", "/run/agenix/immich-api-key")
-        try:
-            with open(key_file) as f:
-                api_key = f.read().strip()
-        except OSError:
-            api_key = ""
-    if not api_key:
-        sys.exit("set IMMICH_API_KEY, or make IMMICH_API_KEY_FILE "
-                 "(default /run/agenix/immich-api-key) readable")
+    # Hermes' terminal scrubs *KEY* env names, so default to the placeholder:
+    # Agent Vault (hosts/rpi5/agent-vault.nix) holds the real key.
+    api_key = os.environ.get("IMMICH_API_KEY") or "__immich_api_key__"
 
-    internal = os.environ.get("IMMICH_INTERNAL_URL", "http://127.0.0.1:2283").rstrip("/")
+    internal = os.environ.get("IMMICH_INTERNAL_URL", "http://immich.home.arpa:2283").rstrip("/")
     public = os.environ.get("IMMICH_PUBLIC_URL", "https://rpi5.gate-mintaka.ts.net:10000").rstrip("/")
 
     memories = fetch_memories(internal, api_key)

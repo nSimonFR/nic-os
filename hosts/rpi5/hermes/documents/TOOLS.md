@@ -5,15 +5,15 @@
 - OS: NixOS | Shell: zsh | Package Manager: Nix (flakes)
 - Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5' --max-jobs 1 -j 1`
 - **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
-- Secrets: agenix — `/run/agenix/` (read-only, system-managed). Skill/tool creds
-  live in `/run/agenix/agent-env`, sourced into the service environment.
-- **Brokered keys are placeholders on purpose.** `TAVILY_API_KEY`,
-  `GOOGLE_PLACES_API_KEY`, `GEMINI_API_KEY`, `LINEAR_KEY`, `LINEAR_KEY_TRUSK` and
-  `TYPESAFE_API_KEY` hold values like `__tavily_api_key__`. Use them as-is: your
-  HTTPS goes through Agent Vault (`HTTPS_PROXY`), which swaps in the real key for
-  that API only. Never read the real value from `/run/agenix/agent-env`, and never
-  unset `HTTPS_PROXY`/`SSL_CERT_FILE`. A 401 from one of those APIs means the
-  broker, not the key: check `journalctl -u agent-vault-bootstrap`.
+- Secrets: agenix — `/run/agenix/` (read-only, system-managed). You hold no API
+  key: every one is a placeholder named after it (`__tavily_api_key__`,
+  `__ha_token__`, `__immich_api_key__`…), and Agent Vault (`HTTPS_PROXY`/`HTTP_PROXY`)
+  swaps in the real value for that service only. Use them as-is, even written
+  literally when your terminal strips the env var. Local services go through it
+  too, under aliases: `ha.home.arpa:8123`, `dawarich.home.arpa:13900`,
+  `ryot.home.arpa:13352`, `immich.home.arpa:2283`. GitHub (`git`, `gh`) acts as
+  nSimonFR-ai the same way. Never unset `HTTPS_PROXY`/`HTTP_PROXY`/`SSL_CERT_FILE`.
+  A 401 means the broker, not the key: check `journalctl -u agent-vault-bootstrap`.
 - **Web search = the native `web_search` / `web_extract` tools** (Tavily). Your
   terminal never sees `TAVILY_API_KEY` or `GEMINI_API_KEY`: Hermes strips its own
   provider keys from subprocesses, so don't script Tavily from the shell.
@@ -55,7 +55,7 @@ no HTTP gateway to curl.
 | Hermes-only skill content | `~/nic-os/hosts/rpi5/hermes/skills/<name>/SKILL.md` | Rebuild |
 | Persona / these docs | `~/nic-os/hosts/rpi5/hermes/documents/` | Rebuild |
 | Cron helper scripts | `~/nic-os/hosts/rpi5/hermes/workspace/` | Rebuild |
-| API keys, tokens | Re-encrypt `hosts/rpi5/secrets/agent-env.age` | Rebuild |
+| API keys, tokens | Re-encrypt `hosts/rpi5/secrets/agent-brokered-env.age` + a service in `agent-vault.nix` | Rebuild |
 | Cron jobs themselves | `~/.hermes/cron/jobs.json` (runtime) | No rebuild |
 
 **Deploy caveat:** the rsyncs in `hermes.nix` omit `--delete`, so a file removed

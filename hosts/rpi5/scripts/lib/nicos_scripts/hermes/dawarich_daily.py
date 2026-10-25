@@ -33,7 +33,8 @@ from ..secrets import env_int, env_str
 log = logger("hermes-dawarich-daily", lambda: sys.stderr)
 
 TZ = ZoneInfo("Europe/Paris")
-DEFAULT_BASE = "http://127.0.0.1:13900"
+# Through Agent Vault, which swaps the placeholder DAWARICH_API_KEY for the key.
+DEFAULT_BASE = "http://dawarich.home.arpa:13900"
 DEFAULT_WEB = "https://rpi5.gate-mintaka.ts.net:3900"
 
 

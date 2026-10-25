@@ -5,9 +5,10 @@
 # through the MITM proxy on :14322, which swaps in the real value for the hosts
 # in `brokered` only, on the surfaces listed there. Everything else passes through.
 #
-# Not brokered: loopback and *.ts.net stay direct (NO_PROXY), so Aperture, the
-# MCPs, HA, Dawarich and Ryot keep their tokens. Hermes runs as nsimon, which can
-# still read /run/agenix/agent-env: this stops env/prompt leaks, not a shell.
+# The keys live in agent-brokered-env, root-only; agents (Hermes via its
+# execWrapper, skills by sourcing proxy.env) see only the placeholders.
+# Loopback and *.ts.net stay direct (NO_PROXY), so Aperture and the MCPs are
+# untouched; local services are brokered under a *.home.arpa alias instead.
 #
 # GitHub is the other way round: Agent Vault attaches nSimonFR-ai's token itself
 # (github-ai-token, root-only), so agents hold nothing at all. Every git on the
@@ -16,7 +17,7 @@
 # passwordless sudo, so this stops an echoed token, not a determined agent.
 #
 # State is derived: agent-vault-bootstrap re-applies the owner account,
-# credentials (from agent-env) and services on every start, so a lost DB is a
+# credentials and services on every start, so a lost DB is a
 # restart. Admin UI (tailnet): owner admin@agent-vault.local, password in
 # /run/agenix/agent-vault-admin-password.
 { config, lib, pkgs, ... }:
@@ -28,7 +29,7 @@ let
   proxyPort = 14322;
 
   # `in` is the security boundary: a placeholder on any other surface is
-  # forwarded literally. Each key must exist in agent-env.
+  # forwarded literally. Each key must exist in agent-brokered-env or credFiles.
   brokered = [
     { name = "tavily";        host = "api.tavily.com";                    keys = [ "TAVILY_API_KEY" ];               "in" = [ "header" "body" ]; }
     { name = "google-places"; host = "places.googleapis.com";             keys = [ "GOOGLE_PLACES_API_KEY" ];        "in" = [ "header" "query" "body" ]; }
@@ -36,18 +37,27 @@ let
     { name = "gemini";        host = "generativelanguage.googleapis.com"; keys = [ "GEMINI_API_KEY" ];               "in" = [ "header" "query" ]; }
     { name = "linear";        host = "api.linear.app";                    keys = [ "LINEAR_KEY" "LINEAR_KEY_TRUSK" ]; "in" = [ "header" ]; }
     { name = "typesafe";      host = "api.typesafe.ai";                   keys = [ "TYPESAFE_API_KEY" ];             "in" = [ "header" ]; }
+    # Loopback services: the alias resolves to 127.0.0.1 (networking.hosts below).
+    { name = "home-assistant"; host = "ha.home.arpa:8123";        keys = [ "HA_TOKEN" ];         "in" = [ "header" ]; }
+    { name = "dawarich";       host = "dawarich.home.arpa:13900"; keys = [ "DAWARICH_API_KEY" ]; "in" = [ "header" "query" ]; }
+    { name = "ryot";           host = "ryot.home.arpa:13352";     keys = [ "RYOT_API_KEY" ];     "in" = [ "header" ]; }
+    { name = "immich";         host = "immich.home.arpa:2283";    keys = [ "IMMICH_API_KEY" ];   "in" = [ "header" ]; }
     # Attached, not substituted: whatever the client sends is replaced.
     { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-git";     host = "github.com";         auth = { type = "basic"; username = "GITHUB_GIT_USER"; password = "GITHUB_AI_TOKEN"; }; }
   ];
   credFiles = {
+    IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
     GITHUB_GIT_USER = pkgs.writeText "github-git-user" "x-access-token";
   };
   servicesFile = pkgs.writeText "agent-vault-services.json" (builtins.toJSON brokered);
 in
 {
+  networking.hosts."127.0.0.1" = map (s: lib.head (lib.splitString ":" s.host))
+    (lib.filter (s: lib.hasSuffix ".home.arpa" (lib.head (lib.splitString ":" s.host))) brokered);
+
   users.users.agent-vault = {
     isSystemUser = true;
     group = "agent-vault";
@@ -89,20 +99,23 @@ in
     };
   };
 
-  # Root: reads agent-env and the admin password, writes into nsimon's hermesDir.
+  # Root: reads the brokered keys and the admin password, writes into nsimon's hermesDir.
   systemd.services.agent-vault-bootstrap = {
     description = "Agent Vault: apply credentials, services and Hermes' proxy env";
     wantedBy = [ "agent-vault.service" ];
     after = [ "agent-vault.service" ];
     partOf = [ "agent-vault.service" ];
-    # A re-encrypted agent-env is a new store path, so a rotated key re-applies.
-    restartTriggers = [ config.age.secrets.agent-env.file config.age.secrets.github-ai-token.file servicesFile ];
+    # A re-encrypted secret is a new store path, so a rotated key re-applies.
+    restartTriggers = [
+      config.age.secrets.agent-brokered-env.file config.age.secrets.github-ai-token.file
+      config.age.secrets.immich-api-key.file servicesFile
+    ];
     environment = {
       AGENT_VAULT_ADDR = "http://127.0.0.1:${toString apiPort}";
       AGENT_VAULT_PROXY = "127.0.0.1:${toString proxyPort}";
       AGENT_VAULT_ADMIN_EMAIL = "admin@agent-vault.local";
       AGENT_VAULT_ADMIN_PASSWORD_FILE = config.age.secrets.agent-vault-admin-password.path;
-      AGENT_VAULT_CREDS_FILE = config.age.secrets.agent-env.path;
+      AGENT_VAULT_CREDS_FILE = config.age.secrets.agent-brokered-env.path;
       AGENT_VAULT_CRED_FILES = lib.concatStringsSep "," (lib.mapAttrsToList (k: v: "${k}=${v}") credFiles);
       AGENT_VAULT_SERVICES_FILE = "${servicesFile}";
       AGENT_VAULT_OUT_DIR = hermesDir;

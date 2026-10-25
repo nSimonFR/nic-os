@@ -14,33 +14,18 @@ media and querying tracked data.
 
 ## How auth works here
 
-All calls go to the **local backend** `http://127.0.0.1:13352/graphql` (this
-machine runs Ryot; agents call it on localhost — no HTTPS, no funnel). Auth is a
-Bearer token in `$RYOT_API_KEY`.
+All calls go to the **local backend** through Agent Vault:
+`http://ryot.home.arpa:13352/graphql` (an alias for 127.0.0.1; rpi5 only). Auth is
+a Bearer token, but agents hold only the placeholder `__ryot_api_key__`: Agent
+Vault swaps in the real token on the way. Source its proxy env in the same command
+as the call (it sets the proxy and `$RYOT_API_KEY`).
 
-**Resolve `$RYOT_API_KEY` before giving up.** Interactive `nsimon` shells may not
-export it, and systemd-spawned agents (Hermes, `claude-remote-control`) run with a
-minimal env. The token lives in the agent creds file `/run/agenix/agent-env`
-(owner `nsimon`, mode 400 — readable by the agents, always present). Self-heal at
-the start of any Ryot task:
-
-```bash
-if [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/agent-env ]; then
-  export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/agent-env)
-fi
-```
-
-Only if `$RYOT_API_KEY` is still empty after this, stop and tell the user (a fresh
-token can be minted with the `generateAuthToken` mutation using an existing session
-— see Troubleshooting).
-
-Helper used throughout — a query/mutation runner that self-heals the key:
+Helper used throughout:
 
 ```bash
 ryot_q() {  # ryot_q '<graphql>' '<variables-json>'
-  [ -z "$RYOT_API_KEY" ] && [ -r /run/agenix/agent-env ] && \
-    export RYOT_API_KEY=$(sed -n 's/^RYOT_API_KEY=//p' /run/agenix/agent-env)
-  curl -fsS http://127.0.0.1:13352/graphql \
+  set -a; . /var/lib/agent-vault-hermes/proxy.env; set +a
+  curl -fsS http://ryot.home.arpa:13352/graphql \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $RYOT_API_KEY" \
     -d "$(jq -nc --arg q "$1" --argjson v "${2:-{\}}" '{query:$q, variables:$v}')"
@@ -295,11 +280,11 @@ GraphQL enums serialize **SCREAMING_SNAKE_CASE**.
   field name, a required var missing, or an enum value that doesn't match the lot
   (e.g. `OPENLIBRARY` source with `MOVIE` lot). Introspect a type with
   `ryot_q 'query($n:String!){__type(name:$n){inputFields{name}}}' '{"n":"UserWorkoutInput"}'`.
-- **`401` / auth errors**: `$RYOT_API_KEY` empty or revoked. Re-run the self-heal.
+- **`401` / auth errors**: run `ryot_q` (it sources the proxy env). Still 401 → the token in `agent-brokered-env` is revoked.
   To mint a fresh durable token you need an existing session token — log in with the
   admin creds (in `/run/agenix/ryot-import-env`, `ryot`-owned → needs sudo) then
   `mutation{ generateAuthToken }`, and store the result as `RYOT_API_KEY` in
-  `agent-env`. Prefer asking the user before rotating.
+  `hosts/rpi5/secrets/agent-brokered-env.age`. Prefer asking the user before rotating.
 - **Wishlist add "did nothing"**: the deploy job is async — re-query
   `userMetadataDetails.collections` after a moment. Also confirm `creatorUserId` is
   **your** id (`usr_o04hupYGQWIM`) and `collectionName` is spelled exactly (`Watchlist`).
