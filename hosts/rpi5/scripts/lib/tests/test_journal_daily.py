@@ -26,7 +26,7 @@ class FakePg:
         elif "FROM users" in sql:
             rows = [("1",)]
         elif "FROM places" in sql:
-            rows = [(self.place,)] if self.place else []
+            rows = [self.place] if self.place else []
         elif "geodata" in sql:
             rows = list(self.areas)
         elif "FROM points" in sql:
@@ -81,9 +81,10 @@ def test_arrondissement_and_city_fallback():
 def test_content_names_places_and_tags_a_commute():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 2220, 9.5, 37, 300),
           wm.Workout(W2, "Cycling", T2, T2 + 2700, 9.8, 45, 312)]
-    text = wm.content("2026-10-19", ws, [("Home", "Work"), ("Work", "Home")], "https://d")
+    home, work = wm.Place("🏡 Home", "Home"), wm.Place("💼 Work", "Work")
+    text = wm.content("2026-10-19", ws, [(home, work), (work, home)], "https://d")
     assert text.startswith("### 🚲 Bike — 2 rides · 19.3 km · 1 h 22 · 612 kcal\n\n")
-    assert "- **08:13** Home → Work · 9.5 km · 37 min · 15.4 km/h" in text
+    assert "- **08:13** 🏡 Home → 💼 Work · 9.5 km · 37 min · 15.4 km/h" in text
     assert "date=2026-10-19" in text
     assert text.rstrip().endswith("#bike #commute")
 
@@ -120,18 +121,51 @@ def test_unchanged_day_is_skipped(tmp_path):
     assert op.requests == []
 
 
-def test_changed_day_replaces_the_old_memo(tmp_path):
+def update_opener(memo):
+    """Replies for: upload the map, GET the memo, set attachments, update."""
+    return FakeOpener([json_reply({"name": "attachments/NEW"}), json_reply(memo),
+                       json_reply({}), json_reply({"name": memo.get("name", "")})])
+
+
+def test_changed_day_is_updated_in_place_keeping_user_additions(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
-    state = {"2026-10-19": {"memo": "memos/OLD", "sig": "stale"}}
-    op = FakeOpener([
-        json_reply({"name": "memos/OLD", "attachments": [{"name": "attachments/OLDA"}]}),
-        json_reply({}), json_reply({}),
-        json_reply({"name": "attachments/A"}), json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"}),
-    ])
-    run_day(cfg(tmp_path), pg, op, state)
-    calls = [(r.get_method(), r.full_url.rsplit("/v1", 1)[-1]) for r in op.requests[:3]]
-    assert calls == [("GET", "/memos/OLD"), ("DELETE", "/attachments/OLDA"), ("DELETE", "/memos/OLD")]
-    assert state["2026-10-19"]["memo"] == "memos/M"
+    state = {"2026-10-19": {"memo": "memos/OLD", "sig": "stale",
+                            "text": "OLD BLOCK\n", "atts": ["attachments/OLDMAP"]}}
+    op = update_opener({"name": "memos/OLD", "content": "Great day!\n\nOLD BLOCK\nPS: rain",
+                        "attachments": [{"name": "attachments/OLDMAP"}, {"name": "attachments/MINE"}]})
+    assert run_day(cfg(tmp_path), pg, op, state) == "memos/OLD"
+    calls = [(r.get_method(), r.full_url.rsplit("/v1", 1)[-1]) for r in op.requests]
+    assert [c[0] for c in calls] == ["POST", "GET", "PATCH", "PATCH"]
+    assert calls[2][1] == "/memos/OLD/attachments"
+    assert op.body_of(2)["attachments"] == [{"name": "attachments/NEW"}, {"name": "attachments/MINE"}]
+    assert calls[3][1] == "/memos/OLD?updateMask=content,create_time,location"
+    new = op.body_of(3)["content"]
+    assert new.startswith("Great day!\n\n### 🚲 Bike") and new.endswith("#bike\nPS: rain")
+    assert state["2026-10-19"]["text"] in new and state["2026-10-19"]["atts"] == ["attachments/NEW"]
+
+
+def test_a_hand_rewritten_block_keeps_the_users_text(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    state = {"2026-10-19": {"memo": "memos/OLD", "sig": "stale", "text": "OLD BLOCK\n", "atts": []}}
+    op = update_opener({"name": "memos/OLD", "content": "my own words", "attachments": []})
+    lines = []
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), state, date(2026, 10, 19), 1,
+                   lines.append, no_render, str(tmp_path))
+    assert op.body_of(3)["content"] == "my own words"
+    assert "edited by hand" in lines[0]
+
+
+def test_a_memo_deleted_in_memos_is_recreated(tmp_path):
+    import urllib.error
+
+    def gone():
+        raise urllib.error.HTTPError("u", 404, "gone", {}, None)
+
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    state = {"2026-10-19": {"memo": "memos/OLD", "sig": "stale", "text": "x", "atts": []}}
+    op = FakeOpener([json_reply({"name": "attachments/A"}), gone,
+                     json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
+    assert run_day(cfg(tmp_path), pg, op, state) == "memos/M"
 
 
 def test_day_without_workouts_posts_nothing(tmp_path):
@@ -147,12 +181,18 @@ def test_dry_run_posts_nothing(tmp_path):
     assert op.requests == [] and state == {}
 
 
-def test_named_place_wins_over_the_area(tmp_path):
-    assert wm.place(cfg(tmp_path), FakePg([], [], place="Home"), 1, 48.83, 2.34) == "Home"
+def test_place_labels_from_dawarich_tags_and_names(tmp_path):
+    at = lambda row: wm.place(cfg(tmp_path), FakePg([], [], place=row), 1, 48.83, 2.34)
+    # geocoder-named place tagged Work reads as its tag
+    assert at(("93400 Rue Godillot 5 ()", "1", "Work", "💼")) == wm.Place("💼 Work", "Work")
+    # hand-named place keeps its name, with the tag's icon
+    assert at(("Maman", "0", "Home", "🏡")) == wm.Place("🏡 Maman", "Home")
+    assert at(("Fitness Park", "0", "", "")) == wm.Place("Fitness Park")
     pg = FakePg([], [])
-    assert wm.place(cfg(tmp_path), pg, 1, 48.83, 2.34) == "Paris 13e"
-    radius = next(s for s in pg.sql if "FROM places" in s)
-    assert "source = 0" in radius and ", 300)" in radius
+    assert wm.place(cfg(tmp_path), pg, 1, 48.83, 2.34) == wm.Place("Paris 13e")
+    sql = next(s for s in pg.sql if "FROM places" in s)
+    assert "p.source = 0 OR t.id IS NOT NULL" in sql and ", 300)" in sql
+    assert "ORDER BY t.id IS NULL" in sql
 
 
 class FakeImmich:
@@ -241,7 +281,8 @@ def test_pick_photos_one_slot_per_burst():
 
 def test_a_loop_reads_around_its_place():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 420, 2.3, 7, 50)]
-    assert "- **08:13** around Paris 13e · 2.3 km" in wm.content("2026-10-19", ws, [("Paris 13e", "Paris 13e")], "d")
+    p13 = wm.Place("Paris 13e")
+    assert "- **08:13** around Paris 13e · 2.3 km" in wm.content("2026-10-19", ws, [(p13, p13)], "d")
 
 
 def test_collage_grid():

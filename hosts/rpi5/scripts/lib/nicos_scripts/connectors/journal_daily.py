@@ -16,9 +16,11 @@ sheet replaces ~2.5 MB of separate previews. Immich URL and key
 come from Dawarich's integration settings (see immich_dawarich); if Immich is
 unreachable the entry is written without photos and replaced once it answers.
 
-Idempotent per day: the state file maps day -> (memo name, signature of the
-workouts, their point counts and the chosen photos). A changed day has its memo
-deleted and recreated; an unchanged day is skipped.
+Idempotent per day: the state file keeps, per day, the memo, a signature of
+its inputs (workouts, their point counts, the chosen photos), and the text and
+attachments we last wrote. A changed day is updated IN PLACE: our block of text
+is swapped inside whatever the user added around it, our attachments replaced,
+theirs kept. If the user rewrote our block itself, their text wins.
 
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX},
 MEMOS_{URL,TOKEN_FILE}, DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
@@ -159,23 +161,36 @@ def arrondissement(postcode, city):
     return city.replace("-sur-Seine", "")
 
 
+@dataclass(frozen=True)
+class Place:
+    label: str
+    tag: str = ""  # Dawarich tag name, e.g. Home / Work
+
+
 def place(cfg, run, uid, lat, lon):
-    """Nearest user-named Dawarich place within the radius, else the area name."""
+    """Nearest tagged or user-named Dawarich place within the radius (tagged
+    first), else the area name. A tagged place the geocoder named ("93400 Rue
+    Godillot 5 ()") reads as its tag instead: "💼 Work"."""
     here = f"ST_SetSRID(ST_MakePoint({float(lon)}, {float(lat)}), 4326)::geography"
     rows = _q(cfg, run, f"""
-        SELECT name FROM places
-        WHERE user_id = {uid} AND source = 0
-          AND ST_DWithin(lonlat, {here}, {int(cfg.place_radius_m)})
-        ORDER BY lonlat <-> {here} LIMIT 1
+        SELECT p.name, p.source, coalesce(t.name, ''), coalesce(t.icon, '')
+        FROM places p
+        LEFT JOIN taggings g ON g.taggable_type = 'Place' AND g.taggable_id = p.id
+        LEFT JOIN tags t ON t.id = g.tag_id
+        WHERE p.user_id = {uid} AND (p.source = 0 OR t.id IS NOT NULL)
+          AND ST_DWithin(p.lonlat, {here}, {int(cfg.place_radius_m)})
+        ORDER BY t.id IS NULL, p.lonlat <-> {here} LIMIT 1
     """, "dawarich")
     if rows:
-        return rows[0][0]
+        name, source, tag, icon = rows[0]
+        shown = name if source == "0" or not tag else tag
+        return Place(f"{icon} {shown}".strip(), tag)
     rows = _q(cfg, run, f"""
         SELECT coalesce(geodata->'properties'->>'postcode', ''), coalesce(city, '')
         FROM points WHERE user_id = {uid} AND geodata ? 'properties'
         ORDER BY lonlat <-> {here} LIMIT 1
     """, "dawarich")
-    return (arrondissement(*rows[0]) if rows else "") or "?"
+    return Place((arrondissement(*rows[0]) if rows else "") or "?")
 
 
 def kind(name):
@@ -212,10 +227,10 @@ def workout_section(ws, legs, web_url, day):
             at = f"{e} {at}"
         if not leg:
             bits = [w.name]
-        elif leg[0] == leg[1]:
-            bits = [f"around {leg[0]}"]
+        elif leg[0].label == leg[1].label:
+            bits = [f"around {leg[0].label}"]
         else:
-            bits = [f"{leg[0]} → {leg[1]}"]
+            bits = [f"{leg[0].label} → {leg[1].label}"]
         if w.km:
             bits.append(f"{w.km:.1f} km")
         bits.append(_hm(w.minutes))
@@ -224,7 +239,7 @@ def workout_section(ws, legs, web_url, day):
         lines.append(f"- {at} {' · '.join(bits)}")
         if tag not in tags:
             tags.append(tag)
-        if leg and {leg[0].lower(), leg[1].lower()} == {"home", "work"} and "commute" not in tags:
+        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "commute" not in tags:
             tags.append("commute")
     lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
     return lines, tags
@@ -374,33 +389,51 @@ class Memos:
                      "Content-Type": "application/json"})
         return http_json(req, opener=self.opener)
 
-    def delete_memo(self, name):
-        """Delete a memo and its attachments; a memo already gone is fine."""
-        try:
-            memo = self.call("GET", f"/{name}")
-        except urllib.error.HTTPError as e:
-            if e.code == 404:
-                return
-            raise
-        for att in memo.get("attachments", []):
-            self.call("DELETE", f"/{att['name']}")
-        self.call("DELETE", f"/{name}")
-
-    def post(self, text, files, when, location=None):
-        """`files` = [(filename, mime, bytes)], shown in that order."""
-        atts = [self.call("POST", "/attachments", {
+    def upload(self, files):
+        """`files` = [(filename, mime, bytes)] -> attachment names, same order."""
+        return [self.call("POST", "/attachments", {
             "filename": name, "type": mime,
             "content": base64.b64encode(data).decode()})["name"]
             for name, mime, data in files]
+
+    def create(self, text, atts, when, location=None):
         body = {"content": text, "visibility": "PRIVATE",
                 "attachments": [{"name": a} for a in atts]}
         if location:
             body["location"] = location
         memo = self.call("POST", "/memos", body)
         # CreateMemo ignores createTime; only an update with this mask sets it.
-        self.call("PATCH", f"/{memo['name']}?updateMask=create_time",
-                  {"createTime": when})
+        self.call("PATCH", f"/{memo['name']}?updateMask=create_time", {"createTime": when})
         return memo["name"]
+
+    def update(self, name, old_text, old_atts, text, atts, when, location=None):
+        """Rewrite our part of an existing memo in place, keeping what the user
+        added: text around the block we last wrote, and their attachments.
+        Returns False if the memo is gone, None if the user rewrote our block
+        (text left alone, attachments still refreshed), True otherwise."""
+        try:
+            memo = self.call("GET", f"/{name}")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return False
+            raise
+        current = memo.get("content", "")
+        if old_text is None:  # entries from before this state carried `text`
+            new, kept = text, True
+        elif old_text in current:
+            new, kept = current.replace(old_text, text, 1), True
+        else:
+            new, kept = current, None
+        ours = set(old_atts) if old_atts is not None else {a["name"] for a in memo.get("attachments", [])}
+        theirs = [a["name"] for a in memo.get("attachments", []) if a["name"] not in ours]
+        # Detached attachments are deleted by Memos itself.
+        self.call("PATCH", f"/{name}/attachments",
+                  {"name": name, "attachments": [{"name": a} for a in atts + theirs]})
+        body, mask = {"name": name, "content": new, "createTime": when}, ["content", "create_time"]
+        if location:
+            body["location"], mask = location, mask + ["location"]
+        self.call("PATCH", f"/{name}?updateMask={','.join(mask)}", body)
+        return kept
 
 
 def _utc(t):
@@ -450,7 +483,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     last = next((t for t in reversed(tracks) if t), None)
     if last:
         lat, lon = last[-1]
-        location = {"placeholder": legs[tracks.index(last)][1], "latitude": lat, "longitude": lon}
+        location = {"placeholder": legs[tracks.index(last)][1].label, "latitude": lat, "longitude": lon}
     else:
         gps = [p["exifInfo"] for p in reversed(day_photos)
                if (p.get("exifInfo") or {}).get("latitude")]
@@ -461,10 +494,18 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     else:
         when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
 
-    if key in state:
-        memos.delete_memo(state[key]["memo"])
-    name = memos.post(text, files, when, location or None)
-    state[key] = {"memo": name, "sig": sig}
+    atts = memos.upload(files)
+    prev, name = state.get(key), None
+    if prev:
+        kept = memos.update(prev["memo"], prev.get("text"), prev.get("atts"),
+                            text, atts, when, location or None)
+        if kept is None:
+            log(f"{key}: {prev['memo']} was edited by hand; text kept, attachments refreshed")
+        if kept is not False:
+            name = prev["memo"]
+    if name is None:
+        name = memos.create(text, atts, when, location or None)
+    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts}
     log(f"{key}: {name} ({len(ws)} workouts, {len(photos)} photos)")
     return name
 
