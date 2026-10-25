@@ -29,7 +29,7 @@ let
   image = pkgs.dockerTools.pullImage {
     imageName      = "ignisda/ryot";
     imageDigest    = "sha256:7e817e1399b53515240de4d124fea401e970481d66f933d666b6ab84b44a392e";
-    hash           = "sha256-YhaWKkkX8JWYKkDs6bx9BQpy65OfB5WmEt86CZqkMKo=";
+    hash           = "sha256-CbAToWxUT1SaKNj12Rmqm23LR8wcRXb8Fv4Kd6Ps1UA=";
     finalImageName = "ignisda/ryot";
     finalImageTag  = "pr-1832-7fc54de";
     os             = "linux";
