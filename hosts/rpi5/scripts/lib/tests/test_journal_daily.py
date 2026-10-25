@@ -274,7 +274,9 @@ def test_pick_photos_one_slot_per_burst():
     burst = [{"id": f"b{i}", "fileCreatedAt": f"2026-10-19T12:29:{i:02d}Z"} for i in range(7)]
     day = [{"id": "m", "fileCreatedAt": "2026-10-19T07:34:00Z"}, *burst,
            {"id": "e", "fileCreatedAt": "2026-10-19T15:57:00Z"}]
-    assert [a["id"] for a in wm.pick_photos(day, 9)] == ["m", "b3", "e"]
+    picks = wm.pick_photos(day, 9)
+    assert [a["id"] for a in picks] == ["m", "b3", "e"]
+    assert [wm.tile_label(a) for a in picks] == ["09:34", "14:29 x7", "17:57"]
     day[5]["isFavorite"] = True
     assert [a["id"] for a in wm.pick_photos(day, 9)] == ["m", "b4", "e"]
 
