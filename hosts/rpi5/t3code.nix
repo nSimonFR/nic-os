@@ -39,6 +39,10 @@ in
       WorkingDirectory = homeDir;
 
       ExecStart = "${t3code}/bin/t3 serve --no-browser";
+      # Agent Vault's proxy env (hosts/rpi5/agent-vault.nix), for the server and
+      # every session: T3's own GitHub client and the skills hold placeholders
+      # only. `-`: absent until the first bootstrap.
+      EnvironmentFile = "-/var/lib/agent-vault-hermes/proxy.env";
 
       # Upstream's own unit (`t3 service install`) uses these.
       KillMode = "mixed";
