@@ -3,6 +3,7 @@ never overwrite without --update, never print a secret it did not generate, and
 hand the org key to the configured owner only.
 """
 
+import base64
 import io
 import json
 import urllib.error
@@ -24,12 +25,21 @@ ORG_KEY = bytes(range(64, 128))
 
 @pytest.fixture(scope="module")
 def keys():
-    """RSA is slow on the Pi: one pair for the bot, one for the owner."""
+    """(public b64, private wrapped by USER_KEY, private DER) for the bot and the owner."""
+    from cryptography.hazmat.primitives import serialization as ser
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
     pairs = {}
     for who in ("bot", "owner"):
-        pub, wrapped = bwcrypto.new_keypair(USER_KEY)
-        pairs[who] = (pub, wrapped, bwcrypto.decrypt(wrapped, *bwcrypto.split(USER_KEY)))
+        priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        der = priv.private_bytes(ser.Encoding.DER, ser.PrivateFormat.PKCS8, ser.NoEncryption())
+        pub = priv.public_key().public_bytes(ser.Encoding.DER, ser.PublicFormat.SubjectPublicKeyInfo)
+        pairs[who] = (base64.b64encode(pub).decode(), enc_bytes(der, USER_KEY), der)
     return pairs
+
+
+def enc_bytes(data, key):
+    return bwcrypto.encrypt(data, *bwcrypto.split(key))
 
 
 def enc(text, key=ORG_KEY):
@@ -41,7 +51,7 @@ def dec(s, key=ORG_KEY):
 
 
 class FakeVault:
-    """urlopen-compatible: login, sync, ciphers, org members and confirm."""
+    """urlopen-compatible: login, sync, ciphers, members and confirm."""
 
     def __init__(self, keys, org=True, members=None):
         mkey = bwcrypto.master_key(PASSWORD, BOT, KDF)
@@ -89,19 +99,10 @@ class FakeVault:
             assert body["lastKnownRevisionDate"] == self.ciphers[i]["revisionDate"]
             self.ciphers[i] = dict(body, id=cid, collectionIds=self.ciphers[i]["collectionIds"], revisionDate="r2")
             return self.reply(self.ciphers[i])
-        if path == "/api/organizations" and method == "POST":
-            self.created = body
-            self.add_org(body["key"], body["collectionName"])
-            return self.reply({"id": "org1"})
-        if path == "/api/users/bot-id/public-key":
-            return self.reply({"publicKey": self.keys["bot"][0]})
         if path == "/api/users/owner-id/public-key":
             return self.reply({"publicKey": self.keys["owner"][0]})
         if path == "/api/organizations/org1/users" and method == "GET":
             return self.reply({"data": self.members})
-        if path == "/api/organizations/org1/users/invite":
-            self.invited = body
-            return self.reply({})
         if path.startswith("/api/organizations/org1/users/") and path.endswith("/confirm"):
             self.confirmed = (path.split("/")[-2], body["key"])
             return self.reply({})
@@ -183,12 +184,6 @@ def test_list_never_prints_a_password(keys, run):
     assert json.loads(out[0]) == [{"id": "c1", "name": "A", "username": "u", "uris": []}]
 
 
-def test_note(keys, run):
-    server = FakeVault(keys)
-    rc, _, _ = run(server, "add", "--name", "N", "--note", "--notes", "body")
-    c = server.ciphers[0]
-    assert rc == 0 and c["type"] == va.NOTE and dec(c["notes"]) == "body" and "login" not in c
-
 
 def test_dry_run_writes_nothing(keys, run):
     server = FakeVault(keys)
@@ -196,24 +191,11 @@ def test_dry_run_writes_nothing(keys, run):
     assert rc == 0 and server.writes() == []
 
 
-def test_uri_without_scheme_is_refused_before_login(keys, run):
-    server = FakeVault(keys)
-    rc, _, lines = run(server, "add", "--name", "A", "--uri", "example.com")
-    assert rc == 1 and server.calls == [] and "scheme" in lines[-1]
 
-
-def test_no_org_says_run_init(keys, run):
+def test_bot_outside_the_org_fails(keys, run):
     rc, _, lines = run(FakeVault(keys, org=False), "add", "--name", "A", "--generate")
-    assert rc == 1 and "run init" in lines[-1]
+    assert rc == 1 and "not in org" in lines[-1]
 
-
-def test_init_creates_an_org_the_bot_can_open_and_invites_the_owner(keys, run):
-    server = FakeVault(keys, org=False)
-    rc, _, _ = run(server, "init")
-    assert rc == 0
-    org_key = bwcrypto.rsa_decrypt(server.created["key"], keys["bot"][2])
-    assert dec(server.created["collectionName"], org_key) == "Agents"
-    assert server.invited["emails"] == [OWNER] and server.invited["type"] == va.OWNER
 
 
 def test_confirm_hands_the_org_key_to_the_owner_only(keys, run):

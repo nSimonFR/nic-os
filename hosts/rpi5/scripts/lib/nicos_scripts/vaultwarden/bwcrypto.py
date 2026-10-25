@@ -109,15 +109,3 @@ def rsa_decrypt(encstring, private_der):
         raise ValueError(f"unsupported asymmetric EncString type {kind}")
     return load_der_private_key(private_der, None).decrypt(base64.b64decode(rest), _oaep())
 
-
-def new_keypair(sym_key):
-    """(public key b64, private key wrapped by `sym_key`), as accounts and orgs store them."""
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
-
-    priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    der = priv.private_bytes(serialization.Encoding.DER, serialization.PrivateFormat.PKCS8,
-                             serialization.NoEncryption())
-    pub = priv.public_key().public_bytes(serialization.Encoding.DER,
-                                         serialization.PublicFormat.SubjectPublicKeyInfo)
-    return base64.b64encode(pub).decode(), encrypt(der, *split(sym_key))

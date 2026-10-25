@@ -14,10 +14,9 @@ Pass the secret through stdin or a file, never argv:
 sudo cat /run/agenix/<name> | vault-agent add --name "<Service>" \
   --username <user> --uri https://<host> --notes "<context>" --password-file -
 vault-agent add --name "<Service>" --username <user> --uri https://<host> --generate  # prints it
-vault-agent add --name "<Title>" --note --notes "<text>"
 ```
 
-`--uri` repeats; `--totp` takes an `otpauth://` URI. Done when it exits 0;
+`--uri` repeats. Done when it exits 0;
 `vault-agent list` shows names, never secrets.
 
 Exit **3** = the name exists: add `--update` only if the user asked to change it.
