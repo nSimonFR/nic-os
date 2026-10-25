@@ -95,3 +95,13 @@ def test_mirrored_calendars_are_merged_keeping_the_fuller_title():
     lines = js.personal_lines(js.expand([a, b, c], LO, HI, TZ), TZ)
     assert sorted(lines) == ["- **17:00-18:00** Heure de conduite — En Voiture Simone",
                              "- **17:00-18:00** Something else"]
+
+
+def test_music_section_top_artists_tracks_and_rest():
+    L = js.Listen
+    plays = [L("A1", "A", 3600), L("B1", "B", 60), L("A2", "A", 60), L("A1", "A", 60), L("A3", "A", 0),
+             L("A4", "A", 0), L("X", "", 0), *[L(f"T{i}", f"Z{i}", 0) for i in range(5)]]
+    head, lines = js.music_section(plays, top=3)
+    assert head == "12 titres · 1 h 03"
+    assert lines[0] == "- **A** · A1, A2, A3 …"
+    assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- + 5 autres artistes"]

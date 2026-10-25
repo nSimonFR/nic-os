@@ -14,9 +14,9 @@ T1, T2 = 1792390421, 1792427478
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=()):
+    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
-        self.tracks = tracks
+        self.tracks, self.music = tracks, music
         self.sql = []
 
     def __call__(self, cmd):
@@ -26,6 +26,8 @@ class FakePg:
             rows = []
         elif "FROM workouts" in sql:
             rows = self.workouts
+        elif "FROM seen" in sql:
+            rows = self.music
         elif "FROM tracks" in sql:
             rows = self.tracks
         elif "FROM users" in sql:
@@ -436,3 +438,22 @@ def test_trip_only_day_gets_an_entry_with_its_trips(tmp_path):
     assert op.body_of(2) == {"createTime": "2026-10-19T16:33:18Z"}
     sql = next(s for s in pg.sql if "FROM tracks" in s)
     assert ">= 300" in sql and "<> 1" in sql
+
+
+def test_music_section_sits_between_photos_and_work(tmp_path):
+    plays = [("Club", "Lomepal", 250), ("Starlight", "Muse", 240), ("Trop beau", "Lomepal", 244),
+             ("Un peu de sang", "Lomepal", 305)]
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], music=plays)
+    op = memos_opener()
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path))
+    text = op.body_of(1)["content"]
+    assert ("\n\n### 🎵 Musique - 4 titres · 17 min\n\n"
+            "- **Lomepal** · Club, Trop beau, Un peu de sang\n- **Muse** · Starlight\n\n#bike #music\n") in text
+
+
+def test_music_alone_makes_no_entry(tmp_path):
+    op = memos_opener()
+    pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
+    assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
+                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None

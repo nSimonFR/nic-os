@@ -188,3 +188,50 @@ def weather_line(day, lat, lon, opener=None):
     if rain >= 0.1:
         bits.append(f"{rain:.1f} mm".replace(".", ","))
     return " · ".join(bits)
+
+
+@dataclass(frozen=True)
+class Listen:
+    title: str
+    artists: str  # "A, B"; "" when Ryot has no artist
+    seconds: int
+
+
+def music_listens(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
+    """The day's music plays from Ryot (fed hourly by spotify-to-ryot), oldest
+    first. The seen's time is when the connector pushed it (:17 each hour),
+    not the play itself: good for the day, too coarse for a per-track time."""
+    rows = psql_rows(run, f"""
+        SELECT m.title,
+               coalesce((SELECT string_agg(p.name, ', ' ORDER BY p.name)
+                         FROM metadata_to_person mp JOIN person p ON p.id = mp.person_id
+                         WHERE mp.metadata_id = m.id AND mp.role = 'Artist'), ''),
+               coalesce((m.music_specifics->>'duration')::int, 0)
+        FROM seen s JOIN metadata m ON m.id = s.metadata_id
+        WHERE m.lot = 'music'
+          AND coalesce(s.finished_on, s.started_on) >= to_timestamp({int(lo)})
+          AND coalesce(s.finished_on, s.started_on) < to_timestamp({int(hi)})
+        ORDER BY coalesce(s.finished_on, s.started_on), s.id
+    """, db, runuser, psql)
+    return [Listen(r[0], r[1], int(r[2] or 0)) for r in rows]
+
+
+def music_section(listens, top=5, per_artist=3):
+    """(heading suffix, lines): `31 titres · 2 h 03`, then the most played
+    artists with their tracks: `- **Lomepal** · Un peu de sang, Club, Trop beau`."""
+    by_artist = {}
+    for l in listens:
+        by_artist.setdefault(l.artists or "Artiste inconnu", []).append(l.title)
+    ranked = sorted(by_artist.items(), key=lambda kv: -len(kv[1]))  # stable: first heard wins ties
+    lines = []
+    for artist, titles in ranked[:top]:
+        uniq = list(dict.fromkeys(titles))
+        shown = ", ".join(uniq[:per_artist]) + (" …" if len(uniq) > per_artist else "")
+        lines.append(f"- **{artist}** · {shown}")
+    if len(ranked) > top:
+        n = len(ranked) - top
+        lines.append(f"- + {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}")
+    h, m = divmod(round(sum(l.seconds for l in listens) / 60), 60)
+    n = len(listens)
+    head = f"{n} titre{'s' if n > 1 else ''}" + (f" · {h} h {m:02d}" if h else f" · {m} min")
+    return head, lines
