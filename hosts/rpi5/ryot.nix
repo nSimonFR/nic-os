@@ -1,128 +1,116 @@
 # hosts/rpi5/ryot.nix
 #
-# Ryot — self-hosted media & life tracker (IgnisDa/ryot), packaged natively via
-# the ryot-nix flake (github:nSimonFR/ryot-nix), same model as sure-nix /
-# airtrail-nix. Container-only upstream, built from source (not in nixpkgs).
+# Ryot V11 — the TypeScript rewrite (IgnisDa/ryot#1832, unreleased), run from the
+# official arm64 image pinned by digest, inside systemd-nspawn. There is no
+# container runtime on the Pi; nspawn runs the unpacked rootfs directly.
 #
-# Runtime shape (see ryot-nix/module.nix) — v10 is THREE processes:
-#   * ryot-backend.service  — Rust axum + async-graphql GraphQL server (:13352).
-#                             Self-applies embedded migrations on boot.
-#   * ryot-frontend.service — React-Router 7 SSR server (:13351), reaches the
-#                             backend THROUGH the proxy (API_URL → proxy/backend).
-#   * ryot-proxy.service     — Caddy (:13350), THE entrypoint. Path-muxes the two
-#                             and exposes /_i/* (Plex/Jellyfin auto-track webhook)
-#                             → backend /webhooks/integrations. Tailscale Serve
-#                             (external :3700) points here.
+# Pinned on purpose: until the release, upstream regenerates its single Drizzle
+# migration baseline (2026-10-18, 2026-10-24), so a V2 database cannot follow a
+# newer pre-release image. Do not bump `image` until V11 ships.
 #
-# Socket-activated (hosts/rpi5/lib/socket-activate.nix) as of this commit; it used
-# to be deliberately always-on. The two reasons that justified that are handled,
-# not gone:
+# Fallback: the V1 database `ryot` is left untouched at cutover. `ryot-seed`
+# copies it into `ryotv2` once, before V2's first start, and V2's startup
+# migration converts that copy. Rolling back = revert this file (ryot-nix is
+# still imported, just disabled) and V1 resumes on its own database.
 #
-#   * "Plex/Jellyfin push webhooks must be awake." Checked rather than assumed, and
-#     it does not hold. A plex_sink integration IS configured, but its
-#     last_finished_at is 2026-07-21 — it has not fired in weeks, because Plex's
-#     webhook sink needs Plex Pass, which is exactly why ryot-plex-import.timer
-#     exists to re-import nightly instead. The only sinks actually receiving
-#     pushes are the two generic_json ones, and both are LOCAL systemd timers on
-#     this host: spotify-to-ryot (hourly at :17) and steam-to-ryot (daily 04:50),
-#     posting to RYOT_WEBHOOK_URL=…:13350/ryot/_i/<id>. Nothing remote can time
-#     out, so there is no latency budget to protect and idleSec is the standard
-#     600. Spotify also skips the POST entirely when there are no new listens, so
-#     it does not hold the stack awake hourly for nothing.
-#   * "3-process cold start is fragile" is exactly what readyProbe exists for: no
-#     traffic is forwarded until Caddy → frontend SSR → backend answers 200 end to
-#     end, so a slow boot delays a request instead of 502-ing it.
+# Tailnet-only on :3710. The client bundle hard-codes root paths (/assets,
+# /api/auth, /oauth/login), so the /ryot/ sub-path V1 used on the 443 mux
+# cannot work with a prebuilt image.
 #
-# Every consumer must be able to OUTWAIT that probe — the socket accepts instantly
-# and holds the connection while the stack boots, so a client that gives up first
-# turns a cold start into a silently lost push. The three timer units are
-# Type=oneshot (TimeoutStartSec=infinity) and ryot-plex-import.sh's curl has no
-# --max-time, so those are fine; the Python clients were NOT, at 60s for the sink
-# and 15s for GraphQL. Both now use nicos_scripts.ryot.RYOT_WAKE_TIMEOUT (240s),
-# pinned against this probe by a test in tests/test_lib.py.
-#
-# NOTE the entry is keyed `ryot-mux`, not `ryot`. The module derives its unit names
-# as <name>-proxy, and ryot-nix already ships a unit called ryot-proxy (the Caddy
-# above) — keying it `ryot` would silently merge the socket-proxy service INTO
-# Caddy's unit and produce a hybrid with two ExecStarts that Requires/After itself.
-#
-# The DATABASE_URL (with password), SERVER_ADMIN_ACCESS_TOKEN and SESSION_SECRET
-# come from the agenix env file so secrets never enter the world-readable Nix
-# store.
-#
-# MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN also lives in that env file. Upstream Ryot
-# binaries fetch shared metadata-provider keys at runtime, gated by a compile-time
-# UNKEY_ROOT_KEY that ryot-nix builds set to "" — so our from-source build ships
-# with NO TMDB key and every movie/show metadata lookup 401s ("Failed to retrieve
-# metadata details"), breaking imports AND live Plex tracking. Fix: supply a free
-# TMDB v4 "API Read Access Token" (themoviedb.org/settings/api) via this env var
-# (env prefix MOVIES_AND_SHOWS_TMDB_, field access_token — see ryot config crate).
-{ config, pkgs, lib, tailnetFqdn, ... }:
+# The app runs as the image's uid 1001 (host: nsimon), confined to the
+# container's mount and PID namespaces.
+{ config, pkgs, lib, pgHost, pgPort, ... }:
 let
-  backendPort  = 13352; # Rust backend (localhost)
-  frontendPort = 13351; # React-Router SSR (localhost)
-  # externalPort is what everything OUTSIDE Ryot talks to — the 443 path-mux, and
-  # scripts/ryot-plex-import.sh, which hardcodes 13350. It is now the
-  # socket-activation listener, so a connection there wakes the stack. Caddy itself
-  # moved off it to proxyPort; that split is the whole mechanism, so if you collapse
-  # these back into one port you get EADDRINUSE between the socket and Caddy.
-  externalPort = 13350;
-  proxyPort    = 13353; # Caddy entrypoint, now BEHIND the socket proxy
-  # No servePort: Ryot has no port of its own. It sits behind the 443 path-mux at
-  # /ryot (nic.services.ryot.public below). A `servePort = 3700` lingered here
-  # long after that move — a port that no longer existed, read by nothing.
+  port      = 13350; # V2 binds 0.0.0.0; reachable on lo + tailscale0 only
+  redisPort = 6380;
+  stateDir  = "/var/lib/ryot-v2";
+  envFile   = "/run/ryot-v2/env";
 
-  # Ryot's SPA is now built with a /ryot/ base (ryot-nix frontend.nix basename +
-  # vite base), so it lives under /ryot/ *everywhere*. Re-root Caddy's path-mux
-  # under /ryot: backend routes strip the prefix (handle_path) then apply the stock
-  # rewrites; frontend routes KEEP the prefix (handle, no strip) since the SSR
-  # server expects the basename. Reuses the {$PORT}/{$CADDY_*_TARGET} env the
-  # ryot-nix module already sets on ryot-proxy. Mirrors ${cfg.package}/etc/ryot/Caddyfile.
-  caddyfile = pkgs.writeText "ryot-subpath-Caddyfile" ''
-    {
-      admin off
-      auto_https off
-    }
+  image = pkgs.dockerTools.pullImage {
+    imageName      = "ignisda/ryot";
+    imageDigest    = "sha256:7e817e1399b53515240de4d124fea401e970481d66f933d666b6ab84b44a392e";
+    hash           = "sha256-YhaWKkkX8JWYKkDs6bx9BQpy65OfB5WmEt86CZqkMKo=";
+    finalImageName = "ignisda/ryot";
+    finalImageTag  = "pr-1832-7fc54de";
+    os             = "linux";
+    arch           = "arm64";
+  };
 
-    :{$PORT:8000} {
-      vars {
-        frontend_url {$CADDY_FRONTEND_TARGET:127.0.0.1:3000}
-        backend_url {$CADDY_BACKEND_TARGET:127.0.0.1:5000}
-      }
+  publicUrl = config.nic.services.ryot.public.publicUrl;
 
-      handle_path /ryot/_i/* {
-        rewrite * /webhooks/integrations{path}
-        reverse_proxy {vars.backend_url}
-      }
-      handle_path /ryot/backend* {
-        reverse_proxy {vars.backend_url}
-      }
-      # The SPA's browser-side GraphQL client posts to <base>/graphql — i.e.
-      # /ryot/graphql — whereas the SSR loaders use /ryot/backend/graphql. Without
-      # this route /ryot/graphql falls through to the frontend catch-all and 404s,
-      # breaking every client-side query/mutation in the web UI. Send it to the
-      # backend's /graphql (same target the /backend* strip reaches). Upstream gap
-      # in the ryot-nix subpath patch — the client path should carry /backend.
-      handle /ryot/graphql {
-        rewrite * /graphql
-        reverse_proxy {vars.backend_url}
-      }
-      handle_path /ryot/u/* {
-        rewrite * /api/sharing{path}?isAccountDefault=true
-        reverse_proxy {vars.frontend_url}
-      }
-      handle_path /ryot/_s/* {
-        rewrite * /api/sharing{path}
-        reverse_proxy {vars.frontend_url}
-      }
-      handle /ryot/* {
-        reverse_proxy {vars.frontend_url}
-      }
-    }
-  '';
+  # Unpacked as root so the setuid sandbox launcher and its root-owned trusted
+  # paths survive; the Nix store can hold neither.
+  prepareRootfs = pkgs.writeShellApplication {
+    name = "ryot-v2-prepare-rootfs";
+    runtimeInputs = [ pkgs.skopeo pkgs.umoci pkgs.coreutils ];
+    text = ''
+      marker=${stateDir}/rootfs.source
+      if [ "$(cat "$marker" 2>/dev/null)" != "${image}" ]; then
+        tmp=$(mktemp -d ${stateDir}/unpack.XXXXXX)
+        skopeo --insecure-policy copy docker-archive:${image} "oci:$tmp/oci:img"
+        umoci unpack --image "$tmp/oci:img" "$tmp/bundle"
+        rm -rf ${stateDir}/rootfs
+        mv "$tmp/bundle/rootfs" ${stateDir}/rootfs
+        rm -rf "$tmp"
+        echo "${image}" > "$marker"
+      fi
+      install -d -o 1001 -g 1001 -m 0750 ${stateDir}/storage
+    '';
+  };
+
+  # Secrets go through a root-only file bound into the container, not
+  # --setenv, which would put them on the command line.
+  writeEnv = pkgs.writeShellApplication {
+    name = "ryot-v2-env";
+    runtimeInputs = [ pkgs.jq pkgs.coreutils pkgs.gnugrep pkgs.gnused ];
+    text = ''
+      umask 077
+      v1() { grep -m1 "^$1=" /run/agenix/ryot-env | cut -d= -f2- | sed -E "s/^['\"]//; s/['\"]$//"; }
+      q() { jq -rn --arg k "$1" --arg v "$2" '"\($k)=\($v | @sh)"'; }
+      pw=$(jq -rn --rawfile p /run/agenix/ryot-pg-password '$p | rtrimstr("\n") | @uri')
+      {
+        q DATABASE_URL "postgres://ryot:$pw@${pgHost}:${toString pgPort}/ryotv2"
+        q SERVER_ADMIN_ACCESS_TOKEN "$(v1 SERVER_ADMIN_ACCESS_TOKEN)"
+        q RYOT_PLUGIN__RYOT__MEDIA__TMDB_ACCESS_TOKEN "$(v1 MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN)"
+        q RYOT_PLUGIN__RYOT__MEDIA__SPOTIFY_CLIENT_ID "$(v1 MUSIC_SPOTIFY_CLIENT_ID)"
+        q RYOT_PLUGIN__RYOT__MEDIA__SPOTIFY_CLIENT_SECRET "$(v1 MUSIC_SPOTIFY_CLIENT_SECRET)"
+        q RYOT_PLUGIN__RYOT__MEDIA__TWITCH_CLIENT_ID "$(v1 VIDEO_GAMES_TWITCH_CLIENT_ID)"
+        q RYOT_PLUGIN__RYOT__MEDIA__TWITCH_CLIENT_SECRET "$(v1 VIDEO_GAMES_TWITCH_CLIENT_SECRET)"
+      } > ${envFile}
+    '';
+  };
+
+  # One-time copy of V1 into ryotv2, built under a temporary name and renamed in
+  # one step, so a failed copy never leaves a half-filled ryotv2 that later
+  # starts would skip. Extensions are created as postgres first; ryot can't.
+  seed = pkgs.writeShellApplication {
+    name = "ryot-v2-seed";
+    runtimeInputs = [ config.services.postgresql.package pkgs.gnugrep ];
+    text = ''
+      sql() { psql -X -q "$@"; }
+      if sql -Atc "select 1 from pg_database where datname = 'ryotv2'" | grep -q 1; then
+        exit 0
+      fi
+      sql -c "drop database if exists ryotv2_seed"
+      sql -c "create database ryotv2_seed owner ryot"
+      sql -d ryotv2_seed -c 'create extension if not exists "uuid-ossp"' -c 'create extension if not exists pg_trgm'
+      { echo 'SET ROLE ryot;'; pg_dump --no-owner --no-acl --exclude-extension='*' ryot; } \
+        | sql -v ON_ERROR_STOP=1 --single-transaction -d ryotv2_seed
+      sql -c "alter database ryotv2_seed rename to ryotv2"
+    '';
+  };
+
+  # nspawn mounts a fresh /run, so the sandbox lock the image's provision step
+  # created at build time has to be recreated before dropping to uid 1001.
+  inner = lib.concatStringsSep " && " [
+    "install -d -o root -g root -m 0700 /run/ryot-sandboxd"
+    "install -o root -g root -m 0600 /dev/null /run/ryot-sandboxd/.lock"
+    "set -a" ". /etc/ryot.env" "set +a"
+    "exec /usr/bin/setpriv --reuid=1001 --regid=1001 --clear-groups /usr/local/bin/bun run dist/main.js"
+  ];
 in
 {
-  # ── PostgreSQL: ryot database + ryot role ─────────────────────────────────
+  # Shared by V1 (rollback source) and V2: same role and password.
   nic.pgRole.ryot = {
     db           = "ryot";
     user         = "ryot";
@@ -130,122 +118,92 @@ in
     privateUsers = false;
   };
 
-  # ── Ryot application (native Nix, via ryot-nix flake) ─────────────────────
-  services.ryot = {
-    enable          = true;
-    inherit backendPort frontendPort proxyPort;
-    # Public URL Ryot is served from, on the single 443 funnel front-proxy → sets
-    # backend FRONTEND_URL (absolute/share links). Ryot lives under /ryot/ now.
-    frontendUrl     = "https://${tailnetFqdn}/ryot";
-    environmentFile = "/run/agenix/ryot-env"; # DATABASE_URL + SERVER_ADMIN_ACCESS_TOKEN + SESSION_SECRET + MOVIES_AND_SHOWS_TMDB_ACCESS_TOKEN
-  };
+  # V1 stays importable for rollback; nothing of it runs.
+  services.ryot.enable = false;
 
-  # The backend self-migrates on boot, so it must start after the role/password
-  # exist. (No separate migrate oneshot — migrations are embedded.)
-  systemd.services.ryot-backend = {
-    after    = [ "ryot-pg-setup.service" ];
-    requires = [ "ryot-pg-setup.service" ];
-  };
-
-  # Run the proxy with the /ryot-rooted Caddyfile instead of the stock root one
-  # baked into the package.
-  systemd.services.ryot-proxy.serviceConfig.ExecStart =
-    lib.mkForce "${pkgs.caddy}/bin/caddy run --adapter caddyfile --config ${caddyfile}";
-
-  # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ──────────
-  # realUnit is Caddy, the entrypoint; the two heavy tiers ride along as workers
-  # (sleepWith → wantedBy + partOf Caddy), so all three wake and sleep together.
-  # Caddy is cheap and starts instantly, which is why the readyProbe has to go
-  # THROUGH it rather than trusting systemd's "active": /ryot/auth is rendered by
-  # the SSR frontend, whose loader queries the backend, so a 200 there is the only
-  # single check that proves the whole chain is up. /ryot/ itself 302s to it, so
-  # probing the root would pass while the frontend was still warming.
-  services.socketActivate.ryot-mux = {
-    enable   = true;
-    realUnit = "ryot-proxy.service";
-    listen   = [ "127.0.0.1:${toString externalPort}" ];
-    backend  = "127.0.0.1:${toString proxyPort}";
-    # Standard 600, same as every other socket-activated service here. The longer
-    # value this started with was protecting a Plex push path that turns out not
-    # to be running at all — see the header.
-    idleSec  = 600;
-    readyProbe = {
-      url          = "http://127.0.0.1:${toString proxyPort}/ryot/auth";
-      expectStatus = 200;
-      # Rust backend boot (it self-applies migrations) + Node SSR boot on a Pi.
-      timeoutSec   = 180;
-    };
-    workers = {
-      "ryot-backend.service".policy  = "sleepWith";
-      "ryot-frontend.service".policy = "sleepWith";
+  # Dedicated Redis: V2's job queue (BullMQ) needs noeviction, and the shared
+  # instance runs allkeys-lru (databases.nix).
+  services.redis.servers.ryot-v2 = {
+    enable = true;
+    bind = "127.0.0.1";
+    port = redisPort;
+    settings = {
+      maxmemory = "64mb";
+      maxmemory-policy = "noeviction";
     };
   };
 
-  # SSR loaders reach the backend through the re-rooted Caddy /ryot/backend route
-  # (module default is the stock /backend, which no longer exists in our Caddyfile).
-  systemd.services.ryot-frontend.environment.API_URL =
-    lib.mkForce "http://127.0.0.1:${toString proxyPort}/ryot/backend";
-
-  # ── Nightly Plex → Ryot watch-history sync (no Plex Pass) ─────────────────
-  # Ryot v10 has no working Plex pull for watch progress (yank only mirrors
-  # libraries; the sink webhook needs Plex Pass, which nSimon lacks). The only
-  # no-Plex-Pass path is to re-run the one-time Plex importer on a schedule — but
-  # it isn't idempotent (seen has no unique constraint), so scripts/ryot-plex-import.sh
-  # imports both shared servers, waits for the jobs, then dedups seen.
-  systemd.services.ryot-plex-import = {
-    description = "Nightly Plex → Ryot watch-history re-import + dedup";
-    after = [ "ryot-proxy.service" "ryot-backend.service" "network-online.target" ];
-    wants = [ "network-online.target" ];
+  systemd.services.ryot-seed = {
+    description = "Ryot V2: one-time copy of the V1 database";
+    after = [ "postgresql.service" "ryot-pg-setup.service" ];
+    requires = [ "postgresql.service" "ryot-pg-setup.service" ];
     serviceConfig = {
       Type = "oneshot";
-      User = "ryot";
-      # DATABASE_URL from ryot-env; RYOT_LOGIN_* + PLEX_IMPORT_SERVERS from ryot-import-env.
-      EnvironmentFile = [ "/run/agenix/ryot-env" "/run/agenix/ryot-import-env" ];
-      ExecStart = lib.getExe (pkgs.writeShellApplication {
-        name = "ryot-plex-import";
-        runtimeInputs = [ pkgs.curl pkgs.jq pkgs.postgresql pkgs.coreutils ];
-        text = builtins.readFile ./scripts/ryot-plex-import.sh;
-      });
-    };
-  };
-  systemd.timers.ryot-plex-import = {
-    description = "Nightly Plex → Ryot re-import";
-    wantedBy = [ "timers.target" ];
-    timerConfig = {
-      OnCalendar = "*-*-* 04:40:00";  # after the 03:00-04:00 backup window
-      Persistent = true;              # catch up a missed run if the Pi was off
+      RemainAfterExit = true;
+      User = "postgres";
+      ExecStart = lib.getExe seed;
     };
   };
 
-  # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
+  systemd.services.ryot = {
+    description = "Ryot V11 (pinned pre-release image in systemd-nspawn)";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" "ryot-seed.service" "redis-ryot-v2.service" ];
+    wants = [ "network-online.target" ];
+    requires = [ "ryot-seed.service" "redis-ryot-v2.service" ];
+    serviceConfig = {
+      StateDirectory = "ryot-v2";
+      RuntimeDirectory = "ryot-v2";
+      RuntimeDirectoryMode = "0700";
+      ExecStartPre = [ (lib.getExe prepareRootfs) (lib.getExe writeEnv) ];
+      ExecStart = lib.escapeShellArgs [
+        "${config.systemd.package}/bin/systemd-nspawn"
+        "--quiet" "--register=no" "--keep-unit"
+        "--directory=${stateDir}/rootfs"
+        "--chdir=/home/ryot"
+        "--bind-ro=${envFile}:/etc/ryot.env"
+        "--bind=${stateDir}/storage:/home/ryot/storage"
+        "--setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        "--setenv=HOME=/home/ryot"
+        "--setenv=NODE_ENV=production"
+        "--setenv=PORT=${toString port}"
+        "--setenv=REDIS_URL=redis://127.0.0.1:${toString redisPort}/0"
+        "--setenv=FRONTEND_URL=${publicUrl}"
+        "--setenv=USERS_ALLOW_REGISTRATION=false"
+        "--setenv=DISABLE_TELEMETRY=true"
+        "--setenv=FILE_STORAGE_LOCAL_DIR=/home/ryot/storage"
+        "--setenv=FILE_STORAGE_LOCAL_TEMP_DIR=/home/ryot/tmp"
+        "--setenv=SANDBOX_WORKER_CONCURRENCY=1"
+        "--setenv=SANDBOX_IMPORT_CONCURRENCY=1"
+        "/bin/sh" "-c" inner
+      ];
+      KillMode = "mixed";
+      Restart = "always";
+      RestartSec = 15;
+      # First start runs the V1→V2 conversion (~70 s here) before listening.
+      TimeoutStartSec = "10min";
+    };
+  };
+
   nic.services.ryot = {
     backup            = [ "postgres" ];
-    postgresDatabases = [ "ryot" ];
-    heavyUnits        = [ "ryot-backend.service" "ryot-frontend.service" ];
+    # `ryot` stays backed up while it is the rollback source.
+    postgresDatabases = [ "ryotv2" "ryot" ];
+    heavyUnits        = [ "ryot.service" ];
     heavyPriority     = 90;
 
-    # Prefix KEPT (no strip): the SSR frontend is built with a /ryot/ base and
-    # basename, and Caddy is re-rooted to mux under /ryot, so front-proxy.nix
-    # forwards /ryot/* verbatim. This also makes the Plex webhook (…/ryot/_i/<id>)
-    # publicly reachable.
     public = {
       order   = 120;
-      port    = 443;
-      # externalPort, NOT proxyPort: the path-mux must land on the socket so a
-      # request wakes the stack. Pointing this at Caddy directly would work only
-      # while Ryot happened to be awake, and 502 the rest of the time.
-      backend = "http://127.0.0.1:${toString externalPort}";
-      proxied = true;
+      port    = 3710;
+      backend = "http://127.0.0.1:${toString port}";
+      funnel  = false;
       authenticated = true;
-      muxPath = "/ryot";
       tile = {
         name        = "Ryot";
         icon        = "ryot.svg";
         category    = "Apps";
         description = "Media & life tracker";
-        # Reads Ryot's Postgres directly (daily-cached, superuser) — no API token
-        # on the tile. "Hours" excludes video-game playtime; see
-        # RYOT_MEDIA_HOURS_SQL for why.
+        # homepage-stats reads ryotv2 directly; see RYOT_MEDIA_HOURS_SQL.
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/ryot";

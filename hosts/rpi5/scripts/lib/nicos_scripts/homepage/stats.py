@@ -1395,37 +1395,32 @@ def fetch_airtrail(cfg, run):
     }
 
 
-# Hours of media actually consumed. daily_user_activity is Ryot's own per-day
-# rollup — the table its dashboard reads — and every *_duration column in it is
-# MINUTES (cross-checked: workout_duration sums to 167 against workout.duration's
-# 10026 seconds). total_duration is exactly the sum of the per-type durations.
-#
-# video_game_duration is subtracted because the Steam import (project_ryot_connectors)
-# dumps lifetime playtime onto its import date: 350736 minutes — 5846 h — all on
-# 2026-07-23, which would swamp everything else. visual_novel_duration goes with it
-# for the same reason. Subtracting from total_duration rather than adding up the
-# media columns means a media type Ryot adds later is counted automatically.
+# Ryot V2 (hosts/rpi5/ryot.nix) keeps no per-day rollup. Hours = completed movies
+# and episodes by runtime (minutes) plus music by track duration (seconds); games
+# are left out, their Steam playtime would swamp everything else.
 RYOT_MEDIA_HOURS_SQL = """
-SELECT COALESCE(SUM(total_duration - video_game_duration
-                    - visual_novel_duration - workout_duration), 0)
-FROM daily_user_activity;
+SELECT COALESCE(ROUND(SUM(CASE
+         WHEN en.entity_schema_slug IN ('movie', 'show-episode')
+           THEN (en.properties->>'runtime')::numeric
+         WHEN en.entity_schema_slug = 'music'
+           THEN (en.properties->>'duration')::numeric / 60
+         ELSE 0 END)), 0)
+FROM event e JOIN entity en ON en.id = e.entity_id
+WHERE e.event_schema_slug = 'complete';
 """
 
 
 def fetch_ryot(cfg, run):
-    # Ryot (hosts/rpi5/ryot.nix) is Postgres-backed. Read its counts directly as the
-    # postgres superuser — no API token, and (like the other direct-read tiles)
-    # it never touches Ryot's own HTTP layer. Ryot is always-on (not socket-
-    # activated), so this is purely to avoid holding an API key on the tile.
-    #
-    # "seen" counts finished consumption events (each episode of a show is its own
-    # row), NOT `metadata`, which is the 16.8k-row metadata catalogue Ryot has
-    # fetched from providers and is nothing to do with what was watched.
+    # Read as the postgres superuser, so the tile holds no API key. "seen" counts
+    # completion events (one per episode), not the provider catalogue in `entity`.
     return {
         "seen": int(pg_superuser(
-            cfg, run, "ryot", "SELECT COUNT(*) FROM seen WHERE state = 'completed';") or 0),
-        "hours": round(int(pg_superuser(cfg, run, "ryot", RYOT_MEDIA_HOURS_SQL) or 0) / 60),
-        "workouts": int(pg_superuser(cfg, run, "ryot", "SELECT COUNT(*) FROM workout;") or 0),
+            cfg, run, "ryotv2",
+            "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'complete';") or 0),
+        "hours": round(int(pg_superuser(cfg, run, "ryotv2", RYOT_MEDIA_HOURS_SQL) or 0) / 60),
+        "workouts": int(pg_superuser(
+            cfg, run, "ryotv2",
+            "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'workout-completed';") or 0),
     }
 
 

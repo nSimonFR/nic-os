@@ -40,7 +40,7 @@ let
     # Loopback services: the alias resolves to 127.0.0.1 (networking.hosts below).
     { name = "home-assistant"; host = "ha.home.arpa:8123";        keys = [ "HA_TOKEN" ];         "in" = [ "header" ]; }
     { name = "dawarich";       host = "dawarich.home.arpa:13900"; keys = [ "DAWARICH_API_KEY" ]; "in" = [ "header" "query" ]; }
-    # :13350 is Ryot's socket-activation port; :13352 is down while it idles.
+    # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`.
     { name = "ryot";           host = "ryot.home.arpa:13350";     keys = [ "RYOT_API_KEY" ];     "in" = [ "header" ]; }
     { name = "immich";         host = "immich.home.arpa:2283";    keys = [ "IMMICH_API_KEY" ];   "in" = [ "header" ]; }
     # Attached, not substituted: whatever the client sends is replaced.

@@ -305,20 +305,18 @@ def test_airtrail_treats_flight_duration_as_seconds():
         "flights": 29, "countries": 9, "hours": 132}
 
 
-def test_ryot_hours_come_from_the_minute_rollup_minus_the_steam_dump():
+def test_ryot_reads_v2_events_and_leaves_games_out_of_hours():
     def answer(cmd):
-        if "daily_user_activity" in cmd:
+        if "runtime" in cmd:
             return "600"     # minutes
-        if "workout" in cmd:
+        if "workout-completed" in cmd:
             return "12"
         return "300"
 
     out = hs.fetch_ryot(CFG, FakeRun([("PSQL", answer)]))
     assert out == {"seen": 300, "hours": 10, "workouts": 12}
-    # The Steam import dumps 5846 h of lifetime playtime onto one day; it and the
-    # visual-novel column are subtracted so they cannot swamp everything else.
-    assert "- video_game_duration" in " ".join(hs.RYOT_MEDIA_HOURS_SQL.split())
-    assert "- visual_novel_duration" in " ".join(hs.RYOT_MEDIA_HOURS_SQL.split())
+    sql = " ".join(hs.RYOT_MEDIA_HOURS_SQL.split())
+    assert "video-game" not in sql  # Steam lifetime playtime would swamp it
 
 
 def test_freereps_reports_distance_in_km_from_metres():
