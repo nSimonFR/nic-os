@@ -10,9 +10,9 @@ nearest geocoded point. A Home ↔ Work workout adds #commute.
 
 Photos: the day's Immich timeline images (archived WhatsApp images and Live
 Photo motion halves are not on the timeline), favourites first, then spread
-over the day, up to PHOTOS_MAX, as ONE collage attachment with each photo's
-time on its tile — the Memos gallery shows no times, and one ~400 KB sheet
-replaces ~2.5 MB of separate previews. Immich URL and key
+over the day's hours, up to PHOTOS_MAX, as ONE collage attachment with each
+photo's time on its tile — the Memos gallery shows no times, and one ~400 KB
+sheet replaces ~2.5 MB of separate previews. Immich URL and key
 come from Dawarich's integration settings (see immich_dawarich); if Immich is
 unreachable the entry is written without photos and replaced once it answers.
 
@@ -193,15 +193,6 @@ def photo_time(asset):
     return f"{t.astimezone(TZ):%H:%M}"
 
 
-def photo_line(total, shown, all_url):
-    """`08:12 · 12:31 · all 10 in Immich`: one time per photo in the collage, in
-    its order, each linking to that photo. `shown` = [(HH:MM, url)]."""
-    bits = [f"[{hm}]({url})" if url else hm for hm, url in shown]
-    if all_url and total > len(shown):
-        bits.append(f"[all {total} in Immich]({all_url})")
-    return " · ".join(bits)
-
-
 def workout_section(ws, legs, web_url, day):
     """(markdown lines, tags) of the workouts section."""
     kinds = {kind(w.name) for w in ws}
@@ -219,7 +210,12 @@ def workout_section(ws, legs, web_url, day):
         at = f"**{datetime.fromtimestamp(w.start, TZ):%H:%M}**"
         if len(kinds) > 1:
             at = f"{e} {at}"
-        bits = [f"{leg[0]} → {leg[1]}" if leg else w.name]
+        if not leg:
+            bits = [w.name]
+        elif leg[0] == leg[1]:
+            bits = [f"around {leg[0]}"]
+        else:
+            bits = [f"{leg[0]} → {leg[1]}"]
         if w.km:
             bits.append(f"{w.km:.1f} km")
         bits.append(_hm(w.minutes))
@@ -234,17 +230,17 @@ def workout_section(ws, legs, web_url, day):
     return lines, tags
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url="", shown=()):
+def content(day, ws, legs, web_url, photos=0, photos_url=""):
     """Memo markdown, one `###` section per source. `legs` = [(from_label,
     to_label) or None] per workout; `photos` = the day's timeline photo count,
-    `shown` = [(HH:MM, url)] of the collage's photos, `photos_url` = the first
-    of the day in Immich."""
+    `photos_url` = the first of the day in Immich."""
     sections, tags = [], []
     if ws:
         lines, tags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
     if photos:
-        sections.append([f"### 📷 Photos — {photos}", "", photo_line(photos, shown, photos_url)])
+        sections.append([f"### 📷 Photos — {photos}", "", f"[Open the day in Immich]({photos_url})"]
+                        if photos_url else [f"### 📷 Photos — {photos}"])
         tags.append("photos")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
@@ -335,16 +331,35 @@ class Immich:
         return f"{self.url}/photos/{asset_id}"
 
 
+def _taken(asset):
+    return datetime.fromisoformat(asset["fileCreatedAt"].replace("Z", "+00:00")).timestamp()
+
+
+BURST_GAP_S = 120
+
+
 def pick_photos(assets, n):
-    """Favourites first, then evenly spread over the day; returned oldest first."""
-    favs = [a for a in assets if a.get("isFavorite")][:max(n, 0)]
-    rest = [a for a in assets if not a.get("isFavorite")]
-    k = min(n - len(favs), len(rest))
-    if k == 1:
-        favs.append(rest[len(rest) // 2])
-    elif k > 1:
-        favs += [rest[round(i * (len(rest) - 1) / (k - 1))] for i in range(k)]
-    return sorted(favs, key=lambda a: a.get("fileCreatedAt", ""))
+    """One photo per burst (shots < BURST_GAP_S apart; its favourite, else its
+    middle shot), then favourites first and the rest nearest evenly spaced
+    instants of the day. Oct 12: a 7-shot burst at 14:29 had filled 7 of 9
+    tiles. Oldest first."""
+    bursts = []
+    for a in assets:
+        if bursts and _taken(a) - _taken(bursts[-1][-1]) < BURST_GAP_S:
+            bursts[-1].append(a)
+        else:
+            bursts.append([a])
+    reps = [next((a for a in b if a.get("isFavorite")), b[len(b) // 2]) for b in bursts]
+    picked = [a for a in reps if a.get("isFavorite")][:max(n, 0)]
+    rest = [a for a in reps if not a.get("isFavorite")]
+    k = min(n - len(picked), len(rest))
+    if k > 0:
+        lo, hi = _taken(rest[0]), _taken(rest[-1])
+        for i in range(k):
+            t = lo + (hi - lo) * (i + 0.5) / k
+            free = [a for a in rest if a not in picked]
+            picked.append(min(free, key=lambda a: abs(_taken(a) - t)))
+    return sorted(picked, key=lambda a: a.get("fileCreatedAt", ""))
 
 
 class Memos:
@@ -414,8 +429,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
             for t in tracks]
     link = immich.link(day_photos[0]["id"]) if day_photos else ""
-    shown = [(photo_time(p), immich.link(p["id"])) for p in photos]
-    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shown)
+    text = content(key, ws, legs, cfg.web_url, len(day_photos), link)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
         return None
