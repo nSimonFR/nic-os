@@ -306,3 +306,30 @@ def climbing_pictures(sessions):
                    else f"{ARKOSE_S3}/800/bouldersPics/{pic['id']}.jpg")
             out.append((int(b.get("label") or 0), url, names.get(str(b.get("label")), "")))
     return [(url, colour) for _, url, colour in sorted(out, key=lambda t: -t[0])]
+
+
+def game_sessions(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
+    """[(title, seconds)] per game played in [lo, hi), most played first.
+    steam-to-ryot pushes the playtime grown since its last run at 04:50, so a
+    push stands for the journal day before it: the window is shifted a day.
+    Keyed on started_on (the push); finished_on is when Ryot completed it,
+    which for seens completed by hand is days later."""
+    rows = psql_rows(run, f"""
+        SELECT m.title, sum(s.manual_time_spent)::bigint
+        FROM seen s JOIN metadata m ON m.id = s.metadata_id
+        WHERE m.lot = 'video_game' AND s.manual_time_spent > 0
+          AND coalesce(s.started_on, s.finished_on) >= to_timestamp({int(lo) + 86400})
+          AND coalesce(s.started_on, s.finished_on) < to_timestamp({int(hi) + 86400})
+        GROUP BY m.title ORDER BY 2 DESC, 1
+    """, db, runuser, psql)
+    return [(r[0], int(r[1])) for r in rows]
+
+
+def _hm(seconds):
+    h, m = divmod(round(seconds / 60), 60)
+    return f"{h} h {m:02d}" if h else f"{m} min"
+
+
+def game_section(games):
+    """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 1 h 40`."""
+    return _hm(sum(s for _, s in games)), [f"- **{t}** · {_hm(s)}" for t, s in games]
