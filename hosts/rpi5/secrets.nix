@@ -139,6 +139,14 @@
     agent-vault-admin-password = {
       file = ./secrets/agent-vault-admin-password.age;
     };
+    # nSimonFR-ai's GitHub token: Agent Vault attaches it, agents never see it.
+    github-ai-token = {
+      file = ./secrets/github-ai-token.age;
+    };
+    # Read-only GitHub token for forgejo-mirror-sync (nSimonFR's private repos).
+    forgejo-github-mirror-token = {
+      file = ./secrets/forgejo-github-mirror-token.age;
+    };
     # Healthchecks.io ping URL: anyone holding it can keep the check green.
     rpi5-healthcheck = {
       file = ./secrets/rpi5-healthcheck.age;

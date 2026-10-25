@@ -137,7 +137,8 @@ let
       ''--set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
       ''--set GIT_COMMITTER_NAME "nSimonFR-ai"''
       ''--set GIT_COMMITTER_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
-      "--run 'export GH_TOKEN=\"$(gh auth token --user nSimonFR-ai 2>/dev/null || true)\"'"
+      # Not where Agent Vault attaches the token instead (hosts/rpi5/home.nix).
+      "--run '[ -r /var/lib/agent-vault-hermes/proxy.env ] || export GH_TOKEN=\"$(gh auth token --user nSimonFR-ai 2>/dev/null || true)\"'"
       ''--set GITHUB_TOKEN ""''
     ];
 

@@ -46,6 +46,10 @@
   commit = false
 [url "https://github.com/"]
   insteadOf = git@github.com:
+# rpi5: github.com via Agent Vault, which holds the token. Absent elsewhere,
+# and git skips a missing include.
+[include]
+  path = /var/lib/agent-vault-hermes/gitconfig
 [credential "https://github.com"]
   helper = ""
   helper = "!gh auth git-credential"

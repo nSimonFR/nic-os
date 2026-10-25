@@ -1,45 +1,28 @@
 #!/usr/bin/env bash
-# Push as nSimonFR-ai, not as whoever owns the default credential.
+# Push as nSimonFR-ai. Branch protection refuses an approval from the last
+# pusher (not the commit author), so a branch nSimonFR pushed can never be
+# approved by nSimonFR.
 #
-# WHY THIS EXISTS. Branch protection on main sets require_last_push_approval,
-# which refuses an approving review from whoever pushed last. Commit authorship
-# does not enter into it — GitHub looks at the pusher. So a branch pushed over
-# the default credential (nSimonFR) can never be approved by nSimonFR, and the
-# PR sits green, approved and unmergeable, looking like the rule is broken
-# rather than like the push came from the wrong account.
-#
-# WHY A HEADER AND NOT `gh`. `gh auth token --user nSimonFR-ai` prints a token
-# but does not switch the credential helper's active account, so git would
-# still authenticate as nSimonFR. The remote also *looks* like SSH
-# (git@github.com:…) while a global `url.https://github.com/.insteadof
-# git@github.com:` rewrites it to HTTPS — which is why an HTTP header works at
-# all, and why swapping SSH keys would not.
+# rpi5: Agent Vault attaches nSimonFR-ai's token to every github.com request
+# (hosts/rpi5/agent-vault.nix), so a plain push already is one.
+# Elsewhere: send nSimonFR-ai's gh token as a header, since the credential
+# helper uses gh's *active* account. The remote may look like SSH, but
+# gitconfig-shared rewrites git@github.com: to HTTPS.
 #
 # Usage: ./scripts/push-ai [any git push arguments]
-#            ./scripts/push-ai                       # push the current branch
-#            ./scripts/push-ai -u origin HEAD        # first push of a branch
-#            ./scripts/push-ai --force-with-lease
-#
-# A plain `git push` is still correct when a human is the one pushing: nSimonFR
-# being the last pusher is only a problem when nSimonFR also has to approve.
 set -euo pipefail
+
+if git config --get-urlmatch http.proxy https://github.com/ >/dev/null; then
+  exec git push "$@"
+fi
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "push-ai: gh is not on PATH — needed to mint the nSimonFR-ai token" >&2
   exit 1
 fi
 
-# `--user` matches the name gh STORED in hosts.yml, exactly, case included —
-# and that is not necessarily the canonical GitHub login. Here the API reports
-# the account as `nSimonFR-ai` while hosts.yml keys it `nSimonfr-ai`, because
-# gh records whatever spelling was typed at `gh auth login` rather than what the
-# API returns. Hardcoding either case is therefore a coin flip that silently
-# breaks every push: asking for the canonical `nSimonFR-ai` returned nothing
-# while `gh auth status` listed the account as plainly present.
-#
-# So resolve the stored spelling case-insensitively instead of asserting one.
-# `grep -ix` anchors the whole line, so this cannot match a different account
-# that merely contains the name.
+# gh's --user matches hosts.yml's key exactly, and gh stores the spelling typed
+# at login (it was `nSimonfr-ai` once), so resolve it case-insensitively.
 ai_account=$(gh auth status 2>&1 \
   | sed -n 's/.*account \([A-Za-z0-9._-]*\).*/\1/p' \
   | grep -ix 'nsimonfr-ai' | head -n1)
@@ -55,8 +38,5 @@ if ! token=$(gh auth token --user "$ai_account" 2>/dev/null) || [ -z "$token" ];
   exit 1
 fi
 
-# base64 -w0 keeps the header on one line; GNU coreutils only, which is what
-# every host in this repo runs.
 auth=$(printf 'x-access-token:%s' "$token" | base64 -w0)
-
 git -c http.extraheader="AUTHORIZATION: basic ${auth}" push "$@"

@@ -17,6 +17,10 @@ Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR — protection
 an approval from the last pusher, so pushing as nSimonFR deadlocks the PR. nSimonFR
 owns/merges; nSimonFR-ai can't self-merge.
 
+On rpi5, git and gh reach GitHub through Agent Vault, which attaches nSimonFR-ai's
+token (`hosts/rpi5/agent-vault.nix`): plain `git push` / `gh pr create` already act as
+nSimonFR-ai, and `gh auth token` prints a placeholder. Elsewhere:
+
 - commit — `git -c user.name="nSimonFR-ai" commit …`
 - push — `./scripts/push-ai` (takes any `git push` args)
 - PR — `GH_TOKEN=$(gh auth token --user "$(gh auth status 2>&1 | grep -oiE 'nSimonFR-ai' | head -1)") gh pr create …`
