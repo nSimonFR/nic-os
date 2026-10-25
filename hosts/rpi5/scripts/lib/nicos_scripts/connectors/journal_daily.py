@@ -10,7 +10,9 @@ nearest geocoded point. A Home ↔ Work workout adds #commute.
 
 Photos: the day's Immich timeline images (archived WhatsApp images and Live
 Photo motion halves are not on the timeline), favourites first, then spread
-over the day, up to PHOTOS_MAX, attached as Immich previews. Immich URL and key
+over the day, up to PHOTOS_MAX, as ONE collage attachment with each photo's
+time on its tile — the Memos gallery shows no times, and one ~400 KB sheet
+replaces ~2.5 MB of separate previews. Immich URL and key
 come from Dawarich's integration settings (see immich_dawarich); if Immich is
 unreachable the entry is written without photos and replaced once it answers.
 
@@ -63,7 +65,7 @@ class Config:
     days: int = 3
     state_path: str = ""
     place_radius_m: int = 300
-    photos_max: int = 6
+    photos_max: int = 9
     dry_run: bool = True
     runuser: str = "runuser"
     psql: str = "psql"
@@ -78,7 +80,7 @@ class Config:
             days=env_int("JOURNAL_DAYS", 3, env),
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
-            photos_max=env_int("JOURNAL_PHOTOS_MAX", 6, env),
+            photos_max=env_int("JOURNAL_PHOTOS_MAX", 9, env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
             psql=env_str("PSQL_BIN", "psql", env),
@@ -192,23 +194,16 @@ def photo_time(asset):
 
 
 def photo_line(total, shown, all_url):
-    """`📷 08:12 · 12:31 · all 10 in Immich`: one time per attached photo, in
-    gallery order, each linking to that photo. `shown` = [(HH:MM, url)]."""
+    """`08:12 · 12:31 · all 10 in Immich`: one time per photo in the collage, in
+    its order, each linking to that photo. `shown` = [(HH:MM, url)]."""
     bits = [f"[{hm}]({url})" if url else hm for hm, url in shown]
     if all_url and total > len(shown):
         bits.append(f"[all {total} in Immich]({all_url})")
-    elif all_url and not shown:
-        bits.append(f"[{total} in Immich]({all_url})")
-    return "📷 " + " · ".join(bits)
+    return " · ".join(bits)
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url="", shown=()):
-    """Memo markdown. `legs` = [(from_label, to_label) or None] per workout;
-    `photos` = the day's timeline photo count, `shown` = [(HH:MM, url)] of the
-    attached ones, `photos_url` = the first of the day in Immich."""
-    if not ws:
-        lines = [f"📷 **Photos — {photos}**", "", photo_line(photos, shown, photos_url)]
-        return "\n".join(lines + ["", "#photos"]) + "\n"
+def workout_section(ws, legs, web_url, day):
+    """(markdown lines, tags) of the workouts section."""
     kinds = {kind(w.name) for w in ws}
     emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Workouts", "workout", "")
     total_km = sum(w.km for w in ws)
@@ -218,31 +213,76 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shown=()):
     head.append(_hm(sum(w.minutes for w in ws)))
     if sum(w.kcal for w in ws):
         head.append(f"{sum(w.kcal for w in ws):.0f} kcal")
-    lines = [f"{emoji} **{title} — {' · '.join(head)}**", ""]
-    tags = []
+    lines, tags = [f"### {emoji} {title} — {' · '.join(head)}", ""], []
     for w, leg in zip(ws, legs):
         e, _, _, tag = kind(w.name)
-        parts = [f"**{datetime.fromtimestamp(w.start, TZ):%H:%M}**"]
+        at = f"**{datetime.fromtimestamp(w.start, TZ):%H:%M}**"
         if len(kinds) > 1:
-            parts[0] = f"{e} {parts[0]}"
-        route = f"{leg[0]} → {leg[1]}" if leg else w.name
-        bits = [route]
+            at = f"{e} {at}"
+        bits = [f"{leg[0]} → {leg[1]}" if leg else w.name]
         if w.km:
             bits.append(f"{w.km:.1f} km")
         bits.append(_hm(w.minutes))
         if w.km and w.minutes:
             bits.append(f"{w.km / (w.minutes / 60):.1f} km/h")
-        lines.append(f"- {parts[0]} {' · '.join(bits)}")
+        lines.append(f"- {at} {' · '.join(bits)}")
         if tag not in tags:
             tags.append(tag)
         if leg and {leg[0].lower(), leg[1].lower()} == {"home", "work"} and "commute" not in tags:
             tags.append("commute")
     lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+    return lines, tags
+
+
+def content(day, ws, legs, web_url, photos=0, photos_url="", shown=()):
+    """Memo markdown, one `###` section per source. `legs` = [(from_label,
+    to_label) or None] per workout; `photos` = the day's timeline photo count,
+    `shown` = [(HH:MM, url)] of the collage's photos, `photos_url` = the first
+    of the day in Immich."""
+    sections, tags = [], []
+    if ws:
+        lines, tags = workout_section(ws, legs, web_url, day)
+        sections.append(lines)
     if photos:
-        lines.append(photo_line(photos, shown, photos_url))
+        sections.append([f"### 📷 Photos — {photos}", "", photo_line(photos, shown, photos_url)])
         tags.append("photos")
-    lines += ["", " ".join(f"#{t}" for t in tags)]
-    return "\n".join(lines) + "\n"
+    body = "\n\n".join("\n".join(lines) for lines in sections)
+    return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
+
+
+def collage_grid(n):
+    """(columns, rows) for n tiles: one row up to 3, then 2x2, 3x2, 3x3."""
+    if n <= 3:
+        return n, 1
+    if n == 4:
+        return 2, 2
+    return 3, (n + 2) // 3
+
+
+def render_collage(images, labels, path, tile=480, gap=6):
+    """Square-cropped grid of `images` (bytes) with each label (the time) in
+    the bottom-left corner of its tile. JPEG."""
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
+
+    cols, rows = collage_grid(len(images))
+    sheet = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), "white")
+    try:
+        font = ImageFont.load_default(size=tile // 14)
+    except TypeError:  # Pillow < 10.1 has no sized default font
+        font = ImageFont.load_default()
+    for i, (raw, label) in enumerate(zip(images, labels)):
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
+        img = ImageOps.fit(img, (tile, tile), Image.LANCZOS)
+        draw = ImageDraw.Draw(img, "RGBA")
+        x0, y0, x1, y1 = draw.textbbox((0, 0), label, font=font)
+        pad = tile // 40
+        box = (pad, tile - pad - (y1 - y0) - 2 * pad, pad + (x1 - x0) + 2 * pad, tile - pad)
+        draw.rounded_rectangle(box, radius=pad, fill=(0, 0, 0, 150))
+        draw.text((box[0] + pad - x0, box[1] + pad - y0), label, font=font, fill="white")
+        sheet.paste(img, ((i % cols) * (tile + gap), (i // cols) * (tile + gap)))
+    sheet.save(path, "JPEG", quality=85, optimize=True)
 
 
 def render(tracks, path):
@@ -352,7 +392,8 @@ def _utc(t):
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None):
+def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
+                collage_fn=render_collage):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -385,9 +426,12 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         render_fn(tracks, png_path)
         with open(png_path, "rb") as f:
             files.append((f"map-{key}.jpg", "image/jpeg", f.read()))
-    for i, p in enumerate(photos, 1):
-        hm = photo_time(p).replace(":", "h")
-        files.append((f"photo-{key}-{hm}-{i}.jpg", "image/jpeg", immich.preview(p["id"])))
+    if photos:
+        collage_path = f"{tmpdir}/photos-{key}.jpg"
+        collage_fn([immich.preview(p["id"]) for p in photos],
+                   [photo_time(p) for p in photos], collage_path)
+        with open(collage_path, "rb") as f:
+            files.append((f"photos-{key}.jpg", "image/jpeg", f.read()))
 
     last = next((t for t in reversed(tracks) if t), None)
     if last:
