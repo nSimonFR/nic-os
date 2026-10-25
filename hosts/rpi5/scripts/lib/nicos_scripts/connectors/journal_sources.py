@@ -1,0 +1,190 @@
+"""
+Calendar and weather lines for journal-daily.
+
+Calendars are read from Nextcloud's own tables (oc_calendarobjects, as postgres
+over the socket), recurrences expanded with recurring-ical-events. PERSONAL
+calendars are listed event by event. WORK calendars are only summed — meeting
+time, count and distinct people — so no work meeting title reaches the journal.
+
+A meeting = a timed work event with at least one other (non-room) attendee
+that the calendar owner did not decline. The owner is the attendee on most of
+the calendar's recent events, so their address is never configured.
+
+Weather: Open-Meteo's daily summary (free, keyless) for where the day happened.
+"""
+
+import base64
+from collections import Counter
+from dataclasses import dataclass
+from datetime import date, datetime, timedelta
+from urllib.parse import urlencode
+
+from ..httpjson import get_json
+from ..pg import psql_rows
+
+# WMO weather code -> (emoji, label); Open-Meteo's `weather_code`.
+WMO = {
+    0: ("☀️", "Clear"), 1: ("🌤", "Mostly clear"), 2: ("⛅", "Partly cloudy"),
+    3: ("☁️", "Overcast"), 45: ("🌫", "Fog"), 48: ("🌫", "Fog"),
+    51: ("🌦", "Light drizzle"), 53: ("🌦", "Drizzle"), 55: ("🌦", "Heavy drizzle"),
+    56: ("🌧", "Freezing drizzle"), 57: ("🌧", "Freezing drizzle"),
+    61: ("🌧", "Light rain"), 63: ("🌧", "Rain"), 65: ("🌧", "Heavy rain"),
+    66: ("🌧", "Freezing rain"), 67: ("🌧", "Freezing rain"),
+    71: ("🌨", "Light snow"), 73: ("🌨", "Snow"), 75: ("🌨", "Heavy snow"), 77: ("🌨", "Snow grains"),
+    80: ("🌦", "Light showers"), 81: ("🌦", "Showers"), 82: ("⛈", "Violent showers"),
+    85: ("🌨", "Snow showers"), 86: ("🌨", "Snow showers"),
+    95: ("⛈", "Thunderstorm"), 96: ("⛈", "Thunderstorm with hail"), 99: ("⛈", "Thunderstorm with hail"),
+}
+ROOM_DOMAINS = ("resource.calendar.google.com", "group.calendar.google.com")
+
+
+@dataclass(frozen=True)
+class Event:
+    title: str
+    start: datetime  # aware
+    end: datetime
+    all_day: bool
+    attendees: tuple = ()  # (email, cutype, partstat)
+
+
+def _sql_list(names):
+    return ", ".join("'" + n.replace("'", "''") + "'" for n in names) or "NULL"
+
+
+def calendar_blobs(run, names, lo, hi, db="nextcloud_production", runuser="runuser", psql="psql"):
+    """Raw iCalendar objects of the named calendars/subscriptions that may
+    occur in [lo, hi) (epoch s; Nextcloud's own occurrence bounds)."""
+    sql = _sql_list(names)
+    rows = psql_rows(run, f"""
+        SELECT replace(encode(o.calendardata, 'base64'), E'\\n', '')
+        FROM oc_calendarobjects o
+        WHERE o.componenttype = 'VEVENT'
+          AND ((o.calendartype = 0 AND o.calendarid IN
+                  (SELECT id FROM oc_calendars WHERE displayname IN ({sql})))
+            OR (o.calendartype = 1 AND o.calendarid IN
+                  (SELECT id FROM oc_calendarsubscriptions WHERE displayname IN ({sql}))))
+          AND coalesce(o.firstoccurence, 0) < {int(hi)}
+          AND coalesce(o.lastoccurence, 9999999999) > {int(lo)}
+    """, db, runuser, psql)
+    return [base64.b64decode(r[0]) for r in rows if r and r[0]]
+
+
+def _attendees(ev):
+    raw = ev.get("ATTENDEE")
+    if raw is None:
+        return ()
+    out = []
+    for a in raw if isinstance(raw, list) else [raw]:
+        email = str(a).lower().removeprefix("mailto:").strip()
+        out.append((email, str(a.params.get("CUTYPE", "")).upper(),
+                    str(a.params.get("PARTSTAT", "")).upper()))
+    return tuple(out)
+
+
+def expand(blobs, lo_dt, hi_dt, tz):
+    """Events of `blobs` overlapping [lo_dt, hi_dt), recurrences expanded,
+    cancelled ones dropped, oldest first."""
+    import icalendar  # lazy
+    import recurring_ical_events  # lazy
+
+    events = []
+    for blob in blobs:
+        try:
+            cal = icalendar.Calendar.from_ical(blob)
+            occurrences = recurring_ical_events.of(cal).between(lo_dt, hi_dt)
+        except Exception:  # one malformed object must not hide the day
+            continue
+        for ev in occurrences:
+            if str(ev.get("STATUS", "")).upper() == "CANCELLED":
+                continue
+            start = ev.decoded("DTSTART")
+            end = ev.decoded("DTEND") if ev.get("DTEND") else None
+            all_day = not isinstance(start, datetime)
+            if all_day:
+                start = datetime(start.year, start.month, start.day, tzinfo=tz)
+                end = (datetime(end.year, end.month, end.day, tzinfo=tz) if isinstance(end, date)
+                       else start + timedelta(days=1))
+            else:
+                start = start if start.tzinfo else start.replace(tzinfo=tz)
+                end = (end if end.tzinfo else end.replace(tzinfo=tz)) if end else start
+            events.append(Event(str(ev.get("SUMMARY", "")).strip(), start, end, all_day, _attendees(ev)))
+    return sorted(events, key=lambda e: (not e.all_day, e.start))
+
+
+def owner(events):
+    """The attendee on most events: the calendar's owner."""
+    seen = Counter(email for e in events for email, _, _ in set(e.attendees))
+    return seen.most_common(1)[0][0] if seen else ""
+
+
+def _is_room(email, cutype):
+    return cutype in ("RESOURCE", "ROOM") or email.endswith(ROOM_DOMAINS)
+
+
+def work_summary(events, lo_dt, hi_dt, me):
+    """(meetings, minutes, people) of the day, or None without meetings."""
+    meetings, people = [], set()
+    for e in events:
+        if e.all_day:
+            continue
+        others = [(m, c) for m, c, _ in e.attendees if m != me and not _is_room(m, c)]
+        declined = any(m == me and p == "DECLINED" for m, _, p in e.attendees)
+        if not others or declined:
+            continue
+        start, end = max(e.start, lo_dt), min(e.end, hi_dt)
+        if end <= start:
+            continue
+        meetings.append((start, end))
+        people.update(m for m, _ in others)
+    if not meetings:
+        return None
+    minutes, cur_s, cur_e = 0, None, None
+    for s, e in sorted(meetings):  # union of the intervals: overlaps count once
+        if cur_e is None or s > cur_e:
+            if cur_e is not None:
+                minutes += (cur_e - cur_s).total_seconds() / 60
+            cur_s, cur_e = s, e
+        else:
+            cur_e = max(cur_e, e)
+    minutes += (cur_e - cur_s).total_seconds() / 60
+    return len(meetings), round(minutes), len(people)
+
+
+def dedupe(events):
+    """One event per time slot when calendars mirror each other (PERSO and
+    Google both carry "Heure de conduite", one with " — En Voiture Simone"):
+    same start and end, and one title equal to or a prefix of the other; the
+    fuller title wins."""
+    kept = []
+    for e in sorted(events, key=lambda e: -len(e.title)):
+        if not any(k.start == e.start and k.end == e.end and k.all_day == e.all_day
+                   and k.title.lower().startswith(e.title.lower()) for k in kept):
+            kept.append(e)
+    return sorted(kept, key=lambda e: (not e.all_day, e.start))
+
+
+def personal_lines(events, tz):
+    """`- **All day** Title` / `- **19:00-21:00** Title`, mirrors merged."""
+    lines = []
+    for e in dedupe(events):
+        title = e.title or "(no title)"
+        if e.all_day:
+            lines.append(f"- **All day** {title}")
+        else:
+            lines.append(f"- **{e.start.astimezone(tz):%H:%M}-{e.end.astimezone(tz):%H:%M}** {title}")
+    return lines
+
+
+def weather_line(day, lat, lon, opener=None):
+    """`🌧 Light rain · 9-14 °C · 2.1 mm`, from Open-Meteo's daily summary."""
+    q = urlencode({"latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
+                   "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
+                   "timezone": "Europe/Paris", "start_date": day.isoformat(), "end_date": day.isoformat()})
+    d = get_json(f"https://api.open-meteo.com/v1/forecast?{q}", opener=opener)["daily"]
+    emoji, label = WMO.get(d["weather_code"][0], ("🌡", "Weather"))
+    bits = [f"{emoji} {label}",
+            f"{round(d['temperature_2m_min'][0])}-{round(d['temperature_2m_max'][0])} °C"]
+    rain = d["precipitation_sum"][0] or 0
+    if rain >= 0.1:
+        bits.append(f"{rain:.1f} mm")
+    return " · ".join(bits)

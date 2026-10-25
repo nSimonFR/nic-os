@@ -21,7 +21,9 @@ class FakePg:
     def __call__(self, cmd):
         sql = cmd[cmd.index("-c") + 1]
         self.sql.append(sql)
-        if "FROM workouts" in sql:
+        if "oc_calendarobjects" in sql:
+            rows = []
+        elif "FROM workouts" in sql:
             rows = self.workouts
         elif "FROM users" in sql:
             rows = [("1",)]
@@ -369,3 +371,29 @@ def test_map_and_collage_carry_metadata(tmp_path):
 def test_photo_lines_one_per_moment():
     assert wm.photo_lines([("09:34", "u1", "", 1), ("14:29", "u2", "🏡 Alfie", 8)]) == \
         ["- [09:34](u1)", "- [14:29](u2) · 🏡 Alfie · 8 photos"]
+
+
+def test_content_puts_weather_calendar_and_work_first():
+    ws = [wm.Workout(W1, "Cycling", T1, T1 + 600, 3, 10, 0)]
+    text = wm.content("2026-10-19", ws, [None], "d", weather="🌧 Light rain · 6-13 °C",
+                      agenda=["- **19:00-21:00** Dinner"], work=(4, 210, 16))
+    assert text.startswith("🌧 Light rain · 6-13 °C\n\n### 📅 Calendar\n\n- **19:00-21:00** Dinner\n\n"
+                           "### 💼 Work - 4 meetings · 3 h 30 · 16 people\n\n### 🚲 Bike")
+    assert text.rstrip().endswith("#work #bike")
+
+
+def test_weather_alone_makes_no_entry(tmp_path):
+    op = memos_opener()
+    assert wm.journal_day(cfg(tmp_path), FakePg([], []), wm.Memos("http://m", "T", op), {},
+                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path),
+                          weather_fn=lambda d, lat, lon: "☀️ Clear") is None
+    assert op.requests == []
+
+
+def test_weather_uses_the_first_ride_start(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    asked = []
+    wm.journal_day(cfg(tmp_path, dry_run=True), pg, wm.Memos("http://m", "T", memos_opener()), {},
+                   date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path),
+                   weather_fn=lambda d, lat, lon: asked.append((lat, lon)) or "☀️ Clear")
+    assert asked == [(48.83, 2.34)]

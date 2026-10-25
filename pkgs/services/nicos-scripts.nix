@@ -41,6 +41,8 @@ python3Packages.buildPythonPackage {
     python3Packages.cryptography
     python3Packages.staticmap
     python3Packages.pillow
+    python3Packages.icalendar
+    python3Packages.recurring-ical-events
   ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
@@ -61,6 +63,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.arkose"
     "nicos_scripts.connectors.freereps_dawarich"
     "nicos_scripts.connectors.journal_daily"
+    "nicos_scripts.connectors.journal_sources"
     "nicos_scripts.connectors.immich_dawarich"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
