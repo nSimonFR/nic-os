@@ -16,6 +16,9 @@ sheet replaces ~2.5 MB of separate previews. Immich URL and key
 come from Dawarich's integration settings (see immich_dawarich); if Immich is
 unreachable the entry is written without photos and replaced once it answers.
 
+A day runs 04:00 -> 04:00 Europe/Paris (DAY_START_H): late-night workouts and
+photos count for the evening before. The timer runs after it, at 04:30.
+
 Idempotent per day: the state file keeps, per day, the memo, a signature of
 its inputs (workouts, their point counts, the chosen photos), and the text and
 attachments we last wrote. A changed day is updated IN PLACE: our block of text
@@ -29,6 +32,7 @@ MEMOS_{URL,TOKEN_FILE}, DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 import base64
 import hashlib
 import json
+import math
 import subprocess
 import sys
 import urllib.error
@@ -48,7 +52,9 @@ TAG = "journal-daily"
 TZ = ZoneInfo("Europe/Paris")
 DEFAULT_MEMOS = "http://127.0.0.1:13356"
 DEFAULT_WEB = "https://rpi5.gate-mintaka.ts.net:3900"
-COLORS = ["#2563eb", "#f97316", "#16a34a", "#9333ea", "#db2777", "#0891b2"]
+COLORS = ["#4f46e5", "#f97316", "#10b981", "#e11d48", "#0ea5e9", "#a855f7"]
+# A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
+DAY_START_H = 4
 # FreeReps workout name -> (emoji, title, noun, tag)
 KINDS = {
     "Cycling": ("🚲", "Bike", "ride", "bike"),
@@ -113,7 +119,7 @@ def target_days(cfg, today=None):
 
 
 def day_bounds(day):
-    start = datetime(day.year, day.month, day.day, tzinfo=TZ)
+    start = datetime(day.year, day.month, day.day, DAY_START_H, tzinfo=TZ)
     return int(start.timestamp()), int((start + timedelta(days=1)).timestamp())
 
 
@@ -303,24 +309,55 @@ def render_collage(images, labels, path, tile=480, gap=6):
     sheet.save(path, "JPEG", quality=85, optimize=True)
 
 
-def render(tracks, path):
-    """Map PNG: one colour per workout, white casing, start dot coloured, end dark."""
-    from staticmap import CircleMarker, Line, StaticMap  # lazy: Pillow + requests
+def map_size(tracks, long_side=1000):
+    """(w, h) following the route's shape, clamped to 4:3 either way, so a
+    north-south commute is not a thin line in a wide empty square."""
+    pts = [p for t in tracks for p in t]
+    lats, lons = [p[0] for p in pts], [p[1] for p in pts]
+    h = max(lats) - min(lats)
+    w = (max(lons) - min(lons)) * math.cos(math.radians(sum(lats) / len(lats)))
+    ratio = max(0.75, min(4 / 3, (w or 1e-4) / (h or 1e-4)))
+    if ratio >= 1:
+        return long_side, round(long_side / ratio)
+    return round(long_side * ratio), long_side
 
-    m = StaticMap(800, 800, padding_x=20, padding_y=20,
-                  url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                  headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
-    for pts, color in zip(tracks, COLORS * 4):
-        if len(pts) < 2:
-            continue
-        ll = [(lon, lat) for lat, lon in pts]
-        m.add_line(Line(ll, "white", 8))
-        m.add_line(Line(ll, color, 4))
-        for at, fill in ((ll[0], color), (ll[-1], "#111827")):
-            m.add_marker(CircleMarker(at, "white", 14))
-            m.add_marker(CircleMarker(at, fill, 9))
+
+def render(tracks, path):
+    """Map JPEG on a washed-out greyscale OSM base: one colour per workout with
+    a white casing, start = ring in its colour, end = dark dot."""
+    from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
+    from staticmap import CircleMarker, Line, StaticMap  # lazy
+
+    class Faded(StaticMap):
+        def _draw_base_layer(self, image):
+            super()._draw_base_layer(image)
+            grey = ImageOps.grayscale(image).convert("RGB")
+            image.paste(Image.blend(grey, Image.new("RGB", image.size, "white"), 0.65))
+
+    drawn = [t for t in tracks if len(t) >= 2]
+    m = Faded(*map_size(drawn), padding_x=60, padding_y=60,
+              url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+              headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
+    lines = [([(lon, lat) for lat, lon in t], c) for t, c in zip(tracks, COLORS * 4) if len(t) >= 2]
+    for ll, color in lines:
+        m.add_line(Line(ll, "white", 11))
+        m.add_line(Line(ll, color, 6))
+    for ll, color in lines:  # markers above every line
+        m.add_marker(CircleMarker(ll[0], color, 18))
+        m.add_marker(CircleMarker(ll[0], "white", 9))
+        m.add_marker(CircleMarker(ll[-1], "white", 20))
+        m.add_marker(CircleMarker(ll[-1], "#111827", 13))
+    img = m.render().convert("RGB")
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.load_default(size=13)
+    except TypeError:  # Pillow < 10.1
+        font = ImageFont.load_default()
+    note = "(c) OpenStreetMap contributors"
+    x0, y0, x1, y1 = draw.textbbox((0, 0), note, font=font)
+    draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#9ca3af")
     # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).
-    m.render().convert("RGB").save(path, "JPEG", quality=85, optimize=True)
+    img.save(path, "JPEG", quality=85, optimize=True)
 
 
 class Immich:

@@ -311,3 +311,17 @@ def test_render_collage_makes_one_labelled_sheet(tmp_path):
     assert sheet.getpixel((50, 10))[0] > 200            # top-left tile is red
     assert sheet.getpixel((150, 10))[2] > 200           # top-right tile is blue
     assert sheet.getpixel((8, 92)) != sheet.getpixel((50, 10))  # label box drawn
+
+
+def test_day_runs_from_4am_to_4am():
+    lo, hi = wm.day_bounds(date(2026, 10, 19))
+    assert lo == 1792375200 and hi - lo == 86400   # 2026-10-19 04:00 CEST
+    lo, hi = wm.day_bounds(date(2026, 10, 24))      # spans the Oct 25 03:00 DST end: 25 h
+    assert hi - lo == 25 * 3600
+
+
+def test_map_follows_the_route_shape():
+    north_south = [[(48.83, 2.34), (48.91, 2.34)]]
+    assert wm.map_size(north_south) == (750, 1000)
+    east_west = [[(48.83, 2.34), (48.83, 2.37)]]
+    assert wm.map_size(east_west) == (1000, 750)

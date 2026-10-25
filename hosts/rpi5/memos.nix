@@ -87,7 +87,7 @@ in
   };
   systemd.timers.journal-daily = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
+    timerConfig = { OnCalendar = "*-*-* 04:30:00"; Persistent = true; };
   };
 
   nic.services.memos = {
