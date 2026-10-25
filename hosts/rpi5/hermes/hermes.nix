@@ -527,7 +527,8 @@ in
     Service = {
       ExecStartPre = "${setupScript}";
       ExecStart = "${execWrapper}";
-      Restart = "on-failure";
+      # always: an earlyoom SIGTERM exits 0, which on-failure treats as a clean stop.
+      Restart = "always";
       RestartSec = 5;
       # Python runtime — hundreds of MB expected, vs picoclaw's <20MB. 1G cap.
       MemoryMax = "1G";
