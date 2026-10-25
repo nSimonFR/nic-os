@@ -212,7 +212,7 @@ def _hm(minutes):
 
 
 def tile_label(asset):
-    """(HH:MM, shots): drawn `14:29`, or `14:29 (8 📸)` for a burst of 8."""
+    """(HH:MM, shots): drawn `14:29`, or `14:29 (8)` for a burst of 8."""
     return photo_time(asset), asset.get("burst", 1)
 
 
@@ -284,21 +284,9 @@ def collage_grid(n):
     return 3, (n + 2) // 3
 
 
-def _camera(draw, x, y, h, fill="white", lens=(30, 30, 30, 255)):
-    """A camera glyph `h` px tall at (x, y); returns its width. Drawn, not
-    typed: Pillow's default font has no emoji (📸 and × drew boxes)."""
-    w = round(h * 1.35)
-    draw.rounded_rectangle((x + w * 0.3, y + h * 0.08, x + w * 0.62, y + h * 0.35),
-                           radius=max(1, h // 12), fill=fill)
-    draw.rounded_rectangle((x, y + h * 0.25, x + w, y + h), radius=max(1, h // 6), fill=fill)
-    cx, cy, r = x + w * 0.5, y + h * 0.62, h * 0.26
-    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=lens)
-    return w
-
-
 def render_collage(images, labels, path, tile=480, gap=6):
     """Square-cropped grid of `images` (bytes); each tile's (HH:MM, shots)
-    label sits in its bottom-left corner — `14:29 (8 📸)` for a burst. JPEG."""
+    label sits in its bottom-left corner — `14:29 (8)` for a burst. JPEG."""
     import io
 
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
@@ -313,21 +301,12 @@ def render_collage(images, labels, path, tile=480, gap=6):
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
         img = ImageOps.fit(img, (tile, tile), Image.LANCZOS)
         draw = ImageDraw.Draw(img, "RGBA")
-        parts = [hm] if shots <= 1 else [f"{hm}  ({shots} ", "📷", ")"]
-        _, top, _, bottom = draw.textbbox((0, 0), "0123456789:()", font=font)
-        th, pad = bottom - top, tile // 40
-        icon_h = round(th * 0.85)
-        width = sum(round(icon_h * 1.35) + pad // 2 if p == "📷" else draw.textlength(p, font=font)
-                    for p in parts)
-        box = (pad, tile - pad - th - 2 * pad, pad + width + 2 * pad, tile - pad)
+        label = hm if shots <= 1 else f"{hm} ({shots})"
+        x0, y0, x1, y1 = draw.textbbox((0, 0), label, font=font)
+        pad = tile // 40
+        box = (pad, tile - pad - (y1 - y0) - 2 * pad, pad + (x1 - x0) + 2 * pad, tile - pad)
         draw.rounded_rectangle(box, radius=pad, fill=(0, 0, 0, 150))
-        x = box[0] + pad
-        for part in parts:
-            if part == "📷":
-                x += _camera(draw, x + pad // 4, box[1] + pad + (th - icon_h), icon_h) + pad // 2
-            else:
-                draw.text((x, box[1] + pad - top), part, font=font, fill="white")
-                x += draw.textlength(part, font=font)
+        draw.text((box[0] + pad - x0, box[1] + pad - y0), label, font=font, fill="white")
         sheet.paste(img, ((i % cols) * (tile + gap), (i // cols) * (tile + gap)))
     sheet.save(path, "JPEG", quality=85, optimize=True)
 
