@@ -24,16 +24,16 @@ from ..pg import psql_rows
 
 # WMO weather code -> (emoji, label); Open-Meteo's `weather_code`.
 WMO = {
-    0: ("☀️", "Clear"), 1: ("🌤", "Mostly clear"), 2: ("⛅", "Partly cloudy"),
-    3: ("☁️", "Overcast"), 45: ("🌫", "Fog"), 48: ("🌫", "Fog"),
-    51: ("🌦", "Light drizzle"), 53: ("🌦", "Drizzle"), 55: ("🌦", "Heavy drizzle"),
-    56: ("🌧", "Freezing drizzle"), 57: ("🌧", "Freezing drizzle"),
-    61: ("🌧", "Light rain"), 63: ("🌧", "Rain"), 65: ("🌧", "Heavy rain"),
-    66: ("🌧", "Freezing rain"), 67: ("🌧", "Freezing rain"),
-    71: ("🌨", "Light snow"), 73: ("🌨", "Snow"), 75: ("🌨", "Heavy snow"), 77: ("🌨", "Snow grains"),
-    80: ("🌦", "Light showers"), 81: ("🌦", "Showers"), 82: ("⛈", "Violent showers"),
-    85: ("🌨", "Snow showers"), 86: ("🌨", "Snow showers"),
-    95: ("⛈", "Thunderstorm"), 96: ("⛈", "Thunderstorm with hail"), 99: ("⛈", "Thunderstorm with hail"),
+    0: ("☀️", "Ciel dégagé"), 1: ("🌤", "Plutôt dégagé"), 2: ("⛅", "Partiellement nuageux"),
+    3: ("☁️", "Couvert"), 45: ("🌫", "Brouillard"), 48: ("🌫", "Brouillard"),
+    51: ("🌦", "Bruine légère"), 53: ("🌦", "Bruine"), 55: ("🌦", "Forte bruine"),
+    56: ("🌧", "Bruine verglaçante"), 57: ("🌧", "Bruine verglaçante"),
+    61: ("🌧", "Pluie légère"), 63: ("🌧", "Pluie"), 65: ("🌧", "Forte pluie"),
+    66: ("🌧", "Pluie verglaçante"), 67: ("🌧", "Pluie verglaçante"),
+    71: ("🌨", "Neige légère"), 73: ("🌨", "Neige"), 75: ("🌨", "Forte neige"), 77: ("🌨", "Grains de neige"),
+    80: ("🌦", "Averses légères"), 81: ("🌦", "Averses"), 82: ("⛈", "Violentes averses"),
+    85: ("🌨", "Averses de neige"), 86: ("🌨", "Averses de neige"),
+    95: ("⛈", "Orage"), 96: ("⛈", "Orage avec grêle"), 99: ("⛈", "Orage avec grêle"),
 }
 ROOM_DOMAINS = ("resource.calendar.google.com", "group.calendar.google.com")
 
@@ -164,27 +164,27 @@ def dedupe(events):
 
 
 def personal_lines(events, tz):
-    """`- **All day** Title` / `- **19:00-21:00** Title`, mirrors merged."""
+    """`- **Journée** Titre` / `- **19:00-21:00** Titre`, mirrors merged."""
     lines = []
     for e in dedupe(events):
-        title = e.title or "(no title)"
+        title = e.title or "(sans titre)"
         if e.all_day:
-            lines.append(f"- **All day** {title}")
+            lines.append(f"- **Journée** {title}")
         else:
             lines.append(f"- **{e.start.astimezone(tz):%H:%M}-{e.end.astimezone(tz):%H:%M}** {title}")
     return lines
 
 
 def weather_line(day, lat, lon, opener=None):
-    """`🌧 Light rain · 9-14 °C · 2.1 mm`, from Open-Meteo's daily summary."""
+    """`🌧 Pluie légère · 9-14 °C · 2,1 mm`, from Open-Meteo's daily summary."""
     q = urlencode({"latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
                    "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
                    "timezone": "Europe/Paris", "start_date": day.isoformat(), "end_date": day.isoformat()})
     d = get_json(f"https://api.open-meteo.com/v1/forecast?{q}", opener=opener)["daily"]
-    emoji, label = WMO.get(d["weather_code"][0], ("🌡", "Weather"))
+    emoji, label = WMO.get(d["weather_code"][0], ("🌡", "Météo"))
     bits = [f"{emoji} {label}",
             f"{round(d['temperature_2m_min'][0])}-{round(d['temperature_2m_max'][0])} °C"]
     rain = d["precipitation_sum"][0] or 0
     if rain >= 0.1:
-        bits.append(f"{rain:.1f} mm")
+        bits.append(f"{rain:.1f} mm".replace(".", ","))
     return " · ".join(bits)
