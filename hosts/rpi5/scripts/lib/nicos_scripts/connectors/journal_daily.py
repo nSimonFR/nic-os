@@ -109,6 +109,7 @@ class Config:
     dispatch_user: str = "nsimon"
     git: str = "git"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
+    spotify_cursor: str = "/var/lib/ryot-connectors/spotify-cursor.json"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -129,6 +130,7 @@ class Config:
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
+            spotify_cursor=env_str("SPOTIFY_CURSOR", "/var/lib/ryot-connectors/spotify-cursor.json", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -793,9 +795,20 @@ def day_games(cfg, run, day, log):
 
 
 def day_music(cfg, run, day, log):
-    """journal_sources.music_section of the day, or None (no plays, or Ryot down)."""
+    """journal_sources.music_section of the day, or None (no plays, or Ryot down).
+    Plays come from the Spotify connector's cursor when it covers the day (it
+    keeps replays), else from Ryot's seens."""
+    lo, hi = day_bounds(day)
     try:
-        listens = src.music_listens(run, *day_bounds(day), cfg.ryot_db, cfg.runuser, cfg.psql)
+        plays = src.spotify_plays(cfg.spotify_cursor, lo, hi)
+    except (OSError, ValueError):
+        plays = []
+    try:
+        if plays:
+            tracks = src.music_tracks(run, [t for t, _ in plays], cfg.ryot_db, cfg.runuser, cfg.psql)
+            listens = [tracks[t] for t, _ in plays if t in tracks]
+        else:
+            listens = src.music_listens(run, lo, hi, cfg.ryot_db, cfg.runuser, cfg.psql)
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: music unavailable ({e})")
         return None

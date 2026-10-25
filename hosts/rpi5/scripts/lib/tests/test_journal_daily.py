@@ -52,7 +52,9 @@ def ride(wid, start, km=9.5, minutes=37):
 
 
 def cfg(tmp_path, **kw):
-    base = dict(state_path=str(tmp_path / "state.json"), dry_run=False, day="2026-10-19")
+    base = dict(state_path=str(tmp_path / "state.json"), dry_run=False, day="2026-10-19",
+                spotify_cursor=str(tmp_path / "no-cursor.json"),
+                arkose_sessions=str(tmp_path / "no-arkose.json"))  # never the host's real files
     base.update(kw)
     return wm.Config(**base)
 
@@ -593,3 +595,27 @@ def test_project_notes_wait_for_the_day_to_end(tmp_path):
     c = cfg(tmp_path, dispatch_repos=("/r",), dry_run=True)
     run = lambda cmd: (_ for _ in ()).throw(AssertionError(cmd))
     assert wm.day_notes(c, run, {}, date(2026, 10, 19), print, now=wm.day_bounds(date(2026, 10, 19))[1] - 1) == []
+
+
+def test_music_counts_replays_from_the_spotify_cursor(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 10, 19))
+    cursor = tmp_path / "cursor.json"
+    ms = lambda h: int((lo + h * 3600) * 1000)
+    cursor.write_text(json.dumps({"pushed": [f"aaa@{ms(1)}", f"bbb@{ms(2)}", f"aaa@{ms(3)}",
+                                              f"aaa@{ms(30)}"]}))  # last one is the next day
+
+    class Pg(FakePg):
+        def __call__(self, cmd):
+            sql = cmd[cmd.index("-c") + 1]
+            if "m.identifier IN ('aaa', 'bbb')" in sql:
+                self.sql.append(sql)
+                return "aaa\x1fClub\x1fLomepal\x1f250\nbbb\x1fTrop beau\x1fLomepal\x1f244"
+            return super().__call__(cmd)
+    music = wm.day_music(cfg(tmp_path, spotify_cursor=str(cursor)), Pg([], []), date(2026, 10, 19), print)
+    assert music == ("3 titres · 12 min", ["- **Lomepal** · Club (2), Trop beau"])
+
+
+def test_music_falls_back_to_ryot_seens_without_a_cursor(tmp_path):
+    pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
+    music = wm.day_music(cfg(tmp_path, spotify_cursor=str(tmp_path / "none.json")), pg, date(2026, 10, 19), print)
+    assert music == ("1 titre · 4 min", ["- **Lomepal** · Club"])

@@ -198,6 +198,40 @@ class Listen:
     seconds: int
 
 
+def spotify_plays(path, lo, hi):
+    """[(track id, epoch s)] played in [lo, hi), from spotify-to-ryot's cursor
+    (`pushed`: "<track>@<played_at ms>", the last 30 days). Unlike Ryot's seens
+    it keeps replays: Ryot drops a repeat within its completed-cache window."""
+    import json
+
+    with open(path) as f:
+        keys = json.load(f).get("pushed", [])
+    plays = []
+    for k in keys:
+        tid, _, ms = k.rpartition("@")
+        if tid and ms.isdigit() and lo <= int(ms) / 1000 < hi:
+            plays.append((tid, int(ms) / 1000))
+    return sorted(plays, key=lambda p: p[1])
+
+
+def music_tracks(run, ids, db="ryot", runuser="runuser", psql="psql"):
+    """{spotify track id: Listen} from Ryot's metadata."""
+    safe = [i for i in ids if i.isalnum()]  # Spotify ids are base62
+    if not safe:
+        return {}
+    rows = psql_rows(run, f"""
+        SELECT m.identifier, m.title,
+               coalesce((SELECT string_agg(p.name, ', ' ORDER BY p.name)
+                         FROM metadata_to_person mp JOIN person p ON p.id = mp.person_id
+                         WHERE mp.metadata_id = m.id AND mp.role = 'Artist'), ''),
+               coalesce((m.music_specifics->>'duration')::int, 0)
+        FROM metadata m
+        WHERE m.lot = 'music' AND m.source = 'spotify'
+          AND m.identifier IN ({", ".join(f"'{i}'" for i in sorted(set(safe)))})
+    """, db, runuser, psql)
+    return {r[0]: Listen(r[1], r[2], int(r[3] or 0)) for r in rows}
+
+
 def music_listens(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
     """The day's music plays from Ryot (fed hourly by spotify-to-ryot), oldest
     first. The seen's time is when the connector pushed it (:17 each hour),
@@ -219,7 +253,7 @@ def music_listens(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
 
 def music_section(listens, top=5, per_artist=3):
     """(heading suffix, lines): `31 titres · 2 h 03`, then the most played
-    artists with their tracks, replays in parentheses:
+    artists with their tracks, replays first with their count:
     `- **Lomepal** · Un peu de sang (2), Club, Trop beau`."""
     by_artist = {}
     for l in listens:
@@ -227,8 +261,8 @@ def music_section(listens, top=5, per_artist=3):
     ranked = sorted(by_artist.items(), key=lambda kv: -len(kv[1]))  # stable: first heard wins ties
     lines = []
     for artist, titles in ranked[:top]:
-        plays = Counter(titles)  # first-heard order
-        uniq = [f"{t} ({n})" if n > 1 else t for t, n in plays.items()]
+        plays = sorted(Counter(titles).items(), key=lambda kv: -kv[1])  # replays first, then first heard
+        uniq = [f"{t} ({n})" if n > 1 else t for t, n in plays]
         shown = ", ".join(uniq[:per_artist]) + (" …" if len(uniq) > per_artist else "")
         lines.append(f"- **{artist}** · {shown}")
     if len(ranked) > top:

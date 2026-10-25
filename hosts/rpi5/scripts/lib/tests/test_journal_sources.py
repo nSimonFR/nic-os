@@ -105,6 +105,8 @@ def test_music_section_top_artists_tracks_and_rest():
     head, lines = js.music_section(plays, top=3)
     assert head == "12 titres · 1 h 03"
     assert lines[0] == "- **A** · A1 (2), A2, A3 …"
+    _, replays = js.music_section([L("x", "A", 0), L("y", "A", 0), L("y", "A", 0)])
+    assert replays == ["- **A** · y (2), x"]  # replays first
     assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- *et 5 autres artistes*"]
 
 
