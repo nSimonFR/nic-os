@@ -104,4 +104,4 @@ def test_music_section_top_artists_tracks_and_rest():
     head, lines = js.music_section(plays, top=3)
     assert head == "12 titres · 1 h 03"
     assert lines[0] == "- **A** · A1 (2), A2, A3 …"
-    assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- et 5 autres artistes"]
+    assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- *et 5 autres artistes*"]
