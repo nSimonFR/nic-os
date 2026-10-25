@@ -13,7 +13,8 @@ transcript, the files touched. Use it as **provenance**: before you change somet
 whose purpose the code and commit message don't explain, read the session that
 made it.
 
-It applies when `command -v entire` succeeds and the repo has `.entire/settings.json`.
+It applies when `command -v entire` succeeds and the repo has `.entire/settings.json` or
+`.entire/settings.local.json` (personal setups, like the Trusk repos, have only the latter).
 Otherwise this skill doesn't apply; carry on without it.
 
 ## Lookups
