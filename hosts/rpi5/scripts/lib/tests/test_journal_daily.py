@@ -82,7 +82,7 @@ def test_content_names_places_and_tags_a_commute():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 2220, 9.5, 37, 300),
           wm.Workout(W2, "Cycling", T2, T2 + 2700, 9.8, 45, 312)]
     text = wm.content("2026-10-19", ws, [("Home", "Work"), ("Work", "Home")], "https://d")
-    assert text.startswith("🚲 **Bike — 2 rides · 19.3 km · 1 h 22 · 612 kcal**")
+    assert text.startswith("### 🚲 Bike — 2 rides · 19.3 km · 1 h 22 · 612 kcal\n\n")
     assert "- **08:13** Home → Work · 9.5 km · 37 min · 15.4 km/h" in text
     assert "date=2026-10-19" in text
     assert text.rstrip().endswith("#bike #commute")
@@ -92,7 +92,7 @@ def test_content_mixed_kinds_prefixes_each_line():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 600, 3, 10, 0),
           wm.Workout(W2, "Running", T2, T2 + 1800, 5, 30, 0)]
     text = wm.content("2026-10-19", ws, [None, None], "https://d")
-    assert text.startswith("🏅 **Workouts — 2 workouts · 8.0 km · 40 min**")
+    assert text.startswith("### 🏅 Workouts — 2 workouts · 8.0 km · 40 min")
     assert "- 🏃 **18:31** Running" in text
     assert text.rstrip().endswith("#bike #run")
 
@@ -189,30 +189,32 @@ def test_pick_photos_favourites_first_then_spread():
 def test_workout_day_attaches_map_then_photos(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
     im = FakeImmich([photo(1), photo(2)])
-    op = FakeOpener([json_reply({"name": "attachments/MAP"}), json_reply({"name": "attachments/P1"}),
-                     json_reply({"name": "attachments/P2"}), json_reply({"name": "memos/M"}),
-                     json_reply({"name": "memos/M"})])
+    op = FakeOpener([json_reply({"name": "attachments/MAP"}), json_reply({"name": "attachments/COL"}),
+                     json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
+    collages = []
     wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
-                   lambda m: None, no_render, str(tmp_path), im)
-    names = [op.body_of(i)["filename"] for i in range(3)]
-    assert names == ["map-2026-10-19.jpg", "photo-2026-10-19-13h00-1.jpg", "photo-2026-10-19-14h00-2.jpg"]
-    memo = op.body_of(3)
-    assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/P1", "attachments/P2"]
-    assert "📷 [13:00](https://immich/photos/p1) · [14:00](https://immich/photos/p2)\n" in memo["content"]
+                   lambda m: None, no_render, str(tmp_path), im,
+                   collage_fn=lambda imgs, labels, path: (collages.append(labels), no_render(None, path)))
+    assert [op.body_of(i)["filename"] for i in range(2)] == ["map-2026-10-19.jpg", "photos-2026-10-19.jpg"]
+    assert collages == [["13:00", "14:00"]] and im.previews == ["p1", "p2"]
+    memo = op.body_of(2)
+    assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
+    assert "\n\n### 📷 Photos — 2\n\n[13:00](https://immich/photos/p1) · [14:00](https://immich/photos/p2)\n" in memo["content"]
     assert memo["content"].rstrip().endswith("#bike #photos")
 
 
 def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
     im = FakeImmich([photo(1), photo(3, gps=False)])
-    op = FakeOpener([json_reply({"name": "attachments/P1"}), json_reply({"name": "attachments/P2"}),
+    op = FakeOpener([json_reply({"name": "attachments/COL"}),
                      json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
     wm.journal_day(cfg(tmp_path), FakePg([], []), wm.Memos("http://m", "T", op), {},
-                   date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im)
-    memo = op.body_of(2)
-    assert memo["content"].startswith("📷 **Photos — 2**")
+                   date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
+                   collage_fn=lambda imgs, labels, path: no_render(None, path))
+    memo = op.body_of(1)
+    assert memo["content"].startswith("### 📷 Photos — 2")
     assert "[13:00](https://immich/photos/p1) · [15:00](https://immich/photos/p3)" in memo["content"]
     assert memo["location"]["placeholder"] == "Paris"
-    assert op.body_of(3) == {"createTime": "2026-10-19T13:00:00.000Z"}
+    assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
 
 def test_immich_down_still_writes_the_workouts(tmp_path):
@@ -231,5 +233,31 @@ def test_new_photo_changes_the_signature():
 
 def test_photo_line_links_the_rest_of_the_day():
     line = wm.photo_line(10, [("08:12", "u1"), ("12:31", "u2")], "all")
-    assert line == "📷 [08:12](u1) · [12:31](u2) · [all 10 in Immich](all)"
-    assert wm.photo_line(2, [("08:12", "u1"), ("12:31", "u2")], "all") == "📷 [08:12](u1) · [12:31](u2)"
+    assert line == "[08:12](u1) · [12:31](u2) · [all 10 in Immich](all)"
+    assert wm.photo_line(2, [("08:12", "u1"), ("12:31", "u2")], "all") == "[08:12](u1) · [12:31](u2)"
+
+
+def test_collage_grid():
+    assert [wm.collage_grid(n) for n in (1, 3, 4, 5, 6, 7, 9)] == \
+        [(1, 1), (3, 1), (2, 2), (3, 2), (3, 2), (3, 3), (3, 3)]
+
+
+def test_render_collage_makes_one_labelled_sheet(tmp_path):
+    import io
+
+    from PIL import Image
+
+    def jpeg(color, size):
+        buf = io.BytesIO()
+        Image.new("RGB", size, color).save(buf, "JPEG")
+        return buf.getvalue()
+
+    out = tmp_path / "c.jpg"
+    wm.render_collage([jpeg("red", (300, 200)), jpeg("blue", (200, 300)), jpeg("green", (100, 100)),
+                       jpeg("white", (400, 400))], ["08:12", "12:31", "14:29", "17:57"],
+                      str(out), tile=100, gap=4)
+    sheet = Image.open(out)
+    assert sheet.size == (204, 204)
+    assert sheet.getpixel((50, 10))[0] > 200            # top-left tile is red
+    assert sheet.getpixel((150, 10))[2] > 200           # top-right tile is blue
+    assert sheet.getpixel((8, 92)) != sheet.getpixel((50, 10))  # label box drawn

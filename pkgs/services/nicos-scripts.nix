@@ -40,6 +40,7 @@ python3Packages.buildPythonPackage {
     python3Packages.websocket-client
     python3Packages.cryptography
     python3Packages.staticmap
+    python3Packages.pillow
   ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];

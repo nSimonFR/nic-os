@@ -15,9 +15,9 @@ requires-python = ">=3.11"
 # is imported lazily inside connect_pg(), so the module (and its tests) still load
 # without it.
 # websocket-client: arkose-sync speaks Meteor DDP over a websocket (lazy import too).
-# staticmap: journal-daily draws the day's map from OSM tiles (lazy import).
+# staticmap + pillow: journal-daily draws the map and the photo collage (lazy imports).
 # cryptography: dps-ea-bridge rewraps a Bitwarden user key (AES-CBC, Argon2id).
-dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap" ]
+dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap", "pillow" ]
 
 # One console script per connector. This is the interface the systemd units use
 # (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
