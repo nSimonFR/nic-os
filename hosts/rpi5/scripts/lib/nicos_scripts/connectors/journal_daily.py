@@ -8,7 +8,7 @@ workout takes the workout's kind, since Dawarich files some rides as runs.
 Tracks that are not workouts get their own section. The map draws them all,
 plus any workout Dawarich has no track for yet (from its points). Start/end labels are the nearest place the user named in Dawarich
 (source `manual`) within PLACE_RADIUS_M, else the arrondissement/city of the
-nearest geocoded point. A Home ↔ Work workout adds #commute.
+nearest geocoded point. A Home ↔ Work workout adds #domicile-travail.
 
 Photos: the day's Immich timeline images (archived WhatsApp images and Live
 Photo motion halves are not on the timeline), favourites first, then spread
@@ -65,12 +65,12 @@ DARK_BG, DARK_CARD, DARK_MUTED_FG, DARK_FG = "#1d1f23", "#25282c", "#a2a5a9", "#
 COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
-# FreeReps workout name -> (emoji, title, noun, tag)
+# FreeReps workout name -> (emoji, title, noun, tag); the journal is in French.
 KINDS = {
-    "Cycling": ("🚲", "Bike", "ride", "bike"),
-    "Running": ("🏃", "Run", "run", "run"),
-    "Walking": ("🚶", "Walk", "walk", "walk"),
-    "Hiking": ("🥾", "Hike", "hike", "hike"),
+    "Cycling": ("🚲", "Vélo", "trajet", "vélo"),
+    "Running": ("🏃", "Course", "course", "course"),
+    "Walking": ("🚶", "Marche", "marche", "marche"),
+    "Hiking": ("🥾", "Rando", "rando", "rando"),
 }
 # Dawarich Track::TRANSPORTATION_MODES (1.16) -> (emoji, map colour); 1 = stationary, dropped.
 WALK, ROAD, TRANSIT, OTHER = "#5fc19a", "#f2a65a", "#e57ba8", "#a78bfa"
@@ -283,12 +283,23 @@ def place(cfg, run, uid, lat, lon):
 
 
 def kind(name):
-    return KINDS.get(name, ("🏅", name, "workout", name.lower().replace(" ", "")))
+    return KINDS.get(name, ("🏅", name, "séance", name.lower().replace(" ", "")))
 
 
 def _hm(minutes):
     h, m = divmod(round(minutes), 60)
     return f"{h} h {m:02d}" if h else f"{m} min"
+
+
+def _hm_short(minutes):
+    """`2h15` / `45min`."""
+    h, m = divmod(round(minutes), 60)
+    return f"{h}h{m:02d}" if h else f"{m}min"
+
+
+def _n(x):
+    """One decimal, French comma: 19,4."""
+    return f"{x:.1f}".replace(".", ",")
 
 
 def tile_label(asset):
@@ -305,37 +316,37 @@ def photo_time(asset):
 def workout_section(ws, legs, web_url, day):
     """(markdown lines, tags) of the workouts section."""
     kinds = {kind(w.name) for w in ws}
-    emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Workouts", "workout", "")
+    emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Sport", "séance", "")
     total_km = sum(w.km for w in ws)
     head = [f"{len(ws)} {noun}{'s' if len(ws) > 1 else ''}"]
     if total_km:
-        head.append(f"{total_km:.1f} km")
+        head.append(f"{_n(total_km)} km")
     head.append(_hm(sum(w.minutes for w in ws)))
     if sum(w.kcal for w in ws):
         head.append(f"{sum(w.kcal for w in ws):.0f} kcal")
     lines, tags = [f"### {emoji} {title} - {' · '.join(head)}", ""], []
     for w, leg in zip(ws, legs):
-        e, _, _, tag = kind(w.name)
+        e, title_w, _, tag = kind(w.name)
         at = f"**{datetime.fromtimestamp(w.start, TZ):%H:%M}**"
         if len(kinds) > 1:
             at = f"{e} {at}"
         if not leg:
-            bits = [w.name]
+            bits = [title_w]
         elif leg[0].label == leg[1].label:
-            bits = [f"around {leg[0].label}"]
+            bits = [f"autour de {leg[0].label}"]
         else:
             bits = [f"{leg[0].label} → {leg[1].label}"]
         if w.km:
-            bits.append(f"{w.km:.1f} km")
+            bits.append(f"{_n(w.km)} km")
         bits.append(_hm(w.minutes))
         if w.km and w.minutes:
-            bits.append(f"{w.km / (w.minutes / 60):.1f} km/h")
+            bits.append(f"{_n(w.km / (w.minutes / 60))} km/h")
         lines.append(f"- {at} {' · '.join(bits)}")
         if tag not in tags:
             tags.append(tag)
-        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "commute" not in tags:
-            tags.append("commute")
-    lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "domicile-travail" not in tags:
+            tags.append("domicile-travail")
+    lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
     return lines, tags
 
 
@@ -343,11 +354,11 @@ def trip_section(day_trips, legs):
     """Markdown lines: `- **14:02** 🚗 Alfie → Des Terres · 13.9 km · 35 min`."""
     km = sum(t.km for t in day_trips)
     n = len(day_trips)
-    lines = [f"### 🧭 Trips - {n} trip{'s' if n > 1 else ''} · {km:.1f} km", ""]
+    lines = [f"### 🧭 Déplacements - {n} trajet{'s' if n > 1 else ''} · {_n(km)} km", ""]
     for t, (a, b) in zip(day_trips, legs):
-        where = f"around {a.label}" if a.label == b.label else f"{a.label} → {b.label}"
+        where = f"autour de {a.label}" if a.label == b.label else f"{a.label} → {b.label}"
         lines.append(f"- **{datetime.fromtimestamp(t.start, TZ):%H:%M}** {MODES.get(t.mode, MODES[0])[0]} "
-                     f"{where} · {t.km:.1f} km · {_hm(t.minutes)}")
+                     f"{where} · {_n(t.km)} km · {_hm(t.minutes)}")
     return lines
 
 
@@ -367,7 +378,8 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=()):
-    """Memo markdown: the weather line, then one `###` section per source.
+    """Memo markdown, in French: the weather line, then one `###` section
+    per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
     same per trip that is not a workout; `photos` = the
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
@@ -377,12 +389,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if weather:
         sections.append([weather])
     if agenda:
-        sections.append(["### 📅 Calendar", "", *agenda])
-    if work:
-        n, minutes, people = work
-        sections.append([f"### 💼 Work - {n} meeting{'s' if n > 1 else ''} · {_hm(minutes)} · "
-                         f"{people} {'person' if people == 1 else 'people'}"])
-        tags.append("work")
+        sections.append(["### 📅 Agenda", "", *agenda])
     if ws:
         lines, wtags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
@@ -390,15 +397,20 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if day_trips:
         lines = trip_section(day_trips, trip_legs)
         if not ws:  # else the workouts section carries it
-            lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+            lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
         sections.append(lines)
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
         if photos_url and not shots:
-            lines += [f"[Open the day in Immich]({photos_url})"]
+            lines += [f"[Voir la journée dans Immich]({photos_url})"]
         sections.append(lines)
         tags.append("photos")
+    if work:
+        n, minutes, people = work
+        sections.append([f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
+                         f"{people} personne{'s' if people > 1 else ''}"])
+        tags.append("travail")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
@@ -485,7 +497,7 @@ def render(lines, path):
         font = ImageFont.load_default(size=13)
     except TypeError:  # Pillow < 10.1
         font = ImageFont.load_default()
-    note = "(c) OpenStreetMap contributors"
+    note = "(c) contributeurs OpenStreetMap"
     x0, y0, x1, y1 = draw.textbbox((0, 0), note, font=font)
     draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#6b7076")
     # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).

@@ -64,7 +64,7 @@ def test_personal_lines_all_day_first():
                  "SUMMARY:Holiday\r\nEND:VEVENT\r\n")
     dinner = ics(vevent("d", "20261020T190000", "20261020T210000", "Dinner"))
     events = js.expand([dinner, allday], LO, HI, TZ)
-    assert js.personal_lines(events, TZ) == ["- **All day** Holiday", "- **19:00-21:00** Dinner"]
+    assert js.personal_lines(events, TZ) == ["- **Journée** Holiday", "- **19:00-21:00** Dinner"]
 
 
 def test_calendar_blobs_decodes_and_filters_by_name():
@@ -81,11 +81,11 @@ def test_calendar_blobs_decodes_and_filters_by_name():
 def test_weather_line():
     op = FakeOpener([json_reply({"daily": {"weather_code": [61], "temperature_2m_min": [5.6],
                                            "temperature_2m_max": [12.6], "precipitation_sum": [0.3]}})])
-    assert js.weather_line(date(2026, 10, 19), 48.8566, 2.3522, op) == "🌧 Light rain · 6-13 °C · 0.3 mm"
+    assert js.weather_line(date(2026, 10, 19), 48.8566, 2.3522, op) == "🌧 Pluie légère · 6-13 °C · 0,3 mm"
     assert "start_date=2026-10-19" in op.last.full_url and "timezone=Europe%2FParis" in op.last.full_url
     dry = FakeOpener([json_reply({"daily": {"weather_code": [0], "temperature_2m_min": [3],
                                             "temperature_2m_max": [9], "precipitation_sum": [0]}})])
-    assert js.weather_line(date(2026, 10, 19), 48.8, 2.3, dry) == "☀️ Clear · 3-9 °C"
+    assert js.weather_line(date(2026, 10, 19), 48.8, 2.3, dry) == "☀️ Ciel dégagé · 3-9 °C"
 
 
 def test_mirrored_calendars_are_merged_keeping_the_fuller_title():
