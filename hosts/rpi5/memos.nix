@@ -65,18 +65,18 @@ in
     timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
   };
 
-  # One journal entry per day with workouts, after freereps-to-dawarich (03:30)
+  # One journal entry per day (workouts + Immich photos), after freereps-to-dawarich (03:30)
   # has put the day's routes into Dawarich. Root for `runuser -u postgres`.
-  systemd.services.workouts-to-memos = {
-    description = "Daily workout entries in Memos";
+  systemd.services.journal-daily = {
+    description = "Daily journal entries in Memos (workouts + photos)";
     after = [ "memos.service" "postgresql.service" "freereps-to-dawarich.service" ];
     wants = [ "memos.service" ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.nicos-scripts}/bin/workouts-to-memos";
-      StateDirectory = "workouts-to-memos";
+      ExecStart = "${pkgs.nicos-scripts}/bin/journal-daily";
+      StateDirectory = "journal-daily";
       Environment = [
-        "JOURNAL_STATE=/var/lib/workouts-to-memos/days.json"
+        "JOURNAL_STATE=/var/lib/journal-daily/days.json"
         "JOURNAL_DRY_RUN=0"
         "MEMOS_URL=http://127.0.0.1:${toString internalPort}"
         "MEMOS_TOKEN_FILE=${config.age.secrets.memos-token.path}"
@@ -85,7 +85,7 @@ in
       ];
     };
   };
-  systemd.timers.workouts-to-memos = {
+  systemd.timers.journal-daily = {
     wantedBy = [ "timers.target" ];
     timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
   };

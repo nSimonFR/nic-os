@@ -2,7 +2,7 @@ import json
 from datetime import date
 
 from conftest import FakeOpener, json_reply
-from nicos_scripts.connectors import workouts_memos as wm
+from nicos_scripts.connectors import journal_daily as wm
 
 SEP = "\x1f"
 W1 = "11111111-1111-1111-1111-111111111111"
@@ -102,7 +102,7 @@ def test_posts_one_memo_dated_at_the_last_workout_end(tmp_path):
     op, state = memos_opener(), {}
     assert run_day(cfg(tmp_path), pg, op, state) == "memos/M"
     att, memo, patch = (op.body_of(i) for i in range(3))
-    assert att["filename"] == "workouts-2026-10-19.png"
+    assert att["filename"] == "map-2026-10-19.png"
     assert memo["visibility"] == "PRIVATE" and memo["attachments"] == [{"name": "attachments/A"}]
     assert memo["location"]["latitude"] == 48.91
     assert op.requests[2].full_url.endswith("/memos/M?updateMask=create_time")
@@ -153,3 +153,76 @@ def test_named_place_wins_over_the_area(tmp_path):
     assert wm.place(cfg(tmp_path), pg, 1, 48.83, 2.34) == "Paris 13e"
     radius = next(s for s in pg.sql if "FROM places" in s)
     assert "source = 0" in radius and ", 300)" in radius
+
+
+class FakeImmich:
+    def __init__(self, assets=(), fail=False):
+        self.assets, self.fail, self.previews = list(assets), fail, []
+
+    def day(self, day):
+        if self.fail:
+            raise OSError("connection refused")
+        return self.assets
+
+    def preview(self, asset_id):
+        self.previews.append(asset_id)
+        return b"JPG"
+
+    def link(self, asset_id):
+        return f"https://immich/photos/{asset_id}"
+
+
+def photo(n, fav=False, gps=True):
+    exif = {"latitude": 48.85, "longitude": 2.35, "city": "Paris"} if gps else {}
+    return {"id": f"p{n}", "fileCreatedAt": f"2026-10-19T{10 + n:02d}:00:00.000Z",
+            "isFavorite": fav, "exifInfo": exif}
+
+
+def test_pick_photos_favourites_first_then_spread():
+    assets = [photo(n) for n in range(10)]
+    assets[7]["isFavorite"] = True
+    assert [a["id"] for a in wm.pick_photos(assets, 3)] == ["p0", "p7", "p9"]
+    assert [a["id"] for a in wm.pick_photos(assets[:2], 6)] == ["p0", "p1"]
+    assert wm.pick_photos(assets, 0) == []
+
+
+def test_workout_day_attaches_map_then_photos(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    im = FakeImmich([photo(1), photo(2)])
+    op = FakeOpener([json_reply({"name": "attachments/MAP"}), json_reply({"name": "attachments/P1"}),
+                     json_reply({"name": "attachments/P2"}), json_reply({"name": "memos/M"}),
+                     json_reply({"name": "memos/M"})])
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path), im)
+    names = [op.body_of(i)["filename"] for i in range(3)]
+    assert names == ["map-2026-10-19.png", "photo-2026-10-19-1.jpg", "photo-2026-10-19-2.jpg"]
+    memo = op.body_of(3)
+    assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/P1", "attachments/P2"]
+    assert "[📷 2 photos in Immich](https://immich/photos/p1)" in memo["content"]
+    assert memo["content"].rstrip().endswith("#bike #photos")
+
+
+def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
+    im = FakeImmich([photo(1), photo(3, gps=False)])
+    op = FakeOpener([json_reply({"name": "attachments/P1"}), json_reply({"name": "attachments/P2"}),
+                     json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
+    wm.journal_day(cfg(tmp_path), FakePg([], []), wm.Memos("http://m", "T", op), {},
+                   date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im)
+    memo = op.body_of(2)
+    assert memo["content"].startswith("📷 **Photos — 2**")
+    assert memo["location"]["placeholder"] == "Paris"
+    assert op.body_of(3) == {"createTime": "2026-10-19T13:00:00.000Z"}
+
+
+def test_immich_down_still_writes_the_workouts(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    lines = []
+    name = wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", memos_opener()), {},
+                          date(2026, 10, 19), 1, lines.append, no_render, str(tmp_path),
+                          FakeImmich(fail=True))
+    assert name == "memos/M" and "Immich unavailable" in lines[0]
+
+
+def test_new_photo_changes_the_signature():
+    ws = [wm.Workout(W1, "Cycling", T1, T1 + 60, 1, 1, 0)]
+    assert wm.signature(ws, [2], ["p1"]) != wm.signature(ws, [2], ["p1", "p2"])
