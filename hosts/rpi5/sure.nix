@@ -1,4 +1,4 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, ... }:
+{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, telegramChatId, ... }:
 let
   # externalPort: where Tailscale Serve (→ :3333) and the socket-activate
   # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
@@ -82,6 +82,11 @@ in
     apiKeyFile            = "/run/agenix/for-sure-api-key";
     swile.accountName     = "Swile";
     sumeria.tokenFile     = config.services.sumeria-mitm.tokenFile;
+
+    # for-sure's only Telegram alerts: Sumeria tokens expired (401) or token
+    # file missing — i.e. the MITM needs a fresh capture from the phone.
+    telegram.botTokenFile = config.age.secrets.telegram-bot-token.path;
+    telegram.chatId       = toString telegramChatId;
   };
 
 
