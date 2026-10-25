@@ -76,6 +76,7 @@ def test_calendar_blobs_decodes_and_filters_by_name():
 
     assert js.calendar_blobs(run, ["PERSO", "O'Brien"], 100, 200) == [b"BEGIN:VCALENDAR"]
     assert "'PERSO', 'O''Brien'" in sent[0] and "< 200" in sent[0] and "> 100" in sent[0]
+    assert "o.deleted_at IS NULL" in sent[0]  # trashed events stay in the table
 
 
 def test_weather_line():

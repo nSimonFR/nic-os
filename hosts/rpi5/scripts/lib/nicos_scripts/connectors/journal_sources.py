@@ -59,8 +59,9 @@ def calendar_blobs(run, names, lo, hi, db="nextcloud_production", runuser="runus
         SELECT replace(encode(o.calendardata, 'base64'), E'\\n', '')
         FROM oc_calendarobjects o
         WHERE o.componenttype = 'VEVENT'
+          AND o.deleted_at IS NULL  -- Nextcloud's trash bin keeps deleted events
           AND ((o.calendartype = 0 AND o.calendarid IN
-                  (SELECT id FROM oc_calendars WHERE displayname IN ({sql})))
+                  (SELECT id FROM oc_calendars WHERE displayname IN ({sql}) AND deleted_at IS NULL))
             OR (o.calendartype = 1 AND o.calendarid IN
                   (SELECT id FROM oc_calendarsubscriptions WHERE displayname IN ({sql}))))
           AND coalesce(o.firstoccurence, 0) < {int(hi)}
