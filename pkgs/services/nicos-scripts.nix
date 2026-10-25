@@ -68,6 +68,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"
     "nicos_scripts.vaultwarden.ea_bridge"
+    "nicos_scripts.vaultwarden.agents"
     "nicos_scripts.agent_vault.bootstrap"
   ];
 

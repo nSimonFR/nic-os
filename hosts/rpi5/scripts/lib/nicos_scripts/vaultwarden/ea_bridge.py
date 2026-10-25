@@ -91,9 +91,10 @@ def new_password(rand=secrets.choice):
 # ── Vaultwarden API ──────────────────────────────────────────────────────────
 
 class Vault:
-    def __init__(self, cfg, opener=None):
+    def __init__(self, cfg, opener=None, device=(DEVICE_ID, TAG)):
         self.cfg = cfg
         self.opener = opener
+        self.device = device
 
     def _call(self, method, path, token=None, payload=None):
         headers = {"Accept": "application/json"}
@@ -127,14 +128,16 @@ class Vault:
                 "password": phash,
                 "scope": "api offline_access",
                 "client_id": "cli",
-                "device_identifier": DEVICE_ID,
-                "device_name": TAG,
+                "device_identifier": self.device[0],
+                "device_name": self.device[1],
                 "device_type": DEVICE_TYPE_LINUX_CLI,
             }, timeout=60, opener=self.opener)
         except urllib.error.HTTPError as e:
             raise VaultError(f"login as {email}: HTTP {e.code}") from None
         user_key = bwcrypto.decrypt(r["Key"], *bwcrypto.stretch(mkey))
-        return Session(self, email, kdf, phash, r["access_token"], user_key)
+        session = Session(self, email, kdf, phash, r["access_token"], user_key)
+        session.private_key = r.get("PrivateKey")
+        return session
 
 
 class Session:
