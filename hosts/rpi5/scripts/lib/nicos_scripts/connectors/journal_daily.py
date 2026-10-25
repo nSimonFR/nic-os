@@ -27,9 +27,10 @@ attachments we last wrote. A changed day is updated IN PLACE: our block of text
 is swapped inside whatever the user added around it, our attachments replaced,
 theirs kept. If the user rewrote our block itself, their text wins.
 
-Calendar, weather, music and games (Ryot) and climbing (arkose-sync): see
-journal_sources. A day with only calendar events or a climbing session still
-gets an entry; weather, music or games alone do not.
+Calendar, weather, activity (FreeReps), music and games (Ryot) and climbing
+(arkose-sync): see journal_sources. A day with only calendar events or a
+climbing session still gets an entry; weather, activity, music or games alone
+do not.
 
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
 PERSONAL_CALENDARS,WORK_CALENDARS}, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
@@ -98,6 +99,7 @@ class Config:
     work_calendars: tuple = ("TRUSK",)
     nextcloud_db: str = "nextcloud_production"
     ryot_db: str = "ryot"
+    freereps_db: str = "freereps"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
@@ -382,7 +384,7 @@ def photo_lines(shots):
 
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None):
+            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -391,7 +393,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     `photos_url` = the first of the day in Immich; `agenda` = personal
     calendar lines; `work` = (meetings, minutes, people) or None; `music` =
     (heading suffix, lines) from journal_sources.music_section, or None;
-    `climbing` and `games` = the same from climbing_section / game_section."""
+    `climbing`, `games`, `activity` = the same from climbing_section /
+    game_section / activity_section."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -417,6 +420,9 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = climbing
         sections.append([f"### 🧗 Escalade - {head}", "", *lines])
         tags.append("climbing")
+    if activity:
+        head, lines = activity
+        sections.append([f"### 🚶 Activité - {head}", *([""] + lines if lines else [])])
     if games:
         head, lines = games
         sections.append([f"### 🎮 Jeux - {head}", "", *lines])
@@ -729,6 +735,16 @@ def day_climbing(cfg, day, log):
         return []
 
 
+def day_activity(cfg, run, day, log):
+    """journal_sources.activity_section of the day, or None (no steps, or FreeReps unreadable)."""
+    try:
+        totals = src.activity_totals(run, *day_bounds(day), cfg.freereps_db, cfg.runuser, cfg.psql)
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        log(f"{day}: activity unavailable ({e})")
+        return None
+    return src.activity_section(totals)
+
+
 def day_games(cfg, run, day, log):
     """journal_sources.game_section of the day, or None (nothing played, or Ryot down)."""
     try:
@@ -768,6 +784,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     photos = pick_photos(day_photos, cfg.photos_max)
     music = day_music(cfg, run, day, log)
     games = day_games(cfg, run, day, log)
+    activity = day_activity(cfg, run, day, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
     extra = other_trips(ws, day_trips)
@@ -780,7 +797,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         except (OSError, ValueError, KeyError, IndexError) as e:
             log(f"{key}: weather unavailable ({e})")
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
-                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games,
+                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs))])
     if state.get(key, {}).get("sig") == sig:
@@ -798,7 +815,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
-                   src.climbing_section(climbs) if climbs else None, games)
+                   src.climbing_section(climbs) if climbs else None, games, activity)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")

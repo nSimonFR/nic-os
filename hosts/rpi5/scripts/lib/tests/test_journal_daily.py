@@ -14,9 +14,9 @@ T1, T2 = 1792390421, 1792427478
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=()):
+    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=(), activity=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
-        self.tracks, self.music, self.games = tracks, music, games
+        self.tracks, self.music, self.games, self.activity = tracks, music, games, activity
         self.sql = []
 
     def __call__(self, cmd):
@@ -26,6 +26,8 @@ class FakePg:
             rows = []
         elif "FROM workouts" in sql:
             rows = self.workouts
+        elif "FROM health_metrics" in sql:
+            rows = self.activity
         elif "FROM seen" in sql and "video_game" in sql:
             rows = self.games
         elif "FROM seen" in sql:
@@ -538,3 +540,24 @@ def test_games_section_after_climbing_before_music(tmp_path):
     sql = next(s for s in pg.sql if "video_game" in s)
     lo, hi = wm.day_bounds(date(2026, 10, 19))
     assert f"to_timestamp({lo + 86400})" in sql and f"to_timestamp({hi + 86400})" in sql
+
+
+def test_activity_after_climbing_and_before_games(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], games=[("Hades", 900)],
+                activity=[("step_count", 5940.4), ("distance_walking_running", 4376.1),
+                          ("flights_climbed", 46.5), ("active_energy", 256.0)])
+    op = memos_opener()
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path))
+    text = op.body_of(1)["content"]
+    assert ("\n\n### 🚶 Activité - 5 940 pas · 4,4 km\n\n- **Étages**: 46\n"
+            "- **Calories actives**: 256 kcal\n\n### 🎮 Jeux") in text
+    sql = next(s for s in pg.sql if "health_metrics" in s)
+    assert "coalesce(source, '') = ''" in sql and "DISTINCT ON (metric_name, time)" in sql
+
+
+def test_activity_alone_makes_no_entry(tmp_path):
+    op = memos_opener()
+    pg = FakePg([], [], activity=[("step_count", 3000)])
+    assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
+                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
