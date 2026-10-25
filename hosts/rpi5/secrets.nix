@@ -242,6 +242,11 @@
       owner = "dawarich";
       mode  = "0440";
     };
+    memos-token = {
+      # Memos personal access token (user nsimon) for the journal collectors.
+      file  = ./secrets/memos-token.age;
+      mode  = "0400";
+    };
     papra-env = {
       file  = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)
