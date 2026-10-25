@@ -17,3 +17,8 @@ regexes = ['''DA790614A5E94643A86333BBFDA7E6C61C9(EA664)?''']
 description = "T3 Code's public T3 Connect config: Clerk publishable key and CLI OAuth client ID, shipped in every official build"
 regexTarget = "match"
 regexes = ['''pk_live_Y2xlcmsudDMuY29kZXMk''', '''hzxSgY2cH10sDU2r''']
+
+[[allowlists]]
+description = "Agent Vault placeholders (__name__): swapped for the real key by the broker"
+regexTarget = "secret"
+regexes = ['''^__[a-z0-9_]+__$''']
