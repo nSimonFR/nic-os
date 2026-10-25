@@ -10,33 +10,25 @@
 #     Runs as root: node-ble talks to org.bluez over the system D-Bus, which the
 #     default BlueZ policy only grants root/at_console (same rationale as the
 #     other root-run local daemons here, e.g. travel-cal-sync).
-#   * scale-to-ryot.service — tiny stdlib-Python shim that translates that
-#     webhook into a Ryot `createOrUpdateUserMeasurement` GraphQL mutation
-#     against Ryot's socket-activation listener on 127.0.0.1:13350 (which wakes
-#     it — see ryotUrl below). Runs as the unprivileged
-#     `scale-bridge` user. Code + tests live in the nicos-scripts package
-#     (hosts/rpi5/scripts/lib/, entry point `scale-to-ryot`).
+#   * scale-to-ryot.service — tiny stdlib-Python shim that logs that webhook as
+#     a Ryot V2 measurement entry (fitness plugin `measurement-reading-log`).
+#     Runs as the unprivileged `scale-bridge` user. Code + tests live in the
+#     nicos-scripts package (hosts/rpi5/scripts/lib/, entry point `scale-to-ryot`).
 #
 # Bluetooth: the onboard radio is force-enabled in configuration.nix (the
 # raspberry-pi-5.bluetooth module + the mkForce toggle there). This module only
 # sets powerOnBoot so hci0 comes up ready to scan.
 #
 # Secrets (agenix `scale-bridge-env`, KEY=VALUE, owner scale-bridge 0400 — root
-# reads it too): RYOT_TOKEN (shim → Ryot, per-user API token), SHIM_KEY (shared
-# webhook secret), and the body-composition profile USER_HEIGHT / USER_BIRTH_DATE
-# / USER_GENDER. The profile is PII and this repo is public, so config.yaml is
+# reads it too): RYOT_TOKEN (shim → Ryot; must be a V2 user API key, sent as
+# X-Api-Key — a V1 token is rejected), SHIM_KEY (shared webhook secret), and the
+# body-composition profile USER_HEIGHT / USER_BIRTH_DATE / USER_GENDER. The profile is PII and this repo is public, so config.yaml is
 # rendered at activation from that secret into /etc (never the Nix store / git).
 { config, pkgs, ... }:
 let
   shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only 
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
-  # Ryot's socket-activation listener + the /ryot/backend route Caddy strips —
-  # NOT ryot-backend's own 13352. Ryot sleeps when idle (ryot.nix), and a weigh-in
-  # arrives exactly when nobody has been using it, so hitting the backend port
-  # directly would connection-refuse against a stopped unit and drop the reading.
-  # Going through 13350 wakes the stack and the mutation is queued behind the
-  # readyProbe instead.
-  ryotUrl = "http://127.0.0.1:13350/ryot/backend/graphql";
+  ryotUrl = "http://127.0.0.1:13350"; # Ryot V2 base; the shim appends /api
 
   bleScaleSync = pkgs.callPackage ../../pkgs/services/ble-scale-sync.nix { };
 in
@@ -51,14 +43,10 @@ in
   };
   users.groups.scale-bridge = { };
 
-  # ── Shim: webhook → Ryot GraphQL ──────────────────────────────────────────
+  # ── Shim: webhook → Ryot ──────────────────────────────────────────────────
   systemd.services.scale-to-ryot = {
     description = "scale-to-ryot: webhook → Ryot measurement shim";
     wantedBy = [ "multi-user.target" ];
-    # Deliberately NOT ordered against ryot-backend any more. Ryot is socket
-    # activated, so it is normally stopped; the shim needs it only at the moment a
-    # weigh-in arrives, and reaching 13350 then wakes it. Ordering after it here
-    # bought nothing and cost a wake on every boot.
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     environment = {
@@ -72,13 +60,8 @@ in
       Group = "scale-bridge";
       # SHIM_KEY + RYOT_TOKEN come from the agenix secret.
       EnvironmentFile = "/run/agenix/scale-bridge-env";
-      # No wait-for-Ryot ExecStartPre. It used to poll ryotUrl for up to 120s
-      # before serving, which under socket activation is actively wrong twice
-      # over: the poll itself WAKES Ryot, so the shim dragged all three tiers up
-      # on every boot and restart; and a cold wake is gated by a 180s readyProbe,
-      # so the 120s budget could not be met and the unit failed with
-      # result 'timeout' (seen on the switch that introduced this). The shim binds
-      # its own port and needs Ryot only when a measurement actually arrives.
+      # No wait-for-Ryot: the shim needs Ryot only when a weigh-in arrives, and
+      # answers 502 if it is down then.
       ExecStart = "${pkgs.nicos-scripts}/bin/scale-to-ryot";
       Restart = "on-failure";
       RestartSec = "15";

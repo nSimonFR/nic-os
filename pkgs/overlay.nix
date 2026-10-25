@@ -45,9 +45,9 @@ inputs: final: _prev: {
   freereps = final.callPackage ./services/freereps.nix { };
 
   # nicos-scripts — this repo's own Python: one package holding the shared
-  # library plus a console script per unit (bin/steam-to-ryot, bin/homepage-stats,
+  # library plus a console script per unit (bin/homepage-stats, bin/scale-to-ryot,
   # …), with its pytest suite in checkPhase.
-  # Consumers: eleven rpi5 units (ryot-connectors, papra, moxfield-sync,
+  # Consumers: rpi5 units (papra, moxfield-sync,
   # travel-cal-sync, homepage, claude-remote-control, claude-notify-aggregator,
   # scale-bridge), and
   # `nix build .#nicos-scripts` — which is also the flake check.

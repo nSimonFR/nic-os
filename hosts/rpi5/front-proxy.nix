@@ -27,7 +27,6 @@
 # derived from the prefix it is already built with:
 #   Sure      — sure-nix patches/base/pwa-relative-url-root.patch (root_path + a
 #               `app-base-path` meta tag the service worker registration reads)
-#   Ryot      — ryot-nix frontend.nix postPatch (root.tsx <link>s + public/manifest.json)
 #   RxResume  — reactive-resume-nix package.nix postPatch (id/start_url/scope from
 #               appBasePath; Vite already re-roots index.html's hrefs)
 #   Nextcloud — nothing to do: overwritewebroot=/nextcloud already re-roots the manifest
@@ -142,38 +141,6 @@ in
         '';
       };
 
-      # Ryot (media/life tracker, always-on). Prefix KEPT (no trailing-slash
-      # strip): Ryot's SSR frontend is built with a /ryot/ base + basename and its
-      # Caddy entrypoint (:13350) is re-rooted to mux under /ryot (see ryot.nix),
-      # so forward /ryot/* verbatim and let Ryot's Caddy own the sub-routing
-      # (frontend pages/assets, /ryot/backend GraphQL, /ryot/_i Plex webhook).
-      "= /ryot" = { return = "301 /ryot/"; };
-      "/ryot/" = {
-        proxyPass = "http://127.0.0.1:13350";
-        proxyWebsockets = true;
-        extraConfig = fwdHeaders;
-      };
-      # Ryot's *browser-side* GraphQL/upload client hardcodes
-      # `${window.location.origin}/backend/graphql` (see clientGqlService in the
-      # frontend) — window.location.origin is host-only, so it ignores the /ryot/
-      # basename and posts to the domain ROOT /backend/*. Ryot is designed to own
-      # the root; under our subpath the SSR uses /ryot/backend but the client can't.
-      # Route root /backend/* to Ryot's socket-activation listener under the
-      # /ryot/backend route Caddy strips, so /backend/graphql lands on the backend's
-      # /graphql. It used to go straight to ryot-backend on 13352; since Ryot sleeps
-      # (ryot.nix) that would 502 for a tab left open past the idle timeout — the SSR
-      # navigation that woke it is long finished, and this path would never wake it
-      # again. Through 13350 the stale tab wakes the stack like any other request.
-      "/backend/" = {
-        proxyPass = "http://127.0.0.1:13350/ryot/backend/";
-        extraConfig = ''
-          ${fwdHeaders}
-          # A cold wake is gated by the 180s readyProbe; outlast nginx's 60s default
-          # so the first query after an idle-stop waits instead of 504-ing.
-          proxy_read_timeout 300s;
-        '';
-      };
-
       # Death Plan Switch (PHP-FPM). Prefix KEPT: its vhost serves /switch/* from
       # the package's share/ root, and the app builds its links from SCRIPT_NAME.
       "= /switch" = { return = "301 /switch/"; };
@@ -211,15 +178,10 @@ in
     };
   };
 
-  # Every OTHER location above that proxies is claimed by a service's
-  # public.muxPath, and lib/service-registration.nix asserts the pairing both
-  # ways — so a deleted service can't leave a live location proxying to a dead
-  # port. /backend/ is the one genuine exception: it belongs to Ryot, but Ryot's
-  # browser-side GraphQL client hardcodes `${window.location.origin}/backend`,
-  # which ignores the /ryot/ basename, so the location has to sit at the domain
-  # root where no muxPath can claim it. The pure `return 301` redirects need no
-  # entry here — they carry no proxyPass.
-  nic.frontProxy.unclaimed = [ "/backend/" ];
+  # Every location above that proxies is claimed by a service's public.muxPath,
+  # and lib/service-registration.nix asserts the pairing both ways. The pure
+  # `return 301` redirects carry no proxyPass and need no entry.
+  nic.frontProxy.unclaimed = [ ];
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.front-proxy = {

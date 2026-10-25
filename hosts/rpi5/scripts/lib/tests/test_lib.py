@@ -184,13 +184,8 @@ def test_graphql_raises_on_graphql_level_errors():
         ryot.graphql("http://ryot/graphql", "tok", "q", {}, opener=op)
 
 
-def test_ryot_clients_outwait_a_socket_activation_cold_start():
-    # Ryot is socket-activated, and every caller of these two runs from a timer —
-    # so the first request after an idle period is answered only once the stack
-    # has started, gated by ryot.nix's 180s readyProbe. A client that gives up
-    # before then turns a cold start into a silently lost push. Guard the margin:
-    # a future edit lowering either default back under the probe fails here
-    # rather than in production, where the symptom is a missing scrobble.
+def test_ryot_clients_outwait_a_slow_start():
+    # A client that gives up first turns a slow start into a silently lost push.
     readyprobe_budget = 180
     assert ryot.RYOT_WAKE_TIMEOUT > readyprobe_budget
 

@@ -11,7 +11,7 @@
   swaps in the real value for that service only. Use them as-is, even written
   literally when your terminal strips the env var. Local services go through it
   too, under aliases: `ha.home.arpa:8123`, `dawarich.home.arpa:13900`,
-  `ryot.home.arpa:13352`, `immich.home.arpa:2283`. GitHub (`git`, `gh`) acts as
+  `ryot.home.arpa:13350`, `immich.home.arpa:2283`. GitHub (`git`, `gh`) acts as
   nSimonFR-ai the same way. Never unset `HTTPS_PROXY`/`HTTP_PROXY`/`SSL_CERT_FILE`.
   A 401 means the broker, not the key: check `journalctl -u agent-vault-bootstrap`.
 - **Web search = the native `web_search` / `web_extract` tools** (Tavily). Your

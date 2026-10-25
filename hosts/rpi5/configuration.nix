@@ -182,7 +182,6 @@ in
     ./epicgames-freegames.nix
     ./travel-cal-sync.nix
     ./ryot.nix
-    ./ryot-connectors.nix
     ./scale-bridge.nix
     ./homepage.nix
     ./backups.nix
