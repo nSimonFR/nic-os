@@ -21,7 +21,7 @@ Environment:
                          terminal path (code_execution_tool.py
                          `_scrub_child_env`) strips any env name containing
                          KEY/TOKEN/SECRET unless it is in `env_passthrough`.
-  TYPESAFE_ENV_FILE      default /run/agenix/agent-env
+  TYPESAFE_ENV_FILE      default Agent Vault's proxy.env (a placeholder it swaps)
   TYPESAFE_ENDPOINT      default https://api.typesafe.ai/v1/systemone
   TYPESAFE_MODEL         default jev-1.13.0 — pin the snapshot, never an alias:
                          calibration drifts silently across versions.
@@ -53,7 +53,7 @@ from ..secrets import env_str
 
 DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone"
 DEFAULT_MODEL = "jev-1.13.0"
-DEFAULT_ENV_FILE = "/run/agenix/agent-env"
+DEFAULT_ENV_FILE = "/var/lib/agent-vault-hermes/proxy.env"
 
 # $0.042 per million input tokens, output free (docs.typesafe.ai/models).
 USD_PER_INPUT_TOKEN = 0.042 / 1_000_000
@@ -261,7 +261,7 @@ def build_state(env):
 
 
 def resolve_key(env=None, env_file=None):
-    """The key, from $TYPESAFE_API_KEY or the KEY=VAL line in the agenix file.
+    """The key, from $TYPESAFE_API_KEY or the KEY=VAL line in TYPESAFE_ENV_FILE.
 
     The file fallback is load-bearing on the model-driven cron path, where
     code_execution_tool.py strips any env name containing KEY/TOKEN/SECRET.

@@ -457,14 +457,11 @@ let
     set -a
     . /run/agenix/agent-env
     # Agent Vault (hosts/rpi5/agent-vault.nix): proxy env + __placeholder__ values
-    # for the brokered keys. Absent until the first bootstrap — real keys then.
+    # for the API keys, which are not in agent-env. Absent until the first bootstrap.
     if [ -r /var/lib/agent-vault-hermes/proxy.env ]; then
       . /var/lib/agent-vault-hermes/proxy.env
     fi
     set +a
-    # Unused by Hermes; TWILIO_* alone made it start a broken SMS platform.
-    unset TWILIO_ACCOUNT_SID TWILIO_AUTH_TOKEN ICLOUD_EMAIL ICLOUD_PASSWORD \
-      ICLOUD_APP_PASSWORD OPENCLAW_GATEWAY_TOKEN
     export HOME="/home/nsimon"
     export HERMES_HOME="${hermesHome}"
     export HERMES_ACCEPT_HOOKS=1

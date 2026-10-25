@@ -2,7 +2,7 @@
 name: immich-memories
 description: Post today's Immich "on this day" photos to Telegram as a single gallery (album). Use when the user asks about Immich memories, on-this-day, or a recap of past photos from today's date.
 homepage: https://immich.app
-metadata: {"openclaw":{"emoji":"📸","requires":{"bins":["python3"]},"agenix":["immich-api-key","telegram-bot-token"]}}
+metadata: {"openclaw":{"emoji":"📸","requires":{"bins":["python3"]},"agenix":["telegram-bot-token"]}}
 ---
 
 # Immich on-this-day reminder
@@ -20,17 +20,16 @@ sends the gallery itself via the Telegram Bot API — Hermes can't build albums
 
 ## Default invocation
 
-Run it plainly — the script reads the Immich key from `/run/agenix/immich-api-key`,
-the bot token from `/run/agenix/telegram-bot-token`, and the chat from
+Run it plainly — the script reaches Immich through Agent Vault (which holds the
+key), reads the bot token from `/run/agenix/telegram-bot-token`, and the chat from
 `$TELEGRAM_CHAT_ID` (exported for the agent service), all by itself:
 
 ```bash
 python3 {baseDir}/scripts/immich-on-this-day.py --send-album
 ```
 
-Do **not** prefix it with `IMMICH_API_KEY=$(cat ...)` or similar: the agent's exec
-safety guard blocks any `$(...)` command substitution, so that form fails. The
-script's built-in file reads avoid the substitution entirely.
+Do **not** prefix it with `IMMICH_API_KEY=...`: the default placeholder is what
+Agent Vault expects, and the exec guard blocks `$(...)` anyway.
 
 **That single command delivers everything** — the photos as a gallery and the
 caption. After it succeeds (it prints e.g. `sent album of 4 photos to chat …`),
@@ -62,7 +61,7 @@ day?" text answer when the user does not want the photos sent.
 - Album = 2–10 items shown as a grid. With exactly 1 photo the script falls back to
   a single photo+caption; with 0 photos but a caption (an all-video day) it sends
   the caption as a text message.
-- Photos come from `http://127.0.0.1:2283/api/assets/<id>/thumbnail?size=preview`
+- Photos come from `http://immich.home.arpa:2283/api/assets/<id>/thumbnail?size=preview`
   (Immich's socket-activated proxy). `preview` always re-encodes to JPEG (~200–900 KB),
   so HEIC/PNG originals still arrive as a `.jpg`. The first request wakes the backend.
 - The caption is two lines: 📸 + today's date in French on line 1, then each year

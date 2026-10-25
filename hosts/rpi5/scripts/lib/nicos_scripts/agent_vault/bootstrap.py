@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 agent-vault-bootstrap: push the repo's declared state into Agent Vault, whose only
-config is its own DB — owner account, credentials (agent-env + CRED_FILES), services,
+config is its own DB — owner account, credentials (CREDS_FILE + CRED_FILES), services,
 and the agent token. Then write OUT_DIR/{agent-token,ca-bundle.pem,proxy.env,gitconfig}.
 Idempotent; a lost DB is a re-run. Env: see hosts/rpi5/agent-vault.nix.
 """
@@ -64,7 +64,7 @@ def placeholder(key):
 
 
 def parse_env_file(text):
-    """As `. file` reads it: agent-env has `KEY="value"` lines too."""
+    """As `. file` reads it: KEY="value" lines too."""
     out = {}
     for line in text.splitlines():
         if "=" not in line or line.lstrip().startswith("#"):
@@ -82,7 +82,7 @@ def auth_keys(auth):
 
 
 def load_creds(cfg):
-    """agent-env, plus `KEY=path` pairs whose file holds just the value."""
+    """CREDS_FILE (KEY=VAL), plus `KEY=path` pairs whose file holds just the value."""
     creds = parse_env_file(Path(cfg.creds_file).read_text())
     for pair in filter(None, cfg.cred_files.split(",")):
         key, path = pair.split("=", 1)

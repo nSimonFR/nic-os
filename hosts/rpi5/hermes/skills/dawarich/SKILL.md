@@ -18,18 +18,17 @@ decline the noise.
 
 ## Setup
 
-On this host (rpi5) the Dawarich API listens on **`http://127.0.0.1:13900`** (loopback)
-— NOT `:3900` (that's the Tailscale Serve HTTPS port). `DAWARICH_API_KEY` is already
-injected into the agent’s environment from `/run/agenix/agent-env`, so you do **not**
-need to set it yourself — just use `$DAWARICH_API_KEY`.
+On this host (rpi5) call the Dawarich API at **`http://dawarich.home.arpa:13900`**, a
+loopback alias routed through Agent Vault (your `HTTP_PROXY`), which swaps the
+placeholder `__dawarich_api_key__` for the real key. You never hold the key.
 
 ```bash
-export DAWARICH_BASE_URL="${DAWARICH_BASE_URL:-http://127.0.0.1:13900}"   # API (loopback)
+export DAWARICH_BASE_URL="${DAWARICH_BASE_URL:-http://dawarich.home.arpa:13900}"   # API (via Agent Vault)
 export DAWARICH_WEB_URL="${DAWARICH_WEB_URL:-https://rpi5.gate-mintaka.ts.net:3900}"  # UI (for user-facing links)
-AUTH=(-H "Authorization: Bearer $DAWARICH_API_KEY")
+AUTH=(-H "Authorization: Bearer __dawarich_api_key__")
 ```
 
-Reuse `"${AUTH[@]}"` in every request below. `DAWARICH_BASE_URL` is loopback and only
+Reuse `"${AUTH[@]}"` in every request below. `DAWARICH_BASE_URL` is a local alias, only
 reachable from rpi5 — never put it in a message. Links you send the user must use
 `DAWARICH_WEB_URL` (the Tailscale Serve URL, reachable from their phone on the tailnet).
 

@@ -14,6 +14,11 @@
       file = ./secrets/agent-env.age;
       owner = "nsimon";
     };
+    # The API keys agents use, root-only: Agent Vault swaps them in for the
+    # placeholders in proxy.env. Homepage also reads HA_TOKEN and SURE_API_KEY.
+    agent-brokered-env = {
+      file = ./secrets/agent-brokered-env.age;
+    };
     telegram-bot-token = {
       file  = ../../shared/telegram-bot-token.age;
       owner = "nsimon";
@@ -29,13 +34,13 @@
     linky-prm = {
       file = ./secrets/linky-prm.age;
     };
+    # root-only: agents get a placeholder, Agent Vault attaches the key.
     immich-api-key = {
       file = ./secrets/immich-api-key.age;
-      owner = "nsimon";
     };
     # The same key, decrypted a second time for the immich user. The CLIP sidecar
     # (immich-clip.nix) runs as `immich` to reach smart_search over the Postgres
-    # socket under peer auth, and so cannot read the nsimon-owned 0400 copy above.
+    # socket under peer auth, and so cannot read the root-only copy above.
     # Same plaintext, different owner — no re-encryption needed.
     immich-clip-api-key = {
       file = ./secrets/immich-api-key.age;

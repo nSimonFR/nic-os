@@ -12,21 +12,21 @@ Use when Nico asks for a random photo from an Immich album, especially to send i
 
 ## Workflow
 
-1. Read `/run/agenix/immich-api-key` inside a script; never print it.
+1. Send the placeholder `__immich_api_key__` as the key to `immich.home.arpa:2283`: Agent Vault (your `HTTP_PROXY`) swaps in the real one. You never hold it.
 2. Find the album by case-insensitive exact name first, then a case-insensitive substring match through:
 
 ```bash
-curl -fsS -H "x-api-key: $API_KEY" \
-  'http://127.0.0.1:2283/api/albums?withAssets=false'
+curl -fsS -H "x-api-key: __immich_api_key__" \
+  'http://immich.home.arpa:2283/api/albums?withAssets=false'
 ```
 
 3. If no unique album match exists, ask which album to use. Do not guess.
 4. Retrieve album assets with the **plural** filter key. `albumId` is ignored by the metadata endpoint; use `albumIds`:
 
 ```bash
-curl -fsS -X POST -H "x-api-key: $API_KEY" -H 'Content-Type: application/json' \
+curl -fsS -X POST -H "x-api-key: __immich_api_key__" -H 'Content-Type: application/json' \
   -d '{"albumIds":["<album-id>"],"size":250}' \
-  'http://127.0.0.1:2283/api/search/metadata'
+  'http://immich.home.arpa:2283/api/search/metadata'
 ```
 
 Read candidates from `.assets.items`. Confirm `.assets.total` matches the album's `assetCount` when practical.
