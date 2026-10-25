@@ -119,6 +119,9 @@ class Package:
     unverifiable: list[str] = field(default_factory=list)
     # pin key -> derivation attribute to build for it (see derive()).
     derived: dict[str, str] = field(default_factory=dict)
+    # Directory of the npm project inside the source tree, from `sourceRoot`
+    # (freereps builds its frontend from server/web). Empty = the tree's root.
+    npm_root: str = ""
 
     @property
     def drift(self) -> dict[str, tuple[str, str]]:
@@ -281,6 +284,7 @@ def parse(path: Path) -> Package:
             raise Problem("fetchurl with no literal `url` binding — recompute this one by hand")
         tarball = resolve(local["url"], local)
 
+    root = re.search(r'sourceRoot\s*=\s*"\$\{[^}]+\}/(?P<sub>[^"]+)"', text)
     return Package(
         path=path,
         tarball=tarball,
@@ -288,6 +292,7 @@ def parse(path: Path) -> Package:
         pinned=pinned | derived_pins,
         unverifiable=unverifiable,
         derived=derived_attrs,
+        npm_root=root["sub"] if root else "",
     )
 
 
@@ -326,9 +331,9 @@ def fetch(pkg: Package) -> None:
         # lockfile out of. No package needs this yet; fail loudly rather than
         # silently leaving npmDepsHash unchecked the way a stale `hash` was.
         raise Problem("pins npmDepsHash alongside fetchurl — recompute this one by hand")
-    lock = src / "package-lock.json"
+    lock = src / pkg.npm_root / "package-lock.json"
     if not lock.is_file():
-        raise Problem("pins npmDepsHash but the tag has no package-lock.json")
+        raise Problem(f"pins npmDepsHash but the tag has no {pkg.npm_root or '.'}/package-lock.json")
     pkg.actual["npmDepsHash"] = run(
         "nix", "run", "nixpkgs#prefetch-npm-deps", "--", str(lock)
     ).splitlines()[-1]

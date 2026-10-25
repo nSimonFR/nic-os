@@ -14,11 +14,11 @@
 # outright without one. `frontend` below produces it and `preBuild` drops it in
 # place before the embed is resolved. That ordering is load-bearing, not tidiness.
 #
-# ⚠ THREE HASHES, all content hashes of fetched inputs, all of which move when
-#   `rev` moves: `src.hash`, `frontend.npmDepsHash`, `vendorHash`. Renovate
-#   cannot recompute any of them (reference_renovate_nix_pins). Set the changed
-#   one to lib.fakeHash, build once, paste the reported `got: sha256-…`. They
-#   surface in that order — src first, then the two dependency sets.
+# ⚠ THREE HASHES move with `version`: `src.hash`, `frontend.npmDepsHash`,
+#   `vendorHash`. Renovate bumps `version` and its postUpgradeTask
+#   (scripts/nix-fix-hashes.py --write) recomputes all three in the same commit.
+#   By hand: run that script on this file, or set one to lib.fakeHash, build,
+#   and paste the `got:` — they surface src first, then the dependency sets.
 #
 #   Unlike showmycards.nix's per-arch npm FODs, `npmDepsHash` here is ONE value
 #   across aarch64 and x86_64: buildNpmPackage walks package-lock.json with
@@ -35,8 +35,9 @@
 }:
 
 let
-  # Tag `2.2.1` (no `v`). The iOS app 2.2 needs a 2.2 server: older builds
+  # Tags are bare (`2.2.1`). The iOS app 2.2 needs a 2.2 server: older builds
   # 404 its /api/v1/sync-state and log its uploads as `hae_rest`.
+  # renovate: datasource=github-releases depName=meltforce/FreeReps
   version = "2.2.1";
 
   src = fetchFromGitHub {
