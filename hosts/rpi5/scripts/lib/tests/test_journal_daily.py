@@ -473,8 +473,8 @@ def test_climbing_day_gets_an_entry_with_its_section(tmp_path):
     wm.journal_day(cfg(tmp_path, arkose_sessions=str(store)), FakePg([], []), wm.Memos("http://m", "T", op),
                    {}, date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path))
     assert op.body_of(0)["content"] == (
-        "### 🧗 Escalade - 7 tops · 38 m\n\n"
-        "- **12:16** Arkose Chevaleret · 🟢 5 verts · 🔵 2 bleus · 1 essai · 1 retop · niveau vert ⬆️"
+        "### 🧗 Escalade - Arkose Chevaleret · 7 tops · 38 m\n\n"
+        "- **Tops** 🟢 5 verts · 🔵 2 bleus\n- **Retops** 1\n- **Essais** 1\n- **Niveau** vert ⬆️"
         "\n\n#climbing\n")
     assert op.body_of(1) == {"createTime": "2026-10-19T10:16:17+00:00"}
 

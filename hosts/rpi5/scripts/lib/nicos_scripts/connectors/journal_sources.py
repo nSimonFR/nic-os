@@ -232,7 +232,7 @@ def music_section(listens, top=5, per_artist=3):
         lines.append(f"- **{artist}** · {shown}")
     if len(ranked) > top:
         n = len(ranked) - top
-        lines.append(f"- et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}")
+        lines.append(f"- *et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}*")
     h, m = divmod(round(sum(l.seconds for l in listens) / 60), 60)
     n = len(listens)
     head = f"{n} titre{'s' if n > 1 else ''}" + (f" · {h} h {m:02d}" if h else f" · {m} min")
@@ -259,31 +259,30 @@ def _plural(n, word, plural=None):
     return f"{n} {word if n == 1 else plural or word + 's'}"
 
 
-def climbing_section(sessions, tz):
-    """(heading suffix, lines): `7 tops · 38 m`, then per session
-    `- **12:16** Arkose Chevaleret · 🟢 5 verts · 🔵 2 bleus · 1 essai · 1 retop · niveau vert ⬆️`."""
-    lines = []
+def climbing_section(sessions):
+    """(heading suffix, lines), one line per category (sessions of the day
+    summed — in practice one): `Arkose Chevaleret · 7 tops · 38 m`, then
+    `- **Tops** 🟢 5 verts · 🔵 2 bleus`, `- **Retops** 1`, `- **Niveau** vert ⬆️`."""
+    names, by_label = {}, {}
     for s in sessions:
-        names = s.get("gymLabels") or {}
-        at = datetime.fromisoformat(s["startDate"]).astimezone(tz)
-        bits = [s.get("gymName") or s.get("gym", "?")]
-        by_label = s.get("topsCountsByLabel") or {}
-        for label in sorted(by_label, key=int):
-            colour = names.get(label, label)
-            bits.append(f"{HOLD_EMOJI.get(colour, '🪨')} {_plural(by_label[label], colour)}".strip())
-        if not by_label and s.get("tops"):
-            bits.append(_plural(s["tops"], "top"))
-        for key, word in (("flashs", "flash"), ("tried", "essai"), ("retops", "retop")):
-            if s.get(key):
-                bits.append(_plural(s[key], word))
-        level = names.get(str((s.get("sessionLevel") or {}).get("label", "")))
-        if level:
-            bits.append(f"niveau {level}" + (" ⬆️" if s.get("isLevelUp") else ""))
-        lines.append(f"- **{at:%H:%M}** {' · '.join(bits)}")
-    head = [_plural(sum(s.get("tops") or 0 for s in sessions), "top")]
-    metres = sum(s.get("climbedHeight") or 0 for s in sessions)
-    if metres:
-        head.append(f"{metres} m")
+        names.update(s.get("gymLabels") or {})
+        for label, n in (s.get("topsCountsByLabel") or {}).items():
+            by_label[label] = by_label.get(label, 0) + n
+    total = lambda key: sum(s.get(key) or 0 for s in sessions)
+    tops = [f"{HOLD_EMOJI.get(names.get(l, l), '🪨')} {_plural(by_label[l], names.get(l, l))}"
+            for l in sorted(by_label, key=int)]
+    lines = [f"- **Tops** {' · '.join(tops)}"] if tops else []
+    for key, title in (("flashs", "Flashs"), ("retops", "Retops"), ("tried", "Essais")):
+        if total(key):
+            lines.append(f"- **{title}** {total(key)}")
+    last = sessions[-1]
+    level = names.get(str((last.get("sessionLevel") or {}).get("label", "")))
+    if level:
+        lines.append(f"- **Niveau** {level}" + (" ⬆️" if last.get("isLevelUp") else ""))
+    gyms = list(dict.fromkeys(s.get("gymName") or s.get("gym", "?") for s in sessions))
+    head = [*gyms, _plural(total("tops"), "top")]
+    if total("climbedHeight"):
+        head.append(f"{total('climbedHeight')} m")
     return " · ".join(head), lines
 
 
