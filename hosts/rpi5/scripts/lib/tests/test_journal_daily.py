@@ -91,7 +91,7 @@ def test_content_names_places_and_tags_a_commute():
     assert text.startswith("### 🚲 Vélo - 2 trajets · 19,3 km · 1 h 22 · 612 kcal\n\n")
     assert "- **08:13** 🏡 Home → 💼 Work · 9,5 km · 37 min · 15,4 km/h" in text
     assert "date=2026-10-19" in text
-    assert text.rstrip().endswith("#vélo #domicile-travail")
+    assert text.rstrip().endswith("#bike #commute")
 
 
 def test_content_mixed_kinds_prefixes_each_line():
@@ -100,7 +100,7 @@ def test_content_mixed_kinds_prefixes_each_line():
     text = wm.content("2026-10-19", ws, [None, None], "https://d")
     assert text.startswith("### 🏅 Sport - 2 séances · 8,0 km · 40 min")
     assert "- 🏃 **18:31** Course" in text
-    assert text.rstrip().endswith("#vélo #course")
+    assert text.rstrip().endswith("#bike #run")
 
 
 def test_posts_one_memo_dated_at_the_last_workout_end(tmp_path):
@@ -145,7 +145,7 @@ def test_changed_day_is_updated_in_place_keeping_user_additions(tmp_path):
     assert op.body_of(2)["attachments"] == [{"name": "attachments/NEW"}, {"name": "attachments/MINE"}]
     assert calls[3][1] == "/memos/OLD?updateMask=content,create_time,location"
     new = op.body_of(3)["content"]
-    assert new.startswith("Great day!\n\n### 🚲 Vélo") and new.endswith("#vélo\nPS: rain")
+    assert new.startswith("Great day!\n\n### 🚲 Vélo") and new.endswith("#bike\nPS: rain")
     assert state["2026-10-19"]["text"] in new and state["2026-10-19"]["atts"] == ["attachments/NEW"]
 
 
@@ -245,8 +245,8 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
     assert ("\n\n### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n"
-            "- [14:00](https://immich/photos/p2) · Paris 13e\n\n#vélo #photos") in memo["content"]
-    assert memo["content"].rstrip().endswith("#vélo #photos")
+            "- [14:00](https://immich/photos/p2) · Paris 13e\n\n#bike #photos") in memo["content"]
+    assert memo["content"].rstrip().endswith("#bike #photos")
 
 
 def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
@@ -382,7 +382,7 @@ def test_content_puts_weather_and_agenda_first_work_last():
                       agenda=["- **19:00-21:00** Dinner"], work=(4, 135, 14))
     assert text.startswith("🌧 Pluie légère · 6-13 °C\n\n### 📅 Agenda\n\n- **19:00-21:00** Dinner\n\n"
                            "### 🚲 Vélo")
-    assert text.endswith("\n\n### 💼 Travail - 4 réunions (2h15) 14 personnes\n\n#vélo #travail\n")
+    assert text.endswith("\n\n### 💼 Travail - 4 réunions (2h15) 14 personnes\n\n#bike #work\n")
     assert "### 💼 Travail - 1 réunion (45min) 1 personne" in wm.content("d", [], [], "d", work=(1, 45, 1))
 
 

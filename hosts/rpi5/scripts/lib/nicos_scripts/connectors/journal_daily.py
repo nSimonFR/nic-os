@@ -8,7 +8,7 @@ workout takes the workout's kind, since Dawarich files some rides as runs.
 Tracks that are not workouts get their own section. The map draws them all,
 plus any workout Dawarich has no track for yet (from its points). Start/end labels are the nearest place the user named in Dawarich
 (source `manual`) within PLACE_RADIUS_M, else the arrondissement/city of the
-nearest geocoded point. A Home ↔ Work workout adds #domicile-travail.
+nearest geocoded point. A Home ↔ Work workout adds #commute.
 
 Photos: the day's Immich timeline images (archived WhatsApp images and Live
 Photo motion halves are not on the timeline), favourites first, then spread
@@ -65,12 +65,12 @@ DARK_BG, DARK_CARD, DARK_MUTED_FG, DARK_FG = "#1d1f23", "#25282c", "#a2a5a9", "#
 COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
-# FreeReps workout name -> (emoji, title, noun, tag); the journal is in French.
+# FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
-    "Cycling": ("🚲", "Vélo", "trajet", "vélo"),
-    "Running": ("🏃", "Course", "course", "course"),
-    "Walking": ("🚶", "Marche", "marche", "marche"),
-    "Hiking": ("🥾", "Rando", "rando", "rando"),
+    "Cycling": ("🚲", "Vélo", "trajet", "bike"),
+    "Running": ("🏃", "Course", "course", "run"),
+    "Walking": ("🚶", "Marche", "marche", "walk"),
+    "Hiking": ("🥾", "Rando", "rando", "hike"),
 }
 # Dawarich Track::TRANSPORTATION_MODES (1.16) -> (emoji, map colour); 1 = stationary, dropped.
 WALK, ROAD, TRANSIT, OTHER = "#5fc19a", "#f2a65a", "#e57ba8", "#a78bfa"
@@ -344,8 +344,8 @@ def workout_section(ws, legs, web_url, day):
         lines.append(f"- {at} {' · '.join(bits)}")
         if tag not in tags:
             tags.append(tag)
-        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "domicile-travail" not in tags:
-            tags.append("domicile-travail")
+        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "commute" not in tags:
+            tags.append("commute")
     lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
     return lines, tags
 
@@ -410,7 +410,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         n, minutes, people = work
         sections.append([f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
                          f"{people} personne{'s' if people > 1 else ''}"])
-        tags.append("travail")
+        tags.append("work")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
