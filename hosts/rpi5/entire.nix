@@ -8,5 +8,5 @@
   environment.systemPackages = [ pkgs.unstablePkgs.entire ];
 
   # From `entire agent add codex` (0.11.5); exits quietly where Entire is off.
-  environment.etc."codex/hooks.json".source = ./entire-codex-hooks.json;
+  environment.etc."codex/hooks.json".source = ../../shared/entire/codex-hooks.json;
 }

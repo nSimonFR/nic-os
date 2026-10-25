@@ -2,3 +2,6 @@
 .DS_Store
 .decrypted~*
 DECRYPTED-
+# Entire, enabled clone-locally (entire-trusk-enable)
+.entire/.gitignore
+.entire/settings.local.json
