@@ -102,7 +102,7 @@ def test_posts_one_memo_dated_at_the_last_workout_end(tmp_path):
     op, state = memos_opener(), {}
     assert run_day(cfg(tmp_path), pg, op, state) == "memos/M"
     att, memo, patch = (op.body_of(i) for i in range(3))
-    assert att["filename"] == "map-2026-10-19.png"
+    assert att["filename"] == "map-2026-10-19.jpg"
     assert memo["visibility"] == "PRIVATE" and memo["attachments"] == [{"name": "attachments/A"}]
     assert memo["location"]["latitude"] == 48.91
     assert op.requests[2].full_url.endswith("/memos/M?updateMask=create_time")
@@ -195,10 +195,10 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
     wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
                    lambda m: None, no_render, str(tmp_path), im)
     names = [op.body_of(i)["filename"] for i in range(3)]
-    assert names == ["map-2026-10-19.png", "photo-2026-10-19-1.jpg", "photo-2026-10-19-2.jpg"]
+    assert names == ["map-2026-10-19.jpg", "photo-2026-10-19-13h00-1.jpg", "photo-2026-10-19-14h00-2.jpg"]
     memo = op.body_of(3)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/P1", "attachments/P2"]
-    assert "[📷 2 photos in Immich](https://immich/photos/p1)" in memo["content"]
+    assert "📷 [13:00](https://immich/photos/p1) · [14:00](https://immich/photos/p2)\n" in memo["content"]
     assert memo["content"].rstrip().endswith("#bike #photos")
 
 
@@ -210,6 +210,7 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im)
     memo = op.body_of(2)
     assert memo["content"].startswith("📷 **Photos — 2**")
+    assert "[13:00](https://immich/photos/p1) · [15:00](https://immich/photos/p3)" in memo["content"]
     assert memo["location"]["placeholder"] == "Paris"
     assert op.body_of(3) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
@@ -226,3 +227,9 @@ def test_immich_down_still_writes_the_workouts(tmp_path):
 def test_new_photo_changes_the_signature():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 60, 1, 1, 0)]
     assert wm.signature(ws, [2], ["p1"]) != wm.signature(ws, [2], ["p1", "p2"])
+
+
+def test_photo_line_links_the_rest_of_the_day():
+    line = wm.photo_line(10, [("08:12", "u1"), ("12:31", "u2")], "all")
+    assert line == "📷 [08:12](u1) · [12:31](u2) · [all 10 in Immich](all)"
+    assert wm.photo_line(2, [("08:12", "u1"), ("12:31", "u2")], "all") == "📷 [08:12](u1) · [12:31](u2)"
