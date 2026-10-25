@@ -12,6 +12,7 @@
   imports = [
     ./components/homebrew.nix
     ./entire.nix
+    ./home-manager-activation.nix
   ];
 
   nixpkgs.config.allowUnfree = true;
