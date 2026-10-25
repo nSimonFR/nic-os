@@ -181,7 +181,7 @@ def photo(n, fav=False, gps=True):
 def test_pick_photos_favourites_first_then_spread():
     assets = [photo(n) for n in range(10)]
     assets[7]["isFavorite"] = True
-    assert [a["id"] for a in wm.pick_photos(assets, 3)] == ["p0", "p7", "p9"]
+    assert [a["id"] for a in wm.pick_photos(assets, 3)] == ["p2", "p6", "p7"]
     assert [a["id"] for a in wm.pick_photos(assets[:2], 6)] == ["p0", "p1"]
     assert wm.pick_photos(assets, 0) == []
 
@@ -199,7 +199,7 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
     assert collages == [["13:00", "14:00"]] and im.previews == ["p1", "p2"]
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
-    assert "\n\n### 📷 Photos — 2\n\n[13:00](https://immich/photos/p1) · [14:00](https://immich/photos/p2)\n" in memo["content"]
+    assert "\n\n### 📷 Photos — 2\n\n[Open the day in Immich](https://immich/photos/p1)\n" in memo["content"]
     assert memo["content"].rstrip().endswith("#bike #photos")
 
 
@@ -211,8 +211,7 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
                    collage_fn=lambda imgs, labels, path: no_render(None, path))
     memo = op.body_of(1)
-    assert memo["content"].startswith("### 📷 Photos — 2")
-    assert "[13:00](https://immich/photos/p1) · [15:00](https://immich/photos/p3)" in memo["content"]
+    assert memo["content"].startswith("### 📷 Photos — 2\n\n[Open the day in Immich](https://immich/photos/p1)")
     assert memo["location"]["placeholder"] == "Paris"
     assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
@@ -231,10 +230,18 @@ def test_new_photo_changes_the_signature():
     assert wm.signature(ws, [2], ["p1"]) != wm.signature(ws, [2], ["p1", "p2"])
 
 
-def test_photo_line_links_the_rest_of_the_day():
-    line = wm.photo_line(10, [("08:12", "u1"), ("12:31", "u2")], "all")
-    assert line == "[08:12](u1) · [12:31](u2) · [all 10 in Immich](all)"
-    assert wm.photo_line(2, [("08:12", "u1"), ("12:31", "u2")], "all") == "[08:12](u1) · [12:31](u2)"
+def test_pick_photos_one_slot_per_burst():
+    burst = [{"id": f"b{i}", "fileCreatedAt": f"2026-10-19T12:29:{i:02d}Z"} for i in range(7)]
+    day = [{"id": "m", "fileCreatedAt": "2026-10-19T07:34:00Z"}, *burst,
+           {"id": "e", "fileCreatedAt": "2026-10-19T15:57:00Z"}]
+    assert [a["id"] for a in wm.pick_photos(day, 9)] == ["m", "b3", "e"]
+    day[5]["isFavorite"] = True
+    assert [a["id"] for a in wm.pick_photos(day, 9)] == ["m", "b4", "e"]
+
+
+def test_a_loop_reads_around_its_place():
+    ws = [wm.Workout(W1, "Cycling", T1, T1 + 420, 2.3, 7, 50)]
+    assert "- **08:13** around Paris 13e · 2.3 km" in wm.content("2026-10-19", ws, [("Paris 13e", "Paris 13e")], "d")
 
 
 def test_collage_grid():
