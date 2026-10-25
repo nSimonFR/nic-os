@@ -82,7 +82,11 @@ in
         "MEMOS_TOKEN_FILE=${config.age.secrets.memos-token.path}"
         "PSQL_BIN=${config.services.postgresql.package}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
+        "GIT_BIN=${pkgs.git}/bin/git"
+        # Side-project notes: `entire dispatch --local` as nsimon, one agent call per active day.
+        "JOURNAL_DISPATCH_REPOS=/home/nsimon/nic-os"
       ];
+      TimeoutStartSec = "45min";
     };
   };
   systemd.timers.journal-daily = {

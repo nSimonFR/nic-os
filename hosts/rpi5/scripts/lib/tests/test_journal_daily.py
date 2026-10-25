@@ -562,7 +562,7 @@ def test_activity_alone_makes_no_entry(tmp_path):
                           date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
 
 
-def test_work_notes_collapse_under_the_work_section_and_are_cached(tmp_path):
+def test_project_notes_collapse_in_their_own_section_and_are_cached(tmp_path):
     from test_journal_sources import DISPATCH
     pg, agent = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")]), []
 
@@ -578,9 +578,10 @@ def test_work_notes_collapse_under_the_work_section_and_are_cached(tmp_path):
     wm.journal_day(c, run, wm.Memos("http://m", "T", memos_opener()), state, date(2026, 10, 19), 1,
                    lambda m: None, no_render, str(tmp_path), now=after)
     text = state["2026-10-19"]["text"]
-    assert ("\n\n### 💼 Travail\n\n<details>\n<summary>Notes de travail</summary>\n\n"
+    assert ("\n\n### 🛠 Projets perso\n\n<details>\n<summary>Notes</summary>\n\n"
             "Un seul correctif") in text
-    assert "déploiement.\n\n</details>\n\n___________\n\n#bike #work\n" in text
+    assert "déploiement.\n\n</details>\n\n___________\n\n#bike #projects\n" in text
+    assert "Travail" not in text
     assert state["_dispatch"]["2026-10-19"][2] == "**nic-os**" and len(agent) == 1
     state["2026-10-19"]["sig"] = "stale"
     wm.journal_day(c, run, wm.Memos("http://m", "T", update_opener({"name": "memos/M", "content": text})),
@@ -588,7 +589,7 @@ def test_work_notes_collapse_under_the_work_section_and_are_cached(tmp_path):
     assert len(agent) == 1  # cached: the agent ran once for the day
 
 
-def test_work_notes_wait_for_the_day_to_end(tmp_path):
+def test_project_notes_wait_for_the_day_to_end(tmp_path):
     c = cfg(tmp_path, dispatch_repos=("/r",), dry_run=True)
     run = lambda cmd: (_ for _ in ()).throw(AssertionError(cmd))
     assert wm.day_notes(c, run, {}, date(2026, 10, 19), print, now=wm.day_bounds(date(2026, 10, 19))[1] - 1) == []
