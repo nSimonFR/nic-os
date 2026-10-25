@@ -262,16 +262,16 @@ def _plural(n, word, plural=None):
 def climbing_section(sessions):
     """(heading suffix, lines), one line per category (sessions of the day
     summed — in practice one): `Arkose Chevaleret · 7 tops · 38 m`, then
-    `- **Tops**: 🟢 5 verts · 🔵 2 bleus`, `- **Retops**: 1`, `- **Niveau**: vert ⬆️`."""
+    `- 🔵 **Bleu**: 2`, `- 🟢 **Vert**: 5`, `- **Retops**: 1`, `- **Niveau**: vert ⬆️`."""
     names, by_label = {}, {}
     for s in sessions:
         names.update(s.get("gymLabels") or {})
         for label, n in (s.get("topsCountsByLabel") or {}).items():
             by_label[label] = by_label.get(label, 0) + n
     total = lambda key: sum(s.get(key) or 0 for s in sessions)
-    tops = [f"{HOLD_EMOJI.get(names.get(l, l), '🪨')} {_plural(by_label[l], names.get(l, l))}"
-            for l in sorted(by_label, key=int)]
-    lines = [f"- **Tops**: {' · '.join(tops)}"] if tops else []
+    # one line per level, hardest (highest label) first
+    lines = [f"- {HOLD_EMOJI.get(names.get(l, l), '🪨')} **{names.get(l, l).capitalize()}**: {by_label[l]}"
+             for l in sorted(by_label, key=int, reverse=True)]
     for key, title in (("flashs", "Flashs"), ("retops", "Retops"), ("tried", "Non topés")):
         if total(key):
             lines.append(f"- **{title}**: {total(key)}")
