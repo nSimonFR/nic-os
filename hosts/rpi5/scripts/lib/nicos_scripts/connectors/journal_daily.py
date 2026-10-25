@@ -383,8 +383,8 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None):
-    """Memo markdown, in French: the weather line, then one `###` section
-    per source, work last.
+    """Memo markdown, in French: the weather line, agenda, photos, then one
+    `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
     same per trip that is not a workout; `photos` = the
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
@@ -397,6 +397,13 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append([weather])
     if agenda:
         sections.append(["### 📅 Agenda", "", *agenda])
+    if photos:
+        # Each line links into Immich, where swiping walks the rest of the day.
+        lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
+        if photos_url and not shots:
+            lines += [f"[Voir la journée dans Immich]({photos_url})"]
+        sections.append(lines)
+        tags.append("photos")
     if ws:
         lines, wtags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
@@ -410,13 +417,6 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = climbing
         sections.append([f"### 🧗 Escalade - {head}", "", *lines])
         tags.append("climbing")
-    if photos:
-        # Each line links into Immich, where swiping walks the rest of the day.
-        lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
-        if photos_url and not shots:
-            lines += [f"[Voir la journée dans Immich]({photos_url})"]
-        sections.append(lines)
-        tags.append("photos")
     if music:
         head, lines = music
         sections.append([f"### 🎵 Musique - {head}", "", *lines])
@@ -798,19 +798,6 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             data = f.read()
         files.append((f"map-{key}.jpg", "image/jpeg", data,
                       media_metadata(data, moved, location=lines[-1][0][-1])))
-    tiles = []
-    for url, colour in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
-        try:
-            tiles.append((fetch_fn(url), (colour, 1)))
-        except OSError as e:  # one missing picture must not drop the mosaic
-            log(f"{key}: boulder picture unavailable ({e})")
-    if tiles:
-        climb_path = f"{tmpdir}/climbing-{key}.jpg"
-        collage_fn([t[0] for t in tiles], [t[1] for t in tiles], climb_path)
-        with open(climb_path, "rb") as f:
-            data = f.read()
-        start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
-        files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
         collage_fn([immich.preview(p["id"]) for p in photos],
@@ -824,6 +811,19 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                       media_metadata(data, _taken(photos[-1]), location=gps,
                                      camera=next(iter(cams)) if len(cams) == 1 else None)))
 
+    tiles = []
+    for url, colour in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
+        try:
+            tiles.append((fetch_fn(url), (colour, 1)))
+        except OSError as e:  # one missing picture must not drop the mosaic
+            log(f"{key}: boulder picture unavailable ({e})")
+    if tiles:
+        climb_path = f"{tmpdir}/climbing-{key}.jpg"
+        collage_fn([t[0] for t in tiles], [t[1] for t in tiles], climb_path)
+        with open(climb_path, "rb") as f:
+            data = f.read()
+        start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
+        files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
     last = next((t for t in reversed(tracks) if t), None)
     if last:
         lat, lon = last[-1]
