@@ -362,8 +362,8 @@ def _int_fr(n):
 
 
 def activity_section(totals):
-    """(heading suffix, lines): `5 940 pas · 4,4 km`, then floors and active
-    kcal; None without steps."""
+    """Heading suffix, like the bike section's: `2 970 pas · 2,2 km · 37
+    étages · 128 kcal`; None without steps."""
     steps = totals.get("step_count", 0)
     if steps < 1:
         return None
@@ -371,9 +371,8 @@ def activity_section(totals):
     km = totals.get("distance_walking_running", 0) / 1000
     if km >= 0.1:
         head.append(f"{km:.1f} km".replace(".", ","))
-    lines = []
     if totals.get("flights_climbed", 0) >= 1:
-        lines.append(f"- **Étages**: {_int_fr(totals['flights_climbed'])}")
+        head.append(_plural(round(totals["flights_climbed"]), "étage"))
     if totals.get("active_energy", 0) >= 1:
-        lines.append(f"- **Calories actives**: {_int_fr(totals['active_energy'])} kcal")
-    return " · ".join(head), lines
+        head.append(f"{_int_fr(totals['active_energy'])} kcal")
+    return " · ".join(head)

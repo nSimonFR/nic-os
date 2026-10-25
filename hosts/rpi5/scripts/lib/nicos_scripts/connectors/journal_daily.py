@@ -393,8 +393,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     `photos_url` = the first of the day in Immich; `agenda` = personal
     calendar lines; `work` = (meetings, minutes, people) or None; `music` =
     (heading suffix, lines) from journal_sources.music_section, or None;
-    `climbing`, `games`, `activity` = the same from climbing_section /
-    game_section / activity_section."""
+    `climbing` and `games` = the same from climbing_section / game_section;
+    `activity` = the heading suffix from activity_section."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -407,6 +407,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             lines += [f"[Voir la journée dans Immich]({photos_url})"]
         sections.append(lines)
         tags.append("photos")
+    if activity:
+        sections.append([f"### 🚶 Activité - {activity}"])
     if ws:
         lines, wtags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
@@ -420,9 +422,6 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = climbing
         sections.append([f"### 🧗 Escalade - {head}", "", *lines])
         tags.append("climbing")
-    if activity:
-        head, lines = activity
-        sections.append([f"### 🚶 Activité - {head}", *([""] + lines if lines else [])])
     if games:
         head, lines = games
         sections.append([f"### 🎮 Jeux - {head}", "", *lines])

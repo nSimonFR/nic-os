@@ -110,4 +110,4 @@ def test_music_section_top_artists_tracks_and_rest():
 
 def test_activity_section_needs_steps_and_skips_empty_lines():
     assert js.activity_section({}) is None
-    assert js.activity_section({"step_count": 12345.6, "distance_walking_running": 50}) == ("12 346 pas", [])
+    assert js.activity_section({"step_count": 12345.6, "distance_walking_running": 50}) == "12 346 pas"

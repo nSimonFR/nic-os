@@ -542,7 +542,7 @@ def test_games_section_after_climbing_before_music(tmp_path):
     assert f"to_timestamp({lo + 86400})" in sql and f"to_timestamp({hi + 86400})" in sql
 
 
-def test_activity_after_climbing_and_before_games(tmp_path):
+def test_activity_one_line_before_the_rides(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], games=[("Hades", 900)],
                 activity=[("step_count", 5940.4), ("distance_walking_running", 4376.1),
                           ("flights_climbed", 46.5), ("active_energy", 256.0)])
@@ -550,8 +550,7 @@ def test_activity_after_climbing_and_before_games(tmp_path):
     wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
                    lambda m: None, no_render, str(tmp_path))
     text = op.body_of(1)["content"]
-    assert ("\n\n### 🚶 Activité - 5 940 pas · 4,4 km\n\n- **Étages**: 46\n"
-            "- **Calories actives**: 256 kcal\n\n### 🎮 Jeux") in text
+    assert text.startswith("### 🚶 Activité - 5 940 pas · 4,4 km · 46 étages · 256 kcal\n\n### 🚲 Vélo")
     sql = next(s for s in pg.sql if "health_metrics" in s)
     assert "coalesce(source, '') = ''" in sql and "DISTINCT ON (metric_name, time)" in sql
 
