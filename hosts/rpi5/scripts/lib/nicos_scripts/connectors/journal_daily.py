@@ -2,9 +2,11 @@
 """
 journal-daily: one Memos journal entry per day with workouts or photos.
 
-Workouts: stats from FreeReps (Apple Health); the map is drawn from Dawarich's
-points inside each workout's window, so it shows what freereps-to-dawarich put
-there. Start/end labels are the nearest place the user named in Dawarich
+Workouts: stats from FreeReps (Apple Health). Trips: every Dawarich track of
+the day (walk, car, metro…), one colour per travel mode; a track overlapping a
+workout takes the workout's kind, since Dawarich files some rides as runs.
+Tracks that are not workouts get their own section. The map draws them all,
+plus any workout Dawarich has no track for yet (from its points). Start/end labels are the nearest place the user named in Dawarich
 (source `manual`) within PLACE_RADIUS_M, else the arrondissement/city of the
 nearest geocoded point. A Home ↔ Work workout adds #commute.
 
@@ -70,6 +72,14 @@ KINDS = {
     "Walking": ("🚶", "Walk", "walk", "walk"),
     "Hiking": ("🥾", "Hike", "hike", "hike"),
 }
+# Dawarich Track::TRANSPORTATION_MODES (1.16) -> (emoji, map colour); 1 = stationary, dropped.
+WALK, ROAD, TRANSIT, OTHER = "#5fc19a", "#f2a65a", "#e57ba8", "#a78bfa"
+MODES = {0: ("🧭", OTHER), 2: ("🚶", WALK), 3: ("🏃", WALK), 4: ("🚲", COLORS[0]),
+         5: ("🚗", ROAD), 6: ("🚌", TRANSIT), 7: ("🚆", TRANSIT), 8: ("✈️", "#56c2d6"),
+         9: ("⛴", "#56c2d6"), 10: ("🏍", ROAD)}
+WORKOUT_MODE = {"Cycling": 4, "Running": 3, "Walking": 2, "Hiking": 2}
+# Shorter tracks are GPS jitter around a stop (Oct 12: three 0-100 m ones).
+MIN_TRIP_M = 300
 
 
 @dataclass(frozen=True)
@@ -179,6 +189,60 @@ def track(cfg, run, uid, w):
     return [(float(r[0]), float(r[1])) for r in rows]
 
 
+@dataclass(frozen=True)
+class Trip:
+    id: str
+    start: int  # epoch s
+    end: int
+    km: float
+    minutes: float
+    mode: int  # Dawarich dominant_mode
+    path: tuple  # ((lat, lon), ...)
+
+
+def trips(cfg, run, uid, day):
+    """The day's Dawarich tracks (by start), without stops and jitter."""
+    lo, hi = day_bounds(day)
+    rows = _q(cfg, run, f"""
+        SELECT id, extract(epoch FROM start_at)::bigint, extract(epoch FROM end_at)::bigint,
+               coalesce(distance, 0), coalesce(duration, 0), coalesce(dominant_mode, 0),
+               ST_AsGeoJSON(original_path, 6)
+        FROM tracks
+        WHERE user_id = {uid} AND coalesce(distance, 0) >= {MIN_TRIP_M}
+          AND coalesce(dominant_mode, 0) <> 1
+          AND start_at >= to_timestamp({lo}) AT TIME ZONE 'UTC'
+          AND start_at < to_timestamp({hi}) AT TIME ZONE 'UTC'
+        ORDER BY start_at
+    """, "dawarich")
+    return [Trip(r[0], int(r[1]), int(r[2]), float(r[3]) / 1000, float(r[4]) / 60, int(r[5]),
+                 tuple((lat, lon) for lon, lat in json.loads(r[6])["coordinates"]))
+            for r in rows]
+
+
+def _overlaps(t, w):
+    return t.start < w.end and t.end > w.start
+
+
+def map_lines(ws, tracks, day_trips):
+    """[(points, colour)] in time order: every trip, coloured by its mode or
+    by the kind of a workout it overlaps; then each workout no trip covers,
+    from its own points (Dawarich rebuilds tracks after the nightly sync)."""
+    lines = []
+    for t in day_trips:
+        w = next((w for w in ws if _overlaps(t, w)), None)
+        mode = WORKOUT_MODE.get(w.name, t.mode) if w else t.mode
+        lines.append((t.start, list(t.path), MODES.get(mode, MODES[0])[1]))
+    for w, pts in zip(ws, tracks):
+        if not any(_overlaps(t, w) for t in day_trips):
+            lines.append((w.start, pts, MODES[WORKOUT_MODE.get(w.name, 0)][1]))
+    return [(pts, c) for _, pts, c in sorted(lines, key=lambda l: l[0]) if len(pts) >= 2]
+
+
+def other_trips(ws, day_trips):
+    """Trips that are not one of the day's workouts."""
+    return [t for t in day_trips if not any(_overlaps(t, w) for w in ws)]
+
+
 def arrondissement(postcode, city):
     if len(postcode) == 5 and postcode.startswith("75"):
         n = int(postcode[3:])
@@ -275,6 +339,18 @@ def workout_section(ws, legs, web_url, day):
     return lines, tags
 
 
+def trip_section(day_trips, legs):
+    """Markdown lines: `- **14:02** 🚗 Alfie → Des Terres · 13.9 km · 35 min`."""
+    km = sum(t.km for t in day_trips)
+    n = len(day_trips)
+    lines = [f"### 🧭 Trips - {n} trip{'s' if n > 1 else ''} · {km:.1f} km", ""]
+    for t, (a, b) in zip(day_trips, legs):
+        where = f"around {a.label}" if a.label == b.label else f"{a.label} → {b.label}"
+        lines.append(f"- **{datetime.fromtimestamp(t.start, TZ):%H:%M}** {MODES.get(t.mode, MODES[0])[0]} "
+                     f"{where} · {t.km:.1f} km · {_hm(t.minutes)}")
+    return lines
+
+
 def photo_lines(shots):
     """One line per moment: `- [14:29](url) · 🏡 Alfie · 8 photos`.
     `shots` = [(HH:MM, url, place label, burst size)]."""
@@ -290,9 +366,10 @@ def photo_lines(shots):
 
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None):
+            weather=None, agenda=(), work=None, day_trips=(), trip_legs=()):
     """Memo markdown: the weather line, then one `###` section per source.
-    `legs` = [(from_label, to_label) or None] per workout; `photos` = the
+    `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
+    same per trip that is not a workout; `photos` = the
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
     `photos_url` = the first of the day in Immich; `agenda` = personal
     calendar lines; `work` = (meetings, minutes, people) or None."""
@@ -310,6 +387,11 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         lines, wtags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
         tags += wtags
+    if day_trips:
+        lines = trip_section(day_trips, trip_legs)
+        if not ws:  # else the workouts section carries it
+            lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+        sections.append(lines)
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
@@ -370,10 +452,11 @@ def map_size(tracks, long_side=1000):
     return round(long_side * ratio), long_side
 
 
-def render(tracks, path):
+def render(lines, path):
     """Map JPEG in Memos' dark palette: OSM tiles greyscaled, inverted and
-    tinted between its card grey and muted text, one colour per workout with
-    a background-coloured casing; start = ring in its colour, end = light dot."""
+    tinted between its card grey and muted text. `lines` = [(points, colour)]
+    (see `map_lines`), each with a background-coloured casing; start = ring
+    in its colour, end = light dot."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
     from staticmap import CircleMarker, Line, StaticMap  # lazy
 
@@ -384,11 +467,10 @@ def render(tracks, path):
             image.paste(ImageOps.colorize(inverted, black=DARK_CARD, white=DARK_MUTED_FG,
                                           blackpoint=0, whitepoint=255, midpoint=150))
 
-    drawn = [t for t in tracks if len(t) >= 2]
-    m = Dark(*map_size(drawn), padding_x=60, padding_y=60,
+    m = Dark(*map_size([pts for pts, _ in lines]), padding_x=60, padding_y=60,
              url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
              headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
-    lines = [([(lon, lat) for lat, lon in t], c) for t, c in zip(tracks, COLORS * 4) if len(t) >= 2]
+    lines = [([(lon, lat) for lat, lon in pts], c) for pts, c in lines]
     for ll, color in lines:
         m.add_line(Line(ll, DARK_BG, 11))
         m.add_line(Line(ll, color, 6))
@@ -609,46 +691,52 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         except (OSError, ValueError) as e:  # URLError/HTTPError are OSErrors
             log(f"{key}: Immich unavailable, no photos this run ({e})")
     agenda, work = day_calendar(cfg, run, day, log)
-    if not ws and not day_photos and not agenda and not work:
+    day_trips = trips(cfg, run, uid, day)
+    if not ws and not day_trips and not day_photos and not agenda and not work:
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     tracks = [track(cfg, run, uid, w) for w in ws]
+    lines = map_lines(ws, tracks, day_trips)
+    extra = other_trips(ws, day_trips)
     weather = None
     if weather_fn:
-        first = next((t[0] for t in tracks if t), None) or next(
+        first = next((pts[0] for pts, _ in lines), None) or next(
             (g for g in map(photo_gps, day_photos) if g), None) or cfg.home
         try:
             weather = weather_fn(day, *first)
         except (OSError, ValueError, KeyError, IndexError) as e:
             log(f"{key}: weather unavailable ({e})")
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
-                    [agenda, work, weather])
+                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips]])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
             for t in tracks]
-    link = immich.link(day_photos[0]["id"]) if day_photos else ""
+    trip_legs = [(place(cfg, run, uid, *t.path[0]), place(cfg, run, uid, *t.path[-1]))
+                 for t in extra]
+    link =immich.link(day_photos[0]["id"]) if day_photos else ""
     shots = []
     for m in moments(day_photos):
         gps = photo_gps(m)
         shots.append((photo_time(m), immich.link(m["id"]),
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
-                   weather, agenda, work)
+                   weather, agenda, work, extra, trip_legs)
     if cfg.dry_run:
-        log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
+        log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
+            f"{len(photos)}/{len(day_photos)} photos\n{text}")
         return None
 
+    moved = max([w.end for w in ws] + [t.end for t in day_trips], default=None)
     files = []
-    if any(len(t) >= 2 for t in tracks):
+    if lines:
         png_path = f"{tmpdir}/day-{key}.jpg"
-        render_fn(tracks, png_path)
+        render_fn(lines, png_path)
         with open(png_path, "rb") as f:
             data = f.read()
-        end = next(t for t in reversed(tracks) if len(t) >= 2)[-1]
         files.append((f"map-{key}.jpg", "image/jpeg", data,
-                      media_metadata(data, ws[-1].end, location=end)))
+                      media_metadata(data, moved, location=lines[-1][0][-1])))
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
         collage_fn([immich.preview(p["id"]) for p in photos],
@@ -666,13 +754,16 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     if last:
         lat, lon = last[-1]
         location = {"placeholder": legs[tracks.index(last)][1].label, "latitude": lat, "longitude": lon}
+    elif extra:
+        lat, lon = extra[-1].path[-1]
+        location = {"placeholder": trip_legs[-1][1].label, "latitude": lat, "longitude": lon}
     else:
         gps = [p["exifInfo"] for p in reversed(day_photos)
                if (p.get("exifInfo") or {}).get("latitude")]
         location = gps and {"placeholder": gps[0].get("city") or "",
                             "latitude": gps[0]["latitude"], "longitude": gps[0]["longitude"]}
-    if ws:
-        when = _utc(ws[-1].end)
+    if moved:
+        when = _utc(moved)
     elif day_photos:
         when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
     else:  # calendar-only day: noon
@@ -690,7 +781,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     if name is None:
         name = memos.create(text, atts, when, location or None)
     state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts}
-    log(f"{key}: {name} ({len(ws)} workouts, {len(photos)} photos)")
+    log(f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)")
     return name
 
 
