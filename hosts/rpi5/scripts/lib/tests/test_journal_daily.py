@@ -246,9 +246,9 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
     assert collages == [[("13:00", 1), ("14:00", 1)]] and im.previews == ["p1", "p2"]
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
-    assert ("\n\n### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n"
-            "- [14:00](https://immich/photos/p2) · Paris 13e\n\n#bike #photos") in memo["content"]
-    assert memo["content"].rstrip().endswith("#bike #photos")
+    assert memo["content"].startswith("### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n"
+                                      "- [14:00](https://immich/photos/p2) · Paris 13e\n\n### 🚲 Vélo")
+    assert memo["content"].rstrip().endswith("#photos #bike")
 
 
 def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
