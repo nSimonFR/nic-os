@@ -103,5 +103,5 @@ def test_music_section_top_artists_tracks_and_rest():
              L("A4", "A", 0), L("X", "", 0), *[L(f"T{i}", f"Z{i}", 0) for i in range(5)]]
     head, lines = js.music_section(plays, top=3)
     assert head == "12 titres · 1 h 03"
-    assert lines[0] == "- **A** · A1, A2, A3 …"
-    assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- + 5 autres artistes"]
+    assert lines[0] == "- **A** · A1 (2), A2, A3 …"
+    assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- et 5 autres artistes"]

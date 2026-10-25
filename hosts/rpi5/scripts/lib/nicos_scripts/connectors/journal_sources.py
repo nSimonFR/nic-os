@@ -218,19 +218,21 @@ def music_listens(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
 
 def music_section(listens, top=5, per_artist=3):
     """(heading suffix, lines): `31 titres · 2 h 03`, then the most played
-    artists with their tracks: `- **Lomepal** · Un peu de sang, Club, Trop beau`."""
+    artists with their tracks, replays in parentheses:
+    `- **Lomepal** · Un peu de sang (2), Club, Trop beau`."""
     by_artist = {}
     for l in listens:
         by_artist.setdefault(l.artists or "Artiste inconnu", []).append(l.title)
     ranked = sorted(by_artist.items(), key=lambda kv: -len(kv[1]))  # stable: first heard wins ties
     lines = []
     for artist, titles in ranked[:top]:
-        uniq = list(dict.fromkeys(titles))
+        plays = Counter(titles)  # first-heard order
+        uniq = [f"{t} ({n})" if n > 1 else t for t, n in plays.items()]
         shown = ", ".join(uniq[:per_artist]) + (" …" if len(uniq) > per_artist else "")
         lines.append(f"- **{artist}** · {shown}")
     if len(ranked) > top:
         n = len(ranked) - top
-        lines.append(f"- + {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}")
+        lines.append(f"- et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}")
     h, m = divmod(round(sum(l.seconds for l in listens) / 60), 60)
     n = len(listens)
     head = f"{n} titre{'s' if n > 1 else ''}" + (f" · {h} h {m:02d}" if h else f" · {m} min")
