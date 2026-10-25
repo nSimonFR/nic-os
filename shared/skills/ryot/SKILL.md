@@ -15,7 +15,8 @@ media and querying tracked data.
 ## How auth works here
 
 All calls go to the **local backend** through Agent Vault:
-`http://ryot.home.arpa:13352/graphql` (an alias for 127.0.0.1; rpi5 only). Auth is
+`http://ryot.home.arpa:13350/ryot/graphql` (an alias for 127.0.0.1; rpi5 only; the
+first call wakes Ryot, so allow ~30 s). Auth is
 a Bearer token, but agents hold only the placeholder `__ryot_api_key__`: Agent
 Vault swaps in the real token on the way. Source its proxy env in the same command
 as the call (it sets the proxy and `$RYOT_API_KEY`).
@@ -25,7 +26,7 @@ Helper used throughout:
 ```bash
 ryot_q() {  # ryot_q '<graphql>' '<variables-json>'
   set -a; . /var/lib/agent-vault-hermes/proxy.env; set +a
-  curl -fsS http://ryot.home.arpa:13352/graphql \
+  curl -fsS -m 90 http://ryot.home.arpa:13350/ryot/graphql \
     -H 'Content-Type: application/json' \
     -H "Authorization: Bearer $RYOT_API_KEY" \
     -d "$(jq -nc --arg q "$1" --argjson v "${2:-{\}}" '{query:$q, variables:$v}')"
