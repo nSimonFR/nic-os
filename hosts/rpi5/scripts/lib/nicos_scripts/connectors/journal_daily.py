@@ -32,8 +32,9 @@ Calendar, weather, activity (FreeReps), music and games (Ryot) and climbing
 climbing session still gets an entry; weather, activity, music or games alone
 do not.
 
-Work notes: `entire dispatch --local` over the day, per repo in
-JOURNAL_DISPATCH_REPOS, collapsed under the work section. Generated once per
+Side-project notes: `entire dispatch --local` over the day, per repo in
+JOURNAL_DISPATCH_REPOS, in a collapsed "Projets perso" section (the repos on
+the Pi are side projects, not work). Generated once per
 finished day and cached in the state's `_dispatch` (an agent call each).
 
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
@@ -404,8 +405,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     calendar lines; `work` = (meetings, minutes, people) or None; `music` =
     (heading suffix, lines) from journal_sources.music_section, or None;
     `climbing` and `games` = the same from climbing_section / game_section;
-    `activity` = the heading suffix from activity_section; `notes` = work
-    notes (journal_sources.dispatch_notes), collapsed under the work section."""
+    `activity` = the heading suffix from activity_section; `notes` = side-project
+    notes (journal_sources.dispatch_notes), collapsed in their own section."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -441,16 +442,14 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = games
         sections.append([f"### 🎮 Jeux - {head}", "", *lines])
         tags.append("gaming")
-    if work or notes:
-        head = "### 💼 Travail"
-        if work:
-            n, minutes, people = work
-            head += (f" - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
-                     f"{people} personne{'s' if people > 1 else ''}")
-        lines = [head]
-        if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
-            lines += ["", "<details>", "<summary>Notes de travail</summary>", "", *notes, "", "</details>"]
-        sections.append(lines)
+    if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
+        sections.append(["### 🛠 Projets perso", "", "<details>", "<summary>Notes</summary>", "",
+                         *notes, "", "</details>"])
+        tags.append("projects")
+    if work:
+        n, minutes, people = work
+        sections.append([f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
+                         f"{people} personne{'s' if people > 1 else ''}"])
         tags.append("work")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
@@ -752,7 +751,7 @@ def day_climbing(cfg, day, log):
 
 
 def day_notes(cfg, run, state, day, log, now=None):
-    """The day's work notes: cached in state["_dispatch"], else generated once
+    """The day's side-project notes: cached in state["_dispatch"], else generated once
     the day is over (an agent call per active repo). Not cached on failure,
     nor in dry run."""
     key = day.isoformat()
@@ -766,7 +765,7 @@ def day_notes(cfg, run, state, day, log, now=None):
         notes = src.dispatch_notes(run, cfg.dispatch_repos, lo, hi, cfg.dispatch_user,
                                    cfg.runuser, cfg.git)
     except (OSError, subprocess.CalledProcessError) as e:
-        log(f"{key}: work notes unavailable ({e})")
+        log(f"{key}: project notes unavailable ({e})")
         return []
     if not cfg.dry_run:
         state.setdefault("_dispatch", {})[key] = notes

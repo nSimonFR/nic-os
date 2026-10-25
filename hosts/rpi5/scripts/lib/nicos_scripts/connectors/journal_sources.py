@@ -410,7 +410,7 @@ def clean_dispatch(md):
 
 
 def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="git"):
-    """Work notes for [lo, hi) from `entire dispatch --local` in each repo, run
+    """Side-project notes for [lo, hi) from `entire dispatch --local` in each repo, run
     as `user` (the agent CLI's credentials are theirs). A repo with no commit
     in the window is skipped before the agent is called."""
     import shlex
