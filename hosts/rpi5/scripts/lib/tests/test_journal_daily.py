@@ -14,9 +14,9 @@ T1, T2 = 1792390421, 1792427478
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=()):
+    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
-        self.tracks, self.music = tracks, music
+        self.tracks, self.music, self.games = tracks, music, games
         self.sql = []
 
     def __call__(self, cmd):
@@ -26,6 +26,8 @@ class FakePg:
             rows = []
         elif "FROM workouts" in sql:
             rows = self.workouts
+        elif "FROM seen" in sql and "video_game" in sql:
+            rows = self.games
         elif "FROM seen" in sql:
             rows = self.music
         elif "FROM tracks" in sql:
@@ -521,3 +523,18 @@ def test_climbing_mosaic_of_topped_boulders_hardest_first(tmp_path):
 
 def test_collage_grid_goes_four_wide_past_nine():
     assert [wm.collage_grid(n) for n in (10, 12, 16)] == [(4, 3), (4, 3), (4, 4)]
+
+
+def test_games_section_after_climbing_before_music(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")],
+                music=[("Club", "Lomepal", 250)], games=[("Stardew Valley", 6000), ("Hades", 900)])
+    op = memos_opener()
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path))
+    text = op.body_of(1)["content"]
+    assert ("\n\n### 🎮 Jeux - 1 h 55\n\n- **Stardew Valley** · 1 h 40\n- **Hades** · 15 min"
+            "\n\n### 🎵 Musique") in text
+    assert text.rstrip().endswith("#bike #gaming #music")
+    sql = next(s for s in pg.sql if "video_game" in s)
+    lo, hi = wm.day_bounds(date(2026, 10, 19))
+    assert f"to_timestamp({lo + 86400})" in sql and f"to_timestamp({hi + 86400})" in sql
