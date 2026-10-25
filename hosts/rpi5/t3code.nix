@@ -8,6 +8,7 @@
 #   sudo systemctl restart t3code
 {
   config,
+  lib,
   pkgs,
   username,
   ...
@@ -15,6 +16,22 @@
 let
   inherit (pkgs) t3code;
   homeDir = config.users.users.${username}.home;
+  # proxy.env's NO_PROXY plus the GitHub API, so the side panel sends the
+  # human's token saved in T3's Settings instead of the broker's nSimonFR-ai one.
+  # Sessions still reach GitHub through the broker: git via its gitconfig, gh
+  # via its wrapper, both of which re-apply the proxy.
+  githubDirect =
+    let
+      noProxy = lib.concatStringsSep "," [
+        "localhost" "127.0.0.1" "::1"
+        config.systemd.services.agent-vault-bootstrap.environment.AGENT_VAULT_NO_PROXY
+        "api.github.com" "uploads.github.com"
+      ];
+    in
+    pkgs.writeText "t3code-github-direct.env" ''
+      NO_PROXY=${noProxy}
+      no_proxy=${noProxy}
+    '';
 in
 {
   # `t3 pair`, `t3 connect status`, `t3 project …` talk to the running server.
@@ -42,7 +59,8 @@ in
       # Agent Vault's proxy env (hosts/rpi5/agent-vault.nix), for the server and
       # every session: T3's own GitHub client and the skills hold placeholders
       # only. `-`: absent until the first bootstrap.
-      EnvironmentFile = "-/var/lib/agent-vault-hermes/proxy.env";
+      # Overriding NO_PROXY takes a later EnvironmentFile: one wins over Environment=.
+      EnvironmentFile = [ "-/var/lib/agent-vault-hermes/proxy.env" "${githubDirect}" ];
 
       # Upstream's own unit (`t3 service install`) uses these.
       KillMode = "mixed";
