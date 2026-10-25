@@ -155,6 +155,7 @@ in
     ./tailnet-mitm.nix
     ./sumeria-mitm.nix
     ./arkose-sync.nix
+    ./entire.nix
     ./hydroxide.nix
     ./vaultwarden.nix
     ./forgejo.nix
