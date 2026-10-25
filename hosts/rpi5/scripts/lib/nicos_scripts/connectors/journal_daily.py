@@ -233,7 +233,7 @@ def workout_section(ws, legs, web_url, day):
     head.append(_hm(sum(w.minutes for w in ws)))
     if sum(w.kcal for w in ws):
         head.append(f"{sum(w.kcal for w in ws):.0f} kcal")
-    lines, tags = [f"### {emoji} {title} — {' · '.join(head)}", ""], []
+    lines, tags = [f"### {emoji} {title} - {' · '.join(head)}", ""], []
     for w, leg in zip(ws, legs):
         e, _, _, tag = kind(w.name)
         at = f"**{datetime.fromtimestamp(w.start, TZ):%H:%M}**"
@@ -259,17 +259,35 @@ def workout_section(ws, legs, web_url, day):
     return lines, tags
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url=""):
+def photo_lines(shots):
+    """One line per moment: `- [14:29](url) · 🏡 Alfie · 8 photos`.
+    `shots` = [(HH:MM, url, place label, burst size)]."""
+    lines = []
+    for hm, url, where, n in shots:
+        bits = [f"[{hm}]({url})" if url else hm]
+        if where:
+            bits.append(where)
+        if n > 1:
+            bits.append(f"{n} photos")
+        lines.append(f"- {' · '.join(bits)}")
+    return lines
+
+
+def content(day, ws, legs, web_url, photos=0, photos_url="", shots=()):
     """Memo markdown, one `###` section per source. `legs` = [(from_label,
     to_label) or None] per workout; `photos` = the day's timeline photo count,
-    `photos_url` = the first of the day in Immich."""
+    `shots` = its moments (see `photo_lines`), `photos_url` = the first of the
+    day in Immich."""
     sections, tags = [], []
     if ws:
         lines, tags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
     if photos:
-        sections.append([f"### 📷 Photos — {photos}", "", f"[Open the day in Immich]({photos_url})"]
-                        if photos_url else [f"### 📷 Photos — {photos}"])
+        # Each line links into Immich, where swiping walks the rest of the day.
+        lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
+        if photos_url and not shots:
+            lines += [f"[Open the day in Immich]({photos_url})"]
+        sections.append(lines)
         tags.append("photos")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
@@ -401,20 +419,25 @@ def _taken(asset):
 BURST_GAP_S = 120
 
 
-def pick_photos(assets, n):
-    """One photo per burst (shots < BURST_GAP_S apart; its favourite, else its
-    middle shot), then favourites first and the rest nearest evenly spaced
-    instants of the day. Oct 12: a 7-shot burst at 14:29 had filled 7 of 9
-    tiles. Each pick carries `burst` = how many shots it stands for. Oldest
-    first."""
+def moments(assets):
+    """The day's photos grouped into bursts (shots < BURST_GAP_S apart), one
+    representative each — the burst's favourite, else its middle shot —
+    carrying `burst` = how many shots it stands for. Oldest first."""
     bursts = []
     for a in assets:
         if bursts and _taken(a) - _taken(bursts[-1][-1]) < BURST_GAP_S:
             bursts[-1].append(a)
         else:
             bursts.append([a])
-    reps = [{**next((a for a in b if a.get("isFavorite")), b[len(b) // 2]), "burst": len(b)}
+    return [{**next((a for a in b if a.get("isFavorite")), b[len(b) // 2]), "burst": len(b)}
             for b in bursts]
+
+
+def pick_photos(assets, n):
+    """One photo per moment (see `moments`), favourites first, then the
+    moments nearest evenly spaced instants of the day. Oct 12: a 7-shot burst
+    at 14:29 had filled 7 of 9 tiles. Oldest first."""
+    reps = moments(assets)
     picked = [a for a in reps if a.get("isFavorite")][:max(n, 0)]
     rest = [a for a in reps if not a.get("isFavorite")]
     k = min(n - len(picked), len(rest))
@@ -538,14 +561,19 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     tracks = [track(cfg, run, uid, w) for w in ws]
-    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in photos])
+    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
             for t in tracks]
     link = immich.link(day_photos[0]["id"]) if day_photos else ""
-    text = content(key, ws, legs, cfg.web_url, len(day_photos), link)
+    shots = []
+    for m in moments(day_photos):
+        gps = photo_gps(m)
+        shots.append((photo_time(m), immich.link(m["id"]),
+                      place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
+    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
         return None

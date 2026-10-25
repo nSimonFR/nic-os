@@ -83,7 +83,7 @@ def test_content_names_places_and_tags_a_commute():
           wm.Workout(W2, "Cycling", T2, T2 + 2700, 9.8, 45, 312)]
     home, work = wm.Place("🏡 Home", "Home"), wm.Place("💼 Work", "Work")
     text = wm.content("2026-10-19", ws, [(home, work), (work, home)], "https://d")
-    assert text.startswith("### 🚲 Bike — 2 rides · 19.3 km · 1 h 22 · 612 kcal\n\n")
+    assert text.startswith("### 🚲 Bike - 2 rides · 19.3 km · 1 h 22 · 612 kcal\n\n")
     assert "- **08:13** 🏡 Home → 💼 Work · 9.5 km · 37 min · 15.4 km/h" in text
     assert "date=2026-10-19" in text
     assert text.rstrip().endswith("#bike #commute")
@@ -93,7 +93,7 @@ def test_content_mixed_kinds_prefixes_each_line():
     ws = [wm.Workout(W1, "Cycling", T1, T1 + 600, 3, 10, 0),
           wm.Workout(W2, "Running", T2, T2 + 1800, 5, 30, 0)]
     text = wm.content("2026-10-19", ws, [None, None], "https://d")
-    assert text.startswith("### 🏅 Workouts — 2 workouts · 8.0 km · 40 min")
+    assert text.startswith("### 🏅 Workouts - 2 workouts · 8.0 km · 40 min")
     assert "- 🏃 **18:31** Running" in text
     assert text.rstrip().endswith("#bike #run")
 
@@ -239,7 +239,8 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
     assert collages == [[("13:00", 1), ("14:00", 1)]] and im.previews == ["p1", "p2"]
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
-    assert "\n\n### 📷 Photos — 2\n\n[Open the day in Immich](https://immich/photos/p1)\n" in memo["content"]
+    assert ("\n\n### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n"
+            "- [14:00](https://immich/photos/p2) · Paris 13e\n\n#bike #photos") in memo["content"]
     assert memo["content"].rstrip().endswith("#bike #photos")
 
 
@@ -251,7 +252,7 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
                    collage_fn=lambda imgs, labels, path: no_render(None, path))
     memo = op.body_of(1)
-    assert memo["content"].startswith("### 📷 Photos — 2\n\n[Open the day in Immich](https://immich/photos/p1)")
+    assert memo["content"].startswith("### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n- [15:00](https://immich/photos/p3)\n")
     assert memo["location"]["placeholder"] == "Paris"
     assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
@@ -363,3 +364,8 @@ def test_map_and_collage_carry_metadata(tmp_path):
     assert col_meta["captureTime"]["localDateTime"] == "2026-10-19T14:00:00"
     assert col_meta["location"] == {"latitude": 48.85, "longitude": 2.35}  # p2 has none
     assert (col_meta["cameraMake"], col_meta["cameraModel"]) == ("Apple", "iPhone 11 Pro")
+
+
+def test_photo_lines_one_per_moment():
+    assert wm.photo_lines([("09:34", "u1", "", 1), ("14:29", "u2", "🏡 Alfie", 8)]) == \
+        ["- [09:34](u1)", "- [14:29](u2) · 🏡 Alfie · 8 photos"]
