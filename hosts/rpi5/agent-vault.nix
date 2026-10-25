@@ -9,11 +9,17 @@
 # MCPs, HA, Dawarich and Ryot keep their tokens. Hermes runs as nsimon, which can
 # still read /run/agenix/agent-env: this stops env/prompt leaks, not a shell.
 #
+# GitHub is the other way round: Agent Vault attaches nSimonFR-ai's token itself
+# (github-ai-token, root-only), so agents hold nothing at all. Every git on the
+# box reaches github.com through it (hermesDir/gitconfig, included from
+# ~/.config/git), and the rpi5 `gh` wrapper sources proxy.env. nsimon has
+# passwordless sudo, so this stops an echoed token, not a determined agent.
+#
 # State is derived: agent-vault-bootstrap re-applies the owner account,
 # credentials (from agent-env) and services on every start, so a lost DB is a
 # restart. Admin UI (tailnet): owner admin@agent-vault.local, password in
 # /run/agenix/agent-vault-admin-password.
-{ config, pkgs, ... }:
+{ config, lib, pkgs, ... }:
 let
   pkg       = pkgs.callPackage ../../pkgs/services/agent-vault.nix { };
   stateDir  = "/var/lib/agent-vault";
@@ -30,7 +36,15 @@ let
     { name = "gemini";        host = "generativelanguage.googleapis.com"; keys = [ "GEMINI_API_KEY" ];               "in" = [ "header" "query" ]; }
     { name = "linear";        host = "api.linear.app";                    keys = [ "LINEAR_KEY" "LINEAR_KEY_TRUSK" ]; "in" = [ "header" ]; }
     { name = "typesafe";      host = "api.typesafe.ai";                   keys = [ "TYPESAFE_API_KEY" ];             "in" = [ "header" ]; }
+    # Attached, not substituted: whatever the client sends is replaced.
+    { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
+    { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
+    { name = "github-git";     host = "github.com";         auth = { type = "basic"; username = "GITHUB_GIT_USER"; password = "GITHUB_AI_TOKEN"; }; }
   ];
+  credFiles = {
+    GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
+    GITHUB_GIT_USER = pkgs.writeText "github-git-user" "x-access-token";
+  };
   servicesFile = pkgs.writeText "agent-vault-services.json" (builtins.toJSON brokered);
 in
 {
@@ -82,13 +96,14 @@ in
     after = [ "agent-vault.service" ];
     partOf = [ "agent-vault.service" ];
     # A re-encrypted agent-env is a new store path, so a rotated key re-applies.
-    restartTriggers = [ config.age.secrets.agent-env.file servicesFile ];
+    restartTriggers = [ config.age.secrets.agent-env.file config.age.secrets.github-ai-token.file servicesFile ];
     environment = {
       AGENT_VAULT_ADDR = "http://127.0.0.1:${toString apiPort}";
       AGENT_VAULT_PROXY = "127.0.0.1:${toString proxyPort}";
       AGENT_VAULT_ADMIN_EMAIL = "admin@agent-vault.local";
       AGENT_VAULT_ADMIN_PASSWORD_FILE = config.age.secrets.agent-vault-admin-password.path;
       AGENT_VAULT_CREDS_FILE = config.age.secrets.agent-env.path;
+      AGENT_VAULT_CRED_FILES = lib.concatStringsSep "," (lib.mapAttrsToList (k: v: "${k}=${v}") credFiles);
       AGENT_VAULT_SERVICES_FILE = "${servicesFile}";
       AGENT_VAULT_OUT_DIR = hermesDir;
       # Telegram is Hermes' lifeline; .ts.net covers Aperture (the LLM path).

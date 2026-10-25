@@ -73,3 +73,24 @@ def test_missing_credential_fails_before_any_call(cfg):
     with pytest.raises(RuntimeError, match="LINEAR_KEY_TRUSK"):
         mod.run(cfg, opener=opener)
     assert seen == {}
+
+
+def test_attaching_service_reads_its_own_secret_and_routes_git(cfg, tmp_path):
+    (tmp_path / "gh").write_text("ghx_real\n")
+    (tmp_path / "user").write_text("x-access-token")
+    mod.Path(cfg.services_file).write_text(json.dumps(SERVICES + [
+        {"name": "github", "host": "github.com",
+         "auth": {"type": "basic", "username": "GH_USER", "password": "GH_TOKEN_AI"}}]))
+    cfg = mod.Config(**{**cfg.__dict__, "cred_files": f"GH_TOKEN_AI={tmp_path}/gh,GH_USER={tmp_path}/user"})
+    opener, seen = server(ROUTES)
+    mod.run(cfg, opener=opener, sleep=lambda _: None)
+    assert seen[("POST", "/v1/credentials")]["credentials"]["GH_TOKEN_AI"] == "ghx_real"
+    assert seen[("PUT", "/v1/vaults/default/services")]["services"][1] == {
+        "name": "github", "host": "github.com",
+        "auth": {"type": "basic", "username": "GH_USER", "password": "GH_TOKEN_AI"}}
+    out = mod.Path(cfg.out_dir)
+    assert "ghx_real" not in (out / "proxy.env").read_text() + (out / "gitconfig").read_text()
+    assert "GH_TOKEN_AI" not in (out / "proxy.env").read_text()
+    assert '[http "https://github.com/"]\n\tproxy = http://av_agt_new:default@127.0.0.1:14322\n' \
+        in (out / "gitconfig").read_text()
+    assert '[http "https://api.linear.app/"]' not in (out / "gitconfig").read_text()

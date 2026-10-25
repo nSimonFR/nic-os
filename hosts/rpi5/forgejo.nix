@@ -146,6 +146,7 @@ in
     serviceConfig = {
       Type = "oneshot";
       User = "nsimon";
+      LoadCredential = "github:${config.age.secrets.forgejo-github-mirror-token.path}";
     };
     path = [ pkgs.gh pkgs.curl pkgs.jq ];
     environment.HOME = "/home/nsimon";
@@ -158,8 +159,9 @@ in
       FORGEJO_URL="http://127.0.0.1:${toString externalPort}"
       FORGEJO_API="$FORGEJO_URL/api/v1"
 
-      # GitHub auth via gh CLI (already authenticated for nsimon)
-      GITHUB_TOKEN=$(${pkgs.gh}/bin/gh auth token)
+      # Read-only, and stored in each new mirror: nsimon's gh holds no token.
+      GITHUB_TOKEN=$(cat "$CREDENTIALS_DIRECTORY/github")
+      export GH_TOKEN="$GITHUB_TOKEN"
 
       # Forgejo API token (created once after first login)
       # Stored in /etc/forgejo/ because /var/lib/forgejo is 750 forgejo:forgejo

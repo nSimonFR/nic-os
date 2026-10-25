@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 agent-vault-bootstrap: push the repo's declared state into Agent Vault, whose only
-config is its own DB — owner account, credentials (from agent-env), services, and
-the Hermes agent token. Then write OUT_DIR/{agent-token,ca-bundle.pem,proxy.env}.
+config is its own DB — owner account, credentials (agent-env + CRED_FILES), services,
+and the agent token. Then write OUT_DIR/{agent-token,ca-bundle.pem,proxy.env,gitconfig}.
 Idempotent; a lost DB is a re-run. Env: see hosts/rpi5/agent-vault.nix.
 """
 
@@ -32,6 +32,7 @@ class Config:
     admin_email: str = ""
     admin_password_file: str = ""
     creds_file: str = ""
+    cred_files: str = ""
     services_file: str = ""
     out_dir: str = ""
     no_proxy: str = ""
@@ -49,6 +50,7 @@ class Config:
             admin_email=get("AGENT_VAULT_ADMIN_EMAIL"),
             admin_password_file=get("AGENT_VAULT_ADMIN_PASSWORD_FILE"),
             creds_file=get("AGENT_VAULT_CREDS_FILE"),
+            cred_files=get("AGENT_VAULT_CRED_FILES"),
             services_file=get("AGENT_VAULT_SERVICES_FILE"),
             out_dir=get("AGENT_VAULT_OUT_DIR"),
             no_proxy=get("AGENT_VAULT_NO_PROXY"),
@@ -72,6 +74,20 @@ def parse_env_file(text):
             v = v[1:-1]
         out[k] = v
     return out
+
+
+def auth_keys(auth):
+    """Credential keys an attaching service reads (Agent Vault's Auth.CredentialKeys)."""
+    return [auth[f] for f in ("token", "username", "password", "key") if auth.get(f)]
+
+
+def load_creds(cfg):
+    """agent-env, plus `KEY=path` pairs whose file holds just the value."""
+    creds = parse_env_file(Path(cfg.creds_file).read_text())
+    for pair in filter(None, cfg.cred_files.split(",")):
+        key, path = pair.split("=", 1)
+        creds[key] = read_secret(path)
+    return creds
 
 
 def call(cfg, method, path, body=None, token=None, headers=None, opener=None):
@@ -107,13 +123,14 @@ def write_owned(path, text, mode):
 
 def run(cfg, opener=None, sleep=time.sleep):
     declared = json.loads(Path(cfg.services_file).read_text())
-    keys = sorted({k for s in declared for k in s["keys"]})
-    creds = parse_env_file(Path(cfg.creds_file).read_text())
-    missing = [k for k in keys if not creds.get(k)]
+    keys = sorted({k for s in declared for k in s.get("keys", [])})
+    attached = sorted({k for s in declared if "auth" in s for k in auth_keys(s["auth"])})
+    creds = load_creds(cfg)
+    missing = [k for k in keys + attached if not creds.get(k)]
     if missing:
         raise RuntimeError(f"not in {cfg.creds_file}: {', '.join(missing)}")
     if cfg.dry_run:
-        log(f"dry run — would broker {', '.join(keys)}")
+        log(f"dry run — would broker {', '.join(keys + attached)}")
         return
 
     def api(*a, **kw):
@@ -137,9 +154,10 @@ def run(cfg, opener=None, sleep=time.sleep):
 
     ok(api("PUT", "/v1/admin/settings", {"invite_only": True}, token=session), "settings")
     ok(api("POST", "/v1/credentials",
-           {"vault": VAULT, "credentials": {k: creds[k] for k in keys}}, token=session),
+           {"vault": VAULT, "credentials": {k: creds[k] for k in keys + attached}}, token=session),
        "credentials")
     services = [
+        {"name": s["name"], "host": s["host"], "auth": s["auth"]} if "auth" in s else
         {"name": s["name"], "host": s["host"], "auth": {"type": "passthrough"},
          "substitutions": [{"key": k, "placeholder": placeholder(k), "in": s["in"]}
                            for k in s["keys"]]}
@@ -175,7 +193,12 @@ def run(cfg, opener=None, sleep=time.sleep):
     # Only rewrite on change: agent-vault-hermes-restart.path watches this file.
     if not env_file.exists() or env_file.read_text() != text:
         write_owned(env_file, text, 0o400)
-    log(f"{len(keys)} credentials, {len(declared)} services applied")
+    # Included by ~/.config/git: every git routes the attaching hosts here,
+    # whether or not it runs with proxy.env.
+    git = "".join(f'[http "https://{s["host"]}/"]\n\tproxy = {proxy_url}\n\tsslCAInfo = {bundle}\n'
+                  for s in declared if "auth" in s)
+    write_owned(out / "gitconfig", git, 0o400)
+    log(f"{len(keys + attached)} credentials, {len(declared)} services applied")
 
 
 def main(argv=None, env=None):
