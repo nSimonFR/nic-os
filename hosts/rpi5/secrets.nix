@@ -110,7 +110,7 @@
     };
     ryot-import-env = {
       file = ./secrets/ryot-import-env.age;
-      owner = "root"; # RYOT_LOGIN_* + PLEX_IMPORT_SERVERS; the V1 Plex re-import is retired
+      owner = "ryot-connector"; # PLEX_IMPORT_SERVERS for plex-to-ryot.service
       mode = "0400";
     };
     ryot-pg-password = {
@@ -166,12 +166,12 @@
     };
     steam-connector-env = {
       file  = ./secrets/steam-connector-env.age;
-      owner = "root"; # steam-to-ryot is retired (V2 has no Generic JSON); kept for its V2 rewrite
+      owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service
       mode  = "0400";
     };
     spotify-connector-env = {
       file  = ./secrets/spotify-connector-env.age;
-      owner = "root"; # spotify-to-ryot is retired; V2 pulls Spotify itself
+      owner = "ryot-connector"; # EnvironmentFile for spotify-to-ryot.service
       mode  = "0400";
     };
     for-sure-api-key = {

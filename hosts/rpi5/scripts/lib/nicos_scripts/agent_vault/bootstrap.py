@@ -82,10 +82,17 @@ def auth_keys(auth):
 
 
 def load_creds(cfg):
-    """CREDS_FILE (KEY=VAL), plus `KEY=path` pairs whose file holds just the value."""
+    """CREDS_FILE (KEY=VAL), plus `KEY=path` pairs whose file holds just the value.
+
+    `KEY=-path` is optional: a missing file keeps CREDS_FILE's value, if any.
+    """
     creds = parse_env_file(Path(cfg.creds_file).read_text())
     for pair in filter(None, cfg.cred_files.split(",")):
         key, path = pair.split("=", 1)
+        optional = path.startswith("-")
+        path = path.removeprefix("-")
+        if optional and not Path(path).exists():
+            continue
         creds[key] = read_secret(path)
     return creds
 

@@ -94,3 +94,11 @@ def test_attaching_service_reads_its_own_secret_and_routes_git(cfg, tmp_path):
     assert '[http "https://github.com/"]\n\tproxy = http://av_agt_new:default@127.0.0.1:14322\n' \
         in (out / "gitconfig").read_text()
     assert '[http "https://api.linear.app/"]' not in (out / "gitconfig").read_text()
+
+
+def test_an_optional_cred_file_overrides_when_present_and_is_skipped_when_absent(cfg, tmp_path):
+    (tmp_path / "ha").write_text("ha-from-file\n")
+    present = mod.Config(**{**cfg.__dict__, "cred_files": f"HA_TOKEN=-{tmp_path}/ha"})
+    assert mod.load_creds(present)["HA_TOKEN"] == "ha-from-file"
+    absent = mod.Config(**{**cfg.__dict__, "cred_files": f"HA_TOKEN=-{tmp_path}/nope"})
+    assert mod.load_creds(absent)["HA_TOKEN"] == "x"
