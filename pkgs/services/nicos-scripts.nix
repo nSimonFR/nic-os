@@ -54,6 +54,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.wealthfolio"
     "nicos_scripts.connectors.arkose"
     "nicos_scripts.connectors.freereps_dawarich"
+    "nicos_scripts.connectors.immich_dawarich"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
     "nicos_scripts.claude.boot_resume"

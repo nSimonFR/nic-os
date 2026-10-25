@@ -63,19 +63,25 @@ in
   systemd.services.dawarich-sidekiq-all.serviceConfig.EnvironmentFile =
     "/run/agenix/dawarich-geoapify";
 
-  # Apple Health ride routes (FreeReps, ~1 Hz) → Dawarich points. Root for
-  # `runuser -u postgres`: both DBs are read over the socket, the API key included.
+  # Apple Health ride routes (FreeReps, ~1 Hz) and geotagged Immich photos →
+  # Dawarich points. Root for `runuser -u postgres`: both DBs are read over the
+  # socket, the API keys included.
   systemd.services.freereps-to-dawarich = {
-    description = "Push FreeReps workout routes into Dawarich";
+    description = "Push FreeReps workout routes and Immich photo fixes into Dawarich";
     after    = [ "postgresql.service" "dawarich-web.service" ];
     wants    = [ "dawarich-web.service" ];
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${pkgs.nicos-scripts}/bin/freereps-to-dawarich";
+      ExecStart = [
+        "${pkgs.nicos-scripts}/bin/freereps-to-dawarich"
+        "${pkgs.nicos-scripts}/bin/immich-to-dawarich"
+      ];
       StateDirectory = "freereps-to-dawarich";
       Environment = [
         "FREEREPS_DAWARICH_STATE=/var/lib/freereps-to-dawarich/pushed.json"
         "FREEREPS_DAWARICH_DRY_RUN=0"
+        "IMMICH_DAWARICH_STATE=/var/lib/freereps-to-dawarich/immich.json"
+        "IMMICH_DAWARICH_DRY_RUN=0"
         "DAWARICH_BASE_URL=http://127.0.0.1:${toString internalPort}"
         "PSQL_BIN=${config.services.postgresql.package}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
