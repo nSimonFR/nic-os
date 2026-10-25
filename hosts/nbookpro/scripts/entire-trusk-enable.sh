@@ -1,5 +1,6 @@
 # entire-trusk-enable [--apply] — turn Entire on, privately, in every
-# trusk-official clone under $TRUSK_DIR (default ~/MyDocuments/TRUSK).
+# trusk-official clone or submodule under $TRUSK_DIR (default ~/MyDocuments/TRUSK),
+# up to four levels deep (trusk-infra nests its services as submodules).
 #
 # Per clone: git hooks, a gitignored .entire/settings.local.json routing
 # checkpoints to nSimonFR/trusk-checkpoints, and a post-checkout hook that copies
@@ -18,7 +19,7 @@ post_checkout_hook() {
 #!/bin/sh
 $marker
 top=\$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
-main=\$(dirname "\$(git rev-parse --path-format=absolute --git-common-dir)")
+main=\$(git worktree list --porcelain | sed -n '1s/^worktree //p')
 [ "\$top" = "\$main" ] && exit 0
 [ -f "\$top/.entire/settings.local.json" ] && exit 0
 [ -f "\$main/.entire/settings.local.json" ] || exit 0
@@ -69,9 +70,10 @@ enable_clone() {
   echo "enabled $dir"
 }
 
-for d in "$root"/*/; do
-  d=${d%/}
-  [ -d "$d/.git" ] || continue
+find "$root" -maxdepth 4 -name node_modules -prune -o -name .git -print | sort | while read -r g; do
+  d=$(dirname "$g")
+  # A worktree's .git file points into <common>/worktrees/; its clone covers it.
+  [ -f "$g" ] && grep -q '/worktrees/' "$g" && continue
   case "$(git -C "$d" remote get-url origin 2>/dev/null)" in
     *github.com[:/]trusk-official/*) ;;
     *) continue ;;
