@@ -14,8 +14,9 @@ the app itself calls (seen in a capture, 2026-10-20):
   _users.getUserSessions({userId, skip})          newest first, pages of 20
   _users.getUserSessionBoulders({sessionId, userId})
         -> {boulders, triedBoulders, retopBoulders, gym...}
-Undocumented API: records are stored as received, minus pictures/avatars, so
-fields not seen yet (how a flash is marked) are kept.
+Undocumented API: records are stored as received, minus avatars and gym
+images, so fields not seen yet (how a flash is marked) are kept. A boulder's
+`picture` is kept: image ids that journal-daily turns into S3 URLs.
 
   ARKOSE_DIR             token.json + sessions.json   (default /var/lib/arkose-sync)
   ARKOSE_URL             DDP endpoint                 (default wss://plus.arkose.com/websocket)
@@ -42,8 +43,12 @@ MAX_PAGES = 50
 # Sessions this recent are re-fetched every run: tops can still be added.
 RECENT_S = 2 * 86400
 COUNT_KEYS = ("tops", "flashs", "tried", "retops")
+# Bumped when the stored detail changes shape; older sessions are re-fetched once.
+# 2: boulder `picture` kept (2026-10-25).
+DETAIL_VERSION = 2
+DETAIL_KEYS = ("boulders", "triedBoulders", "retopBoulders", "detailVersion")
 DROP_KEYS = frozenset({
-    "picture", "setterProfile", "userAvatars", "userFacebookId", "userGender",
+    "setterProfile", "userAvatars", "userFacebookId", "userGender",
     "userName", "gymLogo", "gymLogoGym", "gymSpraywallPicture", "likers", "_isNew",
 })
 
@@ -104,7 +109,7 @@ def _start_ts(session):
 def needs_detail(session, stored, now):
     if session.get("isEmpty"):
         return False
-    if stored is None or "boulders" not in stored:
+    if stored is None or "boulders" not in stored or stored.get("detailVersion") != DETAIL_VERSION:
         return True
     return (not session.get("isClosed")
             or now - _start_ts(session) < RECENT_S
@@ -186,9 +191,10 @@ def sync(ddp, token, store, now):
                                     {"sessionId": s["_id"], "userId": user_id}))
             for k in ("boulders", "triedBoulders", "retopBoulders"):
                 s[k] = detail.get(k, [])
+            s["detailVersion"] = DETAIL_VERSION
             fetched += 1
         elif prev:
-            for k in ("boulders", "triedBoulders", "retopBoulders"):
+            for k in DETAIL_KEYS:
                 if k in prev:
                     s[k] = prev[k]
         sessions[s["_id"]] = s

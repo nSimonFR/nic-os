@@ -66,6 +66,7 @@ DARK_BG, DARK_CARD, DARK_MUTED_FG, DARK_FG = "#1d1f23", "#25282c", "#a2a5a9", "#
 COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
+CLIMB_TILES_MAX = 16
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
     "Cycling": ("🚲", "Vélo", "trajet", "bike"),
@@ -430,11 +431,13 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
 
 
 def collage_grid(n):
-    """(columns, rows) for n tiles: one row up to 3, then 2x2, 3x2, 3x3."""
+    """(columns, rows) for n tiles: one row up to 3, then 2x2, 3x2, 3x3, then 4 wide."""
     if n <= 3:
         return n, 1
     if n == 4:
         return 2, 2
+    if n > 9:
+        return 4, (n + 3) // 4
     return 3, (n + 2) // 3
 
 
@@ -446,7 +449,7 @@ def render_collage(images, labels, path, tile=480, gap=6):
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
 
     cols, rows = collage_grid(len(images))
-    sheet = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), "white")
+    sheet = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), DARK_CARD)  # gaps and empty slots blend into Memos' dark cards
     try:
         font = ImageFont.load_default(size=tile // 14)
     except TypeError:  # Pillow < 10.1 has no sized default font
@@ -546,6 +549,12 @@ class Immich:
 
     def link(self, asset_id):
         return f"{self.url}/photos/{asset_id}"
+
+
+def fetch_image(url, opener=None):
+    req = urllib.request.Request(url, headers={"User-Agent": "nicos-journal/1.0"})
+    with (opener or urllib.request.urlopen)(req, timeout=60) as resp:
+        return resp.read()
 
 
 def _taken(asset):
@@ -727,7 +736,7 @@ def day_music(cfg, run, day, log):
 
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage, weather_fn=None):
+                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -757,7 +766,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             log(f"{key}: weather unavailable ({e})")
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music,
-                     [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs]])
+                     [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
+                     len(src.climbing_pictures(climbs))])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -788,6 +798,19 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             data = f.read()
         files.append((f"map-{key}.jpg", "image/jpeg", data,
                       media_metadata(data, moved, location=lines[-1][0][-1])))
+    tiles = []
+    for url, colour in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
+        try:
+            tiles.append((fetch_fn(url), (colour, 1)))
+        except OSError as e:  # one missing picture must not drop the mosaic
+            log(f"{key}: boulder picture unavailable ({e})")
+    if tiles:
+        climb_path = f"{tmpdir}/climbing-{key}.jpg"
+        collage_fn([t[0] for t in tiles], [t[1] for t in tiles], climb_path)
+        with open(climb_path, "rb") as f:
+            data = f.read()
+        start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
+        files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
         collage_fn([immich.preview(p["id"]) for p in photos],
