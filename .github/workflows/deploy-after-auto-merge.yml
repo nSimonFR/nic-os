@@ -1,0 +1,50 @@
+# Deploy PRs that auto-merge, without a PAT.
+#
+# Auto-merge arms with GITHUB_TOKEN, so GitHub records the merge as
+# github-actions[bot] and the push to main starts no workflow run. The approving
+# review is a human event, so it does start one: wait here for the merge, then
+# dispatch Deploy rpi5 — workflow_dispatch is the one event GITHUB_TOKEN may start.
+name: Deploy after auto-merge
+
+on:
+  pull_request_review:
+    types: [submitted]
+
+permissions:
+  actions: write
+  pull-requests: read
+
+# A later review on the same PR restarts the wait instead of stacking.
+concurrency:
+  group: deploy-after-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    if: github.event.review.state == 'approved' && github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Wait for the merge, then dispatch Deploy rpi5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          while :; do
+            state=$(gh api "repos/$REPO/pulls/$PR" -q '"\(.state) \(.merged) \(.merged_by.login // "-")"')
+            case "$state" in
+              "closed true "*) break ;;
+              "closed false "*) echo "Closed without merging."; exit 0 ;;
+            esac
+            sleep 30
+          done
+          merged_by=${state##* }
+          # A human merge pushes as that human, which already started Deploy.
+          if [ "$merged_by" != "github-actions[bot]" ]; then
+            echo "Merged by $merged_by; its push triggers Deploy rpi5."
+            exit 0
+          fi
+          gh workflow run deploy-rpi5.yml --repo "$REPO" --ref main
+          echo "Dispatched Deploy rpi5 for #$PR." >> "$GITHUB_STEP_SUMMARY"

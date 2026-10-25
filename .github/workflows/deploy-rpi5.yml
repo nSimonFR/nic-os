@@ -9,8 +9,8 @@ name: Deploy rpi5
 on:
   push:
     branches: [main]
-  # Safety net for pushes that start no run (anything landed via GITHUB_TOKEN).
-  # Auto-merge arms with a PAT, so its merges trigger `push` directly.
+  # Auto-merged PRs are dispatched by deploy-after-auto-merge.yml; the schedule
+  # is the safety net for anything else that lands via GITHUB_TOKEN.
   schedule:
     - cron: "*/30 * * * *"
   workflow_dispatch:
