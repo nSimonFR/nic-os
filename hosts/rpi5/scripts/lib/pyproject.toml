@@ -25,6 +25,11 @@ dependencies = [ "psycopg2", "websocket-client", "cryptography" ]
 [project.scripts]
 steam-to-ryot = "nicos_scripts.connectors.steam:main"
 spotify-to-ryot = "nicos_scripts.connectors.spotify:main"
+# Incremental: only views since each library's cursor; anime library -> AniList.
+plex-to-ryot = "nicos_scripts.connectors.plex:main"
+ryot-bootstrap = "nicos_scripts.connectors.ryot_bootstrap:main"
+# Hand-run, once: Spotify's "Extended streaming history" export. Dry run unless --apply.
+spotify-backfill = "nicos_scripts.connectors.spotify_backfill:main"
 scale-to-ryot = "nicos_scripts.connectors.scale:main"
 moxfield-sync = "nicos_scripts.connectors.moxfield:main"
 travel-cal-sync = "nicos_scripts.connectors.travel_cal:main"

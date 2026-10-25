@@ -50,6 +50,8 @@ let
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
+    # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
+    RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
     GITHUB_GIT_USER = pkgs.writeText "github-git-user" "x-access-token";
   };

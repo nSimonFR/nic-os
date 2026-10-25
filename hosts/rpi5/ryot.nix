@@ -185,6 +185,45 @@ in
     };
   };
 
+  # V2 mints API keys only for a signed-in user and V1 keys don't migrate, so
+  # this gives the account a password and writes a key for the local services
+  # (connectors, scale shim, Agent Vault). The password lands in
+  # ${stateDir}/secrets/password for the user's own sign-in.
+  users.groups.ryot-api = { };
+  systemd.tmpfiles.rules = [ "d ${stateDir}/secrets 0750 root ryot-api -" ];
+
+  systemd.services.ryot-bootstrap = {
+    description = "Ryot V2: ensure an API key for local services";
+    wantedBy = [ "ryot.service" ];
+    after = [ "ryot.service" ];
+    bindsTo = [ "ryot.service" ];
+    environment = {
+      RYOT_URL = "http://127.0.0.1:${toString port}";
+      RYOT_FRONTEND_URL = publicUrl;
+      SECRETS_DIR = "${stateDir}/secrets";
+    };
+    path = [ pkgs.util-linux config.services.postgresql.package ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      EnvironmentFile = envFile; # SERVER_ADMIN_ACCESS_TOKEN
+      ExecStart = "${pkgs.nicos-scripts}/bin/ryot-bootstrap";
+    };
+  };
+
+  # A new key has to reach the broker; its bootstrap reads it as an optional credFile.
+  systemd.paths.ryot-api-key = {
+    wantedBy = [ "paths.target" ];
+    pathConfig.PathChanged = "${stateDir}/secrets/api-key";
+  };
+  systemd.services.ryot-api-key = {
+    description = "Re-apply Agent Vault credentials after a new Ryot key";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${config.systemd.package}/bin/systemctl try-restart agent-vault-bootstrap.service";
+    };
+  };
+
   nic.services.ryot = {
     backup            = [ "postgres" ];
     # `ryot` stays backed up while it is the rollback source.

@@ -47,8 +47,9 @@ in
   systemd.services.scale-to-ryot = {
     description = "scale-to-ryot: webhook → Ryot measurement shim";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
+    # Reads its env once, so it starts after ryot-bootstrap has written the key.
+    after = [ "network-online.target" "ryot-bootstrap.service" ];
+    wants = [ "network-online.target" "ryot-bootstrap.service" ];
     environment = {
       SHIM_PORT = toString shimPort;
       RYOT_URL = ryotUrl;
@@ -58,8 +59,9 @@ in
       Type = "simple";
       User = "scale-bridge";
       Group = "scale-bridge";
-      # SHIM_KEY + RYOT_TOKEN come from the agenix secret.
-      EnvironmentFile = "/run/agenix/scale-bridge-env";
+      SupplementaryGroups = [ "ryot-api" ];
+      # SHIM_KEY from agenix; RYOT_API_KEY from ryot-bootstrap.
+      EnvironmentFile = [ "/run/agenix/scale-bridge-env" "-/var/lib/ryot-v2/secrets/api.env" ];
       # No wait-for-Ryot: the shim needs Ryot only when a weigh-in arrives, and
       # answers 502 if it is down then.
       ExecStart = "${pkgs.nicos-scripts}/bin/scale-to-ryot";
