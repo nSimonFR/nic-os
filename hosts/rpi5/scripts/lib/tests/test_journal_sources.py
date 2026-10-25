@@ -111,3 +111,51 @@ def test_music_section_top_artists_tracks_and_rest():
 def test_activity_section_needs_steps_and_skips_empty_lines():
     assert js.activity_section({}) is None
     assert js.activity_section({"step_count": 12345.6, "distance_walking_running": 50}) == "12 346 pas"
+
+
+DISPATCH = """# Dispatch for nSimonFR/nic-os
+
+Un seul correctif ce jour-là, côté CI : les merges automatiques déclenchent enfin le déploiement.
+
+## [nSimonFR/nic-os](https://github.com/nSimonFR/nic-os)
+
+### CI
+
+- Activation de l'auto-merge via un PAT, afin que les merges déclenchent le déploiement.
+
+Un petit correctif, mais il referme la boucle : plus de merge silencieux sans déploiement.
+"""
+IDLE = """# Engineering Dispatch
+
+Aucune activité n'a été enregistrée pour la période.
+
+## Aucun dépôt couvert
+
+### Résumé
+
+- Aucun commit à signaler.
+"""
+
+
+def test_clean_dispatch_keeps_intro_and_bullets_only():
+    assert js.clean_dispatch(DISPATCH) == [
+        "Un seul correctif ce jour-là, côté CI : les merges automatiques déclenchent enfin le déploiement.",
+        "", "**nic-os**", "", "*CI*", "",
+        "- Activation de l'auto-merge via un PAT, afin que les merges déclenchent le déploiement."]
+    assert js.clean_dispatch(IDLE) == []
+
+
+def test_dispatch_notes_skips_repos_without_commits():
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd)
+        if "log" in cmd:
+            return "" if "/quiet" in cmd else "abc123\n"
+        return DISPATCH
+    notes = js.dispatch_notes(run, ["/quiet", "/busy"], 100, 200)
+    assert notes[0].startswith("Un seul correctif")
+    entire = [c for c in calls if "-l" in c]
+    assert len(entire) == 1 and "cd /busy && entire dispatch --local --all-branches" in entire[0][-1]
+    assert "--voice 'concis, en français'" in entire[0][-1]
+    assert [c for c in calls if "log" in c][0][:4] == ["runuser", "-u", "nsimon", "--"]

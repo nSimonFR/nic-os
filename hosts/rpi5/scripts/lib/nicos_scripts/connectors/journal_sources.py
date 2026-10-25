@@ -376,3 +376,56 @@ def activity_section(totals):
     if totals.get("active_energy", 0) >= 1:
         head.append(f"{_int_fr(totals['active_energy'])} kcal")
     return " · ".join(head)
+
+
+DISPATCH_VOICE = "concis, en français"
+
+
+def clean_dispatch(md):
+    """Markdown lines of an `entire dispatch`, fit for a collapsed block: no
+    title, `## [owner/repo](url)` -> `**repo**`, `### Topic` -> `*Topic*`, and
+    the closing paragraph after the last bullet dropped. [] when it covers no
+    repo (an idle window still gets an "Aucune activité" edition)."""
+    import re
+
+    lines = md.splitlines()
+    if not any(l.startswith("## [") for l in lines):
+        return []
+    out = []
+    for l in lines:
+        if l.startswith("# "):
+            continue
+        m = re.match(r"## \[([^\]]+)\]", l)
+        if m:
+            out.append(f"**{m.group(1).rsplit('/', 1)[-1]}**")
+        elif l.startswith("### "):
+            out.append(f"*{l[4:].strip()}*")
+        else:
+            out.append(l.rstrip())
+    last = max((i for i, l in enumerate(out) if l.lstrip().startswith("- ")), default=len(out) - 1)
+    out = out[:last + 1]
+    while out and not out[0].strip():
+        out.pop(0)
+    return [l for i, l in enumerate(out) if l.strip() or (i and out[i - 1].strip())]
+
+
+def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="git"):
+    """Work notes for [lo, hi) from `entire dispatch --local` in each repo, run
+    as `user` (the agent CLI's credentials are theirs). A repo with no commit
+    in the window is skipped before the agent is called."""
+    import shlex
+
+    iso = lambda t: datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
+    notes = []
+    for repo in repos:
+        touched = run([runuser, "-u", user, "--", git, "-C", repo, "log", "--all",
+                       f"--since=@{int(lo)}", f"--until=@{int(hi)}", "--format=%h", "-1"])
+        if not touched.strip():
+            continue
+        md = run([runuser, "-l", user, "-c",
+                  f"cd {shlex.quote(repo)} && entire dispatch --local --all-branches "
+                  f"--since {iso(lo)} --until {iso(hi)} --voice {shlex.quote(DISPATCH_VOICE)}"])
+        lines = clean_dispatch(md)
+        if lines:
+            notes += ([""] if notes else []) + lines
+    return notes
