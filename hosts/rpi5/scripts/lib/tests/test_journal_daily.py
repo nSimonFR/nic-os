@@ -474,7 +474,7 @@ def test_climbing_day_gets_an_entry_with_its_section(tmp_path):
                    {}, date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path))
     assert op.body_of(0)["content"] == (
         "### 🧗 Escalade - Arkose Chevaleret · 7 tops · 38 m\n\n"
-        "- **Tops** 🟢 5 verts · 🔵 2 bleus\n- **Retops** 1\n- **Non topés** 1\n- **Niveau** vert ⬆️"
+        "- **Tops**: 🟢 5 verts · 🔵 2 bleus\n- **Retops**: 1\n- **Non topés**: 1\n- **Niveau**: vert ⬆️"
         "\n\n#climbing\n")
     assert op.body_of(1) == {"createTime": "2026-10-19T10:16:17+00:00"}
 
