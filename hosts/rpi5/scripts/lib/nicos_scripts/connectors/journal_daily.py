@@ -27,8 +27,9 @@ attachments we last wrote. A changed day is updated IN PLACE: our block of text
 is swapped inside whatever the user added around it, our attachments replaced,
 theirs kept. If the user rewrote our block itself, their text wins.
 
-Calendar, weather and music (Ryot): see journal_sources. A day with only
-calendar events still gets an entry; weather or music alone does not.
+Calendar, weather, music (Ryot) and climbing (arkose-sync): see
+journal_sources. A day with only calendar events or a climbing session still
+gets an entry; weather or music alone does not.
 
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
 PERSONAL_CALENDARS,WORK_CALENDARS}, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
@@ -96,6 +97,7 @@ class Config:
     work_calendars: tuple = ("TRUSK",)
     nextcloud_db: str = "nextcloud_production"
     ryot_db: str = "ryot"
+    arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -115,6 +117,7 @@ class Config:
             personal_calendars=_names(env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO,Google", env)),
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
+            arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
             psql=env_str("PSQL_BIN", "psql", env),
@@ -378,7 +381,7 @@ def photo_lines(shots):
 
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None):
+            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None):
     """Memo markdown, in French: the weather line, then one `###` section
     per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -386,7 +389,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
     `photos_url` = the first of the day in Immich; `agenda` = personal
     calendar lines; `work` = (meetings, minutes, people) or None; `music` =
-    (heading suffix, lines) from journal_sources.music_section, or None."""
+    (heading suffix, lines) from journal_sources.music_section, or None;
+    `climbing` = the same from climbing_section."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -401,6 +405,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         if not ws:  # else the workouts section carries it
             lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
         sections.append(lines)
+    if climbing:
+        head, lines = climbing
+        sections.append([f"### 🧗 Escalade - {head}", "", *lines])
+        tags.append("climbing")
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
@@ -697,6 +705,17 @@ def day_calendar(cfg, run, day, log):
         return [], None
 
 
+def day_climbing(cfg, day, log):
+    """Arkose sessions started that day; [] if arkose-sync has no store."""
+    try:
+        return src.climbing_sessions(cfg.arkose_sessions, *day_bounds(day))
+    except FileNotFoundError:
+        return []
+    except (OSError, ValueError, KeyError) as e:
+        log(f"{day}: climbing unavailable ({e})")
+        return []
+
+
 def day_music(cfg, run, day, log):
     """journal_sources.music_section of the day, or None (no plays, or Ryot down)."""
     try:
@@ -720,7 +739,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             log(f"{key}: Immich unavailable, no photos this run ({e})")
     agenda, work = day_calendar(cfg, run, day, log)
     day_trips = trips(cfg, run, uid, day)
-    if not ws and not day_trips and not day_photos and not agenda and not work:
+    climbs = day_climbing(cfg, day, log)
+    if not ws and not day_trips and not climbs and not day_photos and not agenda and not work:
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     music = day_music(cfg, run, day, log)
@@ -736,7 +756,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         except (OSError, ValueError, KeyError, IndexError) as e:
             log(f"{key}: weather unavailable ({e})")
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
-                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music])
+                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music,
+                     [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs]])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -751,7 +772,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         shots.append((photo_time(m), immich.link(m["id"]),
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
-                   weather, agenda, work, extra, trip_legs, music)
+                   weather, agenda, work, extra, trip_legs, music,
+                   src.climbing_section(climbs, TZ) if climbs else None)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -795,6 +817,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         when = _utc(moved)
     elif day_photos:
         when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
+    elif climbs:
+        when = climbs[-1]["startDate"]
     else:  # calendar-only day: noon
         when = _utc(day_bounds(day)[0] + 8 * 3600)
 
