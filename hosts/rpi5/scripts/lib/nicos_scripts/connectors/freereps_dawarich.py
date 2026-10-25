@@ -3,13 +3,17 @@
 freereps-to-dawarich: Apple Health workout routes (FreeReps) -> Dawarich points.
 
 FreeReps holds each route at ~1 Hz; the phone's own Dawarich tracker logs every
-~5 min. Points go in under the phone's tracker id: Dawarich builds tracks per
-tracker, so a separate id would draw the ride as a second, parallel track.
+~5 min. A route is simplified to the fewest fixes within TOLERANCE_M of it
+(one per 5 s drew ~500 overlapping markers per commute), with one at least every
+MAX_GAP_S: mode detection reads speed over 60 s windows, and a 120 s gap left
+12 of 47 rides unclassified (30 s: ~60 points per ride). Points go in under the phone's tracker id: Dawarich builds
+tracks per tracker, so a separate id would draw the ride as a second track.
 
-Dawarich upserts on (user, timestamp, lonlat), so a re-push is harmless. The
-state file ({workout_id: route_points}) only skips routes already sent, and
+The state file ({workout_id: route_points}) skips routes already sent and
 re-sends one whose route grew — Health Auto Export often delivers the workout
-first and its route on a later push.
+first and its route on a later push. After a push, the workout's other points
+(tagged in raw_data) are deleted, so a denser earlier push cannot linger; a
+failed push therefore leaves the old points in place.
 
 Dawarich only builds tracks from untracked points, so the phone's sparse track
 for the same ride would stay beside the new one. Before a push, tracks
@@ -22,11 +26,12 @@ that way on the 2026-10-25 backfill).
 Both databases are reached as postgres over the socket; the API key comes from
 Dawarich's users table, so no secret is copied anywhere.
 
-Env: DAWARICH_{BASE_URL,TRACKER_ID}, FREEREPS_DAWARICH_{STATE,STEP_S,MAX_ACCURACY_M,
-DRY_RUN}, PSQL_BIN, RUNUSER_BIN.
+Env: DAWARICH_{BASE_URL,TRACKER_ID}, FREEREPS_DAWARICH_{STATE,TOLERANCE_M,
+MAX_GAP_S,MAX_ACCURACY_M,DRY_RUN}, PSQL_BIN, RUNUSER_BIN.
 """
 
 import json
+import math
 import subprocess
 import sys
 import time
@@ -48,7 +53,8 @@ class Config:
     base_url: str = DEFAULT_BASE
     tracker_id: str = ""
     state_path: str = ""
-    step_s: int = 5
+    tolerance_m: int = 10
+    max_gap_s: int = 30
     max_accuracy_m: int = 50
     dry_run: bool = True
     runuser: str = "runuser"
@@ -60,7 +66,8 @@ class Config:
             base_url=env_str("DAWARICH_BASE_URL", DEFAULT_BASE, env).rstrip("/"),
             tracker_id=env_str("DAWARICH_TRACKER_ID", "", env),
             state_path=env_str("FREEREPS_DAWARICH_STATE", "", env),
-            step_s=env_int("FREEREPS_DAWARICH_STEP_S", 5, env),
+            tolerance_m=env_int("FREEREPS_DAWARICH_TOLERANCE_M", 10, env),
+            max_gap_s=env_int("FREEREPS_DAWARICH_MAX_GAP_S", 30, env),
             max_accuracy_m=env_int("FREEREPS_DAWARICH_MAX_ACCURACY_M", 50, env),
             dry_run=env_str("FREEREPS_DAWARICH_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
@@ -142,19 +149,59 @@ def clear_overlapping_tracks(cfg, run, uid, start, end):
     return [r[0] for r in rows]
 
 
-def thin(points, step_s, max_accuracy_m):
-    """One point per `step_s`, dropping fixes worse than `max_accuracy_m`.
+def delete_stale_points(cfg, run, uid, workout_id, kept_ts):
+    """Delete this workout's points outside `kept_ts` (epoch s); count deleted."""
+    wid = str(uuid.UUID(workout_id))
+    keep = ",".join(str(int(t)) for t in kept_ts) or "NULL"
+    rows = _q(cfg, run, f"""
+        WITH d AS (
+          DELETE FROM points WHERE user_id = {uid}
+            AND raw_data->'properties'->>'workout_id' = '{wid}'
+            AND timestamp NOT IN ({keep}) RETURNING 1
+        )
+        UPDATE users SET points_count = greatest(points_count - (SELECT count(*) FROM d), 0)
+        WHERE id = {uid} RETURNING (SELECT count(*) FROM d)
+    """, "dawarich")
+    return int(rows[0][0]) if rows else 0
 
-    The last fix is always kept so the ride ends where it ended.
-    """
+
+def _deviation_m(p, a, b):
+    """Distance from fix `p` to segment a-b, in metres (flat-earth, fine at city scale)."""
+    k = math.cos(math.radians(a[1]))
+    xy = lambda q: ((q[2] - a[2]) * 111_320 * k, (q[1] - a[1]) * 110_540)
+    (px, py), (bx, by) = xy(p), xy(b)
+    seg = bx * bx + by * by
+    u = 0.0 if seg == 0 else max(0.0, min(1.0, (px * bx + py * by) / seg))
+    return math.hypot(px - u * bx, py - u * by)
+
+
+def simplify(points, tolerance_m, max_gap_s, max_accuracy_m):
+    """Fewest fixes keeping the route within `tolerance_m` (Douglas-Peucker),
+    plus one at least every `max_gap_s`. Fixes worse than `max_accuracy_m`
+    (or negative: Apple's invalid marker) are dropped first."""
     good = [p for p in points if p[6] is None or 0 <= p[6] <= max_accuracy_m]
-    kept = []
-    for p in good:
-        if not kept or p[0] - kept[-1][0] >= step_s:
-            kept.append(p)
-    if good and kept[-1] is not good[-1]:
-        kept.append(good[-1])
-    return kept
+    if len(good) < 3:
+        return good
+    keep, stack = {0, len(good) - 1}, [(0, len(good) - 1)]
+    while stack:
+        i, j = stack.pop()
+        if j - i < 2:
+            continue
+        k = max(range(i + 1, j), key=lambda m: _deviation_m(good[m], good[i], good[j]))
+        if _deviation_m(good[k], good[i], good[j]) > tolerance_m:
+            keep.add(k)
+            stack += [(i, k), (k, j)]
+    out = [0]
+    for j in sorted(keep)[1:]:
+        while good[j][0] - good[out[-1]][0] > max_gap_s:
+            i, k = out[-1], out[-1] + 1
+            while k + 1 < j and good[k + 1][0] - good[i][0] <= max_gap_s:
+                k += 1
+            if k >= j:
+                break
+            out.append(k)
+        out.append(j)
+    return [good[i] for i in out]
 
 
 def payload(points, tracker, workout_id):
@@ -188,7 +235,8 @@ def sync(cfg, run, opener=None, log=print, sleep=time.sleep):
     uid, api_key, tracker = dawarich_identity(cfg, run)
     pushed = sent = 0
     for wid, name, n in todo:
-        pts = thin(route(cfg, run, wid), cfg.step_s, cfg.max_accuracy_m)
+        pts = simplify(route(cfg, run, wid), cfg.tolerance_m, cfg.max_gap_s,
+                       cfg.max_accuracy_m)
         day = time.strftime("%Y-%m-%d", time.gmtime(pts[0][0])) if pts else "?"
         if cfg.dry_run:
             log(f"[dry-run] {day} {name} {wid}: {n} fixes -> {len(pts)} points")
@@ -203,9 +251,10 @@ def sync(cfg, run, opener=None, log=print, sleep=time.sleep):
                 headers={"Authorization": f"Bearer {api_key}"}, opener=opener)
             if status != 200:
                 raise RuntimeError(f"{wid}: HTTP {status} {body[:200]}")
+            replaced = delete_stale_points(cfg, run, uid, wid, [p[0] for p in pts])
             log(f"{day} {name} {wid}: {n} fixes -> {len(pts)} points, "
                 f"{len(json.loads(body).get('data', []))} upserted, "
-                f"{len(cleared)} overlapping tracks cleared")
+                f"{replaced} earlier points replaced, {len(cleared)} tracks cleared")
         state[wid] = n
         if cfg.state_path:
             save_json(cfg.state_path, state)

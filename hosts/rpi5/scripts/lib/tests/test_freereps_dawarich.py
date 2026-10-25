@@ -10,8 +10,13 @@ W2 = "22222222-2222-2222-2222-222222222222"
 SEP = "\x1f"
 
 
-def fix(t, acc=5.0):
-    return (t, 48.8, 2.3, 35.0, 4.2, 90.0, acc)
+def fix(t, acc=5.0, lat=48.8, lon=2.3):
+    return (t, lat, lon, 35.0, 4.2, 90.0, acc)
+
+
+def north(t, metres, east=0.0):
+    """A fix `metres` north (and `east`) of 48.8,2.3 at time t."""
+    return fix(t, lat=48.8 + metres / 110_540, lon=2.3 + east / (111_320 * 0.6587))
 
 
 class FakePg:
@@ -37,6 +42,8 @@ class FakePg:
             rows = [(self.tracker,)] if self.tracker else []
         elif "corrected_at IS NOT NULL" in sql:
             rows = [("1",)] if self.corrected else []
+        elif "DELETE FROM points" in sql:
+            rows = [("7",)]
         elif "DELETE FROM tracks" in sql:
             rows = [("41",)]
         else:
@@ -59,9 +66,21 @@ def test_config_defaults_to_dry_run():
     assert fd.Config.from_env({"FREEREPS_DAWARICH_DRY_RUN": "0"}).dry_run is False
 
 
-def test_thin_keeps_one_per_step_and_the_last_fix():
-    pts = [fix(t) for t in range(0, 13)]
-    assert [p[0] for p in fd.thin(pts, 5, 50)] == [0, 5, 10, 12]
+def test_simplify_keeps_only_the_ends_of_a_straight_line():
+    pts = [north(t, t * 5) for t in range(0, 60)]
+    assert [p[0] for p in fd.simplify(pts, 10, 120, 50)] == [0, 59]
+
+
+def test_simplify_keeps_a_corner():
+    pts = [north(t, t * 5) for t in range(0, 30)] + [north(t, 145, (t - 29) * 5) for t in range(30, 60)]
+    assert [p[0] for p in fd.simplify(pts, 10, 120, 50)] == [0, 29, 59]
+
+
+def test_simplify_keeps_a_fix_at_least_every_max_gap():
+    pts = [north(t, t) for t in range(0, 301)]
+    kept = [p[0] for p in fd.simplify(pts, 10, 120, 50)]
+    assert kept[0] == 0 and kept[-1] == 300
+    assert max(b - a for a, b in zip(kept, kept[1:])) <= 120
 
 
 def test_payload_omits_apples_invalid_minus_one():
@@ -69,9 +88,9 @@ def test_payload_omits_apples_invalid_minus_one():
     assert "speed" not in props and "course" not in props and props["altitude"] == 30.0
 
 
-def test_thin_drops_inaccurate_fixes():
+def test_simplify_drops_inaccurate_fixes():
     pts = [fix(0), fix(5, acc=200.0), fix(6, acc=None), fix(12, acc=-1.0)]
-    assert [p[0] for p in fd.thin(pts, 5, 50)] == [0, 6]
+    assert [p[0] for p in fd.simplify(pts, 10, 120, 50)] == [0, 6]
 
 
 def test_payload_is_lonlat_and_skips_missing_values():
@@ -85,7 +104,7 @@ def test_payload_is_lonlat_and_skips_missing_values():
 def test_pushes_new_routes_under_the_phone_tracker(tmp_path):
     pg = FakePg([(W1, "Cycling", 3)], {W1: [fix(0), fix(5), fix(10)]})
     op = ok_opener()
-    assert fd.sync(cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None) == (1, 3)
+    assert fd.sync(cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None) == (1, 2)
     req = op.last
     assert req.full_url == "http://127.0.0.1:13900/api/v1/points"
     assert req.headers["Authorization"] == "Bearer KEY"
@@ -98,6 +117,9 @@ def test_clears_overlapping_tracks_before_the_push(tmp_path):
     fd.sync(cfg(tmp_path), pg, opener=ok_opener(), log=lambda m: None, sleep=lambda s: None)
     clear = next(s for s in pg.sql if "DELETE FROM tracks" in s)
     assert "to_timestamp(100)" in clear and "to_timestamp(200)" in clear
+    stale = next(s for s in pg.sql if "DELETE FROM points" in s)
+    assert f"'workout_id' = '{W1}'" in stale and "NOT IN (100,200)" in stale
+    assert pg.sql.index(clear) < pg.sql.index(stale)
 
 
 def test_skips_a_ride_overlapping_a_hand_corrected_track(tmp_path):
@@ -145,6 +167,7 @@ def test_http_error_stops_without_recording_the_workout(tmp_path):
     with pytest.raises(RuntimeError):
         fd.sync(cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None)
     assert not (tmp_path / "state.json").exists()
+    assert not any("DELETE FROM points" in s for s in pg.sql)
 
 
 def test_refuses_more_than_one_dawarich_user(tmp_path):
