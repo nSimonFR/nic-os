@@ -457,3 +457,34 @@ def test_music_alone_makes_no_entry(tmp_path):
     pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
     assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
                           date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
+
+
+SESSION = {"_id": "s1", "startDate": "2026-10-19T10:16:17+00:00", "gymName": "Arkose Chevaleret",
+           "tops": 7, "flashs": 0, "tried": 1, "retops": 1, "climbedHeight": 38, "isEmpty": False,
+           "topsCountsByLabel": {"5": 2, "4": 5}, "gymLabels": {"4": "vert", "5": "bleu"},
+           "sessionLevel": {"label": 4}, "isLevelUp": True}
+
+
+def test_climbing_day_gets_an_entry_with_its_section(tmp_path):
+    store = tmp_path / "sessions.json"
+    other = {**SESSION, "_id": "s0", "startDate": "2026-10-18T10:00:00+00:00"}
+    store.write_text(json.dumps({"sessions": {"s1": SESSION, "s0": other}}))
+    op = memos_opener()
+    wm.journal_day(cfg(tmp_path, arkose_sessions=str(store)), FakePg([], []), wm.Memos("http://m", "T", op),
+                   {}, date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path))
+    assert op.body_of(0)["content"] == (
+        "### 🧗 Escalade - 7 tops · 38 m\n\n"
+        "- **12:16** Arkose Chevaleret · 🟢 5 verts · 🔵 2 bleus · 1 essai · 1 retop · niveau vert ⬆️"
+        "\n\n#climbing\n")
+    assert op.body_of(1) == {"createTime": "2026-10-19T10:16:17+00:00"}
+
+
+def test_arkose_store_missing_is_silent_corrupt_is_logged(tmp_path):
+    lines = []
+    assert wm.day_climbing(cfg(tmp_path, arkose_sessions=str(tmp_path / "nope.json")),
+                           date(2026, 10, 19), lines.append) == []
+    assert lines == []
+    (tmp_path / "bad.json").write_text("{")
+    assert wm.day_climbing(cfg(tmp_path, arkose_sessions=str(tmp_path / "bad.json")),
+                           date(2026, 10, 19), lines.append) == []
+    assert "climbing unavailable" in lines[0]

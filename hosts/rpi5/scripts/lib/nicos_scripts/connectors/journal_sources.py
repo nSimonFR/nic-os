@@ -237,3 +237,51 @@ def music_section(listens, top=5, per_artist=3):
     n = len(listens)
     head = f"{n} titre{'s' if n > 1 else ''}" + (f" · {h} h {m:02d}" if h else f" · {m} min")
     return head, lines
+
+
+# Arkose hold colours (gymLabels names) -> emoji
+HOLD_EMOJI = {"jaune": "🟡", "vert": "🟢", "bleu": "🔵", "rouge": "🔴", "noir": "⚫",
+              "violet": "🟣", "orange": "🟠", "blanc": "⚪", "rose": "🩷", "marron": "🟤"}
+
+
+def climbing_sessions(path, lo, hi):
+    """Arkose sessions (arkose-sync's sessions.json) started in [lo, hi), oldest first."""
+    import json
+
+    with open(path) as f:
+        sessions = json.load(f).get("sessions", {}).values()
+    day = [s for s in sessions if not s.get("isEmpty")
+           and lo <= datetime.fromisoformat(s["startDate"]).timestamp() < hi]
+    return sorted(day, key=lambda s: s["startDate"])
+
+
+def _plural(n, word, plural=None):
+    return f"{n} {word if n == 1 else plural or word + 's'}"
+
+
+def climbing_section(sessions, tz):
+    """(heading suffix, lines): `7 tops · 38 m`, then per session
+    `- **12:16** Arkose Chevaleret · 🟢 5 verts · 🔵 2 bleus · 1 essai · 1 retop · niveau vert ⬆️`."""
+    lines = []
+    for s in sessions:
+        names = s.get("gymLabels") or {}
+        at = datetime.fromisoformat(s["startDate"]).astimezone(tz)
+        bits = [s.get("gymName") or s.get("gym", "?")]
+        by_label = s.get("topsCountsByLabel") or {}
+        for label in sorted(by_label, key=int):
+            colour = names.get(label, label)
+            bits.append(f"{HOLD_EMOJI.get(colour, '🪨')} {_plural(by_label[label], colour)}".strip())
+        if not by_label and s.get("tops"):
+            bits.append(_plural(s["tops"], "top"))
+        for key, word in (("flashs", "flash"), ("tried", "essai"), ("retops", "retop")):
+            if s.get(key):
+                bits.append(_plural(s[key], word))
+        level = names.get(str((s.get("sessionLevel") or {}).get("label", "")))
+        if level:
+            bits.append(f"niveau {level}" + (" ⬆️" if s.get("isLevelUp") else ""))
+        lines.append(f"- **{at:%H:%M}** {' · '.join(bits)}")
+    head = [_plural(sum(s.get("tops") or 0 for s in sessions), "top")]
+    metres = sum(s.get("climbedHeight") or 0 for s in sessions)
+    if metres:
+        head.append(f"{metres} m")
+    return " · ".join(head), lines
