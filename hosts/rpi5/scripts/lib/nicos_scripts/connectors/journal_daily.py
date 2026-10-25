@@ -52,7 +52,10 @@ TAG = "journal-daily"
 TZ = ZoneInfo("Europe/Paris")
 DEFAULT_MEMOS = "http://127.0.0.1:13356"
 DEFAULT_WEB = "https://rpi5.gate-mintaka.ts.net:3900"
-COLORS = ["#4f46e5", "#f97316", "#10b981", "#e11d48", "#0ea5e9", "#a855f7"]
+# Memos' dark theme (web/src/themes/default-dark.css, oklch -> sRGB): the map
+# sits in its cards, so the base is its card grey and route 1 its primary blue.
+DARK_BG, DARK_CARD, DARK_MUTED_FG, DARK_FG = "#1d1f23", "#25282c", "#a2a5a9", "#dbdee2"
+COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
 # FreeReps workout name -> (emoji, title, noun, tag)
@@ -343,30 +346,32 @@ def map_size(tracks, long_side=1000):
 
 
 def render(tracks, path):
-    """Map JPEG on a washed-out greyscale OSM base: one colour per workout with
-    a white casing, start = ring in its colour, end = dark dot."""
+    """Map JPEG in Memos' dark palette: OSM tiles greyscaled, inverted and
+    tinted between its card grey and muted text, one colour per workout with
+    a background-coloured casing; start = ring in its colour, end = light dot."""
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
     from staticmap import CircleMarker, Line, StaticMap  # lazy
 
-    class Faded(StaticMap):
+    class Dark(StaticMap):
         def _draw_base_layer(self, image):
             super()._draw_base_layer(image)
-            grey = ImageOps.grayscale(image).convert("RGB")
-            image.paste(Image.blend(grey, Image.new("RGB", image.size, "white"), 0.65))
+            inverted = ImageOps.invert(ImageOps.grayscale(image))
+            image.paste(ImageOps.colorize(inverted, black=DARK_CARD, white=DARK_MUTED_FG,
+                                          blackpoint=0, whitepoint=255, midpoint=150))
 
     drawn = [t for t in tracks if len(t) >= 2]
-    m = Faded(*map_size(drawn), padding_x=60, padding_y=60,
-              url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-              headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
+    m = Dark(*map_size(drawn), padding_x=60, padding_y=60,
+             url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+             headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
     lines = [([(lon, lat) for lat, lon in t], c) for t, c in zip(tracks, COLORS * 4) if len(t) >= 2]
     for ll, color in lines:
-        m.add_line(Line(ll, "white", 11))
+        m.add_line(Line(ll, DARK_BG, 11))
         m.add_line(Line(ll, color, 6))
     for ll, color in lines:  # markers above every line
         m.add_marker(CircleMarker(ll[0], color, 18))
-        m.add_marker(CircleMarker(ll[0], "white", 9))
-        m.add_marker(CircleMarker(ll[-1], "white", 20))
-        m.add_marker(CircleMarker(ll[-1], "#111827", 13))
+        m.add_marker(CircleMarker(ll[0], DARK_CARD, 9))
+        m.add_marker(CircleMarker(ll[-1], DARK_BG, 20))
+        m.add_marker(CircleMarker(ll[-1], DARK_FG, 13))
     img = m.render().convert("RGB")
     draw = ImageDraw.Draw(img)
     try:
@@ -375,7 +380,7 @@ def render(tracks, path):
         font = ImageFont.load_default()
     note = "(c) OpenStreetMap contributors"
     x0, y0, x1, y1 = draw.textbbox((0, 0), note, font=font)
-    draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#9ca3af")
+    draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#6b7076")
     # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).
     img.save(path, "JPEG", quality=85, optimize=True)
 
