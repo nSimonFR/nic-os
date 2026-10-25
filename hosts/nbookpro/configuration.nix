@@ -9,7 +9,10 @@
   ...
 }:
 {
-  imports = [ ./components/homebrew.nix ];
+  imports = [
+    ./components/homebrew.nix
+    ./entire.nix
+  ];
 
   nixpkgs.config.allowUnfree = true;
 

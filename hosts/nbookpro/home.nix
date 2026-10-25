@@ -10,7 +10,15 @@
     homeDirectory = "/Users/${username}";
 
     # T3 Code desktop with the Issues page; replaces the manually installed nightly.
-    packages = [ pkgs.t3code-desktop ];
+    packages = [
+      pkgs.t3code-desktop
+      unstablePkgs.entire
+      (pkgs.writeShellApplication {
+        name = "entire-trusk-enable";
+        runtimeInputs = [ unstablePkgs.entire pkgs.git pkgs.jq ];
+        text = builtins.readFile ./scripts/entire-trusk-enable.sh;
+      })
+    ];
 
     sessionVariables = {
       SSH_AUTH_SOCK = "$HOME/.bitwarden-ssh-agent.sock";
