@@ -30,25 +30,26 @@
   fetchFromGitHub,
   buildGoModule,
   buildNpmPackage,
+  go_1_27,
   nodejs_22,
 }:
 
 let
-  # Upstream has cut no tags — pinned to a commit, hence the nixpkgs
-  # "unstable" version convention. Bump `rev` and the date together.
-  version = "0-unstable-2026-08-10";
+  # Tag `2.2.1` (no `v`). The iOS app 2.2 needs a 2.2 server: older builds
+  # 404 its /api/v1/sync-state and log its uploads as `hae_rest`.
+  version = "2.2.1";
 
   src = fetchFromGitHub {
     owner = "meltforce";
     repo = "FreeReps";
-    rev = "d50316d835f84f263c81f4a7fb7268ae26bfe11f";
+    rev = version;
     # An FOD's store path is keyed on (outputHash, name), NOT on what it
     # fetched, and fetchFromGitHub defaults name="source". Without a
     # version-bearing name, moving `rev` while forgetting the hash silently
     # re-serves the OLD tree. See known_issue_nix_fod_hash_desync — that trap
     # shipped sure-0.7.3 as v0.7.2.
     name = "freereps-${version}-source";
-    hash = "sha256-liQ87Qd0WQkbF0If/T4clQJgZMUonV2BU0HDKSby5uM=";
+    hash = "sha256-m+o04DUa0cSNvbmnhWbYfy1ZocuhAdMa20dZJdYcR0U=";
   };
 
   # React 19 + Vite 6 + Tailwind 4. Output is a plain directory of static
@@ -58,7 +59,7 @@ let
     inherit version src;
     sourceRoot = "${src.name}/server/web";
 
-    npmDepsHash = "sha256-jjZ7fchjmFpazvH/uB7ojPPqDsjYLX/xqa2HBp9TKx0=";
+    npmDepsHash = "sha256-wcTXEPJj9k2jDPkJyOcUbXRNbrakplep881LihDjNC8=";
 
     nodejs = nodejs_22;
     npmBuildScript = "build"; # tsc -b && vite build
@@ -77,12 +78,13 @@ let
   };
 
 in
-buildGoModule {
+# go.mod says `go 1.27.1`; the default go is 1.26.
+(buildGoModule.override { go = go_1_27; }) {
   pname = "freereps";
   inherit version src;
 
   modRoot = "server";
-  vendorHash = "sha256-EdxUn7JYGaxs8PqiLqAtQqw1MFKGivvxwRB0rNelUAA=";
+  vendorHash = "sha256-oQO5XKYGKXkwEd0wNzMzY5PV92k475LDPkPaN/J1vdo=";
 
   # cmd/freereps-upload is a dev helper for replaying exports by hand; the
   # server binary carries the MCP mode (-mcp) and the migrator (-migrate-only).
