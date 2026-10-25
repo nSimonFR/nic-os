@@ -1,4 +1,4 @@
-"""steam-to-ryot: the playtime-delta and two-phase-completion logic.
+"""steam-to-ryot: the playtime-delta logic and completed-on-arrival seens.
 
 These are the properties that keep the connector from double-counting playtime or
 duplicating a game in Ryot's library — previously only observable in production.
@@ -42,38 +42,33 @@ def test_config_defaults_to_the_service_state_dir():
 # ── build_payload ─────────────────────────────────────────────────────────────
 
 
-def test_first_run_pushes_played_games_and_marks_them_pending():
-    meta, new_games, pending = build([game(1, "Portal", 120)], {"1": "77"}, {})
+def test_first_run_pushes_played_games_with_their_seen_twice():
+    meta, new_games = build([game(1, "Portal", 120)], {"1": "77"}, {})
     assert len(meta) == 1
     assert meta[0]["identifier"] == "77"
     assert meta[0]["source"] == "igdb"
-    assert meta[0]["seen_history"][0]["manual_time_spent"] == "7200"  # 120 min
+    # Ryot's live-progress path opens on the first sighting, completes on the second.
+    seens = meta[0]["seen_history"]
+    assert len(seens) == 2 and seens[0] == seens[1] and seens[0] is not seens[1]
+    assert seens[0]["manual_time_spent"] == "7200"  # 120 min
     assert new_games == {"1": 120}
-    # First-ever games land as in_progress@0, so they must be re-pushed next run.
-    assert pending == [
-        {"identifier": "77", "source_id": "Portal", "seconds": "7200", "ended_on": NOW}
-    ]
 
 
 def test_second_run_with_no_new_playtime_pushes_nothing():
-    meta, new_games, pending = build([game(1, "Portal", 120)], {"1": "77"}, {"1": 120})
+    meta, new_games = build([game(1, "Portal", 120)], {"1": "77"}, {"1": 120})
     assert meta == []
-    assert pending == []
     assert new_games == {"1": 120}
 
 
 def test_only_the_delta_is_pushed_never_the_cumulative_total():
     # Steam exposes cumulative playtime only; pushing the total would double-count.
-    meta, new_games, pending = build([game(1, "Portal", 150)], {"1": "77"}, {"1": 120})
+    meta, new_games = build([game(1, "Portal", 150)], {"1": "77"}, {"1": 120})
     assert meta[0]["seen_history"][0]["manual_time_spent"] == "1800"  # 30 min
     assert new_games == {"1": 150}
-    # A game we have pushed before completes immediately — it must not re-enter
-    # pending, or its seen would be duplicated on every run.
-    assert pending == []
 
 
 def test_growth_below_min_delta_is_ignored():
-    meta, new_games, _ = build(
+    meta, new_games = build(
         [game(1, "Portal", 124)], {"1": "77"}, {"1": 120}, min_delta_min=5
     )
     assert meta == []
@@ -84,19 +79,19 @@ def test_growth_below_min_delta_is_ignored():
 def test_unmapped_and_unknown_appids_are_skipped():
     games = [game(1, "Portal", 60), game(2, "Unmapped", 60), game(3, "Absent", 60)]
     # "" marks a known-unmapped appid; 3 is not in the cache at all.
-    meta, new_games, _ = build(games, {"1": "77", "2": ""}, {})
+    meta, new_games = build(games, {"1": "77", "2": ""}, {})
     assert [m["identifier"] for m in meta] == ["77"]
     assert new_games == {"1": 60}
 
 
 def test_unplayed_games_never_persist():
     # No seen -> the Generic JSON sink cannot attach the game to the library.
-    meta, _, _ = build([game(1, "Never Launched", 0)], {"1": "77"}, {})
+    meta, _ = build([game(1, "Never Launched", 0)], {"1": "77"}, {})
     assert meta == []
 
 
 def test_payload_item_carries_the_fields_ryot_requires():
-    meta, _, _ = build([game(1, "Portal", 60)], {"1": "77"}, {})
+    meta, _ = build([game(1, "Portal", 60)], {"1": "77"}, {})
     assert meta[0]["reviews"] == [] and meta[0]["collections"] == []
     assert meta[0]["lot"] == "video_game"
     assert meta[0]["seen_history"][0]["providers_consumed_on"] == ["Steam"]
@@ -173,17 +168,7 @@ def test_main_end_to_end_writes_state_and_posts_once(tmp_path):
     assert steam.main(env=env, opener=op) == 0
 
     state = json.loads((tmp_path / "steam-state.json").read_text())
-    assert state == {
-        "games": {"1": 60},
-        "pending": [
-            {
-                "identifier": "77",
-                "source_id": "Portal",
-                "seconds": "3600",
-                "ended_on": state["pending"][0]["ended_on"],
-            }
-        ],
-    }
+    assert state == {"games": {"1": 60}}
     assert json.loads((tmp_path / "steam-igdb-map.json").read_text()) == {"1": "77"}
     pushed = json.loads(op.requests[-1].data.decode())["metadata"]
     assert len(pushed) == 1

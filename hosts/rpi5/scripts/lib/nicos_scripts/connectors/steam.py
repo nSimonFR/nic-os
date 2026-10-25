@@ -16,16 +16,15 @@ we emit ONE seen carrying that delta as `manual_time_spent` (seconds). Total tim
 spent therefore aggregates correctly; the trade-off is that each growth counts as
 a "seen" in Ryot.
 
-Idempotency + completion (mirrors the spotify connector / Ryot's YouTube Music
-integration):
-  * State $STATE_DIR/steam-state.json = {games:{appid:last_playtime_min},
-    pending:[...]}. A game is pushed only when its total playtime grew (the delta
-    is one seen); already-synced playtime is never re-pushed (no dup).
-  * A game new to Ryot lands as in_progress@0 because the backend resolves its
-    IGDB metadata asynchronously. Such first-ever games go into `pending` and are
-    re-pushed on the NEXT run — metadata now exists, so the re-push flips the seen
-    to completed in place. Known games complete immediately, so they never enter
-    pending and are never duplicated.
+Idempotency + completion:
+  * State $STATE_DIR/steam-state.json = {games:{appid:last_playtime_min}}. A
+    game is pushed only when its total playtime grew (the delta is one seen);
+    already-synced playtime is never re-pushed (no dup).
+  * The sink runs on Ryot's live-progress path, which ignores `progress` on the
+    first sighting and opens an `in_progress@0` seen; only a second sighting
+    completes it. So each delta carries its seen twice (as spotify-to-ryot does):
+    one request opens and completes it. Pushed once, deltas were lost: no game
+    seen landed between 2026-10-04 and 2026-10-25 though Ryot answered 202.
   * appid -> IGDB id resolutions are cached (steam-igdb-map.json) since IGDB is
     rate-limited; a "" value marks a known-unmapped appid so we don't re-query.
 
@@ -178,36 +177,21 @@ def resolve_igdb_ids(appids, token, igdb_map, cfg, opener=None, sleep=time.sleep
 
 
 def game_item(igdb_id, name, seconds, ended_on):
-    return ryot.metadata_item(
-        "video_game",
-        "igdb",
-        igdb_id,
-        name,
-        [
-            ryot.seen(
-                ended_on,
-                # seconds is Decimal-as-string
-                manual_time_spent=seconds,
-                providers=["Steam"],
-            )
-        ],
-    )
+    # seconds is Decimal-as-string; twice: open, then complete (module docstring)
+    play = ryot.seen(ended_on, manual_time_spent=seconds, providers=["Steam"])
+    return ryot.metadata_item("video_game", "igdb", igdb_id, name, [play, dict(play)])
 
 
 def build_payload(games, igdb_map, prev_games, min_delta_min=1, now=None):
-    """Return (metadata, new_games, first_evers).
+    """Return (metadata, new_games).
 
     Push a game only when its total playtime grew (the delta is recorded as one
     play "seen"); an unplayed game has no seen and cannot persist via the sink, so
-    it is skipped. `first_evers` are games never pushed before — they land as
-    in_progress@0 (Ryot resolves IGDB metadata asynchronously), so they are
-    re-pushed next run to complete (same two-phase trick the music connector uses).
-    `prev_games` maps appid -> last pushed playtime_forever (minutes).
+    it is skipped. `prev_games` maps appid -> last pushed playtime_forever (minutes).
     """
     now = now or datetime.now(timezone.utc).isoformat()
     metadata = []
     new_games = dict(prev_games)
-    first_evers = []
     for g in games:
         appid = str(g.get("appid"))
         igdb_id = igdb_map.get(appid)
@@ -220,17 +204,8 @@ def build_payload(games, igdb_map, prev_games, min_delta_min=1, now=None):
             continue  # no new playtime
         secs = str(delta * 60)
         metadata.append(game_item(igdb_id, name, secs, now))
-        if appid not in prev_games:
-            first_evers.append(
-                {
-                    "identifier": igdb_id,
-                    "source_id": name,
-                    "seconds": secs,
-                    "ended_on": now,
-                }
-            )
         new_games[appid] = playtime
-    return metadata, new_games, first_evers
+    return metadata, new_games
 
 
 def main(env=None, opener=None):
@@ -249,7 +224,6 @@ def main(env=None, opener=None):
 
     state = load_json(cfg.state_file, {})
     prev_games = state.get("games", {})
-    prev_pending = state.get("pending", [])
     igdb_map = load_json(cfg.igdb_map_file, {})
 
     games = get_owned_games(cfg, opener=opener)
@@ -264,25 +238,14 @@ def main(env=None, opener=None):
     # Cache resolutions regardless of push outcome.
     save_json(cfg.igdb_map_file, igdb_map)
 
-    metadata, new_games, first_evers = build_payload(
-        games, igdb_map, prev_games, cfg.min_delta_min
-    )
-
-    # Second phase: complete last run's first-ever games (metadata now resolved),
-    # flipping their in_progress@0 seen to completed in place (no duplicate).
-    repush = [
-        game_item(p["identifier"], p["source_id"], p["seconds"], p["ended_on"])
-        for p in prev_pending
-    ]
-
-    all_meta = metadata + repush
-    if not all_meta:
-        log("no new playtime and nothing to complete — nothing to push")
+    metadata, new_games = build_payload(games, igdb_map, prev_games, cfg.min_delta_min)
+    if not metadata:
+        log("no new playtime — nothing to push")
         return 0
 
-    log(f"pushing {len(metadata)} games with new playtime + {len(repush)} completions")
+    log(f"pushing {len(metadata)} games with new playtime")
     try:
-        status, resp = ryot.post_export(cfg.webhook_url, all_meta, opener=opener)
+        status, resp = ryot.post_export(cfg.webhook_url, metadata, opener=opener)
     except (urllib.error.URLError, KeyError) as e:
         log(f"FATAL: push to Ryot failed: {e}")
         return 1
@@ -290,11 +253,8 @@ def main(env=None, opener=None):
         log(f"FATAL: Ryot returned {status}: {resp[:300]}")
         return 1
 
-    save_json(cfg.state_file, {"games": new_games, "pending": first_evers})
-    log(
-        f"done (Ryot {status}); {len(new_games)} games tracked, "
-        f"{len(first_evers)} pending completion next run"
-    )
+    save_json(cfg.state_file, {"games": new_games})
+    log(f"done (Ryot {status}); {len(new_games)} games tracked")
     return 0
 
 
