@@ -15,8 +15,9 @@ requires-python = ">=3.11"
 # is imported lazily inside connect_pg(), so the module (and its tests) still load
 # without it.
 # websocket-client: arkose-sync speaks Meteor DDP over a websocket (lazy import too).
+# staticmap: workouts-to-memos draws the day's map from OSM tiles (lazy import).
 # cryptography: dps-ea-bridge rewraps a Bitwarden user key (AES-CBC, Argon2id).
-dependencies = [ "psycopg2", "websocket-client", "cryptography" ]
+dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap" ]
 
 # One console script per connector. This is the interface the systemd units use
 # (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
@@ -44,6 +45,8 @@ arkose-sync = "nicos_scripts.connectors.arkose:main"
 # Nightly: Apple Health workout routes into Dawarich at street-level density.
 freereps-to-dawarich = "nicos_scripts.connectors.freereps_dawarich:main"
 immich-to-dawarich = "nicos_scripts.connectors.immich_dawarich:main"
+# Nightly: one Memos journal entry per day with workouts (map from Dawarich).
+workouts-to-memos = "nicos_scripts.connectors.workouts_memos:main"
 sure-to-wealthfolio = "nicos_scripts.connectors.wealthfolio:main"
 homepage-stats = "nicos_scripts.homepage.stats:main"
 claude-notify-aggregator = "nicos_scripts.claude.notify_aggregator:main"
