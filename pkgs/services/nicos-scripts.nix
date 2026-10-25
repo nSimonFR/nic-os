@@ -35,7 +35,12 @@ python3Packages.buildPythonPackage {
   # directly into Postgres; connectors.arkose speaks DDP over a websocket. Both
   # import lazily so the modules stay importable (and testable) without them.
   # vaultwarden.ea_bridge needs cryptography for the Bitwarden key wrap.
-  dependencies = [ python3Packages.psycopg2 python3Packages.websocket-client python3Packages.cryptography ];
+  dependencies = [
+    python3Packages.psycopg2
+    python3Packages.websocket-client
+    python3Packages.cryptography
+    python3Packages.staticmap
+  ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
 
@@ -54,6 +59,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.wealthfolio"
     "nicos_scripts.connectors.arkose"
     "nicos_scripts.connectors.freereps_dawarich"
+    "nicos_scripts.connectors.workouts_memos"
     "nicos_scripts.connectors.immich_dawarich"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
