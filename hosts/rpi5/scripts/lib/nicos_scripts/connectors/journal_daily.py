@@ -25,8 +25,12 @@ attachments we last wrote. A changed day is updated IN PLACE: our block of text
 is swapped inside whatever the user added around it, our attachments replaced,
 theirs kept. If the user rewrote our block itself, their text wins.
 
-Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX},
-MEMOS_{URL,TOKEN_FILE}, DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
+Calendar and weather: see journal_sources. A day with only calendar events
+still gets an entry; the weather alone does not make one.
+
+Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
+PERSONAL_CALENDARS,WORK_CALENDARS}, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
+DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 """
 
 import base64
@@ -47,6 +51,7 @@ from ..pg import psql_rows
 from ..secrets import env_int, env_str, read_secret
 from ..state import load_json, save_json
 from .immich_dawarich import immich_settings
+from . import journal_sources as src
 
 TAG = "journal-daily"
 TZ = ZoneInfo("Europe/Paris")
@@ -77,6 +82,10 @@ class Config:
     state_path: str = ""
     place_radius_m: int = 300
     photos_max: int = 9
+    personal_calendars: tuple = ("PERSO", "Google")
+    work_calendars: tuple = ("TRUSK",)
+    nextcloud_db: str = "nextcloud_production"
+    home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
     psql: str = "psql"
@@ -92,10 +101,17 @@ class Config:
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
             photos_max=env_int("JOURNAL_PHOTOS_MAX", 9, env),
+            personal_calendars=_names(env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO,Google", env)),
+            work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
+            nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
             psql=env_str("PSQL_BIN", "psql", env),
         )
+
+
+def _names(raw):
+    return tuple(n.strip() for n in raw.split(",") if n.strip())
 
 
 @dataclass(frozen=True)
@@ -140,8 +156,8 @@ def workouts(cfg, run, day):
                     float(r[5]) / 60, float(r[6])) for r in rows]
 
 
-def signature(ws, point_counts, photo_ids=()):
-    raw = json.dumps([[[w.id, n] for w, n in zip(ws, point_counts)], list(photo_ids)])
+def signature(ws, point_counts, photo_ids=(), extra=None):
+    raw = json.dumps([[[w.id, n] for w, n in zip(ws, point_counts)], list(photo_ids), extra])
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -273,15 +289,27 @@ def photo_lines(shots):
     return lines
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url="", shots=()):
-    """Memo markdown, one `###` section per source. `legs` = [(from_label,
-    to_label) or None] per workout; `photos` = the day's timeline photo count,
-    `shots` = its moments (see `photo_lines`), `photos_url` = the first of the
-    day in Immich."""
+def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
+            weather=None, agenda=(), work=None):
+    """Memo markdown: the weather line, then one `###` section per source.
+    `legs` = [(from_label, to_label) or None] per workout; `photos` = the
+    day's timeline photo count, `shots` = its moments (see `photo_lines`),
+    `photos_url` = the first of the day in Immich; `agenda` = personal
+    calendar lines; `work` = (meetings, minutes, people) or None."""
     sections, tags = [], []
+    if weather:
+        sections.append([weather])
+    if agenda:
+        sections.append(["### 📅 Calendar", "", *agenda])
+    if work:
+        n, minutes, people = work
+        sections.append([f"### 💼 Work - {n} meeting{'s' if n > 1 else ''} · {_hm(minutes)} · "
+                         f"{people} {'person' if people == 1 else 'people'}"])
+        tags.append("work")
     if ws:
-        lines, tags = workout_section(ws, legs, web_url, day)
+        lines, wtags = workout_section(ws, legs, web_url, day)
         sections.append(lines)
+        tags += wtags
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
@@ -546,8 +574,31 @@ def _utc(t):
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def day_calendar(cfg, run, day, log):
+    """(personal agenda lines, work summary or None); empty on any failure."""
+    lo, hi = day_bounds(day)
+    lo_dt, hi_dt = datetime.fromtimestamp(lo, TZ), datetime.fromtimestamp(hi, TZ)
+    blobs = lambda names, since: src.calendar_blobs(run, names, since, hi, cfg.nextcloud_db,
+                                                    cfg.runuser, cfg.psql)
+    try:
+        agenda = src.personal_lines(
+            src.expand(blobs(cfg.personal_calendars, lo), lo_dt, hi_dt, TZ), TZ) \
+            if cfg.personal_calendars else []
+        work = None
+        if cfg.work_calendars:
+            # 30 days back, to tell the owner apart from the day's few attendees
+            wide = src.expand(blobs(cfg.work_calendars, lo - 30 * 86400),
+                              lo_dt - timedelta(days=30), hi_dt, TZ)
+            today = [e for e in wide if e.end > lo_dt and e.start < hi_dt]
+            work = src.work_summary(today, lo_dt, hi_dt, src.owner(wide))
+        return agenda, work
+    except (OSError, ValueError, ImportError, subprocess.CalledProcessError) as e:
+        log(f"{day}: calendar unavailable ({e})")
+        return [], None
+
+
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage):
+                collage_fn=render_collage, weather_fn=None):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -557,11 +608,21 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             day_photos = immich.day(day)
         except (OSError, ValueError) as e:  # URLError/HTTPError are OSErrors
             log(f"{key}: Immich unavailable, no photos this run ({e})")
-    if not ws and not day_photos:
+    agenda, work = day_calendar(cfg, run, day, log)
+    if not ws and not day_photos and not agenda and not work:
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     tracks = [track(cfg, run, uid, w) for w in ws]
-    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos])
+    weather = None
+    if weather_fn:
+        first = next((t[0] for t in tracks if t), None) or next(
+            (g for g in map(photo_gps, day_photos) if g), None) or cfg.home
+        try:
+            weather = weather_fn(day, *first)
+        except (OSError, ValueError, KeyError, IndexError) as e:
+            log(f"{key}: weather unavailable ({e})")
+    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
+                    [agenda, work, weather])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -573,7 +634,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         gps = photo_gps(m)
         shots.append((photo_time(m), immich.link(m["id"]),
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
-    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots)
+    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
+                   weather, agenda, work)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
         return None
@@ -611,8 +673,10 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                             "latitude": gps[0]["latitude"], "longitude": gps[0]["longitude"]}
     if ws:
         when = _utc(ws[-1].end)
-    else:
+    elif day_photos:
         when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
+    else:  # calendar-only day: noon
+        when = _utc(day_bounds(day)[0] + 8 * 3600)
 
     atts = memos.upload(files)
     prev, name = state.get(key), None
@@ -651,7 +715,8 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
         with tempfile.TemporaryDirectory() as tmp:
             for day in target_days(cfg, today):
                 journal_day(cfg, run, memos, state, day, uid, log,
-                            render_fn or render, tmp, immich)
+                            render_fn or render, tmp, immich,
+                            weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener))
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:

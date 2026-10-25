@@ -16,8 +16,9 @@ requires-python = ">=3.11"
 # without it.
 # websocket-client: arkose-sync speaks Meteor DDP over a websocket (lazy import too).
 # staticmap + pillow: journal-daily draws the map and the photo collage (lazy imports).
+# icalendar + recurring-ical-events: journal-daily reads Nextcloud calendars (lazy).
 # cryptography: dps-ea-bridge rewraps a Bitwarden user key (AES-CBC, Argon2id).
-dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap", "pillow" ]
+dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap", "pillow", "icalendar", "recurring-ical-events" ]
 
 # One console script per connector. This is the interface the systemd units use
 # (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
