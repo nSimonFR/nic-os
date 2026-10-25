@@ -33,6 +33,8 @@ in
 
     environment = {
       TIME_ZONE = "Europe/Paris";
+      # + the Agent Vault alias (hosts/rpi5/agent-vault.nix): Rails 403s other Hosts.
+      APPLICATION_HOSTS = lib.mkForce "127.0.0.1,::1,${tailnetFqdn},dawarich.home.arpa";
       # Single-process Puma (no forked workers) — saves ~50 MB on RPi5
       WEB_CONCURRENCY = "0";
       # Match reduced thread count for web process
