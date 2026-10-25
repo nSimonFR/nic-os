@@ -427,7 +427,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
                          f"{people} personne{'s' if people > 1 else ''}"])
         tags.append("work")
     body = "\n\n".join("\n".join(lines) for lines in sections)
-    return f"{body}\n\n{' '.join(f'#{t}' for t in tags)}\n"
+    return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
 
 def collage_grid(n):

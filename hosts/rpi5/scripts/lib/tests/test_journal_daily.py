@@ -384,7 +384,7 @@ def test_content_puts_weather_and_agenda_first_work_last():
                       agenda=["- **19:00-21:00** Dinner"], work=(4, 135, 14))
     assert text.startswith("🌧 Pluie légère · 6-13 °C\n\n### 📅 Agenda\n\n- **19:00-21:00** Dinner\n\n"
                            "### 🚲 Vélo")
-    assert text.endswith("\n\n### 💼 Travail - 4 réunions (2h15) 14 personnes\n\n#bike #work\n")
+    assert text.endswith("\n\n### 💼 Travail - 4 réunions (2h15) 14 personnes\n\n___________\n\n#bike #work\n")
     assert "### 💼 Travail - 1 réunion (45min) 1 personne" in wm.content("d", [], [], "d", work=(1, 45, 1))
 
 
@@ -449,7 +449,7 @@ def test_music_section_sits_between_photos_and_work(tmp_path):
                    lambda m: None, no_render, str(tmp_path))
     text = op.body_of(1)["content"]
     assert ("\n\n### 🎵 Musique - 4 titres · 17 min\n\n"
-            "- **Lomepal** · Club, Trop beau, Un peu de sang\n- **Muse** · Starlight\n\n#bike #music\n") in text
+            "- **Lomepal** · Club, Trop beau, Un peu de sang\n- **Muse** · Starlight\n\n___________\n\n#bike #music\n") in text
 
 
 def test_music_alone_makes_no_entry(tmp_path):
@@ -475,7 +475,7 @@ def test_climbing_day_gets_an_entry_with_its_section(tmp_path):
     assert op.body_of(0)["content"] == (
         "### 🧗 Escalade - Arkose Chevaleret · 7 tops · 38 m\n\n"
         "- **Tops**: 🟢 5 verts · 🔵 2 bleus\n- **Retops**: 1\n- **Non topés**: 1\n- **Niveau**: vert ⬆️"
-        "\n\n#climbing\n")
+        "\n\n___________\n\n#climbing\n")
     assert op.body_of(1) == {"createTime": "2026-10-19T10:16:17+00:00"}
 
 
