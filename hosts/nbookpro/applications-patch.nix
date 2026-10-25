@@ -14,6 +14,9 @@ in
   home.activation.addApplications = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     fromDir="${apps}/Applications/"
     toDir="$HOME/Applications/Home Manager Trampolines"
-    ${mac-app-util}/bin/mac-app-util sync-trampolines "$fromDir" "$toDir"
+    # Non-fatal: its SBCL runtime can't reserve its heap on macOS 27 ("failed to
+    # allocate … at 0x300100000"), and a failure here aborted the whole switch.
+    ${mac-app-util}/bin/mac-app-util sync-trampolines "$fromDir" "$toDir" \
+      || echo "warning: mac-app-util failed; Home Manager app trampolines not refreshed" >&2
   '';
 }
