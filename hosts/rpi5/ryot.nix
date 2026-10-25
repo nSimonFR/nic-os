@@ -159,6 +159,9 @@ in
       ExecStart = lib.escapeShellArgs [
         "${config.systemd.package}/bin/systemd-nspawn"
         "--quiet" "--register=no" "--keep-unit"
+        # Defaults to the directory name ("rootfs"), which another nspawn
+        # container can share: "Mount point …/unix-export/rootfs exists already".
+        "--machine=ryot"
         "--directory=${stateDir}/rootfs"
         "--chdir=/home/ryot"
         "--bind-ro=${envFile}:/etc/ryot.env"
@@ -211,16 +214,17 @@ in
     };
   };
 
-  # A new key has to reach the broker; its bootstrap reads it as an optional credFile.
+  # Consumers that read the key only at start: the broker's bootstrap (optional
+  # credFile) and the long-running scale shim.
   systemd.paths.ryot-api-key = {
     wantedBy = [ "paths.target" ];
     pathConfig.PathChanged = "${stateDir}/secrets/api-key";
   };
   systemd.services.ryot-api-key = {
-    description = "Re-apply Agent Vault credentials after a new Ryot key";
+    description = "Reload Ryot key consumers after a new key";
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${config.systemd.package}/bin/systemctl try-restart agent-vault-bootstrap.service";
+      ExecStart = "${config.systemd.package}/bin/systemctl try-restart agent-vault-bootstrap.service scale-to-ryot.service";
     };
   };
 
