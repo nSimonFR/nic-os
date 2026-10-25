@@ -54,11 +54,11 @@ in
 
     timerConfig = {
       # 04:30 local (Europe/Paris) — 15 min after karakeep, the last dump, and
-      # comfortably before the Sunday 05:00 auto-upgrade (auto-upgrade.nix).
+      # comfortably before the Sunday 05:00 reboot (auto-reboot.nix).
       OnCalendar = "*-*-* 04:30:00";
       Persistent = true; # catch up if the RPi was off at 04:30
       # Jitter kept small for the same reason it shrank: the window between the
-      # last dump and the auto-upgrade is 30 minutes wide, and there is no
+      # last dump and the reboot is 30 minutes wide, and there is no
       # thundering herd to spread out on a single host.
       RandomizedDelaySec = "10m";
     };

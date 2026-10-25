@@ -14,8 +14,8 @@ let
   # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
   # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs to
   # avoid zram thrashing and a watchdog reset. The shed/restore lives in
-  # `nic.heavyShed` (lib/service-registration.nix) because the weekly
-  # auto-upgrade needs the same thing, and its own copy had no restore.
+  # `nic.heavyShed` (lib/service-registration.nix), shared with the
+  # cachix-agent deploy.
   nixosRebuildSafe = pkgs.writeShellApplication {
     name = "nixos-rebuild-safe";
     runtimeInputs = with pkgs; [ nixos-rebuild config.nic.heavyShed ];
@@ -186,7 +186,7 @@ in
     ./scale-bridge.nix
     ./homepage.nix
     ./backups.nix
-    ./auto-upgrade.nix
+    ./auto-reboot.nix
     ./storj-backup.nix
     ./wakapi.nix
     ./sidestore-reflector.nix
