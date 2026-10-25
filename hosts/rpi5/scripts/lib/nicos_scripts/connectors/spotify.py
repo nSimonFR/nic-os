@@ -21,14 +21,11 @@ retention horizon at any realistic listening rate — a listener quiet enough fo
 50 plays to reach back past RETAIN_DAYS would see the oldest re-pushed, which
 Ryot absorbs as an in-place update of the same seen (no duplicate).
 
-Two-phase completion (mirrors Ryot's own YouTube Music integration): the generic
-JSON sink runs on the *live-progress* path (is_import=false), so a track that is
-new to Ryot lands as `in_progress@0` — Ryot resolves its metadata asynchronously
-and can't finalize the seen in the same beat. So we push each listen, remember the
-tracks we'd never pushed before (`known`/`pending` in the state file), and on the
-NEXT run re-push those — by then the metadata exists, and the re-push flips the
-seen to completed *in place* (no duplicate). Known tracks are never re-pushed, so
-already-completed listens are never duplicated.
+Completion: the generic JSON sink runs on Ryot's *live-progress* path
+(is_import=false), which ignores `progress` on the first sighting of a track and
+opens an `in_progress@0` seen; only a second sighting while that seen is cached
+applies `progress: 100`. So every listen carries its seen twice — Ryot processes
+seen_history in order, opening then completing it within one request.
 
 Stdlib only. Config via environment:
   SPOTIFY_CLIENT_ID       Spotify app client id                    [required]
@@ -121,12 +118,12 @@ def get_recently_played(token, opener=None):
 
 
 def music_item(identifier, source_id, ended_on):
+    # Twice on purpose: the first opens the seen, the second completes it (see the
+    # module docstring). A seen already open from an earlier run is completed by
+    # the first, and the second is then absorbed by Ryot's completed cache.
+    listen = ryot.seen(ended_on, providers=["Spotify"])
     return ryot.metadata_item(
-        "music",
-        "spotify",
-        identifier,
-        source_id,
-        [ryot.seen(ended_on, providers=["Spotify"])],
+        "music", "spotify", identifier, source_id, [listen, dict(listen)]
     )
 
 
@@ -162,8 +159,8 @@ def prune_keys(keys, newest_ms):
     return sorted(kept)
 
 
-def build_payload(items, known, pushed, prev_newest=None, floor_ms=None):
-    """Return (metadata, new_high_water_ms, first_evers).
+def build_payload(items, pushed, prev_newest=None, floor_ms=None):
+    """Return (metadata, new_high_water_ms).
 
     Skips listens already in `pushed` (keys of (track id, played_at)); `pushed` is
     mutated with the keys of everything returned here, so a caller that fails to
@@ -173,15 +170,8 @@ def build_payload(items, known, pushed, prev_newest=None, floor_ms=None):
     state file written before per-listen keys existed — without keys, every play in
     the window looks new, and the floor stands in for the missing history exactly
     once. Passing it routinely would reintroduce the offline-sync gap.
-
-    `first_evers` are the {identifier, source_id, ended_on} of tracks never pushed
-    before (not in `known`) — these land as in_progress@0 because Ryot resolves
-    their metadata asynchronously (the sink runs on the live-progress path, not the
-    import path), so they must be re-pushed once metadata exists (see main()).
-    `known` is mutated with any new identifiers.
     """
     metadata = []
-    first_evers = []
     newest = prev_newest or 0
     for it in items:
         played_at = it.get("played_at")  # ISO8601, e.g. 2026-07-22T09:15:00.123Z
@@ -201,16 +191,7 @@ def build_payload(items, known, pushed, prev_newest=None, floor_ms=None):
         pushed.add(key)
         newest = max(newest, ms)
         metadata.append(music_item(tid, track.get("name", tid), played_at))
-        if tid not in known:
-            known.add(tid)
-            first_evers.append(
-                {
-                    "identifier": tid,
-                    "source_id": track.get("name", tid),
-                    "ended_on": played_at,
-                }
-            )
-    return metadata, newest, first_evers
+    return metadata, newest
 
 
 def main(env=None, opener=None):
@@ -224,8 +205,6 @@ def main(env=None, opener=None):
     state = load_json(cfg.cursor_file, {})
     # `after_ms` is the pre-per-listen-key name for the high-water mark.
     prev_newest = state.get("newest_ms", state.get("after_ms"))
-    known = set(state.get("known", []))
-    prev_pending = state.get("pending", [])
     # A state file with no `pushed` predates per-listen keys; fall back to the
     # high-water mark as a floor for this run only, so the migration doesn't
     # re-push the whole window.
@@ -238,31 +217,19 @@ def main(env=None, opener=None):
         log(f"FATAL: Spotify API failed: {e}")
         return 1
 
-    new_metadata, new_newest, first_evers = build_payload(
+    metadata, new_newest = build_payload(
         items,
-        known,
         pushed,
         prev_newest=prev_newest,
         floor_ms=prev_newest if legacy else None,
     )
-
-    # Second phase: re-push last run's first-ever tracks. Their metadata has since
-    # resolved, so this flips their in_progress@0 seen to completed (updates in
-    # place — no duplicate). Only genuinely-new tracks ever enter this list, so
-    # already-completed listens of known tracks are never re-pushed/duplicated.
-    repush = [
-        music_item(p["identifier"], p["source_id"], p["ended_on"])
-        for p in prev_pending
-    ]
-
-    all_meta = new_metadata + repush
-    if not all_meta:
-        log("no new listens and nothing to complete — nothing to push")
+    if not metadata:
+        log("no new listens — nothing to push")
         return 0
 
-    log(f"pushing {len(new_metadata)} new listens + {len(repush)} completions")
+    log(f"pushing {len(metadata)} new listens")
     try:
-        status, resp = ryot.post_export(cfg.webhook_url, all_meta, opener=opener)
+        status, resp = ryot.post_export(cfg.webhook_url, metadata, opener=opener)
     except urllib.error.URLError as e:
         log(f"FATAL: push to Ryot failed: {e}")
         return 1
@@ -272,17 +239,9 @@ def main(env=None, opener=None):
 
     save_json(
         cfg.cursor_file,
-        {
-            "newest_ms": new_newest,
-            "known": sorted(known),
-            "pending": first_evers,
-            "pushed": prune_keys(pushed, new_newest),
-        },
+        {"newest_ms": new_newest, "pushed": prune_keys(pushed, new_newest)},
     )
-    log(
-        f"done (Ryot {status}); newest {new_newest}; "
-        f"{len(first_evers)} tracks pending completion next run"
-    )
+    log(f"done (Ryot {status}); newest {new_newest}")
     return 0
 
 

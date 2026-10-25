@@ -1,4 +1,4 @@
-"""spotify-to-ryot: per-listen dedupe and the two-phase completion."""
+"""spotify-to-ryot: per-listen dedupe and completed-on-arrival listens."""
 
 import json
 
@@ -70,30 +70,26 @@ def test_prune_keys_drops_malformed_keys():
 
 
 def test_first_run_pushes_every_listen_and_records_the_high_water_mark():
-    known, pushed = set(), set()
-    meta, newest, pending = spotify.build_payload(
+    pushed = set()
+    meta, newest = spotify.build_payload(
         [
             item("t1", "One", "2026-08-06T10:00:00Z"),
             item("t2", "Two", "2026-08-06T11:00:00Z"),
         ],
-        known,
         pushed,
     )
     assert [m["identifier"] for m in meta] == ["t1", "t2"]
     assert newest == ms("2026-08-06T11:00:00Z")
-    assert [p["identifier"] for p in pending] == ["t1", "t2"]
-    assert known == {"t1", "t2"}
     assert pushed == {key("t1", "2026-08-06T10:00:00Z"), key("t2", "2026-08-06T11:00:00Z")}
 
 
 def test_an_already_pushed_listen_is_not_pushed_again():
     pushed = {key("t1", "2026-08-06T10:00:00Z")}
-    meta, _, _ = spotify.build_payload(
+    meta, _ = spotify.build_payload(
         [
             item("t1", "One", "2026-08-06T10:00:00Z"),
             item("t2", "Two", "2026-08-06T10:30:00Z"),
         ],
-        set(),
         pushed,
     )
     assert [m["identifier"] for m in meta] == ["t2"]
@@ -104,9 +100,8 @@ def test_a_listen_that_syncs_late_from_an_offline_device_is_still_pushed():
     # played_at, so it arrives *behind* the high-water mark. Anchoring on the
     # mark (as the old `after` cursor did) dropped it forever.
     prev_newest = ms("2026-08-06T12:00:00Z")
-    meta, newest, _ = spotify.build_payload(
+    meta, newest = spotify.build_payload(
         [item("t1", "Offline", "2026-08-06T08:00:00Z")],
-        set(),
         set(),
         prev_newest=prev_newest,
     )
@@ -116,30 +111,31 @@ def test_a_listen_that_syncs_late_from_an_offline_device_is_still_pushed():
 
 def test_the_same_track_at_a_different_time_is_a_distinct_listen():
     pushed = {key("t1", "2026-08-06T10:00:00Z")}
-    meta, _, _ = spotify.build_payload(
-        [item("t1", "One", "2026-08-06T14:00:00Z")], {"t1"}, pushed
+    meta, _ = spotify.build_payload(
+        [item("t1", "One", "2026-08-06T14:00:00Z")], pushed
     )
     assert len(meta) == 1  # a repeat play, not a duplicate
 
 
-def test_a_known_track_is_pushed_but_not_queued_for_completion():
-    # Its metadata already exists in Ryot, so the seen completes immediately;
-    # re-pushing it next run would duplicate the listen.
-    meta, _, pending = spotify.build_payload(
-        [item("t1", "One", "2026-08-06T10:00:00Z")], {"t1"}, set()
+def test_every_listen_carries_its_seen_twice_so_ryot_completes_it():
+    # Ryot's live-progress path opens the seen on the first entry and only
+    # applies progress 100 on the second; a single entry stays in_progress@0.
+    meta, _ = spotify.build_payload(
+        [item("t1", "One", "2026-08-06T10:00:00Z")], set()
     )
-    assert len(meta) == 1
-    assert pending == []
+    first, second = meta[0]["seen_history"]
+    assert first == second
+    assert first["progress"] == 100
+    assert first["ended_on"] == "2026-08-06T10:00:00Z"
 
 
 def test_items_without_a_track_id_or_timestamp_are_skipped():
-    meta, newest, _ = spotify.build_payload(
+    meta, newest = spotify.build_payload(
         [
             {"played_at": "2026-08-06T10:00:00Z", "track": {}},
             {"track": {"id": "t1", "name": "One"}},
             {"played_at": "2026-08-06T10:00:00Z"},
         ],
-        set(),
         set(),
     )
     assert meta == []
@@ -148,7 +144,7 @@ def test_items_without_a_track_id_or_timestamp_are_skipped():
 
 def test_high_water_mark_never_moves_backwards_on_an_empty_poll():
     prev = ms("2026-08-06T10:00:00Z")
-    _, newest, _ = spotify.build_payload([], set(), set(), prev_newest=prev)
+    _, newest = spotify.build_payload([], set(), prev_newest=prev)
     assert newest == prev
 
 
@@ -157,24 +153,22 @@ def test_the_bootstrap_floor_suppresses_the_push_but_still_records_the_key():
     # history we can't reconstruct, and recording the key retires it.
     floor = ms("2026-08-06T10:00:00Z")
     pushed = set()
-    meta, _, pending = spotify.build_payload(
+    meta, _ = spotify.build_payload(
         [
             item("t1", "Old", "2026-08-06T09:00:00Z"),
             item("t2", "New", "2026-08-06T11:00:00Z"),
         ],
-        set(),
         pushed,
         prev_newest=floor,
         floor_ms=floor,
     )
     assert [m["identifier"] for m in meta] == ["t2"]  # only what's past the floor
-    assert [p["identifier"] for p in pending] == ["t2"]
     assert key("t1", "2026-08-06T09:00:00Z") in pushed  # ...but t1 is accounted for
 
 
 def test_payload_item_carries_the_fields_ryot_requires():
-    meta, _, _ = spotify.build_payload(
-        [item("t1", "One", "2026-08-06T10:00:00Z")], set(), set()
+    meta, _ = spotify.build_payload(
+        [item("t1", "One", "2026-08-06T10:00:00Z")], set()
     )
     assert meta[0]["lot"] == "music" and meta[0]["source"] == "spotify"
     assert meta[0]["reviews"] == [] and meta[0]["collections"] == []
@@ -204,7 +198,7 @@ def test_main_fails_fast_on_missing_env(capsys):
     assert "missing env" in capsys.readouterr().out
 
 
-def test_main_end_to_end_persists_mark_known_pending_and_keys(tmp_path):
+def test_main_end_to_end_persists_mark_and_keys(tmp_path):
     # Reply queue: token refresh, recently-played, Ryot sink.
     op = FakeOpener(
         [
@@ -219,10 +213,6 @@ def test_main_end_to_end_persists_mark_known_pending_and_keys(tmp_path):
     state = json.loads((tmp_path / "spotify-cursor.json").read_text())
     assert state == {
         "newest_ms": ms("2026-08-06T10:00:00Z"),
-        "known": ["t1"],
-        "pending": [
-            {"identifier": "t1", "source_id": "One", "ended_on": "2026-08-06T10:00:00Z"}
-        ],
         "pushed": [key("t1", "2026-08-06T10:00:00Z")],
     }
     assert op.requests[1].get_header("Authorization") == "Bearer tok"
@@ -316,7 +306,9 @@ def test_main_migrates_a_state_file_written_before_per_listen_keys(tmp_path):
     assert "after_ms" not in state  # the legacy field is retired
 
 
-def test_main_completes_last_runs_pending_tracks_on_the_next_run(tmp_path):
+def test_main_drops_the_retired_two_phase_state_without_re_pushing(tmp_path):
+    # `known`/`pending` drove the old next-run re-push; their listens were already
+    # sent, so a leftover `pending` must not be pushed again.
     (tmp_path / "spotify-cursor.json").write_text(
         json.dumps(
             {
@@ -336,16 +328,15 @@ def test_main_completes_last_runs_pending_tracks_on_the_next_run(tmp_path):
     op = FakeOpener(
         [
             json_reply({"access_token": "tok"}),
-            json_reply({"items": []}),  # nothing new
+            json_reply({"items": [item("t2", "Two", "2026-08-06T11:00:00Z")]}),
             json_reply({}, 200),
         ]
     )
     assert spotify.main(env={**ENV, "STATE_DIR": str(tmp_path)}, opener=op) == 0
 
-    pushed = op.body_of()["metadata"]
-    assert [p["identifier"] for p in pushed] == ["t1"]  # the re-push that completes it
+    assert [p["identifier"] for p in op.body_of()["metadata"]] == ["t2"]
     state = json.loads((tmp_path / "spotify-cursor.json").read_text())
-    assert state["pending"] == []  # and it is not re-pushed a third time
+    assert set(state) == {"newest_ms", "pushed"}
 
 
 def test_main_does_not_post_when_there_is_nothing_to_send(tmp_path):
