@@ -92,9 +92,8 @@ let
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
 
   # `heavy-shed <command…>`: free the RAM, do the thing, put it back. Shared by
-  # nixos-rebuild-safe (configuration.nix) and auto-upgrade.nix — it used to be
-  # written twice and only the wrapper's copy had the restore, so a failed weekly
-  # upgrade left nine always-on services stopped for 9h on 2026-08-30.
+  # nixos-rebuild-safe (configuration.nix) and cachix-agent.nix. A copy without
+  # the restore left nine always-on services stopped for 9h on 2026-08-30.
   heavyShed = pkgs.writeShellApplication {
     name = "heavy-shed";
     runtimeInputs = [ pkgs.systemd ];
@@ -103,7 +102,7 @@ let
       # everything and take the success path straight past the restore.
       : "''${1:?heavy-shed: no command given}"
 
-      # Already root under the auto-upgrade unit, which has no sudo on its PATH
+      # Already root under the cachix-agent deploy, which has no sudo on its PATH
       # (and the store's sudo is not setuid); nsimon interactively, which does.
       as_root=()
       if [ "$(id -u)" -ne 0 ]; then as_root=(/run/wrappers/bin/sudo); fi
@@ -494,7 +493,7 @@ let
         type = lib.types.listOf lib.types.str;
         default = [ ];
         description = ''
-          Units stopped by `nixos-rebuild-safe` and the weekly auto-upgrade to
+          Units stopped by `nixos-rebuild-safe` and the cachix-agent deploy to
           free RSS before a build. List every unit the service actually runs
           (web + workers + its search backend), not just the socket-activated
           `realUnit` — the workers are where the RSS is.

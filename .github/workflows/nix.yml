@@ -3,9 +3,8 @@
 # Until now nothing did. garnix went away on 2026-07-15 (docs/adr — see the
 # known-issue note) and took the only build/eval feedback with it, so a PR that
 # broke evaluation merged clean and was discovered by hand. That matters more
-# here than in most repos: auto-upgrade.nix runs `nix flake update` + rebuild +
-# reboot unattended every Sunday at 05:00 on a headless Pi whose documented
-# recovery path is a physical power-cycle.
+# here than in most repos: every merge to main deploys unattended (deploy-rpi5.yml)
+# to a headless Pi whose documented recovery path is a physical power-cycle.
 #
 # Eval, not build. `system.build.toplevel.drvPath` forces the whole module tree —
 # every module imported, every option merged, every `assertions` entry checked —
