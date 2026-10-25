@@ -139,6 +139,10 @@
     agent-vault-admin-password = {
       file = ./secrets/agent-vault-admin-password.age;
     };
+    # Healthchecks.io ping URL: anyone holding it can keep the check green.
+    rpi5-healthcheck = {
+      file = ./secrets/rpi5-healthcheck.age;
+    };
     searxng-env = {
       file = ./secrets/searxng-env.age;
       # SEARXNG_SECRET — signs the preferences cookie and the link token.
