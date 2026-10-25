@@ -14,8 +14,9 @@ T1, T2 = 1792390421, 1792427478
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),)):
+    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
+        self.tracks = tracks
         self.sql = []
 
     def __call__(self, cmd):
@@ -25,6 +26,8 @@ class FakePg:
             rows = []
         elif "FROM workouts" in sql:
             rows = self.workouts
+        elif "FROM tracks" in sql:
+            rows = self.tracks
         elif "FROM users" in sql:
             rows = [("1",)]
         elif "FROM places" in sql:
@@ -397,3 +400,38 @@ def test_weather_uses_the_first_ride_start(tmp_path):
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path),
                    weather_fn=lambda d, lat, lon: asked.append((lat, lon)) or "☀️ Clear")
     assert asked == [(48.83, 2.34)]
+
+
+def trk(tid, start, minutes, km, mode, *pts):
+    path = json.dumps({"type": "LineString", "coordinates": [[lon, lat] for lat, lon in pts]})
+    return (tid, start, start + minutes * 60, km * 1000, minutes * 60, mode, path)
+
+
+def test_map_draws_every_trip_coloured_by_mode():
+    ride_w = wm.Workout(W1, "Cycling", T1, T1 + 2220, 9.5, 37, 300)
+    late = wm.Workout(W2, "Cycling", T2, T2 + 600, 2, 10, 0)
+    # Dawarich called the ride a run (3); the car trip has no workout
+    by_ride = wm.Trip("1", T1 - 60, T1 + 2300, 9.4, 39, 3, ((48.83, 2.34), (48.91, 2.33)))
+    car = wm.Trip("2", T1 + 7200, T1 + 9000, 13.9, 30, 5, ((48.91, 2.33), (48.85, 2.30)))
+    lines = wm.map_lines([ride_w, late], [[(1, 1), (2, 2)], [(3, 3), (4, 4)]], [by_ride, car])
+    assert [c for _, c in lines] == [wm.COLORS[0], wm.ROAD, wm.COLORS[0]]
+    assert lines[2][0] == [(3, 3), (4, 4)]  # no trip yet: the workout's own points
+    assert wm.other_trips([ride_w, late], [by_ride, car]) == [car]
+
+
+def test_trip_only_day_gets_an_entry_with_its_trips(tmp_path):
+    pg = FakePg([], [], tracks=[trk("7", T1, 35, 13.9, 5, (48.83, 2.36), (48.85, 2.30)),
+                                trk("8", T2, 2, 0.3, 0, (48.85, 2.30), (48.85, 2.31))])
+    op, rendered = memos_opener(), []
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, lambda lines, path: (rendered.append(lines), no_render(None, path)),
+                   str(tmp_path))
+    memo = op.body_of(1)
+    assert memo["content"].startswith("### 🧭 Trips - 2 trips · 14.2 km\n\n"
+                                      "- **08:13** 🚗 around Paris 13e · 13.9 km · 35 min\n"
+                                      "- **18:31** 🧭 around Paris 13e · 0.3 km · 2 min\n\n"
+                                      "[Open the day in Dawarich]")
+    assert [c for _, c in rendered[0]] == [wm.ROAD, wm.OTHER]
+    assert op.body_of(2) == {"createTime": "2026-10-19T16:33:18Z"}
+    sql = next(s for s in pg.sql if "FROM tracks" in s)
+    assert ">= 300" in sql and "<> 1" in sql
