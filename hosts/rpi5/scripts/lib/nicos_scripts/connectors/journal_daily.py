@@ -32,8 +32,12 @@ Calendar, weather, activity (FreeReps), music and games (Ryot) and climbing
 climbing session still gets an entry; weather, activity, music or games alone
 do not.
 
+Work notes: `entire dispatch --local` over the day, per repo in
+JOURNAL_DISPATCH_REPOS, collapsed under the work section. Generated once per
+finished day and cached in the state's `_dispatch` (an agent call each).
+
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
-PERSONAL_CALENDARS,WORK_CALENDARS}, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
+PERSONAL_CALENDARS,WORK_CALENDARS,DISPATCH_REPOS,DISPATCH_USER}, GIT_BIN, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
 DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 """
 
@@ -100,6 +104,9 @@ class Config:
     nextcloud_db: str = "nextcloud_production"
     ryot_db: str = "ryot"
     freereps_db: str = "freereps"
+    dispatch_repos: tuple = ()
+    dispatch_user: str = "nsimon"
+    git: str = "git"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
@@ -121,6 +128,9 @@ class Config:
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
+            dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
+            dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
+            git=env_str("GIT_BIN", "git", env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
             psql=env_str("PSQL_BIN", "psql", env),
@@ -384,7 +394,7 @@ def photo_lines(shots):
 
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None):
+            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=()):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -394,7 +404,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     calendar lines; `work` = (meetings, minutes, people) or None; `music` =
     (heading suffix, lines) from journal_sources.music_section, or None;
     `climbing` and `games` = the same from climbing_section / game_section;
-    `activity` = the heading suffix from activity_section."""
+    `activity` = the heading suffix from activity_section; `notes` = work
+    notes (journal_sources.dispatch_notes), collapsed under the work section."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -422,18 +433,24 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = climbing
         sections.append([f"### 🧗 Escalade - {head}", "", *lines])
         tags.append("climbing")
-    if games:
-        head, lines = games
-        sections.append([f"### 🎮 Jeux - {head}", "", *lines])
-        tags.append("gaming")
     if music:
         head, lines = music
         sections.append([f"### 🎵 Musique - {head}", "", *lines])
         tags.append("music")
-    if work:
-        n, minutes, people = work
-        sections.append([f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
-                         f"{people} personne{'s' if people > 1 else ''}"])
+    if games:
+        head, lines = games
+        sections.append([f"### 🎮 Jeux - {head}", "", *lines])
+        tags.append("gaming")
+    if work or notes:
+        head = "### 💼 Travail"
+        if work:
+            n, minutes, people = work
+            head += (f" - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
+                     f"{people} personne{'s' if people > 1 else ''}")
+        lines = [head]
+        if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
+            lines += ["", "<details>", "<summary>Notes de travail</summary>", "", *notes, "", "</details>"]
+        sections.append(lines)
         tags.append("work")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
@@ -734,6 +751,28 @@ def day_climbing(cfg, day, log):
         return []
 
 
+def day_notes(cfg, run, state, day, log, now=None):
+    """The day's work notes: cached in state["_dispatch"], else generated once
+    the day is over (an agent call per active repo). Not cached on failure,
+    nor in dry run."""
+    key = day.isoformat()
+    cache = state.get("_dispatch", {})
+    if key in cache:
+        return cache[key]
+    lo, hi = day_bounds(day)
+    if not cfg.dispatch_repos or hi > (now or datetime.now(timezone.utc).timestamp()):
+        return []
+    try:
+        notes = src.dispatch_notes(run, cfg.dispatch_repos, lo, hi, cfg.dispatch_user,
+                                   cfg.runuser, cfg.git)
+    except (OSError, subprocess.CalledProcessError) as e:
+        log(f"{key}: work notes unavailable ({e})")
+        return []
+    if not cfg.dry_run:
+        state.setdefault("_dispatch", {})[key] = notes
+    return notes
+
+
 def day_activity(cfg, run, day, log):
     """journal_sources.activity_section of the day, or None (no steps, or FreeReps unreadable)."""
     try:
@@ -765,7 +804,7 @@ def day_music(cfg, run, day, log):
 
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image):
+                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -778,7 +817,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     agenda, work = day_calendar(cfg, run, day, log)
     day_trips = trips(cfg, run, uid, day)
     climbs = day_climbing(cfg, day, log)
-    if not ws and not day_trips and not climbs and not day_photos and not agenda and not work:
+    notes = day_notes(cfg, run, state, day, log, now)
+    if not (ws or day_trips or climbs or day_photos or agenda or work or notes):
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     music = day_music(cfg, run, day, log)
@@ -796,7 +836,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         except (OSError, ValueError, KeyError, IndexError) as e:
             log(f"{key}: weather unavailable ({e})")
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
-                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity,
+                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs))])
     if state.get(key, {}).get("sig") == sig:
@@ -814,7 +854,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
-                   src.climbing_section(climbs) if climbs else None, games, activity)
+                   src.climbing_section(climbs) if climbs else None, games, activity, notes)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")

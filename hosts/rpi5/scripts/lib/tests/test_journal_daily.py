@@ -527,7 +527,7 @@ def test_collage_grid_goes_four_wide_past_nine():
     assert [wm.collage_grid(n) for n in (10, 12, 16)] == [(4, 3), (4, 3), (4, 4)]
 
 
-def test_games_section_after_climbing_before_music(tmp_path):
+def test_games_section_after_music(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")],
                 music=[("Club", "Lomepal", 250)], games=[("Stardew Valley", 6000), ("Hades", 900)])
     op = memos_opener()
@@ -535,8 +535,8 @@ def test_games_section_after_climbing_before_music(tmp_path):
                    lambda m: None, no_render, str(tmp_path))
     text = op.body_of(1)["content"]
     assert ("\n\n### 🎮 Jeux - 1 h 55\n\n- **Stardew Valley** · 1 h 40\n- **Hades** · 15 min"
-            "\n\n### 🎵 Musique") in text
-    assert text.rstrip().endswith("#bike #gaming #music")
+            "\n\n___________") in text and text.index("### 🎵 Musique") < text.index("### 🎮 Jeux")
+    assert text.rstrip().endswith("#bike #music #gaming")
     sql = next(s for s in pg.sql if "video_game" in s)
     lo, hi = wm.day_bounds(date(2026, 10, 19))
     assert f"to_timestamp({lo + 86400})" in sql and f"to_timestamp({hi + 86400})" in sql
@@ -560,3 +560,35 @@ def test_activity_alone_makes_no_entry(tmp_path):
     pg = FakePg([], [], activity=[("step_count", 3000)])
     assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
                           date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
+
+
+def test_work_notes_collapse_under_the_work_section_and_are_cached(tmp_path):
+    from test_journal_sources import DISPATCH
+    pg, agent = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")]), []
+
+    def run(cmd):
+        if "log" in cmd:
+            return "abc\n"
+        if "-l" in cmd:
+            agent.append(cmd)
+            return DISPATCH
+        return pg(cmd)
+    c, state = cfg(tmp_path, dispatch_repos=("/home/nsimon/nic-os",)), {}
+    after = wm.day_bounds(date(2026, 10, 19))[1] + 60
+    wm.journal_day(c, run, wm.Memos("http://m", "T", memos_opener()), state, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path), now=after)
+    text = state["2026-10-19"]["text"]
+    assert ("\n\n### 💼 Travail\n\n<details>\n<summary>Notes de travail</summary>\n\n"
+            "Un seul correctif") in text
+    assert "déploiement.\n\n</details>\n\n___________\n\n#bike #work\n" in text
+    assert state["_dispatch"]["2026-10-19"][2] == "**nic-os**" and len(agent) == 1
+    state["2026-10-19"]["sig"] = "stale"
+    wm.journal_day(c, run, wm.Memos("http://m", "T", update_opener({"name": "memos/M", "content": text})),
+                   state, date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), now=after)
+    assert len(agent) == 1  # cached: the agent ran once for the day
+
+
+def test_work_notes_wait_for_the_day_to_end(tmp_path):
+    c = cfg(tmp_path, dispatch_repos=("/r",), dry_run=True)
+    run = lambda cmd: (_ for _ in ()).throw(AssertionError(cmd))
+    assert wm.day_notes(c, run, {}, date(2026, 10, 19), print, now=wm.day_bounds(date(2026, 10, 19))[1] - 1) == []
