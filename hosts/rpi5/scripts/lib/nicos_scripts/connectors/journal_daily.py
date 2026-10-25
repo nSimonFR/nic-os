@@ -202,6 +202,13 @@ def _hm(minutes):
     return f"{h} h {m:02d}" if h else f"{m} min"
 
 
+def tile_label(asset):
+    """`14:29`, or `14:29 x8` for a pick standing for a burst of 8 shots.
+    ASCII x: Pillow's default font has no × (it drew a box)."""
+    n = asset.get("burst", 1)
+    return f"{photo_time(asset)} x{n}" if n > 1 else photo_time(asset)
+
+
 def photo_time(asset):
     """Local HH:MM a photo was taken."""
     t = datetime.fromisoformat(asset["fileCreatedAt"].replace("Z", "+00:00"))
@@ -357,14 +364,16 @@ def pick_photos(assets, n):
     """One photo per burst (shots < BURST_GAP_S apart; its favourite, else its
     middle shot), then favourites first and the rest nearest evenly spaced
     instants of the day. Oct 12: a 7-shot burst at 14:29 had filled 7 of 9
-    tiles. Oldest first."""
+    tiles. Each pick carries `burst` = how many shots it stands for. Oldest
+    first."""
     bursts = []
     for a in assets:
         if bursts and _taken(a) - _taken(bursts[-1][-1]) < BURST_GAP_S:
             bursts[-1].append(a)
         else:
             bursts.append([a])
-    reps = [next((a for a in b if a.get("isFavorite")), b[len(b) // 2]) for b in bursts]
+    reps = [{**next((a for a in b if a.get("isFavorite")), b[len(b) // 2]), "burst": len(b)}
+            for b in bursts]
     picked = [a for a in reps if a.get("isFavorite")][:max(n, 0)]
     rest = [a for a in reps if not a.get("isFavorite")]
     k = min(n - len(picked), len(rest))
@@ -476,7 +485,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
         collage_fn([immich.preview(p["id"]) for p in photos],
-                   [photo_time(p) for p in photos], collage_path)
+                   [tile_label(p) for p in photos], collage_path)
         with open(collage_path, "rb") as f:
             files.append((f"photos-{key}.jpg", "image/jpeg", f.read()))
 
