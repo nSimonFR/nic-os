@@ -85,8 +85,10 @@ def test_first_sync_pages_through_and_fetches_non_empty(tmp_path):
     assert store["userId"] == "U1" and store["lastSyncAt"] == NOW and len(store["sessions"]) == 25
     s0 = store["sessions"]["s0"]
     assert s0["startDate"] == "2027-01-15T08:00:00+00:00"
-    assert "userAvatars" not in s0 and s0["bestTop"] == {"boulderId": "b"}
-    assert s0["boulders"] == [{"_id": "Bs0", "label": 5, "grade": "2", "sent": True}]
+    assert "userAvatars" not in s0 and s0["bestTop"] == {"boulderId": "b", "picture": {"id": "p"}}
+    assert s0["boulders"] == [{"_id": "Bs0", "label": 5, "grade": "2", "sent": True,
+                               "picture": {"id": "x"}}]
+    assert s0["detailVersion"] == mod.DETAIL_VERSION
     assert "boulders" not in store["sessions"]["s24"]
     assert server.closed
 
@@ -134,3 +136,20 @@ def test_token_for_another_account_is_refused(tmp_path):
     server = FakeServer({}, user="U2")
     assert run(setup(tmp_path), server) == 1
     assert [m for m, _ in server.calls] == ["login"]
+
+
+def test_detail_from_an_older_version_is_refetched_once(tmp_path):
+    old = {"_id": "s9", "startDate": "2026-01-01T00:00:00+00:00", "isClosed": True, "isEmpty": False,
+           "tops": 5, "flashs": 0, "tried": 0, "retops": 0, "boulders": [{"_id": "B"}]}
+    sessions = [session("s9", days_ago=30, tops=5)]
+    env = setup(tmp_path, store={"userId": "U1", "lastSyncAt": NOW - 120, "sessions": {"s9": old}})
+    server = FakeServer({"_users.getUserSessions": paged(sessions),
+                         "_users.getUserSessionBoulders": boulders})
+    run(env, server)
+    assert [p["sessionId"] for m, p in server.calls if m == "_users.getUserSessionBoulders"] == ["s9"]
+    store = json.loads((tmp_path / "sessions.json").read_text())
+    assert store["sessions"]["s9"]["boulders"][0]["picture"] == {"id": "x"}
+    server2 = FakeServer({"_users.getUserSessions": paged(sessions),
+                          "_users.getUserSessionBoulders": boulders})
+    run(env, server2)
+    assert not any(m == "_users.getUserSessionBoulders" for m, _ in server2.calls)

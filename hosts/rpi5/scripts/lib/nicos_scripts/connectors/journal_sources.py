@@ -285,3 +285,25 @@ def climbing_section(sessions, tz):
     if metres:
         head.append(f"{metres} m")
     return " · ".join(head), lines
+
+
+# Arkose+ web client: settings.public.S3Path + "/boulderPicsShare/<id>.jpg" is a
+# public 1200 px square of the wall with the start hold circled (2026-10-25).
+ARKOSE_S3 = "https://socialboulder.s3-eu-west-1.amazonaws.com"
+
+
+def climbing_pictures(sessions):
+    """[(url, hold colour)] of the boulders topped (retops included), hardest
+    colour first, each boulder once."""
+    out, seen = [], set()
+    for s in sessions:
+        names = s.get("gymLabels") or {}
+        for b in (s.get("boulders") or []) + (s.get("retopBoulders") or []):
+            pic = b.get("picture") or {}
+            if b["_id"] in seen or not (pic.get("share") or pic.get("id")):
+                continue
+            seen.add(b["_id"])
+            url = (f"{ARKOSE_S3}/boulderPicsShare/{pic['share']}.jpg" if pic.get("share")
+                   else f"{ARKOSE_S3}/800/bouldersPics/{pic['id']}.jpg")
+            out.append((int(b.get("label") or 0), url, names.get(str(b.get("label")), "")))
+    return [(url, colour) for _, url, colour in sorted(out, key=lambda t: -t[0])]

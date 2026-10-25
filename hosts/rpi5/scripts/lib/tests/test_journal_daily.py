@@ -488,3 +488,36 @@ def test_arkose_store_missing_is_silent_corrupt_is_logged(tmp_path):
     assert wm.day_climbing(cfg(tmp_path, arkose_sessions=str(tmp_path / "bad.json")),
                            date(2026, 10, 19), lines.append) == []
     assert "climbing unavailable" in lines[0]
+
+
+def test_climbing_mosaic_of_topped_boulders_hardest_first(tmp_path):
+    def b(bid, label, share):
+        return {"_id": bid, "label": label, "picture": {"id": "i" + bid, "share": share}}
+    sess = {**SESSION, "boulders": [b("g1", 4, "S1"), b("b1", 5, "S2"), b("np", 4, None) | {"picture": {}}],
+            "retopBoulders": [b("g2", 4, None)], "triedBoulders": [b("t", 5, "ST")]}
+    store = tmp_path / "sessions.json"
+    store.write_text(json.dumps({"sessions": {"s1": sess}}))
+    op = FakeOpener([json_reply({"name": "attachments/C"}), json_reply({"name": "memos/M"}),
+                     json_reply({"name": "memos/M"})])
+    fetched, mosaics = [], []
+
+    def fetch(url):
+        fetched.append(url)
+        if url.endswith("S1.jpg"):
+            raise OSError("404")
+        return b"JPG"
+    lines = []
+    wm.journal_day(cfg(tmp_path, arkose_sessions=str(store)), FakePg([], []), wm.Memos("http://m", "T", op),
+                   {}, date(2026, 10, 19), 1, lines.append, no_render, str(tmp_path),
+                   collage_fn=lambda imgs, labels, path: (mosaics.append(labels), no_render(None, path)),
+                   fetch_fn=fetch)
+    s3 = "https://socialboulder.s3-eu-west-1.amazonaws.com"
+    assert fetched == [f"{s3}/boulderPicsShare/S2.jpg", f"{s3}/boulderPicsShare/S1.jpg",
+                       f"{s3}/800/bouldersPics/ig2.jpg"]
+    assert mosaics == [[("bleu", 1), ("vert", 1)]]
+    assert op.body_of(0)["filename"] == "climbing-2026-10-19.jpg"
+    assert "boulder picture unavailable" in lines[0]
+
+
+def test_collage_grid_goes_four_wide_past_nine():
+    assert [wm.collage_grid(n) for n in (10, 12, 16)] == [(4, 3), (4, 3), (4, 4)]
