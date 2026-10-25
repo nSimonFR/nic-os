@@ -272,7 +272,7 @@ def climbing_section(sessions):
     tops = [f"{HOLD_EMOJI.get(names.get(l, l), '🪨')} {_plural(by_label[l], names.get(l, l))}"
             for l in sorted(by_label, key=int)]
     lines = [f"- **Tops** {' · '.join(tops)}"] if tops else []
-    for key, title in (("flashs", "Flashs"), ("retops", "Retops"), ("tried", "Essais")):
+    for key, title in (("flashs", "Flashs"), ("retops", "Retops"), ("tried", "Non topés")):
         if total(key):
             lines.append(f"- **{title}** {total(key)}")
     last = sessions[-1]
