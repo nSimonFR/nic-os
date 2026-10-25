@@ -12,6 +12,7 @@ in {
   "rclone-storj.age".publicKeys        = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "aperture-s3-export.age".publicKeys  = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "immich-api-key.age".publicKeys      = [ nsimon-age nsimon-ed25519 rpi5-host ];
+  "memos-token.age".publicKeys         = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "sure-app-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "sure-pg-password.age".publicKeys    = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "airtrail-env.age".publicKeys        = [ nsimon-age nsimon-ed25519 rpi5-host ];
