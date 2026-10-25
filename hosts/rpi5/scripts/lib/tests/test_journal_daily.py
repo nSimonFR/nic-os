@@ -236,7 +236,7 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
                    lambda m: None, no_render, str(tmp_path), im,
                    collage_fn=lambda imgs, labels, path: (collages.append(labels), no_render(None, path)))
     assert [op.body_of(i)["filename"] for i in range(2)] == ["map-2026-10-19.jpg", "photos-2026-10-19.jpg"]
-    assert collages == [["13:00", "14:00"]] and im.previews == ["p1", "p2"]
+    assert collages == [[("13:00", 1), ("14:00", 1)]] and im.previews == ["p1", "p2"]
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == ["attachments/MAP", "attachments/COL"]
     assert "\n\n### 📷 Photos — 2\n\n[Open the day in Immich](https://immich/photos/p1)\n" in memo["content"]
@@ -276,7 +276,7 @@ def test_pick_photos_one_slot_per_burst():
            {"id": "e", "fileCreatedAt": "2026-10-19T15:57:00Z"}]
     picks = wm.pick_photos(day, 9)
     assert [a["id"] for a in picks] == ["m", "b3", "e"]
-    assert [wm.tile_label(a) for a in picks] == ["09:34", "14:29 x7", "17:57"]
+    assert [wm.tile_label(a) for a in picks] == [("09:34", 1), ("14:29", 7), ("17:57", 1)]
     day[5]["isFavorite"] = True
     assert [a["id"] for a in wm.pick_photos(day, 9)] == ["m", "b4", "e"]
 
@@ -304,7 +304,7 @@ def test_render_collage_makes_one_labelled_sheet(tmp_path):
 
     out = tmp_path / "c.jpg"
     wm.render_collage([jpeg("red", (300, 200)), jpeg("blue", (200, 300)), jpeg("green", (100, 100)),
-                       jpeg("white", (400, 400))], ["08:12", "12:31", "14:29", "17:57"],
+                       jpeg("white", (400, 400))], [("08:12", 1), ("12:31", 1), ("14:29", 8), ("17:57", 1)],
                       str(out), tile=100, gap=4)
     sheet = Image.open(out)
     assert sheet.size == (204, 204)
