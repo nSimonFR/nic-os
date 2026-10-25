@@ -1,19 +1,25 @@
 #!/usr/bin/env python3
 """
-workouts-to-memos: one Memos journal entry per day with workouts.
+journal-daily: one Memos journal entry per day with workouts or photos.
 
-Stats come from FreeReps (Apple Health); the map is drawn from Dawarich's points
-inside each workout's window, so it shows what freereps-to-dawarich put there.
-Start/end labels are the nearest place the user named in Dawarich (source
-`manual`) within PLACE_RADIUS_M, else the arrondissement/city of the nearest
-geocoded point. A Home ↔ Work workout adds #commute.
+Workouts: stats from FreeReps (Apple Health); the map is drawn from Dawarich's
+points inside each workout's window, so it shows what freereps-to-dawarich put
+there. Start/end labels are the nearest place the user named in Dawarich
+(source `manual`) within PLACE_RADIUS_M, else the arrondissement/city of the
+nearest geocoded point. A Home ↔ Work workout adds #commute.
 
-Idempotent per day: the state file maps day -> (memo name, workout signature).
-A day whose workouts changed (late route, new ride) has its memo deleted and
-recreated; an unchanged day is skipped.
+Photos: the day's Immich timeline images (archived WhatsApp images and Live
+Photo motion halves are not on the timeline), favourites first, then spread
+over the day, up to PHOTOS_MAX, attached as Immich previews. Immich URL and key
+come from Dawarich's integration settings (see immich_dawarich); if Immich is
+unreachable the entry is written without photos and replaced once it answers.
 
-Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M}, MEMOS_{URL,TOKEN_FILE},
-DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
+Idempotent per day: the state file maps day -> (memo name, signature of the
+workouts, their point counts and the chosen photos). A changed day has its memo
+deleted and recreated; an unchanged day is skipped.
+
+Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX},
+MEMOS_{URL,TOKEN_FILE}, DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 """
 
 import base64
@@ -32,8 +38,9 @@ from ..logs import logger
 from ..pg import psql_rows
 from ..secrets import env_int, env_str, read_secret
 from ..state import load_json, save_json
+from .immich_dawarich import immich_settings
 
-TAG = "workouts-to-memos"
+TAG = "journal-daily"
 TZ = ZoneInfo("Europe/Paris")
 DEFAULT_MEMOS = "http://127.0.0.1:13356"
 DEFAULT_WEB = "https://rpi5.gate-mintaka.ts.net:3900"
@@ -56,6 +63,7 @@ class Config:
     days: int = 3
     state_path: str = ""
     place_radius_m: int = 300
+    photos_max: int = 6
     dry_run: bool = True
     runuser: str = "runuser"
     psql: str = "psql"
@@ -70,6 +78,7 @@ class Config:
             days=env_int("JOURNAL_DAYS", 3, env),
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
+            photos_max=env_int("JOURNAL_PHOTOS_MAX", 6, env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
             psql=env_str("PSQL_BIN", "psql", env),
@@ -118,8 +127,8 @@ def workouts(cfg, run, day):
                     float(r[5]) / 60, float(r[6])) for r in rows]
 
 
-def signature(ws, point_counts):
-    raw = json.dumps([[w.id, n] for w, n in zip(ws, point_counts)])
+def signature(ws, point_counts, photo_ids=()):
+    raw = json.dumps([[[w.id, n] for w, n in zip(ws, point_counts)], list(photo_ids)])
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -176,8 +185,14 @@ def _hm(minutes):
     return f"{h} h {m:02d}" if h else f"{m} min"
 
 
-def content(day, ws, legs, web_url):
-    """Memo markdown. `legs` = [(from_label, to_label) or None] per workout."""
+def content(day, ws, legs, web_url, photos=0, photos_url=""):
+    """Memo markdown. `legs` = [(from_label, to_label) or None] per workout;
+    `photos` = the day's timeline photo count, linked to `photos_url`."""
+    if not ws:
+        lines = [f"📷 **Photos — {photos}**", ""]
+        if photos_url:
+            lines.append(f"[Open them in Immich]({photos_url})")
+        return "\n".join(lines + ["", "#photos"]) + "\n"
     kinds = {kind(w.name) for w in ws}
     emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Workouts", "workout", "")
     total_km = sum(w.km for w in ws)
@@ -206,8 +221,12 @@ def content(day, ws, legs, web_url):
             tags.append(tag)
         if leg and {leg[0].lower(), leg[1].lower()} == {"home", "work"} and "commute" not in tags:
             tags.append("commute")
-    lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})",
-              "", " ".join(f"#{t}" for t in tags)]
+    lines += ["", f"[Open the day in Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+    if photos:
+        noun = f"{photos} photo{'s' if photos > 1 else ''}"
+        lines.append(f"[📷 {noun} in Immich]({photos_url})" if photos_url else f"📷 {noun}")
+        tags.append("photos")
+    lines += ["", " ".join(f"#{t}" for t in tags)]
     return "\n".join(lines) + "\n"
 
 
@@ -228,6 +247,48 @@ def render(tracks, path):
             m.add_marker(CircleMarker(at, "white", 14))
             m.add_marker(CircleMarker(at, fill, 9))
     m.render().save(path)
+
+
+class Immich:
+    def __init__(self, url, key, opener=None):
+        self.url, self.key, self.opener = url, key, opener
+
+    def day(self, day):
+        """The day's timeline images, oldest first."""
+        lo, hi = day_bounds(day)
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        req = urllib.request.Request(
+            f"{self.url}/api/search/metadata", method="POST",
+            data=json.dumps({"takenAfter": iso(lo), "takenBefore": iso(hi - 1),
+                             "type": "IMAGE", "visibility": "timeline",
+                             "withExif": True, "size": 250}).encode(),
+            headers={"x-api-key": self.key, "Content-Type": "application/json"})
+        items = http_json(req, timeout=180, opener=self.opener).get("assets", {}).get("items", [])
+        items = [a for a in items if a.get("type") == "IMAGE" and not a.get("isTrashed")
+                 and a.get("visibility", "timeline") == "timeline"]
+        return sorted(items, key=lambda a: a.get("fileCreatedAt", ""))
+
+    def preview(self, asset_id):
+        req = urllib.request.Request(
+            f"{self.url}/api/assets/{asset_id}/thumbnail?size=preview",
+            headers={"x-api-key": self.key})
+        with (self.opener or urllib.request.urlopen)(req, timeout=60) as resp:
+            return resp.read()
+
+    def link(self, asset_id):
+        return f"{self.url}/photos/{asset_id}"
+
+
+def pick_photos(assets, n):
+    """Favourites first, then evenly spread over the day; returned oldest first."""
+    favs = [a for a in assets if a.get("isFavorite")][:max(n, 0)]
+    rest = [a for a in assets if not a.get("isFavorite")]
+    k = min(n - len(favs), len(rest))
+    if k == 1:
+        favs.append(rest[len(rest) // 2])
+    elif k > 1:
+        favs += [rest[round(i * (len(rest) - 1) / (k - 1))] for i in range(k)]
+    return sorted(favs, key=lambda a: a.get("fileCreatedAt", ""))
 
 
 class Memos:
@@ -254,50 +315,81 @@ class Memos:
             self.call("DELETE", f"/{att['name']}")
         self.call("DELETE", f"/{name}")
 
-    def post(self, text, png, filename, when, lat, lon, label):
-        att = self.call("POST", "/attachments", {
-            "filename": filename, "type": "image/png",
-            "content": base64.b64encode(png).decode()})
-        memo = self.call("POST", "/memos", {
-            "content": text, "visibility": "PRIVATE",
-            "location": {"placeholder": label, "latitude": lat, "longitude": lon},
-            "attachments": [{"name": att["name"]}]})
+    def post(self, text, files, when, location=None):
+        """`files` = [(filename, mime, bytes)], shown in that order."""
+        atts = [self.call("POST", "/attachments", {
+            "filename": name, "type": mime,
+            "content": base64.b64encode(data).decode()})["name"]
+            for name, mime, data in files]
+        body = {"content": text, "visibility": "PRIVATE",
+                "attachments": [{"name": a} for a in atts]}
+        if location:
+            body["location"] = location
+        memo = self.call("POST", "/memos", body)
         # CreateMemo ignores createTime; only an update with this mask sets it.
         self.call("PATCH", f"/{memo['name']}?updateMask=create_time",
                   {"createTime": when})
         return memo["name"]
 
 
-def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir):
-    """Create/refresh one day's memo. Returns the memo name, or None if no workouts."""
-    ws = workouts(cfg, run, day)
+def _utc(t):
+    return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None):
+    """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
-    if not ws:
+    ws = workouts(cfg, run, day)
+    day_photos = []
+    if immich:
+        try:
+            day_photos = immich.day(day)
+        except (OSError, ValueError) as e:  # URLError/HTTPError are OSErrors
+            log(f"{key}: Immich unavailable, no photos this run ({e})")
+    if not ws and not day_photos:
         return None
+    photos = pick_photos(day_photos, cfg.photos_max)
     tracks = [track(cfg, run, uid, w) for w in ws]
-    sig = signature(ws, [len(t) for t in tracks])
+    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in photos])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
             for t in tracks]
-    text = content(key, ws, legs, cfg.web_url)
+    link = immich.link(day_photos[0]["id"]) if day_photos else ""
+    text = content(key, ws, legs, cfg.web_url, len(day_photos), link)
     if cfg.dry_run:
-        log(f"[dry-run] {key}: {len(ws)} workouts\n{text}")
+        log(f"[dry-run] {key}: {len(ws)} workouts, {len(photos)}/{len(day_photos)} photos\n{text}")
         return None
-    png_path = f"{tmpdir}/workouts-{key}.png"
-    render_fn(tracks, png_path)
-    with open(png_path, "rb") as f:
-        png = f.read()
+
+    files = []
+    if any(len(t) >= 2 for t in tracks):
+        png_path = f"{tmpdir}/day-{key}.png"
+        render_fn(tracks, png_path)
+        with open(png_path, "rb") as f:
+            files.append((f"map-{key}.png", "image/png", f.read()))
+    for i, p in enumerate(photos, 1):
+        files.append((f"photo-{key}-{i}.jpg", "image/jpeg", immich.preview(p["id"])))
+
     last = next((t for t in reversed(tracks) if t), None)
-    lat, lon = last[-1] if last else (0.0, 0.0)
-    label = legs[tracks.index(last)][1] if last else ""
-    when = datetime.fromtimestamp(ws[-1].end, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if last:
+        lat, lon = last[-1]
+        location = {"placeholder": legs[tracks.index(last)][1], "latitude": lat, "longitude": lon}
+    else:
+        gps = [p["exifInfo"] for p in reversed(day_photos)
+               if (p.get("exifInfo") or {}).get("latitude")]
+        location = gps and {"placeholder": gps[0].get("city") or "",
+                            "latitude": gps[0]["latitude"], "longitude": gps[0]["longitude"]}
+    if ws:
+        when = _utc(ws[-1].end)
+    else:
+        when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
+
     if key in state:
         memos.delete_memo(state[key]["memo"])
-    name = memos.post(text, png, f"workouts-{key}.png", when, lat, lon, label)
+    name = memos.post(text, files, when, location or None)
     state[key] = {"memo": name, "sig": sig}
-    log(f"{key}: {name} ({len(ws)} workouts)")
+    log(f"{key}: {name} ({len(ws)} workouts, {len(photos)} photos)")
     return name
 
 
@@ -314,9 +406,15 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
         memos = Memos(cfg.memos_url, token, opener)
         state = load_json(cfg.state_path, {}) if cfg.state_path else {}
         uid = dawarich_user(cfg, run)
+        try:
+            immich = Immich(*immich_settings(cfg, run, uid), opener)
+        except RuntimeError as e:
+            log(f"no photos: {e}")
+            immich = None
         with tempfile.TemporaryDirectory() as tmp:
             for day in target_days(cfg, today):
-                journal_day(cfg, run, memos, state, day, uid, log, render_fn or render, tmp)
+                journal_day(cfg, run, memos, state, day, uid, log,
+                            render_fn or render, tmp, immich)
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:
