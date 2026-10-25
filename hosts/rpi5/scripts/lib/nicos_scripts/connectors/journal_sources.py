@@ -334,3 +334,46 @@ def _hm(seconds):
 def game_section(games):
     """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 1 h 40`."""
     return _hm(sum(s for _, s in games)), [f"- **{t}** · {_hm(s)}" for t, s in games]
+
+
+ACTIVITY_METRICS = ("step_count", "distance_walking_running", "flights_climbed", "active_energy")
+
+
+def activity_totals(run, lo, hi, db="freereps", runuser="runuser", psql="psql"):
+    """{metric: total} of the iPhone's own Health samples in [lo, hi).
+    Apps writing to Health are left out (Geovelo adds a ride's kcal and
+    floors, already in the bike section), and each hourly sample counts once:
+    since FreeReps 2.2 the same hour is stored again with client freereps_ios."""
+    names = ", ".join(f"'{m}'" for m in ACTIVITY_METRICS)
+    rows = psql_rows(run, f"""
+        SELECT metric_name, sum(qty) FROM (
+            SELECT DISTINCT ON (metric_name, time) metric_name, qty
+            FROM health_metrics
+            WHERE metric_name IN ({names}) AND coalesce(source, '') = ''
+              AND time >= to_timestamp({int(lo)}) AND time < to_timestamp({int(hi)})
+            ORDER BY metric_name, time, client NULLS LAST
+        ) hourly GROUP BY metric_name
+    """, db, runuser, psql)
+    return {r[0]: float(r[1] or 0) for r in rows}
+
+
+def _int_fr(n):
+    return f"{round(n):,}".replace(",", " ")
+
+
+def activity_section(totals):
+    """(heading suffix, lines): `5 940 pas · 4,4 km`, then floors and active
+    kcal; None without steps."""
+    steps = totals.get("step_count", 0)
+    if steps < 1:
+        return None
+    head = [f"{_int_fr(steps)} pas"]
+    km = totals.get("distance_walking_running", 0) / 1000
+    if km >= 0.1:
+        head.append(f"{km:.1f} km".replace(".", ","))
+    lines = []
+    if totals.get("flights_climbed", 0) >= 1:
+        lines.append(f"- **Étages**: {_int_fr(totals['flights_climbed'])}")
+    if totals.get("active_energy", 0) >= 1:
+        lines.append(f"- **Calories actives**: {_int_fr(totals['active_energy'])} kcal")
+    return " · ".join(head), lines
