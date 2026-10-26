@@ -43,6 +43,7 @@ DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 """
 
 import base64
+import functools
 import hashlib
 import json
 import math
@@ -76,6 +77,7 @@ COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
 CLIMB_TILES_MAX = 16
+FLASH_GOLD = (255, 200, 40)
 MEMORY_YEARS = 20
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
@@ -118,6 +120,7 @@ class Config:
     gramps_db: str = ""
     gramps_home: str = ""
     gramps_url: str = ""
+    font: str = ""
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -143,6 +146,7 @@ class Config:
             gramps_db=env_str("GRAMPS_DB", "", env),
             gramps_home=env_str("GRAMPS_HOME_PERSON", "", env),
             gramps_url=env_str("GRAMPS_URL", "", env).rstrip("/"),
+            font=env_str("JOURNAL_FONT", "", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -492,9 +496,12 @@ def collage_grid(n):
     return 3, (n + 2) // 3
 
 
-def render_collage(images, labels, path, tile=480, gap=6):
+def render_collage(images, labels, path, tile=480, gap=6, font_path=""):
     """Square-cropped grid of `images` (bytes); each tile's (HH:MM, shots)
-    label sits in its bottom-left corner — `14:29 (8)` for a burst. JPEG."""
+    label sits in its bottom-left corner — `14:29 (8)` for a burst. JPEG.
+    A third label item marks a boulder: "flash" (gold frame and tag),
+    "retop", or "tried" (greyed out, `non topé`). `font_path`: a TTF; Pillow's
+    built-in font has no accents."""
     import io
 
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
@@ -502,19 +509,31 @@ def render_collage(images, labels, path, tile=480, gap=6):
     cols, rows = collage_grid(len(images))
     sheet = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), DARK_CARD)  # gaps and empty slots blend into Memos' dark cards
     try:
-        font = ImageFont.load_default(size=tile // 14)
-    except TypeError:  # Pillow < 10.1 has no sized default font
-        font = ImageFont.load_default()
-    for i, (raw, (hm, shots)) in enumerate(zip(images, labels)):
+        font = ImageFont.truetype(font_path, tile // 14) if font_path else None
+    except OSError:  # a missing font must not drop the collage
+        font = None
+    if font is None:
+        try:
+            font = ImageFont.load_default(size=tile // 14)
+        except TypeError:  # Pillow < 10.1 has no sized default font
+            font = ImageFont.load_default()
+    for i, (raw, label) in enumerate(zip(images, labels)):
+        hm, shots, status = (*label, "")[:3]
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
         img = ImageOps.fit(img, (tile, tile), Image.LANCZOS)
+        if status == "tried":
+            img = Image.blend(ImageOps.grayscale(img).convert("RGB"), Image.new("RGB", img.size), 0.35)
         draw = ImageDraw.Draw(img, "RGBA")
-        label = hm if shots <= 1 else f"{hm} ({shots})"
-        x0, y0, x1, y1 = draw.textbbox((0, 0), label, font=font)
+        text = hm if shots <= 1 else f"{hm} ({shots})"
+        text += {"flash": " · flash", "retop": " · retop", "tried": " · non topé"}.get(status, "")
+        x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
         pad = tile // 40
         box = (pad, tile - pad - (y1 - y0) - 2 * pad, pad + (x1 - x0) + 2 * pad, tile - pad)
-        draw.rounded_rectangle(box, radius=pad, fill=(0, 0, 0, 150))
-        draw.text((box[0] + pad - x0, box[1] + pad - y0), label, font=font, fill="white")
+        gold = status == "flash"
+        draw.rounded_rectangle(box, radius=pad, fill=FLASH_GOLD + (235,) if gold else (0, 0, 0, 150))
+        draw.text((box[0] + pad - x0, box[1] + pad - y0), text, font=font, fill="black" if gold else "white")
+        if gold:
+            draw.rectangle((0, 0, tile - 1, tile - 1), outline=FLASH_GOLD, width=tile // 40)
         sheet.paste(img, ((i % cols) * (tile + gap), (i // cols) * (tile + gap)))
     sheet.save(path, "JPEG", quality=85, optimize=True)
 
@@ -985,9 +1004,9 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                                      camera=next(iter(cams)) if len(cams) == 1 else None)))
 
     tiles = []
-    for url, colour in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
+    for url, colour, status in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
         try:
-            tiles.append((fetch_fn(url), (colour, 1)))
+            tiles.append((fetch_fn(url), (colour, 1, status)))
         except OSError as e:  # one missing picture must not drop the mosaic
             log(f"{key}: boulder picture unavailable ({e})")
     if tiles:
@@ -1071,6 +1090,7 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
             for day in target_days(cfg, today):
                 journal_day(cfg, run, memos, state, day, uid, log,
                             render_fn or render, tmp, immich,
+                            collage_fn=functools.partial(render_collage, font_path=cfg.font),
                             weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
                             tree=tree)
                 if cfg.state_path and not cfg.dry_run:

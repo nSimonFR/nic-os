@@ -326,21 +326,29 @@ def climbing_section(sessions):
 ARKOSE_S3 = "https://socialboulder.s3-eu-west-1.amazonaws.com"
 
 
+CLIMB_ORDER = {"flash": 0, "": 0, "retop": 1, "tried": 2}
+
+
 def climbing_pictures(sessions):
-    """[(url, hold colour)] of the boulders topped (retops included), hardest
-    colour first, each boulder once."""
+    """[(url, hold colour, status)] of the day's boulders, each once: tops
+    ("flash" or ""), then "retop", then "tried" (not topped); hardest colour
+    first within each. A retop's `flashed` is the first send's, so ignored."""
     out, seen = [], set()
     for s in sessions:
         names = s.get("gymLabels") or {}
-        for b in (s.get("boulders") or []) + (s.get("retopBoulders") or []):
+        kinds = [(b, "flash" if b.get("flashed") else "") for b in s.get("boulders") or []]
+        kinds += [(b, "retop") for b in s.get("retopBoulders") or []]
+        kinds += [(b, "tried") for b in s.get("triedBoulders") or []]
+        for b, status in kinds:
             pic = b.get("picture") or {}
             if b["_id"] in seen or not (pic.get("share") or pic.get("id")):
                 continue
             seen.add(b["_id"])
             url = (f"{ARKOSE_S3}/boulderPicsShare/{pic['share']}.jpg" if pic.get("share")
                    else f"{ARKOSE_S3}/800/bouldersPics/{pic['id']}.jpg")
-            out.append((int(b.get("label") or 0), url, names.get(str(b.get("label")), "")))
-    return [(url, colour) for _, url, colour in sorted(out, key=lambda t: -t[0])]
+            out.append((CLIMB_ORDER[status], -int(b.get("label") or 0), url,
+                        names.get(str(b.get("label")), ""), status))
+    return [(url, colour, status) for *_, url, colour, status in sorted(out, key=lambda t: t[:2])]
 
 
 def game_sessions(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):

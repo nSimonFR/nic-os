@@ -89,6 +89,7 @@ in
         "GRAMPS_DB=/var/lib/gramps-web/data/grampsdb/6a51098a/sqlite.db"
         "GRAMPS_HOME_PERSON=I0009"
         "GRAMPS_URL=${config.services.gramps-web.baseUrl}"
+        "JOURNAL_FONT=${pkgs.inter}/share/fonts/truetype/InterVariable.ttf"
       ];
       TimeoutStartSec = "45min";
     };
