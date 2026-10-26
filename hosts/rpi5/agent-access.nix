@@ -73,14 +73,20 @@ in
     "a+ ${sqliteDbs.memos} - - - - u:nsimon:r,m::r"
   ] ++ lib.mapAttrsToList (n: _: "f /var/lib/agent-db/${n}.db 0440 root users -") sqliteDbs;
 
-  # Not in local-fs.target, so ordering after tmpfiles (boot and switch) can't cycle.
+  # Default dependencies would put these Before=local-fs.target, and tmpfiles
+  # runs after local-fs: a boot cycle that systemd breaks by dropping the mounts.
   systemd.mounts = lib.mapAttrsToList (n: src: {
     what = src;
     where = "/var/lib/agent-db/${n}.db";
     type = "none";
     options = "bind,ro";
     wantedBy = [ "multi-user.target" ];
-    after = [ "systemd-tmpfiles-setup.service" "systemd-tmpfiles-resetup.service" ];
-    unitConfig.ConditionPathExists = src;
+    after = [ "local-fs.target" "systemd-tmpfiles-setup.service" "systemd-tmpfiles-resetup.service" ];
+    before = [ "umount.target" ];
+    conflicts = [ "umount.target" ];
+    unitConfig = {
+      DefaultDependencies = false;
+      ConditionPathExists = src;
+    };
   }) sqliteDbs;
 }
