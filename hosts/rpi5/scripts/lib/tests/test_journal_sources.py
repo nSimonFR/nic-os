@@ -187,3 +187,13 @@ def test_dispatch_notes_skips_repos_without_commits():
     assert len(entire) == 1 and "cd /busy && entire dispatch --local --all-branches" in entire[0][-1]
     assert "--voice 'concis, en français'" in entire[0][-1]
     assert [c for c in calls if "log" in c][0][:4] == ["runuser", "-u", "nsimon", "--"]
+
+
+def test_weather_reads_the_archive_for_old_days():
+    reply = {"daily": {"weather_code": [0], "temperature_2m_min": [9], "temperature_2m_max": [14],
+                       "precipitation_sum": [0]}}
+    op = FakeOpener([json_reply(reply), json_reply(reply)])
+    js.weather_line(date(2026, 4, 30), 48.85, 2.35, op, today=date(2026, 10, 26))
+    js.weather_line(date(2026, 10, 20), 48.85, 2.35, op, today=date(2026, 10, 26))
+    assert op.requests[0].full_url.startswith("https://archive-api.open-meteo.com/v1/archive?")
+    assert op.requests[1].full_url.startswith("https://api.open-meteo.com/v1/forecast?")

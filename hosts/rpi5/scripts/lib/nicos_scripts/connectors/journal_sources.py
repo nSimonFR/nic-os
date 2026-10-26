@@ -188,12 +188,18 @@ def personal_lines(events, tz):
     return lines
 
 
-def weather_line(day, lat, lon, opener=None):
+# The forecast API serves 92 days back (2026-10-26); older days need the archive.
+WEATHER_FORECAST_DAYS = 85
+
+
+def weather_line(day, lat, lon, opener=None, today=None):
     """`🌧 Pluie légère · 9-14 °C · 2,1 mm`, from Open-Meteo's daily summary."""
     q = urlencode({"latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
                    "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
                    "timezone": "Europe/Paris", "start_date": day.isoformat(), "end_date": day.isoformat()})
-    d = get_json(f"https://api.open-meteo.com/v1/forecast?{q}", opener=opener)["daily"]
+    old = ((today or date.today()) - day).days > WEATHER_FORECAST_DAYS
+    host = "https://archive-api.open-meteo.com/v1/archive" if old else "https://api.open-meteo.com/v1/forecast"
+    d = get_json(f"{host}?{q}", opener=opener)["daily"]
     emoji, label = WMO.get(d["weather_code"][0], ("🌡", "Météo"))
     bits = [f"{emoji} {label}",
             f"{round(d['temperature_2m_min'][0])}-{round(d['temperature_2m_max'][0])} °C"]
