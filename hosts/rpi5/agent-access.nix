@@ -3,10 +3,11 @@
 #   - start/stop/restart system units via polkit, minus the ones that hold or
 #     guard secrets or access;
 #   - read Postgres through a peer-auth `nsimon` role with pg_read_all_data,
-#     except in the databases that store live credentials.
-# No SQLite: HA and Gramps keep world-readable secrets (.storage,
-# users.sqlite) inside their private dirs, so any traverse right leaks them.
-# Their APIs (HA via Agent Vault) are the way in.
+#     except in the databases that store live credentials;
+#   - read SQLite DBs through read-only single-file bind mounts in
+#     /var/lib/agent-db. Not via the service dirs: HA and Gramps keep secrets
+#     world-readable in there (.storage, users.sqlite), so traversal leaks them.
+#     Open with `?immutable=1`: no -shm needed, but un-checkpointed WAL is unseen.
 { config, lib, pkgs, ... }:
 let
   # Hold bank-link tokens (Sure), the plaintext Immich key (Dawarich) and
@@ -19,6 +20,12 @@ let
   '' + lib.concatMapStrings (db: ''
     REVOKE CONNECT ON DATABASE ${db} FROM PUBLIC;
   '') pgPrivateDbs);
+
+  sqliteDbs = {
+    hass = "/var/lib/hass/home-assistant_v2.db";
+    memos = "/var/lib/memos/memos_prod.db";
+    gramps = "/var/lib/gramps-web/data/grampsdb/6a51098a/sqlite.db"; # one per tree
+  };
 in
 {
   # Units an agent must not touch: secret brokers, deploys, remote access, auth.
@@ -51,4 +58,22 @@ in
       ExecStart = "${config.services.postgresql.package}/bin/psql -v ON_ERROR_STOP=1 -f ${pgReadonlySql}";
     };
   };
+
+  # A file bind needs an existing file mountpoint, else systemd mkdirs one.
+  systemd.tmpfiles.rules = [
+    "d /var/lib/agent-db 0750 root users -"
+    # memos is 0600; the others are already world-readable.
+    "a+ ${sqliteDbs.memos} - - - - u:nsimon:r"
+  ] ++ lib.mapAttrsToList (n: _: "f /var/lib/agent-db/${n}.db 0440 root users -") sqliteDbs;
+
+  # Not in local-fs.target, so ordering after tmpfiles (boot and switch) can't cycle.
+  systemd.mounts = lib.mapAttrsToList (n: src: {
+    what = src;
+    where = "/var/lib/agent-db/${n}.db";
+    type = "none";
+    options = "bind,ro";
+    wantedBy = [ "multi-user.target" ];
+    after = [ "systemd-tmpfiles-setup.service" "systemd-tmpfiles-resetup.service" ];
+    unitConfig.ConditionPathExists = src;
+  }) sqliteDbs;
 }
