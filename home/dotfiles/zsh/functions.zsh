@@ -178,7 +178,7 @@ function rebuild-os() {
   case "$(hostname)" in
     BeAsT)     (cd "$repo" && sudo nixos-rebuild switch --flake path:.#BeAsT) ;;
     rpi5)      (cd "$repo" && sudo nixos-rebuild switch --flake path:.#rpi5) ;;
-    nBookPro)  (cd "$repo" && sudo darwin-rebuild switch --flake path:.#nBookPro && sudo yabai --load-sa) ;;
+    nBookPro)  (cd "$repo" && sudo darwin-rebuild switch --flake path:.#nBookPro) ;;
     *)         echo "Unknown machine: $(hostname)" ;;
   esac
 }

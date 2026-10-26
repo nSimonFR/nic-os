@@ -1,0 +1,111 @@
+# Build nBookPro's system on a macOS runner, push it to nsimon-nicos, and queue it
+# for the Cachix Deploy agent on the Mac (hosts/nbookpro/cachix-agent.nix).
+#
+# `--async`: a sleeping laptop leaves the deployment Pending, and a waiting
+# `activate` would poll until the job timeout. The marker therefore means
+# "queued", not "activated" — check /var/log/cachix-agent.log on the Mac.
+name: Deploy nBookPro
+
+on:
+  push:
+    branches: [main]
+  # Safety net for pushes that start no run (anything landed via GITHUB_TOKEN).
+  schedule:
+    - cron: "15 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Queue even if this system was already queued
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-nbookpro
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: deploy nBookPro
+    runs-on: macos-15
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v7
+      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: cachix/cachix-action@v17
+        with:
+          name: nsimon-nicos
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+          skipPush: true
+
+      - name: Evaluate
+        id: eval
+        run: |
+          set -euo pipefail
+          out=$(nix eval --accept-flake-config --raw \
+            .#darwinConfigurations.nBookPro.config.system.build.toplevel.outPath)
+          hash=${out#/nix/store/}
+          hash=${hash%%-*}
+          echo "out=$out" >> "$GITHUB_OUTPUT"
+          echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "System: \`$out\`" >> "$GITHUB_STEP_SUMMARY"
+          if curl -sfI -o /dev/null "https://nsimon-nicos.cachix.org/$hash.narinfo"; then
+            echo "cached=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Look up the queued marker
+        id: marker
+        if: inputs.force != true
+        uses: actions/cache/restore@v6
+        with:
+          path: .deployed
+          key: nbookpro-deployed-${{ steps.eval.outputs.hash }}
+          lookup-only: true
+
+      - name: Decide
+        id: plan
+        env:
+          DEPLOYED: ${{ steps.marker.outputs.cache-hit }}
+          CACHED: ${{ steps.eval.outputs.cached }}
+        run: |
+          if [ "$DEPLOYED" = true ]; then
+            echo "Already queued, nothing to deploy." >> "$GITHUB_STEP_SUMMARY"
+            echo "activate=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "activate=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [ "$DEPLOYED" != true ] && [ "$CACHED" != true ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        if: steps.plan.outputs.build == 'true'
+        run: |
+          nix build --accept-flake-config --no-link --print-build-logs \
+            .#darwinConfigurations.nBookPro.config.system.build.toplevel
+          df -h /
+
+      - name: Push to Cachix
+        if: steps.plan.outputs.build == 'true'
+        env:
+          OUT: ${{ steps.eval.outputs.out }}
+        run: cachix push nsimon-nicos "$OUT"
+
+      - name: Activate
+        if: steps.plan.outputs.activate == 'true'
+        env:
+          CACHIX_ACTIVATE_TOKEN: ${{ secrets.CACHIX_ACTIVATE_TOKEN }}
+          OUT: ${{ steps.eval.outputs.out }}
+        run: |
+          jq -n --arg out "$OUT" '{agents: {nBookPro: $out}}' > deploy.json
+          cachix deploy activate --async deploy.json
+          echo "$OUT" > .deployed
+
+      - name: Save the queued marker
+        if: steps.plan.outputs.activate == 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: .deployed
+          key: nbookpro-deployed-${{ steps.eval.outputs.hash }}

@@ -11,6 +11,7 @@
 {
   imports = [
     ./components/homebrew.nix
+    ./cachix-agent.nix
     ./entire.nix
     ./home-manager-activation.nix
   ];
