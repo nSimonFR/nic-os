@@ -156,6 +156,9 @@
     # gramps-gedcom7/flask-smorest — none satisfied by our nixpkgs — so its
     # pythonRuntimeDepsCheck fails. Unpin once gramps-web-nix is compatible.
     #
+    # The rev lives on branch `pin/gramps-web-api-3.2.0` (4e1740a + a
+    # pkg_resources shim — nixpkgs 26.05 dropped setuptools from the closure).
+    #
     # This is not theoretical: Renovate proposed exactly that bump (#438), it was
     # merged 2026-08-10, and `system.build.toplevel` stopped building —
     #   Checking runtime dependencies for gramps_webapi-3.17.0-py3-none-any.whl
@@ -166,7 +169,7 @@
     # — so the bump is now disabled in renovate.json rather than left to be
     # re-proposed and re-merged against this warning.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/4e1740a1fdb7cccf3244d3152e26e2ce4dcab027";
+      url = "github:nSimonFR/gramps-web-nix/030942fd285de142c1760f0ba00d91f637c747a9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
