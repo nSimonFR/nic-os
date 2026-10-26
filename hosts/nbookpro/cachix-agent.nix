@@ -12,10 +12,10 @@ in
 
   # The agent defaults to system-profiles/system on macOS; darwin-rebuild (rebuild-os)
   # uses /nix/var/nix/profiles/system. Same profile keeps one generation list.
-  # A missing token would restart-loop every 10s (KeepAlive); back off instead.
+  # A missing or empty token would restart-loop every 10s (KeepAlive); back off instead.
   launchd.daemons.cachix-agent.script = lib.mkForce ''
-    if [ ! -r ${cfg.credentialsFile} ]; then
-      echo "missing ${cfg.credentialsFile}" >&2
+    if ! grep -qs CACHIX_AGENT_TOKEN= ${cfg.credentialsFile}; then
+      echo "no CACHIX_AGENT_TOKEN in ${cfg.credentialsFile}" >&2
       sleep 300
       exit 1
     fi
