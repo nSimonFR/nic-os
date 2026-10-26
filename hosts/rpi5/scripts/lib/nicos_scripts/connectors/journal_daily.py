@@ -43,6 +43,7 @@ DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
 """
 
 import base64
+import dataclasses
 import functools
 import hashlib
 import json
@@ -68,6 +69,7 @@ from .immich_dawarich import immich_settings
 from . import journal_family as fam
 from . import journal_flights as fl
 from . import journal_home as home
+from . import journal_records as rec
 from . import journal_summary as summ
 from . import journal_sources as src
 
@@ -114,13 +116,13 @@ class Config:
     personal_calendars: tuple = ("PERSO", "Google")
     work_calendars: tuple = ("TRUSK",)
     nextcloud_db: str = "nextcloud_production"
-    ryot_db: str = "ryot"
+    ryot_db: str = "ryotv2"
+    ryot_v1_db: str = "ryot"  # history before the V11 switch
     freereps_db: str = "freereps"
     dispatch_repos: tuple = ()
     dispatch_user: str = "nsimon"
     git: str = "git"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
-    spotify_cursor: str = "/var/lib/ryot-connectors/spotify-cursor.json"
     birthday_calendars: tuple = ("Contact birthdays",)
     gramps_db: str = ""
     gramps_home: str = ""
@@ -152,7 +154,8 @@ class Config:
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
-            spotify_cursor=env_str("SPOTIFY_CURSOR", "/var/lib/ryot-connectors/spotify-cursor.json", env),
+            ryot_db=env_str("RYOT_DB", "ryotv2", env),
+            ryot_v1_db=env_str("RYOT_V1_DB", "ryot", env),
             birthday_calendars=_names(env_str("JOURNAL_BIRTHDAY_CALENDARS", "Contact birthdays", env)),
             gramps_db=env_str("GRAMPS_DB", "", env),
             gramps_home=env_str("GRAMPS_HOME_PERSON", "", env),
@@ -373,8 +376,9 @@ def photo_time(asset):
     return f"{t.astimezone(TZ):%H:%M}"
 
 
-def workout_section(ws, legs, web_url, day):
-    """(markdown lines, tags) of the workouts section."""
+def workout_section(ws, legs, web_url, day, badges=()):
+    """(markdown lines, tags) of the workouts section; `badges` = record and
+    streak lines, after the workouts."""
     kinds = {kind(w.name) for w in ws}
     emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Sport", "séance", "")
     total_km = sum(w.km for w in ws)
@@ -406,7 +410,7 @@ def workout_section(ws, legs, web_url, day):
             tags.append(tag)
         if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "commute" not in tags:
             tags.append("commute")
-    lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+    lines += [*badges, "", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
     return lines, tags
 
 
@@ -438,7 +442,8 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
-            memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None):
+            memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None,
+            screens=None, badges=None):
     """Memo markdown, in French (journal_day may prefix a one-line summary):
     the weather line, agenda, photos, then one
     `###` section per source; last come work, memories, home, genealogy.
@@ -454,7 +459,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
     two lists from journal_family.family_sections; `flights` = (heading
     suffix, lines) from journal_flights.flight_section, linking `flights_url`;
-    `energy` = the same from journal_home.energy_section, last of all."""
+    `energy` = the same from journal_home.energy_section, last of all;
+    `screens` = the same from journal_sources.screen_section; `badges` =
+    {"bike" | "activity" | "climbing" | "home": record and streak lines}."""
+    badges = badges or {}
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -476,9 +484,9 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append(lines)
         tags.append("photos")
     if activity:
-        sections.append([f"### 🚶 Activité - {activity}"])
+        sections.append([f"### 🚶 Activité - {activity}", *([""] + badges["activity"] if badges.get("activity") else [])])
     if ws:
-        lines, wtags = workout_section(ws, legs, web_url, day)
+        lines, wtags = workout_section(ws, legs, web_url, day, badges.get("bike", ()))
         sections.append(lines)
         tags += wtags
     if day_trips:
@@ -488,7 +496,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append(lines)
     if climbing:
         head, lines = climbing
-        sections.append([f"### 🧗 Escalade - {head}", "", *lines])
+        sections.append([f"### 🧗 Escalade - {head}", "", *lines, *badges.get("climbing", ())])
         tags.append("climbing")
     if music:
         head, lines = music
@@ -498,6 +506,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = games
         sections.append([f"### 🎮 Jeux - {head}", "", *lines])
         tags.append("gaming")
+    if screens:
+        head, lines = screens
+        sections.append([f"### 📺 Écrans - {head}", "", *lines])
+        tags.append("screen")
     if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
         sections.append(["### 🛠 Projets perso", "", "<details>", "<summary>Notes</summary>", "",
                          *notes, "", "</details>"])
@@ -516,6 +528,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if energy:
         head, lines = energy
         sections.append([f"### 🏠 Maison - ⚡ {head}",
+                         *([""] + badges["home"] if badges.get("home") else []),
                          *(["", "<details>", "<summary>Électricité</summary>", "", *lines, "", "</details>"]
                            if lines else [])])
         tags.append("home")
@@ -1098,35 +1111,87 @@ def day_activity(cfg, run, day, log):
     return src.activity_section(totals)
 
 
+STREAK_LOOKBACK_D = 45
+
+
 def day_games(cfg, run, day, log):
-    """journal_sources.game_section of the day, or None (nothing played, or Ryot down)."""
+    """journal_sources.game_section of the day, each game with its streak, or
+    None (nothing played, or Ryot down)."""
+    lo, hi = day_bounds(day)
     try:
-        games = src.game_sessions(run, *day_bounds(day), cfg.ryot_db, cfg.runuser, cfg.psql)
+        plays = src.game_plays(run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.ryot_v1_db,
+                               cfg.runuser, cfg.psql)
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: games unavailable ({e})")
         return None
-    return src.game_section(games) if games else None
+    games = src.game_sessions([p for p in plays if p[0] >= lo])
+    days = {}
+    for t, title, _ in plays:
+        days.setdefault(title, set()).add(rec.journal_date(t))
+    return src.game_section(games, {t: rec.streak_text(rec.streak(days[t], day)) for t, _ in games}) \
+        if games else None
 
 
 def day_music(cfg, run, day, log):
-    """journal_sources.music_section of the day, or None (no plays, or Ryot down).
-    Plays come from the Spotify connector's cursor when it covers the day (it
-    keeps replays), else from Ryot's seens."""
+    """journal_sources.music_section of the day, each artist with its streak,
+    or None (no plays, or Ryot down). Artists V11 lacks come from V1."""
     lo, hi = day_bounds(day)
     try:
-        plays = src.spotify_plays(cfg.spotify_cursor, lo, hi)
-    except (OSError, ValueError):
-        plays = []
-    try:
-        if plays:
-            tracks = src.music_tracks(run, [t for t, _ in plays], cfg.ryot_db, cfg.runuser, cfg.psql)
-            listens = [tracks[t] for t, _ in plays if t in tracks]
-        else:
-            listens = src.music_listens(run, lo, hi, cfg.ryot_db, cfg.runuser, cfg.psql)
+        listens = src.music_listens(run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.runuser, cfg.psql)
+        missing = [l.track for l in listens if not l.artists and l.track]
+        if missing and cfg.ryot_v1_db:
+            v1 = src.music_tracks(run, missing, cfg.ryot_v1_db, cfg.runuser, cfg.psql)
+            listens = [dataclasses.replace(l, artists=v1.get(l.track, "")) if not l.artists else l
+                       for l in listens]
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: music unavailable ({e})")
         return None
-    return src.music_section(listens) if listens else None
+    today = [l for l in listens if l.at >= lo]
+    if not today:
+        return None
+    days = {}
+    for l in listens:
+        if l.artists:
+            days.setdefault(l.artists, set()).add(rec.journal_date(l.at))
+    return src.music_section(today, streaks={a: rec.streak_text(rec.streak(d, day)) for a, d in days.items()})
+
+
+def day_screens(cfg, run, day, log):
+    """journal_sources.screen_section of the day, or None."""
+    try:
+        screens = src.screen_events(run, *day_bounds(day), cfg.ryot_db, cfg.runuser, cfg.psql)
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        log(f"{day}: films and series unavailable ({e})")
+        return None
+    return src.screen_section(screens, TZ) if screens else None
+
+
+def day_badges(cfg, run, day, ws, climbs, activity, energy, log):
+    """{section: record and streak lines}, each source on its own: one
+    unreadable history drops only its own lines."""
+    lo, hi = day_bounds(day)
+    out = {}
+    if any(w.name == "Cycling" for w in ws):
+        try:
+            out["bike"] = rec.ride_badges(rec.ride_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            log(f"{day}: ride history unavailable ({e})")
+    if activity:
+        try:
+            out["activity"] = rec.step_badges(rec.step_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day)
+        except (OSError, ValueError, subprocess.CalledProcessError) as e:
+            log(f"{day}: step history unavailable ({e})")
+    if climbs:
+        try:
+            out["climbing"] = rec.climbing_badges(src.climbing_sessions(cfg.arkose_sessions, 0, hi), day)
+        except (OSError, ValueError, KeyError) as e:
+            log(f"{day}: climbing history unavailable ({e})")
+    if energy and cfg.ha_db:
+        try:
+            out["home"] = rec.energy_badges(rec.energy_history(cfg.ha_db, hi), day)
+        except (OSError, sqlite3.Error, ValueError) as e:
+            log(f"{day}: electricity history unavailable ({e})")
+    return {k: v for k, v in out.items() if v}
 
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
@@ -1160,6 +1225,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     music = day_music(cfg, run, day, log)
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
+    screens = day_screens(cfg, run, day, log)
+    badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
     extra = other_trips(ws, day_trips)
@@ -1175,7 +1242,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m, _ in memories],
-                     birthdays, genealogy, [f.id for f in flights], energy])
+                     birthdays, genealogy, [f.id for f in flights], energy, screens, badges])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -1194,7 +1261,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                    weather, agenda, work, extra, trip_legs, music,
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
                    memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
-                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy)
+                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy,
+                   screens, badges)
     summary, src_hash = None, summ.source_hash(text)
     if summary_fn:
         prev = state.get(key, {})

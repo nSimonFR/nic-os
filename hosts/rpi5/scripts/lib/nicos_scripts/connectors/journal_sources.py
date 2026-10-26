@@ -14,6 +14,7 @@ Weather: Open-Meteo's daily summary (free, keyless) for where the day happened.
 """
 
 import base64
+import string
 from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
@@ -207,65 +208,51 @@ class Listen:
     title: str
     artists: str  # "A, B"; "" when Ryot has no artist
     seconds: int
-
-
-def spotify_plays(path, lo, hi):
-    """[(track id, epoch s)] played in [lo, hi), from spotify-to-ryot's cursor
-    (`pushed`: "<track>@<played_at ms>", the last 30 days). Unlike Ryot's seens
-    it keeps replays: Ryot drops a repeat within its completed-cache window."""
-    import json
-
-    with open(path) as f:
-        keys = json.load(f).get("pushed", [])
-    plays = []
-    for k in keys:
-        tid, _, ms = k.rpartition("@")
-        if tid and ms.isdigit() and lo <= int(ms) / 1000 < hi:
-            plays.append((tid, int(ms) / 1000))
-    return sorted(plays, key=lambda p: p[1])
+    at: float = 0  # epoch s
+    track: str = ""  # Spotify track id
 
 
 def music_tracks(run, ids, db="ryot", runuser="runuser", psql="psql"):
-    """{spotify track id: Listen} from Ryot's metadata."""
+    """{spotify track id: artists} from Ryot V1's metadata: V11 has artists
+    only for the tracks it has finished populating (516 of 1744 on 2026-10-26)."""
     safe = [i for i in ids if i.isalnum()]  # Spotify ids are base62
     if not safe:
         return {}
     rows = psql_rows(run, f"""
-        SELECT m.identifier, m.title,
+        SELECT m.identifier,
                coalesce((SELECT string_agg(p.name, ', ' ORDER BY p.name)
                          FROM metadata_to_person mp JOIN person p ON p.id = mp.person_id
-                         WHERE mp.metadata_id = m.id AND mp.role = 'Artist'), ''),
-               coalesce((m.music_specifics->>'duration')::int, 0)
+                         WHERE mp.metadata_id = m.id AND mp.role = 'Artist'), '')
         FROM metadata m
         WHERE m.lot = 'music' AND m.source = 'spotify'
           AND m.identifier IN ({", ".join(f"'{i}'" for i in sorted(set(safe)))})
     """, db, runuser, psql)
-    return {r[0]: Listen(r[1], r[2], int(r[3] or 0)) for r in rows}
+    return {r[0]: r[1] for r in rows if r[1]}
 
 
-def music_listens(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
-    """The day's music plays from Ryot (fed hourly by spotify-to-ryot), oldest
-    first. The seen's time is when the connector pushed it (:17 each hour),
-    not the play itself: good for the day, too coarse for a per-track time."""
+def music_listens(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
+    """Every music play in [lo, hi) from Ryot V11, oldest first, stamped with
+    Spotify's own played_at (spotify-to-ryot logs one complete per listen)."""
     rows = psql_rows(run, f"""
-        SELECT m.title,
-               coalesce((SELECT string_agg(p.name, ', ' ORDER BY p.name)
-                         FROM metadata_to_person mp JOIN person p ON p.id = mp.person_id
-                         WHERE mp.metadata_id = m.id AND mp.role = 'Artist'), ''),
-               coalesce((m.music_specifics->>'duration')::int, 0)
-        FROM seen s JOIN metadata m ON m.id = s.metadata_id
-        WHERE m.lot = 'music'
-          AND coalesce(s.finished_on, s.started_on) >= to_timestamp({int(lo)})
-          AND coalesce(s.finished_on, s.started_on) < to_timestamp({int(hi)})
-        ORDER BY coalesce(s.finished_on, s.started_on), s.id
+        SELECT e.name,
+               coalesce((SELECT string_agg(p.name, ', ' ORDER BY coalesce((r.properties->>'order')::int, 0), p.name)
+                         FROM relationship r JOIN entity p ON p.id = r.source_entity_id
+                         WHERE r.target_entity_id = e.id AND r.relationship_schema_slug = 'person-to-music'), ''),
+               coalesce((e.properties->>'duration')::int, 0),
+               extract(epoch FROM ev.occurred_at), coalesce(e.external_id, '')
+        FROM event ev JOIN entity e ON e.id = ev.entity_id
+        WHERE e.entity_schema_slug = 'music' AND ev.event_schema_slug = 'complete'
+          AND ev.occurred_at >= to_timestamp({int(lo)}) AND ev.occurred_at < to_timestamp({int(hi)})
+        ORDER BY ev.occurred_at, ev.id
     """, db, runuser, psql)
-    return [Listen(r[0], r[1], int(r[2] or 0)) for r in rows]
+    return [Listen(r[0], r[1], int(r[2] or 0), float(r[3]), r[4]) for r in rows]
 
 
-def music_section(listens, top=5, per_artist=3):
+def music_section(listens, top=5, per_artist=3, streaks=None):
     """(heading suffix, lines): `31 titres · 2 h 03`, then the most played
     artists with their tracks, replays first with their count:
-    `- **Lomepal** · Un peu de sang (2), Club, Trop beau`."""
+    `- **Lomepal** · Un peu de sang (2), Club, Trop beau`. `streaks` =
+    {artist: text} appended to that artist's line."""
     by_artist = {}
     for l in listens:
         by_artist.setdefault(l.artists or "Artiste inconnu", []).append(l.title)
@@ -275,7 +262,7 @@ def music_section(listens, top=5, per_artist=3):
         plays = sorted(Counter(titles).items(), key=lambda kv: -kv[1])  # replays first, then first heard
         uniq = [f"{t} ({n})" if n > 1 else t for t, n in plays]
         shown = ", ".join(uniq[:per_artist]) + (" …" if len(uniq) > per_artist else "")
-        lines.append(f"- **{artist}** · {shown}")
+        lines.append(f"- **{artist}** · {shown}" + (f" · {streaks[artist]}" if (streaks or {}).get(artist) else ""))
     if len(ranked) > top:
         n = len(ranked) - top
         lines.append(f"- *et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}*")
@@ -362,21 +349,40 @@ def climbing_pictures(sessions):
     return [(url, colour, status) for *_, url, colour, status in sorted(out, key=lambda t: t[:2])]
 
 
-def game_sessions(run, lo, hi, db="ryot", runuser="runuser", psql="psql"):
-    """[(title, seconds)] per game played in [lo, hi), most played first.
+def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="psql"):
+    """[(epoch s, title, seconds)] of the playtime landed for [lo, hi).
     steam-to-ryot pushes the playtime grown since its last run at 04:50, so a
     push stands for the journal day before it: the window is shifted a day.
-    Keyed on started_on (the push); finished_on is when Ryot completed it,
-    which for seens completed by hand is days later."""
+    V11 holds the pushes since the switch (timeSpent in minutes); the V1
+    migration folded each game's earlier sessions into one event (marked by
+    its startedOn), so the days before come from V1's seens."""
+    lo, hi = int(lo) + 86400, int(hi) + 86400
     rows = psql_rows(run, f"""
-        SELECT m.title, sum(s.manual_time_spent)::bigint
-        FROM seen s JOIN metadata m ON m.id = s.metadata_id
-        WHERE m.lot = 'video_game' AND s.manual_time_spent > 0
-          AND coalesce(s.started_on, s.finished_on) >= to_timestamp({int(lo) + 86400})
-          AND coalesce(s.started_on, s.finished_on) < to_timestamp({int(hi) + 86400})
-        GROUP BY m.title ORDER BY 2 DESC, 1
+        SELECT extract(epoch FROM ev.occurred_at), e.name, ((ev.properties->>'timeSpent')::numeric * 60)::bigint
+        FROM event ev JOIN entity e ON e.id = ev.entity_id
+        WHERE e.entity_schema_slug = 'video-game' AND ev.event_schema_slug = 'complete'
+          AND NOT ev.properties ? 'startedOn' AND (ev.properties->>'timeSpent')::numeric > 0
+          AND ev.occurred_at >= to_timestamp({lo}) AND ev.occurred_at < to_timestamp({hi})
     """, db, runuser, psql)
-    return [(r[0], int(r[1])) for r in rows]
+    if v1_db:
+        # Keyed on started_on (the push); finished_on is when Ryot completed it,
+        # which for seens completed by hand is days later.
+        rows += psql_rows(run, f"""
+            SELECT extract(epoch FROM coalesce(s.started_on, s.finished_on)), m.title, s.manual_time_spent::bigint
+            FROM seen s JOIN metadata m ON m.id = s.metadata_id
+            WHERE m.lot = 'video_game' AND s.manual_time_spent > 0
+              AND coalesce(s.started_on, s.finished_on) >= to_timestamp({lo})
+              AND coalesce(s.started_on, s.finished_on) < to_timestamp({hi})
+        """, v1_db, runuser, psql)
+    return sorted((float(r[0]) - 86400, r[1], int(r[2])) for r in rows)
+
+
+def game_sessions(plays):
+    """[(title, seconds)] per game, most played first."""
+    total = {}
+    for _, title, sec in plays:
+        total[title] = total.get(title, 0) + sec
+    return sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))
 
 
 def _hm(seconds):
@@ -384,9 +390,78 @@ def _hm(seconds):
     return f"{h} h {m:02d}" if h else f"{m} min"
 
 
-def game_section(games):
-    """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 1 h 40`."""
-    return _hm(sum(s for _, s in games)), [f"- **{t}** · {_hm(s)}" for t, s in games]
+def game_section(games, streaks=None):
+    """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 1 h 40`,
+    plus that game's `streaks` text if any."""
+    return _hm(sum(s for _, s in games)), [
+        f"- **{t}** · {_hm(s)}" + (f" · {streaks[t]}" if (streaks or {}).get(t) else "") for t, s in games]
+
+
+@dataclass(frozen=True)
+class Screen:
+    at: float  # epoch s, when it ended
+    kind: str  # "movie" | "show-episode"
+    title: str
+    show: str = ""
+    season: int = 0
+    episode: int = 0
+    year: str = ""
+    minutes: int = 0
+
+
+def screen_events(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
+    """Films and episodes finished in [lo, hi) (Plex, through plex-to-ryot), oldest first."""
+    rows = psql_rows(run, f"""
+        SELECT extract(epoch FROM ev.occurred_at), e.entity_schema_slug, e.name,
+               coalesce((SELECT s.name FROM entity s WHERE s.entity_schema_slug = 'show'
+                         AND s.external_id = e.properties->>'parentShowExternalId' LIMIT 1), ''),
+               coalesce(e.properties->>'seasonNumber', '0'), coalesce(e.properties->>'episodeNumber', '0'),
+               coalesce(e.properties->>'publishYear', ''), coalesce(e.properties->>'runtime', '0')
+        FROM event ev JOIN entity e ON e.id = ev.entity_id
+        WHERE e.entity_schema_slug IN ('movie', 'show-episode') AND ev.event_schema_slug = 'complete'
+          AND ev.occurred_at >= to_timestamp({int(lo)}) AND ev.occurred_at < to_timestamp({int(hi)})
+        ORDER BY ev.occurred_at, ev.id
+    """, db, runuser, psql)
+    num = lambda x: int(float(x or 0))
+    return [Screen(float(r[0]), r[1], r[2], r[3], num(r[4]), num(r[5]), r[6], num(r[7])) for r in rows]
+
+
+def _caps(name):
+    """TMDB gives some shows in capitals (INVINCIBLE): `Invincible`."""
+    return string.capwords(name) if name.isupper() else name
+
+
+def screen_section(screens, tz):
+    """(heading suffix, lines): `1 film · 2 épisodes · 2 h 30`, then
+    `- **21:03** 🎬 **Amélie** (2001)` / `- **19:58** 📺 **Invincible** · S03E08 · Title`.
+    A show's episodes in a row share a line: `- **19:04-19:58** 📺 **Invincible** · S03E07-E08`."""
+    films = sum(s.kind == "movie" for s in screens)
+    eps = len(screens) - films
+    head = ([_plural(films, "film")] if films else []) + ([_plural(eps, "épisode")] if eps else [])
+    if all(s.minutes for s in screens):
+        head.append(_hm(60 * sum(s.minutes for s in screens)))
+    runs = []
+    for s in screens:
+        prev = runs[-1][-1] if runs else None
+        if prev and s.kind == prev.kind == "show-episode" and s.show == prev.show and s.at - prev.at < 3 * 3600:
+            runs[-1].append(s)
+        else:
+            runs.append([s])
+    hm = lambda s: f"{datetime.fromtimestamp(s.at, tz):%H:%M}"
+    code = lambda s: f"S{s.season:02d}E{s.episode:02d}" if s.season or s.episode else ""
+    lines = []
+    for run in runs:
+        first, last = run[0], run[-1]
+        at = f"**{hm(first)}**" if len(run) == 1 else f"**{hm(first)}-{hm(last)}**"
+        if first.kind == "movie":
+            lines.append(f"- {at} 🎬 **{first.title}**" + (f" ({first.year})" if first.year else ""))
+        elif len(run) == 1:
+            lines.append(f"- {at} 📺 " + " · ".join(x for x in (
+                f"**{_caps(first.show or first.title)}**", code(first), _caps(first.title) if first.show else "") if x))
+        else:
+            span = code(first) + (f"-E{last.episode:02d}" if last.season == first.season else f"-{code(last)}")
+            lines.append(f"- {at} 📺 **{_caps(first.show or first.title)}** · {span}")
+    return " · ".join(head), lines
 
 
 ACTIVITY_METRICS = ("step_count", "distance_walking_running", "flights_climbed", "active_energy")
