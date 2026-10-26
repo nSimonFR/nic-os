@@ -3,8 +3,10 @@
 #   - start/stop/restart system units via polkit, minus the ones that hold or
 #     guard secrets or access;
 #   - read Postgres through a peer-auth `nsimon` role with pg_read_all_data,
-#     except in the databases that store live credentials;
-#   - read SQLite DBs through on-demand snapshots (agent-db-snapshot@<name>).
+#     except in the databases that store live credentials.
+# No SQLite: HA and Gramps keep world-readable secrets (.storage,
+# users.sqlite) inside their private dirs, so any traverse right leaks them.
+# Their APIs (HA via Agent Vault) are the way in.
 { config, lib, pkgs, ... }:
 let
   # Hold bank-link tokens (Sure), the plaintext Immich key (Dawarich) and
@@ -17,12 +19,6 @@ let
   '' + lib.concatMapStrings (db: ''
     REVOKE CONNECT ON DATABASE ${db} FROM PUBLIC;
   '') pgPrivateDbs);
-
-  dbSnapshot = pkgs.writeShellApplication {
-    name = "agent-db-snapshot";
-    runtimeInputs = [ pkgs.sqlite pkgs.coreutils ];
-    text = builtins.readFile ./scripts/agent-db-snapshot.sh;
-  };
 in
 {
   # Units an agent must not touch: secret brokers, deploys, remote access, auth.
@@ -53,15 +49,6 @@ in
       RemainAfterExit = true;
       User = "postgres";
       ExecStart = "${config.services.postgresql.package}/bin/psql -v ON_ERROR_STOP=1 -f ${pgReadonlySql}";
-    };
-  };
-
-  systemd.tmpfiles.rules = [ "d /var/lib/agent-db 0750 root users -" ];
-  systemd.services."agent-db-snapshot@" = {
-    description = "Readable snapshot of the %i SQLite DB for agents";
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${dbSnapshot}/bin/agent-db-snapshot %i";
     };
   };
 }
