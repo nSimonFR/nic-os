@@ -258,6 +258,7 @@
   },
   "enabledPlugins": {
     "mattpocock-skills@mattpocock": true,
+    "impeccable@impeccable": true,
     "slack@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
@@ -265,6 +266,13 @@
       "source": {
         "source": "github",
         "repo": "mattpocock/skills"
+      },
+      "autoUpdate": true
+    },
+    "impeccable": {
+      "source": {
+        "source": "github",
+        "repo": "pbakaus/impeccable"
       },
       "autoUpdate": true
     }
