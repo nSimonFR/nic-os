@@ -38,7 +38,7 @@ in
       var verbs = ["start", "stop", "restart", "try-restart", "reload", "reload-or-restart", "reset-failed"];
       if (verbs.indexOf(verb) < 0) return;
       if (!/\.(service|socket|timer)$/.test(unit)) return;
-      if (/^(agent-vault|cachix-agent|sshd|tailscaled|polkit|dbus|nix-daemon|systemd-|user@|getty|earlyoom|vaultwarden)/.test(unit)) return;
+      if (/^(agent-vault|cachix-agent|rootreq|sshd|tailscaled|polkit|dbus|nix-daemon|systemd-|user@|getty|earlyoom|vaultwarden)/.test(unit)) return;
       return polkit.Result.YES;
     });
   '';
