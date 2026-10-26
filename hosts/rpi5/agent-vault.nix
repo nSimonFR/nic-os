@@ -90,6 +90,9 @@ in
       User = "agent-vault";
       Group = "agent-vault";
       EnvironmentFile = config.age.secrets.agent-vault-env.path;
+      # The pidfile outlives a reboot; once its PID is reused, the server refuses
+      # to start ("already running"). systemd already keeps it single-instance.
+      ExecStartPre = "${pkgs.coreutils}/bin/rm -f ${stateDir}/.agent-vault/agent-vault.pid";
       ExecStart = "${pkg}/bin/agent-vault server --host 127.0.0.1 --port ${toString apiPort} --mitm-port ${toString proxyPort}";
       StateDirectory = "agent-vault";
       StateDirectoryMode = "0700";
