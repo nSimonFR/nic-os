@@ -21,7 +21,7 @@ Priorités, de la plus forte à la plus faible :
 2. Les moments marquants : un record 🏆, séance d'escalade (surtout un niveau franchi ⬆️ ou des flashs), longue sortie, anniversaire d'un proche.
 3. Le reste, seulement si la journée n'a rien d'autre.
 
-Ignore la routine, sauf si elle est vraiment hors norme : la météo (seulement si extrême : neige, canicule, tempête), la musique écoutée, les séries d'affilée 🔥, le nombre de pas, les trajets domicile-travail, les réunions de travail, l'électricité, les prélèvements et la paperasse.
+Ignore la routine, sauf si elle est vraiment hors norme : la météo (seulement si extrême : neige, canicule, tempête), la musique écoutée, les séries d'affilée 🔥, le nombre de pas, les trajets domicile-travail, les réunions de travail, l'électricité, les dépenses (sauf achat hors norme), les prélèvements et la paperasse.
 Les lignes « Airbnb · Nom » sont des voyageurs qui louent son appartement : ne les mentionne jamais.
 🏡 marque un lieu de vie : Alfie, c'est chez lui (y être n'est pas un événement) ; les autres 🏡 sont chez des proches.
 L'entrée tutoie Nicolas (« ton grand-oncle ») ; toi, écris avec sa voix (« mon grand-oncle »).

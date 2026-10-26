@@ -70,6 +70,7 @@ from . import journal_family as fam
 from . import journal_flights as fl
 from . import journal_home as home
 from . import journal_records as rec
+from . import journal_spend as spend
 from . import journal_summary as summ
 from . import journal_sources as src
 
@@ -132,6 +133,9 @@ class Config:
     airtrail_url: str = ""
     ha_db: str = ""
     immich_admin_key_file: str = ""
+    spend_accounts: tuple = ()  # Sure account names; none = no spending section
+    joint_accounts: tuple = ()
+    sure_db: str = "sure_production"
     gate_url: str = ""
     summary_model: str = "gpt-6-luna"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
@@ -165,6 +169,9 @@ class Config:
             airtrail_url=env_str("AIRTRAIL_URL", "", env).rstrip("/"),
             ha_db=env_str("HA_DB", "", env),
             immich_admin_key_file=env_str("IMMICH_ADMIN_KEY_FILE", "", env),
+            spend_accounts=_names(env_str("JOURNAL_SPEND_ACCOUNTS", "", env)),
+            joint_accounts=_names(env_str("JOURNAL_JOINT_ACCOUNTS", "", env)),
+            sure_db=env_str("SURE_DB", "sure_production", env),
             gate_url=env_str("TINY_LLM_GATE_URL", "", env).rstrip("/"),
             summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
@@ -443,7 +450,7 @@ def photo_lines(shots):
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
             memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None,
-            screens=None, badges=None):
+            screens=None, badges=None, spending=None):
     """Memo markdown, in French (journal_day may prefix a one-line summary):
     the weather line, agenda, photos, then one
     `###` section per source; last come work, memories, home, genealogy.
@@ -460,7 +467,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     two lists from journal_family.family_sections; `flights` = (heading
     suffix, lines) from journal_flights.flight_section, linking `flights_url`;
     `energy` = the same from journal_home.energy_section, last of all;
-    `screens` = the same from journal_sources.screen_section; `badges` =
+    `screens` = the same from journal_sources.screen_section, `spending` from
+    journal_spend.spend_section; `badges` =
     {"bike" | "activity" | "climbing" | "home": record and streak lines}."""
     badges = badges or {}
     sections, tags = [], []
@@ -510,6 +518,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         head, lines = screens
         sections.append([f"### 📺 Écrans - {head}", "", *lines])
         tags.append("screen")
+    if spending:
+        head, lines = spending
+        sections.append([f"### 💸 Dépenses - {head}", "", *lines])
+        tags.append("spending")
     if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
         sections.append(["### 🛠 Projets perso", "", "<details>", "<summary>Notes</summary>", "",
                          *notes, "", "</details>"])
@@ -1166,6 +1178,23 @@ def day_screens(cfg, run, day, log):
     return src.screen_section(screens, TZ) if screens else None
 
 
+def day_spend(cfg, run, day, log, today):
+    """journal_spend.spend_section of the day, or None (no accounts set, nothing spent, Sure unreadable)."""
+    if not (cfg.spend_accounts or cfg.joint_accounts):
+        return None
+    try:
+        spends = spend.day_spends(run, day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_db,
+                                  cfg.runuser, cfg.psql)
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        log(f"{day}: spending unavailable ({e})")
+        return None
+    return spend.spend_section(spends, (today - day).days)
+
+
+def _today(now=None):
+    return datetime.fromtimestamp(now, TZ).date() if now else datetime.now(TZ).date()
+
+
 def day_badges(cfg, run, day, ws, climbs, activity, energy, log):
     """{section: record and streak lines}, each source on its own: one
     unreadable history drops only its own lines."""
@@ -1226,6 +1255,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
     screens = day_screens(cfg, run, day, log)
+    spending = day_spend(cfg, run, day, log, _today(now))
     badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
@@ -1242,7 +1272,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m, _ in memories],
-                     birthdays, genealogy, [f.id for f in flights], energy, screens, badges])
+                     birthdays, genealogy, [f.id for f in flights], energy, screens, badges, spending])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -1262,7 +1292,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
                    memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
                    fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy,
-                   screens, badges)
+                   screens, badges, spending)
     summary, src_hash = None, summ.source_hash(text)
     if summary_fn:
         prev = state.get(key, {})
@@ -1361,10 +1391,28 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             name = prev["memo"]
     if name is None:
         name = memos.create(text, atts, when, location or None)
-    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts,
+    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts, "spend": spending,
                   **({"summary": summary, "summary_src": src_hash} if summary else {})}
     log(f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)")
     return name
+
+
+def catchup_days(cfg, run, state, today=None, log=print):
+    """Older days whose spending moved since their memo was written: banks
+    deliver up to ~3 weeks late. Only days with a memo, and not under JOURNAL_DAY."""
+    if cfg.day or not (cfg.spend_accounts or cfg.joint_accounts):
+        return []
+    today = today or _today()
+    days = []
+    for n in range(cfg.days + 1, spend.CATCHUP_DAYS + 1):
+        day = today - timedelta(days=n)
+        prev = state.get(day.isoformat())
+        if not prev:
+            continue
+        now = day_spend(cfg, run, day, log, today)
+        if json.loads(json.dumps(now)) != prev.get("spend"):  # state round-trips tuples as lists
+            days.append(day)
+    return sorted(days)
 
 
 def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time.sleep):
@@ -1399,7 +1447,7 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
             except (OSError, ValueError, KeyError, sqlite3.Error) as e:
                 log(f"no family tree: {e}")
         with tempfile.TemporaryDirectory() as tmp:
-            for day in target_days(cfg, today):
+            for day in target_days(cfg, today) + catchup_days(cfg, run, state, today, log):
                 journal_day(cfg, run, memos, state, day, uid, log,
                             render_fn or render, tmp, immich,
                             collage_fn=functools.partial(render_collage, font_path=cfg.font),

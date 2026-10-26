@@ -21,6 +21,7 @@ class FakePg:
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
         self.flights, self.screens, self.rides, self.steps = flights, screens, rides, steps
         self.v1_games, self.v1_artists = v1_games, v1_artists
+        self.spends = []
         self.tracks, self.music, self.games, self.activity = tracks, music, games, activity
         self.sql = []
 
@@ -35,6 +36,8 @@ class FakePg:
             rows = self.rides
         elif "-- step history" in sql:
             rows = self.steps
+        elif "FROM entries e" in sql:
+            rows = self.spends
         elif "FROM workouts" in sql:
             rows = self.workouts
         elif "FROM health_metrics" in sql:
@@ -855,3 +858,17 @@ def test_summary_on_top_cached_and_retried(tmp_path):
     state["2026-10-19"]["sig"] = "stale"  # same content: the cached sentence, no new call
     run(FakeOpener([json_reply({"name": "attachments/A"}), json_reply({}), json_reply({}), json_reply({})]))
     assert len(calls) == 2
+
+
+def test_catchup_reruns_only_older_days_whose_spending_moved(tmp_path):
+    c = cfg(tmp_path, day="", spend_accounts=("SG - Courant",))
+    today = date(2026, 10, 26)
+    pg = FakePg([], [])
+    pg.spends = [("f", "12.5", "Franprix", "0 - Groceries")]
+    same = list(wm.spend.spend_section([wm.spend.Spend(False, 12.5, "Franprix", "0 - Groceries")], 10))
+    state = {"2026-10-16": {"memo": "memos/A", "spend": [same[0], same[1]]},  # unchanged
+             "2026-10-15": {"memo": "memos/B"},  # written before the purchase landed
+             "2026-10-01": {"memo": "memos/C"},  # past the window
+             "2026-10-24": {"memo": "memos/D"}}  # a regular target day
+    assert wm.catchup_days(c, pg, state, today) == [date(2026, 10, 15)]
+    assert wm.catchup_days(cfg(tmp_path, day="2026-10-15", spend_accounts=("x",)), pg, state, today) == []
