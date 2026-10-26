@@ -19,7 +19,6 @@ MONTHS = ["janvier", "fÃ©vrier", "mars", "avril", "mai", "juin", "juillet", "aoÃ
 BIRTH, DEATH, BURIAL, MARRIAGE = 12, 13, 15, 1
 PRIMARY = 1  # EventRoleType: the person's own event
 MAX_AGE = 105  # born longer ago with no death recorded = not living
-SHOW = 6
 
 
 @dataclass
@@ -345,12 +344,9 @@ def birthday_lines(contacts, tree, day):
     return lines
 
 
-def family_sections(contacts, tree, day, url, show=SHOW):
+def family_sections(contacts, tree, day, url):
     """(birthday lines, history lines): living people first, then the tree's
-    past events, closest relatives first, at most `show` history lines."""
+    past events, closest relatives first."""
     rows = tree_lines(tree, day, url) if tree else []
     births = [l.text for l in rows if l.living] + birthday_lines(contacts, tree, day)
-    history = [f"- {l.text}" for l in rows if not l.living]
-    if len(history) > show:
-        history = history[:show] + [f"- *et {len(history) - show} autres*"]
-    return [f"- {t}" for t in births], history
+    return [f"- {t}" for t in births], [f"- {l.text}" for l in rows if not l.living]

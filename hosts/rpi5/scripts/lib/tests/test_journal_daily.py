@@ -215,6 +215,8 @@ def test_place_labels_from_dawarich_tags_and_names(tmp_path):
 
 
 class FakeImmich:
+    admin_key = "ADMIN"
+
     def __init__(self, assets=(), fail=False, past=()):
         self.assets, self.fail, self.previews, self.past = list(assets), fail, [], list(past)
 
@@ -237,6 +239,12 @@ class FakeImmich:
 
     def search_link(self, lo, hi):
         return f"https://immich/search?{lo}-{hi}"
+
+    def memory_link(self, memory_id):
+        return f"https://immich/memories/{memory_id}"
+
+    def city(self, asset_id):
+        return "Brest"
 
 
 def photo(n, fav=False, gps=True):
@@ -297,10 +305,10 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
     assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
 
-def test_memories_section_links_each_past_day(tmp_path):
+def test_memories_section_links_each_immich_memory(tmp_path):
     old = lambda y, n, **kw: {**photo(n, **kw), "id": f"y{y}-{n}",
                               "fileCreatedAt": f"{y}-10-19T{10 + n:02d}:00:00.000Z"}
-    past = [(2023, [old(2023, 1), old(2023, 2, gps=False)]), (2010, [old(2010, 1, gps=False)])]
+    past = [(2023, [old(2023, 1), old(2023, 2, gps=False)], "M23"), (2010, [old(2010, 1, gps=False)], "M10")]
     im = FakeImmich([photo(1)], past=past)
     op = FakeOpener([json_reply({"name": "attachments/COL"}),
                      json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
@@ -308,12 +316,23 @@ def test_memories_section_links_each_past_day(tmp_path):
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
                    collage_fn=lambda imgs, labels, path: no_render(None, path))
     assert op.body_of(0)["filename"] == "photos-2026-10-19.jpg"  # no memories collage
-    memo = op.body_of(1)
-    lo23, hi23 = wm.day_bounds(date(2023, 10, 19))
-    lo10, hi10 = wm.day_bounds(date(2010, 10, 19))
-    assert (f"### 🕰 Souvenirs\n\n- [Il y a 3 ans · 2023](https://immich/search?{lo23}-{hi23}) · Paris · 2 photos\n"
-            f"- [Il y a 16 ans · 2010](https://immich/search?{lo10}-{hi10}) · 1 photo\n\n") in memo["content"]
-    assert "#photos #memories" in memo["content"]
+    assert ("### 🕰 Souvenirs\n\n- [Il y a 3 ans · 2023](https://immich/memories/M23) · Paris · 2 photos\n"
+            "- [Il y a 16 ans · 2010](https://immich/memories/M10) · Brest · 1 photo\n\n") in op.body_of(1)["content"]
+
+
+def test_immich_memories_api_drops_screenshots_and_other_types():
+    shot = {"id": "s", "originalFileName": "IMG_1.PNG", "exifInfo": {}}
+    pic = {"id": "c", "originalFileName": "IMG_2.HEIC", "exifInfo": {"make": "Apple"}}
+    reply = [{"id": "A", "type": "on_this_day", "data": {"year": 2021}, "assets": [shot]},
+             {"id": "B", "type": "on_this_day", "data": {"year": 2022}, "assets": [pic, shot]},
+             {"id": "C", "type": "birthday", "data": {"year": 2020}, "assets": [pic]}]
+    op = FakeOpener([json_reply(reply), json_reply({})])
+    im = wm.Immich("https://im", "k", op, admin_key="ADMIN")
+    got = im.memories(date(2026, 10, 12))
+    assert [(y, [a["id"] for a in m], i) for y, m, i in got] == [(2022, ["c"], "B")]
+    assert op.requests[0].full_url == "https://im/api/memories?for=2026-10-12"
+    assert op.requests[0].get_header("X-api-key") == "ADMIN"
+    assert im.memory_link("B") == "https://im/memories/B"
 
 
 def test_immich_search_link_is_a_date_range_query():
@@ -322,22 +341,6 @@ def test_immich_search_link_is_a_date_range_query():
     assert url.startswith("https://im/search?query=")
     q = json.loads(urllib.parse.unquote(url.split("query=")[1]))
     assert q == {"takenAfter": "2026-10-26T02:00:00.000Z", "takenBefore": "2026-10-27T01:59:59.000Z"}
-
-
-def test_memories_skip_screenshots_and_feb_29():
-    calls = []
-
-    class Im(wm.Immich):
-        def day(self, day):
-            calls.append(day)
-            return {2022: [{"id": "s", "originalFileName": "IMG_1.PNG", "exifInfo": {}},
-                           {"id": "c", "originalFileName": "IMG_2.PNG", "exifInfo": {"make": "Apple"}}],
-                    2021: [{"id": "s2", "originalFileName": "IMG_3.png"}]}.get(day.year, [])
-
-    assert Im("u", "k").memories(date(2024, 2, 29), years=4) == []  # 2023-2021 have no Feb 29; 2020 does
-    assert [d.year for d in calls] == [2020]
-    got = Im("u", "k").memories(date(2026, 10, 19), years=5)
-    assert [(y, [a["id"] for a in m]) for y, m in got] == [(2022, ["c"])]
 
 
 def test_immich_down_still_writes_the_workouts(tmp_path):
@@ -784,3 +787,19 @@ def test_great_circle_ends_at_both_airports():
     arc = fl.great_circle(f)
     assert arc[0] == pytest.approx((49.0097, 2.5479)) and arc[-1] == pytest.approx((41.8003, 12.2389))
     assert fl.flag("it") == "🇮🇹"
+
+
+def test_genealogy_collapses_past_three_events_with_the_count_in_the_title():
+    three = [f"- e{i}" for i in range(3)]
+    text = wm.content("2026-10-19", [], [], "w", genealogy=three)
+    assert text.startswith("### 🌳 Généalogie - 3 événements\n\n- e0\n- e1\n- e2\n")
+    text = wm.content("2026-10-19", [], [], "w", genealogy=three + ["- e3"])
+    assert text.startswith("### 🌳 Généalogie - 4 événements\n\n<details>\n<summary>Ce jour-là</summary>\n\n"
+                           "- e0\n- e1\n- e2\n- e3\n\n</details>")
+
+
+def test_home_section_collapses_the_electricity_detail():
+    text = wm.content("2026-10-19", [], [], "w", energy=("25,1 kWh · 3,15 €", ["- 🔥 heat"]))
+    assert text == ("### 🏠 Maison - ⚡ 25,1 kWh · 3,15 €\n\n<details>\n<summary>Électricité</summary>\n\n"
+                    "- 🔥 heat\n\n</details>\n\n___________\n\n#home\n")
+    assert wm.content("2026-10-19", [], [], "w", energy=("1,0 kWh", [])).startswith("### 🏠 Maison - ⚡ 1,0 kWh\n\n___")

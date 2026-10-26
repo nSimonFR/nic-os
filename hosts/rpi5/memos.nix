@@ -92,6 +92,8 @@ in
         "JOURNAL_FONT=${pkgs.inter}/share/fonts/truetype/InterVariable.ttf"
         "AIRTRAIL_URL=${config.nic.services.airtrail.public.publicUrl}"
         "HA_DB=/var/lib/hass/home-assistant_v2.db"
+        # Dawarich's Immich key reads assets only; memories and the memory-create job need this one.
+        "IMMICH_ADMIN_KEY_FILE=${config.age.secrets.immich-api-key.path}"
       ];
       TimeoutStartSec = "45min";
     };
