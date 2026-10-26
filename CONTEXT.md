@@ -1,6 +1,6 @@
 # nic-os domain glossary
 
-The words this repo uses for its own concepts. `CLAUDE.md` says what to *do*;
+The words this repo uses for its own concepts. `AGENTS.md` says what to *do*;
 this file says what things *are*. If a term here stops matching the code, fix
 one of the two.
 
