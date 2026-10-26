@@ -109,9 +109,10 @@ in
   # idleSec=1800 (not 600) dampens wake noise from public bot probes hitting
   # the :10000 funnel URL. There is no local ML worker to sleep with anymore
   # (ML runs on beast) — the API tier sleeps on its own. BullMQ jobs queue in
-  # Redis and resume on wake; @nestjs/schedule cron ticks (NightlyJobs,
-  # VersionCheck, LibraryScan) that fall in the asleep window are missed
-  # and fire on the next wake instead — all idempotent.
+  # Redis and resume on wake. @nestjs/schedule cron ticks that fall in the
+  # asleep window are simply missed — no catch-up on wake: no memory was
+  # generated after 2026-10-14. immich-nightly-wake below keeps the 03:00
+  # NightlyJobs tick (memories, cleanups, DB dump) inside a waking window.
   services.socketActivate.immich = {
     enable    = true;
     realUnit  = "immich-server.service";
@@ -123,6 +124,21 @@ in
       expectStatus = 200;
       timeoutSec   = 60;
     };
+  };
+
+  # Wake through the socket at 02:55; idleSec keeps the server up past
+  # nightlyTasks.startTime (03:00, Immich's default).
+  systemd.services.immich-nightly-wake = {
+    description = "Wake Immich before its 03:00 nightly jobs";
+    serviceConfig.Type = "oneshot";
+    script = ''
+      ${pkgs.curl}/bin/curl -fsS -o /dev/null --max-time 300 --retry 5 --retry-delay 10 \
+        --retry-all-errors http://127.0.0.1:${toString externalPort}/api/server/ping
+    '';
+  };
+  systemd.timers.immich-nightly-wake = {
+    wantedBy    = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 02:55:00"; Persistent = false; };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
