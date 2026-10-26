@@ -435,7 +435,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
             memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None):
     """Memo markdown, in French: the weather line, agenda, photos, then one
-    `###` section per source, work last.
+    `###` section per source; last come work, memories, home, genealogy.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
     same per trip that is not a workout; `photos` = the
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
@@ -469,15 +469,6 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             lines += [f"[Voir la journée dans Immich]({photos_url})"]
         sections.append(lines)
         tags.append("photos")
-    if memories:
-        sections.append(["### 🕰 Souvenirs", "", *memories])
-        tags.append("memories")
-    if genealogy:
-        n = len(genealogy)
-        head = f"### 🌳 Généalogie - {n} événement{'s' if n > 1 else ''}"
-        sections.append([head, "", *genealogy] if n <= 3 else
-                        [head, "", "<details>", "<summary>Ce jour-là</summary>", "", *genealogy, "", "</details>"])
-        tags.append("genealogy")
     if activity:
         sections.append([f"### 🚶 Activité - {activity}"])
     if ws:
@@ -513,12 +504,21 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             lines += ["", "<details>", "<summary>Réunions</summary>", "", *rest[0], "", "</details>"]
         sections.append(lines)
         tags.append("work")
+    if memories:
+        sections.append(["### 🕰 Souvenirs", "", *memories])
+        tags.append("memories")
     if energy:
         head, lines = energy
         sections.append([f"### 🏠 Maison - ⚡ {head}",
                          *(["", "<details>", "<summary>Électricité</summary>", "", *lines, "", "</details>"]
                            if lines else [])])
         tags.append("home")
+    if genealogy:
+        n = len(genealogy)
+        head = f"### 🌳 Généalogie - {n} événement{'s' if n > 1 else ''}"
+        sections.append([head, "", *genealogy] if n <= 3 else
+                        [head, "", "<details>", "<summary>Ce jour-là</summary>", "", *genealogy, "", "</details>"])
+        tags.append("genealogy")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
