@@ -8,9 +8,8 @@ let
 in
 {
   # Codex's system layer: hooks here run without a /hooks approval.
-  # Interpolated so the file gets its own store path: a bare path made nix-darwin
-  # link into the repo's -source without a reference, so the Cachix-deployed
-  # closure lacked it and activation failed on a dangling /etc link (deploy #3).
+  # Interpolated: a bare path links into the repo's -source with no store
+  # reference, so a Cachix-deployed closure lacks it.
   environment.etc."codex/hooks.json".source = "${../../shared/entire/codex-hooks.json}";
 
   # Claude Code's managed settings: these hooks run in every session, T3 and
