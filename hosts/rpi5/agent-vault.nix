@@ -47,6 +47,8 @@ let
     { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-git";     host = "github.com";         auth = { type = "basic"; username = "GITHUB_GIT_USER"; password = "GITHUB_AI_TOKEN"; }; }
+    # Deploy status and logs by UUID: /api/v1/deploy/{deployment,logs}/<uuid>.
+    { name = "cachix";         host = "app.cachix.org";     auth = { type = "bearer"; token = "CACHIX_ACTIVATE_TOKEN"; }; }
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
@@ -54,6 +56,7 @@ let
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
     GITHUB_GIT_USER = pkgs.writeText "github-git-user" "x-access-token";
+    CACHIX_ACTIVATE_TOKEN = config.age.secrets.cachix-activate-token.path;
   };
   servicesFile = pkgs.writeText "agent-vault-services.json" (builtins.toJSON brokered);
 in

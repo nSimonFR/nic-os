@@ -98,9 +98,17 @@ jobs:
         env:
           CACHIX_ACTIVATE_TOKEN: ${{ secrets.CACHIX_ACTIVATE_TOKEN }}
           OUT: ${{ steps.eval.outputs.out }}
+        # The v2 API, not `cachix deploy activate`: only its response carries the
+        # deployment UUID, which status and log lookups need.
         run: |
+          set -euo pipefail
           jq -n --arg out "$OUT" '{agents: {nBookPro: $out}}' > deploy.json
-          cachix deploy activate --async deploy.json
+          resp=$(curl -fsS -X POST https://app.cachix.org/api/v2/deploy/activate \
+            -H "Authorization: Bearer $CACHIX_ACTIVATE_TOKEN" \
+            -H "Content-Type: application/json" --data @deploy.json)
+          jq . <<<"$resp"
+          jq -r '.agents | to_entries[] | "- \(.key): [\(.value.id)](\(.value.url))"' \
+            <<<"$resp" >> "$GITHUB_STEP_SUMMARY"
           echo "$OUT" > .deployed
 
       - name: Save the queued marker
