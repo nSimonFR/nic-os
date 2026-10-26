@@ -1,7 +1,6 @@
 # What agents (running as nsimon, no sudo — security-policy.nix) may still do
 # as root, none of which hands them a secret:
-#   - start/stop/restart system units via polkit, minus the ones that hold or
-#     guard secrets or access;
+#   - start/stop/restart the app units the deploy manages, via polkit;
 #   - read Postgres through a peer-auth `nsimon` role with pg_read_all_data,
 #     except in the databases that store live credentials;
 #   - read SQLite DBs through read-only single-file bind mounts in
@@ -21,6 +20,10 @@ let
     REVOKE CONNECT ON DATABASE ${db} FROM PUBLIC;
   '') pgPrivateDbs);
 
+  agentUnits = config.nic.heavyServices
+    ++ lib.concatMap (n: [ "${n}-proxy.service" "${n}-proxy.socket" ])
+      (lib.attrNames config.services.socketActivate);
+
   sqliteDbs = {
     hass = "/var/lib/hass/home-assistant_v2.db";
     memos = "/var/lib/memos/memos_prod.db";
@@ -28,20 +31,23 @@ let
   };
 in
 {
-  # Units an agent must not touch: secret brokers, deploys, remote access, auth.
+  # Existing units only: systemd checks StartTransientUnit (systemd-run, i.e.
+  # root) as the same manage-units/"start" pair, and a name that already exists
+  # can't be reused for a transient unit. Patterns would let one through.
   security.polkit.enable = true;
   security.polkit.extraConfig = ''
     polkit.addRule(function(action, subject) {
       if (action.id != "org.freedesktop.systemd1.manage-units" || subject.user != "nsimon") return;
-      var unit = action.lookup("unit") || "";
-      var verb = action.lookup("verb") || "";
-      var verbs = ["start", "stop", "restart", "try-restart", "reload", "reload-or-restart", "reset-failed"];
-      if (verbs.indexOf(verb) < 0) return;
-      if (!/\.(service|socket|timer)$/.test(unit)) return;
-      if (/^(agent-vault|cachix-agent|rootreq|sshd|tailscaled|polkit|dbus|nix-daemon|systemd-|user@|getty|earlyoom|vaultwarden)/.test(unit)) return;
-      return polkit.Result.YES;
+      var allowed = ${builtins.toJSON agentUnits};
+      var verbs = ["start", "stop", "restart", "try-restart", "reset-failed"];
+      if (verbs.indexOf(action.lookup("verb")) >= 0 && allowed.indexOf(action.lookup("unit")) >= 0)
+        return polkit.Result.YES;
     });
   '';
+
+  # Takes over the hand-placed deny-all hotfix (2026-10-26) at this path, which
+  # setup-etc replaces; drop this entry once it has deployed.
+  environment.etc."polkit-1/rules.d/00-agent-hotfix.rules".text = "// superseded by agent-access.nix\n";
 
   services.postgresql.ensureUsers = [ { name = "nsimon"; ensureClauses.login = true; } ];
   systemd.services.agent-pg-readonly = {
