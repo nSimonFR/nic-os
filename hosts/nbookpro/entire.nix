@@ -8,7 +8,10 @@ let
 in
 {
   # Codex's system layer: hooks here run without a /hooks approval.
-  environment.etc."codex/hooks.json".source = ../../shared/entire/codex-hooks.json;
+  # Interpolated so the file gets its own store path: a bare path made nix-darwin
+  # link into the repo's -source without a reference, so the Cachix-deployed
+  # closure lacked it and activation failed on a dangling /etc link (deploy #3).
+  environment.etc."codex/hooks.json".source = "${../../shared/entire/codex-hooks.json}";
 
   # Claude Code's managed settings: these hooks run in every session, T3 and
   # headless included, without an approval prompt (checked on 2.1.x).
