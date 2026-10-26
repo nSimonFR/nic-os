@@ -1,6 +1,8 @@
 import json
 from datetime import date
 
+import pytest
+
 from conftest import FakeOpener, json_reply
 from nicos_scripts.connectors import journal_daily as wm
 
@@ -14,8 +16,10 @@ T1, T2 = 1792390421, 1792427478
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=(), activity=()):
+    def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=(), activity=(),
+                 flights=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
+        self.flights = flights
         self.tracks, self.music, self.games, self.activity = tracks, music, games, activity
         self.sql = []
 
@@ -24,6 +28,8 @@ class FakePg:
         self.sql.append(sql)
         if "oc_calendarobjects" in sql:
             rows = []
+        elif "FROM flight f" in sql:
+            rows = self.flights
         elif "FROM workouts" in sql:
             rows = self.workouts
         elif "FROM health_metrics" in sql:
@@ -698,3 +704,66 @@ def test_music_falls_back_to_ryot_seens_without_a_cursor(tmp_path):
     pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
     music = wm.day_music(cfg(tmp_path, spotify_cursor=str(tmp_path / "none.json")), pg, date(2026, 10, 19), print)
     assert music == ("1 titre · 4 min", ["- **Lomepal** · Club"])
+
+
+def flight_row(fid, date_, dep, arr, frm=("CDG", "Paris (Roissy-en-France, Val-d'Oise)", "FR", 49.0097, 2.5479, "Europe/Paris"),
+               to=("FCO", "Rome", "IT", 41.8003, 12.2389, "Europe/Rome"), seat=("36A", "economy"), duration=6300):
+    ap = lambda a: (a[0], f"{a[1]} Airport", a[1], a[2], a[3], a[4], a[5])
+    return (fid, date_, dep, arr, duration, "AF1104", "Air France", "Airbus A321", "F-GTAZ", "2F",
+            *ap(frm), *ap(to), *seat)
+
+
+def test_flight_day_gets_a_section_and_a_boarding_pass(tmp_path):
+    flights = [flight_row(1, "2025-10-03", "2025-10-03T13:20:00.000+00:00", "",
+                          to=("EDI", "Edinburgh", "GB", 55.95, -3.37, "Europe/London"), seat=("", "")),
+               flight_row(2, "2026-10-19", "2026-10-19T07:25:00.000+00:00", "2026-10-19T09:10:00.000+00:00")]
+    op = FakeOpener([json_reply({"name": "attachments/F"}), json_reply({"name": "memos/M"}),
+                     json_reply({"name": "memos/M"})])
+    passes = []
+    wm.journal_day(cfg(tmp_path, airtrail_url="https://air"), FakePg([], [], flights=flights),
+                   wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1, lambda m: None, no_render,
+                   str(tmp_path), pass_fn=lambda fs, path: (passes.append([f.id for f in fs]), no_render(None, path)))
+    assert passes == [[2]] and op.body_of(0)["filename"] == "flight-2026-10-19.jpg"
+    memo = op.body_of(1)
+    assert memo["content"] == (
+        "### ✈️ Vol - Paris → Rome · 1 101 km · 1h45\n\n"
+        "- 🎫 **AF1104** · Air France · Airbus A321 · F-GTAZ\n"
+        "- 🛫 **09:25** · CDG 🇫🇷 Paris · terminal 2F\n"
+        "- 🛬 **11:10** · FCO 🇮🇹 Rome\n"
+        "- 💺 36A · économie\n"
+        "- 📊 2ᵉ vol · 1 969 km en avion depuis 2025\n"
+        "- 🆕 Premier vol vers 🇮🇹\n"
+        "[Voir dans AirTrail](https://air)\n\n___________\n\n#flight\n")
+    assert memo["location"]["placeholder"] == "Rome"
+    assert op.body_of(2) == {"createTime": "2026-10-19T09:10:00Z"}
+
+
+def test_a_dateonly_flight_and_a_red_eye(tmp_path):
+    from nicos_scripts.connectors import journal_flights as fl
+    rows = [flight_row(1, "2026-10-19", "", "", seat=("", "")),
+            flight_row(2, "2026-10-20", "2026-10-20T00:30:00.000+00:00", "")]  # 02:30 Paris: still the 19th's day
+    every = fl.all_flights(FakePg([], [], flights=rows))
+    assert every[1].arr.isoformat() == "2026-10-20T02:15:00+00:00"  # departure + duration
+    lo, hi = wm.day_bounds(date(2026, 10, 19))
+    assert [f.id for f in fl.on_day(every, date(2026, 10, 19), lo, hi)] == [1, 2]
+    head, lines = fl.flight_section(every, every)
+    assert head.startswith("Paris → Rome · 2 20") and head.endswith(" km · 3h30")
+
+
+def test_boarding_pass_draws_without_network(tmp_path):
+    from PIL import Image
+
+    from nicos_scripts.connectors import journal_flights as fl
+    f = fl.all_flights(FakePg([], [], flights=[flight_row(1, "2026-10-19", "2026-10-19T07:25:00.000+00:00", "")]))[0]
+    wm.render_boarding_passes([f, f], str(tmp_path / "p.jpg"),
+                              map_fn=lambda _: Image.new("RGB", (wm.PASS_W, wm.PASS_MAP_H), "black"))
+    img = Image.open(tmp_path / "p.jpg")
+    assert img.size == (wm.PASS_W, 2 * (wm.PASS_MAP_H + wm.PASS_TICKET_H) + 12)
+
+
+def test_great_circle_ends_at_both_airports():
+    from nicos_scripts.connectors import journal_flights as fl
+    f = fl.all_flights(FakePg([], [], flights=[flight_row(1, "2026-10-19", "", "")]))[0]
+    arc = fl.great_circle(f)
+    assert arc[0] == pytest.approx((49.0097, 2.5479)) and arc[-1] == pytest.approx((41.8003, 12.2389))
+    assert fl.flag("it") == "🇮🇹"
