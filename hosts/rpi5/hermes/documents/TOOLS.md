@@ -3,7 +3,7 @@
 ## System
 
 - OS: NixOS | Shell: zsh | Package Manager: Nix (flakes)
-- Config source: `~/nic-os/` → rebuild: `sudo nixos-rebuild switch --flake 'path:.#rpi5' --max-jobs 1 -j 1`
+- Config source: `~/nic-os/` → deploy by merging a PR to `main` (CI + Cachix agent). You have no sudo
 - **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
 - Secrets: agenix — `/run/agenix/` (read-only, system-managed). You hold no API
   key: every one is a placeholder named after it (`__tavily_api_key__`,

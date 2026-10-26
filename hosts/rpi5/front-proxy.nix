@@ -187,7 +187,7 @@ in
   nic.services.front-proxy = {
     backup     = [ "none" ];
     backupNote = "stateless — this is an nginx vhost generated from the config above";
-    # nginx is infra that nixos-rebuild-safe deliberately leaves up.
+    # nginx is infra that heavy-shed deliberately leaves up.
     heavyUnits = [ ];
 
     # No tile: the mux is how other services are reached, not a destination.

@@ -177,7 +177,7 @@ function rebuild-os() {
   local repo=~/nic-os
   case "$(hostname)" in
     BeAsT)     (cd "$repo" && sudo nixos-rebuild switch --flake path:.#BeAsT) ;;
-    rpi5)      (cd "$repo" && sudo nixos-rebuild switch --flake path:.#rpi5) ;;
+    rpi5)      echo "rpi5 deploys from main via CI + Cachix (no sudo here)" ;;
     nBookPro)  (cd "$repo" && sudo darwin-rebuild switch --flake path:.#nBookPro) ;;
     *)         echo "Unknown machine: $(hostname)" ;;
   esac

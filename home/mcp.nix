@@ -1,6 +1,6 @@
 { config, pkgs, tailnetFqdn, ... }:
 let
-  secretsPath = config.age.secrets.mcp-secrets.path;
+  secretsPath = config.nic.userSecrets.mcp-secrets;
 
   # Wrapper scripts: read secrets from agenix at runtime, then exec the MCP server
   githubMcp = pkgs.writeShellScript "github-mcp" ''

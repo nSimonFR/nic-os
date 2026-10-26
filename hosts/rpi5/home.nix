@@ -30,6 +30,11 @@ in
     ./mail.nix
   ];
 
+  # No ~/.ssh/age here: that master key decrypts every secret in the repo,
+  # Agent Vault's included. secrets-zsh (real Linear and Trusk tokens) is not
+  # declared on this host at all.
+  nic.userSecretsFromSystem = true;
+
   home.packages = with pkgs; [
     nodejs_22
     pnpm
