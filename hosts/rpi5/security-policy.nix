@@ -65,5 +65,13 @@ in
         && config.users.users.root.openssh.authorizedKeys.keyFiles == [ ];
       message = "security-policy: root must have no SSH authorized keys.";
     }
+    # Agents run as nsimon and Agent Vault's keys are root-only, so nsimon must
+    # have no path to root.
+    {
+      assertion = !(lib.elem "wheel" config.users.users.nsimon.extraGroups)
+        && !(lib.elem "nsimon" config.nix.settings.trusted-users)
+        && config.security.sudo.extraRules == [ ];
+      message = "security-policy: nsimon must not be in wheel, a trusted nix user, or in a sudo rule.";
+    }
   ];
 }

@@ -5,7 +5,7 @@
 #
 # Before this module, adding a service meant remembering to also edit
 # `backups.nix` (its Postgres database) and `lib/heavy-services.nix` (its units,
-# so `nixos-rebuild-safe` frees their RSS on a 3.9 GiB box). Nothing checked
+# so a deploy frees their RSS on a 3.9 GiB box). Nothing checked
 # either list for completeness, so the gaps stayed invisible until they bit:
 # Karakeep ran unbacked from the day it landed, `backups.nix` dumped a
 # `ghostfolio` database that no module in the repo creates, and five live units
@@ -92,7 +92,7 @@ let
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
 
   # `heavy-shed <command…>`: free the RAM, do the thing, put it back. Shared by
-  # nixos-rebuild-safe (configuration.nix) and cachix-agent.nix. A copy without
+  # cachix-agent.nix. A copy without
   # the restore left nine always-on services stopped for 9h on 2026-08-30.
   heavyShed = pkgs.writeShellApplication {
     name = "heavy-shed";
@@ -493,7 +493,7 @@ let
         type = lib.types.listOf lib.types.str;
         default = [ ];
         description = ''
-          Units stopped by `nixos-rebuild-safe` and the cachix-agent deploy to
+          Units stopped by the cachix-agent deploy (heavy-shed) to
           free RSS before a build. List every unit the service actually runs
           (web + workers + its search backend), not just the socket-activated
           `realUnit` — the workers are where the RSS is.
@@ -555,7 +555,7 @@ in
     description = ''
       Derived: `heavy-shed <command…>` stops every `nic.heavyServices` unit, runs
       the command, and restarts the always-on ones if it fails. The single
-      implementation behind `nixos-rebuild-safe` and the weekly auto-upgrade.
+      implementation behind the cachix-agent deploy and the weekly auto-upgrade.
     '';
   };
 

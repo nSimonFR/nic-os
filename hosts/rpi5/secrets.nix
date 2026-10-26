@@ -25,6 +25,17 @@
       group = "for-sure";
       mode  = "0440";
     };
+    # User secrets (shared/agenix.nix, nic.userSecretsFromSystem in home.nix).
+    mcp-secrets = {
+      file = ../../shared/mcp-secrets.age;
+      owner = "nsimon";
+      mode = "0400";
+    };
+    wakatime-cfg = {
+      file = ../../shared/wakatime.cfg.age;
+      owner = "nsimon";
+      mode = "0400";
+    };
     supervisor-token = {
       file = ./secrets/supervisor-token.age;
     };

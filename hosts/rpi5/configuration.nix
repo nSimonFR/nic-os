@@ -11,19 +11,6 @@
 let
   blogwatcherPkg = pkgs.callPackage ../../pkgs/cli/blogwatcher.nix { };
 
-  # nixos-rebuild wrapper: stop the heaviest userspace services before Nix
-  # evaluates + builds, so the 4 GiB Pi has the ~1 GiB of headroom it needs to
-  # avoid zram thrashing and a watchdog reset. The shed/restore lives in
-  # `nic.heavyShed` (lib/service-registration.nix), shared with the
-  # cachix-agent deploy.
-  nixosRebuildSafe = pkgs.writeShellApplication {
-    name = "nixos-rebuild-safe";
-    runtimeInputs = with pkgs; [ nixos-rebuild config.nic.heavyShed ];
-    # Absolute path to sudo: /run/wrappers/bin is missing from some callers'
-    # PATH (the claude-rc bridge among them), and only the wrapper is setuid.
-    text = ''exec heavy-shed /run/wrappers/bin/sudo nixos-rebuild "$@"'';
-  };
-
   # Fix nixos-raspberrypi bug: kernelboot-gen-builder.sh writes default/cmdline.txt
   # with a hardcoded nix store path instead of a profile symlink, causing boot failure
   # after nix GC deletes the store path (weekly GC).
@@ -324,8 +311,10 @@ in
   users.users.root.hashedPassword = "$6$2l0dzdBCwOb5a4c7$zKxnFzxOblPypU4F5c2PYMETNxedNyqvTA8u2KOpmpJ9Iwtw7B0.UMZFL7LNDlExhyjSbGWKQnEIn8ja2ZfTi.";
 
   users.users.${username} = {
+    # No "wheel": no sudo, no polkit admin. Agents run as this user, and root
+    # reads every agenix secret. Deploys come from CI (cachix-agent.nix).
     extraGroups = [
-      "wheel"
+      "systemd-journal"
       "video"
       "networkmanager"
       # r/w on /mnt/data/cloud for the Hermes agent (runs as this user); the
@@ -368,7 +357,6 @@ in
     wakeonlan
     sqlite  # SQL database for structured data storage
     blogwatcherPkg
-    nixosRebuildSafe
     hydroxide
     immich-cli
     dnsutils  # dig, nslookup
@@ -455,7 +443,8 @@ in
     # contain a space — use curl's `--option=value` syntax instead of
     # `--option value` so the whole UA token survives parsing.
     impure-env = "NIX_CURL_FLAGS=--user-agent=nixpkgs-fetchurl";
-    trusted-users = [ username ];
+    # A trusted user is root-equivalent for the daemon (see users.users above).
+    trusted-users = [ "root" ];
     # Keep the build-time closure of live GC roots (the running system) alive so
     # GC never evicts the expensive-to-rebuild inputs of our custom flake
     # packages — chiefly reactive-resume's pnpm-deps FOD, but also airtrail /

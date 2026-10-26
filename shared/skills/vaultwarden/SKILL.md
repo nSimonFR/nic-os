@@ -11,7 +11,7 @@ write-only toward the user: their personal items are out of reach.
 Pass the secret through stdin or a file, never argv:
 
 ```bash
-sudo cat /run/agenix/<name> | vault-agent add --name "<Service>" \
+<produce-secret> | vault-agent add --name "<Service>" \
   --username <user> --uri https://<host> --notes "<context>" --password-file -
 vault-agent add --name "<Service>" --username <user> --uri https://<host> --generate  # prints it
 ```

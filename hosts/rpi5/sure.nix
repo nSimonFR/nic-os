@@ -377,7 +377,7 @@ in
   nic.services.sure-root = {
     backup     = [ "none" ];
     backupNote = "stateless — an nginx vhost; the app's state is registered on nic.services.sure";
-    # nginx is infra that nixos-rebuild-safe deliberately leaves up, and Sure's
+    # nginx is infra that heavy-shed deliberately leaves up, and Sure's
     # own units are listed on nic.services.sure.
     heavyUnits = [ ];
 
