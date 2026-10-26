@@ -48,6 +48,9 @@ in
 
   systemd.services.memos-backup = {
     description = "Memos database backup";
+    # Waits out a journal-daily run still writing at 04:15, so tonight's
+    # entries are in the dump restic ships at 04:30 (ordered after this unit).
+    after = [ "journal-daily.service" ];
     serviceConfig = { Type = "oneshot"; User = "memos"; };
     script = ''
       set -euo pipefail
@@ -66,7 +69,8 @@ in
   };
 
   # One journal entry per day (workouts + Immich photos), after freereps-to-dawarich (03:30)
-  # has put the day's routes into Dawarich. Root for `runuser -u postgres`.
+  # has put the day's routes into Dawarich, and before memos-backup (04:15). Root
+  # for `runuser -u postgres`.
   systemd.services.journal-daily = {
     description = "Daily journal entries in Memos (workouts + photos)";
     after = [ "memos.service" "postgresql.service" "freereps-to-dawarich.service" ];
@@ -103,7 +107,7 @@ in
   };
   systemd.timers.journal-daily = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:30:00"; Persistent = true; };
+    timerConfig = { OnCalendar = "*-*-* 04:05:00"; Persistent = true; };
   };
 
   nic.services.memos = {
