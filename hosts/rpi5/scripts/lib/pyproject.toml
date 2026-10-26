@@ -26,6 +26,7 @@ dependencies = [ "psycopg2", "websocket-client", "cryptography" ]
 # Root commands approved from the phone (hosts/rpi5/rootreq.nix).
 rootreq = "nicos_scripts.security.rootreq:main"
 rootreq-broker = "nicos_scripts.security.rootreq:main_broker"
+sudo-totp-enroll = "nicos_scripts.security.sudo_totp:main"
 steam-to-ryot = "nicos_scripts.connectors.steam:main"
 spotify-to-ryot = "nicos_scripts.connectors.spotify:main"
 # Incremental: only views since each library's cursor; anime library -> AniList.

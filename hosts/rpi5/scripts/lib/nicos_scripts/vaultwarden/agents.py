@@ -7,6 +7,7 @@ were set up once by hand (PR#815).
   add      create a login; --update replaces one of the same name, keeping
            the old password in its history
   list     names, usernames and URIs — never a secret
+  purge    permanently delete an item already in the org's trash
   confirm  hand the org key to the owner once they accepted the invite
 """
 
@@ -89,7 +90,8 @@ def add(agent, item, update, dry_run, log):
         "name": agent.enc(item["name"]), "notes": agent.enc(item["notes"]),
         "favorite": False, "reprompt": 0, "passwordHistory": history or None,
         "login": {"username": agent.enc(item["username"]), "password": agent.enc(item["password"]),
-                  "uris": [{"uri": agent.enc(u), "match": None} for u in item["uris"]] or None},
+                  "uris": [{"uri": agent.enc(u), "match": None} for u in item["uris"]] or None,
+                  "totp": agent.enc(item.get("totp"))},
     }
     action = "updated" if old else "created"
     if dry_run:
@@ -100,6 +102,24 @@ def add(agent, item, update, dry_run, log):
     else:
         r = agent.call("POST", "/api/ciphers/create", {"cipher": body, "collectionIds": [agent.collection_id]})
     return {"action": action, "id": r["id"], "name": item["name"]}, 0
+
+
+def purge(agent, name, dry_run, log):
+    """Hard-delete the trashed items named `name`: the org keeps its trash 30
+    days, readable by every member. Refuses while a live one remains."""
+    named = [c for c in agent.sync.get("ciphers", [])
+             if agent.collection_id in (c.get("collectionIds") or []) and agent.dec(c["name"]) == name]
+    if any(not c.get("deletedDate") for c in named):
+        log(f"{name!r} is still in the vault: delete it first")
+        return 1
+    if not named:
+        log(f"nothing named {name!r} in the trash")
+        return 1
+    for c in named:
+        log(f"{'DRY_RUN would purge' if dry_run else 'purging'} {name!r} ({c['id']})")
+        if not dry_run:
+            agent.call("DELETE", f"/api/ciphers/{c['id']}")
+    return 0
 
 
 def listing(agent):
@@ -138,6 +158,7 @@ def parse(argv):
     pw.add_argument("--generate", nargs="?", type=int, const=24, metavar="LENGTH")
     a.add_argument("--update", action="store_true")
     sub.add_parser("list")
+    sub.add_parser("purge").add_argument("--name", required=True)
     sub.add_parser("confirm")
     return p.parse_args(argv)
 
@@ -165,6 +186,8 @@ def main(argv=None, env=None, opener=None, log=None, stdin=None, out=None):
             return 0
         if args.cmd == "confirm":
             return confirm(agent, cfg, cfg.dry_run, log)
+        if args.cmd == "purge":
+            return purge(agent, args.name, cfg.dry_run, log)
         item = {"name": args.name, "notes": args.notes, "username": args.username,
                 "password": password, "uris": args.uri}
         result, rc = add(agent, item, args.update, cfg.dry_run, log)
