@@ -119,6 +119,7 @@ in
     ./security-policy.nix
     # beast-wake + the four-hourly "beast is idling powered-on" backstop.
     ./beast-power.nix
+    ./agent-access.nix
     ./immich.nix
     ./immich-clip.nix
     ./immich-adopt.nix
