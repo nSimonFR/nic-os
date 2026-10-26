@@ -19,7 +19,10 @@ in
       sleep 300
       exit 1
     fi
+    # set -a: a line without `export` still reaches cachix.
+    set -a
     . ${cfg.credentialsFile}
+    set +a
 
     exec ${cfg.package}/bin/cachix deploy agent ${cfg.name} system
   '';
