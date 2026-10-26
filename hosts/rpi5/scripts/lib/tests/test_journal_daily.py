@@ -17,9 +17,10 @@ class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
     def __init__(self, workouts, points, place=None, areas=(("75013", "Paris"),), tracks=(), music=(), games=(), activity=(),
-                 flights=()):
+                 flights=(), screens=(), rides=(), steps=(), v1_games=(), v1_artists=()):
         self.workouts, self.points, self.place, self.areas = workouts, points, place, areas
-        self.flights = flights
+        self.flights, self.screens, self.rides, self.steps = flights, screens, rides, steps
+        self.v1_games, self.v1_artists = v1_games, v1_artists
         self.tracks, self.music, self.games, self.activity = tracks, music, games, activity
         self.sql = []
 
@@ -30,14 +31,24 @@ class FakePg:
             rows = []
         elif "FROM flight f" in sql:
             rows = self.flights
+        elif "-- ride history" in sql:
+            rows = self.rides
+        elif "-- step history" in sql:
+            rows = self.steps
         elif "FROM workouts" in sql:
             rows = self.workouts
         elif "FROM health_metrics" in sql:
             rows = self.activity
-        elif "FROM seen" in sql and "video_game" in sql:
-            rows = self.games
         elif "FROM seen" in sql:
+            rows = self.v1_games
+        elif "FROM metadata m" in sql:
+            rows = self.v1_artists
+        elif "'video-game'" in sql:
+            rows = self.games
+        elif "'music'" in sql:
             rows = self.music
+        elif "'movie'" in sql:
+            rows = self.screens
         elif "FROM tracks" in sql:
             rows = self.tracks
         elif "FROM users" in sql:
@@ -57,9 +68,21 @@ def ride(wid, start, km=9.5, minutes=37):
     return (wid, "Cycling", start, start + minutes * 60, km * 1000, minutes * 60, 300)
 
 
+LO19 = 1792375200  # 2026-10-19 04:00 Europe/Paris
+
+
+def play(title, artist, seconds, h=1, track="t"):
+    """A Ryot V11 music row, `h` hours into Oct 19."""
+    return (title, artist, seconds, LO19 + h * 3600, track)
+
+
+def game(title, seconds):
+    """A Ryot V11 playtime push for Oct 19 (04:50 the next morning)."""
+    return (LO19 + 86400 + 3000, title, seconds)
+
+
 def cfg(tmp_path, **kw):
     base = dict(state_path=str(tmp_path / "state.json"), dry_run=False, day="2026-10-19",
-                spotify_cursor=str(tmp_path / "no-cursor.json"),
                 arkose_sessions=str(tmp_path / "no-arkose.json"))  # never the host's real files
     base.update(kw)
     return wm.Config(**base)
@@ -520,8 +543,8 @@ def test_trip_only_day_gets_an_entry_with_its_trips(tmp_path):
 
 
 def test_music_section_sits_between_photos_and_work(tmp_path):
-    plays = [("Club", "Lomepal", 250), ("Starlight", "Muse", 240), ("Trop beau", "Lomepal", 244),
-             ("Un peu de sang", "Lomepal", 305)]
+    plays = [play("Club", "Lomepal", 250), play("Starlight", "Muse", 240), play("Trop beau", "Lomepal", 244),
+             play("Un peu de sang", "Lomepal", 305)]
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], music=plays)
     op = memos_opener()
     wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
@@ -533,7 +556,7 @@ def test_music_section_sits_between_photos_and_work(tmp_path):
 
 def test_music_alone_makes_no_entry(tmp_path):
     op = memos_opener()
-    pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
+    pg = FakePg([], [], music=[play("Club", "Lomepal", 250)])
     assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
                           date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
 
@@ -636,7 +659,7 @@ def test_collage_grid_goes_four_wide_past_nine():
 
 def test_games_section_after_music(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")],
-                music=[("Club", "Lomepal", 250)], games=[("Stardew Valley", 6000), ("Hades", 900)])
+                music=[play("Club", "Lomepal", 250)], games=[game("Stardew Valley", 6000), game("Hades", 900)])
     op = memos_opener()
     wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
                    lambda m: None, no_render, str(tmp_path))
@@ -645,12 +668,12 @@ def test_games_section_after_music(tmp_path):
             "\n\n___________") in text and text.index("### 🎵 Musique") < text.index("### 🎮 Jeux")
     assert text.rstrip().endswith("#bike #music #gaming")
     sql = next(s for s in pg.sql if "video_game" in s)
-    lo, hi = wm.day_bounds(date(2026, 10, 19))
-    assert f"to_timestamp({lo + 86400})" in sql and f"to_timestamp({hi + 86400})" in sql
+    _, hi = wm.day_bounds(date(2026, 10, 19))
+    assert f"to_timestamp({hi + 86400})" in sql
 
 
 def test_activity_one_line_before_the_rides(tmp_path):
-    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], games=[("Hades", 900)],
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")], games=[game("Hades", 900)],
                 activity=[("step_count", 5940.4), ("distance_walking_running", 4376.1),
                           ("flights_climbed", 46.5), ("active_energy", 256.0)])
     op = memos_opener()
@@ -702,28 +725,29 @@ def test_project_notes_wait_for_the_day_to_end(tmp_path):
     assert wm.day_notes(c, run, {}, date(2026, 10, 19), print, now=wm.day_bounds(date(2026, 10, 19))[1] - 1) == []
 
 
-def test_music_counts_replays_from_the_spotify_cursor(tmp_path):
+def test_music_keeps_replays_and_fills_missing_artists_from_v1(tmp_path):
     lo, _ = wm.day_bounds(date(2026, 10, 19))
-    cursor = tmp_path / "cursor.json"
-    ms = lambda h: int((lo + h * 3600) * 1000)
-    cursor.write_text(json.dumps({"pushed": [f"aaa@{ms(1)}", f"bbb@{ms(2)}", f"aaa@{ms(3)}",
-                                              f"aaa@{ms(30)}"]}))  # last one is the next day
-
-    class Pg(FakePg):
-        def __call__(self, cmd):
-            sql = cmd[cmd.index("-c") + 1]
-            if "m.identifier IN ('aaa', 'bbb')" in sql:
-                self.sql.append(sql)
-                return "aaa\x1fClub\x1fLomepal\x1f250\nbbb\x1fTrop beau\x1fLomepal\x1f244"
-            return super().__call__(cmd)
-    music = wm.day_music(cfg(tmp_path, spotify_cursor=str(cursor)), Pg([], []), date(2026, 10, 19), print)
+    pg = FakePg([], [], music=[("Club", "Lomepal", 250, lo + 3600, "aaa"),
+                               ("Trop beau", "", 244, lo + 7200, "bbb"),
+                               ("Club", "Lomepal", 250, lo + 9000, "aaa")],
+                v1_artists=[("bbb", "Lomepal")])
+    music = wm.day_music(cfg(tmp_path), pg, date(2026, 10, 19), print)
     assert music == ("3 titres · 12 min", ["- **Lomepal** · Club (2), Trop beau"])
 
 
-def test_music_falls_back_to_ryot_seens_without_a_cursor(tmp_path):
-    pg = FakePg([], [], music=[("Club", "Lomepal", 250)])
-    music = wm.day_music(cfg(tmp_path, spotify_cursor=str(tmp_path / "none.json")), pg, date(2026, 10, 19), print)
-    assert music == ("1 titre · 4 min", ["- **Lomepal** · Club"])
+def test_music_marks_an_artist_heard_three_days_running(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 10, 19))
+    pg = FakePg([], [], music=[("Club", "Lomepal", 250, lo - d * 86400 + 3600, "aaa") for d in (2, 1, 0)])
+    music = wm.day_music(cfg(tmp_path), pg, date(2026, 10, 19), print)
+    assert music == ("1 titre · 4 min", ["- **Lomepal** · Club · 🔥 3ᵉ jour d'affilée"])
+
+
+def test_games_merge_v11_and_v1_playtime_a_day_late(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 10, 19))
+    push = lo + 86400 + 3000  # 04:50 the next morning
+    pg = FakePg([], [], games=[(push, "Stardew Valley", 3600)], v1_games=[(push, "Hades", 600)])
+    assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
+        "1 h 10", ["- **Stardew Valley** · 1 h 00", "- **Hades** · 10 min"])
 
 
 def flight_row(fid, date_, dep, arr, frm=("CDG", "Paris (Roissy-en-France, Val-d'Oise)", "FR", 49.0097, 2.5479, "Europe/Paris"),

@@ -116,6 +116,26 @@ def test_music_section_top_artists_tracks_and_rest():
     assert lines[1:] == ["- **B** · B1", "- **Artiste inconnu** · X", "- *et 5 autres artistes*"]
 
 
+def test_screen_section_films_and_episode_runs():
+    S = js.Screen
+    t = LO.timestamp()
+    screens = [S(t + 9 * 3600, "show-episode", "YOU WERE MY HERO", "INVINCIBLE", 3, 4, minutes=50),
+               S(t + 15 * 3600, "show-episode", "A", "INVINCIBLE", 3, 5, minutes=49),
+               S(t + 16 * 3600, "show-episode", "B", "INVINCIBLE", 3, 6, minutes=55),
+               S(t + 19 * 3600, "movie", "Amélie", year="2001", minutes=122)]
+    head, lines = js.screen_section(screens, TZ)
+    assert head == "1 film · 3 épisodes · 4 h 36"
+    assert lines == ["- **13:00** 📺 **Invincible** · S03E04 · You Were My Hero",  # gap > 3 h: own line
+                     "- **19:00-20:00** 📺 **Invincible** · S03E05-E06",
+                     "- **23:00** 🎬 **Amélie** (2001)"]
+
+
+def test_game_sessions_sum_per_game():
+    assert js.game_sessions([(1, "A", 60), (2, "B", 600), (3, "A", 60)]) == [("B", 600), ("A", 120)]
+    assert js.game_section([("A", 3600)], {"A": "🔥 3ᵉ jour d'affilée"}) == (
+        "1 h 00", ["- **A** · 1 h 00 · 🔥 3ᵉ jour d'affilée"])
+
+
 def test_activity_section_needs_steps_and_skips_empty_lines():
     assert js.activity_section({}) is None
     assert js.activity_section({"step_count": 12345.6, "distance_walking_running": 50}) == "12 346 pas"
