@@ -85,6 +85,10 @@ in
         "GIT_BIN=${pkgs.git}/bin/git"
         # Side-project notes: `entire dispatch --local` as nsimon, one agent call per active day.
         "JOURNAL_DISPATCH_REPOS=/home/nsimon/nic-os"
+        # The single "Nico's Family" tree (multi-tree mode keys it by id); I0009 = me.
+        "GRAMPS_DB=/var/lib/gramps-web/data/grampsdb/6a51098a/sqlite.db"
+        "GRAMPS_HOME_PERSON=I0009"
+        "GRAMPS_URL=${config.services.gramps-web.baseUrl}"
       ];
       TimeoutStartSec = "45min";
     };
