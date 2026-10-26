@@ -36,7 +36,7 @@ jobs:
       TELEGRAM_CHAT_ID: "82389391"
     steps:
       - uses: actions/checkout@v7
-      - uses: DeterminateSystems/nix-installer-action@v22
+      - uses: DeterminateSystems/nix-installer-action@v23
 
       - name: Instantiate
         id: drv
