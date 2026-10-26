@@ -39,6 +39,19 @@ def test_visible_drops_links_collapsed_blocks_past_sections_and_tags():
     assert "#photos" not in v and "### 💼 Travail" in v
 
 
+def test_visible_drops_the_open_in_dawarich_line():
+    assert "Voir" not in js.visible("### 🚲 Vélo - 1 trajet\n\n- a\n\n[Voir la journée dans Dawarich](https://d)\n")
+
+
+def test_a_new_prompt_means_a_new_sentence():
+    before = js.source_hash(MEMO)
+    js.PROMPT, saved = js.PROMPT + " ", js.PROMPT
+    try:
+        assert js.source_hash(MEMO) != before
+    finally:
+        js.PROMPT = saved
+
+
 def test_summarize_sends_the_visible_text_and_cleans_the_answer():
     op = FakeOpener([json_reply({"choices": [{"message": {"content": " *« Une journée à Rome. »* \n"}}]})])
     assert js.summarize("http://gate", "gpt-6-luna", MEMO, op) == "Une journée à Rome."
