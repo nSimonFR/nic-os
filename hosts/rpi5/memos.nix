@@ -7,7 +7,7 @@
 # nixpkgs module; package from unstable because release-26.05 ships 0.25.3,
 # older than MCP (0.27) and the Calendar/Map pages (0.31). Always-on, no socket
 # activation: a Go binary at tens of MB, and MCP clients would pin it awake.
-{ config, pkgs, unstablePkgs, ... }:
+{ config, pkgs, unstablePkgs, tinyLlmGateUrl, ... }:
 let
   internalPort = 13356;
   dataDir = "/var/lib/memos";
@@ -94,6 +94,9 @@ in
         "HA_DB=/var/lib/hass/home-assistant_v2.db"
         # Dawarich's Immich key reads assets only; memories and the memory-create job need this one.
         "IMMICH_ADMIN_KEY_FILE=${config.age.secrets.immich-api-key.path}"
+        # One-line summary on top, by gpt-6-luna (cloud, ChatGPT plan): it sees the
+        # visible text only — no links, no collapsed blocks, no family history.
+        "TINY_LLM_GATE_URL=${tinyLlmGateUrl}"
       ];
       TimeoutStartSec = "45min";
     };

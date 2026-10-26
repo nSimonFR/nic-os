@@ -810,3 +810,24 @@ def test_the_day_ends_with_work_memories_home_genealogy():
                       energy=("1,0 kWh", []), genealogy=["- g"], music=("1 titre", ["- t"]))
     heads = [l.split(" - ")[0] for l in text.splitlines() if l.startswith("### ")]
     assert heads == ["### 🎵 Musique", "### 💼 Travail", "### 🕰 Souvenirs", "### 🏠 Maison", "### 🌳 Généalogie"]
+
+
+def test_summary_on_top_cached_and_retried(tmp_path):
+    calls = []
+
+    def summary(text):
+        calls.append(text)
+        return None if len(calls) == 1 else "Une sortie à vélo dans Paris."
+
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    state, lines = {}, []
+    run = lambda op: wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), state,
+                                    date(2026, 10, 19), 1, lines.append, no_render, str(tmp_path), summary_fn=summary)
+    run(memos_opener())  # gate down: memo without summary, retried next run
+    assert any("no summary this run" in l for l in lines) and not state["2026-10-19"]["text"].startswith("*")
+    op = FakeOpener([json_reply({"name": "attachments/A"}), json_reply({}), json_reply({}), json_reply({})])
+    run(op)
+    assert state["2026-10-19"]["text"].startswith("*Une sortie à vélo dans Paris.*\n\n")
+    state["2026-10-19"]["sig"] = "stale"  # same content: the cached sentence, no new call
+    run(FakeOpener([json_reply({"name": "attachments/A"}), json_reply({}), json_reply({}), json_reply({})]))
+    assert len(calls) == 2

@@ -68,6 +68,7 @@ from .immich_dawarich import immich_settings
 from . import journal_family as fam
 from . import journal_flights as fl
 from . import journal_home as home
+from . import journal_summary as summ
 from . import journal_sources as src
 
 TAG = "journal-daily"
@@ -129,6 +130,8 @@ class Config:
     airtrail_url: str = ""
     ha_db: str = ""
     immich_admin_key_file: str = ""
+    gate_url: str = ""
+    summary_model: str = "gpt-6-luna"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -159,6 +162,8 @@ class Config:
             airtrail_url=env_str("AIRTRAIL_URL", "", env).rstrip("/"),
             ha_db=env_str("HA_DB", "", env),
             immich_admin_key_file=env_str("IMMICH_ADMIN_KEY_FILE", "", env),
+            gate_url=env_str("TINY_LLM_GATE_URL", "", env).rstrip("/"),
+            summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -434,7 +439,8 @@ def photo_lines(shots):
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
             memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None):
-    """Memo markdown, in French: the weather line, agenda, photos, then one
+    """Memo markdown, in French (journal_day may prefix a one-line summary):
+    the weather line, agenda, photos, then one
     `###` section per source; last come work, memories, home, genealogy.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
     same per trip that is not a workout; `photos` = the
@@ -1125,7 +1131,7 @@ def day_music(cfg, run, day, log):
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
                 collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None,
-                pass_fn=render_boarding_passes):
+                pass_fn=render_boarding_passes, summary_fn=None):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -1189,6 +1195,15 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
                    memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
                    fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy)
+    summary, src_hash = None, summ.source_hash(text)
+    if summary_fn:
+        prev = state.get(key, {})
+        summary = prev.get("summary") if prev.get("summary_src") == src_hash else summary_fn(text)
+        if summary:
+            text = f"*{summary}*\n\n{text}"
+        else:  # gate down: a later run retries, as the signature won't match
+            log(f"{key}: no summary this run")
+            sig = f"{sig}|no-summary"
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -1278,7 +1293,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             name = prev["memo"]
     if name is None:
         name = memos.create(text, atts, when, location or None)
-    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts}
+    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts,
+                  **({"summary": summary, "summary_src": src_hash} if summary else {})}
     log(f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)")
     return name
 
@@ -1320,6 +1336,8 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                             render_fn or render, tmp, immich,
                             collage_fn=functools.partial(render_collage, font_path=cfg.font),
                             pass_fn=functools.partial(render_boarding_passes, font_path=cfg.font),
+                            summary_fn=(lambda t: summ.summarize(cfg.gate_url, cfg.summary_model, t, opener))
+                            if cfg.gate_url else None,
                             weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
                             tree=tree)
                 if cfg.state_path and not cfg.dry_run:
