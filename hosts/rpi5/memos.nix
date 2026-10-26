@@ -96,6 +96,10 @@ in
         "JOURNAL_FONT=${pkgs.inter}/share/fonts/truetype/InterVariable.ttf"
         "AIRTRAIL_URL=${config.nic.services.airtrail.public.publicUrl}"
         "HA_DB=/var/lib/hass/home-assistant_v2.db"
+        # Sure accounts for 💸 Dépenses; the joint one gets its own total.
+        # Quoted: systemd splits an Environment= line on spaces.
+        "\"JOURNAL_SPEND_ACCOUNTS=SG - Courant,Sumeria - Current,Swile\""
+        "JOURNAL_JOINT_ACCOUNTS=Burgieland"
         # Dawarich's Immich key reads assets only; memories and the memory-create job need this one.
         "IMMICH_ADMIN_KEY_FILE=${config.age.secrets.immich-api-key.path}"
         # One-line summary on top, by gpt-6-luna (cloud, ChatGPT plan): it sees the
