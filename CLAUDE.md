@@ -76,3 +76,8 @@ path each SKILL.md documents, so their interface is already a hand-runnable argv
 them there.
 
 Shell: prefer `writeShellApplication` (runs shellcheck) over `writeShellScript`.
+
+<!-- entire-agent:begin -->
+Read .entire/agent-guide.md for this repository's workflow, source inspection, and verification guidance.
+@.entire/agent-guide.md
+<!-- entire-agent:end -->

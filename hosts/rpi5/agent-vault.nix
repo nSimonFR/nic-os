@@ -129,7 +129,8 @@ in
       AGENT_VAULT_SERVICES_FILE = "${servicesFile}";
       AGENT_VAULT_OUT_DIR = hermesDir;
       # Telegram is Hermes' lifeline; .ts.net covers Aperture (the LLM path).
-      AGENT_VAULT_NO_PROXY = "api.telegram.org,.ts.net";
+      # Entire holds its own login, and its Go binaries reject the vault's CA.
+      AGENT_VAULT_NO_PROXY = "api.telegram.org,.ts.net,.entire.io,.entire.com";
       SYSTEM_CA_BUNDLE = "/etc/ssl/certs/ca-certificates.crt";
       AGENT_VAULT_BOOTSTRAP_APPLY = "1";
     };

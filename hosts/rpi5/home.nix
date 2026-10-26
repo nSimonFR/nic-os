@@ -26,6 +26,7 @@ let
 in
 {
   imports = [
+    ./entire-brain.nix
     ./hermes/hermes.nix
     ./mail.nix
   ];
