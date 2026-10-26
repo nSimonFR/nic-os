@@ -46,6 +46,7 @@ import base64
 import hashlib
 import json
 import math
+import sqlite3
 import subprocess
 from collections import Counter
 import sys
@@ -61,6 +62,7 @@ from ..pg import psql_rows
 from ..secrets import env_int, env_str, read_secret
 from ..state import load_json, save_json
 from .immich_dawarich import immich_settings
+from . import journal_family as fam
 from . import journal_sources as src
 
 TAG = "journal-daily"
@@ -112,6 +114,10 @@ class Config:
     git: str = "git"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
     spotify_cursor: str = "/var/lib/ryot-connectors/spotify-cursor.json"
+    birthday_calendars: tuple = ("Contact birthdays",)
+    gramps_db: str = ""
+    gramps_home: str = ""
+    gramps_url: str = ""
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -133,6 +139,10 @@ class Config:
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
             spotify_cursor=env_str("SPOTIFY_CURSOR", "/var/lib/ryot-connectors/spotify-cursor.json", env),
+            birthday_calendars=_names(env_str("JOURNAL_BIRTHDAY_CALENDARS", "Contact birthdays", env)),
+            gramps_db=env_str("GRAMPS_DB", "", env),
+            gramps_home=env_str("GRAMPS_HOME_PERSON", "", env),
+            gramps_url=env_str("GRAMPS_URL", "", env).rstrip("/"),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -400,7 +410,7 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
-            memories=()):
+            memories=(), birthdays=(), genealogy=()):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -412,12 +422,16 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     `climbing` and `games` = the same from climbing_section / game_section;
     `activity` = the heading suffix from activity_section; `notes` = side-project
     notes (journal_sources.dispatch_notes), collapsed in their own section;
-    `memories` = lines from memory_lines."""
+    `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
+    two lists from journal_family.family_sections."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
     if agenda:
         sections.append(["### 📅 Agenda", "", *agenda])
+    if birthdays:
+        sections.append(["### 🎂 Anniversaires", "", *birthdays])
+        tags.append("birthday")
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
@@ -428,6 +442,9 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if memories:
         sections.append(["### 🕰 Souvenirs", "", *memories])
         tags.append("memories")
+    if genealogy:
+        sections.append(["### 🌳 Généalogie", "", *genealogy])
+        tags.append("genealogy")
     if activity:
         sections.append([f"### 🚶 Activité - {activity}"])
     if ws:
@@ -792,6 +809,19 @@ def day_calendar(cfg, run, day, log):
         return [], None
 
 
+def day_family(cfg, run, tree, day, log):
+    """(birthday lines, genealogy lines); contacts and tree each optional."""
+    contacts = []
+    if cfg.birthday_calendars:
+        lo, hi = day_bounds(day)
+        try:
+            contacts = fam.contact_birthdays(src.calendar_blobs(
+                run, cfg.birthday_calendars, lo, hi, cfg.nextcloud_db, cfg.runuser, cfg.psql), day)
+        except (OSError, ValueError, ImportError, subprocess.CalledProcessError) as e:
+            log(f"{day}: contact birthdays unavailable ({e})")
+    return fam.family_sections(contacts, tree, day, cfg.gramps_url)
+
+
 def day_climbing(cfg, day, log):
     """Arkose sessions started that day; [] if arkose-sync has no store."""
     try:
@@ -867,7 +897,7 @@ def day_music(cfg, run, day, log):
 
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None):
+                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -890,6 +920,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             memories = immich.memories(day)
         except (OSError, ValueError) as e:
             log(f"{key}: Immich unavailable, no memories this run ({e})")
+    birthdays, genealogy = day_family(cfg, run, tree, day, log)
     music = day_music(cfg, run, day, log)
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
@@ -907,7 +938,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
-                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories]])
+                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories],
+                     birthdays, genealogy])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -924,7 +956,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
-                   memory_lines(day, memories, immich.link) if memories else ())
+                   memory_lines(day, memories, immich.link) if memories else (), birthdays, genealogy)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -1029,11 +1061,18 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
         except RuntimeError as e:
             log(f"no photos: {e}")
             immich = None
+        tree = None
+        if cfg.gramps_db:
+            try:
+                tree = fam.Tree.load(cfg.gramps_db, cfg.gramps_home)
+            except (OSError, ValueError, KeyError, sqlite3.Error) as e:
+                log(f"no family tree: {e}")
         with tempfile.TemporaryDirectory() as tmp:
             for day in target_days(cfg, today):
                 journal_day(cfg, run, memos, state, day, uid, log,
                             render_fn or render, tmp, immich,
-                            weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener))
+                            weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
+                            tree=tree)
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:
