@@ -68,8 +68,9 @@ in
   # A file bind needs an existing file mountpoint, else systemd mkdirs one.
   systemd.tmpfiles.rules = [
     "d /var/lib/agent-db 0750 root users -"
-    # memos is 0600; the others are already world-readable.
-    "a+ ${sqliteDbs.memos} - - - - u:nsimon:r"
+    # memos is 0600 (the others are world-readable); with group ---, the mask
+    # must be set too or the entry is effective ---.
+    "a+ ${sqliteDbs.memos} - - - - u:nsimon:r,m::r"
   ] ++ lib.mapAttrsToList (n: _: "f /var/lib/agent-db/${n}.db 0440 root users -") sqliteDbs;
 
   # Not in local-fs.target, so ordering after tmpfiles (boot and switch) can't cycle.
