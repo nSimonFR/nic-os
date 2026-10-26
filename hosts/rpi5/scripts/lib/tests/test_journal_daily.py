@@ -543,11 +543,13 @@ def test_arkose_store_missing_is_silent_corrupt_is_logged(tmp_path):
     assert "climbing unavailable" in lines[0]
 
 
-def test_climbing_mosaic_of_topped_boulders_hardest_first(tmp_path):
+def test_climbing_mosaic_tops_then_retops_then_unsent(tmp_path):
     def b(bid, label, share):
         return {"_id": bid, "label": label, "picture": {"id": "i" + bid, "share": share}}
-    sess = {**SESSION, "boulders": [b("g1", 4, "S1"), b("b1", 5, "S2"), b("np", 4, None) | {"picture": {}}],
-            "retopBoulders": [b("g2", 4, None)], "triedBoulders": [b("t", 5, "ST")]}
+    sess = {**SESSION, "boulders": [b("g1", 4, "S1"), b("b1", 5, "S2") | {"flashed": True},
+                                    b("np", 4, None) | {"picture": {}}],
+            "retopBoulders": [b("g2", 4, None) | {"flashed": True}],  # the first send's flash
+            "triedBoulders": [b("t", 5, "ST")]}
     store = tmp_path / "sessions.json"
     store.write_text(json.dumps({"sessions": {"s1": sess}}))
     op = FakeOpener([json_reply({"name": "attachments/C"}), json_reply({"name": "memos/M"}),
@@ -566,10 +568,40 @@ def test_climbing_mosaic_of_topped_boulders_hardest_first(tmp_path):
                    fetch_fn=fetch)
     s3 = "https://socialboulder.s3-eu-west-1.amazonaws.com"
     assert fetched == [f"{s3}/boulderPicsShare/S2.jpg", f"{s3}/boulderPicsShare/S1.jpg",
-                       f"{s3}/800/bouldersPics/ig2.jpg"]
-    assert mosaics == [[("bleu", 1), ("vert", 1)]]
+                       f"{s3}/800/bouldersPics/ig2.jpg", f"{s3}/boulderPicsShare/ST.jpg"]
+    assert mosaics == [[("bleu", 1, "flash"), ("vert", 1, "retop"), ("bleu", 1, "tried")]]
     assert op.body_of(0)["filename"] == "climbing-2026-10-19.jpg"
     assert "boulder picture unavailable" in lines[0]
+
+
+def test_collage_marks_flash_gold_and_unsent_grey(tmp_path):
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), (0, 0, 255)).save(buf, "JPEG")
+    out = tmp_path / "c.jpg"
+    wm.render_collage([buf.getvalue()] * 3, [("bleu", 1, "flash"), ("bleu", 1, ""), ("bleu", 1, "tried")],
+                      str(out), tile=200, gap=4)
+    sheet = Image.open(out).convert("RGB")
+    r, g, b = sheet.getpixel((2, 100))  # flash: gold frame
+    assert r > 200 and g > 150 and b < 120
+    assert sheet.getpixel((304, 100))[2] > 200  # plain top: untouched blue
+    r, g, b = sheet.getpixel((508, 60))  # unsent: grey
+    assert abs(r - b) < 20 and b < 100
+
+
+def test_collage_survives_a_missing_font(tmp_path):
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), "white").save(buf, "JPEG")
+    wm.render_collage([buf.getvalue()], [("bleu", 1, "tried")], str(tmp_path / "c.jpg"),
+                      tile=100, font_path=str(tmp_path / "nope.ttf"))
+    assert Image.open(tmp_path / "c.jpg").size == (100, 100)
 
 
 def test_collage_grid_goes_four_wide_past_nine():
