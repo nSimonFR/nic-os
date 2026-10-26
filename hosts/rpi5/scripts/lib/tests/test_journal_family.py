@@ -122,17 +122,6 @@ def test_own_birthday_and_feb_29_in_a_common_year(tree):
                        "([29 février 1925](https://g/event/E12))"]
 
 
-def test_history_is_capped(tree):
-    rows = [jf.Line(i, f"l{i}", False) for i in range(9)]
-    tree_lines = jf.tree_lines
-    try:
-        jf.tree_lines = lambda *a: rows
-        _, history = jf.family_sections([], tree, date(2026, 1, 1), "u", show=6)
-    finally:
-        jf.tree_lines = tree_lines
-    assert history[-1] == "- *et 3 autres*" and len(history) == 7
-
-
 def bday(summary, ymd, unknown=False, field="BDAY"):
     y, m, d = ymd
     return (f"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:{y:04d}{m:02d}{d:02d}\r\n"

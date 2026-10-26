@@ -51,6 +51,7 @@ import sqlite3
 import subprocess
 from collections import Counter
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -81,7 +82,7 @@ COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 DAY_START_H = 4
 CLIMB_TILES_MAX = 16
 FLASH_GOLD = (255, 200, 40)
-MEMORY_YEARS = 20
+MEMORY_JOB_WAIT_S = 10  # the generation took ~5 s on Oct 26
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
     "Cycling": ("🚲", "Vélo", "trajet", "bike"),
@@ -127,6 +128,7 @@ class Config:
     airtrail_db: str = "airtrail"
     airtrail_url: str = ""
     ha_db: str = ""
+    immich_admin_key_file: str = ""
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -156,6 +158,7 @@ class Config:
             airtrail_db=env_str("AIRTRAIL_DB", "airtrail", env),
             airtrail_url=env_str("AIRTRAIL_URL", "", env).rstrip("/"),
             ha_db=env_str("HA_DB", "", env),
+            immich_admin_key_file=env_str("IMMICH_ADMIN_KEY_FILE", "", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -470,7 +473,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append(["### 🕰 Souvenirs", "", *memories])
         tags.append("memories")
     if genealogy:
-        sections.append(["### 🌳 Généalogie", "", *genealogy])
+        n = len(genealogy)
+        head = f"### 🌳 Généalogie - {n} événement{'s' if n > 1 else ''}"
+        sections.append([head, "", *genealogy] if n <= 3 else
+                        [head, "", "<details>", "<summary>Ce jour-là</summary>", "", *genealogy, "", "</details>"])
         tags.append("genealogy")
     if activity:
         sections.append([f"### 🚶 Activité - {activity}"])
@@ -509,8 +515,10 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         tags.append("work")
     if energy:
         head, lines = energy
-        sections.append([f"### ⚡ Électricité - {head}", *([""] + lines if lines else [])])
-        tags.append("energy")
+        sections.append([f"### 🏠 Maison - ⚡ {head}",
+                         *(["", "<details>", "<summary>Électricité</summary>", "", *lines, "", "</details>"]
+                           if lines else [])])
+        tags.append("home")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
@@ -738,26 +746,46 @@ def render_boarding_passes(flights, path, font_path="", map_fn=flight_map):
 
 
 class Immich:
-    def __init__(self, url, key, opener=None):
-        self.url, self.key, self.opener = url, key, opener
+    def __init__(self, url, key, opener=None, admin_key=""):
+        # `key` (Dawarich's) reads assets; memories and jobs need `admin_key`.
+        self.url, self.key, self.opener, self.admin_key = url, key, opener, admin_key
 
     def day(self, day):
         """The day's timeline images, oldest first."""
         return self.between(*day_bounds(day))
 
-    def memories(self, day, years=MEMORY_YEARS):
-        """[(year, images)] for the same date in past years, newest first;
-        screenshots dropped. Search, not /api/memories: the key lacks memory.read."""
+    def create_memories(self):
+        """Queue Immich's memory generation (today ± 3 days). Its 03:00 cron
+        misses while the socket-activated server sleeps: none after Oct 14 2026."""
+        req = urllib.request.Request(
+            f"{self.url}/api/jobs", method="POST", data=json.dumps({"name": "memory-create"}).encode(),
+            headers={"x-api-key": self.admin_key, "Content-Type": "application/json"})
+        with (self.opener or urllib.request.urlopen)(req, timeout=180):
+            pass
+
+    def memories(self, day):
+        """[(year, images, memory id)] of Immich's "on this day" memories for
+        `day`, newest year first; screenshots dropped."""
+        req = urllib.request.Request(f"{self.url}/api/memories?for={day.isoformat()}",
+                                     headers={"x-api-key": self.admin_key})
         out = []
-        for y in range(day.year - 1, day.year - 1 - years, -1):
-            try:
-                past = day.replace(year=y)
-            except ValueError:  # Feb 29
-                continue
-            shots = [a for a in self.day(past) if not _screenshot(a)]
-            if shots:
-                out.append((y, shots))
-        return out
+        for m in http_json(req, timeout=180, opener=self.opener):
+            year = (m.get("data") or {}).get("year")
+            shots = [a for a in m.get("assets") or [] if not _screenshot(a)]
+            if m.get("type") == "on_this_day" and year and shots and not m.get("isTrashed"):
+                out.append((int(year), shots, m["id"]))
+        return sorted(out, key=lambda x: -x[0])
+
+    def city(self, asset_id):
+        """The asset's EXIF city: the memories API sends assets without EXIF."""
+        req = urllib.request.Request(f"{self.url}/api/assets/{asset_id}", headers={"x-api-key": self.key})
+        try:
+            return (http_json(req, timeout=60, opener=self.opener).get("exifInfo") or {}).get("city") or ""
+        except (OSError, ValueError):
+            return ""
+
+    def memory_link(self, memory_id):
+        return f"{self.url}/memories/{memory_id}"
 
     def between(self, lo, hi):
         iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -802,14 +830,17 @@ def _screenshot(asset):
             and not (asset.get("exifInfo") or {}).get("make"))
 
 
-def memory_lines(day, memories, link):
+def memory_lines(day, memories, link, city=None):
     """`- [Il y a 4 ans · 2022](url) · Bordeaux · 6 photos`, newest year first;
-    `link(lo, hi)` opens that day's photos in Immich."""
+    `link(memory id)` opens the memory in Immich, `city(asset id)` names a
+    place when the assets carry no EXIF."""
     lines = []
-    for y, shots in memories:
+    for y, shots, mid in memories:
         ago = day.year - y
         cities = Counter(c for c in ((a.get("exifInfo") or {}).get("city") for a in shots) if c)
-        bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(*day_bounds(day.replace(year=y)))})"]
+        if not cities and city:
+            cities = Counter(c for c in [city(shots[len(shots) // 2]["id"])] if c)
+        bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(mid)})"]
         if cities:
             bits.append(cities.most_common(1)[0][0])
         bits.append(f"{len(shots)} photo{'s' if len(shots) > 1 else ''}")
@@ -1113,7 +1144,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     memories = []
-    if immich:
+    if immich and immich.admin_key:
         try:
             memories = immich.memories(day)
         except (OSError, ValueError) as e:
@@ -1137,7 +1168,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
-                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories],
+                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m, _ in memories],
                      birthdays, genealogy, [f.id for f in flights], energy])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
@@ -1156,7 +1187,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
-                   memory_lines(day, memories, immich.search_link) if memories else (), birthdays, genealogy,
+                   memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
                    fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
@@ -1252,7 +1283,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     return name
 
 
-def main(env=None, run=None, opener=None, render_fn=None, today=None):
+def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time.sleep):
     import tempfile
 
     cfg = Config.from_env(env)
@@ -1266,7 +1297,14 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
         state = load_json(cfg.state_path, {}) if cfg.state_path else {}
         uid = dawarich_user(cfg, run)
         try:
-            immich = Immich(*immich_settings(cfg, run, uid), opener)
+            immich = Immich(*immich_settings(cfg, run, uid), opener,
+                            read_secret(cfg.immich_admin_key_file) if cfg.immich_admin_key_file else "")
+            if immich.admin_key:
+                try:
+                    immich.create_memories()
+                    sleep(MEMORY_JOB_WAIT_S)
+                except OSError as e:
+                    log(f"memory generation not queued ({e})")
         except RuntimeError as e:
             log(f"no photos: {e}")
             immich = None
