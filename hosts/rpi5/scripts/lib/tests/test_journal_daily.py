@@ -803,3 +803,10 @@ def test_home_section_collapses_the_electricity_detail():
     assert text == ("### 🏠 Maison - ⚡ 25,1 kWh · 3,15 €\n\n<details>\n<summary>Électricité</summary>\n\n"
                     "- 🔥 heat\n\n</details>\n\n___________\n\n#home\n")
     assert wm.content("2026-10-19", [], [], "w", energy=("1,0 kWh", [])).startswith("### 🏠 Maison - ⚡ 1,0 kWh\n\n___")
+
+
+def test_the_day_ends_with_work_memories_home_genealogy():
+    text = wm.content("2026-10-19", [], [], "w", work=(1, 30, 2, []), memories=["- m"],
+                      energy=("1,0 kWh", []), genealogy=["- g"], music=("1 titre", ["- t"]))
+    heads = [l.split(" - ")[0] for l in text.splitlines() if l.startswith("### ")]
+    assert heads == ["### 🎵 Musique", "### 💼 Travail", "### 🕰 Souvenirs", "### 🏠 Maison", "### 🌳 Généalogie"]
