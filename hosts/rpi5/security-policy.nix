@@ -68,9 +68,11 @@ in
     # Agents run as nsimon and Agent Vault's keys are root-only, so nsimon must
     # have no path to root.
     {
+      # extraRules always holds NixOS's own %wheel rule, so look for nsimon by name.
       assertion = !(lib.elem "wheel" config.users.users.nsimon.extraGroups)
+        && !(lib.elem "nsimon" config.users.groups.wheel.members)
         && !(lib.elem "nsimon" config.nix.settings.trusted-users)
-        && config.security.sudo.extraRules == [ ];
+        && !(lib.any (r: lib.elem "nsimon" (r.users or [ ])) config.security.sudo.extraRules);
       message = "security-policy: nsimon must not be in wheel, a trusted nix user, or in a sudo rule.";
     }
   ];
