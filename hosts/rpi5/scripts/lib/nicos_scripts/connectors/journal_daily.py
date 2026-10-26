@@ -52,6 +52,7 @@ import subprocess
 from collections import Counter
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
@@ -65,6 +66,7 @@ from ..state import load_json, save_json
 from .immich_dawarich import immich_settings
 from . import journal_family as fam
 from . import journal_flights as fl
+from . import journal_home as home
 from . import journal_sources as src
 
 TAG = "journal-daily"
@@ -124,6 +126,7 @@ class Config:
     font: str = ""
     airtrail_db: str = "airtrail"
     airtrail_url: str = ""
+    ha_db: str = ""
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -152,6 +155,7 @@ class Config:
             font=env_str("JOURNAL_FONT", "", env),
             airtrail_db=env_str("AIRTRAIL_DB", "airtrail", env),
             airtrail_url=env_str("AIRTRAIL_URL", "", env).rstrip("/"),
+            ha_db=env_str("HA_DB", "", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -344,8 +348,15 @@ def _n(x):
 
 
 def tile_label(asset):
-    """(HH:MM, shots): drawn `14:29`, or `14:29 (8)` for a burst of 8."""
-    return photo_time(asset), asset.get("burst", 1)
+    """(HH:MM, shots): drawn `14:29`, or `14:29 (8)` for a moment of 8."""
+    return photo_time({"fileCreatedAt": asset.get("since", asset["fileCreatedAt"])}), asset.get("burst", 1)
+
+
+def moment_time(m):
+    """`14:29`, or `14:29-16:57` for a moment spanning minutes."""
+    a = photo_time({"fileCreatedAt": m.get("since", m["fileCreatedAt"])})
+    b = photo_time({"fileCreatedAt": m.get("until", m["fileCreatedAt"])})
+    return a if a == b else f"{a}-{b}"
 
 
 def photo_time(asset):
@@ -404,8 +415,8 @@ def trip_section(day_trips, legs):
 
 
 def photo_lines(shots):
-    """One line per moment: `- [14:29](url) · 🏡 Alfie · 8 photos`.
-    `shots` = [(HH:MM, url, place label, burst size)]."""
+    """One line per moment: `- [14:29-16:57](url) · 🏡 Alfie · 8 photos`.
+    `shots` = [(HH:MM or HH:MM-HH:MM, url, place label, photo count)]."""
     lines = []
     for hm, url, where, n in shots:
         bits = [f"[{hm}]({url})" if url else hm]
@@ -419,21 +430,22 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
-            memories=(), birthdays=(), genealogy=(), flights=None, flights_url=""):
+            memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
     same per trip that is not a workout; `photos` = the
     day's timeline photo count, `shots` = its moments (see `photo_lines`),
     `photos_url` = the first of the day in Immich; `agenda` = personal
-    calendar lines; `work` = (meetings, minutes, people) or None; `music` =
+    calendar lines; `work` = (meetings, minutes, people[, meeting lines]) or None; `music` =
     (heading suffix, lines) from journal_sources.music_section, or None;
     `climbing` and `games` = the same from climbing_section / game_section;
     `activity` = the heading suffix from activity_section; `notes` = side-project
     notes (journal_sources.dispatch_notes), collapsed in their own section;
     `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
     two lists from journal_family.family_sections; `flights` = (heading
-    suffix, lines) from journal_flights.flight_section, linking `flights_url`."""
+    suffix, lines) from journal_flights.flight_section, linking `flights_url`;
+    `energy` = the same from journal_home.energy_section, last of all."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -445,7 +457,7 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if flights:
         head, lines = flights
         sections.append([f"### ✈️ Vol - {head}", "", *lines,
-                         *([f"[Voir dans AirTrail]({flights_url})"] if flights_url else [])])
+                         *(["", f"[Voir dans AirTrail]({flights_url})"] if flights_url else [])])
         tags.append("flight")
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
@@ -488,10 +500,17 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
                          *notes, "", "</details>"])
         tags.append("projects")
     if work:
-        n, minutes, people = work
-        sections.append([f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
-                         f"{people} personne{'s' if people > 1 else ''}"])
+        n, minutes, people, *rest = work
+        lines = [f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
+                 f"{people} personne{'s' if people > 1 else ''}"]
+        if rest and rest[0]:
+            lines += ["", "<details>", "<summary>Réunions</summary>", "", *rest[0], "", "</details>"]
+        sections.append(lines)
         tags.append("work")
+    if energy:
+        head, lines = energy
+        sections.append([f"### ⚡ Électricité - {head}", *([""] + lines if lines else [])])
+        tags.append("energy")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
 
@@ -763,6 +782,13 @@ class Immich:
     def link(self, asset_id):
         return f"{self.url}/photos/{asset_id}"
 
+    def search_link(self, lo, hi):
+        """Immich's search page over [lo, hi) (epoch s): its `query` parameter
+        is the search body as JSON (web 3.3)."""
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+        q = json.dumps({"takenAfter": iso(lo), "takenBefore": iso(hi - 1)}, separators=(",", ":"))
+        return f"{self.url}/search?query={urllib.parse.quote(q)}"
+
 
 def fetch_image(url, opener=None):
     req = urllib.request.Request(url, headers={"User-Agent": "nicos-journal/1.0"})
@@ -776,21 +802,14 @@ def _screenshot(asset):
             and not (asset.get("exifInfo") or {}).get("make"))
 
 
-def memory_picks(memories, n):
-    """At most `n` photos over all years, at least one per year, newest years first."""
-    if not memories:
-        return []
-    k = max(1, n // len(memories))
-    return [(y, p) for y, shots in memories for p in pick_photos(shots, k)][:n]
-
-
 def memory_lines(day, memories, link):
-    """`- [Il y a 4 ans · 2022](url) · Bordeaux · 6 photos`, newest year first."""
+    """`- [Il y a 4 ans · 2022](url) · Bordeaux · 6 photos`, newest year first;
+    `link(lo, hi)` opens that day's photos in Immich."""
     lines = []
     for y, shots in memories:
         ago = day.year - y
         cities = Counter(c for c in ((a.get("exifInfo") or {}).get("city") for a in shots) if c)
-        bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(shots[0]['id'])})"]
+        bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(*day_bounds(day.replace(year=y)))})"]
         if cities:
             bits.append(cities.most_common(1)[0][0])
         bits.append(f"{len(shots)} photo{'s' if len(shots) > 1 else ''}")
@@ -805,35 +824,39 @@ def _taken(asset):
 BURST_GAP_S = 120
 
 
-def moments(assets):
-    """The day's photos grouped into bursts (shots < BURST_GAP_S apart), one
-    representative each — the burst's favourite, else its middle shot —
-    carrying `burst` = how many shots it stands for. Oldest first."""
-    bursts = []
-    for a in assets:
-        if bursts and _taken(a) - _taken(bursts[-1][-1]) < BURST_GAP_S:
-            bursts[-1].append(a)
-        else:
-            bursts.append([a])
-    return [{**next((a for a in b if a.get("isFavorite")), b[len(b) // 2]), "burst": len(b)}
-            for b in bursts]
+def groups(assets, n):
+    """The day's photos (oldest first) in at most `n` moments: bursts (shots
+    < BURST_GAP_S apart) first, then cut only at the n-1 longest pauses, so
+    an afternoon walk stays one moment. Apr 30: 30 bursts in Rome, 9 lines."""
+    if not assets or n <= 0:
+        return []
+    gaps = {i: _taken(b) - _taken(a) for i, (a, b) in enumerate(zip(assets, assets[1:]), 1)}
+    cuts = []
+    for _ in range(n - 1):
+        def score(i):  # longest pause; on a tie, the cut leaving the most even halves
+            lo = max([0, *(c for c in cuts if c < i)])
+            hi = min([len(assets), *(c for c in cuts if c > i)])
+            return gaps[i], min(i - lo, hi - i)
+        free = [i for i, g in gaps.items() if g >= BURST_GAP_S and i not in cuts]
+        if not free:
+            break
+        cuts.append(max(free, key=score))
+    cuts.sort()
+    return [assets[a:b] for a, b in zip([0, *cuts], [*cuts, len(assets)])]
+
+
+def moments(assets, n=9):
+    """One representative per group (see `groups`) — its favourite, else its
+    middle shot — carrying `burst` = how many shots it stands for and `until`
+    = its last shot's fileCreatedAt. Oldest first."""
+    return [{**next((a for a in g if a.get("isFavorite")), g[len(g) // 2]),
+             "burst": len(g), "since": g[0]["fileCreatedAt"], "until": g[-1]["fileCreatedAt"]}
+            for g in groups(assets, n)]
 
 
 def pick_photos(assets, n):
-    """One photo per moment (see `moments`), favourites first, then the
-    moments nearest evenly spaced instants of the day. Oct 12: a 7-shot burst
-    at 14:29 had filled 7 of 9 tiles. Oldest first."""
-    reps = moments(assets)
-    picked = [a for a in reps if a.get("isFavorite")][:max(n, 0)]
-    rest = [a for a in reps if not a.get("isFavorite")]
-    k = min(n - len(picked), len(rest))
-    if k > 0:
-        lo, hi = _taken(rest[0]), _taken(rest[-1])
-        for i in range(k):
-            t = lo + (hi - lo) * (i + 0.5) / k
-            free = [a for a in rest if a not in picked]
-            picked.append(min(free, key=lambda a: abs(_taken(a) - t)))
-    return sorted(picked, key=lambda a: a.get("fileCreatedAt", ""))
+    """The collage: one tile per moment, the same moments as the text."""
+    return moments(assets, n)
 
 
 class Memos:
@@ -948,7 +971,10 @@ def day_calendar(cfg, run, day, log):
             wide = src.expand(blobs(cfg.work_calendars, lo - 30 * 86400),
                               lo_dt - timedelta(days=30), hi_dt, TZ)
             today = [e for e in wide if e.end > lo_dt and e.start < hi_dt]
-            work = src.work_summary(today, lo_dt, hi_dt, src.owner(wide))
+            me = src.owner(wide)
+            work = src.work_summary(today, lo_dt, hi_dt, me)
+            if work:
+                work = (*work, src.meeting_lines(today, lo_dt, hi_dt, me, TZ))
         return agenda, work
     except (OSError, ValueError, ImportError, subprocess.CalledProcessError) as e:
         log(f"{day}: calendar unavailable ({e})")
@@ -978,6 +1004,18 @@ def day_flights(cfg, run, day, log):
         log(f"{day}: flights unavailable ({e})")
         return [], []
     return fl.on_day(every, day, *day_bounds(day)), every
+
+
+def day_energy(cfg, day, log):
+    """(heading suffix, lines) or None: no recorder, or the meter's day not in yet."""
+    if not cfg.ha_db:
+        return None
+    try:
+        e = home.energy(cfg.ha_db, *day_bounds(day))
+    except (OSError, sqlite3.Error, ValueError) as err:
+        log(f"{day}: electricity unavailable ({err})")
+        return None
+    return home.energy_section(e) if e else None
 
 
 def day_climbing(cfg, day, log):
@@ -1081,6 +1119,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         except (OSError, ValueError) as e:
             log(f"{key}: Immich unavailable, no memories this run ({e})")
     birthdays, genealogy = day_family(cfg, run, tree, day, log)
+    energy = day_energy(cfg, day, log)
     music = day_music(cfg, run, day, log)
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
@@ -1099,7 +1138,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories],
-                     birthdays, genealogy, [f.id for f in flights]])
+                     birthdays, genealogy, [f.id for f in flights], energy])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -1109,15 +1148,16 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                  for t in extra]
     link =immich.link(day_photos[0]["id"]) if day_photos else ""
     shots = []
-    for m in moments(day_photos):
+    for m in moments(day_photos, cfg.photos_max):
         gps = photo_gps(m)
-        shots.append((photo_time(m), immich.link(m["id"]),
-                      place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
+        lo, hi = _taken({"fileCreatedAt": m["since"]}), _taken({"fileCreatedAt": m["until"]})
+        url = immich.link(m["id"]) if m["burst"] == 1 else immich.search_link(lo, hi + 1)
+        shots.append((moment_time(m), url, place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
-                   memory_lines(day, memories, immich.link) if memories else (), birthdays, genealogy,
-                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url)
+                   memory_lines(day, memories, immich.search_link) if memories else (), birthdays, genealogy,
+                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -1170,15 +1210,6 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                                          location=(dest.lat, dest.lon))))
         except OSError as e:  # map tiles down: the text section still stands
             log(f"{key}: boarding pass unavailable ({e})")
-    picks = memory_picks(memories, cfg.photos_max)
-    if picks:
-        mem_path = f"{tmpdir}/memories-{key}.jpg"
-        collage_fn([immich.preview(p["id"]) for _, p in picks],
-                   [(str(y), 1) for y, _ in picks], mem_path)
-        with open(mem_path, "rb") as f:
-            data = f.read()
-        files.append((f"memories-{key}.jpg", "image/jpeg", data,
-                      media_metadata(data, _taken(picks[0][1]))))
     last = next((t for t in reversed(tracks) if t), None)
     if last:
         lat, lon = last[-1]

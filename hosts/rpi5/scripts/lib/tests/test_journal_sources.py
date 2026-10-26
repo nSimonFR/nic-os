@@ -55,6 +55,12 @@ def test_work_summary_merges_overlaps_skips_declined_rooms_and_solo_blocks():
     assert (n, minutes, people) == (3, 105, 3)   # a, b, c — not the room, not d
 
 
+def test_meeting_lines_list_what_the_summary_counts():
+    lines = js.meeting_lines(js.expand(DAY, LO, HI, TZ), LO, HI, ME, TZ)
+    assert len(lines) == 3 and all(l.startswith("- **") and " personne" in l for l in lines)
+    assert not any("Nope" in l or "Focus" in l for l in lines)
+
+
 def test_no_meetings_is_none():
     assert js.work_summary([], LO, HI, ME) is None
 
