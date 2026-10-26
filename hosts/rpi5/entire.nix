@@ -5,13 +5,16 @@
 # (Codex's system layer) need no approval.
 { pkgs, ... }:
 let
+  # CLI + Brain/Graph plugins (pkgs/cli/entire.nix); Brain needs CLI ≥ 0.11.6.
+  entireBundle = pkgs.callPackage ../../pkgs/cli/entire.nix { };
+
   # No Secret Service on the Pi: the default keyring store fails with "The name
   # is not activatable", so login-backed commands (activity, repo, explain
   # --repo) break. Wrapped rather than a session variable so hooks run by
   # systemd user units (T3, claude-rc) get it too.
   entire = pkgs.symlinkJoin {
-    name = "entire-${pkgs.unstablePkgs.entire.version}";
-    paths = [ pkgs.unstablePkgs.entire ];
+    name = "entire-${entireBundle.version}";
+    paths = [ entireBundle ];
     nativeBuildInputs = [ pkgs.makeWrapper ];
     postBuild = ''
       wrapProgram $out/bin/entire --set-default ENTIRE_TOKEN_STORE file
