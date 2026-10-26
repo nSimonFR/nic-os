@@ -90,6 +90,7 @@ in
         "GRAMPS_HOME_PERSON=I0009"
         "GRAMPS_URL=${config.services.gramps-web.baseUrl}"
         "JOURNAL_FONT=${pkgs.inter}/share/fonts/truetype/InterVariable.ttf"
+        "AIRTRAIL_URL=${config.nic.services.airtrail.public.publicUrl}"
       ];
       TimeoutStartSec = "45min";
     };

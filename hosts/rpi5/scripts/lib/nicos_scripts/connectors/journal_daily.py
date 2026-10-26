@@ -64,6 +64,7 @@ from ..secrets import env_int, env_str, read_secret
 from ..state import load_json, save_json
 from .immich_dawarich import immich_settings
 from . import journal_family as fam
+from . import journal_flights as fl
 from . import journal_sources as src
 
 TAG = "journal-daily"
@@ -121,6 +122,8 @@ class Config:
     gramps_home: str = ""
     gramps_url: str = ""
     font: str = ""
+    airtrail_db: str = "airtrail"
+    airtrail_url: str = ""
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
     dry_run: bool = True
     runuser: str = "runuser"
@@ -147,6 +150,8 @@ class Config:
             gramps_home=env_str("GRAMPS_HOME_PERSON", "", env),
             gramps_url=env_str("GRAMPS_URL", "", env).rstrip("/"),
             font=env_str("JOURNAL_FONT", "", env),
+            airtrail_db=env_str("AIRTRAIL_DB", "airtrail", env),
+            airtrail_url=env_str("AIRTRAIL_URL", "", env).rstrip("/"),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
             git=env_str("GIT_BIN", "git", env),
@@ -414,7 +419,7 @@ def photo_lines(shots):
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
-            memories=(), birthdays=(), genealogy=()):
+            memories=(), birthdays=(), genealogy=(), flights=None, flights_url=""):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -427,7 +432,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     `activity` = the heading suffix from activity_section; `notes` = side-project
     notes (journal_sources.dispatch_notes), collapsed in their own section;
     `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
-    two lists from journal_family.family_sections."""
+    two lists from journal_family.family_sections; `flights` = (heading
+    suffix, lines) from journal_flights.flight_section, linking `flights_url`."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -436,6 +442,11 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if birthdays:
         sections.append(["### 🎂 Anniversaires", "", *birthdays])
         tags.append("birthday")
+    if flights:
+        head, lines = flights
+        sections.append([f"### ✈️ Vol - {head}", "", *lines,
+                         *([f"[Voir dans AirTrail]({flights_url})"] if flights_url else [])])
+        tags.append("flight")
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
         lines = [f"### 📷 Photos - {photos}", "", *photo_lines(shots)]
@@ -551,13 +562,11 @@ def map_size(tracks, long_side=1000):
     return round(long_side * ratio), long_side
 
 
-def render(lines, path):
-    """Map JPEG in Memos' dark palette: OSM tiles greyscaled, inverted and
-    tinted between its card grey and muted text. `lines` = [(points, colour)]
-    (see `map_lines`), each with a background-coloured casing; start = ring
-    in its colour, end = light dot."""
-    from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
-    from staticmap import CircleMarker, Line, StaticMap  # lazy
+def dark_map(w, h, padding):
+    """A staticmap.StaticMap whose OSM tiles are greyscaled, inverted and
+    tinted between Memos' card grey and muted text."""
+    from PIL import ImageOps  # lazy: Pillow
+    from staticmap import StaticMap  # lazy
 
     class Dark(StaticMap):
         def _draw_base_layer(self, image):
@@ -566,9 +575,20 @@ def render(lines, path):
             image.paste(ImageOps.colorize(inverted, black=DARK_CARD, white=DARK_MUTED_FG,
                                           blackpoint=0, whitepoint=255, midpoint=150))
 
-    m = Dark(*map_size([pts for pts, _ in lines]), padding_x=60, padding_y=60,
-             url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-             headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
+    return Dark(w, h, padding_x=padding, padding_y=padding,
+                url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+                headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
+
+
+def render(lines, path):
+    """Map JPEG in Memos' dark palette: OSM tiles greyscaled, inverted and
+    tinted between its card grey and muted text. `lines` = [(points, colour)]
+    (see `map_lines`), each with a background-coloured casing; start = ring
+    in its colour, end = light dot."""
+    from PIL import ImageDraw, ImageFont  # lazy: Pillow
+    from staticmap import CircleMarker, Line  # lazy
+
+    m = dark_map(*map_size([pts for pts, _ in lines]), 60)
     lines = [([(lon, lat) for lat, lon in pts], c) for pts, c in lines]
     for ll, color in lines:
         m.add_line(Line(ll, DARK_BG, 11))
@@ -589,6 +609,113 @@ def render(lines, path):
     draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#6b7076")
     # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).
     img.save(path, "JPEG", quality=85, optimize=True)
+
+
+PASS_W, PASS_MAP_H, PASS_TICKET_H = 1000, 420, 350
+MONTHS_SHORT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+
+
+def _font(path, size, weight="Regular"):
+    from PIL import ImageFont  # lazy: Pillow
+
+    try:
+        font = ImageFont.truetype(path, size)
+        try:
+            font.set_variation_by_name(weight)
+        except (OSError, ValueError):  # not a variable font
+            pass
+        return font
+    except (OSError, ValueError, AttributeError):
+        try:
+            return ImageFont.load_default(size=size)
+        except TypeError:  # Pillow < 10.1
+            return ImageFont.load_default()
+
+
+def flight_map(f):
+    """The great-circle arc on the dark map, PASS_W x PASS_MAP_H."""
+    from staticmap import CircleMarker, Line  # lazy
+
+    m = dark_map(PASS_W, PASS_MAP_H, 40)
+    arc = [(lon, lat) for lat, lon in fl.great_circle(f)]
+    m.add_line(Line(arc, DARK_BG, 10))
+    m.add_line(Line(arc, "#ffc828", 5))
+    for ll in (arc[0], arc[-1]):
+        m.add_marker(CircleMarker(ll, DARK_BG, 22))
+        m.add_marker(CircleMarker(ll, DARK_FG, 13))
+    return m.render().convert("RGB")
+
+
+def _plane(draw, cx, cy, s, fill):
+    """A plane silhouette pointing right, `s` px nose to tail."""
+    half = [(1.0, 0), (0.62, -0.07), (0.12, -0.55), (-0.02, -0.55), (0.25, -0.07),
+            (-0.42, -0.07), (-0.58, -0.28), (-0.68, -0.28), (-0.6, 0)]
+    pts = half + [(x, -y) for x, y in reversed(half[1:-1])]
+    draw.polygon([(cx + x * s / 2, cy + y * s / 2) for x, y in pts], fill=fill)
+
+
+def boarding_pass(f, font_path="", map_fn=flight_map):
+    """One flight as a card: its map over a boarding-pass stub."""
+    from PIL import Image, ImageDraw  # lazy: Pillow
+
+    card = Image.new("RGB", (PASS_W, PASS_MAP_H + PASS_TICKET_H), DARK_CARD)
+    card.paste(map_fn(f), (0, 0))
+    d = ImageDraw.Draw(card)
+    t, pad = PASS_MAP_H, 50
+    for x in range(30, PASS_W - 30, 22):  # perforation, notched at both ends
+        d.line((x, t, x + 11, t), fill=DARK_BG, width=3)
+    for x in (0, PASS_W):
+        d.ellipse((x - 20, t - 20, x + 20, t + 20), fill=DARK_BG)
+
+    def text(xy, s, font, fill, anchor="la"):
+        d.text(xy, s, font=font, fill=fill, anchor=anchor)
+        return d.textbbox(xy, s, font=font, anchor=anchor)
+
+    small, big = _font(font_path, 18, "SemiBold"), _font(font_path, 96, "Bold")
+    when = fl.local(f.dep, f.frm.tz)
+    y, m, dd = map(int, f.date.split("-"))
+    text((pad, t + 30), "CARTE D'EMBARQUEMENT", small, DARK_MUTED_FG)
+    text((PASS_W - pad, t + 30), f"{dd} {MONTHS_SHORT[m - 1]} {y}".upper(), small, DARK_MUTED_FG, "ra")
+    left = text((pad, t + 62), f.frm.iata, big, DARK_FG)
+    right = text((PASS_W - pad, t + 62), f.to.iata, big, DARK_FG, "ra")
+    mid_y = (left[1] + left[3]) / 2
+    for x in range(left[2] + 30, right[0] - 30, 16):
+        if abs(x - (left[2] + right[0]) / 2) > 34:
+            d.line((x, mid_y, x + 7, mid_y), fill=DARK_MUTED_FG, width=3)
+    _plane(d, (left[2] + right[0]) / 2, mid_y, 52, "#ffc828")
+    city, hour = _font(font_path, 28), _font(font_path, 34, "SemiBold")
+    text((pad, t + 178), f.frm.city, city, DARK_MUTED_FG)
+    text((PASS_W - pad, t + 178), f.to.city, city, DARK_MUTED_FG, "ra")
+    arr = fl.local(f.arr, f.to.tz)
+    if when:
+        text((pad, t + 214), f"{when:%H:%M}", hour, DARK_FG)
+    if arr:
+        text((PASS_W - pad, t + 214), f"{arr:%H:%M}", hour, DARK_FG, "ra")
+    fields = [(k, v) for k, v in (("VOL", f.number), ("COMPAGNIE", f.airline), ("SIÈGE", f.seat),
+                                  ("DURÉE", fl._hm(f.duration) if f.duration else ""),
+                                  ("DISTANCE", f"{fl._int_fr(fl.km(f))} km"), ("APPAREIL", f.aircraft)) if v][:5]
+    label, value = _font(font_path, 16, "SemiBold"), _font(font_path, 26, "SemiBold")
+    widths = [max(d.textlength(k, font=label), d.textlength(v, font=value)) for k, v in fields]
+    gap = (PASS_W - 2 * pad - sum(widths)) / max(len(fields) - 1, 1)
+    x = pad
+    for (k, v), w in zip(fields, widths):
+        text((x, t + 270), k, label, DARK_MUTED_FG)
+        text((x, t + 292), v, value, DARK_FG)
+        x += w + gap
+    return card
+
+
+def render_boarding_passes(flights, path, font_path="", map_fn=flight_map):
+    """The day's flights as stacked boarding-pass cards. JPEG."""
+    from PIL import Image  # lazy: Pillow
+
+    cards = [boarding_pass(f, font_path, map_fn) for f in flights]
+    sheet = Image.new("RGB", (PASS_W, sum(c.height for c in cards) + 12 * (len(cards) - 1)), DARK_BG)
+    y = 0
+    for c in cards:
+        sheet.paste(c, (0, y))
+        y += c.height + 12
+    sheet.save(path, "JPEG", quality=88, optimize=True)
 
 
 class Immich:
@@ -841,6 +968,18 @@ def day_family(cfg, run, tree, day, log):
     return fam.family_sections(contacts, tree, day, cfg.gramps_url)
 
 
+def day_flights(cfg, run, day, log):
+    """(the day's flights, every flight); both empty on failure."""
+    if not cfg.airtrail_db:
+        return [], []
+    try:
+        every = fl.all_flights(run, cfg.airtrail_db, cfg.runuser, cfg.psql)
+    except (OSError, ValueError, IndexError, subprocess.CalledProcessError) as e:
+        log(f"{day}: flights unavailable ({e})")
+        return [], []
+    return fl.on_day(every, day, *day_bounds(day)), every
+
+
 def day_climbing(cfg, day, log):
     """Arkose sessions started that day; [] if arkose-sync has no store."""
     try:
@@ -916,7 +1055,8 @@ def day_music(cfg, run, day, log):
 
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None):
+                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None,
+                pass_fn=render_boarding_passes):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -930,7 +1070,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     day_trips = trips(cfg, run, uid, day)
     climbs = day_climbing(cfg, day, log)
     notes = day_notes(cfg, run, state, day, log, now)
-    if not (ws or day_trips or climbs or day_photos or agenda or work or notes):
+    flights, every_flight = day_flights(cfg, run, day, log)
+    if not (ws or day_trips or climbs or day_photos or agenda or work or notes or flights):
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
     memories = []
@@ -958,7 +1099,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories],
-                     birthdays, genealogy])
+                     birthdays, genealogy, [f.id for f in flights]])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -975,7 +1116,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
                    src.climbing_section(climbs) if climbs else None, games, activity, notes,
-                   memory_lines(day, memories, immich.link) if memories else (), birthdays, genealogy)
+                   memory_lines(day, memories, immich.link) if memories else (), birthdays, genealogy,
+                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url)
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -1016,6 +1158,18 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             data = f.read()
         start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
         files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
+    if flights:
+        pass_path = f"{tmpdir}/flight-{key}.jpg"
+        try:
+            pass_fn(flights, pass_path)
+            with open(pass_path, "rb") as f:
+                data = f.read()
+            dest, took_off = flights[-1].to, flights[0].dep
+            files.append((f"flight-{key}.jpg", "image/jpeg", data,
+                          media_metadata(data, took_off.timestamp() if took_off else day_bounds(day)[0] + 8 * 3600,
+                                         location=(dest.lat, dest.lon))))
+        except OSError as e:  # map tiles down: the text section still stands
+            log(f"{key}: boarding pass unavailable ({e})")
     picks = memory_picks(memories, cfg.photos_max)
     if picks:
         mem_path = f"{tmpdir}/memories-{key}.jpg"
@@ -1032,6 +1186,9 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     elif extra:
         lat, lon = extra[-1].path[-1]
         location = {"placeholder": trip_legs[-1][1].label, "latitude": lat, "longitude": lon}
+    elif flights:
+        dest = flights[-1].to
+        location = {"placeholder": dest.city, "latitude": dest.lat, "longitude": dest.lon}
     else:
         gps = [p["exifInfo"] for p in reversed(day_photos)
                if (p.get("exifInfo") or {}).get("latitude")]
@@ -1043,6 +1200,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         when = day_photos[-1]["fileCreatedAt"].replace("+00:00", "Z")
     elif climbs:
         when = climbs[-1]["startDate"]
+    elif flights and (flights[-1].arr or flights[-1].dep):
+        when = _utc((flights[-1].arr or flights[-1].dep).timestamp())
     else:  # calendar-only day: noon
         when = _utc(day_bounds(day)[0] + 8 * 3600)
 
@@ -1091,6 +1250,7 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None):
                 journal_day(cfg, run, memos, state, day, uid, log,
                             render_fn or render, tmp, immich,
                             collage_fn=functools.partial(render_collage, font_path=cfg.font),
+                            pass_fn=functools.partial(render_boarding_passes, font_path=cfg.font),
                             weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
                             tree=tree)
                 if cfg.state_path and not cfg.dry_run:
