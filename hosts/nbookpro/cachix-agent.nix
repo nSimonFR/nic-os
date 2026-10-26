@@ -3,13 +3,12 @@
 #
 # Token: one-time, by hand — `export CACHIX_AGENT_TOKEN=…` in /etc/cachix-agent.token
 # (root, 0600). The daemon watches that path and starts once it exists.
-{ config, lib, pkgs, inputs, ... }:
+{ config, lib, ... }:
 let
   cfg = config.services.cachix-agent;
 in
 {
   services.cachix-agent.enable = true;
-  services.cachix-agent.package = inputs.cachix.packages.${pkgs.stdenv.hostPlatform.system}.cachix; # see flake.nix
 
   # The agent defaults to system-profiles/system on macOS; darwin-rebuild (rebuild-os)
   # uses /nix/var/nix/profiles/system. Same profile keeps one generation list.
