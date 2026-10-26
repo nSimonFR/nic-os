@@ -23,11 +23,4 @@ in
 
     exec ${cfg.package}/bin/cachix deploy agent ${cfg.name} system
   '';
-
-  # rebuild-os used to reload the yabai scripting addition after switching; an
-  # agent-run switch has no such step, so activation does it.
-  system.activationScripts.postActivation.text = lib.mkAfter ''
-    ${config.services.yabai.package}/bin/yabai --load-sa \
-      || echo "warning: yabai --load-sa failed" >&2
-  '';
 }
