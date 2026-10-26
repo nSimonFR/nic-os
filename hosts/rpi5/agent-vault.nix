@@ -47,8 +47,10 @@ let
     { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-git";     host = "github.com";         auth = { type = "basic"; username = "GITHUB_GIT_USER"; password = "GITHUB_AI_TOKEN"; }; }
-    # Deploy status and logs by UUID: /api/v1/deploy/{deployment,logs}/<uuid>.
-    { name = "cachix";         host = "app.cachix.org";     auth = { type = "bearer"; token = "CACHIX_ACTIVATE_TOKEN"; }; }
+    # Read routes only: /api/v2/deploy/activate matches neither, so agents can't
+    # deploy with it (no method filter, so POST /logs is still reachable).
+    { name = "cachix-deployment"; host = "app.cachix.org/api/v1/deploy/deployment/*"; auth = { type = "bearer"; token = "CACHIX_ACTIVATE_TOKEN"; }; }
+    { name = "cachix-logs";       host = "app.cachix.org/api/v1/deploy/logs/*";       auth = { type = "bearer"; token = "CACHIX_ACTIVATE_TOKEN"; }; }
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
@@ -114,7 +116,8 @@ in
     # A re-encrypted secret is a new store path, so a rotated key re-applies.
     restartTriggers = [
       config.age.secrets.agent-brokered-env.file config.age.secrets.github-ai-token.file
-      config.age.secrets.immich-api-key.file servicesFile
+      config.age.secrets.immich-api-key.file config.age.secrets.cachix-activate-token.file
+      servicesFile
     ];
     environment = {
       AGENT_VAULT_ADDR = "http://127.0.0.1:${toString apiPort}";
