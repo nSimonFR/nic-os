@@ -218,6 +218,9 @@
       mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
     };
     cachix-agent-token.file = ./secrets/cachix-agent-token.age; # CACHIX_AGENT_TOKEN=…
+    # nsimon-nicos Deploy activate token (bare), attached by Agent Vault. It can
+    # read deployments and logs by UUID, and can also start deploys.
+    cachix-activate-token.file = ./secrets/cachix-activate-token.age;
     asale-api-key = {
       file = ./secrets/asale-api-key.age;
       # tiny-llm-gate is a DynamicUser, so this must be world-readable inside
