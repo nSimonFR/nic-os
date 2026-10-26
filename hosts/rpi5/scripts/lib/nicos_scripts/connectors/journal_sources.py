@@ -3,8 +3,8 @@ Calendar and weather lines for journal-daily.
 
 Calendars are read from Nextcloud's own tables (oc_calendarobjects, as postgres
 over the socket), recurrences expanded with recurring-ical-events. PERSONAL
-calendars are listed event by event. WORK calendars are only summed — meeting
-time, count and distinct people — so no work meeting title reaches the journal.
+calendars are listed event by event. WORK calendars give the meeting count,
+time and distinct people, then the meetings themselves, collapsed.
 
 A meeting = a timed work event with at least one other (non-room) attendee
 that the calendar owner did not decline. The owner is the attendee on most of
@@ -122,25 +122,36 @@ def _is_room(email, cutype):
     return cutype in ("RESOURCE", "ROOM") or email.endswith(ROOM_DOMAINS)
 
 
-def work_summary(events, lo_dt, hi_dt, me):
-    """(meetings, minutes, people) of the day, or None without meetings."""
-    meetings, people = [], set()
+def meetings(events, lo_dt, hi_dt, me):
+    """[(start, end, event, other attendees)] clipped to the day."""
+    out = []
     for e in events:
         if e.all_day:
             continue
-        others = [(m, c) for m, c, _ in e.attendees if m != me and not _is_room(m, c)]
+        others = [m for m, c, _ in e.attendees if m != me and not _is_room(m, c)]
         declined = any(m == me and p == "DECLINED" for m, _, p in e.attendees)
-        if not others or declined:
-            continue
         start, end = max(e.start, lo_dt), min(e.end, hi_dt)
-        if end <= start:
-            continue
-        meetings.append((start, end))
-        people.update(m for m, _ in others)
-    if not meetings:
+        if others and not declined and end > start:
+            out.append((start, end, e, others))
+    return sorted(out, key=lambda m: m[0])
+
+
+def meeting_lines(events, lo_dt, hi_dt, me, tz):
+    """`- **10:00-10:30** Titre · 4 personnes`, one per meeting."""
+    return [f"- **{s.astimezone(tz):%H:%M}-{e.astimezone(tz):%H:%M}** {ev.title or '(sans titre)'} · "
+            f"{_plural(len(set(o)), 'personne')}"
+            for s, e, ev, o in meetings(events, lo_dt, hi_dt, me)]
+
+
+def work_summary(events, lo_dt, hi_dt, me):
+    """(meetings, minutes, people) of the day, or None without meetings."""
+    found = meetings(events, lo_dt, hi_dt, me)
+    if not found:
         return None
+    people = {o for *_, others in found for o in others}
+    meetings_ = [(s, e) for s, e, *_ in found]
     minutes, cur_s, cur_e = 0, None, None
-    for s, e in sorted(meetings):  # union of the intervals: overlaps count once
+    for s, e in meetings_:  # union of the intervals: overlaps count once
         if cur_e is None or s > cur_e:
             if cur_e is not None:
                 minutes += (cur_e - cur_s).total_seconds() / 60
@@ -148,7 +159,7 @@ def work_summary(events, lo_dt, hi_dt, me):
         else:
             cur_e = max(cur_e, e)
     minutes += (cur_e - cur_s).total_seconds() / 60
-    return len(meetings), round(minutes), len(people)
+    return len(meetings_), round(minutes), len(people)
 
 
 def dedupe(events):

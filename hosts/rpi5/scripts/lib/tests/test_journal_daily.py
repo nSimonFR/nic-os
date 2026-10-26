@@ -235,6 +235,9 @@ class FakeImmich:
     def link(self, asset_id):
         return f"https://immich/photos/{asset_id}"
 
+    def search_link(self, lo, hi):
+        return f"https://immich/search?{lo}-{hi}"
+
 
 def photo(n, fav=False, gps=True):
     exif = {"latitude": 48.85, "longitude": 2.35, "city": "Paris"} if gps else {}
@@ -242,12 +245,25 @@ def photo(n, fav=False, gps=True):
             "isFavorite": fav, "exifInfo": exif}
 
 
-def test_pick_photos_favourites_first_then_spread():
-    assets = [photo(n) for n in range(10)]
+def test_pick_photos_one_per_moment_favourite_first():
+    assets = [photo(n) for n in range(10)]  # one an hour: every pause equal
     assets[7]["isFavorite"] = True
-    assert [a["id"] for a in wm.pick_photos(assets, 3)] == ["p2", "p6", "p7"]
+    picks = wm.pick_photos(assets, 3)
+    assert [(p["id"], p["burst"]) for p in picks] == [("p1", 2), ("p3", 3), ("p7", 5)]  # p7: the favourite
     assert [a["id"] for a in wm.pick_photos(assets[:2], 6)] == ["p0", "p1"]
     assert wm.pick_photos(assets, 0) == []
+
+
+def test_groups_cut_at_the_longest_pauses():
+    t = lambda h, m, s=0: {"id": f"{h}{m}{s}", "fileCreatedAt": f"2026-04-30T{h:02d}:{m:02d}:{s:02d}Z"}
+    # morning airport (3 shots), a long Rome afternoon of shots ~5 min apart, one at night
+    day = [t(6, 45), t(6, 54), t(7, 4)] + [t(10 + i // 12, (i * 5) % 60) for i in range(60)] + [t(20, 13)]
+    gs = wm.groups(day, 9)
+    assert len(gs) == 9 and sum(map(len, gs)) == len(day)
+    assert gs[-1] == [day[-1]]  # the night shot stays alone
+    assert len(wm.groups(day[:3], 9)) == 3 and wm.groups([], 9) == []
+    burst = [t(12, 29, s) for s in range(7)]
+    assert len(wm.groups(burst, 9)) == 1  # a burst is never split
 
 
 def test_workout_day_attaches_map_then_photos(tmp_path):
@@ -281,23 +297,31 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
     assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
 
 
-def test_memories_section_and_fourth_attachment(tmp_path):
+def test_memories_section_links_each_past_day(tmp_path):
     old = lambda y, n, **kw: {**photo(n, **kw), "id": f"y{y}-{n}",
                               "fileCreatedAt": f"{y}-10-19T{10 + n:02d}:00:00.000Z"}
     past = [(2023, [old(2023, 1), old(2023, 2, gps=False)]), (2010, [old(2010, 1, gps=False)])]
     im = FakeImmich([photo(1)], past=past)
-    op = FakeOpener([json_reply({"name": "attachments/COL"}), json_reply({"name": "attachments/MEM"}),
+    op = FakeOpener([json_reply({"name": "attachments/COL"}),
                      json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
-    collages = []
     wm.journal_day(cfg(tmp_path), FakePg([], []), wm.Memos("http://m", "T", op), {},
                    date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
-                   collage_fn=lambda imgs, labels, path: (collages.append(labels), no_render(None, path)))
-    assert [op.body_of(i)["filename"] for i in range(2)] == ["photos-2026-10-19.jpg", "memories-2026-10-19.jpg"]
-    assert collages[1] == [("2023", 1), ("2023", 1), ("2010", 1)]
-    memo = op.body_of(2)
-    assert ("### 🕰 Souvenirs\n\n- [Il y a 3 ans · 2023](https://immich/photos/y2023-1) · Paris · 2 photos\n"
-            "- [Il y a 16 ans · 2010](https://immich/photos/y2010-1) · 1 photo\n\n") in memo["content"]
+                   collage_fn=lambda imgs, labels, path: no_render(None, path))
+    assert op.body_of(0)["filename"] == "photos-2026-10-19.jpg"  # no memories collage
+    memo = op.body_of(1)
+    lo23, hi23 = wm.day_bounds(date(2023, 10, 19))
+    lo10, hi10 = wm.day_bounds(date(2010, 10, 19))
+    assert (f"### 🕰 Souvenirs\n\n- [Il y a 3 ans · 2023](https://immich/search?{lo23}-{hi23}) · Paris · 2 photos\n"
+            f"- [Il y a 16 ans · 2010](https://immich/search?{lo10}-{hi10}) · 1 photo\n\n") in memo["content"]
     assert "#photos #memories" in memo["content"]
+
+
+def test_immich_search_link_is_a_date_range_query():
+    import urllib.parse
+    url = wm.Immich("https://im", "k").search_link(1792980000, 1793066400)
+    assert url.startswith("https://im/search?query=")
+    q = json.loads(urllib.parse.unquote(url.split("query=")[1]))
+    assert q == {"takenAfter": "2026-10-26T02:00:00.000Z", "takenBefore": "2026-10-27T01:59:59.000Z"}
 
 
 def test_memories_skip_screenshots_and_feb_29():
@@ -314,13 +338,6 @@ def test_memories_skip_screenshots_and_feb_29():
     assert [d.year for d in calls] == [2020]
     got = Im("u", "k").memories(date(2026, 10, 19), years=5)
     assert [(y, [a["id"] for a in m]) for y, m in got] == [(2022, ["c"])]
-
-
-def test_memory_picks_cap_total_and_keep_one_per_year():
-    yrs = [(2025 - i, [photo(n) for n in range(3)]) for i in range(12)]
-    picks = wm.memory_picks(yrs, 9)
-    assert len(picks) == 9 and [y for y, _ in picks] == list(range(2025, 2016, -1))
-    assert len(wm.memory_picks(yrs[:2], 9)) == 6 and wm.memory_picks([], 9) == []
 
 
 def test_immich_down_still_writes_the_workouts(tmp_path):
@@ -732,7 +749,7 @@ def test_flight_day_gets_a_section_and_a_boarding_pass(tmp_path):
         "- 🛬 **11:10** · FCO 🇮🇹 Rome\n"
         "- 💺 36A · économie\n"
         "- 📊 2ᵉ vol · 1 969 km en avion depuis 2025\n"
-        "- 🆕 Premier vol vers 🇮🇹\n"
+        "- 🆕 Premier vol vers 🇮🇹\n\n"
         "[Voir dans AirTrail](https://air)\n\n___________\n\n#flight\n")
     assert memo["location"]["placeholder"] == "Rome"
     assert op.body_of(2) == {"createTime": "2026-10-19T09:10:00Z"}

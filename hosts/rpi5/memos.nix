@@ -91,6 +91,7 @@ in
         "GRAMPS_URL=${config.services.gramps-web.baseUrl}"
         "JOURNAL_FONT=${pkgs.inter}/share/fonts/truetype/InterVariable.ttf"
         "AIRTRAIL_URL=${config.nic.services.airtrail.public.publicUrl}"
+        "HA_DB=/var/lib/hass/home-assistant_v2.db"
       ];
       TimeoutStartSec = "45min";
     };
