@@ -17,6 +17,7 @@ either makes the strict deserialize drop the whole item silently.
 """
 
 import json
+import secrets
 import time
 import urllib.error
 import urllib.parse
@@ -149,6 +150,8 @@ API_PAUSE_SEC = 1.0
 RATE_LIMIT_RETRIES = 3
 # The import result endpoint long-polls ~20 s per request.
 IMPORT_POLLS = 6
+# A 502 diagnostic for an operation whose script never started, so nothing was written.
+SIDECAR_STARTUP_FAILED = "Sandbox sidecar startup failed"
 
 
 class RateLimited(RuntimeError):
@@ -223,10 +226,20 @@ class Client:
 
     def operation(self, package_id, slug, payload, idempotency_key=None):
         """A plugin operation's `result` (200 even on refusal: callers check it)."""
+        path = f"/plugins/{package_id}/operations/{slug}"
         body = {"payload": payload}
         if idempotency_key is not None:
             body["idempotencyKey"] = idempotency_key
-        return self.request("POST", f"/plugins/{package_id}/operations/{slug}", body)["result"]
+        try:
+            return self.request("POST", path, body)["result"]
+        except RuntimeError as e:
+            # Ryot replays a stored failure for the key forever, even one where the
+            # script never ran (seen 2026-10-26 after earlyoom killed the sandbox).
+            if idempotency_key is None or SIDECAR_STARTUP_FAILED not in str(e):
+                raise
+        body["idempotencyKey"] = f"{idempotency_key}~{secrets.token_hex(4)}"
+        self.log(f"Ryot {path}: sandbox never started for {idempotency_key}; retrying under a new key")
+        return self.request("POST", path, body)["result"]
 
     def import_entity(self, provider_id, external_id):
         """Import through a provider; the entity id, or "" when the import failed."""
