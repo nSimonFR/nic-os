@@ -147,7 +147,7 @@ in
       Type = "oneshot";
       ExecStart = pkgs.writeShellScript "filesystem-ro-alert" ''
         RO_FS=$(${pkgs.gnugrep}/bin/grep -E 'ext4|xfs|btrfs' /proc/mounts \
-                | ${pkgs.gnugrep}/bin/grep -v '/nix/store' \
+                | ${pkgs.gnugrep}/bin/grep -v -e '/nix/store' -e ' /var/lib/agent-db/' \
                 | ${pkgs.gnugrep}/bin/grep ' ro[, ]' || true)
         BODY=""
         [ -n "$RO_FS" ] && BODY="<code>$RO_FS</code>"

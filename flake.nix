@@ -218,6 +218,12 @@
     #   1. change the tag in the URL below
     #   2. bump `version` in pkgs/agents/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
+    # Cachix Deploy agent ≥ 1.13.0: 1.11.1/1.12.x run a deployment again each
+    # time the server re-sends it (every agent re-register, ~32 s), which looped
+    # the rpi5 through heavy-shed for hours (upstream 37d851cb). Prebuilt on
+    # cachix.cachix.org; nixpkgs not followed so the hashes stay cache hits.
+    cachix.url = "github:cachix/cachix/v1.13.0";
+
     rtk-src = {
       url = "github:rtk-ai/rtk/v0.51.0";
       flake = false;
@@ -299,11 +305,13 @@
       "https://nixos-raspberrypi.cachix.org"
       # Our own: what CI's `build rpi5` job built because nothing else had it.
       "https://nsimon-nicos.cachix.org"
+      "https://cachix.cachix.org"
     ];
     extra-trusted-public-keys = [
       "cache.nixos.org-1:6NCHdD59X431o0gWQnrDg8a8NLFkBE/eCiST04Xhd00="
       "nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI="
       "nsimon-nicos.cachix.org-1:Tu8TcLIpv9Kx+oiyyMkB0Y2KKPYNoc0Ni9E+s/p7LxY="
+      "cachix.cachix.org-1:eWNHQldwUO7G2VkjpnjDbWwy4KQ/HNxht7H4SSoMckM="
     ];
   };
 
