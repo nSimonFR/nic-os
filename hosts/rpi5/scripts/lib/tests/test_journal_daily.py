@@ -209,13 +209,18 @@ def test_place_labels_from_dawarich_tags_and_names(tmp_path):
 
 
 class FakeImmich:
-    def __init__(self, assets=(), fail=False):
-        self.assets, self.fail, self.previews = list(assets), fail, []
+    def __init__(self, assets=(), fail=False, past=()):
+        self.assets, self.fail, self.previews, self.past = list(assets), fail, [], list(past)
 
     def day(self, day):
         if self.fail:
             raise OSError("connection refused")
         return self.assets
+
+    def memories(self, day):
+        if self.fail:
+            raise OSError("connection refused")
+        return self.past
 
     def preview(self, asset_id):
         self.previews.append(asset_id)
@@ -268,6 +273,48 @@ def test_photo_only_day_is_dated_and_pinned_by_the_last_photo(tmp_path):
     assert memo["content"].startswith("### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n- [15:00](https://immich/photos/p3)\n")
     assert memo["location"]["placeholder"] == "Paris"
     assert op.body_of(2) == {"createTime": "2026-10-19T13:00:00.000Z"}
+
+
+def test_memories_section_and_fourth_attachment(tmp_path):
+    old = lambda y, n, **kw: {**photo(n, **kw), "id": f"y{y}-{n}",
+                              "fileCreatedAt": f"{y}-10-19T{10 + n:02d}:00:00.000Z"}
+    past = [(2023, [old(2023, 1), old(2023, 2, gps=False)]), (2010, [old(2010, 1, gps=False)])]
+    im = FakeImmich([photo(1)], past=past)
+    op = FakeOpener([json_reply({"name": "attachments/COL"}), json_reply({"name": "attachments/MEM"}),
+                     json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
+    collages = []
+    wm.journal_day(cfg(tmp_path), FakePg([], []), wm.Memos("http://m", "T", op), {},
+                   date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path), im,
+                   collage_fn=lambda imgs, labels, path: (collages.append(labels), no_render(None, path)))
+    assert [op.body_of(i)["filename"] for i in range(2)] == ["photos-2026-10-19.jpg", "memories-2026-10-19.jpg"]
+    assert collages[1] == [("2023", 1), ("2023", 1), ("2010", 1)]
+    memo = op.body_of(2)
+    assert ("### 🕰 Souvenirs\n\n- [Il y a 3 ans · 2023](https://immich/photos/y2023-1) · Paris · 2 photos\n"
+            "- [Il y a 16 ans · 2010](https://immich/photos/y2010-1) · 1 photo\n\n") in memo["content"]
+    assert "#photos #memories" in memo["content"]
+
+
+def test_memories_skip_screenshots_and_feb_29():
+    calls = []
+
+    class Im(wm.Immich):
+        def day(self, day):
+            calls.append(day)
+            return {2022: [{"id": "s", "originalFileName": "IMG_1.PNG", "exifInfo": {}},
+                           {"id": "c", "originalFileName": "IMG_2.PNG", "exifInfo": {"make": "Apple"}}],
+                    2021: [{"id": "s2", "originalFileName": "IMG_3.png"}]}.get(day.year, [])
+
+    assert Im("u", "k").memories(date(2024, 2, 29), years=4) == []  # 2023-2021 have no Feb 29; 2020 does
+    assert [d.year for d in calls] == [2020]
+    got = Im("u", "k").memories(date(2026, 10, 19), years=5)
+    assert [(y, [a["id"] for a in m]) for y, m in got] == [(2022, ["c"])]
+
+
+def test_memory_picks_cap_total_and_keep_one_per_year():
+    yrs = [(2025 - i, [photo(n) for n in range(3)]) for i in range(12)]
+    picks = wm.memory_picks(yrs, 9)
+    assert len(picks) == 9 and [y for y, _ in picks] == list(range(2025, 2016, -1))
+    assert len(wm.memory_picks(yrs[:2], 9)) == 6 and wm.memory_picks([], 9) == []
 
 
 def test_immich_down_still_writes_the_workouts(tmp_path):

@@ -47,6 +47,7 @@ import hashlib
 import json
 import math
 import subprocess
+from collections import Counter
 import sys
 import urllib.error
 import urllib.request
@@ -73,6 +74,7 @@ COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 # A journal day runs 04:00 -> 04:00: a ride home at 01:00 belongs to the evening before.
 DAY_START_H = 4
 CLIMB_TILES_MAX = 16
+MEMORY_YEARS = 20
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
     "Cycling": ("🚲", "Vélo", "trajet", "bike"),
@@ -397,7 +399,8 @@ def photo_lines(shots):
 
 
 def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=()):
+            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
+            memories=()):
     """Memo markdown, in French: the weather line, agenda, photos, then one
     `###` section per source, work last.
     `legs` = [(from_label, to_label) or None] per workout, `trip_legs` the
@@ -408,7 +411,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     (heading suffix, lines) from journal_sources.music_section, or None;
     `climbing` and `games` = the same from climbing_section / game_section;
     `activity` = the heading suffix from activity_section; `notes` = side-project
-    notes (journal_sources.dispatch_notes), collapsed in their own section."""
+    notes (journal_sources.dispatch_notes), collapsed in their own section;
+    `memories` = lines from memory_lines."""
     sections, tags = [], []
     if weather:
         sections.append([weather])
@@ -421,6 +425,9 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
             lines += [f"[Voir la journée dans Immich]({photos_url})"]
         sections.append(lines)
         tags.append("photos")
+    if memories:
+        sections.append(["### 🕰 Souvenirs", "", *memories])
+        tags.append("memories")
     if activity:
         sections.append([f"### 🚶 Activité - {activity}"])
     if ws:
@@ -554,7 +561,23 @@ class Immich:
 
     def day(self, day):
         """The day's timeline images, oldest first."""
-        lo, hi = day_bounds(day)
+        return self.between(*day_bounds(day))
+
+    def memories(self, day, years=MEMORY_YEARS):
+        """[(year, images)] for the same date in past years, newest first;
+        screenshots dropped. Search, not /api/memories: the key lacks memory.read."""
+        out = []
+        for y in range(day.year - 1, day.year - 1 - years, -1):
+            try:
+                past = day.replace(year=y)
+            except ValueError:  # Feb 29
+                continue
+            shots = [a for a in self.day(past) if not _screenshot(a)]
+            if shots:
+                out.append((y, shots))
+        return out
+
+    def between(self, lo, hi):
         iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
         req = urllib.request.Request(
             f"{self.url}/api/search/metadata", method="POST",
@@ -582,6 +605,34 @@ def fetch_image(url, opener=None):
     req = urllib.request.Request(url, headers={"User-Agent": "nicos-journal/1.0"})
     with (opener or urllib.request.urlopen)(req, timeout=60) as resp:
         return resp.read()
+
+
+def _screenshot(asset):
+    """A PNG with no camera: a phone screenshot (Oct 12 2021 was one)."""
+    return (asset.get("originalFileName", "").lower().endswith(".png")
+            and not (asset.get("exifInfo") or {}).get("make"))
+
+
+def memory_picks(memories, n):
+    """At most `n` photos over all years, at least one per year, newest years first."""
+    if not memories:
+        return []
+    k = max(1, n // len(memories))
+    return [(y, p) for y, shots in memories for p in pick_photos(shots, k)][:n]
+
+
+def memory_lines(day, memories, link):
+    """`- [Il y a 4 ans · 2022](url) · Bordeaux · 6 photos`, newest year first."""
+    lines = []
+    for y, shots in memories:
+        ago = day.year - y
+        cities = Counter(c for c in ((a.get("exifInfo") or {}).get("city") for a in shots) if c)
+        bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(shots[0]['id'])})"]
+        if cities:
+            bits.append(cities.most_common(1)[0][0])
+        bits.append(f"{len(shots)} photo{'s' if len(shots) > 1 else ''}")
+        lines.append(f"- {' · '.join(bits)}")
+    return lines
 
 
 def _taken(asset):
@@ -833,6 +884,12 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     if not (ws or day_trips or climbs or day_photos or agenda or work or notes):
         return None
     photos = pick_photos(day_photos, cfg.photos_max)
+    memories = []
+    if immich:
+        try:
+            memories = immich.memories(day)
+        except (OSError, ValueError) as e:
+            log(f"{key}: Immich unavailable, no memories this run ({e})")
     music = day_music(cfg, run, day, log)
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
@@ -850,7 +907,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
                     [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
-                     len(src.climbing_pictures(climbs))])
+                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m in memories]])
     if state.get(key, {}).get("sig") == sig:
         log(f"{key}: unchanged")
         return state[key]["memo"]
@@ -866,7 +923,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                       place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
     text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
                    weather, agenda, work, extra, trip_legs, music,
-                   src.climbing_section(climbs) if climbs else None, games, activity, notes)
+                   src.climbing_section(climbs) if climbs else None, games, activity, notes,
+                   memory_lines(day, memories, immich.link) if memories else ())
     if cfg.dry_run:
         log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
             f"{len(photos)}/{len(day_photos)} photos\n{text}")
@@ -907,6 +965,15 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             data = f.read()
         start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
         files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
+    picks = memory_picks(memories, cfg.photos_max)
+    if picks:
+        mem_path = f"{tmpdir}/memories-{key}.jpg"
+        collage_fn([immich.preview(p["id"]) for _, p in picks],
+                   [(str(y), 1) for y, _ in picks], mem_path)
+        with open(mem_path, "rb") as f:
+            data = f.read()
+        files.append((f"memories-{key}.jpg", "image/jpeg", data,
+                      media_metadata(data, _taken(picks[0][1]))))
     last = next((t for t in reversed(tracks) if t), None)
     if last:
         lat, lon = last[-1]
