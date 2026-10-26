@@ -14,6 +14,7 @@ import pytest
 from conftest import FakeResponse
 from nicos_scripts.vaultwarden import agents as va
 from nicos_scripts.vaultwarden import bwcrypto
+from nicos_scripts.vaultwarden.ea_bridge import Vault
 
 BOT = "bot@example.com"
 OWNER = "owner@example.com"
@@ -93,6 +94,10 @@ class FakeVault:
                      collectionIds=body["collectionIds"], revisionDate="r1")
             self.ciphers.append(c)
             return self.reply(c)
+        if method == "DELETE" and path.startswith("/api/ciphers/"):
+            cid = path.rsplit("/", 1)[1]
+            self.ciphers = [c for c in self.ciphers if c["id"] != cid]
+            return self.reply({})
         if method == "PUT" and path.startswith("/api/ciphers/"):
             cid = path.rsplit("/", 1)[1]
             i = next(i for i, c in enumerate(self.ciphers) if c["id"] == cid)
@@ -117,7 +122,7 @@ class FakeVault:
         return urllib.error.HTTPError(req.full_url, code, "x", {}, io.BytesIO(b""))
 
     def writes(self):
-        return [c for c in self.calls if c[0] in ("POST", "PUT") and not c[1].startswith("/identity")]
+        return [c for c in self.calls if c[0] in ("POST", "PUT", "DELETE") and not c[1].startswith("/identity")]
 
 
 @pytest.fixture
@@ -215,3 +220,24 @@ def test_confirm_waits_for_the_owner_to_accept(keys, run):
     server = FakeVault(keys, members=[{"id": "m", "userId": "owner-id", "email": OWNER, "status": 0}])
     rc, _, _ = run(server, "confirm")
     assert rc == 1 and not hasattr(server, "confirmed")
+
+
+def test_purge_hard_deletes_only_a_trashed_item(keys, run):
+    server = FakeVault(keys)
+    run(server, "add", "--name", "T", "--generate")
+    rc, _, lines = run(server, "purge", "--name", "T")
+    assert rc == 1 and "delete it first" in lines[-1] and server.ciphers  # still live: untouched
+    server.ciphers[0]["deletedDate"] = "2026-10-26T21:00:00Z"
+    assert run(server, "purge", "--name", "T")[0] == 0 and server.ciphers == []
+    assert run(server, "purge", "--name", "T")[0] == 1  # nothing left
+
+
+def test_add_stores_a_totp(keys):
+    server = FakeVault(keys)
+    cfg = va.Config({"VAULT_URL": "http://vw/vw", "VAULT_AGENT_EMAIL": BOT, "VAULT_OWNER_EMAIL": OWNER,
+                     "VAULT_AGENT_PASSWORD_FILE": "x", "DRY_RUN": "0"})
+    agent = va.Agent(cfg, Vault(cfg, server, device=(va.DEVICE_ID, va.TAG)), PASSWORD)
+    va.add(agent, {"name": "T", "username": "u", "password": None, "notes": None, "uris": [],
+                   "totp": "otpauth://totp/x?secret=ABC"}, False, False, print)
+    assert dec(server.ciphers[0]["login"]["totp"]) == "otpauth://totp/x?secret=ABC"
+    assert server.ciphers[0]["login"]["password"] is None

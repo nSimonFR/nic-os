@@ -121,6 +121,7 @@ in
     ./beast-power.nix
     ./agent-access.nix
     ./rootreq.nix
+    ./sudo-totp.nix
     ./immich.nix
     ./immich-clip.nix
     ./immich-adopt.nix
