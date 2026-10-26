@@ -13,12 +13,24 @@ import socket
 import urllib.error
 import urllib.request
 
-PROMPT = (
-    "Tu résumes la journée d'un journal personnel en UNE seule phrase en français, "
-    "25 mots au plus, au présent, ton sobre et chaleureux. N'utilise que les faits "
-    "fournis, n'invente rien, pas d'emoji, pas de chiffres secondaires, pas de "
-    "guillemets. Commence directement par le contenu (pas de « Aujourd'hui »)."
-)
+PROMPT = """\
+Tu écris la phrase d'accroche d'une entrée de journal personnel (celui de Nicolas, à Paris). Elle dit ce qui définit CETTE journée : ce qu'il voudra retrouver en la relisant dans un an.
+
+Priorités, de la plus forte à la plus faible :
+1. Ce qui sort de l'ordinaire : voyage, vol, nouveau lieu, sortie ou événement à l'agenda (théâtre, concert, fête, dîner), visite chez des proches.
+2. Les moments marquants : séance d'escalade (surtout un niveau franchi ⬆️ ou des flashs), longue sortie, anniversaire d'un proche.
+3. Le reste, seulement si la journée n'a rien d'autre.
+
+Ignore la routine, sauf si elle est vraiment hors norme : la météo (seulement si extrême : neige, canicule, tempête), la musique écoutée, le nombre de pas, les trajets domicile-travail, les réunions de travail, l'électricité, les prélèvements et la paperasse.
+Les lignes « Airbnb · Nom » sont des voyageurs qui louent son appartement : ne les mentionne jamais.
+🏡 marque un lieu de vie : Alfie, c'est chez lui (y être n'est pas un événement) ; les autres 🏡 sont chez des proches.
+L'entrée tutoie Nicolas (« ton grand-oncle ») ; toi, écris avec sa voix (« mon grand-oncle »).
+
+Si rien ne ressort, quelques mots suffisent (« Journée de travail tranquille. », « Dimanche calme à la maison. ») ; n'écris jamais « rien de marquant » ni « sans événement ».
+S'il y a plusieurs moments, garde l'ordre de la journée (les heures sont dans l'entrée).
+
+Forme : une seule phrase en français, 20 mots au plus, de préférence nominale, comme une note de carnet (« Matinée à Lisbonne, puis dîner chez des amis. »). Énonce les faits sans inventer de ressenti ni d'action (pas de « j'ai appris », « j'ai fêté », « j'ai profité »). Pas de remplissage : ni météo, ni trajet, ni formule creuse (« sans autre événement », « journée bien remplie ») pour allonger. Aucun chiffre sauf s'il fait la journée, pas d'emoji, pas de guillemets.
+"""
 SKIP = ("### 🕰", "### 🌳")  # the past, not the day
 
 
@@ -33,18 +45,19 @@ def visible(text):
             skip = line.startswith(SKIP)
         if line.startswith("_____"):
             break
-        if not skip and line.strip():
+        if not skip and line.strip() and not line.startswith("Voir "):
             out.append(line)
     return "\n".join(out)
 
 
 def source_hash(text):
-    return hashlib.sha256(visible(text).encode()).hexdigest()[:16]
+    """Changes with the visible text or the prompt: either one means a new sentence."""
+    return hashlib.sha256((PROMPT + visible(text)).encode()).hexdigest()[:16]
 
 
 def summarize(gate, model, text, opener=None, timeout=120):
     """The sentence, or None when the gate or model is unavailable."""
-    body = json.dumps({"model": model, "temperature": 0.3,
+    body = json.dumps({"model": model, "temperature": 0.2,
                        "messages": [{"role": "system", "content": PROMPT},
                                     {"role": "user", "content": visible(text)}]}).encode()
     req = urllib.request.Request(f"{gate}/v1/chat/completions", data=body, method="POST",
