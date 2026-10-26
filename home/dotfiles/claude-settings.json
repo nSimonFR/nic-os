@@ -259,6 +259,7 @@
   "enabledPlugins": {
     "mattpocock-skills@mattpocock": true,
     "impeccable@impeccable": true,
+    "hallmark@hallmark": true,
     "slack@claude-plugins-official": true
   },
   "extraKnownMarketplaces": {
@@ -273,6 +274,13 @@
       "source": {
         "source": "github",
         "repo": "pbakaus/impeccable"
+      },
+      "autoUpdate": true
+    },
+    "hallmark": {
+      "source": {
+        "source": "github",
+        "repo": "Nutlope/hallmark"
       },
       "autoUpdate": true
     }
