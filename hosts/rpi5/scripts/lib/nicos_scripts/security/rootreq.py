@@ -17,6 +17,7 @@ import secrets
 import shlex
 import socket
 import socketserver
+import ssl
 import struct
 import subprocess
 import sys
@@ -50,6 +51,8 @@ class Config:
     telegram_chat_id: str
     timeout: int
     run_timeout: int
+    tls_cert: str = ""
+    tls_key: str = ""
 
     @classmethod
     def from_env(cls, env=None):
@@ -65,6 +68,8 @@ class Config:
             telegram_chat_id=env_str("TELEGRAM_CHAT_ID", "", env),
             timeout=env_int("ROOTREQ_TIMEOUT", 180, env),
             run_timeout=env_int("ROOTREQ_RUN_TIMEOUT", 600, env),
+            tls_cert=env_str("ROOTREQ_TLS_CERT", "", env),
+            tls_key=env_str("ROOTREQ_TLS_KEY", "", env),
         )
 
 
@@ -295,6 +300,25 @@ class _UnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
     daemon_threads = True
 
 
+class _HttpServer(ThreadingHTTPServer):
+    daemon_threads = True
+    tls = None
+
+    def get_request(self):
+        conn, addr = super().get_request()
+        if self.tls:
+            # Handshake on first read, in the request's thread: a silent client can't stall accept().
+            conn = self.tls.wrap_socket(conn, server_side=True, do_handshake_on_connect=False)
+        return conn, addr
+
+
+def tls_context(cfg):
+    """Phones and Telegram's in-app browser won't open the page over plain http."""
+    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(cfg.tls_cert, cfg.tls_key or None)
+    return ctx
+
+
 def serve(env=None):
     cfg = Config.from_env(env)
     missing = [k for k, v in {"ROOTREQ_LISTEN_HOST": cfg.listen_host,
@@ -312,8 +336,10 @@ def serve(env=None):
     unix = _UnixServer(cfg.socket_path, make_unix_handler(broker))
     os.chown(cfg.socket_path, 0, int(env_str("ROOTREQ_SOCKET_GID", "100", env)))
     os.chmod(cfg.socket_path, 0o660)
-    http = ThreadingHTTPServer((cfg.listen_host, cfg.listen_port),
+    http = _HttpServer((cfg.listen_host, cfg.listen_port),
                                make_http_handler(broker, tailscale_whois))
+    if cfg.tls_cert:
+        http.tls = tls_context(cfg)
     threading.Thread(target=http.serve_forever, daemon=True).start()
     broker.log(f"listening on {cfg.socket_path} and {cfg.listen_host}:{cfg.listen_port}")
     unix.serve_forever()

@@ -145,3 +145,40 @@ def test_describe_escapes_html():
 def test_serve_refuses_incomplete_config(capsys):
     assert rootreq.serve({}) == 2
     assert "FATAL" in capsys.readouterr().err
+
+
+def _self_signed(tmp_path):
+    x509 = pytest.importorskip("cryptography.x509")
+    import datetime
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import ec
+    k = ec.generate_private_key(ec.SECP256R1())
+    name = x509.Name([x509.NameAttribute(x509.oid.NameOID.COMMON_NAME, "localhost")])
+    now = datetime.datetime.now(datetime.timezone.utc)
+    c = (x509.CertificateBuilder().subject_name(name).issuer_name(name).public_key(k.public_key())
+         .serial_number(1).not_valid_before(now).not_valid_after(now + datetime.timedelta(days=1))
+         .add_extension(x509.SubjectAlternativeName([x509.DNSName("localhost")]), critical=False)
+         .sign(k, hashes.SHA256()))
+    key, cert = tmp_path / "k.pem", tmp_path / "c.pem"
+    key.write_bytes(k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                    serialization.NoEncryption()))
+    cert.write_bytes(c.public_bytes(serialization.Encoding.PEM))
+    return key, cert
+
+
+def test_tls_page_answers_over_https(tmp_path):
+    import ssl
+    import urllib.error
+    import urllib.request
+    key, cert = _self_signed(tmp_path)
+    c = cfg(listen_host="127.0.0.1", tls_cert=str(cert), tls_key=str(key))
+    http = rootreq._HttpServer(("127.0.0.1", 0), rootreq.make_http_handler(rootreq.Broker(c), lambda ip: None))
+    http.tls = rootreq.tls_context(c)
+    threading.Thread(target=http.serve_forever, daemon=True).start()
+    try:
+        ctx = ssl.create_default_context(cafile=str(cert))
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(f"https://localhost:{http.server_port}/r/nope", context=ctx, timeout=5)
+        assert e.value.code == 404
+    finally:
+        http.shutdown()

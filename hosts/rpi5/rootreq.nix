@@ -7,6 +7,7 @@
 { pkgs, tailnetFqdn, telegramChatId, ... }:
 let
   port = 8390;
+  certDir = "/var/lib/rootreq";
 in
 {
   environment.systemPackages = [ pkgs.nicos-scripts ];
@@ -23,7 +24,9 @@ in
       # this is the tailnet plus localhost; localhost fails the whois check.
       ROOTREQ_LISTEN_HOST = "0.0.0.0";
       ROOTREQ_LISTEN_PORT = toString port;
-      ROOTREQ_PUBLIC_URL = "http://${tailnetFqdn}:${toString port}";
+      ROOTREQ_PUBLIC_URL = "https://${tailnetFqdn}:${toString port}";
+      ROOTREQ_TLS_CERT = "${certDir}/cert.pem";
+      ROOTREQ_TLS_KEY = "${certDir}/key.pem";
       ROOTREQ_ALLOWED_UID = "1001"; # nsimon
       ROOTREQ_APPROVER_LOGIN = "nSimonFR@github";
       ROOTREQ_APPROVER_NODE = "nphone.gate-mintaka.ts.net";
@@ -31,7 +34,12 @@ in
       TELEGRAM_CHAT_ID = toString telegramChatId;
     };
     serviceConfig = {
+      # Tailnet's Let's Encrypt cert (90 days); tailscaled renews it when it's near expiry.
+      ExecStartPre = "${pkgs.tailscale}/bin/tailscale cert --cert-file ${certDir}/cert.pem --key-file ${certDir}/key.pem ${tailnetFqdn}";
       ExecStart = "${pkgs.nicos-scripts}/bin/rootreq-broker";
+      StateDirectory = "rootreq";
+      StateDirectoryMode = "0700";
+      RuntimeMaxSec = "7d"; # restart (Restart=always) to pick up a renewed cert
       RuntimeDirectory = "rootreq";
       RuntimeDirectoryMode = "0755";
       Restart = "always";
