@@ -271,6 +271,7 @@ def tree_lines(tree, day, url):
             else:
                 out.append(Line(_rank(tree, h), f"🕯 Il y a {years} ans s'éteignait {who(h)}"
                                 f"{then(kin, ev)} ({when})", False))
+    weddings = set()  # a couple entered twice (or one wedding in two families) shows once
     for fam in tree.families.values():
         for eh in fam["events"]:
             ev = tree.events.get(eh)
@@ -278,8 +279,10 @@ def tree_lines(tree, day, url):
                 continue
             years = day.year - ev.date[0]
             pair = [x for x in (fam["father"], fam["mother"]) if x in tree.people]
-            if years <= 0 or not pair:
+            key = (tuple(sorted(tree.people[x].name for x in pair)), ev.date)
+            if years <= 0 or not pair or key in weddings:
                 continue
+            weddings.add(key)
             when = link("event", ev.id, date_fr(ev.date))
             kin = couple_kin(tree, *pair) if len(pair) == 2 else ""
             names = " et ".join(f"{who(x)}" + ("" if kin or not tree.relation(x) else f" ({tree.relation(x)})")
@@ -287,7 +290,7 @@ def tree_lines(tree, day, url):
             rank = min(_rank(tree, x) for x in pair)
             if all(tree.living(x) for x in pair) and years <= 80:
                 out.append(Line(rank, f"💍 {names}{f', {kin},' if kin else ''} fêtent leurs "
-                                f"{years} ans de mariage ({when})", True))
+                                f"{years} ans de mariage ({when})", False))  # genealogy, not 🎂
             else:
                 out.append(Line(rank, f"💍 Il y a {years} ans, {names}{f', {kin},' if kin else ''} "
                                 f"se mariaient{at(ev)} ({when})", False))

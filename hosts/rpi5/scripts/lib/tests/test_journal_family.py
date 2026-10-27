@@ -142,3 +142,16 @@ def test_contact_birthdays_skip_people_already_in_the_tree(tree):
                                                  ("Mathilde Dolou", 1996)]
     assert jf.birthday_lines(contacts, tree, day) == ["🎂 Antoine Martin · 29 ans", "🎂 Guy Le Moal"]
     assert jf.birthday_lines(contacts, None, day)[-1] == "🎂 Mathilde Dolou · 30 ans"
+
+
+def test_a_living_couples_wedding_shows_once_in_genealogy(tmp_path):
+    people = [("I1", "Nicolas", "Simon", False, ["F1"], [], []),
+              ("I3", "Franck", "Simon", False, [], ["F1", "F9"], []),
+              ("I4", "Anne", "Dolou", True, [], ["F1", "F9"], [])]
+    families = [("F1", "I3", "I4", ["I1"], ["E30"]),
+                ("F9", "I3", "I4", [], ["E31"])]  # the same couple entered twice
+    events = [("E30", M, _date(1990, 6, 2), ""), ("E31", M, _date(1990, 6, 2), "")]
+    t = jf.Tree.load(make_tree(str(tmp_path / "w.db"), people, families, events), "I1")
+    births, history = jf.family_sections([], t, date(2026, 6, 2), "https://g")
+    assert births == []
+    assert len(history) == 1 and "fêtent leurs 36 ans de mariage" in history[0]
