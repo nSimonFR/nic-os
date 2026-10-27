@@ -46,6 +46,7 @@ import base64
 import dataclasses
 import functools
 import hashlib
+import io
 import json
 import math
 import os
@@ -586,6 +587,21 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         tags.append("genealogy")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
+
+
+SUMMARY_IMAGE_PX = 1024
+
+
+def summary_image(data):
+    """The collage scaled down for the summary model, or None."""
+    if not data:
+        return None
+    from PIL import Image
+    img = Image.open(io.BytesIO(data))
+    img.thumbnail((SUMMARY_IMAGE_PX, SUMMARY_IMAGE_PX))
+    out = io.BytesIO()
+    img.convert("RGB").save(out, "JPEG", quality=80)
+    return out.getvalue()
 
 
 def collage_grid(n):
@@ -1336,10 +1352,18 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                    memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
                    fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy,
                    screens, badges, spending)
-    summary, src_hash = None, summ.source_hash(text)
+    collage = None
+    if photos:
+        collage_path = f"{tmpdir}/photos-{key}.jpg"
+        collage_fn([immich.preview(p["id"]) for p in photos],
+                   [tile_label(p) for p in photos], collage_path)
+        with open(collage_path, "rb") as f:
+            collage = f.read()
+    summary, src_hash = None, summ.source_hash(text, ",".join(p["id"] for p in photos))
     if summary_fn:
         prev = state.get(key, {})
-        summary = prev.get("summary") if prev.get("summary_src") == src_hash else summary_fn(text)
+        summary = (prev.get("summary") if prev.get("summary_src") == src_hash
+                   else summary_fn(text, summary_image(collage)))
         if summary:
             text = f"*{summary}*\n\n{text}"
         else:  # gate down: a later run retries, as the signature won't match
@@ -1360,11 +1384,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         files.append((f"map-{key}.jpg", "image/jpeg", data,
                       media_metadata(data, moved, location=lines[-1][0][-1])))
     if photos:
-        collage_path = f"{tmpdir}/photos-{key}.jpg"
-        collage_fn([immich.preview(p["id"]) for p in photos],
-                   [tile_label(p) for p in photos], collage_path)
-        with open(collage_path, "rb") as f:
-            data = f.read()
+        data = collage
         gps = next((g for g in map(photo_gps, reversed(photos)) if g), None)
         cams = {((p.get("exifInfo") or {}).get("make"), (p.get("exifInfo") or {}).get("model"))
                 for p in photos if (p.get("exifInfo") or {}).get("make")}
@@ -1496,7 +1516,8 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                             render_fn or render, tmp, immich,
                             collage_fn=functools.partial(render_collage, font_path=cfg.font),
                             pass_fn=functools.partial(render_boarding_passes, font_path=cfg.font),
-                            summary_fn=(lambda t: summ.summarize(cfg.gate_url, cfg.summary_model, t, opener))
+                            summary_fn=(lambda t, img=None: summ.summarize(cfg.gate_url, cfg.summary_model, t, opener,
+                                                                           image=img))
                             if cfg.gate_url else None,
                             weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
                             tree=tree, spend_fn=spend_fn)

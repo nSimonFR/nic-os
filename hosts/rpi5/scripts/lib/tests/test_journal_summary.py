@@ -70,3 +70,17 @@ def test_summarize_is_none_when_the_gate_is_down():
 def test_source_hash_ignores_collapsed_detail():
     assert js.source_hash(MEMO) == js.source_hash(MEMO.replace("Secret meeting", "Other"))
     assert js.source_hash(MEMO) != js.source_hash(MEMO.replace("Rome", "Paris"))
+
+
+def test_birthdays_are_not_shown_to_the_model():
+    v = js.visible("### 📅 Agenda\n\n- **Journée** Anniversaire de Léa\n\n### 🎂 Anniversaires\n\n- Paul a 40 ans\n")
+    assert "Anniversaire de Léa" in v and "Paul" not in v
+
+
+def test_summarize_sends_the_collage_with_the_text():
+    op = FakeOpener([json_reply({"choices": [{"message": {"content": "Pique-nique au parc."}}]})])
+    assert js.summarize("http://gate", "gpt-6-luna", MEMO, op, image=b"\xff\xd8jpeg") == "Pique-nique au parc."
+    text, img = json.loads(op.last.data)["messages"][1]["content"]
+    assert text["type"] == "text" and "Rome" in text["text"]
+    assert img["image_url"]["url"].startswith("data:image/jpeg;base64,/9hqcGVn")
+    assert js.source_hash(MEMO, "a,b") != js.source_hash(MEMO, "a")
