@@ -2,9 +2,9 @@
 Spending for journal-daily, from Sure's database (as postgres).
 
 A day's spending = the money going out of the configured accounts on that
-date (banks give dates, not times: no 04:00 shift), counting only `standard`
-transactions that are neither excluded nor pending. Transfers between own
-accounts are `funds_movement` and stay out. Money coming back is shown apart,
+date (banks give dates, not times: no 04:00 shift), counting `standard`
+transactions and `loan_payment`s (the mortgage counts) that are neither excluded
+nor pending. Transfers between own accounts are `funds_movement` and stay out. Money coming back is shown apart,
 and only refunds (REFUND_CATEGORIES): salary, Airbnb payouts, gifts and meal
 vouchers are not spending's opposite.
 
@@ -48,7 +48,7 @@ def day_spends(run, day, accounts, joint=(), db="sure_production", runuser="runu
         LEFT JOIN categories c ON c.id = t.category_id
         LEFT JOIN merchants m ON m.id = t.merchant_id
         WHERE a.name IN ({_sql_list(tuple(accounts) + tuple(joint))})
-          AND e.date = '{day.isoformat()}' AND t.kind = 'standard' AND NOT e.excluded
+          AND e.date = '{day.isoformat()}' AND t.kind IN ('standard', 'loan_payment') AND NOT e.excluded
           AND coalesce(t.extra->'enable_banking'->>'pending', '') <> 'true'
           AND coalesce(t.extra->'lunchflow'->>'pending', '') <> 'true'
         ORDER BY e.amount DESC, e.id

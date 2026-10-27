@@ -31,5 +31,5 @@ def test_query_keeps_standard_settled_entries_of_the_day():
     spends = sp.day_spends(run, date(2026, 10, 24), ["SG - Courant"], ["Burgieland"])
     assert spends == [S(False, 12.5, "Franprix", "0 - Groceries"), S(True, 3.0, "La Rose", "0 - Food & Drink")]
     sql = seen[0]
-    assert "e.date = '2026-10-24'" in sql and "t.kind = 'standard'" in sql and "NOT e.excluded" in sql
+    assert "e.date = '2026-10-24'" in sql and "t.kind IN ('standard', 'loan_payment')" in sql and "NOT e.excluded" in sql
     assert "'pending', '') <> 'true'" in sql and "IN ('SG - Courant', 'Burgieland')" in sql
