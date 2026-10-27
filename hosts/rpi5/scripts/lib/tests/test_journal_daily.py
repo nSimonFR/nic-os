@@ -750,6 +750,15 @@ def test_games_merge_v11_and_v1_playtime_a_day_late(tmp_path):
         "1 h 10", ["- **Stardew Valley** · 1 h 00", "- **Hades** · 10 min"])
 
 
+
+def test_a_full_sync_is_not_a_day_of_play(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 7, 22))
+    push = lo + 86400 + 3000
+    pg = FakePg([], [], v1_games=[(push, "Path of Exile 2", 19242 * 60), (push, "Portal", 212 * 60)])
+    logs = []
+    assert wm.day_games(cfg(tmp_path), pg, date(2026, 7, 22), logs.append) is None
+    assert logs == ["2026-07-22: games dropped (324 h pushed: a full sync, not a day)"]
+
 def flight_row(fid, date_, dep, arr, frm=("CDG", "Paris (Roissy-en-France, Val-d'Oise)", "FR", 49.0097, 2.5479, "Europe/Paris"),
                to=("FCO", "Rome", "IT", 41.8003, 12.2389, "Europe/Rome"), seat=("36A", "economy"), duration=6300):
     ap = lambda a: (a[0], f"{a[1]} Airport", a[1], a[2], a[3], a[4], a[5])

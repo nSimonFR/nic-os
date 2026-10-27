@@ -1176,6 +1176,20 @@ def day_activity(cfg, run, day, log):
 STREAK_LOOKBACK_D = 45
 
 
+# More play than a day can hold: a sync pushed whole lifetimes (Steam's first
+# run, 2026-07-23, landed ~1000 h on 07-22).
+MAX_DAY_PLAY_S = 16 * 3600
+
+
+def drop_imports(plays):
+    """(plays without the impossible days, {journal day: seconds dropped})."""
+    total = {}
+    for t, _, sec in plays:
+        total[rec.journal_date(t)] = total.get(rec.journal_date(t), 0) + sec
+    bad = {d: s for d, s in total.items() if s > MAX_DAY_PLAY_S}
+    return [p for p in plays if rec.journal_date(p[0]) not in bad], bad
+
+
 def day_games(cfg, run, day, log):
     """journal_sources.game_section of the day, each game with its streak, or
     None (nothing played, or Ryot down)."""
@@ -1186,6 +1200,9 @@ def day_games(cfg, run, day, log):
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: games unavailable ({e})")
         return None
+    plays, dropped = drop_imports(plays)
+    if day in dropped:
+        log(f"{day}: games dropped ({dropped[day] // 3600} h pushed: a full sync, not a day)")
     games = src.game_sessions([p for p in plays if p[0] >= lo])
     days = {}
     for t, title, _ in plays:
