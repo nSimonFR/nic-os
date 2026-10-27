@@ -282,6 +282,17 @@ def test_resolve_reports_a_failed_import_as_unresolved():
     assert emap == {}
 
 
+def test_resolve_skips_an_import_that_never_finishes():
+    c, _ = client(
+        [lookup_reply({}), json_reply({"jobId": "j1"})]
+        + [json_reply({"status": "running"})] * ryot.IMPORT_POLLS
+        + [json_reply({"jobId": "j2"}), json_reply({"status": "completed", "data": {"id": "met_2"}})]
+    )
+    emap = {}
+    assert spotify.resolve_entities(c, ["t1", "t2"], emap, log=lambda _m: None) == ["t1"]
+    assert emap == {"t2": "met_2"}
+
+
 def test_resolve_without_imports_returns_the_missing_ids():
     c, op = client([lookup_reply({})])
     assert spotify.resolve_entities(c, ["t1"], {}, import_missing=False) == ["t1"]

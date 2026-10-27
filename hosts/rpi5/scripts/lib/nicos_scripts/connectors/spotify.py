@@ -351,7 +351,11 @@ def resolve_entities(client, track_ids, entity_map, import_missing=True, log=log
     unresolved = []
     for n, tid in enumerate(missing, 1):
         log(f"importing Spotify track {tid} ({n}/{len(missing)})")
-        entity = client.import_entity(provider_id, tid)
+        try:
+            entity = client.import_entity(provider_id, tid)
+        except ryot.ImportStalled as e:
+            log(f"WARN: {e}")
+            entity = ""
         if entity:
             entity_map[tid] = entity
         else:

@@ -154,6 +154,10 @@ IMPORT_POLLS = 6
 SIDECAR_STARTUP_FAILED = "Sandbox sidecar startup failed"
 
 
+class ImportStalled(RuntimeError):
+    """A provider import still unfinished after IMPORT_POLLS; some never finish."""
+
+
 class RateLimited(RuntimeError):
     def __init__(self, path, retry_after_ms):
         super().__init__(f"Ryot {path} -> 429 (retry after {retry_after_ms} ms)")
@@ -257,7 +261,7 @@ class Client:
             if status in ("failed", "cancelled"):
                 self.log(f"import of {external_id} {status}: {json.dumps(res)[:300]}")
                 return ""
-        raise RuntimeError(f"import of {external_id} still {status} after {IMPORT_POLLS} polls")
+        raise ImportStalled(f"import of {external_id} still {status} after {IMPORT_POLLS} polls")
 
 
 # ── RyotQL expression builders ────────────────────────────────────────────────
