@@ -135,7 +135,8 @@ class Config:
     immich_admin_key_file: str = ""
     spend_accounts: tuple = ()  # Sure account names; none = no spending section
     joint_accounts: tuple = ()
-    sure_db: str = "sure_production"
+    sure_url: str = "http://127.0.0.1:13334/sure"
+    sure_key_file: str = ""
     gate_url: str = ""
     summary_model: str = "gpt-6-luna"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
@@ -171,7 +172,8 @@ class Config:
             immich_admin_key_file=env_str("IMMICH_ADMIN_KEY_FILE", "", env),
             spend_accounts=_names(env_str("JOURNAL_SPEND_ACCOUNTS", "", env)),
             joint_accounts=_names(env_str("JOURNAL_JOINT_ACCOUNTS", "", env)),
-            sure_db=env_str("SURE_DB", "sure_production", env),
+            sure_url=env_str("SURE_URL", "http://127.0.0.1:13334/sure", env).rstrip("/"),
+            sure_key_file=env_str("SURE_API_KEY_FILE", "", env),
             gate_url=env_str("TINY_LLM_GATE_URL", "", env).rstrip("/"),
             summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
@@ -1178,14 +1180,21 @@ def day_screens(cfg, run, day, log):
     return src.screen_section(screens, TZ) if screens else None
 
 
-def day_spend(cfg, run, day, log, today):
-    """journal_spend.spend_section of the day, or None (no accounts set, nothing spent, Sure unreadable)."""
+def sure_spends(cfg, opener=None):
+    """day -> [Spend] through Sure's API, or None when no account is set."""
     if not (cfg.spend_accounts or cfg.joint_accounts):
         return None
+    key = read_secret(cfg.sure_key_file) if cfg.sure_key_file else ""
+    return lambda day: spend.day_spends(day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_url, key, opener)
+
+
+def day_spend(spend_fn, day, log, today):
+    """journal_spend.spend_section of the day, or None (no accounts set, nothing spent, Sure unreadable)."""
+    if not spend_fn:
+        return None
     try:
-        spends = spend.day_spends(run, day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_db,
-                                  cfg.runuser, cfg.psql)
-    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        spends = spend_fn(day)
+    except (OSError, ValueError, KeyError, TypeError) as e:
         log(f"{day}: spending unavailable ({e})")
         return None
     return spend.spend_section(spends, (today - day).days)
@@ -1225,7 +1234,7 @@ def day_badges(cfg, run, day, ws, climbs, activity, energy, log):
 
 def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
                 collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None,
-                pass_fn=render_boarding_passes, summary_fn=None):
+                pass_fn=render_boarding_passes, summary_fn=None, spend_fn=None):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -1255,7 +1264,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
     screens = day_screens(cfg, run, day, log)
-    spending = day_spend(cfg, run, day, log, _today(now))
+    spending = day_spend(spend_fn, day, log, _today(now))
     badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
@@ -1397,10 +1406,10 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     return name
 
 
-def catchup_days(cfg, run, state, today=None, log=print):
+def catchup_days(cfg, spend_fn, state, today=None, log=print):
     """Older days whose spending moved since their memo was written: banks
     deliver up to ~3 weeks late. Only days with a memo, and not under JOURNAL_DAY."""
-    if cfg.day or not (cfg.spend_accounts or cfg.joint_accounts):
+    if cfg.day or not spend_fn:
         return []
     today = today or _today()
     days = []
@@ -1409,7 +1418,7 @@ def catchup_days(cfg, run, state, today=None, log=print):
         prev = state.get(day.isoformat())
         if not prev:
             continue
-        now = day_spend(cfg, run, day, log, today)
+        now = day_spend(spend_fn, day, log, today)
         if json.loads(json.dumps(now)) != prev.get("spend"):  # state round-trips tuples as lists
             days.append(day)
     return sorted(days)
@@ -1446,8 +1455,9 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                 tree = fam.Tree.load(cfg.gramps_db, cfg.gramps_home)
             except (OSError, ValueError, KeyError, sqlite3.Error) as e:
                 log(f"no family tree: {e}")
+        spend_fn = sure_spends(cfg, opener)
         with tempfile.TemporaryDirectory() as tmp:
-            for day in target_days(cfg, today) + catchup_days(cfg, run, state, today, log):
+            for day in target_days(cfg, today) + catchup_days(cfg, spend_fn, state, today, log):
                 journal_day(cfg, run, memos, state, day, uid, log,
                             render_fn or render, tmp, immich,
                             collage_fn=functools.partial(render_collage, font_path=cfg.font),
@@ -1455,7 +1465,7 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                             summary_fn=(lambda t: summ.summarize(cfg.gate_url, cfg.summary_model, t, opener))
                             if cfg.gate_url else None,
                             weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
-                            tree=tree)
+                            tree=tree, spend_fn=spend_fn)
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:

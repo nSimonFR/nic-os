@@ -1,21 +1,24 @@
 """
-Spending for journal-daily, from Sure's database (as postgres).
+Spending for journal-daily, from Sure's REST API (GET /api/v1/transactions,
+docs/api/openapi.yaml in the Sure package) with a read-only API key.
 
 A day's spending = the money going out of the configured accounts on that
-date (banks give dates, not times: no 04:00 shift), counting `standard`
-transactions and `loan_payment`s (the mortgage counts) that are neither excluded
-nor pending. Transfers between own accounts are `funds_movement` and stay out. Money coming back is shown apart,
-and only refunds (REFUND_CATEGORIES): salary, Airbnb payouts, gifts and meal
-vouchers are not spending's opposite.
+date (banks give dates, not times: no 04:00 shift). Transfers between own
+accounts stay out, except those to a loan account: the mortgage counts. The
+API doesn't flag excluded or pending transactions, so both count; a settled
+transaction replaces its pending copy and the catch-up re-reads the day.
+Money coming back is shown apart, and only refunds (REFUND_CATEGORIES):
+salary, Airbnb payouts, gifts and meal vouchers are not spending's opposite.
 
 Banks deliver late (2026-10: median 1.7 days, p90 6.5, p99 ~20), so the
 journal re-reads the last CATCHUP_DAYS and marks a day younger than
 SETTLED_DAYS as still syncing.
 """
 
+import urllib.parse
 from dataclasses import dataclass
 
-from ..pg import psql_rows
+from ..httpjson import get_json
 
 CATCHUP_DAYS = 21
 SETTLED_DAYS = 7
@@ -34,26 +37,27 @@ class Spend:
     category: str
 
 
-def _sql_list(names):
-    return ", ".join("'" + n.replace("'", "''") + "'" for n in names) or "NULL"
+def _counts(t):
+    transfer = t.get("transfer")
+    return not transfer or (transfer.get("other_account") or {}).get("account_type") == "loan"
 
 
-def day_spends(run, day, accounts, joint=(), db="sure_production", runuser="runuser", psql="psql"):
+def day_spends(day, accounts, joint=(), url="http://127.0.0.1:13334/sure", key="", opener=None):
     """The day's Spends on `accounts` and the `joint` ones (Sure account names)."""
-    rows = psql_rows(run, f"""
-        SELECT a.name IN ({_sql_list(joint)}), e.amount, coalesce(m.name, e.name), coalesce(c.name, '')
-        FROM entries e
-        JOIN accounts a ON a.id = e.account_id
-        JOIN transactions t ON t.id = e.entryable_id AND e.entryable_type = 'Transaction'
-        LEFT JOIN categories c ON c.id = t.category_id
-        LEFT JOIN merchants m ON m.id = t.merchant_id
-        WHERE a.name IN ({_sql_list(tuple(accounts) + tuple(joint))})
-          AND e.date = '{day.isoformat()}' AND t.kind IN ('standard', 'loan_payment') AND NOT e.excluded
-          AND coalesce(t.extra->'enable_banking'->>'pending', '') <> 'true'
-          AND coalesce(t.extra->'lunchflow'->>'pending', '') <> 'true'
-        ORDER BY e.amount DESC, e.id
-    """, db, runuser, psql)
-    return [Spend(r[0] == "t", float(r[1]), r[2], r[3]) for r in rows]
+    names, spends, page = set(accounts) | set(joint), [], 1
+    while True:
+        q = urllib.parse.urlencode({"start_date": day.isoformat(), "end_date": day.isoformat(),
+                                    "per_page": 100, "page": page})
+        reply = get_json(f"{url}/api/v1/transactions?{q}", {"X-Api-Key": key, "Accept": "application/json"},
+                         timeout=120, opener=opener)
+        for t in reply.get("transactions", []):
+            if t["account"]["name"] in names and _counts(t):
+                spends.append(Spend(t["account"]["name"] in joint, -t["signed_amount_cents"] / 100,
+                                    (t.get("merchant") or {}).get("name") or t["name"],
+                                    (t.get("category") or {}).get("name") or ""))
+        if page >= (reply.get("pagination") or {}).get("total_pages", 1):
+            return sorted(spends, key=lambda s: -s.amount)
+        page += 1
 
 
 def _eur(x):
