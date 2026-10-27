@@ -16,10 +16,16 @@ def test_section_totals_mine_and_joint_apart():
               S(False, 10.0, "Uber", "3 - Transportation"), S(True, 16.78, "Lidl", "0 - Groceries"),
               S(False, -23.5, "CPAM", "I3 - Health"), S(False, -2000, "TRUSK", "I0 - Work"),
               S(True, -234.25, "AIRBNB", "I7 - Airbnb"), S(False, 600, "PEA", "Investment Contributions")]
-    head, lines = sp.spend_section(spends, age_days=10)
+    head, lines = sp.spend_section(spends, age_days=10, link="https://sure/x")
     assert head == "123,17 € · 👥 16,78 € en commun"
-    assert lines == ["- 🍽 **Trattoria** · 72,00 €", "- 🚕 **Uber** · 51,17 € (2)",
-                     "- 👥 🛒 **Lidl** · 16,78 €", "- ↩︎ **Remboursé** · 23,50 €"]
+    assert lines == ["[Détail dans Sure](https://sure/x)"]
+    assert sp.spend_section(spends, age_days=10)[1] == []
+
+
+def test_detail_url_filters_the_day_and_accounts():
+    url = sp.detail_url("https://h/sure", date(2026, 4, 30), ("SG - Courant", "Burgieland"))
+    assert url == ("https://h/sure/transactions?q%5Bstart_date%5D=2026-04-30&q%5Bend_date%5D=2026-04-30"
+                   "&q%5Baccounts%5D%5B%5D=SG+-+Courant&q%5Baccounts%5D%5B%5D=Burgieland")
 
 
 def test_section_marks_a_young_day_and_skips_an_empty_one():

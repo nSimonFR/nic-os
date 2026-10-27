@@ -137,6 +137,7 @@ class Config:
     joint_accounts: tuple = ()
     sure_url: str = "http://127.0.0.1:13334/sure"
     sure_key_file: str = ""
+    sure_public_url: str = ""  # the memo's link to the day's transactions
     gate_url: str = ""
     summary_model: str = "gpt-6-luna"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
@@ -174,6 +175,7 @@ class Config:
             joint_accounts=_names(env_str("JOURNAL_JOINT_ACCOUNTS", "", env)),
             sure_url=env_str("SURE_URL", "http://127.0.0.1:13334/sure", env).rstrip("/"),
             sure_key_file=env_str("SURE_API_KEY_FILE", "", env),
+            sure_public_url=env_str("SURE_PUBLIC_URL", "", env).rstrip("/"),
             gate_url=env_str("TINY_LLM_GATE_URL", "", env).rstrip("/"),
             summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
@@ -1188,7 +1190,7 @@ def sure_spends(cfg, opener=None):
     return lambda day: spend.day_spends(day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_url, key, opener)
 
 
-def day_spend(spend_fn, day, log, today):
+def day_spend(spend_fn, day, log, today, cfg=None):
     """journal_spend.spend_section of the day, or None (no accounts set, nothing spent, Sure unreadable)."""
     if not spend_fn:
         return None
@@ -1197,7 +1199,9 @@ def day_spend(spend_fn, day, log, today):
     except (OSError, ValueError, KeyError, TypeError) as e:
         log(f"{day}: spending unavailable ({e})")
         return None
-    return spend.spend_section(spends, (today - day).days)
+    link = (spend.detail_url(cfg.sure_public_url, day, cfg.spend_accounts + cfg.joint_accounts)
+            if cfg and cfg.sure_public_url else "")
+    return spend.spend_section(spends, (today - day).days, link)
 
 
 def _today(now=None):
@@ -1264,7 +1268,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     games = day_games(cfg, run, day, log)
     activity = day_activity(cfg, run, day, log)
     screens = day_screens(cfg, run, day, log)
-    spending = day_spend(spend_fn, day, log, _today(now))
+    spending = day_spend(spend_fn, day, log, _today(now), cfg)
     badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
@@ -1418,7 +1422,7 @@ def catchup_days(cfg, spend_fn, state, today=None, log=print):
         prev = state.get(day.isoformat())
         if not prev:
             continue
-        now = day_spend(spend_fn, day, log, today)
+        now = day_spend(spend_fn, day, log, today, cfg)
         if json.loads(json.dumps(now)) != prev.get("spend"):  # state round-trips tuples as lists
             days.append(day)
     return sorted(days)
