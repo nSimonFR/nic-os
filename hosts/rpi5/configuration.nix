@@ -315,15 +315,12 @@ in
   users.users.${username} = {
     # No "wheel": no sudo, no polkit admin. Agents run as this user, and root
     # reads every agenix secret. Deploys come from CI (cachix-agent.nix).
+    # No "systemd-journal" (system logs carry secrets) and no "nextcloud" (it
+    # reads Nextcloud's config.php): /mnt/data/cloud is a per-user ACL instead,
+    # see nextcloud-files-owner. A group change needs a user-session restart.
     extraGroups = [
-      "systemd-journal"
       "video"
       "networkmanager"
-      # r/w on /mnt/data/cloud for the Hermes agent (runs as this user); the
-      # group's rwX ACL is applied in nextcloud.nix (nextcloud-files-owner).
-      # NB: a new group needs a user-session restart (reboot / loginctl
-      # terminate-user), not just a nixos-rebuild switch.
-      "nextcloud"
     ];
     # The shared key comes from ../../common/nixos.nix; this one is Pi-only, and
     # mkAfter keeps it second in authorized_keys as it has always been.
