@@ -6,7 +6,8 @@ Vaultwarden's "Agents" org: the user clones it into their personal vault and
 deletes it, then `vault-agent purge` empties the org's trash. Agents can read
 that org, so the window lasts until the clone.
 
-Run as root, once (rootreq -- systemctl start sudo-totp-enroll). Refuses when a
+Run as root, once, by hand: `rootreq -- env DRY_RUN=0 <nicos-scripts>/bin/sudo-totp-enroll`
+(no unit: the bot's password stays out of any permanent config). Refuses when a
 secret exists: delete it first to re-enroll. Never prints or logs the secret —
 rootreq hands stdout back to the agent, and the journal is readable by nsimon.
 """
@@ -63,8 +64,19 @@ def enroll(path, user, store, rand=secrets.token_bytes, log=print):
     return 0
 
 
+def vault_env(env=None):
+    """vault-agent's settings, defaulting to vaultwarden.nix's wrapper values."""
+    env = dict(os.environ if env is None else env)
+    user = env.get("SUDO_TOTP_USER", "nsimon")
+    env.setdefault("VAULT_AGENT_EMAIL", f"{user}+agents@pm.me")
+    env.setdefault("VAULT_OWNER_EMAIL", f"{user}@pm.me")
+    env.setdefault("VAULT_AGENT_PASSWORD_FILE", "/run/agenix/vaultwarden-agent-password")
+    return env
+
+
 def vault_store(env=None, opener=None):
     """The `store` that writes ITEM into the Agents org through vault-agent's bot."""
+    env = vault_env(env)
     cfg = agents.Config(env)
 
     def store(uri):
