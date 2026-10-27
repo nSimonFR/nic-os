@@ -15,13 +15,17 @@ let
 
   extra = allowed: ports: lib.subtractLists allowed ports;
 
-  # sudo may admit nsimon only on the root-only TOTP (sudo-totp.nix): its
-  # auth stack is exactly that module then pam_deny, with no session cache.
+  # sudo may admit nsimon only on the root-only TOTP (sudo-totp.nix), optionally
+  # preceded by an SSH-agent signature checked against a root-owned key file
+  # (sudo-ssh-agent.nix); then pam_deny, with no session cache.
   sudoAuth = lib.filter (l: lib.hasPrefix "auth " l)
     (lib.splitString "\n" config.security.pam.services.sudo.text);
-  sudoTotpOnly = builtins.length sudoAuth == 2
-    && builtins.match "auth sufficient [^ ]*/pam_google_authenticator\\.so secret=/var/lib/sudo-totp/\\$\\{USER} user=root( #.*)?" (builtins.elemAt sudoAuth 0) != null
-    && builtins.match "auth required [^ ]*/pam_deny\\.so( #.*)?" (builtins.elemAt sudoAuth 1) != null
+  rsshRule = "auth sufficient [^ ]*/libpam_rssh\\.so auth_key_file=/etc/ssh/sudo_keys/\\$ruser( #.*)?";
+  totpRule = "auth sufficient [^ ]*/pam_google_authenticator\\.so secret=/var/lib/sudo-totp/\\$\\{USER} user=root( #.*)?";
+  denyRule = "auth required [^ ]*/pam_deny\\.so( #.*)?";
+  matches = rules: builtins.length sudoAuth == builtins.length rules
+    && lib.all (p: builtins.match p.fst p.snd != null) (lib.zipLists rules sudoAuth);
+  sudoHumanOnly = (matches [ totpRule denyRule ] || matches [ rsshRule totpRule denyRule ])
     && lib.hasInfix "Defaults:nsimon timestamp_timeout=0" config.security.sudo.extraConfig;
 
   # Per-interface openings bypass the global lists; only the tailnet may have them.
@@ -75,15 +79,15 @@ in
       message = "security-policy: root must have no SSH authorized keys.";
     }
     # Agents run as nsimon and Agent Vault's keys are root-only, so nsimon must
-    # have no path to root but a TOTP code the user hands over.
+    # have no path to root but a TOTP code or Mac-approved signature from the user.
     {
       # extraRules always holds NixOS's own %wheel rule, so look for nsimon by name.
       assertion = !(lib.elem "wheel" config.users.users.nsimon.extraGroups)
         && !(lib.elem "nsimon" config.users.groups.wheel.members)
         && !(lib.elem "nsimon" config.nix.settings.trusted-users)
-        && (sudoTotpOnly || !(lib.any (r: lib.elem "nsimon" (r.users or [ ])) config.security.sudo.extraRules));
+        && (sudoHumanOnly || !(lib.any (r: lib.elem "nsimon" (r.users or [ ])) config.security.sudo.extraRules));
       message = "security-policy: nsimon must not be in wheel or a trusted nix user, and may be in "
-        + "a sudo rule only behind sudo-totp.nix's root-only TOTP with no session cache.";
+        + "a sudo rule only behind sudo-totp.nix (and sudo-ssh-agent.nix) with no session cache.";
     }
   ];
 }
