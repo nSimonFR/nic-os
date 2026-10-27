@@ -21,6 +21,8 @@ decline the noise.
 On this host (rpi5) call the Dawarich API at **`http://dawarich.home.arpa:13900`**, a
 loopback alias routed through Agent Vault (your `HTTP_PROXY`), which swaps the
 placeholder `__dawarich_api_key__` for the real key. You never hold the key.
+Dawarich sleeps after 10 min idle: the first call wakes it and can take 30 s to a few
+minutes, so don't give it a short `--max-time` or retry it as a failure.
 
 ```bash
 export DAWARICH_BASE_URL="${DAWARICH_BASE_URL:-http://dawarich.home.arpa:13900}"   # API (via Agent Vault)

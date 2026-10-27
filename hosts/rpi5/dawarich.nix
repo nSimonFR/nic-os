@@ -2,7 +2,8 @@
 # Uses the native NixOS module (services.dawarich) — Rails + Sidekiq + PostGIS + Redis
 { config, pkgs, lib, unstablePkgs, tailnetFqdn, redisHost, redisPort, ... }:
 let
-  internalPort = 13900;
+  internalPort = 13900; # the wake socket; every caller uses this
+  backendPort  = 13901; # Puma, behind the proxy
 in
 {
   services.dawarich = {
@@ -11,7 +12,7 @@ in
     # for the latest release (mirrors immich in hosts/rpi5/immich.nix).
     package = unstablePkgs.dawarich;
     localDomain = tailnetFqdn;
-    webPort = internalPort;
+    webPort = backendPort;
     configureNginx = false; # Tailscale Serve handles HTTPS
 
     # Reuses existing PostgreSQL cluster; auto-adds "dawarich" DB + PostGIS extension
@@ -57,6 +58,26 @@ in
   systemd.services.dawarich-web.serviceConfig.MemoryMax = "256M";
   systemd.services.dawarich-sidekiq-all.serviceConfig.MemoryMax = "256M";
 
+  # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ──────────
+  # Cold start measured 2026-10-27: ~30 s on a quiet Pi, 4 min while swapping.
+  # The iOS app keeps unsent points and re-sends them (an hour of outage arrived
+  # in one batch), so a slow wake delays points rather than losing them.
+  services.socketActivate.dawarich = {
+    enable    = true;
+    realUnit  = "dawarich-web.service";
+    listen    = [ "127.0.0.1:${toString internalPort}" ];
+    backend   = "127.0.0.1:${toString backendPort}";
+    idleSec   = 600;
+    readyProbe = {
+      url        = "http://127.0.0.1:${toString backendPort}/api/v1/health";
+      timeoutSec = 300;
+    };
+    workers."dawarich-sidekiq-all.service".policy = "sleepWith";
+  };
+  # Upstream reruns migrations + seeds (20-35 s) on every web/sidekiq start, so on
+  # every wake. Once per boot is enough; a new package changes the unit and reruns it.
+  systemd.services.dawarich-init-db.serviceConfig.RemainAfterExit = true;
+
   # Geoapify reverse geocoding — drives visit suggestions (nightly sidekiq job)
   # and on-demand address lookups in the web UI.
   # Key is injected via EnvironmentFile to keep it out of the nix store.
@@ -70,10 +91,11 @@ in
   # socket, the API keys included.
   systemd.services.freereps-to-dawarich = {
     description = "Push FreeReps workout routes and Immich photo fixes into Dawarich";
-    after    = [ "postgresql.service" "dawarich-web.service" ];
-    wants    = [ "dawarich-web.service" ];
+    after    = [ "postgresql.service" ];
     serviceConfig = {
       Type = "oneshot";
+      # Wake Dawarich through its socket first: a cold start outlasts post_json's 60 s.
+      ExecStartPre = "${pkgs.curl}/bin/curl -fsS -o /dev/null --max-time 300 http://127.0.0.1:${toString internalPort}/api/v1/health";
       ExecStart = [
         "${pkgs.nicos-scripts}/bin/freereps-to-dawarich"
         "${pkgs.nicos-scripts}/bin/immich-to-dawarich"
@@ -105,7 +127,7 @@ in
     public = {
       order   = 30;
       port    = 3900;
-      backend = "http://127.0.0.1:13900";
+      backend = "http://127.0.0.1:${toString internalPort}";
       tile = {
         name        = "Dawarich";
         icon        = "dawarich.svg";
