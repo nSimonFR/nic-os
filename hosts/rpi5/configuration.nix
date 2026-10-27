@@ -121,6 +121,7 @@ in
     ./beast-power.nix
     ./agent-access.nix
     ./sudo-totp.nix
+    ./sudo-ssh-agent.nix
     ./immich.nix
     ./immich-clip.nix
     ./immich-adopt.nix
