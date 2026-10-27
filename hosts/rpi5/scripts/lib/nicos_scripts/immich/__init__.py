@@ -1,1 +1,1 @@
-"""Immich helpers. See `adopt` for the one script here and why it exists."""
+"""Immich helpers: `adopt` (re-own shared photos), `whatsapp_audit` (archive guard)."""

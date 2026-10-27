@@ -125,6 +125,7 @@ in
     ./immich.nix
     ./immich-clip.nix
     ./immich-adopt.nix
+    ./immich-whatsapp-audit.nix
     ./sure.nix
     ./papra.nix
     ./karakeep.nix
