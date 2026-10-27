@@ -1,10 +1,9 @@
 { config, ... }:
 {
-  # System-level age identity: stored on the root filesystem so it is
-  # available during stage-2 activation (before systemd mounts the RAID-backed
-  # /home).  The key is encrypted to nsimon-age (not host SSH keys).
-  # Physical location: /root/.ssh/age on NIXOS_SSD.
-  age.identityPaths = [ "/root/.ssh/age" ];
+  # The host's own SSH key, on the root filesystem so stage-2 activation has it
+  # before the RAID-backed /home mounts. Never the nsimon-age master key: that
+  # one opens every host's secrets.
+  age.identityPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
 
   age.secrets = {
     # Shared agent env (skill/tool creds: GOG_*, HA_*, SURE/LINEAR/RYOT keys, …)

@@ -45,10 +45,6 @@ in
     });
   '';
 
-  # Takes over the hand-placed deny-all hotfix (2026-10-26) at this path, which
-  # setup-etc replaces; drop this entry once it has deployed.
-  environment.etc."polkit-1/rules.d/00-agent-hotfix.rules".text = "// superseded by agent-access.nix\n";
-
   services.postgresql.ensureUsers = [ { name = "nsimon"; ensureClauses.login = true; } ];
   systemd.services.agent-pg-readonly = {
     description = "Postgres: read-only nsimon role, private DBs excluded";
