@@ -77,6 +77,7 @@ papra-nc-sync = "nicos_scripts.papra.nc_sync:main"
 hermes-dawarich-daily = "nicos_scripts.hermes.dawarich_daily:main"
 hermes-burgie-photo = "nicos_scripts.hermes.burgie_photo:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
+hermes-whatsapp-audit = "nicos_scripts.hermes.whatsapp_audit:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
 hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
