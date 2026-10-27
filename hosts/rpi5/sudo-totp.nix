@@ -5,9 +5,9 @@
 # Agents run as nsimon, so the secret is root-only (`user=root`), each code works
 # once, and sudo caches nothing: one code, one command, ~90 s of validity.
 #
-# Enrolment, once, by hand: `rootreq -- env DRY_RUN=0 <nicos-scripts>/bin/sudo-totp-enroll`
-# (sudo_totp.py) puts the secret in Vaultwarden's Agents org; clone it to your vault, delete it,
-# then `vault-agent purge --name "rpi5 sudo (TOTP)"`. Until then sudo fails
+# Enrolment, once, as root: `DRY_RUN=0 sudo-totp-enroll` (sudo_totp.py) puts the
+# secret in Vaultwarden's Agents org; clone it to your vault, delete it, then
+# `vault-agent purge --name "rpi5 sudo (TOTP)"`. Until then sudo fails
 # closed (no `nullok`). Re-enrol: delete /var/lib/sudo-totp/nsimon first.
 { pkgs, ... }:
 let
@@ -32,6 +32,8 @@ in
   security.sudo.extraConfig = ''
     Defaults:nsimon timestamp_timeout=0
   '';
+
+  environment.systemPackages = [ pkgs.nicos-scripts ]; # sudo-totp-enroll
 
   systemd.tmpfiles.rules = [ "d ${secretDir} 0700 root root -" ];
 }
