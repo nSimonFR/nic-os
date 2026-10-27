@@ -22,5 +22,8 @@ find "$root" -maxdepth 5 -name node_modules -prune -o -name settings.local.json 
     entire-brain refresh $w >/dev/null 2>&1 || echo "refresh failed: $r"
     entire-brain distill --agent claude-code --model sonnet --newest-first --max-sessions "$max" >/dev/null 2>&1 ||
       echo "distill failed: $r"
+    # Facts are kept per branch, and most sessions ran on the default one.
     entire-brain memories sync >/dev/null 2>&1 || true
+    d=$(git symbolic-ref --short refs/remotes/origin/HEAD 2>/dev/null) && d=${d#origin/} &&
+      entire-brain memories sync --branch "$d" >/dev/null 2>&1 || true
   done
