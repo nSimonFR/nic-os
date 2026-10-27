@@ -1,34 +1,9 @@
-# Entire Brain for Trusk: an hourly pass distills new sessions in every Trusk
-# clone (scripts/entire-brain-trusk.sh), all in one "trusk" workspace. Nothing
-# is written into the trusk-official repos; agents learn about Brain from the
-# private TRUSK/CLAUDE.md.
-{ config, pkgs, ... }:
-let
-  entire = pkgs.callPackage ../../pkgs/cli/entire.nix { };
-  pass = pkgs.writeShellApplication {
-    name = "entire-brain-trusk";
-    runtimeInputs = [ entire pkgs.git pkgs.findutils ];
-    # $w is empty or one flag; quoting it would pass an empty argument.
-    excludeShellChecks = [ "SC2086" ];
-    text = builtins.readFile ./scripts/entire-brain-trusk.sh;
-  };
-  logs = "${config.home.homeDirectory}/Library/Logs/entire-brain-trusk.log";
-in
+# Entire Brain + Graph for Trusk. `entire brain setup --workspace trusk` (run per
+# repo) installs Entire's own watcher, io.entire.brain-watch.*: it distills every
+# Trusk repo hourly with claude-code/sonnet (plan in ~/.local/state/entire). It
+# execs ~/.nix-profile/bin/entire-brain, so the bundle must stay in the profile.
+# Agents get the guide from the private TRUSK/AGENTS.md (home/claude.nix).
+{ pkgs, ... }:
 {
-  home.packages = [ entire ];
-
-  launchd.agents.entire-brain-trusk = {
-    enable = true;
-    config = {
-      ProgramArguments = [ "${pass}/bin/entire-brain-trusk" ];
-      StartInterval = 3600;
-      LowPriorityIO = true;
-      ProcessType = "Background";
-      # The distill step runs claude from the profile (~/.nix-profile here: the
-      # Mac's Home Manager is standalone, there is no /etc/profiles/per-user).
-      EnvironmentVariables.PATH = "${config.home.profileDirectory}/bin:/run/current-system/sw/bin:/usr/bin:/bin";
-      StandardOutPath = logs;
-      StandardErrorPath = logs;
-    };
-  };
+  home.packages = [ (pkgs.callPackage ../../pkgs/cli/entire.nix { }) ];
 }
