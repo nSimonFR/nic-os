@@ -163,6 +163,15 @@ def test_unchanged_day_is_skipped(tmp_path):
     assert op.requests == []
 
 
+def test_a_redo_rewrites_an_unchanged_day(tmp_path):
+    pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
+    state = {}
+    run_day(cfg(tmp_path), pg, memos_opener(), state)
+    op = update_opener({"name": "memos/M", "content": state["2026-10-19"]["text"]})
+    run_day(cfg(tmp_path, redo_file=str(tmp_path / "days")), pg, op, state)
+    assert op.requests
+
+
 def update_opener(memo):
     """Replies for: upload the map, GET the memo, set attachments, update."""
     return FakeOpener([json_reply({"name": "attachments/NEW"}), json_reply(memo),
