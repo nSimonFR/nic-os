@@ -248,7 +248,7 @@
       mode  = "0400";
     };
     sure-journal-api-key = {
-      # Sure API key, read-only ("journal (agents)"): journal-daily and Agent Vault.
+      # Sure API key, read-write: journal-daily (reads only) and Agent Vault.
       file  = ./secrets/sure-journal-api-key.age;
       mode  = "0400";
     };
