@@ -7,14 +7,13 @@
 # (sudo-totp.nix) can't stall on a prompt nobody is there to answer; a refused
 # or missing signature falls through to TOTP.
 #
-# Bitwarden must ask on every use (Settings → SSH agent → "Always"): anything
-# running as nsimon can reach the socket, so a remembered approval is silent root.
+# The tunnel comes in over Tailscale SSH, so tailscaled (root) owns the socket:
+# only root, i.e. pam_rssh, can reach the agent. Bitwarden must still ask on
+# every use (Settings → SSH agent → "Always"), or `mac-sudo` is silent root.
 { lib, pkgs, ... }:
 let
   # The sudo key: its own Bitwarden SSH key item, never a login key.
-  sudoKeys = [ ];
-  # The Mac's on-disk tunnel key, allowed to forward a socket and nothing else.
-  tunnelKeys = [ ];
+  sudoKeys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBneog7+eqJyvLrDJoqjdtvlCz7dn4qp7VsXo7P1HeK1 rpi5 sudo" ];
   agentSock = "/home/nsimon/.ssh/sudo-agent.sock";
 in
 lib.mkIf (sudoKeys != [ ]) {
@@ -25,11 +24,6 @@ lib.mkIf (sudoKeys != [ ]) {
   };
   security.pam.services.sudo.rssh = true;
   environment.etc."ssh/sudo_keys/nsimon".text = lib.concatLines sudoKeys;
-
-  users.users.nsimon.openssh.authorizedKeys.keys =
-    map (k: ''restrict,port-forwarding,command="${pkgs.coreutils}/bin/false" ${k}'') tunnelKeys;
-  # A reconnect replaces the socket the dropped session left behind.
-  services.openssh.settings.StreamLocalBindUnlink = true;
 
   environment.systemPackages = [
     (pkgs.writeShellApplication {
