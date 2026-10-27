@@ -24,8 +24,9 @@ in
       StartInterval = 3600;
       LowPriorityIO = true;
       ProcessType = "Background";
-      # The distill step runs claude from the user profile.
-      EnvironmentVariables.PATH = "/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin:/usr/bin:/bin";
+      # The distill step runs claude from the profile (~/.nix-profile here: the
+      # Mac's Home Manager is standalone, there is no /etc/profiles/per-user).
+      EnvironmentVariables.PATH = "${config.home.profileDirectory}/bin:/run/current-system/sw/bin:/usr/bin:/bin";
       StandardOutPath = logs;
       StandardErrorPath = logs;
     };

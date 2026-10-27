@@ -2,6 +2,8 @@
 # sessions, all members of the "trusk" workspace so `entire brain workspace
 # query` searches them as one. Dirty clones are seeded as they are (--worktree):
 # these are working copies, and Brain refuses them otherwise.
+# Sonnet, not haiku: on these long, half-French sessions haiku's output came
+# back malformed and every chunk was dropped (0 facts).
 
 root=${TRUSK_DIR:-$HOME/MyDocuments/TRUSK}
 max=${ENTIRE_BRAIN_MAX_SESSIONS:-10}
@@ -18,7 +20,7 @@ find "$root" -maxdepth 5 -name node_modules -prune -o -name settings.local.json 
     w=
     [ -n "$(git status --porcelain | head -1)" ] && w=--worktree
     entire-brain refresh $w >/dev/null 2>&1 || echo "refresh failed: $r"
-    entire-brain distill --agent claude-code --model haiku --newest-first --max-sessions "$max" >/dev/null 2>&1 ||
+    entire-brain distill --agent claude-code --model sonnet --newest-first --max-sessions "$max" >/dev/null 2>&1 ||
       echo "distill failed: $r"
     entire-brain memories sync >/dev/null 2>&1 || true
   done
