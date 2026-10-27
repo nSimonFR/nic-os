@@ -247,6 +247,11 @@
       file  = ./secrets/memos-token.age;
       mode  = "0400";
     };
+    sure-journal-api-key = {
+      # Sure API key, read-only ("journal (agents)"): journal-daily and Agent Vault.
+      file  = ./secrets/sure-journal-api-key.age;
+      mode  = "0400";
+    };
     papra-env = {
       file  = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)

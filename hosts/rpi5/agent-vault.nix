@@ -43,6 +43,8 @@ let
     # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`.
     { name = "ryot";           host = "ryot.home.arpa:13350";     keys = [ "RYOT_API_KEY" ];     "in" = [ "header" ]; }
     { name = "immich";         host = "immich.home.arpa:2283";    keys = [ "IMMICH_API_KEY" ];   "in" = [ "header" ]; }
+    # Sure (sure.nix): REST under /sure/api/v1, read-only key sent as `X-Api-Key`.
+    { name = "sure";           host = "sure.home.arpa:13334";     keys = [ "SURE_API_KEY" ];     "in" = [ "header" ]; }
     # Attached, not substituted: whatever the client sends is replaced.
     { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
     { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
@@ -52,6 +54,7 @@ let
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
+    SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
     # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
@@ -117,7 +120,7 @@ in
     # A re-encrypted secret is a new store path, so a rotated key re-applies.
     restartTriggers = [
       config.age.secrets.agent-brokered-env.file config.age.secrets.github-ai-token.file
-      config.age.secrets.immich-api-key.file servicesFile
+      config.age.secrets.immich-api-key.file config.age.secrets.sure-journal-api-key.file servicesFile
     ];
     environment = {
       AGENT_VAULT_ADDR = "http://127.0.0.1:${toString apiPort}";
