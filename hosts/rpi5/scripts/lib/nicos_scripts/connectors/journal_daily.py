@@ -48,6 +48,7 @@ import functools
 import hashlib
 import json
 import math
+import os
 import sqlite3
 import subprocess
 from collections import Counter
@@ -110,6 +111,7 @@ class Config:
     token_file: str = "/run/agenix/memos-token"
     web_url: str = DEFAULT_WEB
     day: str = ""
+    redo_file: str = ""  # days to rewrite, written by nsimon (journal-daily-redo)
     days: int = 3
     state_path: str = ""
     place_radius_m: int = 300
@@ -152,6 +154,7 @@ class Config:
             token_file=env_str("MEMOS_TOKEN_FILE", "/run/agenix/memos-token", env),
             web_url=env_str("DAWARICH_WEB_URL", DEFAULT_WEB, env).rstrip("/"),
             day=env_str("JOURNAL_DAY", "", env).strip(),
+            redo_file=env_str("JOURNAL_REDO_FILE", "", env),
             days=env_int("JOURNAL_DAYS", 3, env),
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
@@ -206,11 +209,38 @@ def _q(cfg, run, sql, db):
     return psql_rows(run, sql, db, cfg.runuser, cfg.psql)
 
 
+REDO_MAX = 31
+REDO_FIRST = date(2017, 1, 1)
+
+
+def redo_days(path, today):
+    """The past days listed in `path`. nsimon writes it and root reads it: no
+    symlink, 4 KB, dates only, and nothing else in it reaches the log."""
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except FileNotFoundError:
+        return []
+    with os.fdopen(fd, "rb") as f:
+        words = f.read(4096).decode("ascii", "replace").split()
+    days = set()
+    for w in words:
+        try:
+            d = date.fromisoformat(w) if len(w) == 10 else None
+        except ValueError:
+            d = None
+        if d and REDO_FIRST <= d < today:
+            days.add(d)
+    return sorted(days)[-REDO_MAX:]
+
+
 def target_days(cfg, today=None):
-    """JOURNAL_DAY alone, else the last JOURNAL_DAYS days ending yesterday."""
+    """JOURNAL_DAY alone, else JOURNAL_REDO_FILE's days, else the last
+    JOURNAL_DAYS days ending yesterday."""
     if cfg.day:
         return [date.fromisoformat(cfg.day)]
     today = today or datetime.now(TZ).date()
+    if cfg.redo_file:
+        return redo_days(cfg.redo_file, today)
     return [today - timedelta(days=n) for n in range(cfg.days, 0, -1)]
 
 
@@ -1413,7 +1443,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
 def catchup_days(cfg, spend_fn, state, today=None, log=print):
     """Older days whose spending moved since their memo was written: banks
     deliver up to ~3 weeks late. Only days with a memo, and not under JOURNAL_DAY."""
-    if cfg.day or not spend_fn:
+    if cfg.day or cfg.redo_file or not spend_fn:
         return []
     today = today or _today()
     days = []

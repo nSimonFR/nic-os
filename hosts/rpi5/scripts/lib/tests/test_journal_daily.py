@@ -869,3 +869,20 @@ def test_catchup_reruns_only_older_days_whose_spending_moved(tmp_path):
     assert wm.catchup_days(c, spend_fn, state, today) == [date(2026, 10, 15)]
     assert wm.catchup_days(cfg(tmp_path, day="2026-10-15"), spend_fn, state, today) == []
     assert wm.catchup_days(c, None, state, today) == []
+
+
+def test_redo_file_lists_past_days_only(tmp_path):
+    f = tmp_path / "days"
+    f.write_text("2026-10-19\n2026-04-30 junk 2026-13-01\n2026-10-27 2016-12-31 2026-10-19\n")
+    c = cfg(tmp_path, day="", redo_file=str(f))
+    assert wm.target_days(c, date(2026, 10, 27)) == [date(2026, 4, 30), date(2026, 10, 19)]
+    assert wm.catchup_days(c, lambda d: [], {}, date(2026, 10, 27)) == []
+    assert wm.target_days(cfg(tmp_path, day="", redo_file=str(tmp_path / "none")), date(2026, 10, 27)) == []
+
+
+def test_redo_file_refuses_a_symlink(tmp_path):
+    secret = tmp_path / "secret"
+    secret.write_text("2026-10-19\n")
+    (tmp_path / "days").symlink_to(secret)
+    with pytest.raises(OSError):
+        wm.redo_days(str(tmp_path / "days"), date(2026, 10, 27))
