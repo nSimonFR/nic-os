@@ -184,14 +184,13 @@ function rebuild-os() {
 }
 
 
-# Edit an age-encrypted secret
+# Edit an age-encrypted secret, re-encrypted to every recipient its
+# directory's secrets.nix lists (e.g. rpi5's host key), not just ~/.ssh/age.
 function age-edit() {
   local file="${1:?Usage: age-edit <file.age>}"
-  local tmp=$(mktemp)
-  age -d -i ~/.ssh/age "$file" > "$tmp" \
-    && vim "$tmp" \
-    && age -R ~/.ssh/age.pub -o "$file" "$tmp"
-  rm -f "$tmp"
+  (cd "$(dirname "$file")" \
+    && EDITOR="${EDITOR:-vim}" nix run --inputs-from ~/nic-os ragenix -- \
+      --rules ./secrets.nix -i ~/.ssh/age -e "$(basename "$file")")
 }
 
 function get-version() {
