@@ -49,3 +49,10 @@ def test_main_defaults_to_dry_run(tmp_path):
     logs = []
     assert st.main({"SUDO_TOTP_DIR": str(tmp_path)}, log=logs.append) == 0
     assert os.listdir(tmp_path) == [] and "DRY_RUN" in logs[0]
+
+
+def test_vault_env_defaults_to_the_vault_agent_wrapper():
+    env = st.vault_env({"SUDO_TOTP_USER": "nsimon", "VAULT_OWNER_EMAIL": "x@y"})
+    assert env["VAULT_AGENT_EMAIL"] == "nsimon+agents@pm.me"
+    assert env["VAULT_OWNER_EMAIL"] == "x@y"
+    assert env["VAULT_AGENT_PASSWORD_FILE"] == "/run/agenix/vaultwarden-agent-password"
