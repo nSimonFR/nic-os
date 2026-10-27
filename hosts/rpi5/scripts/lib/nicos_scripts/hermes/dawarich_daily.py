@@ -35,6 +35,8 @@ log = logger("hermes-dawarich-daily", lambda: sys.stderr)
 TZ = ZoneInfo("Europe/Paris")
 # Through Agent Vault, which swaps the placeholder DAWARICH_API_KEY for the key.
 DEFAULT_BASE = "http://dawarich.home.arpa:13900"
+# First call of the run: Dawarich sleeps when idle, cold start ~30 s, minutes under swap.
+WAKE_TIMEOUT_S = 300
 DEFAULT_WEB = "https://rpi5.gate-mintaka.ts.net:3900"
 
 
@@ -81,6 +83,7 @@ def fetch_points(cfg, day, opener=None):
     data = get_json(
         f"{cfg.base_url}/api/v1/points?{q}",
         {"Authorization": f"Bearer {cfg.api_key}"},
+        timeout=WAKE_TIMEOUT_S,
         opener=opener,
     )
     points = data if isinstance(data, list) else data.get("points") or []
