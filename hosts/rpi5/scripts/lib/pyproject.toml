@@ -77,6 +77,7 @@ papra-nc-sync = "nicos_scripts.papra.nc_sync:main"
 # answer. Invoked by the scheduler in `no_agent` mode through the `*.sh` shims in
 # hosts/rpi5/hermes/hermes.nix, so stdout is the delivered message.
 hermes-dawarich-daily = "nicos_scripts.hermes.dawarich_daily:main"
+hermes-burgie-photo = "nicos_scripts.hermes.burgie_photo:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
