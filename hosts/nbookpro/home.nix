@@ -3,6 +3,7 @@
   imports = [
     ./applications-patch.nix
     ./linear-t3-relay.nix
+    ./entire-brain.nix
   ];
 
   home = {
@@ -12,10 +13,9 @@
     # T3 Code desktop with the Issues page; replaces the manually installed nightly.
     packages = [
       pkgs.t3code-desktop
-      unstablePkgs.entire
       (pkgs.writeShellApplication {
         name = "entire-trusk-enable";
-        runtimeInputs = [ unstablePkgs.entire pkgs.git pkgs.jq ];
+        runtimeInputs = [ (pkgs.callPackage ../../pkgs/cli/entire.nix { }) pkgs.git pkgs.jq ];
         text = builtins.readFile ./scripts/entire-trusk-enable.sh;
       })
     ];
