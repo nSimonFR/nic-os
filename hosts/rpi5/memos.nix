@@ -84,6 +84,7 @@ in
         "JOURNAL_DRY_RUN=0"
         "MEMOS_URL=http://127.0.0.1:${toString internalPort}"
         "MEMOS_TOKEN_FILE=${config.age.secrets.memos-token.path}"
+        "SURE_API_KEY_FILE=${config.age.secrets.sure-journal-api-key.path}"
         "PSQL_BIN=${config.services.postgresql.package}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
         "GIT_BIN=${pkgs.git}/bin/git"
