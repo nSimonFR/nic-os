@@ -36,9 +36,10 @@ let
 
   truskFiles = lib.optionalAttrs pkgs.stdenv.isDarwin (
     {
-      # CLAUDE.md loads by walking UP the tree, so it reaches every Trusk repo and
-      # nothing else; notes/ is read on demand.
-      "MyDocuments/TRUSK/CLAUDE.md".source = truskLink "CLAUDE.md";
+      # AGENTS.md loads by walking UP the tree, so it reaches every Trusk repo and
+      # nothing else; notes/ is read on demand. Claude Code skips every AGENTS.md
+      # once a CLAUDE.md is on the path: a CLAUDE.md here hid the repos' own.
+      "MyDocuments/TRUSK/AGENTS.md".source = truskLink "AGENTS.md";
       "MyDocuments/TRUSK/notes".source = truskLink "notes";
     }
     // lib.listToAttrs (lib.concatMap (name: map (t:
