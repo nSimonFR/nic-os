@@ -1349,7 +1349,9 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
                      [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
                      len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m, _ in memories],
                      birthdays, genealogy, [f.id for f in flights], energy, screens, badges, spending])
-    if state.get(key, {}).get("sig") == sig:
+    # A redo is asked for because the rendering changed (place names, prompt),
+    # which the signature doesn't see: always rewrite.
+    if state.get(key, {}).get("sig") == sig and not cfg.redo_file:
         log(f"{key}: unchanged")
         return state[key]["memo"]
     legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
