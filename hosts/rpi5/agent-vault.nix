@@ -43,7 +43,7 @@ let
     # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`.
     { name = "ryot";           host = "ryot.home.arpa:13350";     keys = [ "RYOT_API_KEY" ];     "in" = [ "header" ]; }
     { name = "immich";         host = "immich.home.arpa:2283";    keys = [ "IMMICH_API_KEY" ];   "in" = [ "header" ]; }
-    # Sure (sure.nix): REST under /sure/api/v1, read-only key sent as `X-Api-Key`.
+    # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`.
     { name = "sure";           host = "sure.home.arpa:13334";     keys = [ "SURE_API_KEY" ];     "in" = [ "header" ]; }
     # Attached, not substituted: whatever the client sends is replaced.
     { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }

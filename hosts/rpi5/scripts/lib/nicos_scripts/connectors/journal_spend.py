@@ -1,6 +1,6 @@
 """
 Spending for journal-daily, from Sure's REST API (GET /api/v1/transactions,
-docs/api/openapi.yaml in the Sure package) with a read-only API key.
+docs/api/openapi.yaml in the Sure package) with an API key.
 
 A day's spending = the money going out of the configured accounts on that
 date (banks give dates, not times: no 04:00 shift). Transfers between own
