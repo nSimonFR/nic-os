@@ -27,7 +27,7 @@ def test_enroll_writes_a_private_file_and_stores_the_same_secret(tmp_path):
     assert secret == st.new_secret(fixed) and len(secret) == 32
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
     assert stored == [st.otpauth(secret, "nsimon")]
-    assert secret not in " ".join(logs)  # rootreq and the journal show the log to nsimon
+    assert secret not in " ".join(logs)
 
 
 def test_enroll_refuses_to_overwrite(tmp_path):

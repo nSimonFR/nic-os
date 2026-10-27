@@ -23,9 +23,6 @@ dependencies = [ "psycopg2", "websocket-client", "cryptography" ]
 # `${pkgs.python3}/bin/python3 ${./scripts/steam-to-ryot.py}` — a bare file in
 # the store with no importable sibling, hence no shared lib and no tests.
 [project.scripts]
-# Root commands approved from the phone (hosts/rpi5/rootreq.nix).
-rootreq = "nicos_scripts.security.rootreq:main"
-rootreq-broker = "nicos_scripts.security.rootreq:main_broker"
 sudo-totp-enroll = "nicos_scripts.security.sudo_totp:main"
 steam-to-ryot = "nicos_scripts.connectors.steam:main"
 spotify-to-ryot = "nicos_scripts.connectors.spotify:main"

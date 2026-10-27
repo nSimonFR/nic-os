@@ -120,7 +120,6 @@ in
     # beast-wake + the four-hourly "beast is idling powered-on" backstop.
     ./beast-power.nix
     ./agent-access.nix
-    ./rootreq.nix
     ./sudo-totp.nix
     ./immich.nix
     ./immich-clip.nix
