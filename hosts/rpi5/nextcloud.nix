@@ -326,19 +326,20 @@ in
   # refuses the root→nextcloud "unsafe path transition" — so use a plain chown
   # oneshot (non-recursive: only the dir itself).
   #
-  # Second ExecStart grants the `nextcloud` group rwX on the tree so the Hermes
-  # agent (hosts/rpi5/hermes, runs as nsimon — now in that group) can r/w
-  # /mnt/data/cloud. Additive POSIX ACL: base ownership/modes untouched; the
-  # default (d:) entry lets files created later inherit group access. `-R` skips
-  # symlinks, so PHOTOS -> immich leaves the immich tree alone.
+  # Second ExecStart grants nsimon (Hermes) rwX on the tree, so it can r/w
+  # /mnt/data/cloud without the `nextcloud` group, which also reads config.php.
+  # Additive POSIX ACL; the default (d:) entry covers files created later. `-R`
+  # skips symlinks, so PHOTOS -> immich leaves the immich tree alone.
+  # RemainAfterExit: a changed ExecStart then re-runs on switch, not next boot.
   systemd.services.nextcloud-files-owner = {
-    description = "Own nsimon's Nextcloud files dir + grant nextcloud-group ACL (Hermes r/w)";
+    description = "Own nsimon's Nextcloud files dir + grant nsimon an ACL (Hermes r/w)";
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
+      RemainAfterExit = true;
       ExecStart = [
         "${pkgs.coreutils}/bin/chown nextcloud:nextcloud ${datadir}/data/nsimon/files"
-        "${pkgs.acl}/bin/setfacl -R -m g:nextcloud:rwX,d:g:nextcloud:rwX ${datadir}/data/nsimon/files"
+        "${pkgs.acl}/bin/setfacl -R -m u:nsimon:rwX,d:u:nsimon:rwX ${datadir}/data/nsimon/files"
       ];
     };
   };
