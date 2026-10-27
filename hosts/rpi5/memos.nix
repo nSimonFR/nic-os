@@ -85,6 +85,7 @@ in
         "MEMOS_URL=http://127.0.0.1:${toString internalPort}"
         "MEMOS_TOKEN_FILE=${config.age.secrets.memos-token.path}"
         "SURE_API_KEY_FILE=${config.age.secrets.sure-journal-api-key.path}"
+        "SURE_PUBLIC_URL=${config.nic.services.sure.public.publicUrl}"
         "PSQL_BIN=${config.services.postgresql.package}/bin/psql"
         "RUNUSER_BIN=${pkgs.util-linux}/bin/runuser"
         "GIT_BIN=${pkgs.git}/bin/git"
