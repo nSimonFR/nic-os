@@ -2,6 +2,8 @@ import base64
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from conftest import FakeOpener, json_reply
 from nicos_scripts.connectors import journal_sources as js
 
@@ -197,3 +199,16 @@ def test_weather_reads_the_archive_for_old_days():
     js.weather_line(date(2026, 10, 20), 48.85, 2.35, op, today=date(2026, 10, 26))
     assert op.requests[0].full_url.startswith("https://archive-api.open-meteo.com/v1/archive?")
     assert op.requests[1].full_url.startswith("https://api.open-meteo.com/v1/forecast?")
+
+
+def test_weather_falls_back_when_the_api_has_no_values():
+    empty = {"daily": {"weather_code": [None], "temperature_2m_min": [None], "temperature_2m_max": [None],
+                       "precipitation_sum": [None]}}
+    full = {"daily": {"weather_code": [3], "temperature_2m_min": [17.2], "temperature_2m_max": [31.6],
+                      "precipitation_sum": [0]}}
+    op = FakeOpener([json_reply(empty), json_reply(full)])
+    assert js.weather_line(date(2026, 8, 5), 48.85, 2.35, op, today=date(2026, 10, 27)) == "☁️ Couvert · 17-32 °C"
+    assert op.requests[0].full_url.startswith("https://api.open-meteo.com/v1/forecast?")
+    assert op.requests[1].full_url.startswith("https://archive-api.open-meteo.com/v1/archive?")
+    with pytest.raises(ValueError):
+        js.weather_line(date(2026, 8, 5), 48.85, 2.35, FakeOpener([json_reply(empty)]), today=date(2026, 10, 27))

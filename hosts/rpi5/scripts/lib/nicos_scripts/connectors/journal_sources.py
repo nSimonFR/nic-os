@@ -188,21 +188,28 @@ def personal_lines(events, tz):
     return lines
 
 
-# The forecast API serves 92 days back (2026-10-26); older days need the archive.
+# The forecast API serves ~85 days back, with nulls near the edge (2026-08-02
+# came back empty at 86 days); older days need the archive, which lags ~5 days.
 WEATHER_FORECAST_DAYS = 85
+WEATHER_HOSTS = ("https://api.open-meteo.com/v1/forecast", "https://archive-api.open-meteo.com/v1/archive")
 
 
 def weather_line(day, lat, lon, opener=None, today=None):
-    """`🌧 Pluie légère · 9-14 °C · 2,1 mm`, from Open-Meteo's daily summary."""
+    """`🌧 Pluie légère · 9-14 °C · 2,1 mm`, from Open-Meteo's daily summary.
+    Tries the other API when the first has no values; ValueError when neither has."""
     q = urlencode({"latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
                    "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
                    "timezone": "Europe/Paris", "start_date": day.isoformat(), "end_date": day.isoformat()})
     old = ((today or date.today()) - day).days > WEATHER_FORECAST_DAYS
-    host = "https://archive-api.open-meteo.com/v1/archive" if old else "https://api.open-meteo.com/v1/forecast"
-    d = get_json(f"{host}?{q}", opener=opener)["daily"]
+    for host in (WEATHER_HOSTS[::-1] if old else WEATHER_HOSTS):
+        d = get_json(f"{host}?{q}", opener=opener)["daily"]
+        lo, hi = d["temperature_2m_min"][0], d["temperature_2m_max"][0]
+        if lo is not None and hi is not None:
+            break
+    else:
+        raise ValueError(f"no weather data for {day}")
     emoji, label = WMO.get(d["weather_code"][0], ("🌡", "Météo"))
-    bits = [f"{emoji} {label}",
-            f"{round(d['temperature_2m_min'][0])}-{round(d['temperature_2m_max'][0])} °C"]
+    bits = [f"{emoji} {label}", f"{round(lo)}-{round(hi)} °C"]
     rain = d["precipitation_sum"][0] or 0
     if rain >= 0.1:
         bits.append(f"{rain:.1f} mm".replace(".", ","))
