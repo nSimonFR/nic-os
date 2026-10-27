@@ -33,7 +33,16 @@ stuck=0
 for f in "$SESSIONS_DIR"/*.json; do
   [ -f "$f" ] || continue
   pid="$(basename "$f" .json)"
-  entrypoint="$(jq -r '.entrypoint // ""' "$f")"
+  # An unclean shutdown leaves NUL-filled files; one aborted every run for a day.
+  if ! entrypoint="$(jq -r '.entrypoint // ""' "$f" 2>/dev/null)"; then
+    if [ ! -d "/proc/$pid" ]; then
+      echo "removing unparseable session file for dead PID $pid"
+      rm -f "$f"
+    else
+      echo "skipping unparseable session file for live PID $pid"
+    fi
+    continue
+  fi
 
   # Only target bridge sessions (spawned by remote-control for web UI)
   [ "$entrypoint" = "sdk-cli" ] || continue
