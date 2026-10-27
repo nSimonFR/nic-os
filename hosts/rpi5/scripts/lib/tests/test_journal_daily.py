@@ -839,7 +839,7 @@ def test_the_day_ends_with_work_memories_home_genealogy():
 def test_summary_on_top_cached_and_retried(tmp_path):
     calls = []
 
-    def summary(text):
+    def summary(text, image=None):
         calls.append(text)
         return None if len(calls) == 1 else "Une sortie à vélo dans Paris."
 
@@ -886,3 +886,12 @@ def test_redo_file_refuses_a_symlink(tmp_path):
     (tmp_path / "days").symlink_to(secret)
     with pytest.raises(OSError):
         wm.redo_days(str(tmp_path / "days"), date(2026, 10, 27))
+
+
+def test_summary_image_scales_the_collage_down():
+    from PIL import Image
+    import io
+    buf = io.BytesIO()
+    Image.new("RGB", (2000, 1500), "red").save(buf, "JPEG")
+    small = Image.open(io.BytesIO(wm.summary_image(buf.getvalue())))
+    assert max(small.size) == wm.SUMMARY_IMAGE_PX and wm.summary_image(None) is None
