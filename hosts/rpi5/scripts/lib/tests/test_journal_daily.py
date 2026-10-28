@@ -927,3 +927,40 @@ def test_summary_image_scales_the_collage_down():
 def test_films_and_series_read_as_media():
     text = wm.content("2026-10-19", [], [], "d", screens=("1 film", ["- **21:03** 🎬 **Amélie** (2001)"]))
     assert "### 📺 Médias - 1 film" in text and text.rstrip().endswith("#media")
+
+
+ENTRY = {"memo": "memos/M", "text": "*Résumé.*\n\n### 📷 Photos - 2\n\n- photo\n\n___________\n\n#photos\n",
+         "atts": ["attachments/A", "attachments/B"], "files": ["map-2026-10-19.png", "photos-2026-10-19.jpg"]}
+
+
+def test_the_telegram_entry_drops_tags_and_links_memo_and_files():
+    text = wm.telegram_text(ENTRY, "https://m")
+    assert text == ("*Résumé.*\n\n### 📷 Photos - 2\n\n- photo\n\n"
+                    "- [Ouvrir dans Memos](https://m/memos/M)\n"
+                    "- [map-2026-10-19.png](https://m/file/attachments/A/map-2026-10-19.png)\n"
+                    "- [photos-2026-10-19.jpg](https://m/file/attachments/B/photos-2026-10-19.jpg)")
+
+
+def test_a_long_entry_is_cut_by_whole_lines():
+    entry = {**ENTRY, "text": "\n".join(f"- ligne {i}" for i in range(2000))}
+    text = wm.telegram_text(entry, "https://m")
+    assert len(text) <= wm.TELEGRAM_MAX and text.endswith("photos-2026-10-19.jpg)")
+
+
+def test_yesterday_is_sent_once_and_never_on_a_redo(tmp_path):
+    sent = []
+    run = lambda cmd: sent.append(cmd) or '{"ok":true}'
+    state = {"2026-10-19": dict(ENTRY)}
+    c = cfg(tmp_path, day="", telegram_send="/bin/tg", memos_public_url="https://m")
+    wm.send_day(cfg(tmp_path, day="", telegram_send="/bin/tg", redo_file="/r"), state, date(2026, 10, 19), run, print)
+    assert sent == []
+    wm.send_day(c, state, date(2026, 10, 19), run, print)
+    wm.send_day(c, state, date(2026, 10, 19), run, print)
+    assert len(sent) == 1 and sent[0][:3] == ["/bin/tg", "-m", "rich"] and state["2026-10-19"]["sent"]
+
+
+def test_a_rejected_send_is_retried_next_run(tmp_path):
+    state, logs = {"2026-10-19": dict(ENTRY)}, []
+    c = cfg(tmp_path, day="", telegram_send="/bin/tg")
+    wm.send_day(c, state, date(2026, 10, 19), lambda cmd: '{"ok":false}', logs.append)
+    assert "sent" not in state["2026-10-19"] and "rejected" in logs[0]
