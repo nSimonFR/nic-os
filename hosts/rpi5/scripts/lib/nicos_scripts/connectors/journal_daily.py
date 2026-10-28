@@ -551,8 +551,8 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         tags.append("gaming")
     if screens:
         head, lines = screens
-        sections.append([f"### 📺 Écrans - {head}", "", *lines])
-        tags.append("screen")
+        sections.append([f"### 📺 Médias - {head}", "", *lines])
+        tags.append("media")
     if spending:
         head, lines = spending
         sections.append([f"### 💸 Dépenses - {head}", "", *lines])

@@ -922,3 +922,8 @@ def test_summary_image_scales_the_collage_down():
     Image.new("RGB", (2000, 1500), "red").save(buf, "JPEG")
     small = Image.open(io.BytesIO(wm.summary_image(buf.getvalue())))
     assert max(small.size) == wm.SUMMARY_IMAGE_PX and wm.summary_image(None) is None
+
+
+def test_films_and_series_read_as_media():
+    text = wm.content("2026-10-19", [], [], "d", screens=("1 film", ["- **21:03** 🎬 **Amélie** (2001)"]))
+    assert "### 📺 Médias - 1 film" in text and text.rstrip().endswith("#media")
