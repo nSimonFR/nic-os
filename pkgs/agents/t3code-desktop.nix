@@ -21,8 +21,8 @@ stdenvNoCC.mkDerivation {
   inherit (t3code) version;
 
   src = fetchurl {
-    url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.1/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
-    hash = "sha256-AGOdW/HxkONUvhwTHAaUxFG/nlzuTx434sFk+m5Enko=";
+    url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.2/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
+    hash = "sha256-0OCP600SvyxRWD709VSdaJWi43+lCR6FmyDh7Vr+Fn8=";
   };
 
   nativeBuildInputs = [ unzip ];

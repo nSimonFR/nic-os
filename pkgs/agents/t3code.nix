@@ -27,8 +27,8 @@ let
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
-      url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-MbibsQ9BLsEXAvjNLzTu839Og6KSHa2cUibhhIuFE6g=";
+      url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.2/t3-${version}-issues-linux-arm64.tar.gz";
+      hash = "sha256-LIzvwokHrDu8dAZRlHPOmy/NG5axnAizpK1jDrDu9Bs=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
