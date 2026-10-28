@@ -36,7 +36,7 @@ in
     pkgs.writeShellScript name ''
       export TELEGRAM_TOKEN_FILE=${tokenFile}
       export TELEGRAM_CHAT_ID=${toString chatId}
-      export PATH=${path [ pkgs.curl pkgs.coreutils ]}
+      export PATH=${path [ pkgs.curl pkgs.coreutils pkgs.python3 ]}
       exec ${pkgs.bash}/bin/bash ${./scripts/telegram-send.sh} "$@"
     '';
 

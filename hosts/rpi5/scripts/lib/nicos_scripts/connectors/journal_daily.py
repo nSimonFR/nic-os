@@ -978,7 +978,13 @@ def pick_photos(assets, n):
 
 class Memos:
     def __init__(self, base, token, opener=None):
-        self.base, self.token, self.opener = base + "/api/v1", token, opener
+        self.root, self.base, self.token, self.opener = base, base + "/api/v1", token, opener
+
+    def file(self, att, filename):
+        req = urllib.request.Request(f"{self.root}/file/{att}/{urllib.parse.quote(filename)}",
+                                     headers={"Authorization": f"Bearer {self.token}"})
+        with (self.opener or urllib.request.urlopen)(req, timeout=60) as resp:
+            return resp.read()
 
     def call(self, method, path, body=None):
         req = urllib.request.Request(
@@ -1515,24 +1521,31 @@ def catchup_days(cfg, spend_fn, state, today=None, log=print):
 
 
 def telegram_text(entry, public_url):
-    """The entry's text without its tag footer, then links to the memo and its
-    attachments; whole lines dropped past TELEGRAM_MAX."""
+    """The entry's text without its tag footer, then a link to the memo;
+    whole lines dropped past TELEGRAM_MAX."""
     body = entry["text"].split("\n\n___________\n\n")[0].rstrip()
-    links = [f"[Ouvrir dans Memos]({public_url}/{entry['memo']})"] + [
-        f"[{f}]({public_url}/file/{a}/{f})" for a, f in zip(entry.get("atts", ()), entry.get("files", ()))]
-    tail = "\n\n" + "\n".join(f"- {l}" for l in links)
+    tail = f"\n\n[Ouvrir dans Memos]({public_url}/{entry['memo']})"
     lines = body.split("\n")
     while lines and len("\n".join(lines)) + len(tail) > TELEGRAM_MAX:
         lines.pop()
     return "\n".join(lines).rstrip() + tail
 
 
-def send_day(cfg, state, day, run, log):
-    """Send `day`'s entry to Telegram once; the daily run only, never a redo."""
+def send_day(cfg, state, day, run, log, memos=None, tmpdir=None):
+    """Send `day`'s entry to Telegram once: its images as an album, then the
+    text. The daily run only, never a redo."""
     entry = state.get(day.isoformat())
     if not cfg.telegram_send or cfg.redo_file or cfg.day or cfg.dry_run or not entry or entry.get("sent"):
         return
     try:
+        photos = []
+        for att, name in zip(entry.get("atts", ()), entry.get("files", ()) if memos and tmpdir else ()):
+            path = f"{tmpdir}/tg-{name}"
+            with open(path, "wb") as f:
+                f.write(memos.file(att, name))
+            photos.append(path)
+        if photos and '"ok":true' not in (run([cfg.telegram_send, *[a for p in photos[:10] for a in ("-p", p)]]) or ""):
+            log(f"{day}: Telegram rejected the photos")
         out = run([cfg.telegram_send, "-m", "rich", telegram_text(entry, cfg.memos_public_url)])
     except (OSError, subprocess.CalledProcessError) as e:
         log(f"{day}: Telegram not sent ({e})")
@@ -1588,9 +1601,9 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                             tree=tree, spend_fn=spend_fn)
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
-        send_day(cfg, state, (today or _today()) - timedelta(days=1), run, log)
-        if cfg.state_path and not cfg.dry_run:
-            save_json(cfg.state_path, state)
+            send_day(cfg, state, (today or _today()) - timedelta(days=1), run, log, memos, tmp)
+            if cfg.state_path and not cfg.dry_run:
+                save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"FATAL: {e}")
         return 1
