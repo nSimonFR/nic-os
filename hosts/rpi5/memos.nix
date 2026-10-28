@@ -97,8 +97,9 @@ in
 
   systemd.services.memos-backup = {
     description = "Memos database backup";
-    # Waits out a journal-daily run still writing at 04:15, so tonight's
-    # entries are in the dump restic ships at 04:30 (ordered after this unit).
+    # restic ships the dump at 04:30 (ordered after this unit). The 08:00
+    # journal entry lands in the next night's dump; `after` covers a catch-up
+    # run of both timers at boot.
     after = [ "journal-daily.service" ];
     serviceConfig = { Type = "oneshot"; User = "memos"; };
     script = ''
@@ -117,9 +118,9 @@ in
     timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
   };
 
-  # One journal entry per day (workouts + Immich photos), after freereps-to-dawarich (03:30)
-  # has put the day's routes into Dawarich, and before memos-backup (04:15). Root
-  # for `runuser -u postgres`.
+  # One journal entry per day (workouts + Immich photos). The day ends at 04:00; the
+  # run waits until 08:00 for the phone's overnight uploads (evening photos, points,
+  # plays) and sends the entry to Telegram at a readable hour. Root for `runuser -u postgres`.
   systemd.services.journal-daily = journalService {
     description = "Daily journal entries in Memos (workouts + photos)";
     # Yesterday's entry to Telegram, replacing Hermes' memories and Dawarich jobs.
@@ -139,7 +140,7 @@ in
 
   systemd.timers.journal-daily = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:05:00"; Persistent = true; };
+    timerConfig = { OnCalendar = "*-*-* 08:00:00"; Persistent = true; };
   };
 
   nic.services.memos = {
