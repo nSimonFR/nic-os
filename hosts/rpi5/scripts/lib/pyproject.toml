@@ -78,7 +78,6 @@ papra-nc-sync = "nicos_scripts.papra.nc_sync:main"
 # hermes-*: Hermes cron jobs that used to drive an LLM to reach a deterministic
 # answer. Invoked by the scheduler in `no_agent` mode through the `*.sh` shims in
 # hosts/rpi5/hermes/hermes.nix, so stdout is the delivered message.
-hermes-dawarich-daily = "nicos_scripts.hermes.dawarich_daily:main"
 hermes-burgie-photo = "nicos_scripts.hermes.burgie_photo:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
 hermes-whatsapp-audit = "nicos_scripts.hermes.whatsapp_audit:main"

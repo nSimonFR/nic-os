@@ -7,7 +7,7 @@
 # nixpkgs module; package from unstable because release-26.05 ships 0.25.3,
 # older than MCP (0.27) and the Calendar/Map pages (0.31). Always-on, no socket
 # activation: a Go binary at tens of MB, and MCP clients would pin it awake.
-{ config, pkgs, unstablePkgs, tinyLlmGateUrl, username, ... }:
+{ config, pkgs, unstablePkgs, tinyLlmGateUrl, telegramChatId, username, ... }:
 let
   internalPort = 13356;
   dataDir = "/var/lib/memos";
@@ -16,6 +16,11 @@ let
   assetsDir = "/mnt/data/memos/assets";
   redoDir = "/var/lib/journal-daily-redo";
   redoFile = "${redoDir}/days";
+  telegramSend = (import ../../shared/notify.nix { inherit pkgs; }).send {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+    name = "journal-daily-telegram-send";
+  };
   journalService = { description, extraEnv }: {
     inherit description;
     after = [ "memos.service" "postgresql.service" "freereps-to-dawarich.service" ];
@@ -117,7 +122,11 @@ in
   # for `runuser -u postgres`.
   systemd.services.journal-daily = journalService {
     description = "Daily journal entries in Memos (workouts + photos)";
-    extraEnv = [ ];
+    # Yesterday's entry to Telegram, replacing Hermes' memories and Dawarich jobs.
+    extraEnv = [
+      "TELEGRAM_SEND=${telegramSend}"
+      "MEMOS_PUBLIC_URL=${config.nic.services.memos.public.publicUrl}"
+    ];
   };
 
   # Rewrites the days nsimon lists in redoFile (YYYY-MM-DD, one per line), then

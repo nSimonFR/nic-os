@@ -38,8 +38,8 @@ the Pi are side projects, not work). Generated once per
 finished day and cached in the state's `_dispatch` (an agent call each).
 
 Env: JOURNAL_{DAY,DAYS,STATE,DRY_RUN,PLACE_RADIUS_M,PHOTOS_MAX,
-PERSONAL_CALENDARS,WORK_CALENDARS,DISPATCH_REPOS,DISPATCH_USER}, GIT_BIN, MEMOS_{URL,TOKEN_FILE}, NEXTCLOUD_DB,
-DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN.
+PERSONAL_CALENDARS,WORK_CALENDARS,DISPATCH_REPOS,DISPATCH_USER}, GIT_BIN, MEMOS_{URL,TOKEN_FILE,PUBLIC_URL}, NEXTCLOUD_DB,
+DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN, TELEGRAM_SEND (the daily run sends yesterday's entry).
 """
 
 import base64
@@ -88,6 +88,7 @@ COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 DAY_START_H = 4
 CLIMB_TILES_MAX = 16
 FLASH_GOLD = (255, 200, 40)
+TELEGRAM_MAX = 4000  # sendMessage caps at 4096 characters
 MEMORY_JOB_WAIT_S = 10  # the generation took ~5 s on Oct 26
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
@@ -141,6 +142,8 @@ class Config:
     sure_url: str = "http://127.0.0.1:13334/sure"
     sure_key_file: str = ""
     sure_public_url: str = ""  # the memo's link to the day's transactions
+    telegram_send: str = ""  # shared/notify.nix `send`; yesterday's entry goes to Telegram
+    memos_public_url: str = ""  # links in that message
     gate_url: str = ""
     summary_model: str = "gpt-6-luna"
     home: tuple = (48.8566, 2.3522)  # weather when the day has no GPS
@@ -180,6 +183,8 @@ class Config:
             sure_url=env_str("SURE_URL", "http://127.0.0.1:13334/sure", env).rstrip("/"),
             sure_key_file=env_str("SURE_API_KEY_FILE", "", env),
             sure_public_url=env_str("SURE_PUBLIC_URL", "", env).rstrip("/"),
+            telegram_send=env_str("TELEGRAM_SEND", "", env),
+            memos_public_url=env_str("MEMOS_PUBLIC_URL", "", env).rstrip("/"),
             gate_url=env_str("TINY_LLM_GATE_URL", "", env).rstrip("/"),
             summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
@@ -1484,7 +1489,8 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             name = prev["memo"]
     if name is None:
         name = memos.create(text, atts, when, location or None)
-    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts, "spend": spending,
+    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts,
+                  "files": [f[0] for f in files], "spend": spending,
                   **({"summary": summary, "summary_src": src_hash} if summary else {})}
     log(f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)")
     return name
@@ -1506,6 +1512,35 @@ def catchup_days(cfg, spend_fn, state, today=None, log=print):
         if json.loads(json.dumps(now)) != prev.get("spend"):  # state round-trips tuples as lists
             days.append(day)
     return sorted(days)
+
+
+def telegram_text(entry, public_url):
+    """The entry's text without its tag footer, then links to the memo and its
+    attachments; whole lines dropped past TELEGRAM_MAX."""
+    body = entry["text"].split("\n\n___________\n\n")[0].rstrip()
+    links = [f"[Ouvrir dans Memos]({public_url}/{entry['memo']})"] + [
+        f"[{f}]({public_url}/file/{a}/{f})" for a, f in zip(entry.get("atts", ()), entry.get("files", ()))]
+    tail = "\n\n" + "\n".join(f"- {l}" for l in links)
+    lines = body.split("\n")
+    while lines and len("\n".join(lines)) + len(tail) > TELEGRAM_MAX:
+        lines.pop()
+    return "\n".join(lines).rstrip() + tail
+
+
+def send_day(cfg, state, day, run, log):
+    """Send `day`'s entry to Telegram once; the daily run only, never a redo."""
+    entry = state.get(day.isoformat())
+    if not cfg.telegram_send or cfg.redo_file or cfg.day or cfg.dry_run or not entry or entry.get("sent"):
+        return
+    try:
+        out = run([cfg.telegram_send, "-m", "rich", telegram_text(entry, cfg.memos_public_url)])
+    except (OSError, subprocess.CalledProcessError) as e:
+        log(f"{day}: Telegram not sent ({e})")
+        return
+    if '"ok":true' in (out or ""):
+        entry["sent"] = True
+    else:
+        log(f"{day}: Telegram rejected the entry ({(out or '').strip()[:200]})")
 
 
 def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time.sleep):
@@ -1553,6 +1588,9 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                             tree=tree, spend_fn=spend_fn)
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
+        send_day(cfg, state, (today or _today()) - timedelta(days=1), run, log)
+        if cfg.state_path and not cfg.dry_run:
+            save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"FATAL: {e}")
         return 1
