@@ -36,6 +36,14 @@
     experimental-features = nix-command flakes
   '';
 
+  # 461 GB disk shared with everything else; GC freed 8.6 GB on 2026-10-28 at 4 GB free.
+  nix.gc = {
+    automatic = true;
+    interval = [{ Weekday = 0; Hour = 12; Minute = 0; }];
+    options = "--delete-older-than 14d";
+  };
+  nix.optimise.automatic = true;
+
   networking = {
     hostName = hostname;
     localHostName = hostname;
