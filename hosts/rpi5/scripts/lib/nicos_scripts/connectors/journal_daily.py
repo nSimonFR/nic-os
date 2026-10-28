@@ -88,7 +88,7 @@ COLORS = ["#5b97d3", "#f2a65a", "#5fc19a", "#e57ba8", "#a78bfa", "#56c2d6"]
 DAY_START_H = 4
 CLIMB_TILES_MAX = 16
 FLASH_GOLD = (255, 200, 40)
-TELEGRAM_MAX = 4000  # sendMessage caps at 4096 characters
+TELEGRAM_MAX = 30000  # a Rich Message caps at 32768 characters
 MEMORY_JOB_WAIT_S = 10  # the generation took ~5 s on Oct 26
 # FreeReps workout name -> (emoji, title, noun, tag); text in French, tags in English.
 KINDS = {
@@ -1532,8 +1532,8 @@ def telegram_text(entry, public_url):
 
 
 def send_day(cfg, state, day, run, log, memos=None, tmpdir=None):
-    """Send `day`'s entry to Telegram once: its images as an album, then the
-    text. The daily run only, never a redo."""
+    """Send `day`'s entry to Telegram once, as one Rich Message with its images
+    on top. The daily run only, never a redo."""
     entry = state.get(day.isoformat())
     if not cfg.telegram_send or cfg.redo_file or cfg.day or cfg.dry_run or not entry or entry.get("sent"):
         return
@@ -1544,9 +1544,8 @@ def send_day(cfg, state, day, run, log, memos=None, tmpdir=None):
             with open(path, "wb") as f:
                 f.write(memos.file(att, name))
             photos.append(path)
-        if photos and '"ok":true' not in (run([cfg.telegram_send, *[a for p in photos[:10] for a in ("-p", p)]]) or ""):
-            log(f"{day}: Telegram rejected the photos")
-        out = run([cfg.telegram_send, "-m", "rich", telegram_text(entry, cfg.memos_public_url)])
+        out = run([cfg.telegram_send, "-m", "rich", *[a for p in photos for a in ("-p", p)],
+                   telegram_text(entry, cfg.memos_public_url)])
     except (OSError, subprocess.CalledProcessError) as e:
         log(f"{day}: Telegram not sent ({e})")
         return

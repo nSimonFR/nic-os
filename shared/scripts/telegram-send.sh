@@ -4,7 +4,7 @@
 #
 # Usage: telegram-send [-c CHAT] [-m html|markdown|plain|rich] [-p PHOTO]... [TEXT]
 #   TEXT is read from stdin when omitted; with -p it becomes the caption.
-#   Several -p send one album (2-10 photos).
+#   With `rich`, every -p is embedded at the top of the message.
 #   `rich` sends a Bot API 10.1 Rich Message: TEXT is rich Markdown, and
 #   headings, tables, `- [ ]` checkboxes and <details> become real blocks.
 # Env:   TELEGRAM_CHAT_ID, TELEGRAM_TOKEN_FILE (defaults to the agenix path,
@@ -30,8 +30,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 # Guard on a tty so an interactive call with no arguments errors instead of hanging.
-# An album with no caption reads no stdin.
-[ -n "$text" ] || [ ${#photos[@]} -gt 1 ] || [ -t 0 ] || text=$(cat)
+[ -n "$text" ] || [ -t 0 ] || text=$(cat)
 
 die() { echo "telegram-send: $1" >&2; exit 0; }
 
@@ -53,29 +52,30 @@ case $mode in
   *)        die "unknown --mode $mode" ;;
 esac
 
-if [ ${#photos[@]} -gt 1 ]; then
-  method=sendMediaGroup
+if [ "$mode" = rich ]; then
+  [ -n "$text" ] || die "empty message body"
+  method=sendRichMessage
   set -- -F "chat_id=$chat"
   for i in "${!photos[@]}"; do
     [ -r "${photos[$i]}" ] || die "photo unreadable (${photos[$i]})"
     set -- "$@" -F "p$i=@${photos[$i]}"
   done
-  media=$(python3 -c 'import json,sys; n,cap=int(sys.argv[1]),sys.argv[2]; print(json.dumps([{"type":"photo","media":f"attach://p{i}",**({"caption":cap} if cap and i==0 else {})} for i in range(n)]))' \
-    "${#photos[@]}" "$text") || die "could not encode album"
-  set -- "$@" -F "media=$media"
+  # python3 does the JSON quoting; a bare printf would break on any " or newline.
+  # Photos open the message, uploaded as attach://pN and placed by tg://photo links.
+  rich=$(printf '%s' "$text" | python3 -c '
+import json, sys
+n = int(sys.argv[1])
+md = "".join(f"![](tg://photo?id=p{i})\n\n" for i in range(n)) + sys.stdin.read()
+media = [{"id": f"p{i}", "media": {"type": "photo", "media": f"attach://p{i}"}} for i in range(n)]
+print(json.dumps({"markdown": md, **({"media": media} if n else {})}))' "${#photos[@]}") \
+    || die "could not encode rich message"
+  # --form-string: a body starting with @ or < must not be read as a file.
+  set -- "$@" --form-string "rich_message=$rich"
 elif [ -n "$photo" ]; then
   [ -r "$photo" ] || die "photo unreadable ($photo)"
   method=sendPhoto
   set -- "$@" -F "chat_id=$chat" -F "photo=@$photo"
   [ -n "$text" ] && set -- "$@" -F "caption=$text"
-elif [ "$mode" = rich ]; then
-  [ -n "$text" ] || die "empty message body"
-  method=sendRichMessage
-  # python3 does the JSON quoting; a bare printf would break on any " or newline.
-  rich=$(printf '%s' "$text" | python3 -c \
-    'import json,sys; print(json.dumps({"markdown": sys.stdin.read()}))') \
-    || die "could not encode rich message"
-  set -- "$@" -d "chat_id=$chat" --data-urlencode "rich_message=$rich"
 else
   [ -n "$text" ] || die "empty message body"
   method=sendMessage
