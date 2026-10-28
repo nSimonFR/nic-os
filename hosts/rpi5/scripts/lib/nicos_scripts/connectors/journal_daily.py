@@ -1067,6 +1067,14 @@ def _utc(t):
     return datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
+def same_day(when, day):
+    """A day runs until 04:00, but Memos files an entry under its createTime's
+    date: an activity past midnight would move the entry to the next day."""
+    if datetime.fromisoformat(when.replace("Z", "+00:00")).astimezone(TZ).date() <= day:
+        return when
+    return _utc(datetime(day.year, day.month, day.day, 23, 59, tzinfo=TZ).timestamp())
+
+
 def day_calendar(cfg, run, day, log):
     """(personal agenda lines, work summary or None); empty on any failure."""
     lo, hi = day_bounds(day)
@@ -1461,6 +1469,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         when = _utc((flights[-1].arr or flights[-1].dep).timestamp())
     else:  # calendar-only day: noon
         when = _utc(day_bounds(day)[0] + 8 * 3600)
+    when = same_day(when, day)
 
     atts = memos.upload(files)
     prev, name = state.get(key), None

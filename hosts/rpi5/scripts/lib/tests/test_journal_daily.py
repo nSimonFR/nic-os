@@ -551,6 +551,15 @@ def test_trip_only_day_gets_an_entry_with_its_trips(tmp_path):
     assert ">= 300" in sql and "<> 1" in sql
 
 
+def test_an_entry_ending_past_midnight_stays_on_its_day(tmp_path):
+    home = 1792447200  # 2026-10-20 00:00 Paris, still the 19th until 04:00
+    pg = FakePg([], [], tracks=[trk("7", home - 600, 15, 4.2, 5, (48.83, 2.36), (48.85, 2.30))])
+    op = memos_opener()
+    wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {}, date(2026, 10, 19), 1,
+                   lambda m: None, no_render, str(tmp_path))
+    assert op.body_of(2) == {"createTime": "2026-10-19T21:59:00Z"}
+
+
 def test_music_section_sits_between_photos_and_work(tmp_path):
     plays = [play("Club", "Lomepal", 250), play("Starlight", "Muse", 240), play("Trop beau", "Lomepal", 244),
              play("Un peu de sang", "Lomepal", 305)]
