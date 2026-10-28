@@ -14,6 +14,7 @@ Weather: Open-Meteo's daily summary (free, keyless) for where the day happened.
 """
 
 import base64
+import re
 import string
 from collections import Counter
 from dataclasses import dataclass
@@ -137,9 +138,14 @@ def meetings(events, lo_dt, hi_dt, me):
     return sorted(out, key=lambda m: m[0])
 
 
+def untagged(title):
+    """Memos turns `#word` into a tag ("Point #3", "#standup"); `\\#` stays text."""
+    return re.sub(r"(?<!\\)#", r"\\#", title)
+
+
 def meeting_lines(events, lo_dt, hi_dt, me, tz):
     """`- **10:00-10:30** Titre · 4 personnes`, one per meeting."""
-    return [f"- **{s.astimezone(tz):%H:%M}-{e.astimezone(tz):%H:%M}** {ev.title or '(sans titre)'} · "
+    return [f"- **{s.astimezone(tz):%H:%M}-{e.astimezone(tz):%H:%M}** {untagged(ev.title) or '(sans titre)'} · "
             f"{_plural(len(set(o)), 'personne')}"
             for s, e, ev, o in meetings(events, lo_dt, hi_dt, me)]
 
@@ -180,7 +186,7 @@ def personal_lines(events, tz):
     """`- **Journée** Titre` / `- **19:00-21:00** Titre`, mirrors merged."""
     lines = []
     for e in dedupe(events):
-        title = e.title or "(sans titre)"
+        title = untagged(e.title) or "(sans titre)"
         if e.all_day:
             lines.append(f"- **Journée** {title}")
         else:
