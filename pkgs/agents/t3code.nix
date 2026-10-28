@@ -13,8 +13,8 @@
 # stable server behind a nightly client loses access to its sessions.
 #
 # linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead:
-# the same nightly plus pingdotgg/t3code#6315 (Issues page, Linear trees) and
-# #15827 + #17432 (mod UI), matching ./t3code-desktop.nix. A bump needs that
+# the same nightly plus pingdotgg/t3code#19576 (Issues) and the Linear issue
+# trees from nSimonFR-ai/t3code#1, matching ./t3code-desktop.nix. A bump needs that
 # release rebuilt first; see its notes.
 { lib
 , stdenv
@@ -23,16 +23,16 @@
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.0.46-nightly.20261013.3042";
+  version = "0.1.4-nightly.20261028.3814";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
-      url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.2/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-1ir18ZRnDLup5EmhlNoeHXxIC+A1CMXI71dlCiQdm/E=";
+      url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
+      hash = "sha256-MbibsQ9BLsEXAvjNLzTu839Og6KSHa2cUibhhIuFE6g=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
-      hash = "sha256-ug3kCueRnsADDfoNEyZm7Lq8SgNINX+vH4O3HtXyBJ0=";
+      hash = "sha256-1G+lcjInStxjegVveG59lq/gMQ4JOQaj7lLRme08d6c=";
     };
   };
 in
