@@ -206,3 +206,9 @@ if [[ -t 0 ]]; then
   git() { GIT_CONFIG_GLOBAL=~/.config/git/config command git "$@" }
   gh() { GH_TOKEN=$(command gh auth token --user nSimonFR 2>/dev/null) command gh "$@" }
 fi
+
+# Trusk's private npm packages: the repos' .npmrc reads $TRUSK_NPM_TOKEN, taken from
+# gh's nSimonFR login (agents included). Mac only: that login exists nowhere else.
+if [[ $OSTYPE == darwin* ]]; then
+  npm() { TRUSK_NPM_TOKEN=${TRUSK_NPM_TOKEN:-$(command gh auth token --user nSimonFR 2>/dev/null)} command npm "$@" }
+fi
