@@ -246,6 +246,11 @@
             "type": "command",
             "command": "\"$HOME/.claude/hooks/herdr-agent-code\" cc",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "[ ! -x \"$HOME/.claude/hooks/agent-vault-env\" ] || \"$HOME/.claude/hooks/agent-vault-env\"",
+            "timeout": 20
           }
         ]
       }
