@@ -956,15 +956,15 @@ def test_yesterday_is_sent_once_and_never_on_a_redo(tmp_path):
     assert len(sent) == 1 and sent[0][:3] == ["/bin/tg", "-m", "rich"] and state["2026-10-19"]["sent"]
 
 
-def test_the_entry_images_go_first_as_one_album(tmp_path):
+def test_the_entry_images_ride_in_the_same_message(tmp_path):
     sent = []
     op = FakeOpener([FakeResponse(b"PNG"), FakeResponse(b"JPG")])
     state = {"2026-10-19": dict(ENTRY)}
     wm.send_day(cfg(tmp_path, day="", telegram_send="/bin/tg"), state, date(2026, 10, 19),
                 lambda cmd: sent.append(cmd) or '{"ok":true}', print, wm.Memos("http://m", "T", op), str(tmp_path))
-    album = [f"{tmp_path}/tg-map-2026-10-19.png", f"{tmp_path}/tg-photos-2026-10-19.jpg"]
-    assert sent[0] == ["/bin/tg", "-p", album[0], "-p", album[1]] and sent[1][1:3] == ["-m", "rich"]
-    assert open(album[1], "rb").read() == b"JPG"
+    imgs = [f"{tmp_path}/tg-map-2026-10-19.png", f"{tmp_path}/tg-photos-2026-10-19.jpg"]
+    assert len(sent) == 1 and sent[0][:6] == ["/bin/tg", "-m", "rich", "-p", imgs[0], "-p"]
+    assert sent[0][6] == imgs[1] and open(imgs[1], "rb").read() == b"JPG"
     assert op.requests[0].full_url == "http://m/file/attachments/A/map-2026-10-19.png"
 
 
