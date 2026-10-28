@@ -22,7 +22,7 @@ Two Linear workspaces are available:
 
 Keys are format `lin_api_…`. All API calls go to `https://api.linear.app/graphql` with header `Authorization: $LINEAR_KEY` (no `Bearer` prefix — Linear personal keys are sent raw).
 
-**On rpi5 the keys are placeholders** (`__linear_key__`): Agent Vault swaps in the real one on the way to `api.linear.app`, so source its proxy env in the same command as the call. Elsewhere `secrets.zsh` exports the real keys.
+**The keys are placeholders** (`__linear_key__`): the rpi5's Agent Vault swaps in the real one on the way to `api.linear.app`. On rpi5, source its proxy env in the same command as the call; in Claude Code on the Mac, a SessionStart hook already put the proxy and the placeholders in every Bash command (hosts/nbookpro/home.nix).
 
 ```bash
 [ -r /var/lib/agent-vault-hermes/proxy.env ] && { set -a; . /var/lib/agent-vault-hermes/proxy.env; set +a; }
