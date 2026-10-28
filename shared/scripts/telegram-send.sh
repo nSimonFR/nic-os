@@ -2,8 +2,9 @@
 # telegram-send — post ONE message (or photo) to Telegram. See shared/notify.nix
 # for when this is the wrong seam.
 #
-# Usage: telegram-send [-c CHAT] [-m html|markdown|plain|rich] [-p PHOTO] [TEXT]
+# Usage: telegram-send [-c CHAT] [-m html|markdown|plain|rich] [-p PHOTO]... [TEXT]
 #   TEXT is read from stdin when omitted; with -p it becomes the caption.
+#   Several -p send one album (2-10 photos).
 #   `rich` sends a Bot API 10.1 Rich Message: TEXT is rich Markdown, and
 #   headings, tables, `- [ ]` checkboxes and <details> become real blocks.
 # Env:   TELEGRAM_CHAT_ID, TELEGRAM_TOKEN_FILE (defaults to the agenix path,
@@ -16,19 +17,21 @@ set -u
 chat=${TELEGRAM_CHAT_ID:-}
 mode=html
 photo=
+photos=()
 text=
 
 while [ $# -gt 0 ]; do
   case $1 in
     -c|--chat)  chat=$2;  shift 2 ;;
     -m|--mode)  mode=$2;  shift 2 ;;
-    -p|--photo) photo=$2; shift 2 ;;
-    -h|--help)  sed -n '2,11p' "$0"; exit 0 ;;
+    -p|--photo) photo=$2; photos+=("$2"); shift 2 ;;
+    -h|--help)  sed -n '2,12p' "$0"; exit 0 ;;
     *)          text=$1;  shift ;;
   esac
 done
 # Guard on a tty so an interactive call with no arguments errors instead of hanging.
-[ -n "$text" ] || [ -t 0 ] || text=$(cat)
+# An album with no caption reads no stdin.
+[ -n "$text" ] || [ ${#photos[@]} -gt 1 ] || [ -t 0 ] || text=$(cat)
 
 die() { echo "telegram-send: $1" >&2; exit 0; }
 
@@ -50,7 +53,17 @@ case $mode in
   *)        die "unknown --mode $mode" ;;
 esac
 
-if [ -n "$photo" ]; then
+if [ ${#photos[@]} -gt 1 ]; then
+  method=sendMediaGroup
+  set -- -F "chat_id=$chat"
+  for i in "${!photos[@]}"; do
+    [ -r "${photos[$i]}" ] || die "photo unreadable (${photos[$i]})"
+    set -- "$@" -F "p$i=@${photos[$i]}"
+  done
+  media=$(python3 -c 'import json,sys; n,cap=int(sys.argv[1]),sys.argv[2]; print(json.dumps([{"type":"photo","media":f"attach://p{i}",**({"caption":cap} if cap and i==0 else {})} for i in range(n)]))' \
+    "${#photos[@]}" "$text") || die "could not encode album"
+  set -- "$@" -F "media=$media"
+elif [ -n "$photo" ]; then
   [ -r "$photo" ] || die "photo unreadable ($photo)"
   method=sendPhoto
   set -- "$@" -F "chat_id=$chat" -F "photo=@$photo"

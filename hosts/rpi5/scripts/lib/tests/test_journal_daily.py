@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from conftest import FakeOpener, json_reply
+from conftest import FakeOpener, FakeResponse, json_reply
 from nicos_scripts.connectors import journal_daily as wm
 
 SEP = "\x1f"
@@ -933,18 +933,15 @@ ENTRY = {"memo": "memos/M", "text": "*Résumé.*\n\n### 📷 Photos - 2\n\n- pho
          "atts": ["attachments/A", "attachments/B"], "files": ["map-2026-10-19.png", "photos-2026-10-19.jpg"]}
 
 
-def test_the_telegram_entry_drops_tags_and_links_memo_and_files():
-    text = wm.telegram_text(ENTRY, "https://m")
-    assert text == ("*Résumé.*\n\n### 📷 Photos - 2\n\n- photo\n\n"
-                    "- [Ouvrir dans Memos](https://m/memos/M)\n"
-                    "- [map-2026-10-19.png](https://m/file/attachments/A/map-2026-10-19.png)\n"
-                    "- [photos-2026-10-19.jpg](https://m/file/attachments/B/photos-2026-10-19.jpg)")
+def test_the_telegram_entry_drops_tags_and_links_the_memo():
+    assert wm.telegram_text(ENTRY, "https://m") == (
+        "*Résumé.*\n\n### 📷 Photos - 2\n\n- photo\n\n[Ouvrir dans Memos](https://m/memos/M)")
 
 
 def test_a_long_entry_is_cut_by_whole_lines():
     entry = {**ENTRY, "text": "\n".join(f"- ligne {i}" for i in range(2000))}
     text = wm.telegram_text(entry, "https://m")
-    assert len(text) <= wm.TELEGRAM_MAX and text.endswith("photos-2026-10-19.jpg)")
+    assert len(text) <= wm.TELEGRAM_MAX and text.endswith("(https://m/memos/M)")
 
 
 def test_yesterday_is_sent_once_and_never_on_a_redo(tmp_path):
@@ -957,6 +954,18 @@ def test_yesterday_is_sent_once_and_never_on_a_redo(tmp_path):
     wm.send_day(c, state, date(2026, 10, 19), run, print)
     wm.send_day(c, state, date(2026, 10, 19), run, print)
     assert len(sent) == 1 and sent[0][:3] == ["/bin/tg", "-m", "rich"] and state["2026-10-19"]["sent"]
+
+
+def test_the_entry_images_go_first_as_one_album(tmp_path):
+    sent = []
+    op = FakeOpener([FakeResponse(b"PNG"), FakeResponse(b"JPG")])
+    state = {"2026-10-19": dict(ENTRY)}
+    wm.send_day(cfg(tmp_path, day="", telegram_send="/bin/tg"), state, date(2026, 10, 19),
+                lambda cmd: sent.append(cmd) or '{"ok":true}', print, wm.Memos("http://m", "T", op), str(tmp_path))
+    album = [f"{tmp_path}/tg-map-2026-10-19.png", f"{tmp_path}/tg-photos-2026-10-19.jpg"]
+    assert sent[0] == ["/bin/tg", "-p", album[0], "-p", album[1]] and sent[1][1:3] == ["-m", "rich"]
+    assert open(album[1], "rb").read() == b"JPG"
+    assert op.requests[0].full_url == "http://m/file/attachments/A/map-2026-10-19.png"
 
 
 def test_a_rejected_send_is_retried_next_run(tmp_path):
