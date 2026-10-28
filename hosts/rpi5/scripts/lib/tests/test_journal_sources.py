@@ -63,6 +63,13 @@ def test_meeting_lines_list_what_the_summary_counts():
     assert not any("Nope" in l or "Focus" in l for l in lines)
 
 
+def test_calendar_titles_do_not_become_memos_tags():
+    ev = ics(vevent("d", "20261020T190000", "20261020T210000", "Point #3 #standup"))
+    lines = js.personal_lines(js.expand([ev], LO, HI, TZ), TZ)
+    assert lines == ["- **19:00-21:00** Point \\#3 \\#standup"]
+    assert js.untagged(js.untagged("#a")) == "\\#a"
+
+
 def test_no_meetings_is_none():
     assert js.work_summary([], LO, HI, ME) is None
 

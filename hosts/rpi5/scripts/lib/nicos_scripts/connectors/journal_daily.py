@@ -1324,8 +1324,6 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     climbs = day_climbing(cfg, day, log)
     notes = day_notes(cfg, run, state, day, log, now)
     flights, every_flight = day_flights(cfg, run, day, log)
-    if not (ws or day_trips or climbs or day_photos or agenda or work or notes or flights):
-        return None
     photos = pick_photos(day_photos, cfg.photos_max)
     memories = []
     if immich and immich.admin_key:
@@ -1340,6 +1338,10 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     activity = day_activity(cfg, run, day, log)
     screens = day_screens(cfg, run, day, log)
     spending = day_spend(spend_fn, day, log, _today(now), cfg)
+    # Birthdays, memories and weather come every day: alone they make no entry.
+    if not (ws or day_trips or climbs or day_photos or agenda or work or notes or flights
+            or music or games or activity or screens or spending):
+        return None
     badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
     lines = map_lines(ws, tracks, day_trips)
@@ -1392,7 +1394,7 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         summary = (prev.get("summary") if prev.get("summary_src") == src_hash
                    else summary_fn(text, summary_image(collage)))
         if summary:
-            text = f"*{summary}*\n\n{text}"
+            text = f"*{src.untagged(summary)}*\n\n{text}"
         else:  # gate down: a later run retries, as the signature won't match
             log(f"{key}: no summary this run")
             sig = f"{sig}|no-summary"

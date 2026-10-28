@@ -572,11 +572,11 @@ def test_music_section_sits_between_photos_and_work(tmp_path):
             "- **Lomepal** · Club, Trop beau, Un peu de sang\n- **Muse** · Starlight\n\n___________\n\n#bike #music\n") in text
 
 
-def test_music_alone_makes_no_entry(tmp_path):
-    op = memos_opener()
+def test_a_day_with_only_music_still_gets_an_entry(tmp_path):
+    op = FakeOpener([json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
     pg = FakePg([], [], music=[play("Club", "Lomepal", 250)])
     assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
-                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
+                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) == "memos/M"
 
 
 SESSION = {"_id": "s1", "startDate": "2026-10-19T10:16:17+00:00", "gymName": "Arkose Chevaleret",
@@ -703,11 +703,11 @@ def test_activity_one_line_before_the_rides(tmp_path):
     assert "coalesce(source, '') = ''" in sql and "DISTINCT ON (metric_name, time)" in sql
 
 
-def test_activity_alone_makes_no_entry(tmp_path):
-    op = memos_opener()
+def test_a_day_with_only_steps_still_gets_an_entry(tmp_path):
+    op = FakeOpener([json_reply({"name": "memos/M"}), json_reply({"name": "memos/M"})])
     pg = FakePg([], [], activity=[("step_count", 3000)])
     assert wm.journal_day(cfg(tmp_path), pg, wm.Memos("http://m", "T", op), {},
-                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) is None
+                          date(2026, 10, 19), 1, lambda m: None, no_render, str(tmp_path)) == "memos/M"
 
 
 def test_project_notes_collapse_in_their_own_section_and_are_cached(tmp_path):
