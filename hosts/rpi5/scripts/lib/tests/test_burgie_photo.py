@@ -1,6 +1,7 @@
 """hermes-burgie-photo: album scoping, origin chat, and the Agent Vault route."""
 
 import json
+import urllib.error
 
 import pytest
 
@@ -54,6 +55,38 @@ def test_only_images_are_candidates(tmp_path, opener):
     bp.run(_home(tmp_path), opener=opener(_replies()),
            choice=lambda xs: seen.extend(xs) or xs[0], token="T")
     assert [a["id"] for a in seen] == ["img"]
+
+
+def _raise(exc):
+    def reply():
+        raise exc
+    return reply
+
+
+def test_immich_timeout_is_retried_then_sends_once(tmp_path, opener):
+    sleeps = []
+    fake = opener([_raise(TimeoutError("timed out")), *_replies()])
+    bp.run(_home(tmp_path), opener=fake, choice=lambda xs: xs[0], token="T",
+           sleep=sleeps.append)
+    assert sleeps == [bp.IMMICH_RETRY_SECONDS]
+    assert sum(r.full_url.endswith("/sendPhoto") for r in fake.requests) == 1
+
+
+def test_immich_gives_up_after_the_last_attempt(tmp_path, opener):
+    sleeps = []
+    fake = opener([_raise(urllib.error.URLError("refused"))])
+    with pytest.raises(urllib.error.URLError):
+        bp.run(_home(tmp_path), opener=fake, token="T", sleep=sleeps.append)
+    assert len(fake.requests) == bp.IMMICH_ATTEMPTS
+    assert len(sleeps) == bp.IMMICH_ATTEMPTS - 1
+
+
+def test_immich_http_error_is_not_retried(tmp_path, opener):
+    err = urllib.error.HTTPError("u", 401, "Unauthorized", {}, None)
+    fake = opener([_raise(err)])
+    with pytest.raises(urllib.error.HTTPError):
+        bp.run(_home(tmp_path), opener=fake, token="T", sleep=pytest.fail)
+    assert len(fake.requests) == 1
 
 
 def test_telegram_delivered_elsewhere_is_a_failure(tmp_path, opener):
