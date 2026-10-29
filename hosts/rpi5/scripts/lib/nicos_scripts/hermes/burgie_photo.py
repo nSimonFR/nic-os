@@ -16,6 +16,7 @@ import json
 import os
 import secrets
 import sys
+import time
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
@@ -29,6 +30,10 @@ log = logger("hermes-burgie-photo", lambda: sys.stderr)
 
 DEFAULT_IMMICH = "http://immich.home.arpa:2283"
 PLACEHOLDER_KEY = "__immich_api_key__"
+# Immich shares Postgres with Ryot, whose queue cleanup has stalled it for >30s
+# (2026-10-29). Retry only the Immich half: a resent sendPhoto would post twice.
+IMMICH_ATTEMPTS = 3
+IMMICH_RETRY_SECONDS = 120
 
 
 @dataclass(frozen=True)
@@ -115,18 +120,37 @@ def send_photo(token, chat_id, image, opener=None):
         raise RuntimeError("Telegram delivery verification failed")
 
 
-def run(cfg, opener=None, choice=secrets.choice, token=None):
-    jobs = json.loads(Path(cfg.hermes_home, "cron", "jobs.json").read_text())
-    chat_id = origin_chat(jobs.get("jobs", jobs) if isinstance(jobs, dict) else jobs, cfg.job_id)
-
+def random_preview(cfg, opener, choice):
     albums = get_json(
         f"{cfg.immich_url}/api/albums?withAssets=false",
         {"x-api-key": cfg.api_key},
+        timeout=60,
         opener=opener,
     )
     album = pick_album(albums, cfg.album_match)
     asset = choice(album_images(cfg, album, opener=opener))
-    image = preview(cfg, asset["id"], opener=opener)
+    return album, asset, preview(cfg, asset["id"], opener=opener)
+
+
+def fetch_immich(cfg, opener, choice, sleep):
+    """`random_preview`, retried on a timeout or refused connection (not on an HTTP error)."""
+    for attempt in range(1, IMMICH_ATTEMPTS + 1):
+        try:
+            return random_preview(cfg, opener, choice)
+        except urllib.error.HTTPError:
+            raise
+        except (urllib.error.URLError, TimeoutError) as e:
+            if attempt == IMMICH_ATTEMPTS:
+                raise
+            log(f"immich attempt {attempt} failed ({e}); retrying in {IMMICH_RETRY_SECONDS}s")
+            sleep(IMMICH_RETRY_SECONDS)
+
+
+def run(cfg, opener=None, choice=secrets.choice, token=None, sleep=time.sleep):
+    jobs = json.loads(Path(cfg.hermes_home, "cron", "jobs.json").read_text())
+    chat_id = origin_chat(jobs.get("jobs", jobs) if isinstance(jobs, dict) else jobs, cfg.job_id)
+
+    album, asset, image = fetch_immich(cfg, opener, choice, sleep)
     send_photo(token or read_secret(cfg.token_file), chat_id, image, opener=opener)
     log(f"sent {asset['id']} from {album.get('albumName')!r} to {chat_id}")
 
