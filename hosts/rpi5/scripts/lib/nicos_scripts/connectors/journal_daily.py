@@ -1203,7 +1203,7 @@ MAX_DAY_PLAY_S = 16 * 3600
 def drop_imports(plays):
     """(plays without the impossible days, {journal day: seconds dropped})."""
     total = {}
-    for t, _, sec in plays:
+    for t, _, sec, _ in plays:
         total[rec.journal_date(t)] = total.get(rec.journal_date(t), 0) + sec
     bad = {d: s for d, s in total.items() if s > MAX_DAY_PLAY_S}
     return [p for p in plays if rec.journal_date(p[0]) not in bad], bad
@@ -1224,9 +1224,9 @@ def day_games(cfg, run, day, log):
         log(f"{day}: games dropped ({dropped[day] // 3600} h pushed: a full sync, not a day)")
     games = src.game_sessions([p for p in plays if p[0] >= lo])
     days = {}
-    for t, title, _ in plays:
+    for t, title, *_ in plays:
         days.setdefault(title, set()).add(rec.journal_date(t))
-    return src.game_section(games, {t: rec.streak_text(rec.streak(days[t], day)) for t, _ in games}) \
+    return src.game_section(games, {t: rec.streak_text(rec.streak(days[t], day)) for t, *_ in games}, TZ) \
         if games else None
 
 

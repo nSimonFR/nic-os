@@ -368,40 +368,51 @@ def climbing_pictures(sessions):
     return [(url, colour, status) for *_, url, colour, status in sorted(out, key=lambda t: t[:2])]
 
 
+# From the first steam-to-ryot run stamping plays when quit (10-30 04:50). Pushes
+# land 0-2 min after their run time: the write time alone can't tell them apart.
+STEAM_TIMED_FROM = 1793325600  # 2026-10-30 03:00 Europe/Paris
+
+
 def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="psql"):
-    """[(epoch s, title, seconds)] of the playtime landed for [lo, hi).
-    steam-to-ryot pushes the playtime grown since its last run at 04:50, so a
-    push stands for the journal day before it: the window is shifted a day.
-    V11 holds the pushes since the switch (timeSpent in minutes); the V1
-    migration folded each game's earlier sessions into one event (marked by
-    its startedOn), so the days before come from V1's seens."""
-    lo, hi = int(lo) + 86400, int(hi) + 86400
+    """[(epoch s, title, seconds, timed)] of the playtime played in [lo, hi).
+    steam-to-ryot pushes the playtime grown since its last run at 04:50. A push
+    written from STEAM_TIMED_FROM occurs when the game was quit (`timed`, epoch
+    = the end of the play); the older ones occurred at the run and stand for the
+    journal day before it. V11 holds the pushes since the switch (timeSpent
+    in minutes); the V1 migration folded each game's earlier sessions into one
+    event (marked by its startedOn), so the days before come from V1's seens."""
+    lo, hi = int(lo), int(hi)
     rows = psql_rows(run, f"""
-        SELECT extract(epoch FROM ev.occurred_at), e.name, ((ev.properties->>'timeSpent')::numeric * 60)::bigint
+        SELECT extract(epoch FROM ev.occurred_at), e.name, ((ev.properties->>'timeSpent')::numeric * 60)::bigint,
+               ev.created_at >= to_timestamp({STEAM_TIMED_FROM})
         FROM event ev JOIN entity e ON e.id = ev.entity_id
         WHERE e.entity_schema_slug = 'video-game' AND ev.event_schema_slug = 'complete'
           AND NOT ev.properties ? 'startedOn' AND (ev.properties->>'timeSpent')::numeric > 0
-          AND ev.occurred_at >= to_timestamp({lo}) AND ev.occurred_at < to_timestamp({hi})
+          AND ev.occurred_at >= to_timestamp({lo}) AND ev.occurred_at < to_timestamp({hi + 86400})
     """, db, runuser, psql)
+    plays = [(float(r[0]) - (0 if r[3] == "t" else 86400), r[1], int(r[2]), r[3] == "t") for r in rows]
     if v1_db:
         # Keyed on started_on (the push); finished_on is when Ryot completed it,
         # which for seens completed by hand is days later.
-        rows += psql_rows(run, f"""
+        plays += [(float(r[0]) - 86400, r[1], int(r[2]), False) for r in psql_rows(run, f"""
             SELECT extract(epoch FROM coalesce(s.started_on, s.finished_on)), m.title, s.manual_time_spent::bigint
             FROM seen s JOIN metadata m ON m.id = s.metadata_id
             WHERE m.lot = 'video_game' AND s.manual_time_spent > 0
-              AND coalesce(s.started_on, s.finished_on) >= to_timestamp({lo})
-              AND coalesce(s.started_on, s.finished_on) < to_timestamp({hi})
-        """, v1_db, runuser, psql)
-    return sorted((float(r[0]) - 86400, r[1], int(r[2])) for r in rows)
+              AND coalesce(s.started_on, s.finished_on) >= to_timestamp({lo + 86400})
+              AND coalesce(s.started_on, s.finished_on) < to_timestamp({hi + 86400})
+        """, v1_db, runuser, psql)]
+    return sorted(p for p in plays if lo <= p[0] < hi)
 
 
 def game_sessions(plays):
-    """[(title, seconds)] per game, most played first."""
-    total = {}
-    for _, title, sec in plays:
+    """[(title, seconds, (start, end) or None)] per game, most played first; the
+    span runs from the first start to the last end when every play is timed."""
+    total, spans = {}, {}
+    for end, title, sec, timed in plays:
         total[title] = total.get(title, 0) + sec
-    return sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))
+        spans.setdefault(title, []).append((end - sec, end) if timed else None)
+    span = lambda t: None if None in spans[t] else (min(a for a, _ in spans[t]), max(b for _, b in spans[t]))
+    return [(t, sec, span(t)) for t, sec in sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))]
 
 
 def _hm(seconds):
@@ -409,11 +420,13 @@ def _hm(seconds):
     return f"{h} h {m:02d}" if h else f"{m} min"
 
 
-def game_section(games, streaks=None):
-    """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 1 h 40`,
-    plus that game's `streaks` text if any."""
-    return _hm(sum(s for _, s in games)), [
-        f"- **{t}** · {_hm(s)}" + (f" · {streaks[t]}" if (streaks or {}).get(t) else "") for t, s in games]
+def game_section(games, streaks=None, tz=None):
+    """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 13:05-13:54
+    · 49 min` (the hours when known), plus that game's `streaks` text if any."""
+    hm = lambda t: f"{datetime.fromtimestamp(t, tz):%H:%M}"
+    return _hm(sum(s for _, s, _ in games)), [
+        f"- **{t}** · " + (f"{hm(span[0])}-{hm(span[1])} · " if span else "") + _hm(s)
+        + (f" · {streaks[t]}" if (streaks or {}).get(t) else "") for t, s, span in games]
 
 
 @dataclass(frozen=True)

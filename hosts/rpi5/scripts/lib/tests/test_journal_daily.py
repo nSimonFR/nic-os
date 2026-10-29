@@ -77,8 +77,8 @@ def play(title, artist, seconds, h=1, track="t"):
 
 
 def game(title, seconds):
-    """A Ryot V11 playtime push for Oct 19 (04:50 the next morning)."""
-    return (LO19 + 86400 + 3000, title, seconds)
+    """A Ryot V11 playtime push for Oct 19, stamped with the run (04:50 the next morning)."""
+    return (LO19 + 86400 + 3000, title, seconds, "f")
 
 
 def cfg(tmp_path, **kw):
@@ -763,9 +763,17 @@ def test_music_marks_an_artist_heard_three_days_running(tmp_path):
 def test_games_merge_v11_and_v1_playtime_a_day_late(tmp_path):
     lo, _ = wm.day_bounds(date(2026, 10, 19))
     push = lo + 86400 + 3000  # 04:50 the next morning
-    pg = FakePg([], [], games=[(push, "Stardew Valley", 3600)], v1_games=[(push, "Hades", 600)])
+    pg = FakePg([], [], games=[(push, "Stardew Valley", 3600, "f")], v1_games=[(push, "Hades", 600)])
     assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
         "1 h 10", ["- **Stardew Valley** · 1 h 00", "- **Hades** · 10 min"])
+
+
+def test_a_play_stamped_when_quit_shows_its_hours_on_its_own_day(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 10, 19))
+    quit = lo + 9 * 3600 + 54 * 60  # 13:54
+    pg = FakePg([], [], games=[(quit, "Stardew Valley", 49 * 60, "t"), (quit + 86400, "Hades", 600, "t")])
+    assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
+        "49 min", ["- **Stardew Valley** · 13:05-13:54 · 49 min"])
 
 
 
