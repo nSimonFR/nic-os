@@ -8,22 +8,26 @@ external id (RyotQL), else imported through the `video-game.igdb` provider.
 
 Playtime model (Steam exposes only cumulative `playtime_forever`, no sessions):
 each time it grows by >= MIN_DELTA_MIN minutes we log ONE `complete` event via
-the media plugin's `media-activity-log`, occurring now, with `timeSpent` = the
-delta in minutes and `consumedOn: "Steam"` — the shape the V1 -> V2 migration
-gave the V1 seens (V1 `manual_time_spent` seconds / 60).
+the media plugin's `media-activity-log`, with `timeSpent` = the delta in minutes
+and `consumedOn: "Steam"` — the shape the V1 -> V2 migration gave the V1 seens
+(V1 `manual_time_spent` seconds / 60). It occurs at the game's
+`rtime_last_played`, which Steam sets when the game is quit (checked 2026-10-29
+against the profile's lastlogoff); several sessions in a day collapse onto the
+last one. Pushes before that occurred at the run time.
 
 State, all in $STATE_DIR:
   * steam-state.json = {games:{appid:last_logged_playtime_min}} — unchanged from
     V1, so the first V2 run logs exactly the growth since V1's last run. A game
     advances only once its event is saved; until then its play sits in
-    `inflight` ({appid:{total, submittedAt}}, omitted when empty).
+    `inflight` ({appid:{total, submittedAt, playedAt}}, omitted when empty).
   * steam-igdb-map.json = appid -> IGDB id ("" = known-unmapped).
   * steam-ryot-entities.json = appid -> Ryot entity id.
 
 Idempotency: the submissionId is `steam-<appid>-<new total>`, and Ryot keys the
 event write on it. Resending it with the same payload replays the first write;
 with a different one (a new occurredAt) Ryot refuses with mutation-conflict. So an
-inflight play is resent byte-identical, never re-stamped with a new run time.
+inflight play is resent byte-identical, never re-stamped with a new run time or
+a newer last play.
 
 Stdlib only. Config via environment:
   STEAM_API_KEY           Steam Web API key (steamcommunity.com/dev/apikey)   [required]
@@ -222,6 +226,8 @@ def playtime_deltas(games, igdb_map, prev_games, min_delta_min=1, inflight=None,
                 "total": total,
                 "delta": delta,
                 "submitted_at": sent["submittedAt"] if sent else now,
+                # "" = occurs now: an inflight play from before playedAt existed.
+                "played_at": sent.get("playedAt", "") if sent else epoch_iso(g.get("rtime_last_played")),
             }
         )
     return plays
@@ -287,6 +293,13 @@ def games_query(provider_id, igdb_ids):
     }
 
 
+def epoch_iso(t):
+    """Steam's epoch seconds as Ryot's ISO instant; "" for none (0 = never played)."""
+    if not t:
+        return ""
+    return datetime.fromtimestamp(int(t), timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def submission_id(appid, total):
     return f"steam-{appid}-{total}"
 
@@ -299,7 +312,7 @@ def activity_payload(entity_id, play):
         "entry": {
             "kind": "complete",
             "entityId": entity_id,
-            "when": {"kind": "now"},
+            "when": {"kind": "date", "finishedOn": play["played_at"]} if play.get("played_at") else {"kind": "now"},
             "timeSpent": play["delta"],
             "consumedOn": "Steam",
         },
@@ -482,7 +495,7 @@ def main(env=None, opener=None, sleep=time.sleep, now=None):
             continue
         # Recorded before sending: a retry must resend the same occurredAt, or Ryot
         # answers mutation-conflict for the reused submissionId.
-        inflight[p["appid"]] = {"total": p["total"], "submittedAt": p["submitted_at"]}
+        inflight[p["appid"]] = {"total": p["total"], "submittedAt": p["submitted_at"], "playedAt": p["played_at"]}
         save()
         try:
             client.log_play(entity, p)

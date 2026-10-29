@@ -140,9 +140,15 @@ def test_screen_section_films_and_episode_runs():
 
 
 def test_game_sessions_sum_per_game():
-    assert js.game_sessions([(1, "A", 60), (2, "B", 600), (3, "A", 60)]) == [("B", 600), ("A", 120)]
-    assert js.game_section([("A", 3600)], {"A": "🔥 3ᵉ jour d'affilée"}) == (
+    assert js.game_sessions([(1, "A", 60, False), (2, "B", 600, False), (3, "A", 60, False)]) == [
+        ("B", 600, None), ("A", 120, None)]
+    assert js.game_section([("A", 3600, None)], {"A": "🔥 3ᵉ jour d'affilée"}) == (
         "1 h 00", ["- **A** · 1 h 00 · 🔥 3ᵉ jour d'affilée"])
+
+
+def test_a_game_spans_its_timed_plays_and_drops_the_hours_when_one_is_untimed():
+    assert js.game_sessions([(1000, "A", 100, True), (5000, "A", 600, True)]) == [("A", 700, (900, 5000))]
+    assert js.game_sessions([(1000, "A", 100, True), (5000, "A", 600, False)]) == [("A", 700, None)]
 
 
 def test_activity_section_needs_steps_and_skips_empty_lines():

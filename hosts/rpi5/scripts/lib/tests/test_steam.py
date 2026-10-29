@@ -25,8 +25,14 @@ ENV = {
 SAVED = json_reply({"result": {"count": 1, "status": "saved"}})
 
 
-def game(appid, name, minutes):
-    return {"appid": appid, "name": name, "playtime_forever": minutes}
+def game(appid, name, minutes, last_played=None):
+    g = {"appid": appid, "name": name, "playtime_forever": minutes}
+    if last_played:
+        g["rtime_last_played"] = last_played
+    return g
+
+
+QUIT = 1761659640  # 2025-10-28T13:54:00Z
 
 
 def no_sleep(_):
@@ -67,8 +73,16 @@ def test_first_run_logs_the_whole_playtime():
             "total": 120,
             "delta": 120,
             "submitted_at": NOW,
+            "played_at": "",
         }
     ]
+
+
+def test_a_play_occurs_when_the_game_was_quit():
+    (play,) = steam.playtime_deltas([game(1, "Stardew", 150, QUIT)], {"1": "77"}, {"1": 101}, now=NOW)
+    assert play["played_at"] == "2025-10-28T13:54:00.000Z" and play["delta"] == 49
+    assert steam.activity_payload("e", play)["entry"]["when"] == {
+        "kind": "date", "finishedOn": "2025-10-28T13:54:00.000Z"}
 
 
 def test_no_new_playtime_logs_nothing():
@@ -87,11 +101,17 @@ def test_growth_below_min_delta_is_ignored_and_accumulates():
 
 def test_an_inflight_play_is_resent_exactly_as_first_sent():
     # Steam has grown past it since; the extra 30 min wait for the next run.
-    inflight = {"1": {"total": 150, "submittedAt": "earlier"}}
+    inflight = {"1": {"total": 150, "submittedAt": "earlier", "playedAt": "quit"}}
     (play,) = steam.playtime_deltas(
-        [game(1, "Portal", 180)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
+        [game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
     )
-    assert (play["total"], play["delta"], play["submitted_at"]) == (150, 30, "earlier")
+    assert (play["total"], play["delta"], play["submitted_at"], play["played_at"]) == (150, 30, "earlier", "quit")
+
+
+def test_an_inflight_play_from_before_played_at_still_occurs_now():
+    inflight = {"1": {"total": 150, "submittedAt": "earlier"}}
+    (play,) = steam.playtime_deltas([game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW)
+    assert steam.activity_payload("e", play)["entry"]["when"] == {"kind": "now"}
 
 
 def test_unmapped_unknown_and_unplayed_games_are_skipped():
@@ -329,7 +349,7 @@ def test_a_failed_play_keeps_its_old_total_and_fails_the_run(tmp_path):
     # A stays inflight with its stamp, so the next run resends it unchanged; B advanced.
     assert read(tmp_path, "steam-state.json") == {
         "games": {"2": 30},
-        "inflight": {"1": {"total": 60, "submittedAt": NOW}},
+        "inflight": {"1": {"total": 60, "submittedAt": NOW, "playedAt": ""}},
     }
 
 
