@@ -267,6 +267,9 @@ in
       "--prefer" "(immich|ffmpeg)"
       # Protect critical infrastructure from being the first killed.
       "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
+      # Ryot sets oom_score_adj 1000 on its 2–36 MiB sandbox, which --avoid's -300
+      # can't outweigh: 17 kills 2026-10-30, each failing every Ryot import after.
+      "--ignore" "^ryot-sandboxd$"
     ];
   };
 
