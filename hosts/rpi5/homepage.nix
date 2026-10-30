@@ -205,6 +205,12 @@ in
         };
       }
       {
+        datetime = {
+          locale = "fr";
+          format = { dateStyle = "full"; timeStyle = "short"; hourCycle = "h23"; };
+        };
+      }
+      {
         # Paris weather — no API key needed
         openmeteo = {
           label = "Paris";

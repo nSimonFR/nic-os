@@ -26,6 +26,7 @@ Endpoints (one per homepage tile, three stats each):
   /forgejo   — Forgejo (repositories, overdue mirrors, disk size) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
+  /memos     — Memos journal (days, days in 30, last day) — journal-daily's state file
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
   /dsh       — DeepSeek Harness (sessions, prompts, days since the last) — zstd JSONL on disk
   /switch    — Death Plan Switch (status, next check-in, contacts confirmed) — its JSON files
@@ -172,6 +173,7 @@ class Config:
     # OpenKnowledge notes (hosts/rpi5/open-knowledge.nix): plain markdown, counted from
     # the filesystem so the poll never touches the app.
     notes_dir: str = "/mnt/data/cloud/NOTES"
+    journal_state: str = "/var/lib/journal-daily/days.json"
 
     # Reactive Resume's Postgres role/db (hosts/rpi5/reactive-resume.nix, shared cluster).
     # pg_hba requires scram-sha-256 for this role (see pg_hba_file_rules), so the
@@ -266,6 +268,7 @@ class Config:
             switch_dir=s("SWITCH_DIR", cls.switch_dir),
             showmycards_db=s("SHOWMYCARDS_DB", cls.showmycards_db),
             notes_dir=s("NOTES_DIR", cls.notes_dir),
+            journal_state=s("JOURNAL_STATE", cls.journal_state),
             rxresume_db=s("RXRESUME_DB", cls.rxresume_db),
             rxresume_role=s("RXRESUME_ROLE", cls.rxresume_role),
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
@@ -302,7 +305,7 @@ class Stats:
         "sure", "wealthfolio", "immich", "karakeep", "homeassistant",
         "papra", "reactiveresume", "grampsweb",
         "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
-        "beaverhabits", "ryot", "showmycards",
+        "beaverhabits", "ryot", "memos", "showmycards",
         "nextcloud", "calino", "affine", "openknowledge", "beszel",
         "freereps", "aperture", "dsh", "switch",
     )
@@ -1424,6 +1427,18 @@ def fetch_ryot(cfg, run):
     }
 
 
+def fetch_memos(cfg, run, today=None):
+    # journal-daily's state (hosts/rpi5/memos.nix) has one key per day it wrote,
+    # so Memos is never asked. `last` lags yesterday when the 08:00 run broke.
+    with open(cfg.journal_state) as f:
+        days = sorted(datetime.date.fromisoformat(k) for k, v in json.load(f).items()
+                      if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo"))
+    today = today or datetime.date.today()
+    return {"days": len(days),
+            "month": sum(1 for d in days if (today - d).days <= 30),
+            "last": days[-1].strftime("%d/%m") if days else "-"}
+
+
 def fetch_dsh(cfg, run, find=None, stat=None, now=None):
     """DeepSeek Harness: sessions, prompts sent, and how long since the last one.
 
@@ -1833,6 +1848,7 @@ FETCHERS = {
     "forgejo": fetch_forgejo,
     "beaverhabits": fetch_beaverhabits,
     "ryot": fetch_ryot,
+    "memos": fetch_memos,
     "freereps": fetch_freereps,
     "aperture": fetch_aperture,
     "dsh": fetch_dsh,
