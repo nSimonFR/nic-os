@@ -14,6 +14,7 @@ import pytest
 from conftest import FakeResponse, json_reply
 from nicos_scripts.hermes import calendar_digest as cal
 from nicos_scripts.hermes import cron_check as chk
+from nicos_scripts.hermes import mcp_token_check as mtc
 from nicos_scripts.hermes import zen_watch as zen
 
 TZ = ZoneInfo("Europe/Paris")
@@ -384,3 +385,51 @@ def test_main_prints_the_nudge_and_always_exits_zero(tmp_path, capsys):
     _home(tmp_path, [{"id": "a", "no_agent": True, "script": "gone.sh"}])
     assert chk.main(env={"HERMES_HOME": str(tmp_path)}) == 0
     assert "gone.sh" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# mcp_token_check
+# ---------------------------------------------------------------------------
+
+NOW = 1_800_000_000
+DAY = 86400
+
+
+def _mcp_home(tmp_path, servers, tokens):
+    (tmp_path / "mcp-tokens").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "config.yaml").write_text(json.dumps({"mcp_servers": servers}))
+    for name, data in tokens.items():
+        (tmp_path / "mcp-tokens" / f"{name}.json").write_text(json.dumps(data))
+    return mtc.Config(hermes_home=str(tmp_path))
+
+
+def test_mcp_silent_while_tokens_are_far_from_expiry_or_refreshable(tmp_path):
+    cfg = _mcp_home(
+        tmp_path,
+        {"t3": {"url": "u", "auth": "oauth"}, "g": {"url": "u", "auth": "oauth"}, "notes": {"url": "u"}},
+        {
+            "t3": {"access_token": "a", "expires_at": NOW + 20 * DAY},
+            "g": {"access_token": "a", "refresh_token": "r", "expires_at": NOW - DAY},
+        },
+    )
+    assert mtc.run(cfg, now=NOW) == ""
+
+
+@pytest.mark.parametrize(
+    "tokens, expected",
+    [
+        ({}, "jamais connecté"),
+        ({"t3": {"access_token": "a", "expires_at": NOW - 1}}, "expiré"),
+        ({"t3": {"access_token": "a", "expires_at": NOW + 3 * DAY}}, "expire dans 3 j"),
+        ({"t3": {"access_token": "a", "expires_at": NOW + 3600}}, "expire aujourd'hui"),
+    ],
+)
+def test_mcp_names_the_server_and_the_login_command(tmp_path, tokens, expected):
+    cfg = _mcp_home(tmp_path, {"t3": {"url": "u", "auth": "oauth"}}, tokens)
+    out = mtc.run(cfg, now=NOW)
+    assert expected in out and "hermes mcp login t3" in out
+
+
+def test_mcp_unreadable_config_is_skipped(tmp_path, capsys):
+    assert mtc.main(env={"HERMES_HOME": str(tmp_path / "nope")}) == 0
+    assert capsys.readouterr().out == ""

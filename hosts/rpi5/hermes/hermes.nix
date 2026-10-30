@@ -310,6 +310,17 @@ let
     # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 
+    # T3 Code (hosts/rpi5/t3code.nix): launch and follow coding threads, skill t3-agents.
+    # OAuth with no refresh token: the login lasts 30 days, watched by the
+    # mcp-token-check cron job. `untrusted` puts every write call (thread launch,
+    # send) behind a Telegram approval, whatever approvals.mode says; the access level
+    # picked on T3's approval page caps what the launched threads may do.
+    mcp_servers.t3 = {
+      url = "http://127.0.0.1:3773/mcp";
+      auth = "oauth";
+      trust = "untrusted";
+    };
+
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
     # single-chat-ID Telegram allowlist, not workspace isolation).

@@ -87,6 +87,8 @@ hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
 # untracked jobs.json, so nothing else can catch a renamed shim.
 hermes-cron-check = "nicos_scripts.hermes.cron_check:main"
+# Daily no_agent job: T3 Code issues no refresh token, so its MCP login lapses after 30 days.
+hermes-mcp-token-check = "nicos_scripts.hermes.mcp_token_check:main"
 # The morning digest. Classification is Jev's, not a model's, and every message
 # is classified once into ~/.mail-digest/mail.db — so a re-run costs nothing and
 # the store accumulates the evidence needed to score Jev at all.
