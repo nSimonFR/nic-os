@@ -265,9 +265,10 @@
     # v0.10.3 skipped Codex's additional_tools — left gpt-6-luna with NO tools.
     # v0.10.4 forwards /v1/responses on codex hops unchanged (#15). Test bumps
     # with a prompt that needs shell calls; "say hi" passes with zero tools.
-    # v0.10.5 adds the /v0/management usage-hub API (#16).
+    # v0.10.5 adds the /v0/management usage-hub API (#16); v0.10.6 reports
+    # Claude account emails from Anthropic's profile (#17).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.10.5";
+      url = "github:nSimonFR/tiny-llm-gate/v0.10.6";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
