@@ -81,6 +81,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.vaultwarden.ea_bridge"
     "nicos_scripts.vaultwarden.agents"
     "nicos_scripts.agent_vault.bootstrap"
+    "nicos_scripts.monitoring.earlyoom_alert"
   ];
 
   meta = {
