@@ -504,19 +504,20 @@ def test_switch_disarmed_has_no_due_date(tmp_path):
     assert hs.fetch_switch(cfg, None, now=0) == {"status": "off", "next_due": "-", "contacts": "0/0"}
 
 
-def test_memos_shows_the_total_and_the_last_day_with_its_year_before(tmp_path):
-    state = {"2026-10-29": {"memo": "m/a", "text": "*Escalade, puis AfterWork.*\n\n🌫 Brouillard"},
-             "2025-10-29": {"memo": "m/b", "text": "*Bretagne.*\n\n☀️"},
-             "2026-10-01": {"memo": "m/c", "text": "### 📷 Photos"},
+def test_memos_counts_days_and_the_last_day_s_agenda_and_activity(tmp_path):
+    text = ("*Escalade, puis AfterWork.*\n\n### 📅 Agenda\n\n- **Journée** Airbnb\n- **18:00** AfterWork\n\n"
+            "### 🧗 Escalade - Arkose · 7 tops · 44 m\n\n- 🟢 **Vert**: 7\n\n"
+            "### 🚲 Vélo - 2 trajets · 12,6 km · 40 min\n\n"
+            "### 💼 Travail - 5 réunions (4h15) 19 personnes\n\n<details>\n- **09:30** Daily\n</details>")
+    state = {"2026-10-29": {"memo": "m/a", "text": text},
+             "2026-10-28": {"memo": "m/b", "text": "### 📷 Photos - 3"},
              "2026-10-30": {}, "_dispatch": {"memo": "x"}}
     (tmp_path / "days.json").write_text(json.dumps(state))
     cfg = hs.Config(journal_state=str(tmp_path / "days.json"))
-    assert hs.fetch_memos(cfg, None) == {
-        "days": 3, "last": "29/10 · Escalade, puis AfterWork", "year_ago": "Bretagne"}
-    state["2026-10-29"]["text"] = "### 🎮 Jeux"
-    del state["2025-10-29"]
+    assert hs.fetch_memos(cfg, None) == {"days": 2, "agenda": 7, "activity": "🧗 7 tops · 🚲 13 km"}
+    del state["2026-10-29"]
     (tmp_path / "days.json").write_text(json.dumps(state))
-    assert hs.fetch_memos(cfg, None) == {"days": 2, "last": "29/10 · -", "year_ago": "-"}
+    assert hs.fetch_memos(cfg, None) == {"days": 1, "agenda": 0, "activity": "-"}
 
 
 def test_a_live_key_is_fetched_on_every_request(tmp_path, monkeypatch):
