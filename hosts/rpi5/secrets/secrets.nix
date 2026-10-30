@@ -33,6 +33,7 @@ in {
   "affine-gcal-oauth.age".publicKeys       = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "affine-mcp-http-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 rpi5-host ];
 "asale-api-key.age".publicKeys        = [ nsimon-age nsimon-ed25519 rpi5-host ];
+  "tiny-llm-gate-management-key.age".publicKeys = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "cachix-agent-token.age".publicKeys   = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "cachix-activate-token.age".publicKeys = [ nsimon-age nsimon-ed25519 rpi5-host ];
   "tavily-api-key.age".publicKeys          = [ nsimon-age nsimon-ed25519 rpi5-host ];
