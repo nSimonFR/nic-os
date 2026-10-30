@@ -15,7 +15,7 @@
 buildNpmPackage {
   pname = "open-knowledge";
   # renovate: datasource=npm depName=@inkeep/open-knowledge
-  version = "0.82.1";
+  version = "0.89.1";
   src = ./.;
   nodejs = nodejs_24;
   npmDepsHash = "sha256-cTn+JlMLnPyE/1hyWy4oQHPx8ML8mwgu+4iyCEqQBak=";
