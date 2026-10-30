@@ -26,7 +26,8 @@ Endpoints (one per homepage tile, three stats each):
   /forgejo   — Forgejo (repositories, overdue mirrors, disk size) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
-  /memos     — Memos journal (days, days in 30, last day) — journal-daily's state file
+  /memos     — Memos journal (days, last day's title, a year before) — journal-daily's
+               state file, read on every request (LIVE_KEYS)
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
   /dsh       — DeepSeek Harness (sessions, prompts, days since the last) — zstd JSONL on disk
   /switch    — Death Plan Switch (status, next check-in, contacts confirmed) — its JSON files
@@ -1427,16 +1428,29 @@ def fetch_ryot(cfg, run):
     }
 
 
-def fetch_memos(cfg, run, today=None):
+def _title(entry):
+    """The italic first line journal-daily opens an entry with, or ""."""
+    first = ((entry or {}).get("text") or "").split("\n", 1)[0].strip()
+    return first.strip("*").rstrip(".") if first.startswith("*") else ""
+
+
+def fetch_memos(cfg, run):
     # journal-daily's state (hosts/rpi5/memos.nix) has one key per day it wrote,
-    # so Memos is never asked. `last` lags yesterday when the 08:00 run broke.
+    # so Memos is never asked.
     with open(cfg.journal_state) as f:
-        days = sorted(datetime.date.fromisoformat(k) for k, v in json.load(f).items()
-                      if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo"))
-    today = today or datetime.date.today()
+        state = json.load(f)
+    days = sorted(k for k, v in state.items()
+                  if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo"))
+    if not days:
+        return {"days": 0, "last": "-", "year_ago": "-"}
+    last = datetime.date.fromisoformat(days[-1])
+    try:
+        before = last.replace(year=last.year - 1).isoformat()
+    except ValueError:  # 29 Feb
+        before = ""
     return {"days": len(days),
-            "month": sum(1 for d in days if (today - d).days <= 30),
-            "last": days[-1].strftime("%d/%m") if days else "-"}
+            "last": f"{last:%d/%m} · {_title(state[days[-1]]) or '-'}",
+            "year_ago": _title(state.get(before)) or "-"}
 
 
 def fetch_dsh(cfg, run, find=None, stat=None, now=None):
@@ -1826,6 +1840,10 @@ def fetch_switch(cfg, run, now=None):
             "contacts": f"{confirmed}/{len(contacts)}"}
 
 
+# Fetched on every request instead of daily: a cheap local read whose value
+# changes once a day at a known time (journal-daily, 08:00).
+LIVE_KEYS = {"memos"}
+
 FETCHERS = {
     "sure": fetch_sure,
     "wealthfolio": fetch_wealthfolio,
@@ -1977,7 +1995,7 @@ def refresh(cfg, run, stats, initial_fetched_at, sleep=time.sleep, once=False, l
             return last_fetched
 
 
-def make_handler(stats):
+def make_handler(stats, cfg=None, run=None):
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             # One branch per service used to be spelled out here, which meant adding
@@ -1985,6 +2003,8 @@ def make_handler(stats):
             # key, so route straight off it; anything else (including /) serves the
             # whole payload.
             key = self.path.strip("/")
+            if key in LIVE_KEYS and cfg:
+                run_fetcher(cfg, run, stats, key)
             data = stats.get(key) if key in stats else stats.snapshot()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
@@ -2006,7 +2026,7 @@ def main(env=None, run=None, server_class=http.server.HTTPServer):
     initial_fetched_at = load_cache(cfg, stats)
     threading.Thread(target=refresh, args=(cfg, run, stats, initial_fetched_at),
                      daemon=True).start()
-    server_class(("127.0.0.1", cfg.port), make_handler(stats)).serve_forever()
+    server_class(("127.0.0.1", cfg.port), make_handler(stats, cfg, run)).serve_forever()
     return 0
 
 

@@ -504,13 +504,32 @@ def test_switch_disarmed_has_no_due_date(tmp_path):
     assert hs.fetch_switch(cfg, None, now=0) == {"status": "off", "next_due": "-", "contacts": "0/0"}
 
 
-def test_memos_counts_the_journal_days_written(tmp_path):
-    state = {"2026-10-29": {"memo": "memos/a"}, "2026-10-01": {"memo": "memos/b"},
-             "2025-07-23": {"memo": "memos/c"}, "2026-10-28": {}, "_dispatch": {"memo": "x"}}
+def test_memos_shows_the_total_and_the_last_day_with_its_year_before(tmp_path):
+    state = {"2026-10-29": {"memo": "m/a", "text": "*Escalade, puis AfterWork.*\n\n🌫 Brouillard"},
+             "2025-10-29": {"memo": "m/b", "text": "*Bretagne.*\n\n☀️"},
+             "2026-10-01": {"memo": "m/c", "text": "### 📷 Photos"},
+             "2026-10-30": {}, "_dispatch": {"memo": "x"}}
     (tmp_path / "days.json").write_text(json.dumps(state))
     cfg = hs.Config(journal_state=str(tmp_path / "days.json"))
-    assert hs.fetch_memos(cfg, None, today=datetime.date(2026, 10, 30)) == {
-        "days": 3, "month": 2, "last": "29/10"}
+    assert hs.fetch_memos(cfg, None) == {
+        "days": 3, "last": "29/10 · Escalade, puis AfterWork", "year_ago": "Bretagne"}
+    state["2026-10-29"]["text"] = "### 🎮 Jeux"
+    del state["2025-10-29"]
+    (tmp_path / "days.json").write_text(json.dumps(state))
+    assert hs.fetch_memos(cfg, None) == {"days": 2, "last": "29/10 · -", "year_ago": "-"}
+
+
+def test_a_live_key_is_fetched_on_every_request(tmp_path, monkeypatch):
+    calls = []
+    monkeypatch.setitem(hs.FETCHERS, "memos", lambda cfg, run: calls.append(1) or {"days": len(calls)})
+    stats = hs.Stats()
+    handler = hs.make_handler(stats, hs.Config(), None)
+    for _ in range(2):
+        h = handler.__new__(handler)
+        h.path, h.wfile = "/memos", __import__("io").BytesIO()
+        h.send_response = h.send_header = h.end_headers = lambda *a: None
+        h.do_GET()
+    assert json.loads(h.wfile.getvalue()) == {"days": 2}
 
 
 def test_beaverhabits_sums_across_users():
