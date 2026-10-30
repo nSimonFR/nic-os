@@ -10,8 +10,8 @@ plus any workout Dawarich has no track for yet (from its points). Start/end labe
 (source `manual`) within PLACE_RADIUS_M, else the arrondissement/city of the
 nearest geocoded point. A Home ↔ Work workout adds #commute.
 
-Photos: the day's Immich timeline images (archived WhatsApp images and Live
-Photo motion halves are not on the timeline), favourites first, then spread
+Photos: the day's Immich timeline images minus WhatsApp ones (see `_whatsapp`;
+Live Photo motion halves are not on the timeline), favourites first, then spread
 over the day's hours, up to PHOTOS_MAX, as ONE collage attachment with each
 photo's time on its tile — the Memos gallery shows no times, and one ~400 KB
 sheet replaces ~2.5 MB of separate previews. Immich URL and key
@@ -50,6 +50,7 @@ import io
 import json
 import math
 import os
+import re
 import sqlite3
 import subprocess
 from collections import Counter
@@ -857,7 +858,7 @@ class Immich:
         out = []
         for m in http_json(req, timeout=180, opener=self.opener):
             year = (m.get("data") or {}).get("year")
-            shots = [a for a in m.get("assets") or [] if not _screenshot(a)]
+            shots = [a for a in m.get("assets") or [] if not (_screenshot(a) or _whatsapp(a))]
             if m.get("type") == "on_this_day" and year and shots and not m.get("isTrashed"):
                 out.append((int(year), shots, m["id"]))
         return sorted(out, key=lambda x: -x[0])
@@ -883,7 +884,7 @@ class Immich:
             headers={"x-api-key": self.key, "Content-Type": "application/json"})
         items = http_json(req, timeout=180, opener=self.opener).get("assets", {}).get("items", [])
         items = [a for a in items if a.get("type") == "IMAGE" and not a.get("isTrashed")
-                 and a.get("visibility", "timeline") == "timeline"]
+                 and a.get("visibility", "timeline") == "timeline" and not _whatsapp(a)]
         return sorted(items, key=lambda a: a.get("fileCreatedAt", ""))
 
     def preview(self, asset_id):
@@ -913,6 +914,17 @@ def fetch_image(url, opener=None):
 def _screenshot(asset):
     """A PNG with no camera: a phone screenshot (Oct 12 2021 was one)."""
     return (asset.get("originalFileName", "").lower().endswith(".png")
+            and not (asset.get("exifInfo") or {}).get("make"))
+
+
+WHATSAPP_NAME = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.", re.I)
+
+
+def _whatsapp(asset):
+    """WhatsApp saves media as a bare UUID with EXIF stripped. The archive jobs
+    only keep it off the timeline since 2026-08; the camera make spares the
+    ~3% of real UUID-named shots."""
+    return (bool(WHATSAPP_NAME.match(asset.get("originalFileName", "")))
             and not (asset.get("exifInfo") or {}).get("make"))
 
 
