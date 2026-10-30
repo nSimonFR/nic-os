@@ -158,15 +158,16 @@ in
         icon        = "memos.png";
         category    = "Apps";
         description = "Work journal";
-        # homepage-stats reads journal-daily's state; see fetch_memos.
+        # homepage-stats reads journal-daily's state on each request; see fetch_memos.
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/memos";
           refreshInterval = 3600000;
+          display = "list";
           mappings = [
-            { field = "days";  label = "Journal days"; format = "number"; }
-            { field = "month"; label = "In 30 days";   format = "number"; }
-            { field = "last";  label = "Last day"; }
+            { field = "days";     label = "Days";       format = "number"; }
+            { field = "last";     label = "Last";       format = "text"; }
+            { field = "year_ago"; label = "A year ago"; format = "text"; }
           ];
         };
       };
