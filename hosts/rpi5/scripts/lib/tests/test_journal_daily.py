@@ -367,6 +367,16 @@ def test_immich_memories_api_drops_screenshots_and_other_types():
     assert im.memory_link("B") == "https://im/memories/B"
 
 
+def test_immich_day_drops_whatsapp_images_but_not_uuid_named_camera_shots():
+    uuid = "0b9e3c1a-5f2d-4e8b-9a7c-1d2e3f4a5b6c"
+    wa = {"id": "w", "type": "IMAGE", "originalFileName": f"{uuid}.jpg", "exifInfo": {},
+          "fileCreatedAt": "2026-10-19T10:00:00Z"}
+    cam = {**wa, "id": "c", "originalFileName": f"{uuid.upper()}.JPG", "exifInfo": {"make": "Apple"}}
+    own = {**wa, "id": "i", "originalFileName": "IMG_1.HEIC"}
+    op = FakeOpener([json_reply({"assets": {"items": [wa, cam, own]}})])
+    assert [a["id"] for a in wm.Immich("https://im", "k", op).between(0, 1)] == ["c", "i"]
+
+
 def test_immich_search_link_is_a_date_range_query():
     import urllib.parse
     url = wm.Immich("https://im", "k").search_link(1792980000, 1793066400)
