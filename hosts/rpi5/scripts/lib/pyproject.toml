@@ -99,6 +99,8 @@ dps-ea-bridge = "nicos_scripts.vaultwarden.ea_bridge:main"
 vault-agent = "nicos_scripts.vaultwarden.agents:main"
 # Daily: SSH keys, funnels and SSH sources that live outside the Nix config.
 security-drift = "nicos_scripts.security.drift:main"
+# Every 2 min: earlyoom kills, one Telegram message per memory-pressure episode.
+earlyoom-alert = "nicos_scripts.monitoring.earlyoom_alert:main"
 # Started after agent-vault: credentials, services and Hermes' proxy env.
 agent-vault-bootstrap = "nicos_scripts.agent_vault.bootstrap:main"
 
