@@ -237,6 +237,11 @@
       # /run/agenix. The bearer is still absent from the Nix store and config.
       mode = "0444";
     };
+    # Usage hubs (T3 Code) read every subscription's quota with this key.
+    tiny-llm-gate-management-key = {
+      file = ./secrets/tiny-llm-gate-management-key.age;
+      mode = "0444"; # DynamicUser, as for asale-api-key
+    };
     dawarich-geoapify = {
       file  = ./secrets/dawarich-geoapify.age;
       owner = "dawarich";

@@ -22,10 +22,15 @@ in
     secretPaths = [
       "/run/agenix/affine-mcp-http-token"
       "/run/agenix/asale-api-key"
+      "/run/agenix/tiny-llm-gate-management-key"
     ];
 
     settings = {
       listen = "127.0.0.1:${toString port}";
+
+      # CLIProxyAPI-compatible /v0/management: T3 Code's usage hub reads the
+      # quota of acct1 and the codex provider. Tokens stay in the gate.
+      management.key_file = "/run/agenix/tiny-llm-gate-management-key";
 
       providers = {
         # Ollama on beast — no auth, plain OpenAI-compat.
