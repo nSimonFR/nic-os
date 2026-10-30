@@ -504,6 +504,15 @@ def test_switch_disarmed_has_no_due_date(tmp_path):
     assert hs.fetch_switch(cfg, None, now=0) == {"status": "off", "next_due": "-", "contacts": "0/0"}
 
 
+def test_memos_counts_the_journal_days_written(tmp_path):
+    state = {"2026-10-29": {"memo": "memos/a"}, "2026-10-01": {"memo": "memos/b"},
+             "2025-07-23": {"memo": "memos/c"}, "2026-10-28": {}, "_dispatch": {"memo": "x"}}
+    (tmp_path / "days.json").write_text(json.dumps(state))
+    cfg = hs.Config(journal_state=str(tmp_path / "days.json"))
+    assert hs.fetch_memos(cfg, None, today=datetime.date(2026, 10, 30)) == {
+        "days": 3, "month": 2, "last": "29/10"}
+
+
 def test_beaverhabits_sums_across_users():
     one = json.dumps({"habits": [{"name": "a", "records": [{"day": "x", "done": True}]}]})
     run = FakeRun([("habit_list", one + "\n" + one + "\n\n")])
