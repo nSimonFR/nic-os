@@ -566,8 +566,10 @@ def build_ics(b, uid, now=None):
         "DTSTART" + _fmt_dt(start, all_day),
         "DTEND" + _fmt_dt(end, all_day),
     ]
-    if platform:
-        lines.append("CATEGORIES:" + esc(platform))
+    # Transit shares one category so Calino colours every trip alike.
+    category = "Transports" if typ != "stay" else platform
+    if category:
+        lines.append("CATEGORIES:" + esc(category))
     if b.get("location"):
         lines.append(f"LOCATION:{esc(b['location'])}")
     # Description names the EXACT source email (from / subject / date) so it can be

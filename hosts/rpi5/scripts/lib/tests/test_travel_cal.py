@@ -310,6 +310,13 @@ def test_the_platform_becomes_a_category():
          "title": "x", "_platform": "Airbnb"})
 
 
+def test_transit_is_categorised_as_transports_whatever_the_platform():
+    for platform in ("Trainline", ""):
+        assert "CATEGORIES:Transports" in ics_lines(
+            {"type": "train", "start": "2026-09-01T10:00", "title": "x",
+             "_platform": platform})
+
+
 def test_the_description_names_the_source_email():
     body = "\r\n".join(ics_lines({
         "type": "stay", "start": "2026-09-01", "all_day": True, "title": "x",
