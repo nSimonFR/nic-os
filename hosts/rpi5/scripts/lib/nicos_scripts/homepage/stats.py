@@ -26,7 +26,7 @@ Endpoints (one per homepage tile, three stats each):
   /forgejo   — Forgejo (repositories, overdue mirrors, disk size) — direct Postgres query (superuser)
   /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
-  /memos     — Memos journal (days, last day's title, a year before) — journal-daily's
+  /memos     — Memos journal (days, the last day's agenda and activity) — journal-daily's
                state file, read on every request (LIVE_KEYS)
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
   /dsh       — DeepSeek Harness (sessions, prompts, days since the last) — zstd JSONL on disk
@@ -1428,10 +1428,30 @@ def fetch_ryot(cfg, run):
     }
 
 
-def _title(entry):
-    """The italic first line journal-daily opens an entry with, or ""."""
-    first = ((entry or {}).get("text") or "").split("\n", 1)[0].strip()
-    return first.strip("*").rstrip(".") if first.startswith("*") else ""
+def _sections(text):
+    """{heading: body lines} of a journal-daily entry, keyed by its "### " line."""
+    out, cur = {}, None
+    for line in text.splitlines():
+        if line.startswith("### "):
+            cur = out.setdefault(line[4:], [])
+        elif cur is not None:
+            cur.append(line)
+    return out
+
+
+def _day_stats(text):
+    """(agenda + work meetings, "🚲 12 km · 🧗 7 tops" or "-") of one entry."""
+    agenda, activity = 0, []
+    for head, body in _sections(text).items():
+        if head.startswith("📅 Agenda"):
+            agenda += sum(1 for l in body if l.startswith("- "))
+        elif m := re.match(r"💼 Travail - (\d+) réunion", head):
+            agenda += int(m[1])
+        elif head.startswith("🚲 Vélo") and (m := re.search(r"([\d,]+) km", head)):
+            activity.append(f"🚲 {round(float(m[1].replace(',', '.')))} km")
+        elif head.startswith("🧗 Escalade") and (m := re.search(r"(\d+) tops?", head)):
+            activity.append(f"🧗 {m[1]} tops")
+    return agenda, " · ".join(activity) or "-"
 
 
 def fetch_memos(cfg, run):
@@ -1441,16 +1461,8 @@ def fetch_memos(cfg, run):
         state = json.load(f)
     days = sorted(k for k, v in state.items()
                   if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo"))
-    if not days:
-        return {"days": 0, "last": "-", "year_ago": "-"}
-    last = datetime.date.fromisoformat(days[-1])
-    try:
-        before = last.replace(year=last.year - 1).isoformat()
-    except ValueError:  # 29 Feb
-        before = ""
-    return {"days": len(days),
-            "last": f"{last:%d/%m} · {_title(state[days[-1]]) or '-'}",
-            "year_ago": _title(state.get(before)) or "-"}
+    agenda, activity = _day_stats(state[days[-1]].get("text") or "") if days else (0, "-")
+    return {"days": len(days), "agenda": agenda, "activity": activity}
 
 
 def fetch_dsh(cfg, run, find=None, stat=None, now=None):

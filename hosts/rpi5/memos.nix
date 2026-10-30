@@ -163,11 +163,10 @@ in
           type = "customapi";
           url = "http://127.0.0.1:8087/memos";
           refreshInterval = 3600000;
-          display = "list";
           mappings = [
-            { field = "days";     label = "Days";       format = "number"; }
-            { field = "last";     label = "Last";       format = "text"; }
-            { field = "year_ago"; label = "A year ago"; format = "text"; }
+            { field = "days";     label = "Days";     format = "number"; }
+            { field = "agenda";   label = "Agenda";   format = "number"; }
+            { field = "activity"; label = "Activity"; format = "text"; }
           ];
         };
       };
