@@ -310,7 +310,7 @@ let
     # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 
-    # T3 Code (hosts/rpi5/t3code.nix): launch and follow coding threads, skill t3-agents.
+    # T3 Code (hosts/rpi5/t3code.nix): launch and follow coding threads.
     # OAuth with no refresh token: the login lasts 30 days, watched by the
     # mcp-token-check cron job. `untrusted` puts every write call (thread launch,
     # send) behind a Telegram approval, whatever approvals.mode says; the access level
