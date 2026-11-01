@@ -95,7 +95,7 @@
     #   Renovate bumps the tag (renovate.json, stable tags only); a nodejs_*
     #   missing from nixpkgs-unstable fails `eval rpi5` on its PR, not main.
     hermes-agent = {
-      url = "github:NousResearch/hermes-agent/v0.21.6";
+      url = "github:NousResearch/hermes-agent/v0.22.5";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
     };
 
