@@ -24,9 +24,7 @@ python3Packages.buildPythonPackage {
   src = lib.cleanSourceWith {
     src = ../../hosts/rpi5/scripts/lib;
     # Keep the store path stable no matter what a local `pytest` run left behind.
-    filter =
-      path: _type:
-      !(lib.hasInfix "__pycache__" path || lib.hasInfix ".pytest_cache" path);
+    filter = path: _type: !(lib.hasInfix "__pycache__" path || lib.hasInfix ".pytest_cache" path);
   };
 
   build-system = [ python3Packages.setuptools ];

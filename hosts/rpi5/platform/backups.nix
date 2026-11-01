@@ -41,7 +41,10 @@
   # registry, auth, UI dashboards) and the YAML are what a restore needs.
   systemd.services.hass-backup = {
     description = "Home Assistant database + config backup";
-    serviceConfig = { Type = "oneshot"; User = "hass"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "hass";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -60,7 +63,10 @@
   systemd.timers.hass-backup = {
     description = "Daily Home Assistant backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:00:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:00:00";
+      Persistent = true;
+    };
   };
 
   # ── Papra (SQLite — Papra is libSQL-only, no Postgres) ──────────────────
@@ -70,7 +76,10 @@
   # awake (idle-sleep) — .backup only touches the file, not the running server.
   systemd.services.papra-backup = {
     description = "Papra database backup";
-    serviceConfig = { Type = "oneshot"; User = "papra"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "papra";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -82,7 +91,10 @@
   systemd.timers.papra-backup = {
     description = "Daily Papra backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:45:00";
+      Persistent = true;
+    };
   };
 
   # ── BeaverHabits (SQLite — HABITS_STORAGE=DATABASE) ─────────────────────
@@ -92,7 +104,10 @@
   # file, not the running process.
   systemd.services.beaverhabits-backup = {
     description = "BeaverHabits database backup";
-    serviceConfig = { Type = "oneshot"; User = "beaverhabits"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "beaverhabits";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -104,7 +119,10 @@
   systemd.timers.beaverhabits-backup = {
     description = "Daily BeaverHabits backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:00:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:00:00";
+      Persistent = true;
+    };
   };
 
   # ── Wealthfolio (SQLite — the server edition is SQLite-only) ────────────
@@ -119,7 +137,10 @@
   # online-backup API and is safe against the live writer.
   systemd.services.wealthfolio-backup = {
     description = "Wealthfolio database backup";
-    serviceConfig = { Type = "oneshot"; User = "wealthfolio"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "wealthfolio";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -131,7 +152,10 @@
   systemd.timers.wealthfolio-backup = {
     description = "Daily Wealthfolio backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:15:00";
+      Persistent = true;
+    };
   };
 
   # ── Karakeep (SQLite + assets) ─────────────────────────────────────────
@@ -148,7 +172,10 @@
   # stack is awake; .backup only touches the file, not the running server.
   systemd.services.karakeep-backup = {
     description = "Karakeep database + assets backup";
-    serviceConfig = { Type = "oneshot"; User = "karakeep"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "karakeep";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -163,7 +190,10 @@
   systemd.timers.karakeep-backup = {
     description = "Daily Karakeep backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:15:00";
+      Persistent = true;
+    };
   };
 
   # ── Registration for the two $HOME dumps below ─────────────────────────
@@ -206,7 +236,10 @@
   # backup API, safe against the 08:30 digest running concurrently.
   systemd.services.mail-digest-backup = {
     description = "mail-digest database backup";
-    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "nsimon";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -218,7 +251,10 @@
   systemd.timers.mail-digest-backup = {
     description = "Daily mail-digest backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:30:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:30:00";
+      Persistent = true;
+    };
   };
 
   # ── blogwatcher (SQLite in $HOME) ──────────────────────────────────────
@@ -237,7 +273,10 @@
   # backup API, safe against a `scan` running concurrently.
   systemd.services.blogwatcher-backup = {
     description = "blogwatcher database backup";
-    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "nsimon";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -252,7 +291,10 @@
   systemd.timers.blogwatcher-backup = {
     description = "Daily blogwatcher backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:20:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:20:00";
+      Persistent = true;
+    };
   };
 
   # ── Hermes (SQLite + runtime files in $HOME) ───────────────────────────
@@ -283,7 +325,10 @@
   # continuously and would otherwise lose the race to a busy database.
   systemd.services.hermes-backup = {
     description = "Hermes agent state backup";
-    serviceConfig = { Type = "oneshot"; User = "nsimon"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "nsimon";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -301,13 +346,19 @@
   systemd.timers.hermes-backup = {
     description = "Daily Hermes backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:25:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:25:00";
+      Persistent = true;
+    };
   };
 
   # ── Vaultwarden (file copy from built-in hot backup) ───────────────────
   systemd.services.vaultwarden-backup = {
     description = "Vaultwarden off-site backup";
-    serviceConfig = { Type = "oneshot"; User = "vaultwarden"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "vaultwarden";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -320,13 +371,19 @@
   systemd.timers.vaultwarden-backup = {
     description = "Daily Vaultwarden backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:15:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:15:00";
+      Persistent = true;
+    };
   };
 
   # ── Gramps Web (per-tree SQLite + media) ───────────────────────────────
   systemd.services.gramps-web-backup = {
     description = "Gramps Web family trees + media backup";
-    serviceConfig = { Type = "oneshot"; User = "gramps-web"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "gramps-web";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -344,6 +401,9 @@
   systemd.timers.gramps-web-backup = {
     description = "Daily Gramps Web backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:45:00";
+      Persistent = true;
+    };
   };
 }

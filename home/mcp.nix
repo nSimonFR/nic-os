@@ -1,4 +1,9 @@
-{ config, pkgs, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  tailnetFqdn,
+  ...
+}:
 let
   secretsPath = config.nic.userSecrets.mcp-secrets;
 
@@ -48,17 +53,29 @@ let
   # Shared MCP server definitions (no plaintext secrets)
   mcpServers = {
     # Public — no secrets
-    Linear              = { type = "sse"; url = "https://mcp.linear.app/sse"; };
+    Linear = {
+      type = "sse";
+      url = "https://mcp.linear.app/sse";
+    };
     # Private — secrets loaded at runtime via wrapper scripts
-    GitHub  = { command = "${githubMcp}"; };
-    Miro    = { command = "${miroMcp}"; };
-    affine  = { type = "sse"; url = affineMcpUrl; };
-    notes   = { type = "http"; url = notesMcpUrl; };
+    GitHub = {
+      command = "${githubMcp}";
+    };
+    Miro = {
+      command = "${miroMcp}";
+    };
+    affine = {
+      type = "sse";
+      url = affineMcpUrl;
+    };
+    notes = {
+      type = "http";
+      url = notesMcpUrl;
+    };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
-  cursorMcpBase = pkgs.writeText "cursor-mcp-base.json"
-    (builtins.toJSON { inherit mcpServers; });
+  cursorMcpBase = pkgs.writeText "cursor-mcp-base.json" (builtins.toJSON { inherit mcpServers; });
 in
 {
   # Claude Code: declarative MCP via home-manager plugin mechanism

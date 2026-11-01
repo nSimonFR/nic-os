@@ -16,18 +16,24 @@
 # FIRST-TIME SETUP (from a tailnet device): open <publicUrl>/install.php. SMTP is
 # hydroxide on 127.0.0.1:1025, no TLS, login = proton address, password = bridge
 # password. Skip the installer's crontab step — the timer below already runs it.
-{ config, pkgs, tailnetFqdn, username, ... }:
+{
+  config,
+  pkgs,
+  tailnetFqdn,
+  username,
+  ...
+}:
 let
-  name    = "death-plan-switch";
+  name = "death-plan-switch";
   dataDir = "/mnt/data/death-plan-switch";
-  pkg     = pkgs.callPackage ../../../pkgs/services/death-plan-switch.nix {
+  pkg = pkgs.callPackage ../../../pkgs/services/death-plan-switch.nix {
     inherit dataDir;
     vaultHook = "${bridgeBin}/bin/dps-ea-bridge";
   };
-  appDir  = "${pkg}/share/switch";
-  php     = pkgs.php;
-  port    = 8094;  # backend vhost; the path-mux forwards /switch/* here unchanged
-  socket  = config.services.phpfpm.pools.${name}.socket;
+  appDir = "${pkg}/share/switch";
+  php = pkgs.php;
+  port = 8094; # backend vhost; the path-mux forwards /switch/* here unchanged
+  socket = config.services.phpfpm.pools.${name}.socket;
 
   fastcgi = ''
     include ${config.services.nginx.package}/conf/fastcgi.conf;
@@ -90,7 +96,13 @@ in
   systemd.services."phpfpm-${name}".unitConfig.RequiresMountsFor = [ dataDir ];
 
   services.nginx.virtualHosts.${name} = {
-    listen = [ { addr = "127.0.0.1"; inherit port; ssl = false; } ];
+    listen = [
+      {
+        addr = "127.0.0.1";
+        inherit port;
+        ssl = false;
+      }
+    ];
     root = "${pkg}/share";
     extraConfig = ''
       index index.php;
@@ -98,11 +110,23 @@ in
     '';
     # Regex locations match in file order, so the denies need the lower priority.
     locations = {
-      "~ ^/switch/(data|app|cli|tests|docs)/" = { priority = 100; extraConfig = "deny all;"; };
-      "~ /\\." = { priority = 100; extraConfig = "deny all;"; };
-      "~ \\.(json|jsonl|bak|lock|md|example)$" = { priority = 100; extraConfig = "deny all;"; };
+      "~ ^/switch/(data|app|cli|tests|docs)/" = {
+        priority = 100;
+        extraConfig = "deny all;";
+      };
+      "~ /\\." = {
+        priority = 100;
+        extraConfig = "deny all;";
+      };
+      "~ \\.(json|jsonl|bak|lock|md|example)$" = {
+        priority = 100;
+        extraConfig = "deny all;";
+      };
       # The web scheduler is redundant with the timer; config.local.php only defines DPS_DATA.
-      "~ ^/switch/(config\\.local\\.php|tick\\.php|LICENSE)$" = { priority = 100; extraConfig = "deny all;"; };
+      "~ ^/switch/(config\\.local\\.php|tick\\.php|LICENSE)$" = {
+        priority = 100;
+        extraConfig = "deny all;";
+      };
 
       "~ ^/switch/(index|install)\\.php$" = {
         priority = 200;
@@ -115,7 +139,10 @@ in
         priority = 300;
         extraConfig = fastcgi;
       };
-      "~ \\.php$" = { priority = 400; extraConfig = "return 404;"; };
+      "~ \\.php$" = {
+        priority = 400;
+        extraConfig = "return 404;";
+      };
     };
   };
 
@@ -157,27 +184,39 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 260;
-      port    = 443;
+      order = 260;
+      port = 443;
       backend = "http://127.0.0.1:${toString port}";
       proxied = true;
       authenticated = true; # admin pages 404 to funnel; contact pages need their secret link
       muxPath = "/switch";
       tile = {
-        name        = "Death Plan Switch";
-        icon        = "mdi-timer-sand";
-        category    = "Apps";
+        name = "Death Plan Switch";
+        icon = "mdi-timer-sand";
+        category = "Apps";
         description = "Dead man's switch";
-        deepLink    = "/index.php?p=contacts";
+        deepLink = "/index.php?p=contacts";
         # homepage-stats reads the switch's JSON files (daily cache).
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/switch";
           refreshInterval = 3600000;
           mappings = [
-            { field = "status";   label = "Status";   format = "text"; }
-            { field = "next_due"; label = "Check-in"; format = "text"; }
-            { field = "contacts"; label = "Contacts"; format = "text"; }
+            {
+              field = "status";
+              label = "Status";
+              format = "text";
+            }
+            {
+              field = "next_due";
+              label = "Check-in";
+              format = "text";
+            }
+            {
+              field = "contacts";
+              label = "Contacts";
+              format = "text";
+            }
           ];
         };
       };

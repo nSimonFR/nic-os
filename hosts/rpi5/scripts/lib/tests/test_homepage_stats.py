@@ -49,10 +49,17 @@ class FakeRun:
 
 
 CFG = hs.Config(
-    curl="CURL", sqlite="SQLITE", psql="PSQL", runuser="RUNUSER",
-    beszel_db="/db/beszel", karakeep_db="/db/karakeep", papra_db="/db/papra",
-    vaultwarden_db="/db/vw", wakapi_db="/db/wakapi",
-    beaverhabits_db="/db/habits", showmycards_db="/db/smc",
+    curl="CURL",
+    sqlite="SQLITE",
+    psql="PSQL",
+    runuser="RUNUSER",
+    beszel_db="/db/beszel",
+    karakeep_db="/db/karakeep",
+    papra_db="/db/papra",
+    vaultwarden_db="/db/vw",
+    wakapi_db="/db/wakapi",
+    beaverhabits_db="/db/habits",
+    showmycards_db="/db/smc",
     gramps_trees_glob="/db/gramps/*/sqlite.db",
 )
 
@@ -63,14 +70,21 @@ CFG = hs.Config(
 def test_every_path_is_overridable_from_the_environment():
     # The whole point of the migration: thirteen DB paths were module constants,
     # so the file only ran on one machine.
-    cfg = hs.Config.from_env({
-        "KARAKEEP_DB": "/tmp/k.db", "PAPRA_DB": "/tmp/p.db",
-        "BESZEL_DB": "/tmp/b.db", "WAKAPI_DB": "/tmp/w.db",
-        "VAULTWARDEN_DB": "/tmp/v.db", "BEAVERHABITS_DB": "/tmp/h.db",
-        "SHOWMYCARDS_DB": "/tmp/s.db", "OWUI_DB": "/tmp/o.db",
-        "GRAMPS_TREES_GLOB": "/tmp/g/*.db", "SQLITE_BIN": "/bin/sq",
-        "STATE_DIRECTORY": "/tmp/state",
-    })
+    cfg = hs.Config.from_env(
+        {
+            "KARAKEEP_DB": "/tmp/k.db",
+            "PAPRA_DB": "/tmp/p.db",
+            "BESZEL_DB": "/tmp/b.db",
+            "WAKAPI_DB": "/tmp/w.db",
+            "VAULTWARDEN_DB": "/tmp/v.db",
+            "BEAVERHABITS_DB": "/tmp/h.db",
+            "SHOWMYCARDS_DB": "/tmp/s.db",
+            "OWUI_DB": "/tmp/o.db",
+            "GRAMPS_TREES_GLOB": "/tmp/g/*.db",
+            "SQLITE_BIN": "/bin/sq",
+            "STATE_DIRECTORY": "/tmp/state",
+        }
+    )
     assert cfg.karakeep_db == "/tmp/k.db"
     assert cfg.showmycards_db == "/tmp/s.db"
     assert cfg.sqlite == "/bin/sq"
@@ -178,8 +192,9 @@ def test_a_cache_from_an_older_schema_is_discarded(tmp_path):
     # Otherwise a renamed field keeps serving the old shape for up to 24h after
     # the rebuild that changed it.
     cfg = cfg_state(tmp_path)
-    (tmp_path / "stats.json").write_text(json.dumps(
-        {"_schema": 1, "_fetched_at": 999, "papra": {"docs": 1}}))
+    (tmp_path / "stats.json").write_text(
+        json.dumps({"_schema": 1, "_fetched_at": 999, "papra": {"docs": 1}})
+    )
     stats = hs.Stats()
     logged = []
     assert hs.load_cache(cfg, stats, log=logged.append) == 0
@@ -213,8 +228,9 @@ def test_saving_leaves_no_temp_file_behind(tmp_path):
 def test_backfill_only_fetches_the_keys_the_cache_has_no_entry_for(tmp_path):
     # A newly added widget must not wait a full day, and the socket-activated
     # services must not be woken on every restart.
-    cfg = hs.Config(state_dir=str(tmp_path), sqlite="SQLITE",
-                    karakeep_db="/db/karakeep")
+    cfg = hs.Config(
+        state_dir=str(tmp_path), sqlite="SQLITE", karakeep_db="/db/karakeep"
+    )
     stats = hs.Stats()
     for key in hs.Stats.KEYS:
         if key != "karakeep":
@@ -244,16 +260,27 @@ def test_the_refresh_loop_runs_every_fetcher_and_saves(tmp_path):
     original = dict(hs.FETCHERS)
     try:
         for key in list(hs.FETCHERS):
-            hs.FETCHERS[key] = (lambda k: lambda cfg, run: ran.append(k) or {"n": 1})(key)
-        last = hs.refresh(cfg, FakeRun(), stats, 0, sleep=lambda _s: None, once=True,
-                          log=lambda _m: None)
+            hs.FETCHERS[key] = (lambda k: lambda cfg, run: ran.append(k) or {"n": 1})(
+                key
+            )
+        last = hs.refresh(
+            cfg,
+            FakeRun(),
+            stats,
+            0,
+            sleep=lambda _s: None,
+            once=True,
+            log=lambda _m: None,
+        )
     finally:
         hs.FETCHERS.clear()
         hs.FETCHERS.update(original)
     # Backfill covers all 19, then the loop refreshes all 19 again.
     assert len(ran) == 2 * len(hs.Stats.KEYS)
     assert last > 0
-    assert json.loads((tmp_path / "stats.json").read_text())["_schema"] == hs.STATS_SCHEMA
+    assert (
+        json.loads((tmp_path / "stats.json").read_text())["_schema"] == hs.STATS_SCHEMA
+    )
 
 
 # ── the read-only discipline ───────────────────────────────────────────────────
@@ -261,8 +288,14 @@ def test_the_refresh_loop_runs_every_fetcher_and_saves(tmp_path):
 
 @pytest.mark.parametrize(
     ("fetcher", "answer"),
-    [("beszel", "1"), ("karakeep", "1"), ("papra", "1"), ("vaultwarden", "1"),
-     ("wakapi", "1"), ("showmycards", "1")],
+    [
+        ("beszel", "1"),
+        ("karakeep", "1"),
+        ("papra", "1"),
+        ("vaultwarden", "1"),
+        ("wakapi", "1"),
+        ("showmycards", "1"),
+    ],
 )
 def test_service_databases_are_read_with_readonly(fetcher, answer):
     # Without -readonly, sqlite3 creates root-owned -wal/-shm files next to a
@@ -296,19 +329,22 @@ def test_airtrail_treats_flight_duration_as_seconds():
     # /60 reported 7922 "hours" for 29 flights; the real total is 132.
     def answer(cmd):
         if "SUM(duration)" in cmd:
-            return "475200"      # 132 h in seconds
+            return "475200"  # 132 h in seconds
         if "visited_country" in cmd:
             return "9"
         return "29"
 
     assert hs.fetch_airtrail(CFG, FakeRun([("PSQL", answer)])) == {
-        "flights": 29, "countries": 9, "hours": 132}
+        "flights": 29,
+        "countries": 9,
+        "hours": 132,
+    }
 
 
 def test_ryot_reads_v2_events_and_leaves_games_out_of_hours():
     def answer(cmd):
         if "runtime" in cmd:
-            return "600"     # minutes
+            return "600"  # minutes
         if "workout-completed" in cmd:
             return "12"
         return "300"
@@ -449,21 +485,41 @@ def test_gramps_web_with_no_trees_reports_zero():
 
 
 def test_beaverhabits_reads_the_json_blob_and_skips_archived_habits():
-    blob = json.dumps({"habits": [
-        {"name": "run", "status": "active",
-         "records": [{"day": "2026-08-06", "done": True}, {"day": "2026-08-05", "done": True}]},
-        {"name": "old", "status": "archive",
-         "records": [{"day": "2026-08-06", "done": True}]},
-        {"name": "read", "records": [{"day": "2026-08-05", "done": True},
-                                     {"day": "2026-08-04", "done": False}]},
-    ]})
-    out = hs.fetch_beaverhabits(CFG, FakeRun([("habit_list", blob + "\n")]),
-                                today="2026-08-06")
+    blob = json.dumps(
+        {
+            "habits": [
+                {
+                    "name": "run",
+                    "status": "active",
+                    "records": [
+                        {"day": "2026-08-06", "done": True},
+                        {"day": "2026-08-05", "done": True},
+                    ],
+                },
+                {
+                    "name": "old",
+                    "status": "archive",
+                    "records": [{"day": "2026-08-06", "done": True}],
+                },
+                {
+                    "name": "read",
+                    "records": [
+                        {"day": "2026-08-05", "done": True},
+                        {"day": "2026-08-04", "done": False},
+                    ],
+                },
+            ]
+        }
+    )
+    out = hs.fetch_beaverhabits(
+        CFG, FakeRun([("habit_list", blob + "\n")]), today="2026-08-06"
+    )
     assert out == {"habits": 2, "done_today": 1, "checkins": 3}
 
 
 def test_openknowledge_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
     import os
+
     old = time.time() - 30 * 86400
     (tmp_path / "Cuisine").mkdir()
     (tmp_path / "Cuisine" / "a.md").write_text("x" * 10)
@@ -486,35 +542,59 @@ def switch_dir(tmp_path, state, contacts):
 
 
 def test_switch_armed_shows_the_next_check_in_and_confirmed_contacts(tmp_path):
-    cfg = switch_dir(tmp_path, {"armed": True, "next_due_at": 1792915200, "cycle": None},
-                     [{"status": "confirmed"}, {"status": "unconfirmed"}])
+    cfg = switch_dir(
+        tmp_path,
+        {"armed": True, "next_due_at": 1792915200, "cycle": None},
+        [{"status": "confirmed"}, {"status": "unconfirmed"}],
+    )
     assert hs.fetch_switch(cfg, None, now=1792800000) == {
-        "status": "armed", "next_due": "Sun 25/10 09:00", "contacts": "1/2"}
+        "status": "armed",
+        "next_due": "Sun 25/10 09:00",
+        "contacts": "1/2",
+    }
 
 
 def test_switch_cycle_stage_wins_over_armed(tmp_path):
-    for stage, status in [("checkin", "overdue"), ("verify", "asking next of kin"),
-                          ("fired", "fired")]:
-        cfg = switch_dir(tmp_path, {"armed": True, "next_due_at": 1, "cycle": {"stage": stage}}, [])
+    for stage, status in [
+        ("checkin", "overdue"),
+        ("verify", "asking next of kin"),
+        ("fired", "fired"),
+    ]:
+        cfg = switch_dir(
+            tmp_path, {"armed": True, "next_due_at": 1, "cycle": {"stage": stage}}, []
+        )
         assert hs.fetch_switch(cfg, None, now=0)["status"] == status
 
 
 def test_switch_disarmed_has_no_due_date(tmp_path):
     cfg = switch_dir(tmp_path, {"armed": False, "next_due_at": None, "cycle": None}, [])
-    assert hs.fetch_switch(cfg, None, now=0) == {"status": "off", "next_due": "-", "contacts": "0/0"}
+    assert hs.fetch_switch(cfg, None, now=0) == {
+        "status": "off",
+        "next_due": "-",
+        "contacts": "0/0",
+    }
 
 
 def test_memos_counts_days_and_the_last_day_s_agenda_and_activity(tmp_path):
-    text = ("*Escalade, puis AfterWork.*\n\n### 📅 Agenda\n\n- **Journée** Airbnb\n- **18:00** AfterWork\n\n"
-            "### 🧗 Escalade - Arkose · 7 tops · 44 m\n\n- 🟢 **Vert**: 7\n\n"
-            "### 🚲 Vélo - 2 trajets · 12,6 km · 40 min\n\n"
-            "### 💼 Travail - 5 réunions (4h15) 19 personnes\n\n<details>\n- **09:30** Daily\n</details>")
-    state = {"2026-10-29": {"memo": "m/a", "text": text},
-             "2026-10-28": {"memo": "m/b", "text": "### 📷 Photos - 3"},
-             "2026-10-30": {}, "_dispatch": {"memo": "x"}}
+    text = (
+        "*Escalade, puis AfterWork.*\n\n### 📅 Agenda\n\n- **Journée** Airbnb\n- **18:00** AfterWork\n\n"
+        "### 🧗 Escalade - Arkose · 7 tops · 44 m\n\n- 🟢 **Vert**: 7\n\n"
+        "### 🚲 Vélo - 2 trajets · 12,6 km · 40 min\n\n"
+        "### 💼 Travail - 5 réunions (4h15) 19 personnes\n\n<details>\n- **09:30** Daily\n</details>"
+    )
+    state = {
+        "2026-10-29": {"memo": "m/a", "text": text},
+        "2026-10-28": {"memo": "m/b", "text": "### 📷 Photos - 3"},
+        "2026-10-30": {},
+        "_dispatch": {"memo": "x"},
+    }
     (tmp_path / "days.json").write_text(json.dumps(state))
     cfg = hs.Config(journal_state=str(tmp_path / "days.json"))
-    assert hs.fetch_memos(cfg, None) == {"days": 2, "agenda": 7, "activity": "🧗 7 tops · 🚲 13 km"}
+    assert hs.fetch_memos(cfg, None) == {
+        "days": 2,
+        "agenda": 7,
+        "activity": "🧗 7 tops · 🚲 13 km",
+    }
     del state["2026-10-29"]
     (tmp_path / "days.json").write_text(json.dumps(state))
     assert hs.fetch_memos(cfg, None) == {"days": 1, "agenda": 0, "activity": "-"}
@@ -522,7 +602,9 @@ def test_memos_counts_days_and_the_last_day_s_agenda_and_activity(tmp_path):
 
 def test_a_live_key_is_fetched_on_every_request(tmp_path, monkeypatch):
     calls = []
-    monkeypatch.setitem(hs.FETCHERS, "memos", lambda cfg, run: calls.append(1) or {"days": len(calls)})
+    monkeypatch.setitem(
+        hs.FETCHERS, "memos", lambda cfg, run: calls.append(1) or {"days": len(calls)}
+    )
     stats = hs.Stats()
     handler = hs.make_handler(stats, hs.Config(), None)
     for _ in range(2):
@@ -534,16 +616,23 @@ def test_a_live_key_is_fetched_on_every_request(tmp_path, monkeypatch):
 
 
 def test_beaverhabits_sums_across_users():
-    one = json.dumps({"habits": [{"name": "a", "records": [{"day": "x", "done": True}]}]})
+    one = json.dumps(
+        {"habits": [{"name": "a", "records": [{"day": "x", "done": True}]}]}
+    )
     run = FakeRun([("habit_list", one + "\n" + one + "\n\n")])
     assert hs.fetch_beaverhabits(CFG, run, today="x") == {
-        "habits": 2, "done_today": 2, "checkins": 2}
+        "habits": 2,
+        "done_today": 2,
+        "checkins": 2,
+    }
 
 
-SURE_ROWS = [("WITH food AS", "300.00|66.20"),
-             ("accountable_type = 'Depository'", "6640.47|240.47"),
-             ("e.amount > 0", "1928.56"),
-             ("FROM budgets", "2500.0000")]
+SURE_ROWS = [
+    ("WITH food AS", "300.00|66.20"),
+    ("accountable_type = 'Depository'", "6640.47|240.47"),
+    ("e.amount > 0", "1928.56"),
+    ("FROM budgets", "2500.0000"),
+]
 
 
 def test_sure_reports_cash_spend_and_the_month_budget():
@@ -552,7 +641,8 @@ def test_sure_reports_cash_spend_and_the_month_budget():
     assert hs.fetch_sure(cfg, run) == {
         "cash": "€6,640 (240€)",
         "spend": "€1,929 (+571€)",
-        "food": "€66 (+234€)"}
+        "food": "€66 (+234€)",
+    }
 
 
 def test_the_cash_bracket_leaves_out_the_livret_a():
@@ -579,10 +669,14 @@ def test_food_spend_includes_the_categorys_children():
 
 def test_overspending_the_month_shows_a_negative_remainder():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
-    run = FakeRun([("WITH food AS", "300.00|66.20"),
-                   ("accountable_type = 'Depository'", "6640.47|240.47"),
-                   ("e.amount > 0", "3100.00"),
-                   ("FROM budgets", "2500.0000")])
+    run = FakeRun(
+        [
+            ("WITH food AS", "300.00|66.20"),
+            ("accountable_type = 'Depository'", "6640.47|240.47"),
+            ("e.amount > 0", "3100.00"),
+            ("FROM budgets", "2500.0000"),
+        ]
+    )
     assert hs.fetch_sure(cfg, run)["spend"] == "€3,100 (-600€)"
 
 
@@ -616,29 +710,41 @@ def test_sure_never_wakes_the_socket_activated_app():
     assert all("CURL" not in c for c in run.commands)
 
 
-NET_WORTH_JSON = json.dumps({
-    "assets": {"total": 380779.95, "breakdown": [
-        {"category": "properties", "value": 338531.0},
-        {"category": "investments", "value": 35608.4},
-    ]},
-    "liabilities": {"total": 314229.0},
-})
+NET_WORTH_JSON = json.dumps(
+    {
+        "assets": {
+            "total": 380779.95,
+            "breakdown": [
+                {"category": "properties", "value": 338531.0},
+                {"category": "investments", "value": 35608.4},
+            ],
+        },
+        "liabilities": {"total": 314229.0},
+    }
+)
 
 
 def wealthfolio_run(perf, basis_row="25827.35|35610.24|39316.91"):
-    return FakeRun([
-        ("auth/login", ""),
-        ("net-worth", NET_WORTH_JSON),
-        ("performance/summary", perf),
-        ("cost_basis_base", basis_row),
-    ])
+    return FakeRun(
+        [
+            ("auth/login", ""),
+            ("net-worth", NET_WORTH_JSON),
+            ("performance/summary", perf),
+            ("cost_basis_base", basis_row),
+        ]
+    )
 
 
 def wealthfolio_cfg(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_WEALTHFOLIO_PASSWORD=pw\n")
-    return hs.Config(curl="CURL", sqlite="SQLITE", env_file=str(env_file),
-                     wealthfolio_url="http://wf", state_dir=str(tmp_path))
+    return hs.Config(
+        curl="CURL",
+        sqlite="SQLITE",
+        env_file=str(env_file),
+        wealthfolio_url="http://wf",
+        state_dir=str(tmp_path),
+    )
 
 
 def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
@@ -647,7 +753,8 @@ def test_wealthfolio_reports_cost_basis_as_the_money_put_in(tmp_path):
     assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run) == {
         "net_worth": "€66,551 (35.6k€)",
         "invested": "€25,827 (+9,783€)",
-        "return_30d": "2.24% (+881€)"}
+        "return_30d": "2.24% (+881€)",
+    }
 
 
 def test_bracketed_amounts_from_10k_are_compact_so_the_tile_stays_one_line():
@@ -657,8 +764,10 @@ def test_bracketed_amounts_from_10k_are_compact_so_the_tile_stays_one_line():
 
 
 def test_a_loss_is_shown_with_a_minus_not_a_negative_inside_the_brackets(tmp_path):
-    run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.02}}),
-                          basis_row="30000.00|27500.00|39316.91")
+    run = wealthfolio_run(
+        json.dumps({"returns": {"valueReturn": -0.02}}),
+        basis_row="30000.00|27500.00|39316.91",
+    )
     got = hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)
     assert got["invested"] == "€30,000 (-2,500€)"
     assert got["return_30d"] == "-2.00% (-786€)"
@@ -670,12 +779,16 @@ def test_the_return_is_pre_formatted_to_two_places_in_percentage_points(tmp_path
     `float` keeps decimals but drops trailing zeros, so a flat 2.2% would lose a
     place. Formatting here is the only way to guarantee exactly two."""
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": 0.022}}))
-    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"].startswith("2.20%")
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)[
+        "return_30d"
+    ].startswith("2.20%")
 
 
 def test_a_negative_month_keeps_its_sign(tmp_path):
     run = wealthfolio_run(json.dumps({"returns": {"valueReturn": -0.0151}}))
-    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)["return_30d"].startswith("-1.51%")
+    assert hs.fetch_wealthfolio(wealthfolio_cfg(tmp_path), run)[
+        "return_30d"
+    ].startswith("-1.51%")
 
 
 def test_wealthfolio_asks_for_a_thirty_day_window(tmp_path):
@@ -724,7 +837,10 @@ def test_affine_counts_docs_and_live_blobs_only():
         return "1000"  # blobs
 
     assert hs.fetch_affine(CFG, FakeRun([("PSQL", answer)])) == {
-        "docs": 7503, "edited_7d": 15, "storage": 1000}
+        "docs": 7503,
+        "edited_7d": 15,
+        "storage": 1000,
+    }
 
 
 def test_affine_needs_no_token_and_never_calls_the_api():
@@ -806,16 +922,20 @@ def multistatus(hrefs):
         f"<d:response><d:href>{h}</d:href>"
         f"<d:propstat><d:prop><d:getetag>&quot;{i}&quot;</d:getetag></d:prop>"
         "<d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>"
-        for i, h in enumerate(hrefs))
+        for i, h in enumerate(hrefs)
+    )
     return f'<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">{body}</d:multistatus>'
 
 
 def calino_cfg(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=app-pw\n")
-    return hs.Config(curl="CURL", env_file=str(env_file),
-                     nextcloud_dav_url="http://nc/remote.php/dav",
-                     nextcloud_user="nsimon")
+    return hs.Config(
+        curl="CURL",
+        env_file=str(env_file),
+        nextcloud_dav_url="http://nc/remote.php/dav",
+        nextcloud_user="nsimon",
+    )
 
 
 def calino_run(today=2, week=9, pending=None, due=None, dtstart=None, current=None):
@@ -834,12 +954,16 @@ def calino_run(today=2, week=9, pending=None, due=None, dtstart=None, current=No
     Needle ORDER matters: every task body contains "VTODO", so the discriminating
     needles (STATUS / DUE / DTSTART / time-range) must all precede it.
     """
-    pending = ["/t1.ics", "/t2.ics", "/t3.ics", "/t4.ics"] if pending is None else pending
+    pending = (
+        ["/t1.ics", "/t2.ics", "/t3.ics", "/t4.ics"] if pending is None else pending
+    )
     due = ["/t1.ics", "/t3.ics", "/t5.ics"] if due is None else due
     dtstart = ["/t2.ics"] if dtstart is None else dtstart
     # Undated VTODOs match every range (RFC 4791 §9.9), so t4 is in here — which is
     # exactly why the range cannot be the only date test.
-    current = ["/t1.ics", "/t2.ics", "/t4.ics", "/t5.ics"] if current is None else current
+    current = (
+        ["/t1.ics", "/t2.ics", "/t4.ics", "/t5.ics"] if current is None else current
+    )
 
     def events(joined):
         # The two event queries differ only in the window's end stamp: tonight's local
@@ -847,16 +971,18 @@ def calino_run(today=2, week=9, pending=None, due=None, dtstart=None, current=No
         # a fetcher that built UTC windows would match neither and KeyError out.
         return multistatus(week if 'end="20260825T220000Z"' in joined else today)
 
-    return FakeRun([
-        ("propfind", CALDAV_HOME_XML),
-        ("NEEDS-ACTION", multistatus(pending)),
-        ('prop-filter name="DUE"', multistatus(due)),
-        ('prop-filter name="DTSTART"', multistatus(dtstart)),
-        # Before the bare "time-range" needle: the event bodies carry a time-range too,
-        # and only the VTODO one should be answered with the href set.
-        ("VEVENT", events),
-        ("time-range", multistatus(current)),
-    ])
+    return FakeRun(
+        [
+            ("propfind", CALDAV_HOME_XML),
+            ("NEEDS-ACTION", multistatus(pending)),
+            ('prop-filter name="DUE"', multistatus(due)),
+            ('prop-filter name="DTSTART"', multistatus(dtstart)),
+            # Before the bare "time-range" needle: the event bodies carry a time-range too,
+            # and only the VTODO one should be answered with the href set.
+            ("VEVENT", events),
+            ("time-range", multistatus(current)),
+        ]
+    )
 
 
 # A Wednesday 20:30 at UTC+2 — the hour that makes a UTC-midnight window wrong.
@@ -868,8 +994,7 @@ def test_calino_counts_events_and_tasks_due_now(tmp_path):
     # Of the five fixture todos only t1 and t2 are pending, dated and arrived.
     cfg = calino_cfg(tmp_path)
     run = calino_run(today=2, week=9)
-    assert hs.fetch_calino(cfg, run, now=NOW) == {
-        "today": 2, "week": 9, "tasks": 2}
+    assert hs.fetch_calino(cfg, run, now=NOW) == {"today": 2, "week": 9, "tasks": 2}
 
 
 def test_calino_windows_are_local_days_not_utc(tmp_path):
@@ -954,9 +1079,12 @@ def test_calino_excludes_undated_tasks(tmp_path):
     assert hs.fetch_calino(cfg, run, now=NOW)["tasks"] == 2
 
     # An account of nothing but undated items must report zero, not "all of them".
-    undated = calino_run(due=[], dtstart=[],
-                         pending=["/a.ics", "/b.ics", "/c.ics"],
-                         current=["/a.ics", "/b.ics", "/c.ics"])
+    undated = calino_run(
+        due=[],
+        dtstart=[],
+        pending=["/a.ics", "/b.ics", "/c.ics"],
+        current=["/a.ics", "/b.ics", "/c.ics"],
+    )
     assert hs.fetch_calino(cfg, undated, now=NOW)["tasks"] == 0
 
 
@@ -1022,19 +1150,26 @@ def test_calino_reuses_the_nextcloud_app_password(tmp_path):
 def ha_cfg(tmp_path):
     env_file = tmp_path / "env"
     env_file.write_text("HOMEPAGE_VAR_HA_TOKEN=t\n")
-    return hs.Config(curl="CURL", sqlite="SQLITE", env_file=str(env_file),
-                     hass_url="http://ha", hass_db="/db/hass")
+    return hs.Config(
+        curl="CURL",
+        sqlite="SQLITE",
+        env_file=str(env_file),
+        hass_url="http://ha",
+        hass_db="/db/hass",
+    )
 
 
-HA_STATES = json.dumps([
-    # Voltalis: a running daily counter per room, plus the heater's own switch.
-    {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "820"},
-    {"entity_id": "sensor.kitchen_cuisine_daily_consumption", "state": "480"},
-    {"entity_id": "switch.living_room_salon_device_switch", "state": "on"},
-    {"entity_id": "switch.bedroom_chambre_device_switch", "state": "off"},
-    # Not a heater switch — must not be counted as a room.
-    {"entity_id": "switch.quicksettings_athome", "state": "on"},
-])
+HA_STATES = json.dumps(
+    [
+        # Voltalis: a running daily counter per room, plus the heater's own switch.
+        {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "820"},
+        {"entity_id": "sensor.kitchen_cuisine_daily_consumption", "state": "480"},
+        {"entity_id": "switch.living_room_salon_device_switch", "state": "on"},
+        {"entity_id": "switch.bedroom_chambre_device_switch", "state": "off"},
+        # Not a heater switch — must not be counted as a room.
+        {"entity_id": "switch.quicksettings_athome", "state": "on"},
+    ]
+)
 
 
 def ha_run(day="3073|3895.43", cost="16.96|0.6523|0.91125", states=HA_STATES):
@@ -1066,11 +1201,16 @@ def test_home_assistant_reads_the_recorder_database_read_only(tmp_path):
 def test_home_assistant_survives_voltalis_reporting_nothing(tmp_path):
     # Every daily counter is "unknown" for a while after an HA restart, and
     # "unavailable" between polls. Neither is a number; neither may raise.
-    states = json.dumps([
-        {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "unknown"},
-        {"entity_id": "sensor.kitchen_cuisine_daily_consumption", "state": "unavailable"},
-        {"entity_id": "sensor.bedroom_chambre_daily_consumption", "state": None},
-    ])
+    states = json.dumps(
+        [
+            {"entity_id": "sensor.bathroom_sdb_daily_consumption", "state": "unknown"},
+            {
+                "entity_id": "sensor.kitchen_cuisine_daily_consumption",
+                "state": "unavailable",
+            },
+            {"entity_id": "sensor.bedroom_chambre_daily_consumption", "state": None},
+        ]
+    )
     out = hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run(states=states))
     assert out["heating"] == "0 Wh (0 on)"
 
@@ -1078,7 +1218,9 @@ def test_home_assistant_survives_voltalis_reporting_nothing(tmp_path):
 def test_home_assistant_admits_when_there_is_nothing_to_compare_against(tmp_path):
     # A fresh ha-linky backfill has no prior week and no prior month. "+100%"
     # against a zero baseline would read as a real measurement.
-    out = hs.fetch_homeassistant(ha_cfg(tmp_path), ha_run(day="900|0", cost="4.2|0.6|0"))
+    out = hs.fetch_homeassistant(
+        ha_cfg(tmp_path), ha_run(day="900|0", cost="4.2|0.6|0")
+    )
     assert out["day"] == "900 Wh (—)"
     assert out["cost"] == "€4.20 (—)"
 
@@ -1090,10 +1232,16 @@ def test_home_assistant_tolerates_an_empty_statistics_table(tmp_path):
     assert out["day"] == "0 Wh (—)"
 
 
-@pytest.mark.parametrize("wh,expected", [
-    (0, "0 Wh"), (5, "5 Wh"), (999, "999 Wh"),
-    (1000, "1.0 kWh"), (12400, "12.4 kWh"),
-])
+@pytest.mark.parametrize(
+    "wh,expected",
+    [
+        (0, "0 Wh"),
+        (5, "5 Wh"),
+        (999, "999 Wh"),
+        (1000, "1.0 kWh"),
+        (12400, "12.4 kWh"),
+    ],
+)
 def test_watt_hours_switches_unit_at_a_kilowatt_hour(wh, expected):
     assert hs.watt_hours(wh) == expected
 
@@ -1128,8 +1276,7 @@ def recorder_db(path):
         # Halves at the 30-day boundary, so the rolling comparison is -50%.
         eur = 0.01 if ago < 30 else 0.02
         for hour in range(24):
-            ts = datetime.datetime.combine(
-                day, datetime.time(hour)).timestamp()
+            ts = datetime.datetime.combine(day, datetime.time(hour)).timestamp()
             rows.append((1, ts, wh, 0))
             rows.append((2, ts, eur, 0))
     con.executemany("INSERT INTO statistics VALUES (?,?,?,?)", rows)
@@ -1171,6 +1318,7 @@ def test_the_home_assistant_queries_ignore_incomplete_days(tmp_path):
     db = tmp_path / "hass.db"
     recorder_db(db)
     import sqlite3
+
     con = sqlite3.connect(db)
     today = datetime.date.today()
     for hour in range(3):
@@ -1179,8 +1327,10 @@ def test_the_home_assistant_queries_ignore_incomplete_days(tmp_path):
     con.commit()
     con.close()
     # Unchanged: the three-hour stub is not a day.
-    assert hs.fetch_homeassistant(ha_cfg(tmp_path), real_sql_run(db))["day"] \
+    assert (
+        hs.fetch_homeassistant(ha_cfg(tmp_path), real_sql_run(db))["day"]
         == "2.4 kWh (-50%)"
+    )
 
 
 def test_reactive_resume_passes_its_password_through_the_environment(tmp_path):
@@ -1188,7 +1338,11 @@ def test_reactive_resume_passes_its_password_through_the_environment(tmp_path):
     pw.write_text("s3cret\n")
     cfg = hs.Config(psql="PSQL", rxresume_pw_file=str(pw))
     run = FakeRun([("PSQL", "4")])
-    assert hs.fetch_reactive_resume(cfg, run) == {"resumes": 4, "updated": 4, "public": 4}
+    assert hs.fetch_reactive_resume(cfg, run) == {
+        "resumes": 4,
+        "updated": 4,
+        "public": 4,
+    }
     # In the env, never on the command line.
     for argv, env in run.calls:
         assert env["PGPASSWORD"] == "s3cret"
@@ -1233,10 +1387,14 @@ def test_deleted_accounts_are_excluded_from_the_valuation_sums(tmp_path):
 
 def test_an_overspent_food_envelope_reads_negative():
     cfg = hs.Config(psql="PSQL", runuser="RUNUSER")
-    run = FakeRun([("WITH food AS", "300.00|412.40"),
-                   ("accountable_type = 'Depository'", "6640.47|240.47"),
-                   ("e.amount > 0", "1928.56"),
-                   ("FROM budgets", "2500.0000")])
+    run = FakeRun(
+        [
+            ("WITH food AS", "300.00|412.40"),
+            ("accountable_type = 'Depository'", "6640.47|240.47"),
+            ("e.amount > 0", "1928.56"),
+            ("FROM budgets", "2500.0000"),
+        ]
+    )
     assert hs.fetch_sure(cfg, run)["food"] == "€412 (-112€)"
 
 
@@ -1269,19 +1427,27 @@ def test_a_key_still_empty_after_backfill_is_retried_not_left_for_a_day(tmp_path
     stats._data["wealthfolio"] = {"error": "connection refused"}
 
     attempts, slept = [], []
+
     def fake_fetcher(cfg, run, stats_, key, log=None):
         attempts.append(key)
-        if len(attempts) == 1:                  # loses the race, as on a rebuild
+        if len(attempts) == 1:  # loses the race, as on a rebuild
             stats_.error(key, "connection refused")
             return False
-        stats_.set(key, {"net_worth": "€1"})    # up seconds later
+        stats_.set(key, {"net_worth": "€1"})  # up seconds later
         return True
 
     orig = hs.run_fetcher
     hs.run_fetcher = fake_fetcher
     try:
-        hs.refresh(hs.Config(state_dir=str(tmp_path)), None, stats, time.time(),
-                   sleep=slept.append, once=True, log=lambda m: None)
+        hs.refresh(
+            hs.Config(state_dir=str(tmp_path)),
+            None,
+            stats,
+            time.time(),
+            sleep=slept.append,
+            once=True,
+            log=lambda m: None,
+        )
     finally:
         hs.run_fetcher = orig
     assert "wealthfolio" in attempts
@@ -1331,13 +1497,32 @@ def test_beszel_peak_temperature_reads_the_ten_minute_rollup():
 def test_nextcloud_storage_counts_the_user_home_and_not_appdata():
     # Three storages exist; only home:: is the user's data. Summing all of them
     # folds ~1.4 MB of appdata in and drifts the day another mount appears.
-    run = FakeRun([("CURL", json.dumps({"ocs": {"data": {
-        "activeUsers": {"last24hours": 1},
-        "nextcloud": {"storage": {"num_files": 2556}, "shares": {"num_shares": 0}},
-    }}})), ("oc_cards", "249"), ("oc_filecache", "7556451690")])
+    run = FakeRun(
+        [
+            (
+                "CURL",
+                json.dumps(
+                    {
+                        "ocs": {
+                            "data": {
+                                "activeUsers": {"last24hours": 1},
+                                "nextcloud": {
+                                    "storage": {"num_files": 2556},
+                                    "shares": {"num_shares": 0},
+                                },
+                            }
+                        }
+                    }
+                ),
+            ),
+            ("oc_cards", "249"),
+            ("oc_filecache", "7556451690"),
+        ]
+    )
     # env_var reads the NC-Token out of the shared env file.
-    cfg = hs.Config(curl="CURL", psql="PSQL", runuser="RUNUSER",
-                    env_file=str(_write_env()))
+    cfg = hs.Config(
+        curl="CURL", psql="PSQL", runuser="RUNUSER", env_file=str(_write_env())
+    )
     out = hs.fetch_nextcloud(cfg, run)
     assert out == {"files": 2556, "contacts": 249, "storage": 7556451690}
     storage_sql = [c for c in run.commands if "oc_filecache" in c][0]
@@ -1348,6 +1533,7 @@ def test_nextcloud_storage_counts_the_user_home_and_not_appdata():
 def _write_env():
     import pathlib
     import tempfile
+
     p = pathlib.Path(tempfile.mkdtemp()) / "env"
     p.write_text("HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=tok\n")
     return p
@@ -1356,9 +1542,13 @@ def _write_env():
 def test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past():
     # The field earned itself on the first fetch: all 68 mirrors overdue, newest
     # sync 2026-08-11, and nothing on the dashboard had said so.
-    run = FakeRun([("COUNT(*) FROM repository;", "167"),
-                   ("FROM mirror", "68"),
-                   ("SUM(size)", "2308263025")])
+    run = FakeRun(
+        [
+            ("COUNT(*) FROM repository;", "167"),
+            ("FROM mirror", "68"),
+            ("SUM(size)", "2308263025"),
+        ]
+    )
     out = hs.fetch_forgejo(CFG, run)
     assert out == {"repositories": 167, "stale_mirrors": 68, "size": 2308263025}
     mirror_sql = [c for c in run.commands if "FROM mirror" in c][0]
@@ -1386,9 +1576,13 @@ def test_affine_edited_count_covers_the_same_docs_as_the_total():
     # snapshots alone counts 17 because it includes the per-workspace doc-list Yjs
     # docs that `docs` (workspace_pages) excludes. Joining keeps both fields
     # counting one universe.
-    run = FakeRun([("FROM workspace_pages;", "7915"),
-                   ("FROM snapshots", "15"),
-                   ("FROM blobs", "558516275")])
+    run = FakeRun(
+        [
+            ("FROM workspace_pages;", "7915"),
+            ("FROM snapshots", "15"),
+            ("FROM blobs", "558516275"),
+        ]
+    )
     out = hs.fetch_affine(CFG, run)
     assert out == {"docs": 7915, "edited_7d": 15, "storage": 558516275}
     edited_sql = [c for c in run.commands if "FROM snapshots" in c][0]
@@ -1403,11 +1597,17 @@ def test_reactive_resume_reports_an_age_because_no_window_fits_a_cv(tmp_path):
     pw = tmp_path / "pw"
     pw.write_text("secret\n")
     cfg = hs.Config(psql="PSQL", rxresume_pw_file=str(pw))
-    run = FakeRun([("COUNT(*) FROM resume;", "14"),
-                   ("MAX(updated_at)", "36.4"),
-                   ("is_public", "0")])
+    run = FakeRun(
+        [
+            ("COUNT(*) FROM resume;", "14"),
+            ("MAX(updated_at)", "36.4"),
+            ("is_public", "0"),
+        ]
+    )
     assert hs.fetch_reactive_resume(cfg, run) == {
-        "resumes": 14, "updated": 36, "public": 0,
+        "resumes": 14,
+        "updated": 36,
+        "public": 0,
     }
 
 
@@ -1415,13 +1615,27 @@ def test_reactive_resume_reports_an_age_because_no_window_fits_a_cv(tmp_path):
 def test_the_retired_fields_stay_retired(key, gone):
     # Every fetcher answers "1" to everything, so this checks the SHAPE of the
     # returned dict and nothing about the numbers.
-    cfg = hs.Config(curl="CURL", sqlite="SQLITE", psql="PSQL", runuser="RUNUSER",
-                    env_file=str(_write_env()),
-                    rxresume_pw_file=str(_write_env()))
-    payload = json.dumps({"ocs": {"data": {
-        "activeUsers": {"last24hours": 1},
-        "nextcloud": {"storage": {"num_files": 1}, "shares": {"num_shares": 0}},
-    }}})
+    cfg = hs.Config(
+        curl="CURL",
+        sqlite="SQLITE",
+        psql="PSQL",
+        runuser="RUNUSER",
+        env_file=str(_write_env()),
+        rxresume_pw_file=str(_write_env()),
+    )
+    payload = json.dumps(
+        {
+            "ocs": {
+                "data": {
+                    "activeUsers": {"last24hours": 1},
+                    "nextcloud": {
+                        "storage": {"num_files": 1},
+                        "shares": {"num_shares": 0},
+                    },
+                }
+            }
+        }
+    )
     run = FakeRun([("CURL", payload), ("SQLITE", "1"), ("PSQL", "1")])
     assert gone & set(hs.FETCHERS[key](cfg, run)) == set()
 
@@ -1450,8 +1664,11 @@ TOKENS_TOTAL = 817129133 + 45939028 + 2784606
 
 
 def ap_cfg(tmp_path):
-    return hs.Config(curl="CURL", state_dir=str(tmp_path),
-                     aperture_metrics_url="http://aperture/metrics")
+    return hs.Config(
+        curl="CURL",
+        state_dir=str(tmp_path),
+        aperture_metrics_url="http://aperture/metrics",
+    )
 
 
 def ap_run():
@@ -1461,21 +1678,30 @@ def ap_run():
 def test_prometheus_parsing_handles_labels_scientific_notation_and_comments():
     m = hs.parse_prometheus(METRICS)
     assert "# HELP" not in str(m)
-    series = {tuple(sorted(labels.items())): v
-              for labels, v in m["aperture_generations_tokens_total"]}
+    series = {
+        tuple(sorted(labels.items())): v
+        for labels, v in m["aperture_generations_tokens_total"]
+    }
     assert len(series) == 4
-    assert series[(("instance_id", "26-04-23-b79145"), ("type", "cache_read"))] == 817129133.0
+    assert (
+        series[(("instance_id", "26-04-23-b79145"), ("type", "cache_read"))]
+        == 817129133.0
+    )
 
 
 def test_token_total_does_not_double_count_the_cached_reads(tmp_path):
     # aperture_llm_tokens_total{input} already folds cache_read into input, so
     # summing both metric families counts 817M cached tokens twice.
     m = hs.parse_prometheus(METRICS)
-    total = hs._prom_sum(m, "aperture_generations_tokens_total",
-                         label="type", values=hs._TOKEN_TYPES)
+    total = hs._prom_sum(
+        m, "aperture_generations_tokens_total", label="type", values=hs._TOKEN_TYPES
+    )
     assert total == TOKENS_TOTAL
-    assert total < hs._prom_sum(m, "aperture_llm_tokens_total",
-                                label="type", values=("input",)) * 2
+    assert (
+        total
+        < hs._prom_sum(m, "aperture_llm_tokens_total", label="type", values=("input",))
+        * 2
+    )
 
 
 def test_the_first_reading_falls_back_to_the_all_time_total(tmp_path):
@@ -1494,11 +1720,15 @@ def test_the_first_reading_falls_back_to_the_all_time_total(tmp_path):
 
 def test_a_day_later_the_delta_becomes_a_per_day_rate(tmp_path):
     now = 1_000_000 + 86400
-    (tmp_path / "aperture-counters.json").write_text(json.dumps({
-        "at": 1_000_000,
-        "tokens": TOKENS_TOTAL - 20_000_000,
-        "requests": 237201 - 3000,
-    }))
+    (tmp_path / "aperture-counters.json").write_text(
+        json.dumps(
+            {
+                "at": 1_000_000,
+                "tokens": TOKENS_TOTAL - 20_000_000,
+                "requests": 237201 - 3000,
+            }
+        )
+    )
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
     assert out["tokens"] == "20M/day"
     assert out["requests"] == "3.0k/day"
@@ -1509,20 +1739,31 @@ def test_a_day_later_the_delta_becomes_a_per_day_rate(tmp_path):
 def test_the_rate_is_normalised_so_a_half_day_gap_is_not_read_as_a_day(tmp_path):
     # The refresh loop is daily, but a restart can shorten the gap. Dividing by
     # elapsed days keeps the "per day" label true instead of under-reporting.
-    now = 1_000_000 + 43200                        # 12h
-    (tmp_path / "aperture-counters.json").write_text(json.dumps({
-        "at": 1_000_000, "tokens": TOKENS_TOTAL - 10_000_000, "requests": 237201,
-    }))
+    now = 1_000_000 + 43200  # 12h
+    (tmp_path / "aperture-counters.json").write_text(
+        json.dumps(
+            {
+                "at": 1_000_000,
+                "tokens": TOKENS_TOTAL - 10_000_000,
+                "requests": 237201,
+            }
+        )
+    )
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
-    assert out["tokens"] == "20M/day"              # 10M in 12h = 20M/day
+    assert out["tokens"] == "20M/day"  # 10M in 12h = 20M/day
 
 
 def test_a_gap_below_the_floor_keeps_the_last_rate_and_the_old_baseline(tmp_path):
     # Dividing a few minutes' delta by a few minutes of elapsed time turns
     # ordinary noise into a wild per-day figure.
     now = 1_000_000 + 600
-    before = {"at": 1_000_000, "tokens": 1.0, "requests": 1.0,
-              "tokens_per_day": 42_000_000, "requests_per_day": 1234}
+    before = {
+        "at": 1_000_000,
+        "tokens": 1.0,
+        "requests": 1.0,
+        "tokens_per_day": 42_000_000,
+        "requests_per_day": 1234,
+    }
     (tmp_path / "aperture-counters.json").write_text(json.dumps(before))
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=now)
     assert out["tokens"] == "42M/day"
@@ -1533,13 +1774,22 @@ def test_a_gap_below_the_floor_keeps_the_last_rate_and_the_old_baseline(tmp_path
 def test_a_counter_reset_reports_no_rate_rather_than_a_negative_one(tmp_path):
     # Aperture's counters are durable across restarts and purges, but a replaced
     # instance starts from zero. There is no meaningful delta across that.
-    (tmp_path / "aperture-counters.json").write_text(json.dumps({
-        "at": 1_000_000, "tokens": 9e12, "requests": 9e9,
-    }))
+    (tmp_path / "aperture-counters.json").write_text(
+        json.dumps(
+            {
+                "at": 1_000_000,
+                "tokens": 9e12,
+                "requests": 9e9,
+            }
+        )
+    )
     out = hs.fetch_aperture(ap_cfg(tmp_path), ap_run(), now=1_000_000 + 86400)
     assert out["tokens"] == "866M total"
     assert out["requests"] == "237.2k total"
-    assert json.loads((tmp_path / "aperture-counters.json").read_text())["tokens"] == TOKENS_TOTAL
+    assert (
+        json.loads((tmp_path / "aperture-counters.json").read_text())["tokens"]
+        == TOKENS_TOTAL
+    )
 
 
 def test_the_aperture_baseline_is_not_published_on_the_tile(tmp_path):
@@ -1549,15 +1799,23 @@ def test_the_aperture_baseline_is_not_published_on_the_tile(tmp_path):
     assert set(out) == {"tokens", "requests", "cached"}
 
 
-@pytest.mark.parametrize(("n", "text"), [
-    # The billions tier: without it this rendered "1,013M" — wider than the tile,
-    # and a thousand-separator inside a unit that already means thousands of
-    # thousands. The counter crossed a billion during this change's deployment.
-    (1_012_647_234, "1.01B"), (2_500_000_000, "2.50B"),
-    (999_400_000, "999M"),
-    (865_900_000, "866M"), (20_000_000, "20M"), (15_641, "15.6k"),
-    (3000, "3.0k"), (999, "999"), (0, "0"),
-])
+@pytest.mark.parametrize(
+    ("n", "text"),
+    [
+        # The billions tier: without it this rendered "1,013M" — wider than the tile,
+        # and a thousand-separator inside a unit that already means thousands of
+        # thousands. The counter crossed a billion during this change's deployment.
+        (1_012_647_234, "1.01B"),
+        (2_500_000_000, "2.50B"),
+        (999_400_000, "999M"),
+        (865_900_000, "866M"),
+        (20_000_000, "20M"),
+        (15_641, "15.6k"),
+        (3000, "3.0k"),
+        (999, "999"),
+        (0, "0"),
+    ],
+)
 def test_compact_keeps_a_large_count_inside_a_tile(n, text):
     # homepage's `number` formatter renders 865900000 as "865,900,000", wider
     # than the tile it sits in.
@@ -1574,31 +1832,37 @@ def test_compact_keeps_a_large_count_inside_a_tile(n, text):
 # Two sessions' worth of records, in the shape dsh actually writes. The bulk of a
 # real transcript is streaming fragments, which is exactly what must NOT be
 # counted as a prompt.
-DSH_A = "\n".join([
-    '{"type":"session","id":"session-aaa","createdAt":1787564015673,"cwd":"/home/nsimon"}',
-    '{"type":"permission/preset","seq":0,"data":{"preset":"workspace-write"}}',
-    '{"type":"user/message","seq":1}',
-    '{"type":"text-chunks","seq":2}',
-    '{"type":"assistant/chunk","seq":3}',
-    '{"type":"assistant/message","seq":4}',
-    '{"type":"user/message","seq":5}',
-])
-DSH_B = "\n".join([
-    '{"type":"session","id":"session-bbb"}',
-    '{"type":"user/message","seq":1}',
-    '{"type":"tool/call","seq":2}',
-    '',                                     # blank lines occur; must be skipped
-    '{"type":"text-chunks","seq":3}',
-])
+DSH_A = "\n".join(
+    [
+        '{"type":"session","id":"session-aaa","createdAt":1787564015673,"cwd":"/home/nsimon"}',
+        '{"type":"permission/preset","seq":0,"data":{"preset":"workspace-write"}}',
+        '{"type":"user/message","seq":1}',
+        '{"type":"text-chunks","seq":2}',
+        '{"type":"assistant/chunk","seq":3}',
+        '{"type":"assistant/message","seq":4}',
+        '{"type":"user/message","seq":5}',
+    ]
+)
+DSH_B = "\n".join(
+    [
+        '{"type":"session","id":"session-bbb"}',
+        '{"type":"user/message","seq":1}',
+        '{"type":"tool/call","seq":2}',
+        "",  # blank lines occur; must be skipped
+        '{"type":"text-chunks","seq":3}',
+    ]
+)
 
 
 def dsh_run(bodies):
     """FakeRun answering `zstd -dc <path>` per path."""
+
     def answer(cmd):
         for path, body in bodies.items():
             if path in cmd:
                 return body
         raise AssertionError(f"no body for {cmd}")
+
     return FakeRun([("ZSTD", answer)])
 
 
@@ -1606,22 +1870,37 @@ def test_dsh_counts_prompts_and_not_transcript_lines():
     # A line count reads 12 across these two sessions because most of a
     # transcript is text-chunks/assistant-chunk streaming fragments — an artefact
     # of how the stream was flushed, not a measure of anything. 3 is the answer.
-    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd")
-    bodies = {"/dsh/w/session-aaa/session.jsonl.zstd": DSH_A,
-              "/dsh/w/session-bbb/session.jsonl.zstd": DSH_B}
-    out = hs.fetch_dsh(cfg, dsh_run(bodies), find=lambda _p: list(bodies),
-                       stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
-                       now=1_000_000 + 3 * 86400)
+    cfg = hs.Config(
+        zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd"
+    )
+    bodies = {
+        "/dsh/w/session-aaa/session.jsonl.zstd": DSH_A,
+        "/dsh/w/session-bbb/session.jsonl.zstd": DSH_B,
+    }
+    out = hs.fetch_dsh(
+        cfg,
+        dsh_run(bodies),
+        find=lambda _p: list(bodies),
+        stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
+        now=1_000_000 + 3 * 86400,
+    )
     assert out == {"sessions": 2, "prompts": 3, "last": 3}
 
 
 def test_dsh_reads_the_files_and_never_the_api():
     # The whole reason this fetcher exists in this shape.
-    cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd")
+    cfg = hs.Config(
+        zstd="ZSTD", dsh_sessions_glob="/dsh/*/session-*/session.jsonl.zstd"
+    )
     bodies = {"/dsh/w/session-aaa/session.jsonl.zstd": DSH_A}
     run = dsh_run(bodies)
-    hs.fetch_dsh(cfg, run, find=lambda _p: list(bodies),
-                 stat=lambda _p: type("S", (), {"st_mtime": 1})(), now=2)
+    hs.fetch_dsh(
+        cfg,
+        run,
+        find=lambda _p: list(bodies),
+        stat=lambda _p: type("S", (), {"st_mtime": 1})(),
+        now=2,
+    )
     assert run.commands, "fetcher issued no command at all"
     for cmd in run.commands:
         assert "ZSTD" in cmd
@@ -1633,10 +1912,14 @@ def test_a_truncated_final_record_does_not_zero_the_dsh_tile():
     # A session killed mid-write leaves a half-flushed last line.
     cfg = hs.Config(zstd="ZSTD", dsh_sessions_glob="/g")
     body = DSH_A + '\n{"type":"user/mess'
-    out = hs.fetch_dsh(cfg, FakeRun([("ZSTD", body)]), find=lambda _p: ["/s.zstd"],
-                       stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
-                       now=1_000_000)
-    assert out["prompts"] == 2      # the two intact ones, not 0
+    out = hs.fetch_dsh(
+        cfg,
+        FakeRun([("ZSTD", body)]),
+        find=lambda _p: ["/s.zstd"],
+        stat=lambda _p: type("S", (), {"st_mtime": 1_000_000})(),
+        now=1_000_000,
+    )
+    assert out["prompts"] == 2  # the two intact ones, not 0
     assert out["last"] == 0
 
 

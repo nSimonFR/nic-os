@@ -75,8 +75,8 @@ find "$root" -maxdepth 4 -name node_modules -prune -o -name .git -print | sort |
   # A worktree's .git file points into <common>/worktrees/; its clone covers it.
   [ -f "$g" ] && grep -q '/worktrees/' "$g" && continue
   case "$(git -C "$d" remote get-url origin 2>/dev/null)" in
-    *github.com[:/]trusk-official/*) ;;
-    *) continue ;;
+  *github.com[:/]trusk-official/*) ;;
+  *) continue ;;
   esac
   if [ "$apply" = 1 ]; then
     (enable_clone "$d") || echo "FAILED $d"

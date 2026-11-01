@@ -16,10 +16,11 @@
 # the same nightly plus pingdotgg/t3code#19576 (Issues) and the Linear issue
 # trees from nSimonFR-ai/t3code#1, matching ./t3code-desktop.nix. A bump needs that
 # release rebuilt first; see its notes.
-{ lib
-, stdenv
-, fetchurl
-, autoPatchelfHook
+{
+  lib,
+  stdenv,
+  fetchurl,
+  autoPatchelfHook,
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
@@ -78,7 +79,10 @@ stdenv.mkDerivation {
     homepage = "https://github.com/pingdotgg/t3code";
     license = lib.licenses.mit;
     mainProgram = "t3";
-    platforms = [ "aarch64-linux" "aarch64-darwin" ];
+    platforms = [
+      "aarch64-linux"
+      "aarch64-darwin"
+    ];
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
   };
 }

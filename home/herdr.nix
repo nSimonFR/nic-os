@@ -33,7 +33,10 @@ let
   # because an interactive shell lends it a grep the unit never has.
   herdrServerAbsent = pkgs.writeShellApplication {
     name = "herdr-server-absent";
-    runtimeInputs = [ pkgs.herdr-fork pkgs.gnugrep ];
+    runtimeInputs = [
+      pkgs.herdr-fork
+      pkgs.gnugrep
+    ];
     text = ''
       if herdr status server 2>/dev/null | grep -q '^status: running'; then
         exit 1
@@ -146,15 +149,13 @@ in
       ".config/herdr/config.toml".source =
         deliver "home/dotfiles/herdr-config.toml" ./dotfiles/herdr-config.toml;
 
-      ".config/herdr/usage-bar.py".source =
-        deliver "home/herdr/usage-bar.py" ./herdr/usage-bar.py;
+      ".config/herdr/usage-bar.py".source = deliver "home/herdr/usage-bar.py" ./herdr/usage-bar.py;
     }
     // lib.optionalAttrs pkgs.stdenv.isDarwin {
       # Saved SSH machines (`herdr machine add`) — the Mac only, since the client
       # is what holds them. Its sibling endpoint-selection.json stays out: that
       # is which machine is open.
-      ".local/state/herdr/client/endpoints.json".source =
-        inCheckout "home/dotfiles/herdr-endpoints.json";
+      ".local/state/herdr/client/endpoints.json".source = inCheckout "home/dotfiles/herdr-endpoints.json";
     };
 
   # No herdr plugins are declared: plugins.json is a derived cache of absolute

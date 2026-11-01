@@ -19,10 +19,10 @@
       file = ./secrets/agent-brokered-env.age;
     };
     telegram-bot-token = {
-      file  = ../../shared/telegram-bot-token.age;
+      file = ../../shared/telegram-bot-token.age;
       owner = "nsimon";
       group = "for-sure";
-      mode  = "0440";
+      mode = "0440";
     };
     # User secrets (shared/agenix.nix, nic.userSecretsFromSystem in home.nix).
     mcp-secrets = {
@@ -175,29 +175,29 @@
       mode = "0400";
     };
     steam-connector-env = {
-      file  = ./secrets/steam-connector-env.age;
+      file = ./secrets/steam-connector-env.age;
       owner = "ryot-connector"; # EnvironmentFile for steam-to-ryot.service
-      mode  = "0400";
+      mode = "0400";
     };
     spotify-connector-env = {
-      file  = ./secrets/spotify-connector-env.age;
+      file = ./secrets/spotify-connector-env.age;
       owner = "ryot-connector"; # EnvironmentFile for spotify-to-ryot.service
-      mode  = "0400";
+      mode = "0400";
     };
     for-sure-api-key = {
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";
     };
     vaultwarden-admin-token = {
-      file  = ./secrets/vaultwarden-admin-token.age;
+      file = ./secrets/vaultwarden-admin-token.age;
       owner = "vaultwarden";
     };
     # Master password of nsimon+agents@pm.me, the bot behind `vault-agent`. It
     # opens the "Agents" org only, so the agents (nsimon) may read it.
     vaultwarden-agent-password = {
-      file  = ./secrets/vaultwarden-agent-password.age;
+      file = ./secrets/vaultwarden-agent-password.age;
       owner = "nsimon";
-      mode  = "0400";
+      mode = "0400";
     };
     rclone-storj = {
       file = ./secrets/rclone-storj.age;
@@ -211,7 +211,7 @@
       file = ./secrets/restic-password.age;
     };
     gramps-web-secret = {
-      file  = ./secrets/gramps-web-secret.age;
+      file = ./secrets/gramps-web-secret.age;
       owner = "gramps-web";
     };
     # AFFiNE session cookie for affine-mcp. Replaces affine-token.age, which held a
@@ -243,40 +243,40 @@
       mode = "0444"; # DynamicUser, as for asale-api-key
     };
     dawarich-geoapify = {
-      file  = ./secrets/dawarich-geoapify.age;
+      file = ./secrets/dawarich-geoapify.age;
       owner = "dawarich";
-      mode  = "0440";
+      mode = "0440";
     };
     memos-token = {
       # Memos personal access token (user nsimon) for the journal collectors.
-      file  = ./secrets/memos-token.age;
-      mode  = "0400";
+      file = ./secrets/memos-token.age;
+      mode = "0400";
     };
     sure-journal-api-key = {
       # Sure API key, read-write: journal-daily (reads only) and Agent Vault.
-      file  = ./secrets/sure-journal-api-key.age;
-      mode  = "0400";
+      file = ./secrets/sure-journal-api-key.age;
+      mode = "0400";
     };
     papra-env = {
-      file  = ./secrets/papra-env.age;
+      file = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)
-      mode  = "0400";
+      mode = "0400";
     };
     nextcloud-pg-password = {
-      file  = ./secrets/nextcloud-pg-password.age;
+      file = ./secrets/nextcloud-pg-password.age;
       owner = "postgres"; # nextcloud-pg-setup runs as postgres; nextcloud-setup reads via LoadCredential as PID 1
     };
     # No nextcloud-admin-password agenix entry: install is done; the admin
     # password lives hashed in postgres oc_users and is rotated via
     # `occ user:resetpassword`. See nextcloud.nix for the placeholder.
     protonmail-bridge-password = {
-      file  = ./secrets/protonmail-bridge-password.age;
+      file = ./secrets/protonmail-bridge-password.age;
       owner = "hydroxide";
       group = "hydroxide";
-      mode  = "0440";
+      mode = "0440";
     };
     nextcloud-homepage-password = {
-      file  = ./secrets/nextcloud-homepage-password.age;
+      file = ./secrets/nextcloud-homepage-password.age;
       owner = "nsimon"; # homepage-dashboard-env reads this
     };
     # Feed list for ics-mirror (calino.nix). Root-readable only: the unit runs as
@@ -319,12 +319,12 @@
       # epicgames-freegames-config (root oneshot) reads it into config.json.
     };
     scale-bridge-env = {
-      file  = ./secrets/scale-bridge-env.age;
+      file = ./secrets/scale-bridge-env.age;
       # RYOT_TOKEN + SHIM_KEY + body-comp profile (USER_HEIGHT/BIRTH_DATE/GENDER).
       # owner scale-bridge (shim reads via EnvironmentFile); root (ble-scale-sync
       # + the config.yaml activation script) reads it regardless of the bits.
       owner = "scale-bridge";
-      mode  = "0400";
+      mode = "0400";
     };
-};
+  };
 }

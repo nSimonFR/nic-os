@@ -79,14 +79,20 @@ def test_first_run_logs_the_whole_playtime():
 
 
 def test_a_play_occurs_when_the_game_was_quit():
-    (play,) = steam.playtime_deltas([game(1, "Stardew", 150, QUIT)], {"1": "77"}, {"1": 101}, now=NOW)
+    (play,) = steam.playtime_deltas(
+        [game(1, "Stardew", 150, QUIT)], {"1": "77"}, {"1": 101}, now=NOW
+    )
     assert play["played_at"] == "2025-10-28T13:54:00.000Z" and play["delta"] == 49
     assert steam.activity_payload("e", play)["entry"]["when"] == {
-        "kind": "date", "finishedOn": "2025-10-28T13:54:00.000Z"}
+        "kind": "date",
+        "finishedOn": "2025-10-28T13:54:00.000Z",
+    }
 
 
 def test_no_new_playtime_logs_nothing():
-    assert steam.playtime_deltas([game(1, "Portal", 120)], {"1": "77"}, {"1": 120}) == []
+    assert (
+        steam.playtime_deltas([game(1, "Portal", 120)], {"1": "77"}, {"1": 120}) == []
+    )
 
 
 def test_only_the_delta_is_logged_never_the_cumulative_total():
@@ -105,12 +111,19 @@ def test_an_inflight_play_is_resent_exactly_as_first_sent():
     (play,) = steam.playtime_deltas(
         [game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
     )
-    assert (play["total"], play["delta"], play["submitted_at"], play["played_at"]) == (150, 30, "earlier", "quit")
+    assert (play["total"], play["delta"], play["submitted_at"], play["played_at"]) == (
+        150,
+        30,
+        "earlier",
+        "quit",
+    )
 
 
 def test_an_inflight_play_from_before_played_at_still_occurs_now():
     inflight = {"1": {"total": 150, "submittedAt": "earlier"}}
-    (play,) = steam.playtime_deltas([game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW)
+    (play,) = steam.playtime_deltas(
+        [game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
+    )
     assert steam.activity_payload("e", play)["entry"]["when"] == {"kind": "now"}
 
 
@@ -229,7 +242,9 @@ def test_import_game_polls_until_completed():
 
 
 def test_import_game_reports_a_failed_import_as_empty():
-    client, _ = ryot_client([json_reply({"jobId": "j"}), json_reply({"status": "failed"})])
+    client, _ = ryot_client(
+        [json_reply({"jobId": "j"}), json_reply({"status": "failed"})]
+    )
     assert client.import_game("prov", "77") == ""
 
 
@@ -284,7 +299,9 @@ def test_main_end_to_end_resolves_logs_and_advances_state(tmp_path):
         steam_replies(game(1, "Portal", 60))
         + [
             json_reply({"data": {"p": {"items": [{"id": "prov"}]}}}),
-            json_reply({"data": {"g": {"items": [{"id": "met_a", "externalId": "71"}]}}}),
+            json_reply(
+                {"data": {"g": {"items": [{"id": "met_a", "externalId": "71"}]}}}
+            ),
             SAVED,
         ],
     )
@@ -292,7 +309,10 @@ def test_main_end_to_end_resolves_logs_and_advances_state(tmp_path):
     assert read(tmp_path, "steam-state.json") == {"games": {"1": 60}}
     assert read(tmp_path, "steam-igdb-map.json") == {"1": "71"}
     assert read(tmp_path, "steam-ryot-entities.json") == {"1": "met_a"}
-    assert paths(op)[-1] == "http://ryot/api/plugins/ryot/media/operations/media-activity-log"
+    assert (
+        paths(op)[-1]
+        == "http://ryot/api/plugins/ryot/media/operations/media-activity-log"
+    )
     payload = op.body_of()["payload"]
     assert payload["submissionId"] == "steam-1-60"
     assert payload["entry"]["timeSpent"] == 60
@@ -357,7 +377,9 @@ def test_the_next_run_resends_the_inflight_play_unchanged(tmp_path):
     (tmp_path / "steam-igdb-map.json").write_text('{"1": "71"}')
     (tmp_path / "steam-ryot-entities.json").write_text('{"1": "met_a"}')
     (tmp_path / "steam-state.json").write_text(
-        json.dumps({"games": {"1": 40}, "inflight": {"1": {"total": 60, "submittedAt": "t0"}}})
+        json.dumps(
+            {"games": {"1": 40}, "inflight": {"1": {"total": 60, "submittedAt": "t0"}}}
+        )
     )
     replies = [
         json_reply({"response": {"games": [game(1, "Portal", 90)]}}),

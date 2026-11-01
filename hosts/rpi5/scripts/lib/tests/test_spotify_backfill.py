@@ -73,7 +73,12 @@ def test_plan_does_not_reach_past_90_minutes_or_before_the_slack():
     out = bf.plan(
         [play("t1", "2024-01-01T10:00:00Z")],
         {"t1": "met_1"},
-        {"met_1": [ev("late", "2024-01-01T11:31:00Z"), ev("early", "2024-01-01T09:54:00Z")]},
+        {
+            "met_1": [
+                ev("late", "2024-01-01T11:31:00Z"),
+                ev("early", "2024-01-01T09:54:00Z"),
+            ]
+        },
     )
     assert actions(out) == [("new", "t1", None)]
 
@@ -125,7 +130,10 @@ def test_written_shapes_carry_the_real_start_and_end():
         "entityId": "met_1",
         "eventSchemaSlug": "complete",
         "occurredAt": "2024-01-01T10:00:00.000Z",
-        "properties": {"consumedOn": "Spotify", "startedOn": "2024-01-01T09:57:00.000Z"},
+        "properties": {
+            "consumedOn": "Spotify",
+            "startedOn": "2024-01-01T09:57:00.000Z",
+        },
     }
     assert bf.correction(p) == {
         "occurredAt": "2024-01-01T10:00:00.000Z",
@@ -141,12 +149,16 @@ def test_create_events_waits_out_a_pending_batch():
 
     op = FakeOpener(
         [
-            json_reply({"operationId": "op1", "status": "accepted", "writtenCount": 0}, 202),
+            json_reply(
+                {"operationId": "op1", "status": "accepted", "writtenCount": 0}, 202
+            ),
             json_reply({"operationId": "op1", "result": {"count": 2}}),
         ]
     )
     c = ryot.Client("http://ryot", "key", opener=op, sleep=lambda _s: None)
-    assert bf.create_events(c, [{}, {}], sleep=lambda _s: None, log=lambda _m: None) == 2
+    assert (
+        bf.create_events(c, [{}, {}], sleep=lambda _s: None, log=lambda _m: None) == 2
+    )
     assert op.last.full_url.endswith("/api/events/operations/op1")
 
 
@@ -164,7 +176,12 @@ def lookup(tracks):
         {
             "data": {
                 "p": rows([{"id": "prov"}]),
-                "t": rows([{"id": e, "externalId": t, "providerId": "prov"} for t, e in tracks.items()]),
+                "t": rows(
+                    [
+                        {"id": e, "externalId": t, "providerId": "prov"}
+                        for t, e in tracks.items()
+                    ]
+                ),
             }
         }
     )
@@ -180,13 +197,22 @@ RECORDS = [
     rec("t3", "2024-01-01T12:00:00Z"),  # unknown track
     rec("t1", "2024-01-01T13:00:00Z", ms_played=1000),  # too short
 ]
-V1_EVENT = {"id": "e1", "entityId": "met_1", "occurredAt": "2024-01-01T11:02:00.000Z", "consumedOn": "Spotify"}
+V1_EVENT = {
+    "id": "e1",
+    "entityId": "met_1",
+    "occurredAt": "2024-01-01T11:02:00.000Z",
+    "consumedOn": "Spotify",
+}
 
 
 def run(tmp_path, argv, replies):
     op = FakeOpener(replies)
     lines = []
-    env = {"RYOT_API_KEY": "key", "RYOT_URL": "http://ryot", "STATE_DIR": str(tmp_path / "state")}
+    env = {
+        "RYOT_API_KEY": "key",
+        "RYOT_URL": "http://ryot",
+        "STATE_DIR": str(tmp_path / "state"),
+    }
     rc = bf.main(argv, env=env, opener=op, sleep=lambda _s: None, log=lines.append)
     return rc, op, lines
 
@@ -194,10 +220,15 @@ def run(tmp_path, argv, replies):
 def test_dry_run_writes_nothing_and_summarizes(tmp_path):
     path = export(tmp_path, RECORDS)
     rc, op, lines = run(
-        tmp_path, [path], [lookup({"t1": "met_1", "t2": "met_2"}), completes([V1_EVENT])]
+        tmp_path,
+        [path],
+        [lookup({"t1": "met_1", "t2": "met_2"}), completes([V1_EVENT])],
     )
     assert rc == 0
-    assert all(r.get_method() == "POST" and r.full_url.endswith("/ryotql/execute") for r in op.requests)
+    assert all(
+        r.get_method() == "POST" and r.full_url.endswith("/ryotql/execute")
+        for r in op.requests
+    )
     summary = next(line for line in lines if line.startswith("dry run:"))
     assert "1 new, 1 to correct" in summary
     assert "1 on tracks to import" in summary and "1 filtered" in summary
@@ -236,7 +267,10 @@ def test_a_partial_batch_fails_the_run(tmp_path):
         [
             lookup({"t2": "met_2"}),
             completes([]),
-            json_reply({"count": 0, "outcomes": [], "failure": {"code": "policy-rejected"}}, 201),
+            json_reply(
+                {"count": 0, "outcomes": [], "failure": {"code": "policy-rejected"}},
+                201,
+            ),
         ],
     )
     assert rc == 1

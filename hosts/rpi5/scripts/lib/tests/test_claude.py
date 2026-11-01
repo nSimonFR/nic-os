@@ -35,8 +35,13 @@ class Clock:
 
 
 def agg_for(quiet=300, cap=900, max_lines=40, self_host="rpi5"):
-    cfg = na.Config(quiet_seconds=quiet, max_seconds=cap, max_lines=max_lines,
-                    self_host=self_host, chat_id="1")
+    cfg = na.Config(
+        quiet_seconds=quiet,
+        max_seconds=cap,
+        max_lines=max_lines,
+        self_host=self_host,
+        chat_id="1",
+    )
     sent = []
     clock = Clock()
     return na.Aggregator(cfg, send=sent.append, now=clock), sent, clock
@@ -147,13 +152,23 @@ def test_no_send_without_a_token_or_a_chat_id(tmp_path):
     token.write_text("t\n")
     calls = []
     # No chat id configured -> nothing leaves the box.
-    assert na.telegram_send(
-        na.Config(chat_id="", token_path=str(token)), "x",
-        opener=lambda *a, **k: calls.append(a)) is False
+    assert (
+        na.telegram_send(
+            na.Config(chat_id="", token_path=str(token)),
+            "x",
+            opener=lambda *a, **k: calls.append(a),
+        )
+        is False
+    )
     # No token file -> likewise.
-    assert na.telegram_send(
-        na.Config(chat_id="1", token_path=str(tmp_path / "nope")), "x",
-        opener=lambda *a, **k: calls.append(a)) is False
+    assert (
+        na.telegram_send(
+            na.Config(chat_id="1", token_path=str(tmp_path / "nope")),
+            "x",
+            opener=lambda *a, **k: calls.append(a),
+        )
+        is False
+    )
     assert calls == []
 
 
@@ -164,8 +179,12 @@ def test_a_telegram_failure_is_swallowed(tmp_path):
     def boom(*a, **k):
         raise OSError("telegram down")
 
-    assert na.telegram_send(
-        na.Config(chat_id="1", token_path=str(token)), "x", opener=boom) is False
+    assert (
+        na.telegram_send(
+            na.Config(chat_id="1", token_path=str(token)), "x", opener=boom
+        )
+        is False
+    )
 
 
 def test_the_flusher_tick_can_run_a_single_pass():
@@ -210,8 +229,13 @@ def test_the_credentials_come_from_the_bridges_own_config_dir():
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("bridge-cse_01ABC", "cse_01ABC"), ("/a/b/bridge-cse_XYZ9", "cse_XYZ9"),
-     ("worktree-nope", None), ("", None), (None, None)],
+    [
+        ("bridge-cse_01ABC", "cse_01ABC"),
+        ("/a/b/bridge-cse_XYZ9", "cse_XYZ9"),
+        ("worktree-nope", None),
+        ("", None),
+        (None, None),
+    ],
 )
 def test_the_session_id_is_recovered_from_the_worktree_name(name, expected):
     assert br.cse_from_cwd(name) == expected
@@ -225,7 +249,12 @@ def test_the_project_slug_matches_claude_codes_own():
 def test_the_bridge_pointer_path_mirrors_claude_codes(tmp_path):
     cfg = br_cfg(tmp_path)
     assert br.bridge_pointer_path(cfg) == (
-        tmp_path / "config" / "projects" / br.slug(cfg.bridge_dir) / "bridge-pointer.json")
+        tmp_path
+        / "config"
+        / "projects"
+        / br.slug(cfg.bridge_dir)
+        / "bridge-pointer.json"
+    )
 
 
 def make_worktree(cfg, cse, age_seconds=0, now=1_000_000.0):
@@ -270,8 +299,9 @@ def test_the_transcript_mtime_beats_the_worktree_mtime(tmp_path):
 
 def write_snapshot(cfg, sessions, now=1_000_000):
     cfg.snapshot_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.snapshot_file.write_text(json.dumps(
-        {"savedAt": int(now), "sessions": sessions}))
+    cfg.snapshot_file.write_text(
+        json.dumps({"savedAt": int(now), "sessions": sessions})
+    )
 
 
 def write_creds(cfg, token="tok"):
@@ -316,8 +346,9 @@ def test_a_live_run_reconnects_each_recent_session(tmp_path):
     write_pointer(cfg, "env_9")
     api = FakeApi(200)
 
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert out == {"revived": 2, "stale": 0, "cooldown": 0, "failed": 0}
     assert [body["session_id"] for _url, body in api.posts] == ["cse_a", "cse_b"]
     assert api.posts[0][0].endswith("/v1/environments/env_9/bridge/reconnect")
@@ -332,8 +363,9 @@ def test_a_dry_run_reconnects_nothing(tmp_path):
     write_creds(cfg)
     write_pointer(cfg)
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert out["revived"] == 1  # counted as "would revive"
     assert api.posts == []
     # …and no cooldown state is written, so the real run is not suppressed.
@@ -347,8 +379,9 @@ def test_the_revive_cap_leaves_headroom_under_bridge_capacity(tmp_path):
     write_creds(cfg)
     write_pointer(cfg)
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert out["revived"] == 2
     assert len(api.posts) == 2
 
@@ -360,7 +393,9 @@ def test_the_most_recently_active_sessions_are_revived_first(tmp_path):
     write_creds(cfg)
     write_pointer(cfg)
     api = FakeApi(200)
-    br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None)
+    br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert api.posts[0][1]["session_id"] == "cse_new"
 
 
@@ -371,8 +406,9 @@ def test_a_stale_session_is_skipped(tmp_path):
     write_creds(cfg)
     write_pointer(cfg)
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert (out["revived"], out["stale"]) == (0, 1)
     assert api.posts == []
 
@@ -385,11 +421,13 @@ def test_a_session_revived_moments_ago_is_not_revived_again(tmp_path):
     write_creds(cfg)
     write_pointer(cfg, "env_9")
     cfg.state_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.state_file.write_text(json.dumps(
-        {"cse_a:env_9": {"cseId": "cse_a", "revivedAt": now - 60}}))
+    cfg.state_file.write_text(
+        json.dumps({"cse_a:env_9": {"cseId": "cse_a", "revivedAt": now - 60}})
+    )
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert (out["revived"], out["cooldown"]) == (0, 1)
     assert api.posts == []
 
@@ -402,11 +440,13 @@ def test_the_cooldown_is_scoped_to_the_environment(tmp_path):
     write_creds(cfg)
     write_pointer(cfg, "env_NEW")
     cfg.state_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.state_file.write_text(json.dumps(
-        {"cse_a:env_OLD": {"cseId": "cse_a", "revivedAt": now - 60}}))
+    cfg.state_file.write_text(
+        json.dumps({"cse_a:env_OLD": {"cseId": "cse_a", "revivedAt": now - 60}})
+    )
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert out["revived"] == 1
 
 
@@ -417,8 +457,9 @@ def test_a_failed_reconnect_is_counted_and_not_remembered(tmp_path):
     write_creds(cfg)
     write_pointer(cfg, "env_9")
     api = FakeApi(400)  # "Session does not belong to this environment"
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert (out["revived"], out["failed"]) == (0, 1)
     assert json.loads(cfg.state_file.read_text()) == {}
 
@@ -428,13 +469,15 @@ def test_a_session_whose_worktree_is_gone_is_still_reconnected(tmp_path):
     # the bridge recreates it from the branch on the reconnected work poll.
     now = 1_000_000
     cfg = br_cfg(tmp_path, dry_run=False)
-    write_snapshot(cfg, [{"cseId": "cse_a", "cwd": "/gone/bridge-cse_a",
-                          "lastActive": now}])
+    write_snapshot(
+        cfg, [{"cseId": "cse_a", "cwd": "/gone/bridge-cse_a", "lastActive": now}]
+    )
     write_creds(cfg)
     write_pointer(cfg)
     api = FakeApi(200)
-    out = br.cmd_resume(cfg, opener=api, sleep=lambda _s: None, now=now,
-                        notify=lambda _m: None)
+    out = br.cmd_resume(
+        cfg, opener=api, sleep=lambda _s: None, now=now, notify=lambda _m: None
+    )
     assert out["revived"] == 1
 
 
@@ -454,14 +497,32 @@ def test_a_missing_oauth_token_reports_and_stops(tmp_path):
     assert "no OAuth token" in notes[0]
 
 
-def test_the_environment_falls_back_to_the_listing_when_the_pointer_is_missing(tmp_path):
+def test_the_environment_falls_back_to_the_listing_when_the_pointer_is_missing(
+    tmp_path,
+):
     cfg = br_cfg(tmp_path)
     write_creds(cfg)
-    listing = json.dumps({"data": [
-        {"id": "env_old", "name": "rpi5:nic-os:aaa", "created_at": "2026-01-01"},
-        {"id": "env_new", "name": "rpi5:nic-os:bbb", "created_at": "2026-06-01"},
-        {"id": "env_other", "name": "beast:nic-os:ccc", "created_at": "2026-07-01"},
-    ]}).encode()
+    listing = json.dumps(
+        {
+            "data": [
+                {
+                    "id": "env_old",
+                    "name": "rpi5:nic-os:aaa",
+                    "created_at": "2026-01-01",
+                },
+                {
+                    "id": "env_new",
+                    "name": "rpi5:nic-os:bbb",
+                    "created_at": "2026-06-01",
+                },
+                {
+                    "id": "env_other",
+                    "name": "beast:nic-os:ccc",
+                    "created_at": "2026-07-01",
+                },
+            ]
+        }
+    ).encode()
 
     def opener(req, timeout=None):
         assert req.get_header("Anthropic-beta") == "environments-2025-11-01"
@@ -474,9 +535,16 @@ def test_the_environment_falls_back_to_the_listing_when_the_pointer_is_missing(t
 def test_no_matching_environment_yields_none(tmp_path):
     cfg = br_cfg(tmp_path)
     listing = json.dumps({"data": [{"id": "e", "name": "beast:x:1"}]}).encode()
-    assert br.current_env_id(
-        cfg, "tok", opener=lambda req, timeout=None: type(
-            "R", (), {"read": lambda self: listing})()) is None
+    assert (
+        br.current_env_id(
+            cfg,
+            "tok",
+            opener=lambda req, timeout=None: type(
+                "R", (), {"read": lambda self: listing}
+            )(),
+        )
+        is None
+    )
 
 
 def test_the_pointer_wins_over_the_listing(tmp_path):
@@ -493,8 +561,11 @@ def test_the_summary_goes_through_the_shared_sender_in_plain_mode():
     # Session names and worktree paths are not HTML-escaped; asking Telegram to
     # parse them as HTML is how a stray "<" 400s the whole notification.
     calls = []
-    br.telegram(br.Config(telegram_send="/nix/store/x/bin/send"), "revived <cse_1>",
-                run=lambda argv, **kw: calls.append((argv, kw)))
+    br.telegram(
+        br.Config(telegram_send="/nix/store/x/bin/send"),
+        "revived <cse_1>",
+        run=lambda argv, **kw: calls.append((argv, kw)),
+    )
     argv, kw = calls[0]
     assert argv == ["/nix/store/x/bin/send", "--mode", "plain", "revived <cse_1>"]
     assert kw["check"] is False
@@ -531,11 +602,13 @@ def transcript(*objs):
 def usage_msg(inp=0, creation=0, read=0):
     return {
         "type": "assistant",
-        "message": {"usage": {
-            "input_tokens": inp,
-            "cache_creation_input_tokens": creation,
-            "cache_read_input_tokens": read,
-        }},
+        "message": {
+            "usage": {
+                "input_tokens": inp,
+                "cache_creation_input_tokens": creation,
+                "cache_read_input_tokens": read,
+            }
+        },
     }
 
 
@@ -550,20 +623,30 @@ def write_session(tmp_path, project, uuid, text):
 def test_the_baseline_sums_all_three_input_counters(tmp_path):
     # 134k bridge sessions were ~2 input + ~134k cache_creation: reading
     # input_tokens alone reports "2" and the alarm never fires.
-    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
-        usage_msg(inp=2, creation=134_000, read=190),
-    ))
+    p = write_session(
+        tmp_path,
+        "proj",
+        "aaaaaaaa-1111",
+        transcript(
+            usage_msg(inp=2, creation=134_000, read=190),
+        ),
+    )
     assert cb.baseline_of(p) == 134_192
 
 
 def test_the_first_request_wins_not_the_largest(tmp_path):
     # Baseline is a startup property. Later turns are work, and compaction
     # rewrites them — measuring anything but the first request measures usage.
-    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
-        {"type": "user", "message": {"content": "hi"}},
-        usage_msg(inp=1, creation=50_000),
-        usage_msg(inp=1, read=168_000),
-    ))
+    p = write_session(
+        tmp_path,
+        "proj",
+        "aaaaaaaa-1111",
+        transcript(
+            {"type": "user", "message": {"content": "hi"}},
+            usage_msg(inp=1, creation=50_000),
+            usage_msg(inp=1, read=168_000),
+        ),
+    )
     assert cb.baseline_of(p) == 50_001
 
 
@@ -577,9 +660,14 @@ def test_a_half_written_last_line_is_skipped_not_fatal(tmp_path):
 
 
 def test_a_session_with_no_request_yet_is_not_a_row(tmp_path):
-    p = write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(
-        {"type": "user", "message": {"content": "hi"}},
-    ))
+    p = write_session(
+        tmp_path,
+        "proj",
+        "aaaaaaaa-1111",
+        transcript(
+            {"type": "user", "message": {"content": "hi"}},
+        ),
+    )
     assert cb.baseline_of(p) is None
 
 
@@ -592,8 +680,7 @@ def test_only_sessions_inside_the_lookback_are_judged(tmp_path):
     write_session(tmp_path, "proj", "bbbbbbbb-2222", transcript(usage_msg(creation=8)))
     cfg = cb_cfg(tmp_path, lookback=100)
     ages = {"aaaaaaaa-1111": 50, "bbbbbbbb-2222": 5000}
-    rows = cb.scan(cfg, now=10_000,
-                   mtime=lambda p: 10_000 - ages[Path(p).stem])
+    rows = cb.scan(cfg, now=10_000, mtime=lambda p: 10_000 - ages[Path(p).stem])
     assert [r[1] for r in rows] == ["proj/aaaaaaaa"]
 
 
@@ -618,8 +705,8 @@ def test_the_body_lists_the_offenders_and_says_what_to_do(tmp_path):
     cfg = cb_cfg(tmp_path, threshold=100_000)
     body = cb.build_body(cfg, [(134_198, "proj/aaaa", "p"), (50_000, "proj/bbbb", "q")])
     assert "134,198" in body and "proj/aaaa" in body
-    assert "proj/bbbb" not in body          # under threshold, not an offender
-    assert "BOTH name forms" in body        # the fix that actually applies
+    assert "proj/bbbb" not in body  # under threshold, not an offender
+    assert "BOTH name forms" in body  # the fix that actually applies
 
 
 def test_the_threshold_is_inclusive(tmp_path):
@@ -642,8 +729,13 @@ def test_the_default_is_a_dry_run_so_nothing_is_ever_sent_by_accident(tmp_path):
 
 
 def test_an_armed_run_pipes_the_body_to_the_keyed_alerter(tmp_path):
-    cfg = cb_cfg(tmp_path, alert_cmd="/nix/store/x-telegram-alert", dry_run=False,
-                 alert_key="claude-context-baseline", alert_title="T")
+    cfg = cb_cfg(
+        tmp_path,
+        alert_cmd="/nix/store/x-telegram-alert",
+        dry_run=False,
+        alert_key="claude-context-baseline",
+        alert_title="T",
+    )
     calls = []
 
     def run(argv, **kw):
@@ -685,47 +777,78 @@ def test_an_alerter_failure_is_swallowed(tmp_path):
 def test_a_quiet_window_does_not_resolve_an_open_alert(tmp_path):
     # No sessions started is no evidence. Sending an empty body here would clear
     # a real alert overnight and re-open it every morning.
-    cfg_env = {"CTXB_PROJECTS_DIR": str(tmp_path), "CTXB_ALERT": "/x",
-               "CTXB_DRY_RUN": "0"}
+    cfg_env = {
+        "CTXB_PROJECTS_DIR": str(tmp_path),
+        "CTXB_ALERT": "/x",
+        "CTXB_DRY_RUN": "0",
+    }
     calls = []
     lines = []
-    assert cb.main(env=cfg_env, now=10_000, mtime=lambda p: 0,
-                   run=lambda *a, **k: calls.append(a), log=lines.append) == 0
+    assert (
+        cb.main(
+            env=cfg_env,
+            now=10_000,
+            mtime=lambda p: 0,
+            run=lambda *a, **k: calls.append(a),
+            log=lines.append,
+        )
+        == 0
+    )
     assert calls == []
     assert "nothing to judge" in lines[0]
 
 
 def test_main_reports_the_worst_baseline_either_way(tmp_path):
-    write_session(tmp_path, "proj", "aaaaaaaa-1111", transcript(usage_msg(creation=54_000)))
+    write_session(
+        tmp_path, "proj", "aaaaaaaa-1111", transcript(usage_msg(creation=54_000))
+    )
     lines = []
-    cb.main(env={"CTXB_PROJECTS_DIR": str(tmp_path)}, now=10_000,
-            mtime=lambda p: 10_000, log=lines.append)
+    cb.main(
+        env={"CTXB_PROJECTS_DIR": str(tmp_path)},
+        now=10_000,
+        mtime=lambda p: 10_000,
+        log=lines.append,
+    )
     assert lines[0].startswith("OK 1 session(s), worst 54,000")
 
 
 def test_main_alerts_when_a_session_is_over_the_threshold(tmp_path):
-    write_session(tmp_path, "proj", "aaaaaaaa-1111",
-                  transcript(usage_msg(inp=2, creation=134_000)))
+    write_session(
+        tmp_path,
+        "proj",
+        "aaaaaaaa-1111",
+        transcript(usage_msg(inp=2, creation=134_000)),
+    )
     calls = []
     lines = []
-    cb.main(env={"CTXB_PROJECTS_DIR": str(tmp_path), "CTXB_ALERT": "/x",
-                 "CTXB_DRY_RUN": "0"},
-            now=10_000, mtime=lambda p: 10_000,
-            run=lambda argv, **kw: calls.append(kw["input"]), log=lines.append)
+    cb.main(
+        env={
+            "CTXB_PROJECTS_DIR": str(tmp_path),
+            "CTXB_ALERT": "/x",
+            "CTXB_DRY_RUN": "0",
+        },
+        now=10_000,
+        mtime=lambda p: 10_000,
+        run=lambda argv, **kw: calls.append(kw["input"]),
+        log=lines.append,
+    )
     assert lines[0].startswith("ALERT 1 session(s), worst 134,002")
     assert b"134,002" in calls[0]
 
 
 def test_the_threshold_and_lookback_come_from_the_environment(tmp_path):
-    cfg = cb.Config.from_env({"CTXB_THRESHOLD": "50000", "CTXB_LOOKBACK": "60",
-                              "HOME": "/home/x"})
+    cfg = cb.Config.from_env(
+        {"CTXB_THRESHOLD": "50000", "CTXB_LOOKBACK": "60", "HOME": "/home/x"}
+    )
     assert (cfg.threshold, cfg.lookback) == (50_000, 60)
     assert cfg.projects_dir == Path("/home/x/.claude/projects")
     assert cfg.dry_run is True
 
 
 def test_a_garbage_threshold_falls_back_instead_of_crashing_the_timer():
-    assert cb.Config.from_env({"CTXB_THRESHOLD": "lots"}).threshold == cb.DEFAULT_THRESHOLD
+    assert (
+        cb.Config.from_env({"CTXB_THRESHOLD": "lots"}).threshold == cb.DEFAULT_THRESHOLD
+    )
 
 
 # ── window_anchor ─────────────────────────────────────────────────────────────
@@ -738,8 +861,14 @@ def at(hh, mm=0):
 
 
 def usage(reset=None):
-    return json_reply({"five_hour": {"utilization": 18.0,
-                                     "resets_at": reset.isoformat() if reset else None}})
+    return json_reply(
+        {
+            "five_hour": {
+                "utilization": 18.0,
+                "resets_at": reset.isoformat() if reset else None,
+            }
+        }
+    )
 
 
 def anchor_env(tmp_path, **extra):
@@ -765,8 +894,17 @@ class Ran:
 def test_no_open_window_pings_right_away(tmp_path):
     ran, slept = Ran(), []
     opener = FakeOpener([usage(None), usage(at(12))])
-    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
-                   run=ran, sleep=slept.append, log=lambda m: None) == 0
+    assert (
+        wa.main(
+            env=anchor_env(tmp_path),
+            clock=lambda: at(7),
+            opener=opener,
+            run=ran,
+            sleep=slept.append,
+            log=lambda m: None,
+        )
+        == 0
+    )
     assert slept == [] and len(ran.argvs) == 1
     assert ran.argvs[0][ran.argvs[0].index("--model") + 1] == "sonnet"
 
@@ -774,16 +912,31 @@ def test_no_open_window_pings_right_away(tmp_path):
 def test_an_open_window_is_chained_one_slack_after_its_reset(tmp_path):
     ran, slept = Ran(), []
     opener = FakeOpener([usage(at(8, 10)), usage(at(13, 11))])
-    wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
-            run=ran, sleep=slept.append, log=lambda m: None)
+    wa.main(
+        env=anchor_env(tmp_path),
+        clock=lambda: at(7),
+        opener=opener,
+        run=ran,
+        sleep=slept.append,
+        log=lambda m: None,
+    )
     assert slept == [70 * 60 + 60] and len(ran.argvs) == 1
 
 
 def test_a_reset_after_day_end_is_not_chained(tmp_path):
     ran, lines = Ran(), []
     opener = FakeOpener([usage(at(21, 52))])
-    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(17), opener=opener,
-                   run=ran, sleep=lambda s: None, log=lines.append) == 0
+    assert (
+        wa.main(
+            env=anchor_env(tmp_path),
+            clock=lambda: at(17),
+            opener=opener,
+            run=ran,
+            sleep=lambda s: None,
+            log=lines.append,
+        )
+        == 0
+    )
     assert ran.argvs == [] and lines[0].startswith("skip:")
 
 
@@ -795,28 +948,57 @@ def test_a_night_catch_up_run_does_not_ping():
 def test_unreadable_usage_still_pings(tmp_path):
     ran = Ran()
     env = anchor_env(tmp_path, ANCHOR_TOKEN_FILE=str(tmp_path / "missing"))
-    assert wa.main(env=env, clock=lambda: at(12), opener=FakeOpener(), run=ran,
-                   sleep=lambda s: None, log=lambda m: None) == 0
+    assert (
+        wa.main(
+            env=env,
+            clock=lambda: at(12),
+            opener=FakeOpener(),
+            run=ran,
+            sleep=lambda s: None,
+            log=lambda m: None,
+        )
+        == 0
+    )
     assert len(ran.argvs) == 1
 
 
 def test_the_ping_is_confirmed_without_rereading_usage(tmp_path):
     opener = FakeOpener([usage(None)])
-    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7), opener=opener,
-                   run=Ran(), sleep=lambda s: None, log=lambda m: None) == 0
+    assert (
+        wa.main(
+            env=anchor_env(tmp_path),
+            clock=lambda: at(7),
+            opener=opener,
+            run=Ran(),
+            sleep=lambda s: None,
+            log=lambda m: None,
+        )
+        == 0
+    )
     assert len(opener.requests) == 1
 
 
-@pytest.mark.parametrize("stdout", [
-    claude_result(models=("asale-codex",)),
-    claude_result(is_error=True),
-    claude_result(models=()),
-    "not json",
-])
+@pytest.mark.parametrize(
+    "stdout",
+    [
+        claude_result(models=("asale-codex",)),
+        claude_result(is_error=True),
+        claude_result(models=()),
+        "not json",
+    ],
+)
 def test_a_ping_that_does_not_reach_anthropic_fails_the_unit(tmp_path, stdout):
-    assert wa.main(env=anchor_env(tmp_path), clock=lambda: at(7),
-                   opener=FakeOpener([usage(None)]), run=Ran(stdout=stdout),
-                   sleep=lambda s: None, log=lambda m: None) == 1
+    assert (
+        wa.main(
+            env=anchor_env(tmp_path),
+            clock=lambda: at(7),
+            opener=FakeOpener([usage(None)]),
+            run=Ran(stdout=stdout),
+            sleep=lambda s: None,
+            log=lambda m: None,
+        )
+        == 1
+    )
 
 
 def test_the_usage_request_carries_the_oauth_beta_header(tmp_path):
@@ -830,14 +1012,26 @@ def test_the_anchor_defaults_to_a_dry_run(tmp_path):
     ran = Ran()
     env = anchor_env(tmp_path)
     del env["ANCHOR_DRY_RUN"]
-    wa.main(env=env, clock=lambda: at(7), opener=FakeOpener([usage(None)]),
-            run=ran, sleep=lambda s: None, log=lambda m: None)
+    wa.main(
+        env=env,
+        clock=lambda: at(7),
+        opener=FakeOpener([usage(None)]),
+        run=ran,
+        sleep=lambda s: None,
+        log=lambda m: None,
+    )
     assert ran.argvs == []
 
 
 def test_a_dry_run_never_sleeps_until_the_reset(tmp_path):
     slept = []
     env = anchor_env(tmp_path, ANCHOR_DRY_RUN="1")
-    wa.main(env=env, clock=lambda: at(14), opener=FakeOpener([usage(at(18, 40))]),
-            run=Ran(), sleep=slept.append, log=lambda m: None)
+    wa.main(
+        env=env,
+        clock=lambda: at(14),
+        opener=FakeOpener([usage(at(18, 40))]),
+        run=Ran(),
+        sleep=slept.append,
+        log=lambda m: None,
+    )
     assert slept == []

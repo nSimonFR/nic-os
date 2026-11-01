@@ -6,11 +6,18 @@
 #               stops and frees ~13 MB; next IDE heartbeat wakes it.
 # Storage     : SQLite at /var/lib/wakapi/wakapi.db (DynamicUser → /var/lib/private/wakapi).
 # Daily backup at 03:45 → /mnt/data/backups/wakapi/ (picked up by storj-backup).
-{ config, pkgs, lib, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  tailnetFqdn,
+  ...
+}:
 let
   externalPort = 3030;
-  backendPort  = 3031;
-in {
+  backendPort = 3031;
+in
+{
   services.wakapi = {
     enable = true;
     # WAKAPI_PASSWORD_SALT and WAKAPI_MAIL_SMTP_PASS (Proton Bridge token),
@@ -80,15 +87,15 @@ in {
   # a warm SQLite cache) before binding the listen socket. Without the
   # probe, the proxy races the listen() and the first heartbeat fails.
   services.socketActivate.wakapi = {
-    enable    = true;
-    realUnit  = "wakapi.service";
-    listen    = [ "127.0.0.1:${toString externalPort}" ];
-    backend   = "127.0.0.1:${toString backendPort}";
-    idleSec   = 600;
+    enable = true;
+    realUnit = "wakapi.service";
+    listen = [ "127.0.0.1:${toString externalPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
     readyProbe = {
-      url          = "http://127.0.0.1:${toString backendPort}/api/health";
+      url = "http://127.0.0.1:${toString backendPort}/api/health";
       expectStatus = 200;
-      timeoutSec   = 30;
+      timeoutSec = 30;
     };
   };
 
@@ -99,7 +106,9 @@ in {
 
   systemd.services.wakapi-backup = {
     description = "Wakapi SQLite database backup";
-    serviceConfig = { Type = "oneshot"; };
+    serviceConfig = {
+      Type = "oneshot";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -112,24 +121,27 @@ in {
   systemd.timers.wakapi-backup = {
     description = "Daily Wakapi backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:45:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:45:00";
+      Persistent = true;
+    };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.wakapi = {
-    backup        = [ "unit" ];
-    backupUnits   = [ "wakapi-backup.service" ];   # declared just above
-    heavyUnits    = [ "wakapi.service" ];
+    backup = [ "unit" ];
+    backupUnits = [ "wakapi-backup.service" ]; # declared just above
+    heavyUnits = [ "wakapi.service" ];
     heavyPriority = 140;
 
     public = {
-      order   = 190;
-      port    = 3030;
+      order = 190;
+      port = 3030;
       backend = "http://127.0.0.1:3030";
       tile = {
-        name        = "Wakapi";
-        icon        = "wakatime.svg";
-        category    = "Apps";
+        name = "Wakapi";
+        icon = "wakatime.svg";
+        category = "Apps";
         description = "Coding stats (WakaTime-compatible)";
         # Coding hours, from wakapi's own `durations` table — heartbeat/language/user
         # row counts said nothing about how much was actually coded.
@@ -138,9 +150,24 @@ in {
           url = "http://127.0.0.1:8087/wakapi";
           refreshInterval = 3600000;
           mappings = [
-            { field = "today";    label = "Today";    format = "float"; suffix = "h"; }
-            { field = "last_30d"; label = "30 days";  format = "float"; suffix = "h"; }
-            { field = "total";    label = "All time"; format = "float"; suffix = "h"; }
+            {
+              field = "today";
+              label = "Today";
+              format = "float";
+              suffix = "h";
+            }
+            {
+              field = "last_30d";
+              label = "30 days";
+              format = "float";
+              suffix = "h";
+            }
+            {
+              field = "total";
+              label = "All time";
+              format = "float";
+              suffix = "h";
+            }
           ];
         };
       };

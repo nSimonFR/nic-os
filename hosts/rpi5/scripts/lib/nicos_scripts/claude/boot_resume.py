@@ -109,11 +109,11 @@ class Config:
     org_uuid: str = ""
     base: str = "https://api.anthropic.com"
     beta: str = "environments-2025-11-01"
-    start_delay: int = 18   # let the bridge register its env + warm its poll loop
-    delay: int = 20         # between reconnects (each spawns a worker)
-    max_revive: int = 6     # leave headroom under bridge capacity 8
-    recency: int = 86400    # only revive sessions active within 24h
-    cooldown: int = 600     # don't re-revive the same session within 10min
+    start_delay: int = 18  # let the bridge register its env + warm its poll loop
+    delay: int = 20  # between reconnects (each spawns a worker)
+    max_revive: int = 6  # leave headroom under bridge capacity 8
+    recency: int = 86400  # only revive sessions active within 24h
+    cooldown: int = 600  # don't re-revive the same session within 10min
     # The one-shot seam (shared/notify.nix `send`), already carrying the bot-token
     # path and chat id. See telegram() below.
     telegram_send: str = ""
@@ -133,13 +133,19 @@ class Config:
             projects_dir=path_of("CRC_PROJECTS_DIR", home / ".claude/projects"),
             snapshot_file=path_of(
                 "CRC_SNAPSHOT_FILE",
-                home / ".claude/state/claude-rc-boot-resume/snapshot.json"),
+                home / ".claude/state/claude-rc-boot-resume/snapshot.json",
+            ),
             state_file=path_of(
                 "CRC_STATE_FILE",
-                home / ".claude/state/claude-rc-boot-resume/handled.json"),
+                home / ".claude/state/claude-rc-boot-resume/handled.json",
+            ),
             # ~/.claude-rc, NOT ~/.claude — the latter's copy goes stale.
-            cred_file=path_of("CRC_CREDENTIALS_FILE", home / ".claude-rc/.credentials.json"),
-            worktrees_dir=path_of("CRC_WORKTREES_DIR", home / "nic-os/.claude/worktrees"),
+            cred_file=path_of(
+                "CRC_CREDENTIALS_FILE", home / ".claude-rc/.credentials.json"
+            ),
+            worktrees_dir=path_of(
+                "CRC_WORKTREES_DIR", home / "nic-os/.claude/worktrees"
+            ),
             device_name=env_str("CRC_DEVICE_NAME", "rpi5", env),
             bridge_dir=bridge_dir,
             config_dir=path_of("CRC_CONFIG_DIR", home / ".claude-rc"),
@@ -179,7 +185,9 @@ def telegram(cfg, msg, run=None):
     try:
         (run or subprocess.run)(
             [cfg.telegram_send, "--mode", "plain", msg],
-            stdout=subprocess.DEVNULL, timeout=30, check=False,
+            stdout=subprocess.DEVNULL,
+            timeout=30,
+            check=False,
         )
     except Exception as e:  # noqa: BLE001 — best effort
         log(f"telegram notify failed: {e}")
@@ -227,6 +235,7 @@ def worktree_last_active(cfg, cwd):
 
 # ---------------------------------------------------------------- snapshot ----
 
+
 def cmd_snapshot(cfg, now=None):
     """Record the recently-active bridge sessions so a later (restarted) instance
     knows what to revive.
@@ -256,12 +265,15 @@ def cmd_snapshot(cfg, now=None):
             "localUuid": None,
             "lastActive": la,
         }
-    save_json(cfg.snapshot_file, {"savedAt": int(now), "sessions": list(records.values())})
+    save_json(
+        cfg.snapshot_file, {"savedAt": int(now), "sessions": list(records.values())}
+    )
     log(f"snapshot: {len(records)} recently-active session(s) -> {cfg.snapshot_file}")
     return records
 
 
 # ------------------------------------------------------------------ resume ----
+
 
 def oauth_token(cfg):
     return json.loads(cfg.cred_file.read_text())["claudeAiOauth"]["accessToken"]
@@ -293,11 +305,17 @@ def current_env_id(cfg, tok, opener=None):
         return env
 
     log("resume: no bridge pointer; falling back to /v1/environments listing")
-    req = urllib.request.Request(f"{cfg.base}/v1/environments", headers=cfg.headers(tok))
+    req = urllib.request.Request(
+        f"{cfg.base}/v1/environments", headers=cfg.headers(tok)
+    )
     d = json.loads((opener or urllib.request.urlopen)(req, timeout=20).read())
     items = d.get("data") or d.get("environments") or (d if isinstance(d, list) else [])
     prefix = f"{cfg.device_name}:{Path(cfg.bridge_dir).name}:"
-    mine = [e for e in items if isinstance(e, dict) and str(e.get("name", "")).startswith(prefix)]
+    mine = [
+        e
+        for e in items
+        if isinstance(e, dict) and str(e.get("name", "")).startswith(prefix)
+    ]
     if not mine:
         return None
     mine.sort(key=lambda e: e.get("created_at", ""), reverse=True)
@@ -308,7 +326,9 @@ def reconnect(cfg, tok, env_id, cse, opener=None):
     body = json.dumps({"session_id": cse}).encode()
     req = urllib.request.Request(
         f"{cfg.base}/v1/environments/{env_id}/bridge/reconnect",
-        data=body, method="POST", headers=cfg.headers(tok),
+        data=body,
+        method="POST",
+        headers=cfg.headers(tok),
     )
     try:
         r = (opener or urllib.request.urlopen)(req, timeout=20)
@@ -342,16 +362,22 @@ def cmd_resume(cfg, opener=None, sleep=time.sleep, now=None, notify=None):
         notify(f"⚠️ claude-rc boot-resume: environment lookup failed ({e})")
         return None
     if not env_id:
-        log(f"resume: no environment named '{cfg.device_name}:*' found — bridge not registered yet?")
+        log(
+            f"resume: no environment named '{cfg.device_name}:*' found — bridge not registered yet?"
+        )
         return None
-    log(f"resume: environment={env_id} dry_run={cfg.dry_run} candidates={len(sessions)}")
+    log(
+        f"resume: environment={env_id} dry_run={cfg.dry_run} candidates={len(sessions)}"
+    )
 
     revived = skipped_stale = skipped_cooldown = failed = 0
     done = []
     for rec in sorted(sessions, key=lambda r: r.get("lastActive", 0), reverse=True):
         if revived >= cfg.max_revive:
-            log(f"resume: hit MAX_REVIVE={cfg.max_revive}; "
-                f"{len(sessions) - cfg.max_revive} not revived this run")
+            log(
+                f"resume: hit MAX_REVIVE={cfg.max_revive}; "
+                f"{len(sessions) - cfg.max_revive} not revived this run"
+            )
             break
         cse = rec.get("cseId")
         cwd = rec.get("cwd", "")
@@ -386,15 +412,21 @@ def cmd_resume(cfg, opener=None, sleep=time.sleep, now=None, notify=None):
             failed += 1
 
     save_json(cfg.state_file, state)
-    summary = (f"{'[dry-run] ' if cfg.dry_run else ''}claude-rc boot-resume: "
-               f"revived={revived} stale={skipped_stale} cooldown={skipped_cooldown} "
-               f"failed={failed}")
+    summary = (
+        f"{'[dry-run] ' if cfg.dry_run else ''}claude-rc boot-resume: "
+        f"revived={revived} stale={skipped_stale} cooldown={skipped_cooldown} "
+        f"failed={failed}"
+    )
     log(summary)
     if revived or failed:
         short = ", ".join(c[4:12] for c in done)
         notify(f"🔁 {summary}" + (f"\nrevived: {short}" if short else ""))
-    return {"revived": revived, "stale": skipped_stale,
-            "cooldown": skipped_cooldown, "failed": failed}
+    return {
+        "revived": revived,
+        "stale": skipped_stale,
+        "cooldown": skipped_cooldown,
+        "failed": failed,
+    }
 
 
 def main(argv=None, env=None):

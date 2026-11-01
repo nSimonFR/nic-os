@@ -23,7 +23,9 @@ USER_KEY = bytes(range(64))
 
 def wrap(password, user_key=USER_KEY):
     mkey = bwcrypto.master_key(password, GRANTEE, KDF)
-    return bwcrypto.password_hash(mkey, password), bwcrypto.encrypt(user_key, *bwcrypto.stretch(mkey))
+    return bwcrypto.password_hash(mkey, password), bwcrypto.encrypt(
+        user_key, *bwcrypto.stretch(mkey)
+    )
 
 
 class FakeServer:
@@ -32,7 +34,11 @@ class FakeServer:
     def __init__(self, password, status=eb.EA_CONFIRMED, devices=None, ciphers=()):
         self.hash, self.akey = wrap(password)
         self.ea = {"id": "ea1", "status": status, "waitTimeDays": 3, "email": GRANTOR}
-        self.devices = devices if devices is not None else [{"identifier": eb.DEVICE_ID, "name": eb.TAG}]
+        self.devices = (
+            devices
+            if devices is not None
+            else [{"identifier": eb.DEVICE_ID, "name": eb.TAG}]
+        )
         self.ciphers = list(ciphers)
         self.calls = []
         self.fail_password_change = False
@@ -45,7 +51,10 @@ class FakeServer:
             return self.reply({"kdf": 0, "kdfIterations": KDF["iterations"]})
         if path == "/identity/connect/token":
             form = dict(urllib.parse.parse_qsl(body.decode()))
-            if form["password"] != self.hash or form["device_identifier"] != eb.DEVICE_ID:
+            if (
+                form["password"] != self.hash
+                or form["device_identifier"] != eb.DEVICE_ID
+            ):
                 raise self.error(req, 400)
             return self.reply({"access_token": "tok", "Key": self.akey})
         if req.get_header("Authorization") != "Bearer tok":
@@ -87,9 +96,15 @@ class FakeServer:
 
 
 def cfg_for(tmp, **kw):
-    base = dict(switch_dir=str(tmp and tmp / "switch"), state_dir=str(tmp and tmp / "state"),
-                vault_url="http://vw/vw", public_url="https://pub/vaultwarden",
-                grantee=GRANTEE, grantor=GRANTOR, dry_run=False)
+    base = dict(
+        switch_dir=str(tmp and tmp / "switch"),
+        state_dir=str(tmp and tmp / "state"),
+        vault_url="http://vw/vw",
+        public_url="https://pub/vaultwarden",
+        grantee=GRANTEE,
+        grantor=GRANTOR,
+        dry_run=False,
+    )
     base.update(kw)
     return eb.Config(**base)
 
@@ -102,14 +117,22 @@ def world(tmp_path):
     def write_switch(cycle):
         (tmp_path / "switch" / "state.json").write_text(json.dumps({"cycle": cycle}))
 
-    (tmp_path / "switch" / "config.json").write_text(json.dumps(
-        {"owner_name": "Owner", "timezone": "Europe/Paris"}))
-    (tmp_path / "switch" / "contacts.json").write_text(json.dumps({"contacts": [
-        {"id": "c1", "name": "Mum", "email": "mum@example.com"},
-        {"id": "c2", "name": "Dad", "email": "dad@example.com"},
-    ]}))
-    (tmp_path / "state" / "state.json").write_text(json.dumps(
-        {"password": "old-pass", "pending": None, "fire": None}))
+    (tmp_path / "switch" / "config.json").write_text(
+        json.dumps({"owner_name": "Owner", "timezone": "Europe/Paris"})
+    )
+    (tmp_path / "switch" / "contacts.json").write_text(
+        json.dumps(
+            {
+                "contacts": [
+                    {"id": "c1", "name": "Mum", "email": "mum@example.com"},
+                    {"id": "c2", "name": "Dad", "email": "dad@example.com"},
+                ]
+            }
+        )
+    )
+    (tmp_path / "state" / "state.json").write_text(
+        json.dumps({"password": "old-pass", "pending": None, "fire": None})
+    )
     write_switch(None)
     return tmp_path, write_switch
 
@@ -120,10 +143,20 @@ def state_of(tmp):
 
 def go(tmp, server, cmd="run", mails=None, **kw):
     lines = []
-    send = (lambda to, subj, body: mails.append((to, body))) if mails is not None else (lambda *a: None)
-    env = {"SWITCH_DIR": str(tmp / "switch"), "STATE_DIR": str(tmp / "state"),
-           "VAULT_URL": "http://vw/vw", "PUBLIC_URL": "https://pub/vaultwarden",
-           "GRANTEE_EMAIL": GRANTEE, "GRANTOR_EMAIL": GRANTOR, "DRY_RUN": "0"}
+    send = (
+        (lambda to, subj, body: mails.append((to, body)))
+        if mails is not None
+        else (lambda *a: None)
+    )
+    env = {
+        "SWITCH_DIR": str(tmp / "switch"),
+        "STATE_DIR": str(tmp / "state"),
+        "VAULT_URL": "http://vw/vw",
+        "PUBLIC_URL": "https://pub/vaultwarden",
+        "GRANTEE_EMAIL": GRANTEE,
+        "GRANTOR_EMAIL": GRANTOR,
+        "DRY_RUN": "0",
+    }
     env.update(kw)
     rc = eb.main([cmd], env=env, opener=server, send=send, log=lines.append)
     return rc, lines
@@ -133,6 +166,7 @@ FIRED = {"stage": "fired", "fired_at": 1000, "notified": {"c1": 1001}}
 
 
 # ── crypto ───────────────────────────────────────────────────────────────────
+
 
 def test_encstring_round_trips():
     enc, mac = bwcrypto.stretch(b"k" * 32)
@@ -153,10 +187,13 @@ def test_master_key_salts_with_the_normalised_email():
 
 def test_argon2id_master_key_is_deterministic():
     kdf = {"type": bwcrypto.ARGON2ID, "iterations": 1, "memory": 1, "parallelism": 1}
-    assert bwcrypto.master_key("pw", GRANTEE, kdf) == bwcrypto.master_key("pw", GRANTEE, kdf)
+    assert bwcrypto.master_key("pw", GRANTEE, kdf) == bwcrypto.master_key(
+        "pw", GRANTEE, kdf
+    )
 
 
 # ── quiet switch ─────────────────────────────────────────────────────────────
+
 
 def test_a_quiet_switch_never_touches_vaultwarden(world):
     tmp, write = world
@@ -174,6 +211,7 @@ def test_an_unreadable_switch_state_fails_loudly(world):
 
 # ── firing ───────────────────────────────────────────────────────────────────
 
+
 def test_firing_requests_access_rotates_and_mails_the_working_password(world):
     tmp, write = world
     write(FIRED)
@@ -182,9 +220,17 @@ def test_firing_requests_access_rotates_and_mails_the_working_password(world):
 
     assert server.ea["status"] == eb.EA_INITIATED
     new = state_of(tmp)["password"]
-    assert new != "old-pass" and server.opens_with(new) and not server.opens_with("old-pass")
+    assert (
+        new != "old-pass"
+        and server.opens_with(new)
+        and not server.opens_with("old-pass")
+    )
     assert [to for to, _ in mails] == ["mum@example.com"]
-    assert new in mails[0][1] and GRANTEE in mails[0][1] and "https://pub/vaultwarden" in mails[0][1]
+    assert (
+        new in mails[0][1]
+        and GRANTEE in mails[0][1]
+        and "https://pub/vaultwarden" in mails[0][1]
+    )
 
 
 def test_contacts_reached_later_get_the_same_password_once(world):
@@ -250,13 +296,24 @@ def test_dry_run_is_the_default():
 
 # ── {vault_access} hook ──────────────────────────────────────────────────────
 
+
 def hook(tmp, server, contact="c1"):
     printed = []
-    rc = eb.main(["access", contact], env={
-        "SWITCH_DIR": str(tmp / "switch"), "STATE_DIR": str(tmp / "state"),
-        "VAULT_URL": "http://vw/vw", "PUBLIC_URL": "https://pub/vaultwarden",
-        "GRANTEE_EMAIL": GRANTEE, "GRANTOR_EMAIL": GRANTOR, "DRY_RUN": "0"},
-        opener=server, log=lambda m: None, out=printed.append)
+    rc = eb.main(
+        ["access", contact],
+        env={
+            "SWITCH_DIR": str(tmp / "switch"),
+            "STATE_DIR": str(tmp / "state"),
+            "VAULT_URL": "http://vw/vw",
+            "PUBLIC_URL": "https://pub/vaultwarden",
+            "GRANTEE_EMAIL": GRANTEE,
+            "GRANTOR_EMAIL": GRANTOR,
+            "DRY_RUN": "0",
+        },
+        opener=server,
+        log=lambda m: None,
+        out=printed.append,
+    )
     return rc, "\n".join(printed)
 
 
@@ -308,6 +365,7 @@ def test_a_failing_hook_prints_nothing_so_the_switch_uses_its_fallback(world):
 
 # ── false alarm ──────────────────────────────────────────────────────────────
 
+
 def test_a_check_in_after_firing_kills_the_mailed_password(world):
     tmp, write = world
     write(FIRED)
@@ -338,17 +396,21 @@ def test_a_second_firing_starts_over(world):
 
 # ── health check ─────────────────────────────────────────────────────────────
 
+
 def test_check_passes_on_a_clean_setup(world):
     tmp, _ = world
     assert go(tmp, FakeServer("old-pass"), "check")[0] == 0
 
 
-@pytest.mark.parametrize("server", [
-    FakeServer("someone-changed-it"),
-    FakeServer("old-pass", status=0),
-    FakeServer("old-pass", devices=[{"identifier": "phone", "name": "iPhone"}]),
-    FakeServer("old-pass", ciphers=[{"id": "x"}]),
-])
+@pytest.mark.parametrize(
+    "server",
+    [
+        FakeServer("someone-changed-it"),
+        FakeServer("old-pass", status=0),
+        FakeServer("old-pass", devices=[{"identifier": "phone", "name": "iPhone"}]),
+        FakeServer("old-pass", ciphers=[{"id": "x"}]),
+    ],
+)
 def test_check_flags_anything_that_would_break_or_betray_the_bridge(world, server):
     tmp, _ = world
     assert go(tmp, server, "check")[0] == 1
@@ -358,13 +420,31 @@ def test_seed_verifies_before_storing(world):
     tmp, _ = world
     (tmp / "state" / "state.json").unlink()
     server = FakeServer("the-pass")
-    rc = eb.main(["seed"], env={"STATE_DIR": str(tmp / "state"), "VAULT_URL": "http://vw/vw",
-                                "GRANTEE_EMAIL": GRANTEE, "GRANTOR_EMAIL": GRANTOR},
-                 opener=server, log=lambda m: None, stdin=io.StringIO("wrong\n"))
+    rc = eb.main(
+        ["seed"],
+        env={
+            "STATE_DIR": str(tmp / "state"),
+            "VAULT_URL": "http://vw/vw",
+            "GRANTEE_EMAIL": GRANTEE,
+            "GRANTOR_EMAIL": GRANTOR,
+        },
+        opener=server,
+        log=lambda m: None,
+        stdin=io.StringIO("wrong\n"),
+    )
     assert rc == 1 and not os.path.exists(tmp / "state" / "state.json")
-    rc = eb.main(["seed"], env={"STATE_DIR": str(tmp / "state"), "VAULT_URL": "http://vw/vw",
-                                "GRANTEE_EMAIL": GRANTEE, "GRANTOR_EMAIL": GRANTOR},
-                 opener=server, log=lambda m: None, stdin=io.StringIO("the-pass\n"))
+    rc = eb.main(
+        ["seed"],
+        env={
+            "STATE_DIR": str(tmp / "state"),
+            "VAULT_URL": "http://vw/vw",
+            "GRANTEE_EMAIL": GRANTEE,
+            "GRANTOR_EMAIL": GRANTOR,
+        },
+        opener=server,
+        log=lambda m: None,
+        stdin=io.StringIO("the-pass\n"),
+    )
     assert rc == 0 and state_of(tmp)["password"] == "the-pass"
 
 

@@ -15,7 +15,14 @@
 #   and refreshed automatically on later runs. If Epic occasionally forces an
 #   hCaptcha, the tool spins up a portal (loopback :3211, exposed tailnet-only on
 #   :3750 — see nic.services.epicgames-freegames.public below) and sends you a link.
-{ config, pkgs, lib, telegramChatId, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  telegramChatId,
+  tailnetFqdn,
+  ...
+}:
 let
   # ── Tunables ───────────────────────────────────────────────────────────────
   # Epic account email is injected from agenix at render time (not a secret, but
@@ -147,7 +154,7 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.epicgames-freegames = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote =
       "${stateDir} holds a generated config.json plus an Epic device-auth "
       + "session. The config is rendered from the store on every run, and the "
@@ -160,8 +167,8 @@ in
     # an interactive solve. Tailnet-only serve so the Telegram captcha link
     # resolves from a phone.
     public = {
-      order   = 380;
-      port    = 3750;
+      order = 380;
+      port = 3750;
       backend = "http://127.0.0.1:${toString portalPort}";
     };
   };

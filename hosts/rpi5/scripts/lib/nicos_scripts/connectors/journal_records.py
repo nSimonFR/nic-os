@@ -30,10 +30,14 @@ def journal_date(t):
 
 
 def best(value, history, day):
-    """"all", "year" or None: `value` beats every earlier one of `history`
+    """ "all", "year" or None: `value` beats every earlier one of `history`
     ([(date, value)]), or every one of the 365 days before `day`."""
     prior = [(d, v) for d, v in history if d < day]
-    if not value or len(prior) < MIN_PRIOR or (day - min(d for d, _ in prior)).days < MIN_SPAN_DAYS:
+    if (
+        not value
+        or len(prior) < MIN_PRIOR
+        or (day - min(d for d, _ in prior)).days < MIN_SPAN_DAYS
+    ):
         return None
     if value > max(v for _, v in prior):
         return "all"
@@ -58,7 +62,10 @@ def streak(dates, day, weeks=False):
     """How many consecutive days (ISO weeks) with an entry in `dates` end with
     `day`'s; 0 when `day` has none."""
     key = (lambda d: d - timedelta(days=d.weekday())) if weeks else (lambda d: d)
-    have, step = {key(d) for d in dates if d <= day}, timedelta(weeks=1) if weeks else timedelta(days=1)
+    have, step = (
+        {key(d) for d in dates if d <= day},
+        timedelta(weeks=1) if weeks else timedelta(days=1),
+    )
     n, cur = 0, key(day)
     while cur in have:
         n, cur = n + 1, cur - step
@@ -82,13 +89,20 @@ def _int_fr(n):
 
 # --- per source -----------------------------------------------------------
 
+
 def ride_history(run, hi, db="freereps", runuser="runuser", psql="psql"):
     """[(epoch start, km, minutes)] of every ride started before `hi`."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT extract(epoch FROM start_time)::bigint, coalesce(distance, 0), coalesce(duration_sec, 0)
         FROM workouts  -- ride history
         WHERE name = 'Cycling' AND start_time < to_timestamp({int(hi)})
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return [(int(r[0]), float(r[1]) / 1000, float(r[2]) / 60) for r in rows]
 
 
@@ -98,20 +112,40 @@ def ride_badges(rides, day):
     today = [(km, mins) for t, km, mins in rides if journal_date(t) == day]
     if not today:
         return []
-    before = [(journal_date(t), km, mins) for t, km, mins in rides if journal_date(t) < day]
+    before = [
+        (journal_date(t), km, mins) for t, km, mins in rides if journal_date(t) < day
+    ]
     per_day = {}
     for d, km, _ in before:
         per_day[d] = per_day.get(d, 0) + km
     longest = max(km for km, _ in today)
-    found = [(best(longest, [(d, km) for d, km, _ in before], day), f"plus longue sortie ({_n(longest)} km)")]
+    found = [
+        (
+            best(longest, [(d, km) for d, km, _ in before], day),
+            f"plus longue sortie ({_n(longest)} km)",
+        )
+    ]
     if len(today) > 1:
         total = sum(km for km, _ in today)
-        found.append((best(total, list(per_day.items()), day), f"plus grosse journée ({_n(total)} km)"))
+        found.append(
+            (
+                best(total, list(per_day.items()), day),
+                f"plus grosse journée ({_n(total)} km)",
+            )
+        )
     speed = lambda km, mins: km / (mins / 60) if km >= FAST_RIDE_KM and mins else 0
     fastest = max(speed(km, mins) for km, mins in today)
     if fastest:
-        found.append((best(fastest, [(d, speed(km, m)) for d, km, m in before if speed(km, m)], day),
-                      f"sortie la plus rapide ({_n(fastest)} km/h)"))
+        found.append(
+            (
+                best(
+                    fastest,
+                    [(d, speed(km, m)) for d, km, m in before if speed(km, m)],
+                    day,
+                ),
+                f"sortie la plus rapide ({_n(fastest)} km/h)",
+            )
+        )
     lines = record_lines(found)
     s = streak_text(streak({journal_date(t) for t, _, _ in rides}, day))
     return lines + ([f"- {s}"] if s else [])
@@ -119,7 +153,9 @@ def ride_badges(rides, day):
 
 def step_history(run, hi, db="freereps", runuser="runuser", psql="psql"):
     """{journal day: steps} before `hi`, counted as activity_totals does."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT (date_trunc('day', time AT TIME ZONE 'Europe/Paris' - interval '{DAY_START_H} hours'))::date, sum(qty)
         FROM (
             SELECT DISTINCT ON (time) time, qty FROM health_metrics  -- step history
@@ -127,7 +163,11 @@ def step_history(run, hi, db="freereps", runuser="runuser", psql="psql"):
               AND time < to_timestamp({int(hi)})
             ORDER BY time, client NULLS LAST
         ) hourly GROUP BY 1
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return {datetime.strptime(r[0], "%Y-%m-%d").date(): float(r[1] or 0) for r in rows}
 
 
@@ -135,10 +175,18 @@ def step_badges(steps, day):
     """Lines for the activity section: the step record, the 10 000-step streak."""
     if not steps.get(day):
         return []
-    lines = record_lines([(best(steps[day], list(steps.items()), day),
-                           f"plus de pas en un jour ({_int_fr(steps[day])})")])
-    s = streak_text(streak({d for d, n in steps.items() if n >= STEP_GOAL}, day),
-                    what=f" à {_int_fr(STEP_GOAL)} pas")
+    lines = record_lines(
+        [
+            (
+                best(steps[day], list(steps.items()), day),
+                f"plus de pas en un jour ({_int_fr(steps[day])})",
+            )
+        ]
+    )
+    s = streak_text(
+        streak({d for d, n in steps.items() if n >= STEP_GOAL}, day),
+        what=f" à {_int_fr(STEP_GOAL)} pas",
+    )
     return lines + ([f"- {s}"] if s else [])
 
 
@@ -149,14 +197,26 @@ def climbing_badges(sessions, day):
     for s in sessions:
         d = journal_date(datetime.fromisoformat(s["startDate"]).timestamp())
         tops, height = by_day.get(d, (0, 0))
-        by_day[d] = (tops + (s.get("tops") or 0), height + (s.get("climbedHeight") or 0))
+        by_day[d] = (
+            tops + (s.get("tops") or 0),
+            height + (s.get("climbedHeight") or 0),
+        )
     if day not in by_day:
         return []
     tops, height = by_day[day]
-    found = [(best(tops, [(d, t) for d, (t, _) in by_day.items()], day), f"plus de tops en une séance ({tops})")]
+    found = [
+        (
+            best(tops, [(d, t) for d, (t, _) in by_day.items()], day),
+            f"plus de tops en une séance ({tops})",
+        )
+    ]
     if height:
-        found.append((best(height, [(d, h) for d, (_, h) in by_day.items()], day),
-                      f"plus haut grimpé en une séance ({height} m)"))
+        found.append(
+            (
+                best(height, [(d, h) for d, (_, h) in by_day.items()], day),
+                f"plus haut grimpé en une séance ({height} m)",
+            )
+        )
     s = streak_text(streak(by_day, day, weeks=True), weeks=True)
     return record_lines(found) + ([f"- {s}"] if s else [])
 
@@ -165,12 +225,16 @@ def energy_history(path, hi, connect=sqlite3.connect):
     """{journal day: kWh} of the Linky meter's complete days before `hi`."""
     db = connect(f"file:{path}?mode=ro", uri=True)
     try:
-        meter = db.execute("SELECT id FROM statistics_meta WHERE source = 'linky' "
-                           "AND statistic_id NOT LIKE '%\\_cost' ESCAPE '\\'").fetchone()
+        meter = db.execute(
+            "SELECT id FROM statistics_meta WHERE source = 'linky' "
+            "AND statistic_id NOT LIKE '%\\_cost' ESCAPE '\\'"
+        ).fetchone()
         if not meter:
             return {}
-        rows = db.execute("SELECT start_ts, state FROM statistics WHERE metadata_id = ? AND start_ts < ?",
-                          (meter[0], hi)).fetchall()
+        rows = db.execute(
+            "SELECT start_ts, state FROM statistics WHERE metadata_id = ? AND start_ts < ?",
+            (meter[0], hi),
+        ).fetchall()
     finally:
         db.close()
     # Until 2026-02 the meter has one row per calendar day (at local midnight),
@@ -185,12 +249,20 @@ def energy_history(path, hi, connect=sqlite3.connect):
         d = local if per_date[local] == 1 else journal_date(t)
         days[d] = days.get(d, 0) + (wh or 0)
         hours[d] = hours.get(d, 0) + (24 if per_date[local] == 1 else 1)
-    return {d: wh / 1000 for d, wh in days.items() if hours[d] >= 23}  # as energy(): one hour may be missing
+    return {
+        d: wh / 1000 for d, wh in days.items() if hours[d] >= 23
+    }  # as energy(): one hour may be missing
 
 
 def energy_badges(kwh, day):
     """The day's consumption record, if any."""
     if not kwh.get(day):
         return []
-    return record_lines([(best(kwh[day], list(kwh.items()), day),
-                          f"plus forte conso en un jour ({_n(kwh[day])} kWh)")])
+    return record_lines(
+        [
+            (
+                best(kwh[day], list(kwh.items()), day),
+                f"plus forte conso en un jour ({_n(kwh[day])} kWh)",
+            )
+        ]
+    )

@@ -47,10 +47,20 @@ COUNT_KEYS = ("tops", "flashs", "tried", "retops")
 # 2: boulder `picture` kept (2026-10-25).
 DETAIL_VERSION = 2
 DETAIL_KEYS = ("boulders", "triedBoulders", "retopBoulders", "detailVersion")
-DROP_KEYS = frozenset({
-    "setterProfile", "userAvatars", "userFacebookId", "userGender",
-    "userName", "gymLogo", "gymLogoGym", "gymSpraywallPicture", "likers", "_isNew",
-})
+DROP_KEYS = frozenset(
+    {
+        "setterProfile",
+        "userAvatars",
+        "userFacebookId",
+        "userGender",
+        "userName",
+        "gymLogo",
+        "gymLogoGym",
+        "gymSpraywallPicture",
+        "likers",
+        "_isNew",
+    }
+)
 
 
 class ArkoseError(Exception):
@@ -86,16 +96,20 @@ def should_sync(token, last_sync, now, cfg):
     captured = token.get("capturedAt", 0)
     if not token.get("token"):
         return False
-    return (captured > last_sync
-            or now - captured < cfg.followup_s
-            or now - last_sync >= cfg.daily_s)
+    return (
+        captured > last_sync
+        or now - captured < cfg.followup_s
+        or now - last_sync >= cfg.daily_s
+    )
 
 
 def clean(value):
     """Drop images/profile noise, turn EJSON {"$date": ms} into ISO-8601 UTC."""
     if isinstance(value, dict):
         if set(value) == {"$date"}:
-            return datetime.fromtimestamp(value["$date"] / 1000, timezone.utc).isoformat()
+            return datetime.fromtimestamp(
+                value["$date"] / 1000, timezone.utc
+            ).isoformat()
         return {k: clean(v) for k, v in value.items() if k not in DROP_KEYS}
     if isinstance(value, list):
         return [clean(v) for v in value]
@@ -109,11 +123,17 @@ def _start_ts(session):
 def needs_detail(session, stored, now):
     if session.get("isEmpty"):
         return False
-    if stored is None or "boulders" not in stored or stored.get("detailVersion") != DETAIL_VERSION:
+    if (
+        stored is None
+        or "boulders" not in stored
+        or stored.get("detailVersion") != DETAIL_VERSION
+    ):
         return True
-    return (not session.get("isClosed")
-            or now - _start_ts(session) < RECENT_S
-            or _changed(session, stored))
+    return (
+        not session.get("isClosed")
+        or now - _start_ts(session) < RECENT_S
+        or _changed(session, stored)
+    )
 
 
 class DDP:
@@ -127,7 +147,11 @@ class DDP:
         while True:
             m = json.loads(self.conn.recv())
             if m.get("msg") == "ping":
-                self.conn.send(json.dumps({"msg": "pong", **({"id": m["id"]} if "id" in m else {})}))
+                self.conn.send(
+                    json.dumps(
+                        {"msg": "pong", **({"id": m["id"]} if "id" in m else {})}
+                    )
+                )
                 continue
             return m
 
@@ -142,7 +166,11 @@ class DDP:
 
     def call(self, method, *params):
         mid = str(next(self.ids))
-        self.conn.send(json.dumps({"msg": "method", "method": method, "params": list(params), "id": mid}))
+        self.conn.send(
+            json.dumps(
+                {"msg": "method", "method": method, "params": list(params), "id": mid}
+            )
+        )
         while True:
             m = self._recv()
             if m.get("msg") == "result" and m.get("id") == mid:
@@ -163,7 +191,12 @@ def fetch_sessions(ddp, user_id, stored):
     """
     out = []
     for page_no in range(MAX_PAGES):
-        page = ddp.call("_users.getUserSessions", {"userId": user_id, "skip": page_no * PAGE}) or []
+        page = (
+            ddp.call(
+                "_users.getUserSessions", {"userId": user_id, "skip": page_no * PAGE}
+            )
+            or []
+        )
         page = [clean(s) for s in page]
         if out and page and page[0]["_id"] == out[-PAGE]["_id"]:
             log("server ignored skip, stopping pagination")
@@ -187,8 +220,12 @@ def sync(ddp, token, store, now):
     for s in fetch_sessions(ddp, user_id, sessions):
         prev = sessions.get(s["_id"])
         if needs_detail(s, prev, now):
-            detail = clean(ddp.call("_users.getUserSessionBoulders",
-                                    {"sessionId": s["_id"], "userId": user_id}))
+            detail = clean(
+                ddp.call(
+                    "_users.getUserSessionBoulders",
+                    {"sessionId": s["_id"], "userId": user_id},
+                )
+            )
             for k in ("boulders", "triedBoulders", "retopBoulders"):
                 s[k] = detail.get(k, [])
             s["detailVersion"] = DETAIL_VERSION

@@ -11,8 +11,8 @@ busy=()
 
 # Column 3 is the user. greetd's own session is present on every idle beast
 # (users.users.greeter), so it never counts.
-sessions=$(loginctl list-sessions --no-legend 2>/dev/null \
-  | awk '{ print $3 }' | grep -vx 'greeter' | sort -u | tr '\n' ' ' || true)
+sessions=$(loginctl list-sessions --no-legend 2>/dev/null |
+  awk '{ print $3 }' | grep -vx 'greeter' | sort -u | tr '\n' ' ' || true)
 [ -n "${sessions// /}" ] && busy+=("session(s): ${sessions% }")
 
 if builds=$(pgrep -c -f 'nixos-rebuild|nix build|nix-build' 2>/dev/null) && [ "$builds" -gt 0 ]; then
@@ -21,14 +21,17 @@ fi
 
 # A compute app holding VRAM means an Immich ML job is running right now; the
 # model itself is evicted after 5 min idle, so an idle beast reports nothing.
-if gpu=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null) \
-   && [ -n "${gpu//[[:space:]]/}" ]; then
-  busy+=("$(grep -c . <<< "$gpu") process(es) on the GPU")
+if gpu=$(nvidia-smi --query-compute-apps=pid --format=csv,noheader 2>/dev/null) &&
+  [ -n "${gpu//[[:space:]]/}" ]; then
+  busy+=("$(grep -c . <<<"$gpu") process(es) on the GPU")
 fi
 
 if [ ${#busy[@]} -gt 0 ]; then
   printf 'beast-auto-poweroff: in use (%s) — re-arming for %s\n' \
-    "$(IFS='; '; echo "${busy[*]}")" "$BEAST_POWEROFF_AFTER"
+    "$(
+      IFS='; '
+      echo "${busy[*]}"
+    )" "$BEAST_POWEROFF_AFTER"
   # Fresh unit name: this one is still running, so its own name is taken.
   exec systemd-run --collect --on-active="$BEAST_POWEROFF_AFTER" \
     --unit="beast-auto-poweroff-$(date +%s)" \

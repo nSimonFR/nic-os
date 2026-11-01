@@ -10,11 +10,12 @@
 # Ad-hoc signed and without app-update.yml, so it never updates itself back to
 # the official nightly. Same bundle id as the official "T3 Code (Nightly)" app,
 # whose copy in /Applications has to go: both would share one data folder.
-{ lib
-, stdenvNoCC
-, fetchurl
-, unzip
-, t3code
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  unzip,
+  t3code,
 }:
 stdenvNoCC.mkDerivation {
   pname = "t3code-desktop";

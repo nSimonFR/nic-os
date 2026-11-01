@@ -64,8 +64,10 @@ def _headers(cfg):
 
 def _post(cfg, path, payload, opener=None):
     req = urllib.request.Request(
-        f"{cfg.immich_url}/api{path}", data=json.dumps(payload).encode(),
-        headers=_headers(cfg), method="POST",
+        f"{cfg.immich_url}/api{path}",
+        data=json.dumps(payload).encode(),
+        headers=_headers(cfg),
+        method="POST",
     )
     return http_json(req, timeout=60, opener=opener)
 
@@ -84,8 +86,10 @@ def is_incident(wf):
 def disable_workflow(cfg, opener=None):
     """None on success, else the error text — the alert must say which."""
     req = urllib.request.Request(
-        f"{cfg.immich_url}/api/workflows/{WORKFLOW}", data=b'{"enabled":false}',
-        headers=_headers(cfg), method="PUT",
+        f"{cfg.immich_url}/api/workflows/{WORKFLOW}",
+        data=b'{"enabled":false}',
+        headers=_headers(cfg),
+        method="PUT",
     )
     try:
         with (opener or urllib.request.urlopen)(req, timeout=20) as resp:
@@ -105,12 +109,23 @@ def uuid_archives(cfg, since, opener=None):
     """UUID-named archives created since `since`, every page."""
     out, page = [], 1
     while page:
-        d = _post(cfg, "/search/metadata", {
-            "visibility": "archive", "createdAfter": since.isoformat(),
-            "withExif": True, "size": 1000, "page": page,
-        }, opener=opener)["assets"]
-        out += [a for a in d.get("items") or []
-                if re.match(UUID_REGEX, a.get("originalFileName") or "")]
+        d = _post(
+            cfg,
+            "/search/metadata",
+            {
+                "visibility": "archive",
+                "createdAfter": since.isoformat(),
+                "withExif": True,
+                "size": 1000,
+                "page": page,
+            },
+            opener=opener,
+        )["assets"]
+        out += [
+            a
+            for a in d.get("items") or []
+            if re.match(UUID_REGEX, a.get("originalFileName") or "")
+        ]
         page = int(d["nextPage"]) if d.get("nextPage") else None
     return out
 
@@ -133,8 +148,11 @@ def classify(asset, albums):
 def false_positives(cfg, since, opener=None):
     flagged = []
     for asset in uuid_archives(cfg, since, opener=opener):
-        albums = get_json(f"{cfg.immich_url}/api/albums?assetId={asset['id']}",
-                          _headers(cfg), opener=opener)
+        albums = get_json(
+            f"{cfg.immich_url}/api/albums?assetId={asset['id']}",
+            _headers(cfg),
+            opener=opener,
+        )
         if reasons := classify(asset, albums):
             flagged.append((asset, reasons))
     return flagged
@@ -143,11 +161,14 @@ def false_positives(cfg, since, opener=None):
 def weekly_volumes(cfg, now, opener=None):
     """Archived per UTC week, current (partial) week first, then 8 completed."""
     monday = (now - timedelta(days=now.weekday())).replace(
-        hour=0, minute=0, second=0, microsecond=0)
+        hour=0, minute=0, second=0, microsecond=0
+    )
     out = [archived_count(cfg, monday, opener=opener)]
     for n in range(1, 9):
         start = monday - timedelta(weeks=n)
-        out.append(archived_count(cfg, start, start + timedelta(weeks=1), opener=opener))
+        out.append(
+            archived_count(cfg, start, start + timedelta(weeks=1), opener=opener)
+        )
     return out
 
 
@@ -161,19 +182,25 @@ def spike(volumes):
 def run(cfg, now=None, opener=None):
     """The message to print — "" means stay silent."""
     now = now or datetime.now(timezone.utc)
-    wf = get_json(f"{cfg.immich_url}/api/workflows/{WORKFLOW}", _headers(cfg), opener=opener)
+    wf = get_json(
+        f"{cfg.immich_url}/api/workflows/{WORKFLOW}", _headers(cfg), opener=opener
+    )
     if is_incident(wf):
         error = disable_workflow(cfg, opener=opener)
         status = "disabled" if error is None else f"DISABLE FAILED ({error})"
-        steps = [(s.get("method"), s.get("enabled"), s.get("config"))
-                 for s in wf.get("steps") or []]
-        return "\n".join([
-            "🔴 Immich WhatsApp archive incident",
-            f"Workflow {status}.",
-            f"enabled={wf.get('enabled')}; steps={steps}",
-            f"Archived in the last 7 days: "
-            f"{archived_count(cfg, now - timedelta(days=7), opener=opener)}",
-        ])
+        steps = [
+            (s.get("method"), s.get("enabled"), s.get("config"))
+            for s in wf.get("steps") or []
+        ]
+        return "\n".join(
+            [
+                "🔴 Immich WhatsApp archive incident",
+                f"Workflow {status}.",
+                f"enabled={wf.get('enabled')}; steps={steps}",
+                f"Archived in the last 7 days: "
+                f"{archived_count(cfg, now - timedelta(days=7), opener=opener)}",
+            ]
+        )
 
     flagged = false_positives(cfg, now - timedelta(days=cfg.window_days), opener=opener)
     spiked = spike(weekly_volumes(cfg, now, opener=opener))
@@ -185,11 +212,15 @@ def run(cfg, now=None, opener=None):
     if flagged:
         lines.append(f"Possible false positives: {len(flagged)}")
         for asset, reasons in flagged[:20]:
-            lines.append(f"• {asset['originalFileName']} — {asset['createdAt'][:10]}; "
-                         f"{'; '.join(reasons)}\n  {PUBLIC}{asset['id']}")
+            lines.append(
+                f"• {asset['originalFileName']} — {asset['createdAt'][:10]}; "
+                f"{'; '.join(reasons)}\n  {PUBLIC}{asset['id']}"
+            )
     if spiked:
-        lines.append(f"Archive volume spike: {spiked[0]} this week; "
-                     f"trailing 8-week median {spiked[1]}.")
+        lines.append(
+            f"Archive volume spike: {spiked[0]} this week; "
+            f"trailing 8-week median {spiked[1]}."
+        )
     return "\n".join(lines)
 
 

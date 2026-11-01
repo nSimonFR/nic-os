@@ -76,17 +76,26 @@ def sync(con, config_path):
         for product in config["products"]:
             slug = product["slug"]
             slugs.append(slug)
-            metadata = {k: v for k, v in product.items() if k not in {
-                "slug", "name", "category", "currency", "sources", "conditions"
-            }}
+            metadata = {
+                k: v
+                for k, v in product.items()
+                if k
+                not in {"slug", "name", "category", "currency", "sources", "conditions"}
+            }
             con.execute(
                 """INSERT INTO products(slug,name,category,currency,metadata_json,active,updated_at)
                    VALUES(?,?,?,?,?,1,?)
                    ON CONFLICT(slug) DO UPDATE SET name=excluded.name,
                    category=excluded.category,currency=excluded.currency,
                    metadata_json=excluded.metadata_json,active=1,updated_at=excluded.updated_at""",
-                (slug, product["name"], product["category"], product.get("currency", "EUR"),
-                 json.dumps(metadata, ensure_ascii=False, sort_keys=True), timestamp),
+                (
+                    slug,
+                    product["name"],
+                    product["category"],
+                    product.get("currency", "EUR"),
+                    json.dumps(metadata, ensure_ascii=False, sort_keys=True),
+                    timestamp,
+                ),
             )
             con.execute("DELETE FROM product_sources WHERE product_slug=?", (slug,))
             con.executemany(
@@ -95,21 +104,31 @@ def sync(con, config_path):
             )
             con.execute("DELETE FROM alert_conditions WHERE product_slug=?", (slug,))
             for condition in product.get("conditions", []):
-                extra = {k: v for k, v in condition.items() if k not in {
-                    "kind", "metric", "operator", "value", "baseline"
-                }}
+                extra = {
+                    k: v
+                    for k, v in condition.items()
+                    if k not in {"kind", "metric", "operator", "value", "baseline"}
+                }
                 con.execute(
                     """INSERT INTO alert_conditions
                        (product_slug,kind,metric,operator,threshold,baseline,config_json)
                        VALUES(?,?,?,?,?,?,?)""",
-                    (slug, condition["kind"], condition["metric"], condition["operator"],
-                     condition["value"], condition.get("baseline"),
-                     json.dumps(extra, ensure_ascii=False, sort_keys=True)),
+                    (
+                        slug,
+                        condition["kind"],
+                        condition["metric"],
+                        condition["operator"],
+                        condition["value"],
+                        condition.get("baseline"),
+                        json.dumps(extra, ensure_ascii=False, sort_keys=True),
+                    ),
                 )
         if slugs:
             marks = ",".join("?" for _ in slugs)
-            con.execute(f"UPDATE products SET active=0,updated_at=? WHERE slug NOT IN ({marks})",
-                        (timestamp, *slugs))
+            con.execute(
+                f"UPDATE products SET active=0,updated_at=? WHERE slug NOT IN ({marks})",
+                (timestamp, *slugs),
+            )
     return {"products": len(slugs)}
 
 
@@ -124,7 +143,9 @@ def compare(actual, operator, expected):
 
 
 def record(con, args):
-    product = con.execute("SELECT * FROM products WHERE slug=? AND active=1", (args.product,)).fetchone()
+    product = con.execute(
+        "SELECT * FROM products WHERE slug=? AND active=1", (args.product,)
+    ).fetchone()
     if not product:
         raise SystemExit(f"unknown or inactive product: {args.product}; run sync first")
     observed_at = args.observed_at or now_iso()
@@ -143,21 +164,38 @@ def record(con, args):
                (product_slug,observed_at,price,shipping,total_price,currency,seller,url,
                 variant_key,verified,details_json)
                VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
-            (args.product, observed_at, args.price, args.shipping, total, args.currency,
-             args.seller, args.url, args.variant, 0 if args.unverified else 1,
-             json.dumps(details, ensure_ascii=False, sort_keys=True)),
+            (
+                args.product,
+                observed_at,
+                args.price,
+                args.shipping,
+                total,
+                args.currency,
+                args.seller,
+                args.url,
+                args.variant,
+                0 if args.unverified else 1,
+                json.dumps(details, ensure_ascii=False, sort_keys=True),
+            ),
         )
     saving = round(previous_price - total, 2) if previous_price is not None else None
     saving_pct = round(saving / previous_price * 100, 6) if previous_price else None
     matched = []
     if not args.unverified:
-        conditions = con.execute("SELECT * FROM alert_conditions WHERE product_slug=?", (args.product,))
+        conditions = con.execute(
+            "SELECT * FROM alert_conditions WHERE product_slug=?", (args.product,)
+        )
         for condition in conditions:
-            if condition["kind"] == "threshold" and condition["metric"] == "total_price":
+            if (
+                condition["kind"] == "threshold"
+                and condition["metric"] == "total_price"
+            ):
                 actual = total
-            elif (condition["kind"] == "relative_drop"
-                  and condition["baseline"] == "previous_comparable_price"
-                  and saving_pct is not None):
+            elif (
+                condition["kind"] == "relative_drop"
+                and condition["baseline"] == "previous_comparable_price"
+                and saving_pct is not None
+            ):
                 actual = saving_pct
             else:
                 continue
@@ -222,9 +260,12 @@ def main():
     elif args.command == "history":
         result = history(con, args.product, args.limit)
     else:
-        result = [dict(row) for row in con.execute(
-            "SELECT slug,name,category,currency,metadata_json FROM products WHERE active=1 ORDER BY slug"
-        )]
+        result = [
+            dict(row)
+            for row in con.execute(
+                "SELECT slug,name,category,currency,metadata_json FROM products WHERE active=1 ORDER BY slug"
+            )
+        ]
     print(json.dumps(result, ensure_ascii=False, sort_keys=True))
 
 

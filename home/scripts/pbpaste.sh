@@ -29,36 +29,39 @@ mac() {
 helper() { mac osascript -l JavaScript - "$1" <"$MAC_CLIP_JS"; }
 
 case "${1:-}" in
-  # Without a UTF-8 locale (ssh sets none) pbpaste turns non-ASCII into '?'.
-  "") mac LC_CTYPE=UTF-8 pbpaste </dev/null ;;
-  --types) helper types ;;
-  --image)
-    out=${2:-$(mktemp --tmpdir pbpaste-XXXXXX.png)}
-    helper image | base64 -d >"$out"
-    [[ -s "$out" ]] || { rm -f "$out"; die "no image on the clipboard (⌘⇧4 saves a file: try --screenshot)"; }
-    echo "$out"
-    ;;
-  --screenshot)
-    shot=$(mac sh -s <"$MAC_LAST_SCREENSHOT")
-    [[ -n "$shot" ]] || die "no saved screenshot found"
-    out=${2:-$(mktemp --tmpdir "pbpaste-XXXXXX.${shot##*.}")}
-    mac cat -- "$(printf %q "$shot")" </dev/null >"$out"
-    echo "$out"
-    ;;
-  --files)
-    out=${2:-$(mktemp -d --tmpdir pbpaste-XXXXXX)}
-    mkdir -p "$out"
-    paths=$(helper files)
-    [[ -n "$paths" ]] || die "no files on the clipboard"
-    while IFS= read -r p; do
-      mac "tar -cf - -C $(printf %q "$(dirname "$p")") $(printf %q "$(basename "$p")")" </dev/null |
-        tar -xf - -C "$out"
-      echo "$out/$(basename "$p")"
-    done <<<"$paths"
-    ;;
-  -h | --help) usage ;;
-  *)
-    usage >&2
-    exit 2
-    ;;
+# Without a UTF-8 locale (ssh sets none) pbpaste turns non-ASCII into '?'.
+"") mac LC_CTYPE=UTF-8 pbpaste </dev/null ;;
+--types) helper types ;;
+--image)
+  out=${2:-$(mktemp --tmpdir pbpaste-XXXXXX.png)}
+  helper image | base64 -d >"$out"
+  [[ -s $out ]] || {
+    rm -f "$out"
+    die "no image on the clipboard (⌘⇧4 saves a file: try --screenshot)"
+  }
+  echo "$out"
+  ;;
+--screenshot)
+  shot=$(mac sh -s <"$MAC_LAST_SCREENSHOT")
+  [[ -n $shot ]] || die "no saved screenshot found"
+  out=${2:-$(mktemp --tmpdir "pbpaste-XXXXXX.${shot##*.}")}
+  mac cat -- "$(printf %q "$shot")" </dev/null >"$out"
+  echo "$out"
+  ;;
+--files)
+  out=${2:-$(mktemp -d --tmpdir pbpaste-XXXXXX)}
+  mkdir -p "$out"
+  paths=$(helper files)
+  [[ -n $paths ]] || die "no files on the clipboard"
+  while IFS= read -r p; do
+    mac "tar -cf - -C $(printf %q "$(dirname "$p")") $(printf %q "$(basename "$p")")" </dev/null |
+      tar -xf - -C "$out"
+    echo "$out/$(basename "$p")"
+  done <<<"$paths"
+  ;;
+-h | --help) usage ;;
+*)
+  usage >&2
+  exit 2
+  ;;
 esac

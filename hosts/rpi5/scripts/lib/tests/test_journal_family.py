@@ -8,7 +8,12 @@ from nicos_scripts.connectors import journal_family as jf
 
 
 def _date(y=0, m=0, d=0, modifier=0):
-    return {"calendar": 0, "modifier": modifier, "quality": 0, "dateval": [d, m, y, False]}
+    return {
+        "calendar": 0,
+        "modifier": modifier,
+        "quality": 0,
+        "dateval": [d, m, y, False],
+    }
 
 
 def make_tree(path, people, families, events, places=()):
@@ -18,20 +23,67 @@ def make_tree(path, people, families, events, places=()):
         db.execute(f"CREATE TABLE {t} (handle TEXT, json_data TEXT)")
     ref = lambda e: {"ref": e, "role": {"value": 1}}
     for pid, given, surname, female, parents, fams, evs in people:
-        db.execute("INSERT INTO person VALUES (?, ?)", (pid, json.dumps({
-            "handle": pid, "gramps_id": pid, "gender": 0 if female else 1,
-            "primary_name": {"first_name": given, "call": "", "surname_list": [{"surname": surname}]},
-            "parent_family_list": parents, "family_list": fams, "event_ref_list": [ref(e) for e in evs]})))
+        db.execute(
+            "INSERT INTO person VALUES (?, ?)",
+            (
+                pid,
+                json.dumps(
+                    {
+                        "handle": pid,
+                        "gramps_id": pid,
+                        "gender": 0 if female else 1,
+                        "primary_name": {
+                            "first_name": given,
+                            "call": "",
+                            "surname_list": [{"surname": surname}],
+                        },
+                        "parent_family_list": parents,
+                        "family_list": fams,
+                        "event_ref_list": [ref(e) for e in evs],
+                    }
+                ),
+            ),
+        )
     for fid, father, mother, children, evs in families:
-        db.execute("INSERT INTO family VALUES (?, ?)", (fid, json.dumps({
-            "handle": fid, "gramps_id": fid, "father_handle": father, "mother_handle": mother,
-            "child_ref_list": [{"ref": c} for c in children],
-            "event_ref_list": [{"ref": e, "role": {"value": 8}} for e in evs]})))
+        db.execute(
+            "INSERT INTO family VALUES (?, ?)",
+            (
+                fid,
+                json.dumps(
+                    {
+                        "handle": fid,
+                        "gramps_id": fid,
+                        "father_handle": father,
+                        "mother_handle": mother,
+                        "child_ref_list": [{"ref": c} for c in children],
+                        "event_ref_list": [
+                            {"ref": e, "role": {"value": 8}} for e in evs
+                        ],
+                    }
+                ),
+            ),
+        )
     for eid, etype, d, place in events:
-        db.execute("INSERT INTO event VALUES (?, ?)", (eid, json.dumps({
-            "handle": eid, "gramps_id": eid, "type": {"value": etype}, "date": d, "place": place})))
+        db.execute(
+            "INSERT INTO event VALUES (?, ?)",
+            (
+                eid,
+                json.dumps(
+                    {
+                        "handle": eid,
+                        "gramps_id": eid,
+                        "type": {"value": etype},
+                        "date": d,
+                        "place": place,
+                    }
+                ),
+            ),
+        )
     for hid, name in places:
-        db.execute("INSERT INTO place VALUES (?, ?)", (hid, json.dumps({"handle": hid, "name": {"value": name}})))
+        db.execute(
+            "INSERT INTO place VALUES (?, ?)",
+            (hid, json.dumps({"handle": hid, "name": {"value": name}})),
+        )
     db.commit()
     db.close()
     return path
@@ -73,17 +125,27 @@ def tree(tmp_path):
         ("E12d", D, _date(), ""),  # died, date unknown
         ("E20", M, _date(1955, 12, 28), "P1"),
     ]
-    path = make_tree(str(tmp_path / "sqlite.db"), people, families, events, [("P1", "Brest")])
+    path = make_tree(
+        str(tmp_path / "sqlite.db"), people, families, events, [("P1", "Brest")]
+    )
     return jf.Tree.load(path, "I1")
 
 
 def test_relations_by_blood_and_by_marriage(tree):
     rel = {pid: tree.relation(pid) for pid in tree.people}
     assert rel == {
-        "I1": "toi", "I2": "ta sœur", "I3": "ton père", "I4": "ta mère",
-        "I5": "ton grand-père", "I6": "ta grand-mère", "I7": "ton oncle",
-        "I8": "épouse de ton oncle", "I9": "ta cousine germaine",
-        "I10": "ton arrière-grand-père", "I11": "ton arrière-grand-mère", "I12": "ton grand-oncle",
+        "I1": "toi",
+        "I2": "ta sœur",
+        "I3": "ton père",
+        "I4": "ta mère",
+        "I5": "ton grand-père",
+        "I6": "ta grand-mère",
+        "I7": "ton oncle",
+        "I8": "épouse de ton oncle",
+        "I9": "ta cousine germaine",
+        "I10": "ton arrière-grand-père",
+        "I11": "ton arrière-grand-mère",
+        "I12": "ton grand-oncle",
     }
 
 
@@ -104,8 +166,10 @@ def test_unknown_home_person_is_an_error(tmp_path):
 
 def test_day_lines_birthday_death_marriage(tree):
     births, history = jf.family_sections([], tree, date(2026, 12, 28), "https://g")
-    assert births == ["- 🎂 [Mathilde Simon](https://g/person/I2), ta sœur, fête ses 28 ans "
-                      "([28 décembre 1998](https://g/event/E2))"]
+    assert births == [
+        "- 🎂 [Mathilde Simon](https://g/person/I2), ta sœur, fête ses 28 ans "
+        "([28 décembre 1998](https://g/event/E2))"
+    ]
     assert history == [
         "- 💍 Il y a 71 ans, [Roger Simon](https://g/person/I5) et [Claude Le Dreff](https://g/person/I6), "
         "tes grands-parents, se mariaient à Brest ([28 décembre 1955](https://g/event/E20))",
@@ -116,40 +180,60 @@ def test_day_lines_birthday_death_marriage(tree):
 
 def test_own_birthday_and_feb_29_in_a_common_year(tree):
     births, _ = jf.family_sections([], tree, date(2026, 11, 27), "https://g")
-    assert births == ["- 🎂 C'est ton anniversaire : 30 ans ([27 novembre 1996](https://g/event/E1))"]
+    assert births == [
+        "- 🎂 C'est ton anniversaire : 30 ans ([27 novembre 1996](https://g/event/E1))"
+    ]
     _, history = jf.family_sections([], tree, date(2026, 2, 28), "https://g")
-    assert history == ["- 👶 Il y a 101 ans naissait [Jean Simon](https://g/person/I12), ton grand-oncle "
-                       "([29 février 1925](https://g/event/E12))"]
+    assert history == [
+        "- 👶 Il y a 101 ans naissait [Jean Simon](https://g/person/I12), ton grand-oncle "
+        "([29 février 1925](https://g/event/E12))"
+    ]
 
 
 def bday(summary, ymd, unknown=False, field="BDAY"):
     y, m, d = ymd
-    return (f"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:{y:04d}{m:02d}{d:02d}\r\n"
-            f"SUMMARY:{summary}\r\nRRULE:FREQ=YEARLY\r\nX-NEXTCLOUD-BC-FIELD-TYPE:{field}\r\n"
-            f"X-NEXTCLOUD-BC-UNKNOWN-YEAR:{1 if unknown else 0}\r\nX-NEXTCLOUD-BC-YEAR:{y}\r\n"
-            "END:VEVENT\r\nEND:VCALENDAR\r\n").encode()
+    return (
+        f"BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nDTSTART;VALUE=DATE:{y:04d}{m:02d}{d:02d}\r\n"
+        f"SUMMARY:{summary}\r\nRRULE:FREQ=YEARLY\r\nX-NEXTCLOUD-BC-FIELD-TYPE:{field}\r\n"
+        f"X-NEXTCLOUD-BC-UNKNOWN-YEAR:{1 if unknown else 0}\r\nX-NEXTCLOUD-BC-YEAR:{y}\r\n"
+        "END:VEVENT\r\nEND:VCALENDAR\r\n"
+    ).encode()
 
 
 def test_contact_birthdays_skip_people_already_in_the_tree(tree):
-    blobs = [bday("🎂 Mathilde Dolou (1996)", (1996, 12, 28)),  # same first name and day: the sister
-             bday("🎂 Antoine Martin (1997)", (1997, 12, 28)),
-             bday("🎂 Guy Le Moal", (1970, 12, 28), unknown=True),
-             bday("🎂 Roger Simon (1930)", (1930, 3, 1)),  # another day
-             bday("💀 Old", (1900, 12, 28), field="DEATHDATE")]
+    blobs = [
+        bday(
+            "🎂 Mathilde Dolou (1996)", (1996, 12, 28)
+        ),  # same first name and day: the sister
+        bday("🎂 Antoine Martin (1997)", (1997, 12, 28)),
+        bday("🎂 Guy Le Moal", (1970, 12, 28), unknown=True),
+        bday("🎂 Roger Simon (1930)", (1930, 3, 1)),  # another day
+        bday("💀 Old", (1900, 12, 28), field="DEATHDATE"),
+    ]
     day = date(2026, 12, 28)
     contacts = jf.contact_birthdays(blobs, day)
-    assert [(n, y) for n, y, _ in contacts] == [("Antoine Martin", 1997), ("Guy Le Moal", None),
-                                                 ("Mathilde Dolou", 1996)]
-    assert jf.birthday_lines(contacts, tree, day) == ["🎂 Antoine Martin · 29 ans", "🎂 Guy Le Moal"]
+    assert [(n, y) for n, y, _ in contacts] == [
+        ("Antoine Martin", 1997),
+        ("Guy Le Moal", None),
+        ("Mathilde Dolou", 1996),
+    ]
+    assert jf.birthday_lines(contacts, tree, day) == [
+        "🎂 Antoine Martin · 29 ans",
+        "🎂 Guy Le Moal",
+    ]
     assert jf.birthday_lines(contacts, None, day)[-1] == "🎂 Mathilde Dolou · 30 ans"
 
 
 def test_a_living_couples_wedding_shows_once_in_genealogy(tmp_path):
-    people = [("I1", "Nicolas", "Simon", False, ["F1"], [], []),
-              ("I3", "Franck", "Simon", False, [], ["F1", "F9"], []),
-              ("I4", "Anne", "Dolou", True, [], ["F1", "F9"], [])]
-    families = [("F1", "I3", "I4", ["I1"], ["E30"]),
-                ("F9", "I3", "I4", [], ["E31"])]  # the same couple entered twice
+    people = [
+        ("I1", "Nicolas", "Simon", False, ["F1"], [], []),
+        ("I3", "Franck", "Simon", False, [], ["F1", "F9"], []),
+        ("I4", "Anne", "Dolou", True, [], ["F1", "F9"], []),
+    ]
+    families = [
+        ("F1", "I3", "I4", ["I1"], ["E30"]),
+        ("F9", "I3", "I4", [], ["E31"]),
+    ]  # the same couple entered twice
     events = [("E30", M, _date(1990, 6, 2), ""), ("E31", M, _date(1990, 6, 2), "")]
     t = jf.Tree.load(make_tree(str(tmp_path / "w.db"), people, families, events), "I1")
     births, history = jf.family_sections([], t, date(2026, 6, 2), "https://g")

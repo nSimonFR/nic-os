@@ -22,23 +22,44 @@ text=
 
 while [ $# -gt 0 ]; do
   case $1 in
-    -c|--chat)  chat=$2;  shift 2 ;;
-    -m|--mode)  mode=$2;  shift 2 ;;
-    -p|--photo) photo=$2; photos+=("$2"); shift 2 ;;
-    -h|--help)  sed -n '2,12p' "$0"; exit 0 ;;
-    *)          text=$1;  shift ;;
+  -c | --chat)
+    chat=$2
+    shift 2
+    ;;
+  -m | --mode)
+    mode=$2
+    shift 2
+    ;;
+  -p | --photo)
+    photo=$2
+    photos+=("$2")
+    shift 2
+    ;;
+  -h | --help)
+    sed -n '2,12p' "$0"
+    exit 0
+    ;;
+  *)
+    text=$1
+    shift
+    ;;
   esac
 done
 # Guard on a tty so an interactive call with no arguments errors instead of hanging.
 [ -n "$text" ] || [ -t 0 ] || text=$(cat)
 
-die() { echo "telegram-send: $1" >&2; exit 0; }
+die() {
+  echo "telegram-send: $1" >&2
+  exit 0
+}
 
 # An explicit TELEGRAM_TOKEN_FILE is authoritative — never silently fall back to
 # a different credential. The defaults are only for callers that set nothing.
-for f in ${TELEGRAM_TOKEN_FILE:-/run/agenix/telegram-bot-token \
-         "/run/user/$(id -u)/agenix/telegram-bot-token"}; do
-  [ -r "$f" ] && { token=$(< "$f"); break; }
+for f in ${TELEGRAM_TOKEN_FILE:-/run/agenix/telegram-bot-token          "/run/user/$(id -u)/agenix/telegram-bot-token"}; do
+  [ -r "$f" ] && {
+    token=$(<"$f")
+    break
+  }
 done
 [ -n "${token:-}" ] || die "no readable bot token"
 [ -n "$chat" ] || die "no chat id (pass --chat or set TELEGRAM_CHAT_ID)"
@@ -46,10 +67,10 @@ done
 # `plain` omits parse_mode entirely — Telegram rejects an empty one.
 # `rich` carries no parse_mode at all: it is a different method below.
 case $mode in
-  html)     set -- -d parse_mode=HTML ;;
-  markdown) set -- -d parse_mode=Markdown ;;
-  plain|rich) set -- ;;
-  *)        die "unknown --mode $mode" ;;
+html) set -- -d parse_mode=HTML ;;
+markdown) set -- -d parse_mode=Markdown ;;
+plain | rich) set -- ;;
+*) die "unknown --mode $mode" ;;
 esac
 
 if [ "$mode" = rich ]; then
@@ -67,8 +88,8 @@ import json, sys
 n = int(sys.argv[1])
 md = "".join(f"![](tg://photo?id=p{i})\n\n" for i in range(n)) + sys.stdin.read()
 media = [{"id": f"p{i}", "media": {"type": "photo", "media": f"attach://p{i}"}} for i in range(n)]
-print(json.dumps({"markdown": md, **({"media": media} if n else {})}))' "${#photos[@]}") \
-    || die "could not encode rich message"
+print(json.dumps({"markdown": md, **({"media": media} if n else {})}))' "${#photos[@]}") ||
+    die "could not encode rich message"
   # --form-string: a body starting with @ or < must not be read as a file.
   set -- "$@" --form-string "rich_message=$rich"
 elif [ -n "$photo" ]; then
@@ -81,7 +102,7 @@ else
   method=sendMessage
   # --data-urlencode keeps newlines, spaces and punctuation intact.
   set -- "$@" -d "chat_id=$chat" -d disable_web_page_preview=true \
-              --data-urlencode "text=$text"
+    --data-urlencode "text=$text"
 fi
 
 resp=$(curl -sS --max-time 20 -X POST \

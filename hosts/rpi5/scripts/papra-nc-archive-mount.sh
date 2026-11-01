@@ -2,8 +2,8 @@
 # Idempotent. Env: OCC, ARCHIVE_DIR, ARCHIVE_MOUNT, NC_USER.
 
 find_mount() {
-  "$OCC" files_external:list --output=json 2>/dev/null \
-    | jq -r --arg mp "/$ARCHIVE_MOUNT" 'map(select(.mount_point == $mp)) | .[0].mount_id // empty'
+  "$OCC" files_external:list --output=json 2>/dev/null |
+    jq -r --arg mp "/$ARCHIVE_MOUNT" 'map(select(.mount_point == $mp)) | .[0].mount_id // empty'
 }
 
 "$OCC" app:enable files_external >/dev/null

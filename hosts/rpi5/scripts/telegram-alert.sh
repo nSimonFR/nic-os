@@ -21,7 +21,7 @@ key=$1
 title=$2
 body=$(cat)
 
-token=$(< "$TELEGRAM_TOKEN_FILE")
+token=$(<"$TELEGRAM_TOKEN_FILE")
 api="https://api.telegram.org/bot$token"
 now=$(date '+%H:%M')
 
@@ -46,15 +46,15 @@ if [ -n "${body//[[:space:]]/}" ]; then
   # ── Condition is firing ──────────────────────────────────────────────────
   if [ -f "$mid_f" ]; then
     # Already have a live message → edit it and bump the counter.
-    mid=$(< "$mid_f")
-    cnt=$(( $(cat "$cnt_f" 2>/dev/null || echo 1) + 1 ))
+    mid=$(<"$mid_f")
+    cnt=$(($(cat "$cnt_f" 2>/dev/null || echo 1) + 1))
     first=$(cat "$first_f" 2>/dev/null || echo "$now")
-    printf '%s\n' "$cnt" > "$cnt_f"
+    printf '%s\n' "$cnt" >"$cnt_f"
     text="<b>$title</b>
 $body
 
 <i>⚠ ongoing ×$cnt · since $first · updated $now</i>"
-    tg editMessageText "$text" -d message_id="$mid" > /dev/null || true
+    tg editMessageText "$text" -d message_id="$mid" >/dev/null || true
   else
     # First firing → send a fresh message and remember its id.
     text="<b>$title</b>
@@ -64,21 +64,21 @@ $body
     resp=$(tg sendMessage "$text" || true)
     mid=$(printf '%s' "$resp" | jq -r '.result.message_id // empty')
     if [ -n "$mid" ]; then
-      printf '%s\n' "$mid"   > "$mid_f"
-      printf '1\n'           > "$cnt_f"
-      printf '%s\n' "$now"   > "$first_f"
+      printf '%s\n' "$mid" >"$mid_f"
+      printf '1\n' >"$cnt_f"
+      printf '%s\n' "$now" >"$first_f"
     fi
   fi
 else
   # ── Condition has cleared ────────────────────────────────────────────────
   if [ -f "$mid_f" ]; then
-    mid=$(< "$mid_f")
+    mid=$(<"$mid_f")
     cnt=$(cat "$cnt_f" 2>/dev/null || echo '?')
     first=$(cat "$first_f" 2>/dev/null || echo '?')
     text="<b>$title</b>
 
 <i>✅ resolved $now · was ongoing ×$cnt since $first</i>"
-    tg editMessageText "$text" -d message_id="$mid" > /dev/null || true
+    tg editMessageText "$text" -d message_id="$mid" >/dev/null || true
     rm -f "$mid_f" "$cnt_f" "$first_f"
   fi
 fi

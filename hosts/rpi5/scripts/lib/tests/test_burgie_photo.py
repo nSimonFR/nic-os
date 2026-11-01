@@ -9,8 +9,12 @@ from conftest import FakeResponse, json_reply
 from nicos_scripts.hermes import burgie_photo as bp
 
 ALBUM = {"id": "a1", "albumName": "🧸 Burgiiiiiiie [AUTO]", "assetCount": 2}
-ASSETS = {"assets": {"total": 2, "items": [
-    {"id": "img", "type": "IMAGE"}, {"id": "vid", "type": "VIDEO"}]}}
+ASSETS = {
+    "assets": {
+        "total": 2,
+        "items": [{"id": "img", "type": "IMAGE"}, {"id": "vid", "type": "VIDEO"}],
+    }
+}
 
 
 def _home(tmp_path, chat="-100"):
@@ -44,7 +48,9 @@ def test_run_sends_an_image_from_the_album_to_the_origin_chat(tmp_path, opener):
     assert urls[0].startswith("http://immich.home.arpa:2283/api/albums")
     assert fake.body_of(1)["albumIds"] == ["a1"]
     assert urls[2].endswith("/api/assets/img/thumbnail?size=preview")
-    assert all(r.get_header("X-api-key") == "__immich_api_key__" for r in fake.requests[:3])
+    assert all(
+        r.get_header("X-api-key") == "__immich_api_key__" for r in fake.requests[:3]
+    )
     assert urls[3] == "https://api.telegram.org/botT/sendPhoto"
     assert b'name="chat_id"\r\n\r\n-100\r\n' in fake.requests[3].data
     assert b"\xff\xd8jpeg" in fake.requests[3].data
@@ -52,22 +58,32 @@ def test_run_sends_an_image_from_the_album_to_the_origin_chat(tmp_path, opener):
 
 def test_only_images_are_candidates(tmp_path, opener):
     seen = []
-    bp.run(_home(tmp_path), opener=opener(_replies()),
-           choice=lambda xs: seen.extend(xs) or xs[0], token="T")
+    bp.run(
+        _home(tmp_path),
+        opener=opener(_replies()),
+        choice=lambda xs: seen.extend(xs) or xs[0],
+        token="T",
+    )
     assert [a["id"] for a in seen] == ["img"]
 
 
 def _raise(exc):
     def reply():
         raise exc
+
     return reply
 
 
 def test_immich_timeout_is_retried_then_sends_once(tmp_path, opener):
     sleeps = []
     fake = opener([_raise(TimeoutError("timed out")), *_replies()])
-    bp.run(_home(tmp_path), opener=fake, choice=lambda xs: xs[0], token="T",
-           sleep=sleeps.append)
+    bp.run(
+        _home(tmp_path),
+        opener=fake,
+        choice=lambda xs: xs[0],
+        token="T",
+        sleep=sleeps.append,
+    )
     assert sleeps == [bp.IMMICH_RETRY_SECONDS]
     assert sum(r.full_url.endswith("/sendPhoto") for r in fake.requests) == 1
 
@@ -91,8 +107,12 @@ def test_immich_http_error_is_not_retried(tmp_path, opener):
 
 def test_telegram_delivered_elsewhere_is_a_failure(tmp_path, opener):
     with pytest.raises(RuntimeError, match="delivery verification"):
-        bp.run(_home(tmp_path), opener=opener(_replies(sent_chat="-999")),
-               choice=lambda xs: xs[0], token="T")
+        bp.run(
+            _home(tmp_path),
+            opener=opener(_replies(sent_chat="-999")),
+            choice=lambda xs: xs[0],
+            token="T",
+        )
 
 
 @pytest.mark.parametrize("albums", [[], [ALBUM, dict(ALBUM, id="a3")]])

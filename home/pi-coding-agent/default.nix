@@ -52,10 +52,8 @@ in
     PI_AGENT_NOTIFY_SCRIPT = "${notifyScript}";
   };
 
-  home.file.".pi/agent/extensions/agent-notify.ts".source =
-    ./extensions/agent-notify.ts;
-  home.file.".pi/agent/extensions/aperture-provider.ts".source =
-    ./extensions/aperture-provider.ts;
+  home.file.".pi/agent/extensions/agent-notify.ts".source = ./extensions/agent-notify.ts;
+  home.file.".pi/agent/extensions/aperture-provider.ts".source = ./extensions/aperture-provider.ts;
 
   # NOTE: ~/.pi/agent/auth.json is intentionally NOT Nix-managed — pi
   # writes/refreshes it on OAuth rotation; a read-only store symlink

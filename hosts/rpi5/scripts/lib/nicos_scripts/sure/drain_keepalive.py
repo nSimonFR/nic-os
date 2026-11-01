@@ -92,14 +92,22 @@ def queue_depths(cfg, run):
 
 def summarize(depths):
     """Only the non-empty queues, biggest first — the journal line's payload."""
-    busy = sorted(((q, n) for q, n in depths.items() if n),
-                  key=lambda kv: -kv[1])
+    busy = sorted(((q, n) for q, n in depths.items() if n), key=lambda kv: -kv[1])
     return ", ".join(f"{q}={n}" for q, n in busy)
 
 
 def wake(cfg, run):
-    run([cfg.curl, "-s", "-o", "/dev/null",
-         "--max-time", str(cfg.timeout), cfg.wake_url])
+    run(
+        [
+            cfg.curl,
+            "-s",
+            "-o",
+            "/dev/null",
+            "--max-time",
+            str(cfg.timeout),
+            cfg.wake_url,
+        ]
+    )
 
 
 def main(argv=None, env=None, run=None, log=None):
@@ -108,9 +116,11 @@ def main(argv=None, env=None, run=None, log=None):
     cfg = Config.from_env(env)
     log = log or logger(TAG)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=False).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=False
+            ).stdout
 
     depths = queue_depths(cfg, run)
 

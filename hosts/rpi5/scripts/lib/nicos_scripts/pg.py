@@ -14,6 +14,7 @@ SEP = "\x1f"
 
 
 def psql_rows(run, sql, db, runuser="runuser", psql="psql"):
-    out = run([runuser, "-u", "postgres", "--", psql,
-               "-d", db, "-tAF" + SEP, "-c", sql])
+    out = run(
+        [runuser, "-u", "postgres", "--", psql, "-d", db, "-tAF" + SEP, "-c", sql]
+    )
     return [line.split(SEP) for line in out.splitlines() if line.strip()]

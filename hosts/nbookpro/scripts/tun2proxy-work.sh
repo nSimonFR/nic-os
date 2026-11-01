@@ -12,12 +12,18 @@ GW="10.0.0.1"
 MARKER="# WORK-TAILSCALE-MANAGED"
 
 # Wait for work tailscaled
-for _ in $(seq 1 30); do $TS --socket=$SOCK status >/dev/null 2>&1 && break; sleep 2; done
+for _ in $(seq 1 30); do
+  $TS --socket=$SOCK status >/dev/null 2>&1 && break
+  sleep 2
+done
 
 # Start tun2proxy in background
 $TUN2PROXY --proxy socks5://127.0.0.1:1055 --dns over-tcp --dns-addr 192.168.64.10 --bypass 127.0.0.1 &
 PID=$!
-for _ in $(seq 1 15); do /sbin/route -n get "$GW" >/dev/null 2>&1 && break; sleep 1; done
+for _ in $(seq 1 15); do
+  /sbin/route -n get "$GW" >/dev/null 2>&1 && break
+  sleep 1
+done
 
 # Single python call: extract subnets, peer IPs, and DNS names
 $TS --socket=$SOCK status --json 2>/dev/null | /usr/bin/python3 -c "
@@ -33,15 +39,15 @@ for p in (data.get('Peer') or {}).values():
             if name: print(f'DNS {a} {name}')
 " | while read -r type value extra; do
   case "$type" in
-    SUBNET) /sbin/route add -net "$value" "$GW" 2>/dev/null || true ;;
-    HOST)   /sbin/route add -host "$value" "$GW" 2>/dev/null || true ;;
-    DNS)    echo "$value $extra $MARKER" ;;
+  SUBNET) /sbin/route add -net "$value" "$GW" 2>/dev/null || true ;;
+  HOST) /sbin/route add -host "$value" "$GW" 2>/dev/null || true ;;
+  DNS) echo "$value $extra $MARKER" ;;
   esac
-done > /tmp/hosts.work
+done >/tmp/hosts.work
 
 # Update /etc/hosts atomically
-grep -v "$MARKER" /etc/hosts > /tmp/hosts.clean 2>/dev/null || true
-cat /tmp/hosts.clean /tmp/hosts.work > /tmp/hosts.new
+grep -v "$MARKER" /etc/hosts >/tmp/hosts.clean 2>/dev/null || true
+cat /tmp/hosts.clean /tmp/hosts.work >/tmp/hosts.new
 cp /tmp/hosts.new /etc/hosts
 rm -f /tmp/hosts.work /tmp/hosts.clean /tmp/hosts.new
 

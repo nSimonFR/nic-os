@@ -1,4 +1,8 @@
-{ lib, stdenvNoCC, fetchurl }:
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+}:
 # Agent Vault (Infisical) — credential-brokering MITM proxy for AI agents.
 # Upstream's release binaries embed the web UI (a source build would need the
 # npm frontend plus go >= 1.26.10; nixpkgs has 1.26.4).
@@ -8,8 +12,14 @@
 let
   version = "0.40.2";
   assets = {
-    aarch64-linux = { asset = "linux_arm64"; hash = "sha256-21CkaN+DP4rjWEEuN5DIPhpondBycsdvY0r7JY2fWCc="; };
-    x86_64-linux  = { asset = "linux_amd64"; hash = "sha256-bYoS9AVeWwJE95wMaqVBXCmIuR9bFqLAuStYl7i652s="; };
+    aarch64-linux = {
+      asset = "linux_arm64";
+      hash = "sha256-21CkaN+DP4rjWEEuN5DIPhpondBycsdvY0r7JY2fWCc=";
+    };
+    x86_64-linux = {
+      asset = "linux_amd64";
+      hash = "sha256-bYoS9AVeWwJE95wMaqVBXCmIuR9bFqLAuStYl7i652s=";
+    };
   };
   inherit (stdenvNoCC.hostPlatform) system;
   target = assets.${system} or (throw "agent-vault: no release asset for ${system}");

@@ -18,6 +18,7 @@ Config (env):
   TELEGRAM_BOT_TOKEN_FILE   default /run/agenix/telegram-bot-token
   TELEGRAM_CHAT_ID          recipient chat id (or pass --chat-id)
 """
+
 import argparse
 import json
 import os
@@ -170,8 +171,20 @@ def download_asset(base, api_key, asset_id, dest):
     return True
 
 
-FR_MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet",
-             "août", "septembre", "octobre", "novembre", "décembre"]
+FR_MONTHS = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
 
 
 def french_date(d):
@@ -220,7 +233,9 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
         caption = f"📸 {french_date(datetime.now())}"
         if per_year:
             # Match the visual gallery's oldest-to-newest timeline order.
-            caption += "\n" + ", ".join(f"{y} ({per_year[y]})" for y in sorted(per_year))
+            caption += "\n" + ", ".join(
+                f"{y} ({per_year[y]})" for y in sorted(per_year)
+            )
     else:
         caption = ""
 
@@ -234,10 +249,13 @@ def run_download(memories, base, api_key, out_dir, top, per_memory, max_total):
 
 
 def resolve_telegram_token():
-    tok = (os.environ.get("TELEGRAM_BOT_TOKEN")
-           or os.environ.get("PICOCLAW_CHANNELS_TELEGRAM_TOKEN"))
+    tok = os.environ.get("TELEGRAM_BOT_TOKEN") or os.environ.get(
+        "PICOCLAW_CHANNELS_TELEGRAM_TOKEN"
+    )
     if not tok:
-        tok_file = os.environ.get("TELEGRAM_BOT_TOKEN_FILE", "/run/agenix/telegram-bot-token")
+        tok_file = os.environ.get(
+            "TELEGRAM_BOT_TOKEN_FILE", "/run/agenix/telegram-bot-token"
+        )
         try:
             with open(tok_file) as f:
                 tok = f.read().strip()
@@ -255,10 +273,12 @@ def tg_request(token, method, fields, files=None):
         body += b"--" + bb + b"\r\n"
         body += b'Content-Disposition: form-data; name="' + name.encode() + b'"\r\n\r\n'
         body += str(value).encode() + b"\r\n"
-    for field, filename, data in (files or []):
+    for field, filename, data in files or []:
         body += b"--" + bb + b"\r\n"
-        body += ('Content-Disposition: form-data; name="%s"; filename="%s"\r\n'
-                 % (field, filename)).encode()
+        body += (
+            'Content-Disposition: form-data; name="%s"; filename="%s"\r\n'
+            % (field, filename)
+        ).encode()
         body += b"Content-Type: image/jpeg\r\n\r\n"
         body += data + b"\r\n"
     body += b"--" + bb + b"--\r\n"
@@ -291,13 +311,21 @@ def send_album(token, chat_id, manifest):
     files, caption = manifest["files"], manifest["caption"]
 
     if len(files) >= 2:
-        media = [{"type": "photo", "media": f"attach://file{i}"} for i in range(len(files))]
+        media = [
+            {"type": "photo", "media": f"attach://file{i}"} for i in range(len(files))
+        ]
         if caption:
             media[0]["caption"] = caption
-        parts = [(f"file{i}", os.path.basename(p), open(p, "rb").read())
-                 for i, p in enumerate(files)]
-        ok, res = tg_request(token, "sendMediaGroup",
-                             {"chat_id": chat_id, "media": json.dumps(media)}, parts)
+        parts = [
+            (f"file{i}", os.path.basename(p), open(p, "rb").read())
+            for i, p in enumerate(files)
+        ]
+        ok, res = tg_request(
+            token,
+            "sendMediaGroup",
+            {"chat_id": chat_id, "media": json.dumps(media)},
+            parts,
+        )
         action = f"album of {len(files)} photos"
     elif len(files) == 1:
         fields = {"chat_id": chat_id}
@@ -308,7 +336,9 @@ def send_album(token, chat_id, manifest):
         ok, res = tg_request(token, "sendPhoto", fields, parts)
         action = "1 photo"
     elif caption:
-        ok, res = tg_request(token, "sendMessage", {"chat_id": chat_id, "text": caption})
+        ok, res = tg_request(
+            token, "sendMessage", {"chat_id": chat_id, "text": caption}
+        )
         action = "caption (no photos today)"
     else:
         return True, "no memories today; nothing sent"
@@ -320,44 +350,83 @@ def send_album(token, chat_id, manifest):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--send-album", action="store_true",
-                    help="download today's photos and post them to Telegram as one "
-                         "media group (gallery), caption on the first photo")
-    ap.add_argument("--chat-id", default=os.environ.get("TELEGRAM_CHAT_ID", ""),
-                    help="--send-album: recipient chat id (default $TELEGRAM_CHAT_ID)")
-    ap.add_argument("--download", action="store_true",
-                    help="download today's photos as JPGs and print a JSON manifest "
-                         "{caption, files, ...} without sending")
-    ap.add_argument("--download-dir",
-                    default=os.path.join(tempfile.gettempdir(), "immich-on-this-day"),
-                    help="dir to write JPGs into; wiped + recreated each run "
-                         "(default: <tmp>/immich-on-this-day)")
-    ap.add_argument("--per-memory", type=int, default=4,
-                    help="download mode: max photos per memory (default 4)")
-    ap.add_argument("--max-total", type=int, default=10,
-                    help="download mode: hard cap on total photos (default 10)")
-    ap.add_argument("--top", type=int, default=3,
-                    help="cap to top N memories by asset count (default 3)")
-    ap.add_argument("--asset-preview", type=int, default=2,
-                    help="text mode: first N asset filenames listed per memory (default 2)")
-    ap.add_argument("--json", action="store_true",
-                    help="emit structured JSON (with links) instead of human-readable text")
+    ap.add_argument(
+        "--send-album",
+        action="store_true",
+        help="download today's photos and post them to Telegram as one "
+        "media group (gallery), caption on the first photo",
+    )
+    ap.add_argument(
+        "--chat-id",
+        default=os.environ.get("TELEGRAM_CHAT_ID", ""),
+        help="--send-album: recipient chat id (default $TELEGRAM_CHAT_ID)",
+    )
+    ap.add_argument(
+        "--download",
+        action="store_true",
+        help="download today's photos as JPGs and print a JSON manifest "
+        "{caption, files, ...} without sending",
+    )
+    ap.add_argument(
+        "--download-dir",
+        default=os.path.join(tempfile.gettempdir(), "immich-on-this-day"),
+        help="dir to write JPGs into; wiped + recreated each run "
+        "(default: <tmp>/immich-on-this-day)",
+    )
+    ap.add_argument(
+        "--per-memory",
+        type=int,
+        default=4,
+        help="download mode: max photos per memory (default 4)",
+    )
+    ap.add_argument(
+        "--max-total",
+        type=int,
+        default=10,
+        help="download mode: hard cap on total photos (default 10)",
+    )
+    ap.add_argument(
+        "--top",
+        type=int,
+        default=3,
+        help="cap to top N memories by asset count (default 3)",
+    )
+    ap.add_argument(
+        "--asset-preview",
+        type=int,
+        default=2,
+        help="text mode: first N asset filenames listed per memory (default 2)",
+    )
+    ap.add_argument(
+        "--json",
+        action="store_true",
+        help="emit structured JSON (with links) instead of human-readable text",
+    )
     args = ap.parse_args()
 
     # Hermes' terminal scrubs *KEY* env names, so default to the placeholder:
     # Agent Vault (hosts/rpi5/security/agent-vault.nix) holds the real key.
     api_key = os.environ.get("IMMICH_API_KEY") or "__immich_api_key__"
 
-    internal = os.environ.get("IMMICH_INTERNAL_URL", "http://immich.home.arpa:2283").rstrip("/")
-    public = os.environ.get("IMMICH_PUBLIC_URL", "https://rpi5.gate-mintaka.ts.net:10000").rstrip("/")
+    internal = os.environ.get(
+        "IMMICH_INTERNAL_URL", "http://immich.home.arpa:2283"
+    ).rstrip("/")
+    public = os.environ.get(
+        "IMMICH_PUBLIC_URL", "https://rpi5.gate-mintaka.ts.net:10000"
+    ).rstrip("/")
 
     memories = fetch_memories(internal, api_key)
     today = select_today(memories, datetime.now(timezone.utc))
 
     if args.send_album or args.download:
         manifest = run_download(
-            today, internal, api_key, args.download_dir,
-            max(0, args.top), max(0, args.per_memory), max(0, args.max_total),
+            today,
+            internal,
+            api_key,
+            args.download_dir,
+            max(0, args.top),
+            max(0, args.per_memory),
+            max(0, args.max_total),
         )
         if not args.send_album:
             print(json.dumps(manifest, indent=2))
@@ -365,8 +434,10 @@ def main():
 
         token = resolve_telegram_token()
         if not token:
-            sys.exit("set TELEGRAM_BOT_TOKEN, or make TELEGRAM_BOT_TOKEN_FILE "
-                     "(default /run/agenix/telegram-bot-token) readable")
+            sys.exit(
+                "set TELEGRAM_BOT_TOKEN, or make TELEGRAM_BOT_TOKEN_FILE "
+                "(default /run/agenix/telegram-bot-token) readable"
+            )
         if not args.chat_id:
             sys.exit("set --chat-id or TELEGRAM_CHAT_ID for --send-album")
         ok, status = send_album(token, args.chat_id, manifest)

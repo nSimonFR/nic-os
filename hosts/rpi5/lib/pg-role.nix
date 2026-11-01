@@ -44,153 +44,173 @@
 # the namespace this repo uses for options it invents; `services.*` stays for
 # upstream NixOS ones. `services.socketActivate` predates that split and is the
 # remaining outlier.
-{ config, lib, pkgs, pgHost, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  pgHost,
+  ...
+}:
 
 let
   cfg = config.nic.pgRole;
 
-  roleModule = lib.types.submodule ({ name, config, ... }: {
-    options = {
-      db = lib.mkOption {
-        type = lib.types.str;
-        description = ''
-          Database name. No default — it is only sometimes equal to `user`
-          (airtrail, ryot, reactive_resume) and often not (sure_production vs
-          sure_user). Explicit > implicit.
-        '';
-        example = "sure_production";
+  roleModule = lib.types.submodule (
+    { name, config, ... }: {
+      options = {
+        db = lib.mkOption {
+          type = lib.types.str;
+          description = ''
+            Database name. No default — it is only sometimes equal to `user`
+            (airtrail, ryot, reactive_resume) and often not (sure_production vs
+            sure_user). Explicit > implicit.
+          '';
+          example = "sure_production";
+        };
+
+        user = lib.mkOption {
+          type = lib.types.str;
+          description = ''
+            Postgres role name. Use the underscore form — this is a SQL
+            identifier, not a systemd unit name, so `reactive_resume` even when
+            the OS user is `reactive-resume`.
+          '';
+          example = "sure_user";
+        };
+
+        passwordFile = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Path to a file holding the role's password, read at runtime (agenix,
+            so the secret never enters the world-readable Nix store). null means
+            the role gets no password and no pg_hba entry — correct for services
+            that reach Postgres over the Unix socket with peer auth (affine).
+          '';
+          example = "/run/agenix/sure-pg-password";
+        };
+
+        extensions = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = ''
+            Extensions to `CREATE EXTENSION IF NOT EXISTS` inside `db`, as
+            postgres. Needed when the app's own migrations issue CREATE EXTENSION
+            but run as the unprivileged role, which lacks the superuser rights it
+            requires.
+
+            This is the SQL side only. Making the extension's shared library
+            available at all is a separate, nixpkgs-level concern — set
+            `services.postgresql.extensions` for anything outside the contrib set
+            (pgvector), and leave that at the call site.
+          '';
+          example = [ "unaccent" ];
+        };
+
+        login = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Pass `ensureClauses.login = true` through to ensureUsers, i.e. create
+            the role with LOGIN. Only affine needs it today.
+          '';
+        };
+
+        tcpAuth = lib.mkOption {
+          type = lib.types.bool;
+          defaultText = lib.literalExpression "passwordFile != null";
+          default = config.passwordFile != null;
+          description = ''
+            Append `host <db> <user> <pgHost>/32 scram-sha-256` to pg_hba, letting
+            the role connect over TCP with password auth. Defaults to whether a
+            password exists, because the two go together: a TCP scram line is
+            useless without a password, and every password-holding role here
+            connects via a `postgres://` TCP URL rather than the socket.
+          '';
+        };
+
+        privateUsers = lib.mkOption {
+          type = lib.types.nullOr lib.types.bool;
+          default = null;
+          description = ''
+            When non-null, force `PrivateUsers` on the oneshot. The RPi5 kernel
+            has no user namespaces, so `PrivateUsers = true` breaks the unit
+            outright — `false` is the only correct value on this host.
+
+            It is `nullOr` (emitting nothing when null) purely to preserve
+            existing drift: airtrail/ryot/nextcloud set `mkForce false`,
+            sure/reactive-resume/affine set nothing, and all six run. Normalising
+            the three to `false` is the right follow-up, but it would change three
+            units, so it is left as a deliberate decision rather than a side
+            effect of this extraction.
+          '';
+        };
+
+        restartTriggers = lib.mkOption {
+          type = lib.types.listOf lib.types.path;
+          default = [ ];
+          description = ''
+            Re-run the oneshot when these paths change — in practice, the agenix
+            source file behind `passwordFile`.
+
+            Without it the RemainAfterExit oneshot stays "active" across a
+            password rotation, so Postgres keeps the OLD password while the app's
+            env file picks up the NEW one, and the app fails to authenticate on
+            its next restart. Only reactive-resume sets this today; the other four
+            password-holding roles have the same latent bug.
+          '';
+          example = lib.literalExpression "[ config.age.secrets.sure-pg-password.file ]";
+        };
+
+        description = lib.mkOption {
+          type = lib.types.str;
+          default = "Set ${config.user} PostgreSQL password + DB ownership";
+          defaultText = lib.literalExpression ''"Set ''${user} PostgreSQL password + DB ownership"'';
+          description = "systemd unit Description= for the oneshot.";
+        };
       };
-
-      user = lib.mkOption {
-        type = lib.types.str;
-        description = ''
-          Postgres role name. Use the underscore form — this is a SQL
-          identifier, not a systemd unit name, so `reactive_resume` even when
-          the OS user is `reactive-resume`.
-        '';
-        example = "sure_user";
-      };
-
-      passwordFile = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = ''
-          Path to a file holding the role's password, read at runtime (agenix,
-          so the secret never enters the world-readable Nix store). null means
-          the role gets no password and no pg_hba entry — correct for services
-          that reach Postgres over the Unix socket with peer auth (affine).
-        '';
-        example = "/run/agenix/sure-pg-password";
-      };
-
-      extensions = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = ''
-          Extensions to `CREATE EXTENSION IF NOT EXISTS` inside `db`, as
-          postgres. Needed when the app's own migrations issue CREATE EXTENSION
-          but run as the unprivileged role, which lacks the superuser rights it
-          requires.
-
-          This is the SQL side only. Making the extension's shared library
-          available at all is a separate, nixpkgs-level concern — set
-          `services.postgresql.extensions` for anything outside the contrib set
-          (pgvector), and leave that at the call site.
-        '';
-        example = [ "unaccent" ];
-      };
-
-      login = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Pass `ensureClauses.login = true` through to ensureUsers, i.e. create
-          the role with LOGIN. Only affine needs it today.
-        '';
-      };
-
-      tcpAuth = lib.mkOption {
-        type = lib.types.bool;
-        defaultText = lib.literalExpression "passwordFile != null";
-        default = config.passwordFile != null;
-        description = ''
-          Append `host <db> <user> <pgHost>/32 scram-sha-256` to pg_hba, letting
-          the role connect over TCP with password auth. Defaults to whether a
-          password exists, because the two go together: a TCP scram line is
-          useless without a password, and every password-holding role here
-          connects via a `postgres://` TCP URL rather than the socket.
-        '';
-      };
-
-      privateUsers = lib.mkOption {
-        type = lib.types.nullOr lib.types.bool;
-        default = null;
-        description = ''
-          When non-null, force `PrivateUsers` on the oneshot. The RPi5 kernel
-          has no user namespaces, so `PrivateUsers = true` breaks the unit
-          outright — `false` is the only correct value on this host.
-
-          It is `nullOr` (emitting nothing when null) purely to preserve
-          existing drift: airtrail/ryot/nextcloud set `mkForce false`,
-          sure/reactive-resume/affine set nothing, and all six run. Normalising
-          the three to `false` is the right follow-up, but it would change three
-          units, so it is left as a deliberate decision rather than a side
-          effect of this extraction.
-        '';
-      };
-
-      restartTriggers = lib.mkOption {
-        type = lib.types.listOf lib.types.path;
-        default = [ ];
-        description = ''
-          Re-run the oneshot when these paths change — in practice, the agenix
-          source file behind `passwordFile`.
-
-          Without it the RemainAfterExit oneshot stays "active" across a
-          password rotation, so Postgres keeps the OLD password while the app's
-          env file picks up the NEW one, and the app fails to authenticate on
-          its next restart. Only reactive-resume sets this today; the other four
-          password-holding roles have the same latent bug.
-        '';
-        example = lib.literalExpression "[ config.age.secrets.sure-pg-password.file ]";
-      };
-
-      description = lib.mkOption {
-        type = lib.types.str;
-        default = "Set ${config.user} PostgreSQL password + DB ownership";
-        defaultText = lib.literalExpression ''"Set ''${user} PostgreSQL password + DB ownership"'';
-        description = "systemd unit Description= for the oneshot.";
-      };
-    };
-  });
+    }
+  );
 
   psql = "${pkgs.postgresql}/bin/psql";
 
-  setupScript = c: lib.concatStrings (
-    lib.optional (c.passwordFile != null) ''
-      password=$(cat ${c.passwordFile})
-      # psql's :'pw' interpolation works via stdin/-f only; with -c it is
-      # silently dropped and psql errors "syntax error at or near :".
-      ${psql} -v pw="$password" <<< "ALTER USER ${c.user} WITH PASSWORD :'pw';"
-    ''
-    ++ [ ''${psql} -c "ALTER DATABASE ${c.db} OWNER TO ${c.user};"
+  setupScript =
+    c:
+    lib.concatStrings (
+      lib.optional (c.passwordFile != null) ''
+        password=$(cat ${c.passwordFile})
+        # psql's :'pw' interpolation works via stdin/-f only; with -c it is
+        # silently dropped and psql errors "syntax error at or near :".
+        ${psql} -v pw="$password" <<< "ALTER USER ${c.user} WITH PASSWORD :'pw';"
       ''
-    ]
-    ++ map (ext: ''${psql} -d ${c.db} -c "CREATE EXTENSION IF NOT EXISTS ${ext};"
-    '') c.extensions
-  );
+      ++ [
+        ''
+          ${psql} -c "ALTER DATABASE ${c.db} OWNER TO ${c.user};"
+        ''
+      ]
+      ++ map (ext: ''
+        ${psql} -d ${c.db} -c "CREATE EXTENSION IF NOT EXISTS ${ext};"
+      '') c.extensions
+    );
 
   setupService = c: {
     inherit (c) description restartTriggers;
     # See caveat 1 at the top of this file: postgresql-setup, not just postgresql.
-    after = [ "postgresql.service" "postgresql-setup.service" ];
-    requires = [ "postgresql.service" "postgresql-setup.service" ];
+    after = [
+      "postgresql.service"
+      "postgresql-setup.service"
+    ];
+    requires = [
+      "postgresql.service"
+      "postgresql-setup.service"
+    ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
       User = "postgres";
-    } // lib.optionalAttrs (c.privateUsers != null) {
+    }
+    // lib.optionalAttrs (c.privateUsers != null) {
       PrivateUsers = lib.mkForce c.privateUsers;
     };
     script = setupScript c;
@@ -217,18 +237,22 @@ in
   config = lib.mkIf (cfg != { }) {
     services.postgresql = {
       ensureDatabases = lib.mapAttrsToList (_: c: c.db) cfg;
-      ensureUsers = lib.mapAttrsToList
-        (_: c: { name = c.user; } // lib.optionalAttrs c.login {
+      ensureUsers = lib.mapAttrsToList (
+        _: c:
+        {
+          name = c.user;
+        }
+        // lib.optionalAttrs c.login {
           ensureClauses.login = true;
-        })
-        cfg;
-      authentication = lib.mkAfter (lib.concatMapStrings
-        (c: "host  ${c.db}  ${c.user}  ${pgHost}/32  scram-sha-256\n")
-        withTcpAuth);
+        }
+      ) cfg;
+      authentication = lib.mkAfter (
+        lib.concatMapStrings (c: "host  ${c.db}  ${c.user}  ${pgHost}/32  scram-sha-256\n") withTcpAuth
+      );
     };
 
-    systemd.services = lib.mapAttrs'
-      (name: c: lib.nameValuePair "${name}-pg-setup" (setupService c))
-      cfg;
+    systemd.services = lib.mapAttrs' (
+      name: c: lib.nameValuePair "${name}-pg-setup" (setupService c)
+    ) cfg;
   };
 }

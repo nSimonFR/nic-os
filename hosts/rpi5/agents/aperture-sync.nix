@@ -11,7 +11,15 @@
 #
 # Aperture is a Tailscale-managed proxy on the tailnet — it is NOT self-hosted.
 # Auth comes from Tailscale identity (the RPi5 node is an admin via grants).
-{ config, pkgs, lib, apertureUrl, tailnetFqdn, unstablePkgs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  apertureUrl,
+  tailnetFqdn,
+  unstablePkgs,
+  ...
+}:
 let
   gateCfg = config.services.tiny-llm-gate.settings;
 
@@ -55,14 +63,19 @@ let
         baseurl = "https://${tailnetFqdn}:4001";
         apikey = "unused";
         models = allModels;
-        compatibility = { openai_chat = true; gemini_generate_content = true; };
+        compatibility = {
+          openai_chat = true;
+          gemini_generate_content = true;
+        };
         name = "tiny-llm-gate (RPi5)";
       };
       rpi5-gate-anthropic = {
         baseurl = "https://${tailnetFqdn}:4001";
         apikey = "unused";
         models = anthropicModels;
-        compatibility = { anthropic_messages = true; };
+        compatibility = {
+          anthropic_messages = true;
+        };
         name = "Claude Code (Anthropic passthrough)";
       };
     };
@@ -111,7 +124,10 @@ let
         src = [ "*" ];
         app = {
           "tailscale.com/cap/aperture" = [
-            { role = "user"; models = "**"; }
+            {
+              role = "user";
+              models = "**";
+            }
           ];
         };
       }
@@ -139,7 +155,10 @@ in
 {
   systemd.services.aperture-config-sync = lib.mkIf isEnabled {
     description = "Sync Aperture config with tiny-llm-gate model list";
-    after = [ "network-online.target" "tiny-llm-gate.service" ];
+    after = [
+      "network-online.target"
+      "tiny-llm-gate.service"
+    ];
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
@@ -248,9 +267,21 @@ in
             # and a "Tokens/day" label over a first-fetch placeholder would be
             # mislabelled — see fetch_aperture, which also explains why the
             # instance start time cannot stand in as a denominator.
-            { field = "tokens"; label = "Tokens"; format = "text"; }
-            { field = "requests"; label = "Requests"; format = "text"; }
-            { field = "cached"; label = "Cached"; format = "text"; }
+            {
+              field = "tokens";
+              label = "Tokens";
+              format = "text";
+            }
+            {
+              field = "requests";
+              label = "Requests";
+              format = "text";
+            }
+            {
+              field = "cached";
+              label = "Cached";
+              format = "text";
+            }
           ];
         };
       };

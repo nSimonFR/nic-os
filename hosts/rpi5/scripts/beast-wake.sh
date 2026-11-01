@@ -21,11 +21,26 @@ after=1h arm=yes cancel=no
 
 while [ $# -gt 0 ]; do
   case $1 in
-    --after)       after=${2:?--after needs a systemd time span}; shift 2 ;;
-    --no-poweroff) arm=no;     shift ;;
-    --cancel)      cancel=yes; shift ;;
-    -h|--help)     echo 'beast-wake [--after <span>] [--no-poweroff] [--cancel]'; exit 0 ;;
-    *)             echo "beast-wake: unknown argument: $1" >&2; exit 2 ;;
+  --after)
+    after=${2:?--after needs a systemd time span}
+    shift 2
+    ;;
+  --no-poweroff)
+    arm=no
+    shift
+    ;;
+  --cancel)
+    cancel=yes
+    shift
+    ;;
+  -h | --help)
+    echo 'beast-wake [--after <span>] [--no-poweroff] [--cancel]'
+    exit 0
+    ;;
+  *)
+    echo "beast-wake: unknown argument: $1" >&2
+    exit 2
+    ;;
   esac
 done
 
@@ -36,7 +51,10 @@ ssh_beast() {
 disarm() { ssh_beast "sudo systemctl stop 'beast-auto-poweroff-*.timer' 2>/dev/null || true"; }
 
 if [ "$cancel" = yes ]; then
-  ssh_beast true 2>/dev/null || { echo "beast-wake: $BEAST_HOST unreachable — nothing to disarm" >&2; exit 1; }
+  ssh_beast true 2>/dev/null || {
+    echo "beast-wake: $BEAST_HOST unreachable — nothing to disarm" >&2
+    exit 1
+  }
   disarm
   echo "beast-wake: disarmed — $BEAST_HOST stays up until powered off by hand"
   exit 0
@@ -47,11 +65,11 @@ if ssh_beast true 2>/dev/null; then
 else
   # Both forms (some switches drop 255.255.255.255), 3× each: it is fire-and-forget UDP.
   for _ in 1 2 3; do
-    wakeonlan "$BEAST_MAC" > /dev/null
-    wakeonlan -i "$BEAST_LAN_BROADCAST" "$BEAST_MAC" > /dev/null
+    wakeonlan "$BEAST_MAC" >/dev/null
+    wakeonlan -i "$BEAST_LAN_BROADCAST" "$BEAST_MAC" >/dev/null
   done
   echo "beast-wake: packets sent to $BEAST_MAC, waiting for ssh (~40s typical)"
-  deadline=$(( SECONDS + BEAST_WAIT_SECS ))
+  deadline=$((SECONDS + BEAST_WAIT_SECS))
   until ssh_beast true 2>/dev/null; do
     if [ "$SECONDS" -ge "$deadline" ]; then
       echo "beast-wake: no ssh after ${BEAST_WAIT_SECS}s — a hard GPU stall needs a physical power-cycle" >&2
@@ -71,10 +89,16 @@ fi
 # leaves a timer pointing at a path that is gone.
 guard=/run/beast-auto-poweroff
 unguarded="beast is UP and UNGUARDED: ssh $BEAST_HOST 'sudo systemctl poweroff'"
-ssh_beast "sudo tee $guard > /dev/null && sudo chmod 0755 $guard" < "$BEAST_AUTOPOWEROFF_SCRIPT" \
-  || { echo "beast-wake: guard install failed — $unguarded" >&2; exit 1; }
+ssh_beast "sudo tee $guard > /dev/null && sudo chmod 0755 $guard" <"$BEAST_AUTOPOWEROFF_SCRIPT" ||
+  {
+    echo "beast-wake: guard install failed — $unguarded" >&2
+    exit 1
+  }
 disarm
 ssh_beast "sudo systemd-run --collect --on-active=$after --unit=beast-auto-poweroff-\$(date +%s) \
-    --setenv=BEAST_POWEROFF_AFTER=$after --description='beast auto-poweroff (beast-wake)' $guard" > /dev/null 2>&1 \
-  || { echo "beast-wake: FAILED to arm — $unguarded" >&2; exit 1; }
+    --setenv=BEAST_POWEROFF_AFTER=$after --description='beast auto-poweroff (beast-wake)' $guard" >/dev/null 2>&1 ||
+  {
+    echo "beast-wake: FAILED to arm — $unguarded" >&2
+    exit 1
+  }
 echo "beast-wake: armed — $BEAST_HOST powers off in $after unless in use ('beast-wake --cancel' keeps it up)"

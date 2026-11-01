@@ -22,7 +22,12 @@
 # What survives an edit: allocation targets (not in Sure at all), goals made by
 # hand (only goals stamped "Mirrored from Sure" are pruned), addons, settings,
 # and anything else the sync never writes.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   stateDir = "/var/lib/wealthfolio-sync";
   internalPort = 13345; # wealthfolio.service — see wealthfolio.nix
@@ -38,7 +43,11 @@ in
 
   systemd.services.wealthfolio-sync = {
     description = "Mirror Sure holdings into Wealthfolio";
-    after = [ "wealthfolio.service" "postgresql.service" "network-online.target" ];
+    after = [
+      "wealthfolio.service"
+      "postgresql.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     # No wantedBy: the timer is the only thing that should start this. A run on
     # every activation would race a mid-rebuild wealthfolio restart.

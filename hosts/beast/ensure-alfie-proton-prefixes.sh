@@ -32,8 +32,8 @@ if pgrep -u alfie -x steam >/dev/null 2>&1; then
 fi
 
 # Appids installed on the NTFS library (these are the ones whose prefixes live on ntfs3).
-mapfile -t APPS < <(ls "$LIB"/appmanifest_*.acf 2>/dev/null \
-  | sed 's#.*appmanifest_##; s#\.acf$##' | grep -E '^[0-9]+$' | sort -un)
+mapfile -t APPS < <(ls "$LIB"/appmanifest_*.acf 2>/dev/null |
+  sed 's#.*appmanifest_##; s#\.acf$##' | grep -E '^[0-9]+$' | sort -un)
 if [ "${#APPS[@]}" -eq 0 ]; then
   echo "no appmanifests under $LIB; nothing to do"
   exit 0
@@ -106,7 +106,8 @@ shopt -s nullglob
 found_lc=0
 for LC in /home/alfie/.local/share/Steam/userdata/*/config/localconfig.vdf; do
   found_lc=1
-  work="$(mktemp)"; cp "$LC" "$work"
+  work="$(mktemp)"
+  cp "$LC" "$work"
   changed=0
 
   for APP in "${APPS[@]}"; do
@@ -123,10 +124,10 @@ for LC in /home/alfie/.local/share/Steam/userdata/*/config/localconfig.vdf; do
     fi
 
     tmp="$(mktemp)"
-    inject_one "$APP" "$OPT" "$work" > "$tmp"
+    inject_one "$APP" "$OPT" "$work" >"$tmp"
 
-    ob=$(tr -cd '{' < "$tmp" | wc -c)
-    cb=$(tr -cd '}' < "$tmp" | wc -c)
+    ob=$(tr -cd '{' <"$tmp" | wc -c)
+    cb=$(tr -cd '}' <"$tmp" | wc -c)
     if [ "$ob" = "$cb" ] && grep -qF "$OPT" "$tmp"; then
       mv "$tmp" "$work"
       changed=1
@@ -139,7 +140,7 @@ for LC in /home/alfie/.local/share/Steam/userdata/*/config/localconfig.vdf; do
 
   if [ "$changed" = 1 ]; then
     cp -a "$LC" "$LC.bak-prefixes"
-    cat "$work" > "$LC"   # truncate-rewrite preserves owner/mode
+    cat "$work" >"$LC" # truncate-rewrite preserves owner/mode
     echo "patched $LC"
   else
     echo "no change needed: $LC"

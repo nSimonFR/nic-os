@@ -1,4 +1,15 @@
-{ pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, tinyLlmGateUrl, username, ... }:
+{
+  pkgs,
+  lib,
+  pgHost,
+  pgPort,
+  redisHost,
+  redisPort,
+  tailnetFqdn,
+  tinyLlmGateUrl,
+  username,
+  ...
+}:
 let
   # Proton account hydroxide is authenticated as — the only envelope sender the
   # bridge will accept. Same address mail.nix gives himalaya.
@@ -10,7 +21,7 @@ let
   # one most days) are filtered out in renovate.json.
   # renovate: datasource=docker depName=ghcr.io/toeverything/affine
   version = "0.27.3";
-  port = 13010;  # internal; Tailscale Serve proxies 3010 → 13010
+  port = 13010; # internal; Tailscale Serve proxies 3010 → 13010
   dataDir = "/var/lib/affine";
   appDir = "${dataDir}/app";
 
@@ -18,7 +29,11 @@ let
   # openssl_3 (3.0) is EOL and refused as insecure since 26.05.
   openssl3 = pkgs.openssl;
   nodejs = pkgs.nodejs_22;
-  rpath = lib.makeLibraryPath [ openssl3 pkgs.glibc pkgs.stdenv.cc.cc.lib ];
+  rpath = lib.makeLibraryPath [
+    openssl3
+    pkgs.glibc
+    pkgs.stdenv.cc.cc.lib
+  ];
   interpreter = "${pkgs.glibc}/lib/ld-linux-aarch64.so.1";
 
   # AFFiNE config.json — enables Google Calendar + Copilot (via LiteLLM gateway).
@@ -29,7 +44,11 @@ let
     # Desktop app sends Origin: assets://. which isn't in the default
     # allowedOrigin list (localhost, 127.0.0.1), causing link-preview
     # and image-proxy requests to be rejected with "Invalid header".
-    "worker.allowedOrigin" = [ "localhost" "127.0.0.1" "assets://." ];
+    "worker.allowedOrigin" = [
+      "localhost"
+      "127.0.0.1"
+      "assets://."
+    ];
     # Outbound mail via the local hydroxide ProtonMail bridge (hosts/rpi5/knowledge/hydroxide.nix).
     # Until this existed AFFiNE logged "Mailer SMTP transport is not configured." at every
     # boot and every magic-link sign-in died server-side with email_service_not_configured
@@ -111,14 +130,27 @@ let
   # Ship the policy instead of depending on that file — it is the same
   # accept-anything default a distro would install, and the pull is a pinned tag
   # over TLS from ghcr.
-  skopeoPolicy = pkgs.writeText "affine-skopeo-policy.json" (builtins.toJSON {
-    default = [ { type = "insecureAcceptAnything"; } ];
-  });
+  skopeoPolicy = pkgs.writeText "affine-skopeo-policy.json" (
+    builtins.toJSON {
+      default = [ { type = "insecureAcceptAnything"; } ];
+    }
+  );
 
   # Update script: pulls arm64 image, extracts app layer, patches binaries for NixOS
   updateScript = pkgs.writeShellScript "affine-update" ''
     set -euo pipefail
-    export PATH="${lib.makeBinPath [ pkgs.skopeo pkgs.jq pkgs.gnutar pkgs.gzip pkgs.coreutils pkgs.patchelf pkgs.findutils pkgs.gnugrep ]}"
+    export PATH="${
+      lib.makeBinPath [
+        pkgs.skopeo
+        pkgs.jq
+        pkgs.gnutar
+        pkgs.gzip
+        pkgs.coreutils
+        pkgs.patchelf
+        pkgs.findutils
+        pkgs.gnugrep
+      ]
+    }"
     export SSL_CERT_FILE="${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
 
     # Defaults to the pinned version, not `stable` — otherwise `version` above
@@ -204,10 +236,10 @@ in
   services.postgresql.extensions = ps: with ps; [ pgvector ];
 
   nic.pgRole.affine = {
-    db          = dbName;
-    user        = dbUser;
-    login       = true;
-    extensions  = [ "vector" ];
+    db = dbName;
+    user = dbUser;
+    login = true;
+    extensions = [ "vector" ];
     description = "AFFiNE PostgreSQL setup";
   };
 
@@ -246,7 +278,10 @@ in
   # ── Prisma migrations ─────────────────────────────────────────────────
   systemd.services.affine-migrate = {
     description = "AFFiNE database migrations";
-    after = [ "affine-pg-setup.service" "affine-sync.service" ];
+    after = [
+      "affine-pg-setup.service"
+      "affine-sync.service"
+    ];
     requires = [ "affine-pg-setup.service" ];
     wants = [ "affine-sync.service" ];
     wantedBy = [ "multi-user.target" ];
@@ -283,7 +318,12 @@ in
 
   systemd.services.affine = {
     description = "AFFiNE";
-    after = [ "network.target" "affine-migrate.service" "redis-shared.service" "tiny-llm-gate.service" ];
+    after = [
+      "network.target"
+      "affine-migrate.service"
+      "redis-shared.service"
+      "tiny-llm-gate.service"
+    ];
     requires = [ "affine-migrate.service" ];
     wants = [ "redis-shared.service" ];
     wantedBy = [ "multi-user.target" ];
@@ -400,32 +440,34 @@ in
   };
 
   # Make update script available system-wide
-  environment.systemPackages = [ (pkgs.writeShellScriptBin "affine-update" (builtins.readFile updateScript)) ];
+  environment.systemPackages = [
+    (pkgs.writeShellScriptBin "affine-update" (builtins.readFile updateScript))
+  ];
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   # Doc content lives in Postgres, which is dumped nightly. Worth knowing:
   # attachment blobs under /var/lib/affine/storage are on the SSD, outside restic's
   # /mnt/data scope — pre-existing, not addressed here.
   nic.services.affine = {
-    backup            = [ "postgres" ];
+    backup = [ "postgres" ];
     postgresDatabases = [ "affine" ];
-    heavyUnits        = [ "affine.service" ];
-    heavyPriority     = 50;
+    heavyUnits = [ "affine.service" ];
+    heavyPriority = 50;
 
     # NOT behind the 443 path-mux: AFFiNE's SPA router insists on root paths, so
     # it runs at the root of its own 8443 funnel.
     public = {
       # 4th in Apps. Swapped with Nextcloud (was 30) so Nextcloud and Calino, which
       # reads Nextcloud's calendars, sit next to each other.
-      order   = 70;
-      port    = 8443;
+      order = 70;
+      port = 8443;
       backend = "http://127.0.0.1:13010";
-      funnel  = true;
+      funnel = true;
       authenticated = true;
       tile = {
-        name        = "AFFiNE";
-        icon        = "affine.svg";
-        category    = "Apps";
+        name = "AFFiNE";
+        icon = "affine.svg";
+        category = "Apps";
         description = "Collaborative docs";
         # Was a customapi POSTing GraphQL straight at AFFiNE every 10s, and it read
         # workspaces[0] — the 3-doc scratch workspace, not the main one. The
@@ -439,9 +481,21 @@ in
             # project_affine_workspaces_courses, so it could only change if that
             # layout did. With 7,915 docs the total is near-constant too — what says
             # whether the wiki is alive is the count touched this week.
-            { field = "docs";      label = "Docs";      format = "number"; }
-            { field = "edited_7d"; label = "Edited 7d"; format = "number"; }
-            { field = "storage";   label = "Storage";   format = "bytes"; }
+            {
+              field = "docs";
+              label = "Docs";
+              format = "number";
+            }
+            {
+              field = "edited_7d";
+              label = "Edited 7d";
+              format = "number";
+            }
+            {
+              field = "storage";
+              label = "Storage";
+              format = "bytes";
+            }
           ];
         };
       };

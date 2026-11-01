@@ -445,7 +445,8 @@
       # See pkgs/overlay.nix for what does and does not belong in it.
       nicOsOverlay = import ./pkgs/overlay.nix inputs;
 
-      treefmtFor = system: inputs.treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
+      treefmtFor =
+        system: inputs.treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
     in
     {
       # Exposed so hosts/rpi5/overlays.nix and hosts/beast/overlays.nix pull the same
@@ -509,50 +510,47 @@
       # build target so its ~20-min pnpm/turbo compile can be isolated/pinned.
       # (Was prebuilt by garnix CI — DEPRECATED, garnix shut down 2026-07-15;
       # now built locally, or push to Cachix/attic if a cache is wanted.)
-      packages = nixpkgs.lib.recursiveUpdate
-        (nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
-          system:
-          let
-            pkgs = import nixpkgs {
-              inherit system;
-              config.allowUnfree = true;
-              overlays = [ nicOsOverlay ];
-            };
-          in
+      packages =
+        nixpkgs.lib.recursiveUpdate
+          (nixpkgs.lib.genAttrs [ "aarch64-linux" "x86_64-linux" "aarch64-darwin" ] (
+            system:
+            let
+              pkgs = import nixpkgs {
+                inherit system;
+                config.allowUnfree = true;
+                overlays = [ nicOsOverlay ];
+              };
+            in
+            {
+              inherit (pkgs) rtk;
+              # `nix build .#nicos-scripts` — also the flake check (see `checks`).
+              inherit (pkgs) nicos-scripts;
+            }
+          ))
           {
-            inherit (pkgs) rtk;
-            # `nix build .#nicos-scripts` — also the flake check (see `checks`).
-            inherit (pkgs) nicos-scripts;
-          }
-        ))
-        {
-          aarch64-linux.reactive-resume =
-            self.nixosConfigurations.${rpiconfig}.config.services.reactive-resume.package;
-          # Expose Ryot as a standalone target (`nix build .#ryot`) so its heavy
-          # Rust LTO + Node build can be isolated/pinned and optionally pushed to
-          # a binary cache (Cachix/attic). Built locally on the Pi by default —
-          # there is no prebuild CI cache (garnix is deprecated). See hosts/rpi5/media/ryot.nix.
-          aarch64-linux.ryot =
-            self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
-          # ShowMyCards — `nix build .#showmycards` to isolate its Go (cgo) +
-          # SvelteKit compile from a full rebuild and validate/pin it first
-          # (no prebuild cache). Pulls the exact rpi5 derivation via the overlay.
-          aarch64-linux.showmycards =
-            self.nixosConfigurations.${rpiconfig}.pkgs.showmycards;
-          # FreeReps — `nix build .#freereps` to isolate its Go + Vite/React
-          # compile from a full rebuild. Same reasoning as showmycards above:
-          # no prebuild cache, and this one is OOM-prone on a 4 GB box because
-          # the tailscale dependency tree and a Rollup build land in one
-          # derivation. See hosts/rpi5/life/freereps.nix.
-          aarch64-linux.freereps =
-            self.nixosConfigurations.${rpiconfig}.pkgs.freereps;
-          # Hermes Agent — lean `messaging` variant. Exposed as a standalone
-          # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
-          # npm compile can be validated/isolated on the Pi BEFORE wiring the
-          # user service (OOM-prone; no prebuild cache). See hosts/rpi5/agents/hermes/hermes.nix.
-          aarch64-linux.hermes-messaging =
-            self.nixosConfigurations.${rpiconfig}.pkgs.hermes-messaging;
-        };
+            aarch64-linux.reactive-resume =
+              self.nixosConfigurations.${rpiconfig}.config.services.reactive-resume.package;
+            # Expose Ryot as a standalone target (`nix build .#ryot`) so its heavy
+            # Rust LTO + Node build can be isolated/pinned and optionally pushed to
+            # a binary cache (Cachix/attic). Built locally on the Pi by default —
+            # there is no prebuild CI cache (garnix is deprecated). See hosts/rpi5/media/ryot.nix.
+            aarch64-linux.ryot = self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
+            # ShowMyCards — `nix build .#showmycards` to isolate its Go (cgo) +
+            # SvelteKit compile from a full rebuild and validate/pin it first
+            # (no prebuild cache). Pulls the exact rpi5 derivation via the overlay.
+            aarch64-linux.showmycards = self.nixosConfigurations.${rpiconfig}.pkgs.showmycards;
+            # FreeReps — `nix build .#freereps` to isolate its Go + Vite/React
+            # compile from a full rebuild. Same reasoning as showmycards above:
+            # no prebuild cache, and this one is OOM-prone on a 4 GB box because
+            # the tailscale dependency tree and a Rollup build land in one
+            # derivation. See hosts/rpi5/life/freereps.nix.
+            aarch64-linux.freereps = self.nixosConfigurations.${rpiconfig}.pkgs.freereps;
+            # Hermes Agent — lean `messaging` variant. Exposed as a standalone
+            # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
+            # npm compile can be validated/isolated on the Pi BEFORE wiring the
+            # user service (OOM-prone; no prebuild cache). See hosts/rpi5/agents/hermes/hermes.nix.
+            aarch64-linux.hermes-messaging = self.nixosConfigurations.${rpiconfig}.pkgs.hermes-messaging;
+          };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {
         system = "x86_64-linux";
@@ -575,7 +573,14 @@
         # break the kernel cache).
         nixpkgs = inputs.nixpkgs;
         specialArgs = baseArgs rpiconfig // {
-          inherit (rpi5Params) tailnetFqdn beastOllamaUrl apertureUrl tinyLlmGateUrl beastHost immichVersion;
+          inherit (rpi5Params)
+            tailnetFqdn
+            beastOllamaUrl
+            apertureUrl
+            tinyLlmGateUrl
+            beastHost
+            immichVersion
+            ;
           nixos-raspberrypi = inputs.nixos-raspberrypi;
           unstablePkgs = unstableFor "aarch64-linux";
         };

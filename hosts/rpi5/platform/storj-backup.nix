@@ -27,13 +27,19 @@
 # yesterday's file; `backup-freshness` below is what notices — including a unit
 # that exits 0 having written nothing, which is how Immich's `pg_dump` went 34
 # days unseen.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   restic = config.services.restic.backups.storj-daily;
 
   # Same repo/credentials/cache as the backup unit, minus PATH and unset vars.
-  resticEnv = lib.filterAttrs (n: v: v != null && n != "PATH")
-    config.systemd.services.restic-backups-storj-daily.environment;
+  resticEnv = lib.filterAttrs (
+    n: v: v != null && n != "PATH"
+  ) config.systemd.services.restic-backups-storj-daily.environment;
 
   resticLimits = {
     Nice = 10;
@@ -44,7 +50,12 @@ let
 
   backupFreshness = pkgs.writeShellApplication {
     name = "backup-freshness";
-    runtimeInputs = with pkgs; [ coreutils findutils jq restic.package ];
+    runtimeInputs = with pkgs; [
+      coreutils
+      findutils
+      jq
+      restic.package
+    ];
     text = builtins.readFile ../scripts/backup-freshness.sh;
   };
 
@@ -90,8 +101,8 @@ in
     ];
 
     extraBackupArgs = [
-      "--one-file-system"  # don't cross bind mounts (e.g. SSD-backed immich dirs)
-      "--pack-size 60"     # 60 MiB packs — reduces Storj segment fees
+      "--one-file-system" # don't cross bind mounts (e.g. SSD-backed immich dirs)
+      "--pack-size 60" # 60 MiB packs — reduces Storj segment fees
       "--exclude-caches"
     ];
   };
@@ -123,7 +134,10 @@ in
 
   systemd.timers.backup-freshness = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 07:00:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 07:00:00";
+      Persistent = true;
+    };
   };
 
   # Reads back a random 5% of pack data each week (~4 GB of Storj egress at
@@ -139,6 +153,9 @@ in
 
   systemd.timers.restic-check-storj = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "Wed *-*-* 11:00:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "Wed *-*-* 11:00:00";
+      Persistent = true;
+    };
   };
 }

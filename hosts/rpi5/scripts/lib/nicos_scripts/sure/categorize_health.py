@@ -90,6 +90,7 @@ class Config:
 
 # ── reading the queue ────────────────────────────────────────────────────────
 
+
 def job_created_at(line):
     """Sidekiq's `created_at` for one queue entry, as an aware UTC datetime.
 
@@ -109,8 +110,9 @@ def queued_categorize(cfg, run):
     """(count, oldest_created_at) for AutoCategorizeJob across `cfg.queues`."""
     count, oldest = 0, None
     for q in cfg.queues:
-        out = run([cfg.redis_cli, "-n", str(cfg.redis_db),
-                   "lrange", f"queue:{q}", "0", "-1"])
+        out = run(
+            [cfg.redis_cli, "-n", str(cfg.redis_db), "lrange", f"queue:{q}", "0", "-1"]
+        )
         for line in out.splitlines():
             if JOB_CLASS not in line:
                 continue
@@ -127,6 +129,7 @@ def queued_categorize(cfg, run):
 
 # ── reading the outcome (context for the body) ───────────────────────────────
 
+
 def parse_pg_timestamp(value):
     """Postgres `timestamp without time zone`, which Rails stores in UTC."""
     text = (value or "").strip()
@@ -141,10 +144,16 @@ def parse_pg_timestamp(value):
 
 
 def last_category_write(cfg, run):
-    rows = psql_rows(run, """
+    rows = psql_rows(
+        run,
+        """
         SELECT max(created_at) FROM data_enrichments
         WHERE attribute_name = 'category_id'
-    """, cfg.sure_db, cfg.runuser, cfg.psql)
+    """,
+        cfg.sure_db,
+        cfg.runuser,
+        cfg.psql,
+    )
     return parse_pg_timestamp(rows[0][0]) if rows else None
 
 
@@ -155,10 +164,16 @@ def uncategorized_standard(cfg, run):
     patch correctly refuses to label transfers, so counting them would report a
     permanent several-hundred backlog as a fault.
     """
-    rows = psql_rows(run, """
+    rows = psql_rows(
+        run,
+        """
         SELECT count(*) FROM transactions
         WHERE category_id IS NULL AND kind = 'standard'
-    """, cfg.sure_db, cfg.runuser, cfg.psql)
+    """,
+        cfg.sure_db,
+        cfg.runuser,
+        cfg.psql,
+    )
     try:
         return int(rows[0][0])
     except (IndexError, ValueError):
@@ -166,6 +181,7 @@ def uncategorized_standard(cfg, run):
 
 
 # ── the verdict ──────────────────────────────────────────────────────────────
+
 
 def hours_since(then, now):
     return None if then is None else (now - then).total_seconds() / 3600.0
@@ -216,9 +232,12 @@ def main(argv=None, env=None, run=None, now=None, log=None):
     # its own alert.
     log = log or logger(TAG, stream=lambda: sys.stderr)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=False).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=False
+            ).stdout
+
     now = now or datetime.now(timezone.utc)
 
     queued, oldest = queued_categorize(cfg, run)
@@ -229,6 +248,8 @@ def main(argv=None, env=None, run=None, now=None, log=None):
     if body:
         print(body)
     else:
-        log(f"ok — {queued} queued, last write "
-            f"{describe_age(hours_since(last_write, now))}, backlog {backlog}")
+        log(
+            f"ok — {queued} queued, last write "
+            f"{describe_age(hours_since(last_write, now))}, backlog {backlog}"
+        )
     return 0

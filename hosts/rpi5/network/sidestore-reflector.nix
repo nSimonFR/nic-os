@@ -29,7 +29,12 @@
 #     stateless swap. (A `nat`-type chain can't be used here: the kernel requires
 #     nat chains to have priority > -200, and this is a raw payload swap, not NAT.)
 
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.services.sidestore-reflector;
@@ -56,7 +61,10 @@ in
   config = lib.mkIf cfg.enable {
     systemd.services.sidestore-reflector = {
       description = "SideStore 10.7.0.1 tailnet reflector (nftables hairpin)";
-      after = [ "tailscaled.service" "network-online.target" ];
+      after = [
+        "tailscaled.service"
+        "network-online.target"
+      ];
       wants = [ "network-online.target" ];
       requires = [ "tailscaled.service" ];
       wantedBy = [ "multi-user.target" ];

@@ -22,30 +22,60 @@ let
 in
 {
   alert =
-    { tokenFile, chatId, name ? "telegram-alert", stateDir ? "/var/lib/telegram-alerts" }:
+    {
+      tokenFile,
+      chatId,
+      name ? "telegram-alert",
+      stateDir ? "/var/lib/telegram-alerts",
+    }:
     pkgs.writeShellScript name ''
       export TELEGRAM_TOKEN_FILE=${tokenFile}
       export TELEGRAM_CHAT_ID=${toString chatId}
       export ALERT_STATE_DIR=${stateDir}
-      export PATH=${path [ pkgs.curl pkgs.jq pkgs.coreutils ]}
+      export PATH=${
+        path [
+          pkgs.curl
+          pkgs.jq
+          pkgs.coreutils
+        ]
+      }
       exec ${pkgs.bash}/bin/bash ${../hosts/rpi5/scripts/telegram-alert.sh} "$@"
     '';
 
   send =
-    { tokenFile, chatId, name ? "telegram-send" }:
+    {
+      tokenFile,
+      chatId,
+      name ? "telegram-send",
+    }:
     pkgs.writeShellScript name ''
       export TELEGRAM_TOKEN_FILE=${tokenFile}
       export TELEGRAM_CHAT_ID=${toString chatId}
-      export PATH=${path [ pkgs.curl pkgs.coreutils pkgs.python3 ]}
+      export PATH=${
+        path [
+          pkgs.curl
+          pkgs.coreutils
+          pkgs.python3
+        ]
+      }
       exec ${pkgs.bash}/bin/bash ${./scripts/telegram-send.sh} "$@"
     '';
 
   # `source` is baked in unless null — home/scripts/claude-notify.sh varies it
   # per invocation and passes its own.
   agent =
-    { name, source ? null }:
+    {
+      name,
+      source ? null,
+    }:
     pkgs.writeShellScript "${name}-agent-notify" ''
-      export PATH=${path [ pkgs.curl pkgs.jq pkgs.coreutils ]}
+      export PATH=${
+        path [
+          pkgs.curl
+          pkgs.jq
+          pkgs.coreutils
+        ]
+      }
       exec ${pkgs.bash}/bin/bash ${./scripts/agent-notify.sh} ${
         lib.optionalString (source != null) "--source ${lib.escapeShellArg source}"
       } "$@"

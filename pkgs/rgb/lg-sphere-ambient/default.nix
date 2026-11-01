@@ -22,16 +22,23 @@ let
   # ------------------------------------------------------------------
   # Wayland protocol bindings, generated at build time so we don't ship
   # pre-generated python in the repo.
-  pywaylandProtocols = runCommand "pywayland-lg-protocols" {
-    nativeBuildInputs = [ python.pkgs.pywayland pkg-config wayland-scanner ];
-  } ''
-    mkdir -p $out
-    pywayland-scanner \
-      -i ${wayland-scanner}/share/wayland/wayland.xml \
-         ${wlr-protocols}/share/wlr-protocols/unstable/wlr-screencopy-unstable-v1.xml \
-      -o $out
-    touch $out/__init__.py
-  '';
+  pywaylandProtocols =
+    runCommand "pywayland-lg-protocols"
+      {
+        nativeBuildInputs = [
+          python.pkgs.pywayland
+          pkg-config
+          wayland-scanner
+        ];
+      }
+      ''
+        mkdir -p $out
+        pywayland-scanner \
+          -i ${wayland-scanner}/share/wayland/wayland.xml \
+             ${wlr-protocols}/share/wlr-protocols/unstable/wlr-screencopy-unstable-v1.xml \
+          -o $out
+        touch $out/__init__.py
+      '';
 
   # ------------------------------------------------------------------
   # lib27gn950 — minimal vendored copy of the HID command codec.
@@ -48,7 +55,14 @@ let
 
   # ------------------------------------------------------------------
   # Bundle the python sources into one package directory.
-  pythonEnv = python.withPackages (ps: with ps; [ pywayland hid numpy openrgb-python ]);
+  pythonEnv = python.withPackages (
+    ps: with ps; [
+      pywayland
+      hid
+      numpy
+      openrgb-python
+    ]
+  );
 in
 stdenv.mkDerivation {
   pname = "lg-sphere-ambient";

@@ -3,7 +3,11 @@
 # and hosts/rpi5/agents/dsh.nix's `dsh web` unit. One derivation, so the service and
 # the CLI can never drift apart, and the unit's ExecStart stays a store path
 # that nixos-rebuild actually tracks.
-{ pkgs, lib, inputs }:
+{
+  pkgs,
+  lib,
+  inputs,
+}:
 let
   upstream = inputs.llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.dsh;
 

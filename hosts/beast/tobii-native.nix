@@ -31,15 +31,15 @@ in
   environment.systemPackages = [
     tobii-stream-engine
     tobii-pro-eye-tracker-manager
-    opentrack-tobii  # AppImage with Tobii tracker — runs opentrack (tracker side)
-    opentrack-sc     # Source build — provides NPClient64.dll in /libexec/opentrack/
+    opentrack-tobii # AppImage with Tobii tracker — runs opentrack (tracker side)
+    opentrack-sc # Source build — provides NPClient64.dll in /libexec/opentrack/
   ];
 
   # ── Systemd services ────────────────────────────────────────────────
   systemd.services.tobii-engine = {
     description = "Tobii Engine Service";
     after = [ "network.target" ];
-    wantedBy = lib.mkForce [];
+    wantedBy = lib.mkForce [ ];
 
     serviceConfig = {
       Type = "simple";
@@ -81,19 +81,21 @@ in
       # connects to the same wineserver as SC (shared via /tmp socket across Flatpak).
       # FT_SharedMem created by the wrapper is readable by NPClient64.dll via
       # OpenFileMappingA from any wine process on the same wineserver.
-      ExecStart = let
-        # GE-Proton's `wine` is 32-bit ELF needing /lib/ld-linux.so.2 which is
-        # absent in the AppImage bwrap sandbox. Create a `wine` shim that calls
-        # `wine64` (64-bit, works on NixOS) so proto-wine finds it in PATH.
-        wine-shim = pkgs.writeShellScriptBin "wine" ''
-          exec "$HOME/.var/app/io.github.mactan_sc.RSILauncher/.local/share/Steam/compatibilitytools.d/GE-Proton10-30/files/bin/wine64" "$@"
-        '';
-        wrapper = pkgs.writeShellScript "opentrack-sc-wrapper" ''
-          export WINEPREFIX="$HOME/.var/app/io.github.mactan_sc.RSILauncher/data/prefix"
-          export PATH="${wine-shim}/bin:$HOME/.var/app/io.github.mactan_sc.RSILauncher/.local/share/Steam/compatibilitytools.d/GE-Proton10-30/files/bin:$PATH"
-          exec ${opentrack-tobii}/bin/opentrack-tobii "$@"
-        '';
-      in "${wrapper}";
+      ExecStart =
+        let
+          # GE-Proton's `wine` is 32-bit ELF needing /lib/ld-linux.so.2 which is
+          # absent in the AppImage bwrap sandbox. Create a `wine` shim that calls
+          # `wine64` (64-bit, works on NixOS) so proto-wine finds it in PATH.
+          wine-shim = pkgs.writeShellScriptBin "wine" ''
+            exec "$HOME/.var/app/io.github.mactan_sc.RSILauncher/.local/share/Steam/compatibilitytools.d/GE-Proton10-30/files/bin/wine64" "$@"
+          '';
+          wrapper = pkgs.writeShellScript "opentrack-sc-wrapper" ''
+            export WINEPREFIX="$HOME/.var/app/io.github.mactan_sc.RSILauncher/data/prefix"
+            export PATH="${wine-shim}/bin:$HOME/.var/app/io.github.mactan_sc.RSILauncher/.local/share/Steam/compatibilitytools.d/GE-Proton10-30/files/bin:$PATH"
+            exec ${opentrack-tobii}/bin/opentrack-tobii "$@"
+          '';
+        in
+        "${wrapper}";
       Restart = "on-failure";
       RestartSec = "3s";
     };
@@ -103,7 +105,7 @@ in
     description = "Tobii USB Service";
     requires = [ "tobii-engine.service" ];
     after = [ "tobii-engine.service" ];
-    wantedBy = lib.mkForce [];
+    wantedBy = lib.mkForce [ ];
 
     serviceConfig = {
       Type = "forking";

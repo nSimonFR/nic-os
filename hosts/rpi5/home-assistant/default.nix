@@ -13,8 +13,12 @@ let
   # The two custom components take HA's own python set so their deps match the
   # ABI of the HA binary — hence the explicit python3Packages argument.
   haPython = config.services.home-assistant.package.python3Packages;
-  haVoltalis = pkgs.callPackage ../../../pkgs/home-assistant/ha-voltalis.nix { python3Packages = haPython; };
-  haIntratone = pkgs.callPackage ../../../pkgs/home-assistant/ha-intratone.nix { python3Packages = haPython; };
+  haVoltalis = pkgs.callPackage ../../../pkgs/home-assistant/ha-voltalis.nix {
+    python3Packages = haPython;
+  };
+  haIntratone = pkgs.callPackage ../../../pkgs/home-assistant/ha-intratone.nix {
+    python3Packages = haPython;
+  };
   haLinky = pkgs.callPackage ../../../pkgs/home-assistant/ha-linky.nix { };
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
@@ -42,24 +46,27 @@ in
     enable = true;
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
-    customComponents = [ haVoltalis haIntratone ];
+    customComponents = [
+      haVoltalis
+      haIntratone
+    ];
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
-      "homekit"    # HomeKit bridge — uses zeroconf/mDNS
+      "homekit" # HomeKit bridge — uses zeroconf/mDNS
       # Components whose Python deps were absent, causing default_config cascade failure:
       "conversation" # hassil — also required by mobile_app
-      "dhcp"         # aiodhcpwatcher
-      "ssdp"         # async_upnp_client
-      "tts"          # mutagen
-      "stream"       # av (PyAV)
-      "usb"          # aiousbwatcher (required by default_config → bluetooth)
+      "dhcp" # aiodhcpwatcher
+      "ssdp" # async_upnp_client
+      "tts" # mutagen
+      "stream" # av (PyAV)
+      "usb" # aiousbwatcher (required by default_config → bluetooth)
       # Configured integrations that also had missing deps:
-      "met"          # metno
-      "go2rtc"       # go2rtc_client
-      "sfr_box"      # sfrbox_api
+      "met" # metno
+      "go2rtc" # go2rtc_client
+      "sfr_box" # sfrbox_api
       "mobile_app"
       "google_translate" # gtts
-      "prometheus"   # prometheus_client — configuration.yaml has `prometheus:`
+      "prometheus" # prometheus_client — configuration.yaml has `prometheus:`
       # Installs python-telegram-bot so the telegram_bot config-flow handler
       # loads in the UI. Configuration itself is done via Settings → Devices &
       # Services (YAML setup was removed in HA 2025.7).
@@ -147,7 +154,7 @@ in
     isSystemUser = true;
     group = "ha-linky";
   };
-  users.groups.ha-linky = {};
+  users.groups.ha-linky = { };
 
   systemd.services.ha-linky = {
     description = "ha-linky Linky → Home Assistant bridge";
@@ -212,24 +219,24 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.home-assistant = {
-    backup        = [ "unit" ];
-    backupUnits   = [ "hass-backup.service" ];   # backups.nix
-    heavyUnits    = [ "home-assistant.service" ];
+    backup = [ "unit" ];
+    backupUnits = [ "hass-backup.service" ]; # backups.nix
+    heavyUnits = [ "home-assistant.service" ];
     heavyPriority = 20;
 
     public = {
-      order   = 130;
-      port    = 8123;
+      order = 130;
+      port = 8123;
       backend = "http://127.0.0.1:8123";
       tile = {
-        name        = "Home Assistant";
-        icon        = "home-assistant.svg";
-        category    = "Apps";
+        name = "Home Assistant";
+        icon = "home-assistant.svg";
+        category = "Apps";
         description = "Home automation";
         # Deep-link the tile straight to the "Mine" Lovelace dashboard (url_path
         # "mine-dashboard" above) instead of HA's root. Cosmetic only — HA is not
         # behind the path-mux, so this is not a muxPath.
-        deepLink    = "/mine-dashboard/";
+        deepLink = "/mine-dashboard/";
         # Routed through the homepage-stats aggregator (:8087, daily-cached) like the
         # other tiles rather than the native `homeassistant` widget that polls HA
         # every 60s. Figures can be up to the aggregator's REFRESH_INTERVAL (24h)
@@ -253,11 +260,23 @@ in
           mappings = [
             # The last day Enedis actually reported (~2 days back), against the
             # mean of the seven before it.
-            { field = "day";     label = "Yesterday"; format = "text"; }
-            { field = "cost";    label = "30 days";   format = "text"; }
+            {
+              field = "day";
+              label = "Yesterday";
+              format = "text";
+            }
+            {
+              field = "cost";
+              label = "30 days";
+              format = "text";
+            }
             # Voltalis heaters: consumed so far today, and how many rooms are on
             # right now — the one live figure on the tile.
-            { field = "heating"; label = "Heating";   format = "text"; }
+            {
+              field = "heating";
+              label = "Heating";
+              format = "text";
+            }
           ];
         };
       };

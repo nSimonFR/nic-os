@@ -23,9 +23,12 @@ let
   githubDirect =
     let
       noProxy = lib.concatStringsSep "," [
-        "localhost" "127.0.0.1" "::1"
+        "localhost"
+        "127.0.0.1"
+        "::1"
         config.systemd.services.agent-vault-bootstrap.environment.AGENT_VAULT_NO_PROXY
-        "api.github.com" "uploads.github.com"
+        "api.github.com"
+        "uploads.github.com"
       ];
     in
     pkgs.writeText "t3code-github-direct.env" ''
@@ -60,7 +63,10 @@ in
       # every session: T3's own GitHub client and the skills hold placeholders
       # only. `-`: absent until the first bootstrap.
       # Overriding NO_PROXY takes a later EnvironmentFile: one wins over Environment=.
-      EnvironmentFile = [ "-/var/lib/agent-vault-hermes/proxy.env" "${githubDirect}" ];
+      EnvironmentFile = [
+        "-/var/lib/agent-vault-hermes/proxy.env"
+        "${githubDirect}"
+      ];
 
       # Upstream's own unit (`t3 service install`) uses these.
       KillMode = "mixed";
@@ -87,7 +93,7 @@ in
   };
 
   nic.services.t3code = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote = "Thread history in ~/.t3/userdata; same class as ~/.claude, the durable output is commits.";
   };
 }

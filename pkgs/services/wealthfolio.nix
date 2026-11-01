@@ -52,7 +52,8 @@ let
   image =
     let
       spec =
-        images.${system} or (throw "wealthfolio: no pinned image digest for ${system}; add one to pkgs/services/wealthfolio.nix");
+        images.${system}
+          or (throw "wealthfolio: no pinned image digest for ${system}; add one to pkgs/services/wealthfolio.nix");
     in
     dockerTools.pullImage {
       imageName = "wealthfolio/wealthfolio";

@@ -40,14 +40,26 @@ TZ = ZoneInfo("Europe/Paris")
 UTC = ZoneInfo("UTC")
 CALDAV_NS = "urn:ietf:params:xml:ns:caldav"
 
-DEFAULT_BASE = "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/"
+DEFAULT_BASE = (
+    "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/"
+)
 DEFAULT_PASSWORD_FILE = "/run/agenix/nextcloud-homepage-password"
 
 # The C locale has no French names, so these are spelled out.
 DAYS_FR = ["lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi", "dimanche"]
 MONTHS_FR = [
-    "janvier", "février", "mars", "avril", "mai", "juin",
-    "juillet", "août", "septembre", "octobre", "novembre", "décembre",
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
 ]
 
 KIND_DATE, KIND_FLOATING, KIND_ABSOLUTE = "date", "floating", "absolute"
@@ -211,7 +223,9 @@ def build_instances(blobs, kinds):
                 {
                     "uid": uid,
                     "start": read_clock(*comp["dtstart"], kind),
-                    "end": read_clock(*comp["dtend"], kind) if "dtend" in comp else None,
+                    "end": read_clock(*comp["dtend"], kind)
+                    if "dtend" in comp
+                    else None,
                     "all_day": kind == KIND_DATE,
                     "summary": comp.get("summary"),
                     "location": comp.get("location"),

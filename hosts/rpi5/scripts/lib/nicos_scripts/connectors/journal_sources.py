@@ -26,16 +26,34 @@ from ..pg import psql_rows
 
 # WMO weather code -> (emoji, label); Open-Meteo's `weather_code`.
 WMO = {
-    0: ("☀️", "Ciel dégagé"), 1: ("🌤", "Plutôt dégagé"), 2: ("⛅", "Partiellement nuageux"),
-    3: ("☁️", "Couvert"), 45: ("🌫", "Brouillard"), 48: ("🌫", "Brouillard"),
-    51: ("🌦", "Bruine légère"), 53: ("🌦", "Bruine"), 55: ("🌦", "Forte bruine"),
-    56: ("🌧", "Bruine verglaçante"), 57: ("🌧", "Bruine verglaçante"),
-    61: ("🌧", "Pluie légère"), 63: ("🌧", "Pluie"), 65: ("🌧", "Forte pluie"),
-    66: ("🌧", "Pluie verglaçante"), 67: ("🌧", "Pluie verglaçante"),
-    71: ("🌨", "Neige légère"), 73: ("🌨", "Neige"), 75: ("🌨", "Forte neige"), 77: ("🌨", "Grains de neige"),
-    80: ("🌦", "Averses légères"), 81: ("🌦", "Averses"), 82: ("⛈", "Violentes averses"),
-    85: ("🌨", "Averses de neige"), 86: ("🌨", "Averses de neige"),
-    95: ("⛈", "Orage"), 96: ("⛈", "Orage avec grêle"), 99: ("⛈", "Orage avec grêle"),
+    0: ("☀️", "Ciel dégagé"),
+    1: ("🌤", "Plutôt dégagé"),
+    2: ("⛅", "Partiellement nuageux"),
+    3: ("☁️", "Couvert"),
+    45: ("🌫", "Brouillard"),
+    48: ("🌫", "Brouillard"),
+    51: ("🌦", "Bruine légère"),
+    53: ("🌦", "Bruine"),
+    55: ("🌦", "Forte bruine"),
+    56: ("🌧", "Bruine verglaçante"),
+    57: ("🌧", "Bruine verglaçante"),
+    61: ("🌧", "Pluie légère"),
+    63: ("🌧", "Pluie"),
+    65: ("🌧", "Forte pluie"),
+    66: ("🌧", "Pluie verglaçante"),
+    67: ("🌧", "Pluie verglaçante"),
+    71: ("🌨", "Neige légère"),
+    73: ("🌨", "Neige"),
+    75: ("🌨", "Forte neige"),
+    77: ("🌨", "Grains de neige"),
+    80: ("🌦", "Averses légères"),
+    81: ("🌦", "Averses"),
+    82: ("⛈", "Violentes averses"),
+    85: ("🌨", "Averses de neige"),
+    86: ("🌨", "Averses de neige"),
+    95: ("⛈", "Orage"),
+    96: ("⛈", "Orage avec grêle"),
+    99: ("⛈", "Orage avec grêle"),
 }
 ROOM_DOMAINS = ("resource.calendar.google.com", "group.calendar.google.com")
 
@@ -53,11 +71,15 @@ def _sql_list(names):
     return ", ".join("'" + n.replace("'", "''") + "'" for n in names) or "NULL"
 
 
-def calendar_blobs(run, names, lo, hi, db="nextcloud_production", runuser="runuser", psql="psql"):
+def calendar_blobs(
+    run, names, lo, hi, db="nextcloud_production", runuser="runuser", psql="psql"
+):
     """Raw iCalendar objects of the named calendars/subscriptions that may
     occur in [lo, hi) (epoch s; Nextcloud's own occurrence bounds)."""
     sql = _sql_list(names)
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT replace(encode(o.calendardata, 'base64'), E'\\n', '')
         FROM oc_calendarobjects o
         WHERE o.componenttype = 'VEVENT'
@@ -68,7 +90,11 @@ def calendar_blobs(run, names, lo, hi, db="nextcloud_production", runuser="runus
                   (SELECT id FROM oc_calendarsubscriptions WHERE displayname IN ({sql}))))
           AND coalesce(o.firstoccurence, 0) < {int(hi)}
           AND coalesce(o.lastoccurence, 9999999999) > {int(lo)}
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return [base64.b64decode(r[0]) for r in rows if r and r[0]]
 
 
@@ -79,8 +105,13 @@ def _attendees(ev):
     out = []
     for a in raw if isinstance(raw, list) else [raw]:
         email = str(a).lower().removeprefix("mailto:").strip()
-        out.append((email, str(a.params.get("CUTYPE", "")).upper(),
-                    str(a.params.get("PARTSTAT", "")).upper()))
+        out.append(
+            (
+                email,
+                str(a.params.get("CUTYPE", "")).upper(),
+                str(a.params.get("PARTSTAT", "")).upper(),
+            )
+        )
     return tuple(out)
 
 
@@ -105,12 +136,23 @@ def expand(blobs, lo_dt, hi_dt, tz):
             all_day = not isinstance(start, datetime)
             if all_day:
                 start = datetime(start.year, start.month, start.day, tzinfo=tz)
-                end = (datetime(end.year, end.month, end.day, tzinfo=tz) if isinstance(end, date)
-                       else start + timedelta(days=1))
+                end = (
+                    datetime(end.year, end.month, end.day, tzinfo=tz)
+                    if isinstance(end, date)
+                    else start + timedelta(days=1)
+                )
             else:
                 start = start if start.tzinfo else start.replace(tzinfo=tz)
                 end = (end if end.tzinfo else end.replace(tzinfo=tz)) if end else start
-            events.append(Event(str(ev.get("SUMMARY", "")).strip(), start, end, all_day, _attendees(ev)))
+            events.append(
+                Event(
+                    str(ev.get("SUMMARY", "")).strip(),
+                    start,
+                    end,
+                    all_day,
+                    _attendees(ev),
+                )
+            )
     return sorted(events, key=lambda e: (not e.all_day, e.start))
 
 
@@ -145,9 +187,11 @@ def untagged(title):
 
 def meeting_lines(events, lo_dt, hi_dt, me, tz):
     """`- **10:00-10:30** Titre · 4 personnes`, one per meeting."""
-    return [f"- **{s.astimezone(tz):%H:%M}-{e.astimezone(tz):%H:%M}** {untagged(ev.title) or '(sans titre)'} · "
-            f"{_plural(len(set(o)), 'personne')}"
-            for s, e, ev, o in meetings(events, lo_dt, hi_dt, me)]
+    return [
+        f"- **{s.astimezone(tz):%H:%M}-{e.astimezone(tz):%H:%M}** {untagged(ev.title) or '(sans titre)'} · "
+        f"{_plural(len(set(o)), 'personne')}"
+        for s, e, ev, o in meetings(events, lo_dt, hi_dt, me)
+    ]
 
 
 def work_summary(events, lo_dt, hi_dt, me):
@@ -176,8 +220,13 @@ def dedupe(events):
     fuller title wins."""
     kept = []
     for e in sorted(events, key=lambda e: -len(e.title)):
-        if not any(k.start == e.start and k.end == e.end and k.all_day == e.all_day
-                   and k.title.lower().startswith(e.title.lower()) for k in kept):
+        if not any(
+            k.start == e.start
+            and k.end == e.end
+            and k.all_day == e.all_day
+            and k.title.lower().startswith(e.title.lower())
+            for k in kept
+        ):
             kept.append(e)
     return sorted(kept, key=lambda e: (not e.all_day, e.start))
 
@@ -190,24 +239,36 @@ def personal_lines(events, tz):
         if e.all_day:
             lines.append(f"- **Journée** {title}")
         else:
-            lines.append(f"- **{e.start.astimezone(tz):%H:%M}-{e.end.astimezone(tz):%H:%M}** {title}")
+            lines.append(
+                f"- **{e.start.astimezone(tz):%H:%M}-{e.end.astimezone(tz):%H:%M}** {title}"
+            )
     return lines
 
 
 # The forecast API serves ~85 days back, with nulls near the edge (2026-08-02
 # came back empty at 86 days); older days need the archive, which lags ~5 days.
 WEATHER_FORECAST_DAYS = 85
-WEATHER_HOSTS = ("https://api.open-meteo.com/v1/forecast", "https://archive-api.open-meteo.com/v1/archive")
+WEATHER_HOSTS = (
+    "https://api.open-meteo.com/v1/forecast",
+    "https://archive-api.open-meteo.com/v1/archive",
+)
 
 
 def weather_line(day, lat, lon, opener=None, today=None):
     """`🌧 Pluie légère · 9-14 °C · 2,1 mm`, from Open-Meteo's daily summary.
     Tries the other API when the first has no values; ValueError when neither has."""
-    q = urlencode({"latitude": f"{lat:.4f}", "longitude": f"{lon:.4f}",
-                   "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
-                   "timezone": "Europe/Paris", "start_date": day.isoformat(), "end_date": day.isoformat()})
+    q = urlencode(
+        {
+            "latitude": f"{lat:.4f}",
+            "longitude": f"{lon:.4f}",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum",
+            "timezone": "Europe/Paris",
+            "start_date": day.isoformat(),
+            "end_date": day.isoformat(),
+        }
+    )
     old = ((today or date.today()) - day).days > WEATHER_FORECAST_DAYS
-    for host in (WEATHER_HOSTS[::-1] if old else WEATHER_HOSTS):
+    for host in WEATHER_HOSTS[::-1] if old else WEATHER_HOSTS:
         d = get_json(f"{host}?{q}", opener=opener)["daily"]
         lo, hi = d["temperature_2m_min"][0], d["temperature_2m_max"][0]
         if lo is not None and hi is not None:
@@ -237,7 +298,9 @@ def music_tracks(run, ids, db="ryot", runuser="runuser", psql="psql"):
     safe = [i for i in ids if i.isalnum()]  # Spotify ids are base62
     if not safe:
         return {}
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT m.identifier,
                coalesce((SELECT string_agg(p.name, ', ' ORDER BY p.name)
                          FROM metadata_to_person mp JOIN person p ON p.id = mp.person_id
@@ -245,14 +308,20 @@ def music_tracks(run, ids, db="ryot", runuser="runuser", psql="psql"):
         FROM metadata m
         WHERE m.lot = 'music' AND m.source = 'spotify'
           AND m.identifier IN ({", ".join(f"'{i}'" for i in sorted(set(safe)))})
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return {r[0]: r[1] for r in rows if r[1]}
 
 
 def music_listens(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
     """Every music play in [lo, hi) from Ryot V11, oldest first, stamped with
     Spotify's own played_at (spotify-to-ryot logs one complete per listen)."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT e.name,
                coalesce((SELECT string_agg(p.name, ', ' ORDER BY coalesce((r.properties->>'order')::int, 0), p.name)
                          FROM relationship r JOIN entity p ON p.id = r.source_entity_id
@@ -263,7 +332,11 @@ def music_listens(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
         WHERE e.entity_schema_slug = 'music' AND ev.event_schema_slug = 'complete'
           AND ev.occurred_at >= to_timestamp({int(lo)}) AND ev.occurred_at < to_timestamp({int(hi)})
         ORDER BY ev.occurred_at, ev.id
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return [Listen(r[0], r[1], int(r[2] or 0), float(r[3]), r[4]) for r in rows]
 
 
@@ -275,25 +348,46 @@ def music_section(listens, top=5, per_artist=3, streaks=None):
     by_artist = {}
     for l in listens:
         by_artist.setdefault(l.artists or "Artiste inconnu", []).append(l.title)
-    ranked = sorted(by_artist.items(), key=lambda kv: -len(kv[1]))  # stable: first heard wins ties
+    ranked = sorted(
+        by_artist.items(), key=lambda kv: -len(kv[1])
+    )  # stable: first heard wins ties
     lines = []
     for artist, titles in ranked[:top]:
-        plays = sorted(Counter(titles).items(), key=lambda kv: -kv[1])  # replays first, then first heard
+        plays = sorted(
+            Counter(titles).items(), key=lambda kv: -kv[1]
+        )  # replays first, then first heard
         uniq = [f"{t} ({n})" if n > 1 else t for t, n in plays]
         shown = ", ".join(uniq[:per_artist]) + (" …" if len(uniq) > per_artist else "")
-        lines.append(f"- **{artist}** · {shown}" + (f" · {streaks[artist]}" if (streaks or {}).get(artist) else ""))
+        lines.append(
+            f"- **{artist}** · {shown}"
+            + (f" · {streaks[artist]}" if (streaks or {}).get(artist) else "")
+        )
     if len(ranked) > top:
         n = len(ranked) - top
-        lines.append(f"- *et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}*")
+        lines.append(
+            f"- *et {n} autre{'s' if n > 1 else ''} artiste{'s' if n > 1 else ''}*"
+        )
     h, m = divmod(round(sum(l.seconds for l in listens) / 60), 60)
     n = len(listens)
-    head = f"{n} titre{'s' if n > 1 else ''}" + (f" · {h} h {m:02d}" if h else f" · {m} min")
+    head = f"{n} titre{'s' if n > 1 else ''}" + (
+        f" · {h} h {m:02d}" if h else f" · {m} min"
+    )
     return head, lines
 
 
 # Arkose hold colours (gymLabels names) -> emoji
-HOLD_EMOJI = {"jaune": "🟡", "vert": "🟢", "bleu": "🔵", "rouge": "🔴", "noir": "⚫",
-              "violet": "🟣", "orange": "🟠", "blanc": "⚪", "rose": "🩷", "marron": "🟤"}
+HOLD_EMOJI = {
+    "jaune": "🟡",
+    "vert": "🟢",
+    "bleu": "🔵",
+    "rouge": "🔴",
+    "noir": "⚫",
+    "violet": "🟣",
+    "orange": "🟠",
+    "blanc": "⚪",
+    "rose": "🩷",
+    "marron": "🟤",
+}
 
 
 def climbing_sessions(path, lo, hi):
@@ -302,8 +396,12 @@ def climbing_sessions(path, lo, hi):
 
     with open(path) as f:
         sessions = json.load(f).get("sessions", {}).values()
-    day = [s for s in sessions if not s.get("isEmpty")
-           and lo <= datetime.fromisoformat(s["startDate"]).timestamp() < hi]
+    day = [
+        s
+        for s in sessions
+        if not s.get("isEmpty")
+        and lo <= datetime.fromisoformat(s["startDate"]).timestamp() < hi
+    ]
     return sorted(day, key=lambda s: s["startDate"])
 
 
@@ -322,9 +420,15 @@ def climbing_section(sessions):
             by_label[label] = by_label.get(label, 0) + n
     total = lambda key: sum(s.get(key) or 0 for s in sessions)
     # one line per level, hardest (highest label) first
-    lines = [f"- {HOLD_EMOJI.get(names.get(l, l), '🪨')} **{names.get(l, l).capitalize()}**: {by_label[l]}"
-             for l in sorted(by_label, key=int, reverse=True)]
-    for key, title in (("flashs", "Flashs"), ("retops", "Retops"), ("tried", "Non topés")):
+    lines = [
+        f"- {HOLD_EMOJI.get(names.get(l, l), '🪨')} **{names.get(l, l).capitalize()}**: {by_label[l]}"
+        for l in sorted(by_label, key=int, reverse=True)
+    ]
+    for key, title in (
+        ("flashs", "Flashs"),
+        ("retops", "Retops"),
+        ("tried", "Non topés"),
+    ):
         if total(key):
             lines.append(f"- **{title}**: {total(key)}")
     last = sessions[-1]
@@ -353,7 +457,9 @@ def climbing_pictures(sessions):
     out, seen = [], set()
     for s in sessions:
         names = s.get("gymLabels") or {}
-        kinds = [(b, "flash" if b.get("flashed") else "") for b in s.get("boulders") or []]
+        kinds = [
+            (b, "flash" if b.get("flashed") else "") for b in s.get("boulders") or []
+        ]
         kinds += [(b, "retop") for b in s.get("retopBoulders") or []]
         kinds += [(b, "tried") for b in s.get("triedBoulders") or []]
         for b, status in kinds:
@@ -361,11 +467,24 @@ def climbing_pictures(sessions):
             if b["_id"] in seen or not (pic.get("share") or pic.get("id")):
                 continue
             seen.add(b["_id"])
-            url = (f"{ARKOSE_S3}/boulderPicsShare/{pic['share']}.jpg" if pic.get("share")
-                   else f"{ARKOSE_S3}/800/bouldersPics/{pic['id']}.jpg")
-            out.append((CLIMB_ORDER[status], -int(b.get("label") or 0), url,
-                        names.get(str(b.get("label")), ""), status))
-    return [(url, colour, status) for *_, url, colour, status in sorted(out, key=lambda t: t[:2])]
+            url = (
+                f"{ARKOSE_S3}/boulderPicsShare/{pic['share']}.jpg"
+                if pic.get("share")
+                else f"{ARKOSE_S3}/800/bouldersPics/{pic['id']}.jpg"
+            )
+            out.append(
+                (
+                    CLIMB_ORDER[status],
+                    -int(b.get("label") or 0),
+                    url,
+                    names.get(str(b.get("label")), ""),
+                    status,
+                )
+            )
+    return [
+        (url, colour, status)
+        for *_, url, colour, status in sorted(out, key=lambda t: t[:2])
+    ]
 
 
 # From the first steam-to-ryot run stamping plays when quit (10-30 04:50). Pushes
@@ -382,25 +501,43 @@ def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="
     in minutes); the V1 migration folded each game's earlier sessions into one
     event (marked by its startedOn), so the days before come from V1's seens."""
     lo, hi = int(lo), int(hi)
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT extract(epoch FROM ev.occurred_at), e.name, ((ev.properties->>'timeSpent')::numeric * 60)::bigint,
                ev.created_at >= to_timestamp({STEAM_TIMED_FROM})
         FROM event ev JOIN entity e ON e.id = ev.entity_id
         WHERE e.entity_schema_slug = 'video-game' AND ev.event_schema_slug = 'complete'
           AND NOT ev.properties ? 'startedOn' AND (ev.properties->>'timeSpent')::numeric > 0
           AND ev.occurred_at >= to_timestamp({lo}) AND ev.occurred_at < to_timestamp({hi + 86400})
-    """, db, runuser, psql)
-    plays = [(float(r[0]) - (0 if r[3] == "t" else 86400), r[1], int(r[2]), r[3] == "t") for r in rows]
+    """,
+        db,
+        runuser,
+        psql,
+    )
+    plays = [
+        (float(r[0]) - (0 if r[3] == "t" else 86400), r[1], int(r[2]), r[3] == "t")
+        for r in rows
+    ]
     if v1_db:
         # Keyed on started_on (the push); finished_on is when Ryot completed it,
         # which for seens completed by hand is days later.
-        plays += [(float(r[0]) - 86400, r[1], int(r[2]), False) for r in psql_rows(run, f"""
+        plays += [
+            (float(r[0]) - 86400, r[1], int(r[2]), False)
+            for r in psql_rows(
+                run,
+                f"""
             SELECT extract(epoch FROM coalesce(s.started_on, s.finished_on)), m.title, s.manual_time_spent::bigint
             FROM seen s JOIN metadata m ON m.id = s.metadata_id
             WHERE m.lot = 'video_game' AND s.manual_time_spent > 0
               AND coalesce(s.started_on, s.finished_on) >= to_timestamp({lo + 86400})
               AND coalesce(s.started_on, s.finished_on) < to_timestamp({hi + 86400})
-        """, v1_db, runuser, psql)]
+        """,
+                v1_db,
+                runuser,
+                psql,
+            )
+        ]
     return sorted(p for p in plays if lo <= p[0] < hi)
 
 
@@ -411,8 +548,15 @@ def game_sessions(plays):
     for end, title, sec, timed in plays:
         total[title] = total.get(title, 0) + sec
         spans.setdefault(title, []).append((end - sec, end) if timed else None)
-    span = lambda t: None if None in spans[t] else (min(a for a, _ in spans[t]), max(b for _, b in spans[t]))
-    return [(t, sec, span(t)) for t, sec in sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))]
+    span = lambda t: (
+        None
+        if None in spans[t]
+        else (min(a for a, _ in spans[t]), max(b for _, b in spans[t]))
+    )
+    return [
+        (t, sec, span(t))
+        for t, sec in sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 def _hm(seconds):
@@ -425,8 +569,12 @@ def game_section(games, streaks=None, tz=None):
     · 49 min` (the hours when known), plus that game's `streaks` text if any."""
     hm = lambda t: f"{datetime.fromtimestamp(t, tz):%H:%M}"
     return _hm(sum(s for _, s, _ in games)), [
-        f"- **{t}** · " + (f"{hm(span[0])}-{hm(span[1])} · " if span else "") + _hm(s)
-        + (f" · {streaks[t]}" if (streaks or {}).get(t) else "") for t, s, span in games]
+        f"- **{t}** · "
+        + (f"{hm(span[0])}-{hm(span[1])} · " if span else "")
+        + _hm(s)
+        + (f" · {streaks[t]}" if (streaks or {}).get(t) else "")
+        for t, s, span in games
+    ]
 
 
 @dataclass(frozen=True)
@@ -443,7 +591,9 @@ class Screen:
 
 def screen_events(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
     """Films and episodes finished in [lo, hi) (Plex, through plex-to-ryot), oldest first."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT extract(epoch FROM ev.occurred_at), e.entity_schema_slug, e.name,
                coalesce((SELECT s.name FROM entity s WHERE s.entity_schema_slug = 'show'
                          AND s.external_id = e.properties->>'parentShowExternalId' LIMIT 1), ''),
@@ -453,9 +603,16 @@ def screen_events(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):
         WHERE e.entity_schema_slug IN ('movie', 'show-episode') AND ev.event_schema_slug = 'complete'
           AND ev.occurred_at >= to_timestamp({int(lo)}) AND ev.occurred_at < to_timestamp({int(hi)})
         ORDER BY ev.occurred_at, ev.id
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     num = lambda x: int(float(x or 0))
-    return [Screen(float(r[0]), r[1], r[2], r[3], num(r[4]), num(r[5]), r[6], num(r[7])) for r in rows]
+    return [
+        Screen(float(r[0]), r[1], r[2], r[3], num(r[4]), num(r[5]), r[6], num(r[7]))
+        for r in rows
+    ]
 
 
 def _caps(name):
@@ -469,13 +626,20 @@ def screen_section(screens, tz):
     A show's episodes in a row share a line: `- **19:04-19:58** 📺 **Invincible** · S03E07-E08`."""
     films = sum(s.kind == "movie" for s in screens)
     eps = len(screens) - films
-    head = ([_plural(films, "film")] if films else []) + ([_plural(eps, "épisode")] if eps else [])
+    head = ([_plural(films, "film")] if films else []) + (
+        [_plural(eps, "épisode")] if eps else []
+    )
     if all(s.minutes for s in screens):
         head.append(_hm(60 * sum(s.minutes for s in screens)))
     runs = []
     for s in screens:
         prev = runs[-1][-1] if runs else None
-        if prev and s.kind == prev.kind == "show-episode" and s.show == prev.show and s.at - prev.at < 3 * 3600:
+        if (
+            prev
+            and s.kind == prev.kind == "show-episode"
+            and s.show == prev.show
+            and s.at - prev.at < 3 * 3600
+        ):
             runs[-1].append(s)
         else:
             runs.append([s])
@@ -486,17 +650,39 @@ def screen_section(screens, tz):
         first, last = run[0], run[-1]
         at = f"**{hm(first)}**" if len(run) == 1 else f"**{hm(first)}-{hm(last)}**"
         if first.kind == "movie":
-            lines.append(f"- {at} 🎬 **{first.title}**" + (f" ({first.year})" if first.year else ""))
+            lines.append(
+                f"- {at} 🎬 **{first.title}**"
+                + (f" ({first.year})" if first.year else "")
+            )
         elif len(run) == 1:
-            lines.append(f"- {at} 📺 " + " · ".join(x for x in (
-                f"**{_caps(first.show or first.title)}**", code(first), _caps(first.title) if first.show else "") if x))
+            lines.append(
+                f"- {at} 📺 "
+                + " · ".join(
+                    x
+                    for x in (
+                        f"**{_caps(first.show or first.title)}**",
+                        code(first),
+                        _caps(first.title) if first.show else "",
+                    )
+                    if x
+                )
+            )
         else:
-            span = code(first) + (f"-E{last.episode:02d}" if last.season == first.season else f"-{code(last)}")
+            span = code(first) + (
+                f"-E{last.episode:02d}"
+                if last.season == first.season
+                else f"-{code(last)}"
+            )
             lines.append(f"- {at} 📺 **{_caps(first.show or first.title)}** · {span}")
     return " · ".join(head), lines
 
 
-ACTIVITY_METRICS = ("step_count", "distance_walking_running", "flights_climbed", "active_energy")
+ACTIVITY_METRICS = (
+    "step_count",
+    "distance_walking_running",
+    "flights_climbed",
+    "active_energy",
+)
 
 
 def activity_totals(run, lo, hi, db="freereps", runuser="runuser", psql="psql"):
@@ -505,7 +691,9 @@ def activity_totals(run, lo, hi, db="freereps", runuser="runuser", psql="psql"):
     floors, already in the bike section), and each hourly sample counts once:
     since FreeReps 2.2 the same hour is stored again with client freereps_ios."""
     names = ", ".join(f"'{m}'" for m in ACTIVITY_METRICS)
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT metric_name, sum(qty) FROM (
             SELECT DISTINCT ON (metric_name, time) metric_name, qty
             FROM health_metrics
@@ -513,7 +701,11 @@ def activity_totals(run, lo, hi, db="freereps", runuser="runuser", psql="psql"):
               AND time >= to_timestamp({int(lo)}) AND time < to_timestamp({int(hi)})
             ORDER BY metric_name, time, client NULLS LAST
         ) hourly GROUP BY metric_name
-    """, db, runuser, psql)
+    """,
+        db,
+        runuser,
+        psql,
+    )
     return {r[0]: float(r[1] or 0) for r in rows}
 
 
@@ -562,8 +754,11 @@ def clean_dispatch(md):
             out.append(f"*{l[4:].strip()}*")
         else:
             out.append(l.rstrip())
-    last = max((i for i, l in enumerate(out) if l.lstrip().startswith("- ")), default=len(out) - 1)
-    out = out[:last + 1]
+    last = max(
+        (i for i, l in enumerate(out) if l.lstrip().startswith("- ")),
+        default=len(out) - 1,
+    )
+    out = out[: last + 1]
     while out and not out[0].strip():
         out.pop(0)
     return [l for i, l in enumerate(out) if l.strip() or (i and out[i - 1].strip())]
@@ -578,13 +773,35 @@ def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="gi
     iso = lambda t: datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
     notes = []
     for repo in repos:
-        touched = run([runuser, "-u", user, "--", git, "-C", repo, "log", "--all",
-                       f"--since=@{int(lo)}", f"--until=@{int(hi)}", "--format=%h", "-1"])
+        touched = run(
+            [
+                runuser,
+                "-u",
+                user,
+                "--",
+                git,
+                "-C",
+                repo,
+                "log",
+                "--all",
+                f"--since=@{int(lo)}",
+                f"--until=@{int(hi)}",
+                "--format=%h",
+                "-1",
+            ]
+        )
         if not touched.strip():
             continue
-        md = run([runuser, "-l", user, "-c",
-                  f"cd {shlex.quote(repo)} && entire dispatch --local --all-branches "
-                  f"--since {iso(lo)} --until {iso(hi)} --voice {shlex.quote(DISPATCH_VOICE)}"])
+        md = run(
+            [
+                runuser,
+                "-l",
+                user,
+                "-c",
+                f"cd {shlex.quote(repo)} && entire dispatch --local --all-branches "
+                f"--since {iso(lo)} --until {iso(hi)} --voice {shlex.quote(DISPATCH_VOICE)}",
+            ]
+        )
         lines = clean_dispatch(md)
         if lines:
             notes += ([""] if notes else []) + lines

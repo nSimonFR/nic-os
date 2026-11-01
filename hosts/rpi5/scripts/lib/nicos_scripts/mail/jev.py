@@ -139,9 +139,7 @@ QUESTIONS = {
     },
     "disposition": {
         "type": "choice",
-        "instructions": (
-            "What should happen to this message in a daily inbox triage?"
-        ),
+        "instructions": ("What should happen to this message in a daily inbox triage?"),
         "criteria": {
             "top_action": "Needs the recipient to act on it today",
             "read_if_time": "Worth reading today but needs no action",
@@ -284,20 +282,27 @@ def http_post(url, key, payload, timeout=30, opener=None):
     """POST one evaluation. `opener` is the seam the tests fake."""
     try:
         status, raw = post_json(
-            url, payload, headers={"Authorization": f"Bearer {key}"},
-            timeout=timeout, opener=opener,
+            url,
+            payload,
+            headers={"Authorization": f"Bearer {key}"},
+            timeout=timeout,
+            opener=opener,
         )
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:200]
         if exc.code in (401, 402, 403):
-            raise RuntimeError(f"jev rejected the key (HTTP {exc.code}) — "
-                               f"expired, revoked or out of credit: {detail}") from exc
+            raise RuntimeError(
+                f"jev rejected the key (HTTP {exc.code}) — "
+                f"expired, revoked or out of credit: {detail}"
+            ) from exc
         raise RuntimeError(f"jev HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise RuntimeError(f"jev unreachable: {exc.reason}") from exc
     if status in (401, 402, 403):
-        raise RuntimeError(f"jev rejected the key (HTTP {status}) — "
-                           f"expired, revoked or out of credit: {raw[:200]}")
+        raise RuntimeError(
+            f"jev rejected the key (HTTP {status}) — "
+            f"expired, revoked or out of credit: {raw[:200]}"
+        )
     if status >= 400:
         raise RuntimeError(f"jev HTTP {status}: {raw[:300]}")
     return json.loads(raw) if raw else {}
@@ -350,12 +355,8 @@ def classify(envelopes, key, endpoint, model, post=http_post, workers=8):
             "date": _first(env, "date", "Date", "internalDate"),
             "rank": round(rank_value(answers), 4),
             "disposition": disp.get("choice") or "leave",
-            "disposition_confidence": round(
-                float(disp.get("confidence") or 0.0), 4
-            ),
-            "signals": {
-                k: round(_noul(answers, k), 4) for k in WEIGHTS
-            }
+            "disposition_confidence": round(float(disp.get("confidence") or 0.0), 4),
+            "signals": {k: round(_noul(answers, k), 4) for k in WEIGHTS}
             | {"urgency": round(_score01(answers, "urgency"), 4)},
             "usage": resp.get("usage") or {},
         }
@@ -520,12 +521,18 @@ def self_test():
         ),
         ("quoted chain trimmed", "> old" not in build_state({"snippet": "new\n> old"})),
         ("state is guarded", "untrusted email" in build_state(envelopes[0])),
-        ("state is capped", len(build_state({"snippet": "x" * 9000})) < MAX_STATE_CHARS + 300),
+        (
+            "state is capped",
+            len(build_state({"snippet": "x" * 9000})) < MAX_STATE_CHARS + 300,
+        ),
         ("two results", len(results) == 2 and usage["failed"] == 0),
         ("urgent ranks first", results[0]["id"] == "1"),
         ("injection did not promote", results[1]["id"] == "2"),
         ("top action picked", [r["id"] for r in buckets["top_actions"]] == ["1"]),
-        ("bulk offered for deletion", [r["id"] for r in buckets["delete_spam"]] == ["2"]),
+        (
+            "bulk offered for deletion",
+            [r["id"] for r in buckets["delete_spam"]] == ["2"],
+        ),
         ("cost computed", usage["input_tokens"] == 240 and usage["usd"] > 0),
         ("eight questions", len(QUESTIONS) == 8),
         (
@@ -535,8 +542,7 @@ def self_test():
         ),
         (
             "imap link falls back to the inbox",
-            message_url({"source": "proton"}, "")
-            == "https://mail.proton.me/u/0/inbox",
+            message_url({"source": "proton"}, "") == "https://mail.proton.me/u/0/inbox",
         ),
         (
             "proton account index is honoured",
@@ -549,10 +555,20 @@ def self_test():
             len(
                 dedupe(
                     [
-                        {"account": "w", "from": "a@b.c", "subject": "Timesheet due",
-                         "thread": "t1", "rank": 2},
-                        {"account": "w", "from": "a@b.c", "subject": "Timesheet due",
-                         "thread": "t2", "rank": 1},
+                        {
+                            "account": "w",
+                            "from": "a@b.c",
+                            "subject": "Timesheet due",
+                            "thread": "t1",
+                            "rank": 2,
+                        },
+                        {
+                            "account": "w",
+                            "from": "a@b.c",
+                            "subject": "Timesheet due",
+                            "thread": "t2",
+                            "rank": 1,
+                        },
                     ]
                 )
             )
@@ -563,10 +579,20 @@ def self_test():
             len(
                 dedupe(
                     [
-                        {"account": "w", "from": "a@b.c", "subject": "Specs",
-                         "thread": "", "rank": 2},
-                        {"account": "w", "from": "a@b.c", "subject": "Re: Specs",
-                         "thread": "", "rank": 1},
+                        {
+                            "account": "w",
+                            "from": "a@b.c",
+                            "subject": "Specs",
+                            "thread": "",
+                            "rank": 2,
+                        },
+                        {
+                            "account": "w",
+                            "from": "a@b.c",
+                            "subject": "Re: Specs",
+                            "thread": "",
+                            "rank": 1,
+                        },
                     ]
                 )
             )
@@ -587,17 +613,23 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     # Anything past the cap is never ranked, so it must clear a normal unread
     # backlog. ~$0.00005 per message.
-    p.add_argument("--max", type=int, default=150,
-                   help="cap envelopes per run (cost control, default 150)")
+    p.add_argument(
+        "--max",
+        type=int,
+        default=150,
+        help="cap envelopes per run (cost control, default 150)",
+    )
     p.add_argument("--top", type=int, default=3)
     p.add_argument("--read", type=int, default=3)
-    p.add_argument("--endpoint",
-                   default=os.environ.get("TYPESAFE_ENDPOINT", DEFAULT_ENDPOINT))
-    p.add_argument("--model",
-                   default=os.environ.get("TYPESAFE_MODEL", DEFAULT_MODEL))
-    p.add_argument("--key-file", default=None,
-                   help="file holding TYPESAFE_API_KEY=... (default "
-                        f"{DEFAULT_ENV_FILE})")
+    p.add_argument(
+        "--endpoint", default=os.environ.get("TYPESAFE_ENDPOINT", DEFAULT_ENDPOINT)
+    )
+    p.add_argument("--model", default=os.environ.get("TYPESAFE_MODEL", DEFAULT_MODEL))
+    p.add_argument(
+        "--key-file",
+        default=None,
+        help=f"file holding TYPESAFE_API_KEY=... (default {DEFAULT_ENV_FILE})",
+    )
     p.add_argument("--self-test", action="store_true")
     args = p.parse_args(argv)
 
@@ -607,9 +639,7 @@ def main(argv=None):
     key = resolve_key(env_file=args.key_file)
     if not key:
         checked = (
-            args.key_file
-            or os.environ.get("TYPESAFE_ENV_FILE")
-            or DEFAULT_ENV_FILE
+            args.key_file or os.environ.get("TYPESAFE_ENV_FILE") or DEFAULT_ENV_FILE
         )
         print(
             f"no TYPESAFE_API_KEY (checked $TYPESAFE_API_KEY and {checked}) "
@@ -620,15 +650,22 @@ def main(argv=None):
 
     envelopes = load_envelopes(sys.stdin.read())
     if not envelopes:
-        json.dump({"top_actions": [], "read_if_time": [], "delete_spam": [],
-                   "archive": [], "usage": {"messages": 0}}, sys.stdout, indent=2)
+        json.dump(
+            {
+                "top_actions": [],
+                "read_if_time": [],
+                "delete_spam": [],
+                "archive": [],
+                "usage": {"messages": 0},
+            },
+            sys.stdout,
+            indent=2,
+        )
         print()
         return 0
 
     truncated = len(envelopes) > args.max
-    results, usage = classify(
-        envelopes[: args.max], key, args.endpoint, args.model
-    )
+    results, usage = classify(envelopes[: args.max], key, args.endpoint, args.model)
     out = assign(results, top=args.top, read=args.read)
     out["usage"] = usage | {"truncated": truncated, "model": args.model}
     json.dump(out, sys.stdout, indent=2, ensure_ascii=False)

@@ -77,7 +77,10 @@ MOX_API = "https://api2.moxfield.com/v3/decks/all/"
 MOX_SEARCH = "https://api2.moxfield.com/v2/decks/search"
 MOX_USER = "https://api2.moxfield.com/v1/users/"
 MOX_COLLECTION = "https://api2.moxfield.com/v1/collections/search/"
-DECK_BOARDS = ("commanders", "mainboard")  # the deck proper; sideboard/maybeboard reported only
+DECK_BOARDS = (
+    "commanders",
+    "mainboard",
+)  # the deck proper; sideboard/maybeboard reported only
 FETCH_DELAY = 3.0  # seconds between Moxfield fetches; their rate limit is unpublished
 COLLECTION_PAGE = 500
 
@@ -115,7 +118,9 @@ class Config:
     def from_env(cls, env=None):
         return cls(
             users=tuple(
-                u.strip() for u in env_str("MOXFIELD_USERS", "", env).split(",") if u.strip()
+                u.strip()
+                for u in env_str("MOXFIELD_USERS", "", env).split(",")
+                if u.strip()
             ),
             collection_user=env_str("MOXFIELD_COLLECTION_USER", "", env).strip(),
             user_agent=env_str("MOXFIELD_USER_AGENT", DEFAULT_USER_AGENT, env),
@@ -132,6 +137,7 @@ class Config:
 
 # ── HTTP ────────────────────────────────────────────────────────────────────────
 
+
 class _KeepMethodRedirect(urllib.request.HTTPRedirectHandler):
     """Follow 307/308 without downgrading the method.
 
@@ -144,9 +150,13 @@ class _KeepMethodRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         if code in (307, 308):
             return urllib.request.Request(
-                newurl, data=req.data, headers=dict(req.header_items()),
-                origin_req_host=req.origin_req_host, unverifiable=True,
-                method=req.get_method())
+                newurl,
+                data=req.data,
+                headers=dict(req.header_items()),
+                origin_req_host=req.origin_req_host,
+                unverifiable=True,
+                method=req.get_method(),
+            )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -188,8 +198,11 @@ class Smc:
         if path.endswith("/"):
             path = path[:-1]
         return _request(
-            f"{self.base}{path}", method=method, body=body,
-            timeout=self.timeout, opener=self.opener,
+            f"{self.base}{path}",
+            method=method,
+            body=body,
+            timeout=self.timeout,
+            opener=self.opener,
         )
 
     def paged(self, path):
@@ -211,14 +224,18 @@ class Moxfield:
     `sleep` is injectable so tests don't pay the 3 s inter-fetch delay.
     """
 
-    def __init__(self, user_agent, opener=None, sleep=time.sleep, fetch_delay=FETCH_DELAY):
+    def __init__(
+        self, user_agent, opener=None, sleep=time.sleep, fetch_delay=FETCH_DELAY
+    ):
         self.user_agent = user_agent
         self.opener = opener
         self.sleep = sleep
         self.fetch_delay = fetch_delay
 
     def _plain(self, url):
-        return _request(url, headers={"User-Agent": self.user_agent}, opener=self.opener)
+        return _request(
+            url, headers={"User-Agent": self.user_agent}, opener=self.opener
+        )
 
     def get(self, url, label):
         """GET one Moxfield URL, backing off on 429/5xx. Moxfield publishes no rate
@@ -228,14 +245,14 @@ class Moxfield:
                 return self._plain(url)
             except urllib.error.HTTPError as e:
                 if e.code in (429, 500, 502, 503, 504) and attempt < 4:
-                    wait = 5 * (2 ** attempt)
+                    wait = 5 * (2**attempt)
                     log(f"  {label}: HTTP {e.code}, retrying in {wait}s")
                     self.sleep(wait)
                     continue
                 raise
             except urllib.error.URLError as e:
                 if attempt < 4:
-                    wait = 5 * (2 ** attempt)
+                    wait = 5 * (2**attempt)
                     log(f"  {label}: {e.reason}, retrying in {wait}s")
                     self.sleep(wait)
                     continue
@@ -264,10 +281,14 @@ class Moxfield:
         for user in users:
             page = 1
             while True:
-                q = urllib.parse.urlencode({
-                    "authorUserNames": user, "pageNumber": page,
-                    "pageSize": 100, "showIllegal": "true",
-                })
+                q = urllib.parse.urlencode(
+                    {
+                        "authorUserNames": user,
+                        "pageNumber": page,
+                        "pageSize": 100,
+                        "showIllegal": "true",
+                    }
+                )
                 data = self._plain(f"{MOX_SEARCH}?{q}")
                 rows = data.get("data") or []
                 for d in rows:
@@ -275,8 +296,13 @@ class Moxfield:
                     if not pid or pid in seen:
                         continue
                     seen.add(pid)
-                    out.append((pid, d.get("name") or pid,
-                                (d.get("createdByUser") or {}).get("userName") or "?"))
+                    out.append(
+                        (
+                            pid,
+                            d.get("name") or pid,
+                            (d.get("createdByUser") or {}).get("userName") or "?",
+                        )
+                    )
                 # totalPages is absent on some responses; the empty page is the real
                 # terminator, the page cap just stops a pathological loop.
                 if not rows or page >= data.get("totalPages", page) or page >= 20:
@@ -300,11 +326,14 @@ class Moxfield:
         if vis != "public" or not cid:
             raise RuntimeError(
                 f"collection of {user} is not publicly readable (visibility={vis!r}, "
-                f"id={cid!r}) — set it to public on Moxfield or disable the mirror")
+                f"id={cid!r}) — set it to public on Moxfield or disable the mirror"
+            )
 
         rows, page, total = [], 1, None
         while True:
-            q = urllib.parse.urlencode({"pageNumber": page, "pageSize": COLLECTION_PAGE})
+            q = urllib.parse.urlencode(
+                {"pageNumber": page, "pageSize": COLLECTION_PAGE}
+            )
             data = self.get(f"{MOX_COLLECTION}{cid}?{q}", f"collection p{page}")
             rows += data.get("data") or []
             total = data.get("totalResults")
@@ -315,13 +344,18 @@ class Moxfield:
 
         # A truncated response reads as "these cards were sold" and would prune them.
         if total is not None and len(rows) != total:
-            raise RuntimeError(f"collection truncated: got {len(rows)} rows, expected {total}")
+            raise RuntimeError(
+                f"collection truncated: got {len(rows)} rows, expected {total}"
+            )
         if not rows:
-            raise RuntimeError("collection came back empty — refusing to prune everything")
+            raise RuntimeError(
+                "collection came back empty — refusing to prune everything"
+            )
         return rows
 
 
 # ── local catalogue ─────────────────────────────────────────────────────────────
+
 
 def open_db(cfg):
     return sqlite3.connect(f"file:{cfg.db}?mode=ro", uri=True)
@@ -332,7 +366,7 @@ def oracle_ids(con, scryfall_ids):
     out = {}
     ids = list(scryfall_ids)
     for i in range(0, len(ids), 400):
-        chunk = ids[i:i + 400]
+        chunk = ids[i : i + 400]
         q = f"select scryfall_id, oracle_id from cards where scryfall_id in ({','.join('?' * len(chunk))})"
         for sid, oid in con.execute(q, chunk):
             if oid:
@@ -388,17 +422,21 @@ def resolve_printings(con, rows, oids):
     182 remaps is a French row).
     """
     idx = {}
-    targets = sorted({
-        oids[(r.get("card") or {}).get("scryfall_id")]
-        for r in rows
-        if ((r.get("language") or {}).get("code") or "en") != "en"
-        and (r.get("card") or {}).get("scryfall_id") in oids})
+    targets = sorted(
+        {
+            oids[(r.get("card") or {}).get("scryfall_id")]
+            for r in rows
+            if ((r.get("language") or {}).get("code") or "en") != "en"
+            and (r.get("card") or {}).get("scryfall_id") in oids
+        }
+    )
     for i in range(0, len(targets), 200):
-        chunk = targets[i:i + 200]
+        chunk = targets[i : i + 200]
         for sid, code, cn, lang in con.execute(
             "select scryfall_id, set_code, json_extract(raw_json,'$.collector_number'),"
             f" json_extract(raw_json,'$.lang') from cards"
-            f" where oracle_id in ({','.join('?' * len(chunk))})", chunk
+            f" where oracle_id in ({','.join('?' * len(chunk))})",
+            chunk,
         ):
             if cn is not None and lang:
                 idx[(code, _cn(cn), lang)] = sid
@@ -406,6 +444,7 @@ def resolve_printings(con, rows, oids):
 
 
 # ── collection mirror (Moxfield -> ShowMyCards inventory) ───────────────────────
+
 
 def infer_storage_type(name):
     """Moxfield has no Box-vs-Binder distinction and ShowMyCards requires one, so the
@@ -464,8 +503,11 @@ def sync_storage_locations(cfg, smc, rows):
             if not cfg.dry_run:
                 # storage_type is a non-pointer field — omitting it writes an empty
                 # value, the same trap as description on PUT /lists/:id.
-                smc(f"/storage/{loc['id']}", "PUT",
-                    {"name": name, "storage_type": loc["storage_type"]})
+                smc(
+                    f"/storage/{loc['id']}",
+                    "PUT",
+                    {"name": name, "storage_type": loc["storage_type"]},
+                )
         out[pid] = loc["id"]
         if state.get(pid) != loc["id"]:
             state[pid] = loc["id"]
@@ -488,8 +530,9 @@ def build_wanted_inventory(cfg, smc, con, rows):
     # Doubles as the catalogue-membership test: oracle_ids() only returns ids that
     # exist locally with an oracle_id, and an id without one cannot be POSTed anyway.
     # It reads no raw_json, so it stays cheap over all 515 rows.
-    known = oracle_ids(con, {s for s in
-                             ((r.get("card") or {}).get("scryfall_id") for r in rows) if s})
+    known = oracle_ids(
+        con, {s for s in ((r.get("card") or {}).get("scryfall_id") for r in rows) if s}
+    )
     idx = resolve_printings(con, rows, known)
 
     wanted = collections.Counter()
@@ -500,7 +543,7 @@ def build_wanted_inventory(cfg, smc, con, rows):
         mox_sid = card.get("scryfall_id")
         if not mox_sid:
             continue
-        lang = ((r.get("language") or {}).get("code") or "en")
+        lang = (r.get("language") or {}).get("code") or "en"
         sid = idx.get((card.get("set"), _cn(card.get("cn")), lang))
         if sid is None:
             # English row, or no printing in that language: keep whatever id Moxfield
@@ -509,8 +552,10 @@ def build_wanted_inventory(cfg, smc, con, rows):
             if mox_sid not in known:
                 stats["unresolved"] += 1
                 if len(unresolved) < 10:
-                    unresolved.append(f"{card.get('name')} [{card.get('set')} "
-                                      f"{card.get('cn')} {lang}]")
+                    unresolved.append(
+                        f"{card.get('name')} [{card.get('set')} "
+                        f"{card.get('cn')} {lang}]"
+                    )
                 continue
             sid = mox_sid
         elif sid != mox_sid:
@@ -520,7 +565,9 @@ def build_wanted_inventory(cfg, smc, con, rows):
         treat = FINISHES.get(finish)
         if treat is None:
             stats["bad_finish"] += 1
-            log(f"  ! unknown finish {finish!r} on {card.get('name')} — treating as nonfoil")
+            log(
+                f"  ! unknown finish {finish!r} on {card.get('name')} — treating as nonfoil"
+            )
             treat = "nonfoil"
 
         binder = (r.get("tradeBinder") or {}).get("publicId")
@@ -542,8 +589,13 @@ def mirror_inventory(cfg, smc, con, rows):
 
     current = collections.defaultdict(list)
     for it in smc.paged("/inventory/"):
-        current[(it["scryfall_id"], it.get("treatment") or "nonfoil",
-                 it.get("storage_location_id"))].append(it)
+        current[
+            (
+                it["scryfall_id"],
+                it.get("treatment") or "nonfoil",
+                it.get("storage_location_id"),
+            )
+        ].append(it)
 
     oids = oracle_ids(con, {sid for sid, _, _ in wanted})
 
@@ -557,8 +609,15 @@ def mirror_inventory(cfg, smc, con, rows):
             continue
         held = current.get(key) or []
         if not held:
-            add.append({"scryfall_id": sid, "oracle_id": oid, "treatment": treat,
-                        "quantity": qty, "storage_location_id": loc})
+            add.append(
+                {
+                    "scryfall_id": sid,
+                    "oracle_id": oid,
+                    "treatment": treat,
+                    "quantity": qty,
+                    "storage_location_id": loc,
+                }
+            )
         else:
             # Several rows for one key means the collection was hand-edited or
             # double-imported; keep the first and drop the rest.
@@ -572,25 +631,35 @@ def mirror_inventory(cfg, smc, con, rows):
 
     total_now = sum(it["quantity"] for its in current.values() for it in its)
     pruned = sum(it["quantity"] for it in remove)
-    log(f"inventory: moxfield {sum(wanted.values())} cards in {len(wanted)} rows"
+    log(
+        f"inventory: moxfield {sum(wanted.values())} cards in {len(wanted)} rows"
         f" | showmycards {total_now} in {sum(len(v) for v in current.values())}"
-        f" | remapped {stats['remapped']} printing(s) to their fr/en variant")
-    log(f"inventory: +{len(add)} ~{len(update)} -{len(remove)}"
-        + (" [dry-run]" if cfg.dry_run else ""))
+        f" | remapped {stats['remapped']} printing(s) to their fr/en variant"
+    )
+    log(
+        f"inventory: +{len(add)} ~{len(update)} -{len(remove)}"
+        + (" [dry-run]" if cfg.dry_run else "")
+    )
 
     if total_now and pruned > total_now * cfg.max_prune and not cfg.force_prune:
-        log(f"inventory: REFUSING — would delete {pruned}/{total_now} cards "
+        log(
+            f"inventory: REFUSING — would delete {pruned}/{total_now} cards "
             f"(>{int(cfg.max_prune * 100)}%). A renamed binder or a partial Moxfield "
-            f"collection looks exactly like this. Set FORCE_PRUNE=1 if intended.")
+            f"collection looks exactly like this. Set FORCE_PRUNE=1 if intended."
+        )
         return None
 
     if cfg.dry_run:
         for it in add[:20]:
-            log(f"  + would add {it['scryfall_id']} x{it['quantity']} @loc {it['storage_location_id']}")
+            log(
+                f"  + would add {it['scryfall_id']} x{it['quantity']} @loc {it['storage_location_id']}"
+            )
         for cur, qty in update[:20]:
             log(f"  ~ would set {cur['scryfall_id']} qty {cur['quantity']} -> {qty}")
         for cur in remove[:20]:
-            log(f"  - would remove {cur['scryfall_id']} x{cur['quantity']} @loc {cur.get('storage_location_id')}")
+            log(
+                f"  - would remove {cur['scryfall_id']} x{cur['quantity']} @loc {cur.get('storage_location_id')}"
+            )
         if max(len(add), len(update), len(remove)) > 20:
             log("  … (truncated to 20 per category)")
         return len(add), len(update), len(remove)
@@ -601,11 +670,17 @@ def mirror_inventory(cfg, smc, con, rows):
     # non-pointer fields unconditionally, so a partial PUT is how you silently blank
     # storage_location_id (the same trap as PUT /lists/:id wiping description).
     for cur, qty in update:
-        smc(f"/inventory/{cur['id']}", "PUT", {
-            "scryfall_id": cur["scryfall_id"], "oracle_id": cur["oracle_id"],
-            "treatment": cur.get("treatment") or "nonfoil", "quantity": qty,
-            "storage_location_id": cur.get("storage_location_id"),
-        })
+        smc(
+            f"/inventory/{cur['id']}",
+            "PUT",
+            {
+                "scryfall_id": cur["scryfall_id"],
+                "oracle_id": cur["oracle_id"],
+                "treatment": cur.get("treatment") or "nonfoil",
+                "quantity": qty,
+                "storage_location_id": cur.get("storage_location_id"),
+            },
+        )
     delete_inventory(smc, [it["id"] for it in remove])
     return len(add), len(update), len(remove)
 
@@ -615,7 +690,7 @@ def delete_inventory(smc, ids):
     JSON body capped at 1000 ids; if that shape is rejected, the per-id route is
     slower but always available."""
     for i in range(0, len(ids), 500):
-        chunk = ids[i:i + 500]
+        chunk = ids[i : i + 500]
         try:
             smc("/inventory/batch", "DELETE", {"ids": chunk})
         except urllib.error.HTTPError as e:
@@ -625,6 +700,7 @@ def delete_inventory(smc, ids):
 
 
 # ── deck parsing ────────────────────────────────────────────────────────────────
+
 
 def parse_deck(deck):
     """-> (wanted{(scryfall_id,treatment): qty}, excluded{board: count})"""
@@ -641,7 +717,9 @@ def parse_deck(deck):
             if not sid:
                 continue
             treat = "foil" if entry.get("isFoil") else "nonfoil"
-            wanted[(sid, treat)] = wanted.get((sid, treat), 0) + int(entry.get("quantity", 1))
+            wanted[(sid, treat)] = wanted.get((sid, treat), 0) + int(
+                entry.get("quantity", 1)
+            )
     return wanted, excluded
 
 
@@ -650,15 +728,21 @@ def deck_fingerprint(wanted, name, inventory_fp):
     Moxfield still needs its collected_quantity refreshed when the collection moves
     underneath it, and the mirror moves it daily. Without this the hash-skip below
     would freeze every ownership count at whatever it was when the deck last changed."""
-    payload = json.dumps({"n": name, "i": inventory_fp,
-                          "c": sorted([[k[0], k[1], v] for k, v in wanted.items()])},
-                         sort_keys=True)
+    payload = json.dumps(
+        {
+            "n": name,
+            "i": inventory_fp,
+            "c": sorted([[k[0], k[1], v] for k, v in wanted.items()]),
+        },
+        sort_keys=True,
+    )
     return hashlib.sha256(payload.encode()).hexdigest()
 
 
 def inventory_fingerprint(owned):
     return hashlib.sha256(
-        json.dumps(sorted(owned.items()), sort_keys=True).encode()).hexdigest()
+        json.dumps(sorted(owned.items()), sort_keys=True).encode()
+    ).hexdigest()
 
 
 def allocate_collected(wanted, oids, owned):
@@ -682,6 +766,7 @@ def allocate_collected(wanted, oids, owned):
 
 
 # ── ShowMyCards deck reconciliation ─────────────────────────────────────────────
+
 
 def find_list(lists, public_id, name):
     """Match on the Moxfield URL kept in the list description; fall back to name so
@@ -711,9 +796,18 @@ def reconcile(cfg, smc, list_id, wanted, oids, collected_by_key):
         collected = collected_by_key.get(key, 0)
         cur = current.get(key)
         if cur is None:
-            add.append({"scryfall_id": sid, "oracle_id": oid, "treatment": treat,
-                        "desired_quantity": qty})
-        elif cur["desired_quantity"] != qty or cur.get("collected_quantity", 0) != collected:
+            add.append(
+                {
+                    "scryfall_id": sid,
+                    "oracle_id": oid,
+                    "treatment": treat,
+                    "desired_quantity": qty,
+                }
+            )
+        elif (
+            cur["desired_quantity"] != qty
+            or cur.get("collected_quantity", 0) != collected
+        ):
             update.append((cur["id"], qty, collected, key))
     for key, cur in current.items():
         if key not in wanted:
@@ -732,27 +826,43 @@ def reconcile(cfg, smc, list_id, wanted, oids, collected_by_key):
     # duplicate against (list_id, scryfall_id, treatment) fails the WHOLE
     # transaction -- `wanted` is keyed on that tuple, so it is duplicate-free.
     for i in range(0, len(add), 400):
-        smc(f"/lists/{list_id}/items/batch", "POST", {"items": add[i:i + 400]})
+        smc(f"/lists/{list_id}/items/batch", "POST", {"items": add[i : i + 400]})
     # collected_quantity is forced to 0 on create, so every new item needs a
     # follow-up PUT to carry ownership.
-    fresh = {(it["scryfall_id"], it.get("treatment") or "nonfoil"): it
-             for it in smc.paged(f"/lists/{list_id}/items")} if add else {}
+    fresh = (
+        {
+            (it["scryfall_id"], it.get("treatment") or "nonfoil"): it
+            for it in smc.paged(f"/lists/{list_id}/items")
+        }
+        if add
+        else {}
+    )
     for it in add:
         key = (it["scryfall_id"], it["treatment"])
         collected = collected_by_key.get(key, 0)
         got = fresh.get(key)
         if got and collected:
-            smc(f"/lists/{list_id}/items/{got['id']}", "PUT",
-                {"desired_quantity": it["desired_quantity"], "collected_quantity": collected})
+            smc(
+                f"/lists/{list_id}/items/{got['id']}",
+                "PUT",
+                {
+                    "desired_quantity": it["desired_quantity"],
+                    "collected_quantity": collected,
+                },
+            )
     for item_id, qty, coll, _key in update:
-        smc(f"/lists/{list_id}/items/{item_id}", "PUT",
-            {"desired_quantity": qty, "collected_quantity": coll})
+        smc(
+            f"/lists/{list_id}/items/{item_id}",
+            "PUT",
+            {"desired_quantity": qty, "collected_quantity": coll},
+        )
     for cur in remove:
         smc(f"/lists/{list_id}/items/{cur['id']}", "DELETE")
     return len(add), len(update), len(remove)
 
 
 # ── main ────────────────────────────────────────────────────────────────────────
+
 
 def sync_collection(cfg, smc, mox):
     """-> True if the inventory is in a known-good state to reconcile decks against."""
@@ -764,7 +874,9 @@ def sync_collection(cfg, smc, mox):
     except Exception as e:  # noqa: BLE001
         # Same reasoning as deck discovery: a partial or failed read is
         # indistinguishable from "the user sold everything".
-        log(f"collection fetch FAILED for {cfg.collection_user}: {e} — inventory untouched")
+        log(
+            f"collection fetch FAILED for {cfg.collection_user}: {e} — inventory untouched"
+        )
         return False
     log(f"collection: {len(rows)} rows from {cfg.collection_user}")
     con = open_db(cfg)
@@ -796,13 +908,17 @@ def sync_decks(cfg, smc, mox):
         try:
             found = mox.discover_decks(cfg.users)
         except Exception as e:  # noqa: BLE001
-            log(f"discovery FAILED for {','.join(cfg.users)}: {e} — aborting without changes")
+            log(
+                f"discovery FAILED for {','.join(cfg.users)}: {e} — aborting without changes"
+            )
             return totals, False
         decks = [(pid, name) for pid, name, _ in found]
         for pid, name, author in found:
             log(f"  deck: {name} ({pid}, by {author})")
-        log(f"{len(decks)} deck(s) from {len(cfg.users)} user(s), {len(lists)} list(s) in "
-            f"ShowMyCards, dry_run={cfg.dry_run}")
+        log(
+            f"{len(decks)} deck(s) from {len(cfg.users)} user(s), {len(lists)} list(s) in "
+            f"ShowMyCards, dry_run={cfg.dry_run}"
+        )
 
         for n, (public_id, _discovered_name) in enumerate(decks):
             if n:
@@ -823,8 +939,14 @@ def sync_decks(cfg, smc, mox):
             if lst is None:
                 log(f"{name}: no matching list — creating")
                 if not cfg.dry_run:
-                    lst = smc("/lists/", "POST",
-                              {"name": name, "description": deck.get("publicUrl") or public_id})
+                    lst = smc(
+                        "/lists/",
+                        "POST",
+                        {
+                            "name": name,
+                            "description": deck.get("publicUrl") or public_id,
+                        },
+                    )
                     lists.append(lst)
                 else:
                     log("  (dry-run: skipping create and reconcile)")
@@ -841,20 +963,30 @@ def sync_decks(cfg, smc, mox):
                 if not cfg.dry_run:
                     # description MUST be resent: it is a non-pointer field, so omitting
                     # it blanks the Moxfield URL find_list matches on next run.
-                    smc(f"/lists/{lst['id']}", "PUT", {
-                        "name": name,
-                        "description": lst.get("description") or deck.get("publicUrl") or public_id,
-                    })
+                    smc(
+                        f"/lists/{lst['id']}",
+                        "PUT",
+                        {
+                            "name": name,
+                            "description": lst.get("description")
+                            or deck.get("publicUrl")
+                            or public_id,
+                        },
+                    )
 
             oids = oracle_ids(con, {sid for sid, _ in wanted})
             collected = allocate_collected(wanted, oids, owned)
-            added, updated, removed = reconcile(cfg, smc, lst["id"], wanted, oids, collected)
+            added, updated, removed = reconcile(
+                cfg, smc, lst["id"], wanted, oids, collected
+            )
             totals["added"] += added
             totals["updated"] += updated
             totals["removed"] += removed
-            log(f"{name}: {sum(collected.values())}/{sum(wanted.values())} owned"
+            log(
+                f"{name}: {sum(collected.values())}/{sum(wanted.values())} owned"
                 f" — +{added} ~{updated} -{removed}"
-                + (f"  (excluded: {excluded})" if excluded else ""))
+                + (f"  (excluded: {excluded})" if excluded else "")
+            )
             if not cfg.dry_run:
                 with open(state, "w") as fh:
                     fh.write(fp)
@@ -881,10 +1013,12 @@ def main(env=None, opener=None, smc=None, mox=None):
     if not discovered:
         return 1
 
-    log(f"summary: decks +{totals['added']} ~{totals['updated']} -{totals['removed']} "
+    log(
+        f"summary: decks +{totals['added']} ~{totals['updated']} -{totals['removed']} "
         f"unchanged={totals['unchanged']} failed={totals['failed']} "
         f"collection={'ok' if mirror_ok else 'FAILED'}"
-        + (" [dry-run]" if cfg.dry_run else ""))
+        + (" [dry-run]" if cfg.dry_run else "")
+    )
     return 0 if (mirror_ok and not totals["failed"]) else 1
 
 

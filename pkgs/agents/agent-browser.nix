@@ -22,10 +22,11 @@
 # That script grew fetchurl support for this package; before, it only understood
 # fetchFromGitHub and would have reported "nothing this script knows how to
 # fetch", leaving the pin to drift the way affine-mcp-server's did.
-{ lib
-, stdenvNoCC
-, fetchurl
-, autoPatchelfHook
+{
+  lib,
+  stdenvNoCC,
+  fetchurl,
+  autoPatchelfHook,
 }:
 let
   # renovate: datasource=npm depName=agent-browser

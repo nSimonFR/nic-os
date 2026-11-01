@@ -100,9 +100,18 @@ KINDS = {
 }
 # Dawarich Track::TRANSPORTATION_MODES (1.16) -> (emoji, map colour); 1 = stationary, dropped.
 WALK, ROAD, TRANSIT, OTHER = "#5fc19a", "#f2a65a", "#e57ba8", "#a78bfa"
-MODES = {0: ("🧭", OTHER), 2: ("🚶", WALK), 3: ("🏃", WALK), 4: ("🚲", COLORS[0]),
-         5: ("🚗", ROAD), 6: ("🚌", TRANSIT), 7: ("🚆", TRANSIT), 8: ("✈️", "#56c2d6"),
-         9: ("⛴", "#56c2d6"), 10: ("🏍", ROAD)}
+MODES = {
+    0: ("🧭", OTHER),
+    2: ("🚶", WALK),
+    3: ("🏃", WALK),
+    4: ("🚲", COLORS[0]),
+    5: ("🚗", ROAD),
+    6: ("🚌", TRANSIT),
+    7: ("🚆", TRANSIT),
+    8: ("✈️", "#56c2d6"),
+    9: ("⛴", "#56c2d6"),
+    10: ("🏍", ROAD),
+}
 WORKOUT_MODE = {"Cycling": 4, "Running": 3, "Walking": 2, "Hiking": 2}
 # Shorter tracks are GPS jitter around a stop (Oct 12: three 0-100 m ones).
 MIN_TRIP_M = 300
@@ -143,7 +152,9 @@ class Config:
     sure_url: str = "http://127.0.0.1:13334/sure"
     sure_key_file: str = ""
     sure_public_url: str = ""  # the memo's link to the day's transactions
-    telegram_send: str = ""  # shared/notify.nix `send`; yesterday's entry goes to Telegram
+    telegram_send: str = (
+        ""  # shared/notify.nix `send`; yesterday's entry goes to Telegram
+    )
     memos_public_url: str = ""  # links in that message
     gate_url: str = ""
     summary_model: str = "gpt-6-luna"
@@ -164,13 +175,19 @@ class Config:
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
             photos_max=env_int("JOURNAL_PHOTOS_MAX", 9, env),
-            personal_calendars=_names(env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO", env)),
+            personal_calendars=_names(
+                env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO", env)
+            ),
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
-            arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
+            arkose_sessions=env_str(
+                "ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env
+            ),
             ryot_db=env_str("RYOT_DB", "ryotv2", env),
             ryot_v1_db=env_str("RYOT_V1_DB", "ryot", env),
-            birthday_calendars=_names(env_str("JOURNAL_BIRTHDAY_CALENDARS", "Contact birthdays", env)),
+            birthday_calendars=_names(
+                env_str("JOURNAL_BIRTHDAY_CALENDARS", "Contact birthdays", env)
+            ),
             gramps_db=env_str("GRAMPS_DB", "", env),
             gramps_home=env_str("GRAMPS_HOME_PERSON", "", env),
             gramps_url=env_str("GRAMPS_URL", "", env).rstrip("/"),
@@ -181,7 +198,9 @@ class Config:
             immich_admin_key_file=env_str("IMMICH_ADMIN_KEY_FILE", "", env),
             spend_accounts=_names(env_str("JOURNAL_SPEND_ACCOUNTS", "", env)),
             joint_accounts=_names(env_str("JOURNAL_JOINT_ACCOUNTS", "", env)),
-            sure_url=env_str("SURE_URL", "http://127.0.0.1:13334/sure", env).rstrip("/"),
+            sure_url=env_str("SURE_URL", "http://127.0.0.1:13334/sure", env).rstrip(
+                "/"
+            ),
             sure_key_file=env_str("SURE_API_KEY_FILE", "", env),
             sure_public_url=env_str("SURE_PUBLIC_URL", "", env).rstrip("/"),
             telegram_send=env_str("TELEGRAM_SEND", "", env),
@@ -258,20 +277,37 @@ def day_bounds(day):
 
 def workouts(cfg, run, day):
     lo, hi = day_bounds(day)
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT id, name, extract(epoch FROM start_time)::bigint,
                extract(epoch FROM end_time)::bigint, coalesce(distance, 0),
                coalesce(duration_sec, 0), coalesce(active_energy_burned, 0)
         FROM workouts
         WHERE start_time >= to_timestamp({lo}) AND start_time < to_timestamp({hi})
         ORDER BY start_time
-    """, "freereps")
-    return [Workout(r[0], r[1], int(r[2]), int(r[3]), float(r[4]) / 1000,
-                    float(r[5]) / 60, float(r[6])) for r in rows]
+    """,
+        "freereps",
+    )
+    return [
+        Workout(
+            r[0],
+            r[1],
+            int(r[2]),
+            int(r[3]),
+            float(r[4]) / 1000,
+            float(r[5]) / 60,
+            float(r[6]),
+        )
+        for r in rows
+    ]
 
 
 def signature(ws, point_counts, photo_ids=(), extra=None):
-    raw = json.dumps([[[w.id, n] for w, n in zip(ws, point_counts)], list(photo_ids), extra])
+    raw = json.dumps(
+        [[[w.id, n] for w, n in zip(ws, point_counts)], list(photo_ids), extra]
+    )
     return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
@@ -284,12 +320,17 @@ def dawarich_user(cfg, run):
 
 def track(cfg, run, uid, w):
     """[(lat, lon)] of Dawarich's points inside the workout window."""
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT ST_Y(lonlat::geometry), ST_X(lonlat::geometry) FROM points
         WHERE user_id = {uid} AND timestamp BETWEEN {w.start} AND {w.end}
           AND anomaly IS NOT TRUE
         ORDER BY timestamp
-    """, "dawarich")
+    """,
+        "dawarich",
+    )
     return [(float(r[0]), float(r[1])) for r in rows]
 
 
@@ -307,7 +348,10 @@ class Trip:
 def trips(cfg, run, uid, day):
     """The day's Dawarich tracks (by start), without stops and jitter."""
     lo, hi = day_bounds(day)
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT id, extract(epoch FROM start_at)::bigint, extract(epoch FROM end_at)::bigint,
                coalesce(distance, 0), coalesce(duration, 0), coalesce(dominant_mode, 0),
                ST_AsGeoJSON(original_path, 6)
@@ -317,10 +361,21 @@ def trips(cfg, run, uid, day):
           AND start_at >= to_timestamp({lo}) AT TIME ZONE 'UTC'
           AND start_at < to_timestamp({hi}) AT TIME ZONE 'UTC'
         ORDER BY start_at
-    """, "dawarich")
-    return [Trip(r[0], int(r[1]), int(r[2]), float(r[3]) / 1000, float(r[4]) / 60, int(r[5]),
-                 tuple((lat, lon) for lon, lat in json.loads(r[6])["coordinates"]))
-            for r in rows]
+    """,
+        "dawarich",
+    )
+    return [
+        Trip(
+            r[0],
+            int(r[1]),
+            int(r[2]),
+            float(r[3]) / 1000,
+            float(r[4]) / 60,
+            int(r[5]),
+            tuple((lat, lon) for lon, lat in json.loads(r[6])["coordinates"]),
+        )
+        for r in rows
+    ]
 
 
 def _overlaps(t, w):
@@ -339,7 +394,9 @@ def map_lines(ws, tracks, day_trips):
     for w, pts in zip(ws, tracks):
         if not any(_overlaps(t, w) for t in day_trips):
             lines.append((w.start, pts, MODES[WORKOUT_MODE.get(w.name, 0)][1]))
-    return [(pts, c) for _, pts, c in sorted(lines, key=lambda l: l[0]) if len(pts) >= 2]
+    return [
+        (pts, c) for _, pts, c in sorted(lines, key=lambda l: l[0]) if len(pts) >= 2
+    ]
 
 
 def other_trips(ws, day_trips):
@@ -365,7 +422,10 @@ def place(cfg, run, uid, lat, lon):
     first), else the area name. A tagged place the geocoder named ("93400 Rue
     Godillot 5 ()") reads as its tag instead: "💼 Work"."""
     here = f"ST_SetSRID(ST_MakePoint({float(lon)}, {float(lat)}), 4326)::geography"
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT p.name, p.source, coalesce(t.name, ''), coalesce(t.icon, '')
         FROM places p
         LEFT JOIN taggings g ON g.taggable_type = 'Place' AND g.taggable_id = p.id
@@ -373,16 +433,23 @@ def place(cfg, run, uid, lat, lon):
         WHERE p.user_id = {uid} AND (p.source = 0 OR t.id IS NOT NULL)
           AND ST_DWithin(p.lonlat, {here}, {int(cfg.place_radius_m)})
         ORDER BY t.id IS NULL, p.lonlat <-> {here} LIMIT 1
-    """, "dawarich")
+    """,
+        "dawarich",
+    )
     if rows:
         name, source, tag, icon = rows[0]
         shown = name if source == "0" or not tag else tag
         return Place(f"{icon} {shown}".strip(), tag)
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT coalesce(geodata->'properties'->>'postcode', ''), coalesce(city, '')
         FROM points WHERE user_id = {uid} AND geodata ? 'properties'
         ORDER BY lonlat <-> {here} LIMIT 1
-    """, "dawarich")
+    """,
+        "dawarich",
+    )
     return Place((arrondissement(*rows[0]) if rows else "") or "?")
 
 
@@ -408,7 +475,9 @@ def _n(x):
 
 def tile_label(asset):
     """(HH:MM, shots): drawn `14:29`, or `14:29 (8)` for a moment of 8."""
-    return photo_time({"fileCreatedAt": asset.get("since", asset["fileCreatedAt"])}), asset.get("burst", 1)
+    return photo_time(
+        {"fileCreatedAt": asset.get("since", asset["fileCreatedAt"])}
+    ), asset.get("burst", 1)
 
 
 def moment_time(m):
@@ -428,7 +497,9 @@ def workout_section(ws, legs, web_url, day, badges=()):
     """(markdown lines, tags) of the workouts section; `badges` = record and
     streak lines, after the workouts."""
     kinds = {kind(w.name) for w in ws}
-    emoji, title, noun, _ = next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Sport", "séance", "")
+    emoji, title, noun, _ = (
+        next(iter(kinds)) if len(kinds) == 1 else ("🏅", "Sport", "séance", "")
+    )
     total_km = sum(w.km for w in ws)
     head = [f"{len(ws)} {noun}{'s' if len(ws) > 1 else ''}"]
     if total_km:
@@ -456,9 +527,17 @@ def workout_section(ws, legs, web_url, day, badges=()):
         lines.append(f"- {at} {' · '.join(bits)}")
         if tag not in tags:
             tags.append(tag)
-        if leg and {leg[0].tag, leg[1].tag} == {"Home", "Work"} and "commute" not in tags:
+        if (
+            leg
+            and {leg[0].tag, leg[1].tag} == {"Home", "Work"}
+            and "commute" not in tags
+        ):
             tags.append("commute")
-    lines += [*badges, "", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+    lines += [
+        *badges,
+        "",
+        f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})",
+    ]
     return lines, tags
 
 
@@ -466,11 +545,18 @@ def trip_section(day_trips, legs):
     """Markdown lines: `- **14:02** 🚗 Alfie → Des Terres · 13.9 km · 35 min`."""
     km = sum(t.km for t in day_trips)
     n = len(day_trips)
-    lines = [f"### 🧭 Déplacements - {n} trajet{'s' if n > 1 else ''} · {_n(km)} km", ""]
+    lines = [
+        f"### 🧭 Déplacements - {n} trajet{'s' if n > 1 else ''} · {_n(km)} km",
+        "",
+    ]
     for t, (a, b) in zip(day_trips, legs):
-        where = f"autour de {a.label}" if a.label == b.label else f"{a.label} → {b.label}"
-        lines.append(f"- **{datetime.fromtimestamp(t.start, TZ):%H:%M}** {MODES.get(t.mode, MODES[0])[0]} "
-                     f"{where} · {_n(t.km)} km · {_hm(t.minutes)}")
+        where = (
+            f"autour de {a.label}" if a.label == b.label else f"{a.label} → {b.label}"
+        )
+        lines.append(
+            f"- **{datetime.fromtimestamp(t.start, TZ):%H:%M}** {MODES.get(t.mode, MODES[0])[0]} "
+            f"{where} · {_n(t.km)} km · {_hm(t.minutes)}"
+        )
     return lines
 
 
@@ -488,10 +574,34 @@ def photo_lines(shots):
     return lines
 
 
-def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
-            weather=None, agenda=(), work=None, day_trips=(), trip_legs=(), music=None, climbing=None, games=None, activity=None, notes=(),
-            memories=(), birthdays=(), genealogy=(), flights=None, flights_url="", energy=None,
-            screens=None, badges=None, spending=None):
+def content(
+    day,
+    ws,
+    legs,
+    web_url,
+    photos=0,
+    photos_url="",
+    shots=(),
+    weather=None,
+    agenda=(),
+    work=None,
+    day_trips=(),
+    trip_legs=(),
+    music=None,
+    climbing=None,
+    games=None,
+    activity=None,
+    notes=(),
+    memories=(),
+    birthdays=(),
+    genealogy=(),
+    flights=None,
+    flights_url="",
+    energy=None,
+    screens=None,
+    badges=None,
+    spending=None,
+):
     """Memo markdown, in French (journal_day may prefix a one-line summary):
     the weather line, agenda, photos, then one
     `###` section per source; last come work, memories, home, genealogy.
@@ -522,8 +632,14 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         tags.append("birthday")
     if flights:
         head, lines = flights
-        sections.append([f"### ✈️ Vol - {head}", "", *lines,
-                         *(["", f"[Voir dans AirTrail]({flights_url})"] if flights_url else [])])
+        sections.append(
+            [
+                f"### ✈️ Vol - {head}",
+                "",
+                *lines,
+                *(["", f"[Voir dans AirTrail]({flights_url})"] if flights_url else []),
+            ]
+        )
         tags.append("flight")
     if photos:
         # Each line links into Immich, where swiping walks the rest of the day.
@@ -533,7 +649,12 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append(lines)
         tags.append("photos")
     if activity:
-        sections.append([f"### 🚶 Activité - {activity}", *([""] + badges["activity"] if badges.get("activity") else [])])
+        sections.append(
+            [
+                f"### 🚶 Activité - {activity}",
+                *([""] + badges["activity"] if badges.get("activity") else []),
+            ]
+        )
     if ws:
         lines, wtags = workout_section(ws, legs, web_url, day, badges.get("bike", ()))
         sections.append(lines)
@@ -541,11 +662,16 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
     if day_trips:
         lines = trip_section(day_trips, trip_legs)
         if not ws:  # else the workouts section carries it
-            lines += ["", f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})"]
+            lines += [
+                "",
+                f"[Voir la journée dans Dawarich]({web_url}/map/v2?panel=timeline&date={day})",
+            ]
         sections.append(lines)
     if climbing:
         head, lines = climbing
-        sections.append([f"### 🧗 Escalade - {head}", "", *lines, *badges.get("climbing", ())])
+        sections.append(
+            [f"### 🧗 Escalade - {head}", "", *lines, *badges.get("climbing", ())]
+        )
         tags.append("climbing")
     if music:
         head, lines = music
@@ -564,15 +690,35 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         sections.append([f"### 💸 Dépenses - {head}", "", *lines])
         tags.append("spending")
     if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
-        sections.append(["### 🛠 Projets perso", "", "<details>", "<summary>Notes</summary>", "",
-                         *notes, "", "</details>"])
+        sections.append(
+            [
+                "### 🛠 Projets perso",
+                "",
+                "<details>",
+                "<summary>Notes</summary>",
+                "",
+                *notes,
+                "",
+                "</details>",
+            ]
+        )
         tags.append("projects")
     if work:
         n, minutes, people, *rest = work
-        lines = [f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
-                 f"{people} personne{'s' if people > 1 else ''}"]
+        lines = [
+            f"### 💼 Travail - {n} réunion{'s' if n > 1 else ''} ({_hm_short(minutes)}) "
+            f"{people} personne{'s' if people > 1 else ''}"
+        ]
         if rest and rest[0]:
-            lines += ["", "<details>", "<summary>Réunions</summary>", "", *rest[0], "", "</details>"]
+            lines += [
+                "",
+                "<details>",
+                "<summary>Réunions</summary>",
+                "",
+                *rest[0],
+                "",
+                "</details>",
+            ]
         sections.append(lines)
         tags.append("work")
     if memories:
@@ -580,16 +726,43 @@ def content(day, ws, legs, web_url, photos=0, photos_url="", shots=(),
         tags.append("memories")
     if energy:
         head, lines = energy
-        sections.append([f"### 🏠 Maison - ⚡ {head}",
-                         *([""] + badges["home"] if badges.get("home") else []),
-                         *(["", "<details>", "<summary>Électricité</summary>", "", *lines, "", "</details>"]
-                           if lines else [])])
+        sections.append(
+            [
+                f"### 🏠 Maison - ⚡ {head}",
+                *([""] + badges["home"] if badges.get("home") else []),
+                *(
+                    [
+                        "",
+                        "<details>",
+                        "<summary>Électricité</summary>",
+                        "",
+                        *lines,
+                        "",
+                        "</details>",
+                    ]
+                    if lines
+                    else []
+                ),
+            ]
+        )
         tags.append("home")
     if genealogy:
         n = len(genealogy)
         head = f"### 🌳 Généalogie - {n} événement{'s' if n > 1 else ''}"
-        sections.append([head, "", *genealogy] if n <= 3 else
-                        [head, "", "<details>", "<summary>Ce jour-là</summary>", "", *genealogy, "", "</details>"])
+        sections.append(
+            [head, "", *genealogy]
+            if n <= 3
+            else [
+                head,
+                "",
+                "<details>",
+                "<summary>Ce jour-là</summary>",
+                "",
+                *genealogy,
+                "",
+                "</details>",
+            ]
+        )
         tags.append("genealogy")
     body = "\n\n".join("\n".join(lines) for lines in sections)
     return f"{body}\n\n___________\n\n{' '.join(f'#{t}' for t in tags)}\n"
@@ -603,6 +776,7 @@ def summary_image(data):
     if not data:
         return None
     from PIL import Image
+
     img = Image.open(io.BytesIO(data))
     img.thumbnail((SUMMARY_IMAGE_PX, SUMMARY_IMAGE_PX))
     out = io.BytesIO()
@@ -632,7 +806,11 @@ def render_collage(images, labels, path, tile=480, gap=6, font_path=""):
     from PIL import Image, ImageDraw, ImageFont, ImageOps  # lazy: Pillow
 
     cols, rows = collage_grid(len(images))
-    sheet = Image.new("RGB", (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap), DARK_CARD)  # gaps and empty slots blend into Memos' dark cards
+    sheet = Image.new(
+        "RGB",
+        (cols * tile + (cols - 1) * gap, rows * tile + (rows - 1) * gap),
+        DARK_CARD,
+    )  # gaps and empty slots blend into Memos' dark cards
     try:
         font = ImageFont.truetype(font_path, tile // 14) if font_path else None
     except OSError:  # a missing font must not drop the collage
@@ -647,18 +825,36 @@ def render_collage(images, labels, path, tile=480, gap=6, font_path=""):
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(raw))).convert("RGB")
         img = ImageOps.fit(img, (tile, tile), Image.LANCZOS)
         if status == "tried":
-            img = Image.blend(ImageOps.grayscale(img).convert("RGB"), Image.new("RGB", img.size), 0.35)
+            img = Image.blend(
+                ImageOps.grayscale(img).convert("RGB"), Image.new("RGB", img.size), 0.35
+            )
         draw = ImageDraw.Draw(img, "RGBA")
         text = hm if shots <= 1 else f"{hm} ({shots})"
-        text += {"flash": " · flash", "retop": " · retop", "tried": " · non topé"}.get(status, "")
+        text += {"flash": " · flash", "retop": " · retop", "tried": " · non topé"}.get(
+            status, ""
+        )
         x0, y0, x1, y1 = draw.textbbox((0, 0), text, font=font)
         pad = tile // 40
-        box = (pad, tile - pad - (y1 - y0) - 2 * pad, pad + (x1 - x0) + 2 * pad, tile - pad)
+        box = (
+            pad,
+            tile - pad - (y1 - y0) - 2 * pad,
+            pad + (x1 - x0) + 2 * pad,
+            tile - pad,
+        )
         gold = status == "flash"
-        draw.rounded_rectangle(box, radius=pad, fill=FLASH_GOLD + (235,) if gold else (0, 0, 0, 150))
-        draw.text((box[0] + pad - x0, box[1] + pad - y0), text, font=font, fill="black" if gold else "white")
+        draw.rounded_rectangle(
+            box, radius=pad, fill=FLASH_GOLD + (235,) if gold else (0, 0, 0, 150)
+        )
+        draw.text(
+            (box[0] + pad - x0, box[1] + pad - y0),
+            text,
+            font=font,
+            fill="black" if gold else "white",
+        )
         if gold:
-            draw.rectangle((0, 0, tile - 1, tile - 1), outline=FLASH_GOLD, width=tile // 40)
+            draw.rectangle(
+                (0, 0, tile - 1, tile - 1), outline=FLASH_GOLD, width=tile // 40
+            )
         sheet.paste(img, ((i % cols) * (tile + gap), (i // cols) * (tile + gap)))
     sheet.save(path, "JPEG", quality=85, optimize=True)
 
@@ -686,12 +882,25 @@ def dark_map(w, h, padding):
         def _draw_base_layer(self, image):
             super()._draw_base_layer(image)
             inverted = ImageOps.invert(ImageOps.grayscale(image))
-            image.paste(ImageOps.colorize(inverted, black=DARK_CARD, white=DARK_MUTED_FG,
-                                          blackpoint=0, whitepoint=255, midpoint=150))
+            image.paste(
+                ImageOps.colorize(
+                    inverted,
+                    black=DARK_CARD,
+                    white=DARK_MUTED_FG,
+                    blackpoint=0,
+                    whitepoint=255,
+                    midpoint=150,
+                )
+            )
 
-    return Dark(w, h, padding_x=padding, padding_y=padding,
-                url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"})
+    return Dark(
+        w,
+        h,
+        padding_x=padding,
+        padding_y=padding,
+        url_template="https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+        headers={"User-Agent": "nicos-journal/1.0 (self-hosted, personal)"},
+    )
 
 
 def render(lines, path):
@@ -720,13 +929,31 @@ def render(lines, path):
         font = ImageFont.load_default()
     note = "(c) contributeurs OpenStreetMap"
     x0, y0, x1, y1 = draw.textbbox((0, 0), note, font=font)
-    draw.text((img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8), note, font=font, fill="#6b7076")
+    draw.text(
+        (img.width - (x1 - x0) - 8, img.height - (y1 - y0) - 8),
+        note,
+        font=font,
+        fill="#6b7076",
+    )
     # JPEG: a city map was 1.1 MB as PNG, 410 KB as JPEG (Oct 12).
     img.save(path, "JPEG", quality=85, optimize=True)
 
 
 PASS_W, PASS_MAP_H, PASS_TICKET_H = 1000, 420, 350
-MONTHS_SHORT = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."]
+MONTHS_SHORT = [
+    "janv.",
+    "févr.",
+    "mars",
+    "avr.",
+    "mai",
+    "juin",
+    "juil.",
+    "août",
+    "sept.",
+    "oct.",
+    "nov.",
+    "déc.",
+]
 
 
 def _font(path, size, weight="Regular"):
@@ -762,8 +989,17 @@ def flight_map(f):
 
 def _plane(draw, cx, cy, s, fill):
     """A plane silhouette pointing right, `s` px nose to tail."""
-    half = [(1.0, 0), (0.62, -0.07), (0.12, -0.55), (-0.02, -0.55), (0.25, -0.07),
-            (-0.42, -0.07), (-0.58, -0.28), (-0.68, -0.28), (-0.6, 0)]
+    half = [
+        (1.0, 0),
+        (0.62, -0.07),
+        (0.12, -0.55),
+        (-0.02, -0.55),
+        (0.25, -0.07),
+        (-0.42, -0.07),
+        (-0.58, -0.28),
+        (-0.68, -0.28),
+        (-0.6, 0),
+    ]
     pts = half + [(x, -y) for x, y in reversed(half[1:-1])]
     draw.polygon([(cx + x * s / 2, cy + y * s / 2) for x, y in pts], fill=fill)
 
@@ -789,7 +1025,13 @@ def boarding_pass(f, font_path="", map_fn=flight_map):
     when = fl.local(f.dep, f.frm.tz)
     y, m, dd = map(int, f.date.split("-"))
     text((pad, t + 30), "CARTE D'EMBARQUEMENT", small, DARK_MUTED_FG)
-    text((PASS_W - pad, t + 30), f"{dd} {MONTHS_SHORT[m - 1]} {y}".upper(), small, DARK_MUTED_FG, "ra")
+    text(
+        (PASS_W - pad, t + 30),
+        f"{dd} {MONTHS_SHORT[m - 1]} {y}".upper(),
+        small,
+        DARK_MUTED_FG,
+        "ra",
+    )
     left = text((pad, t + 62), f.frm.iata, big, DARK_FG)
     right = text((PASS_W - pad, t + 62), f.to.iata, big, DARK_FG, "ra")
     mid_y = (left[1] + left[3]) / 2
@@ -805,11 +1047,22 @@ def boarding_pass(f, font_path="", map_fn=flight_map):
         text((pad, t + 214), f"{when:%H:%M}", hour, DARK_FG)
     if arr:
         text((PASS_W - pad, t + 214), f"{arr:%H:%M}", hour, DARK_FG, "ra")
-    fields = [(k, v) for k, v in (("VOL", f.number), ("COMPAGNIE", f.airline), ("SIÈGE", f.seat),
-                                  ("DURÉE", fl._hm(f.duration) if f.duration else ""),
-                                  ("DISTANCE", f"{fl._int_fr(fl.km(f))} km"), ("APPAREIL", f.aircraft)) if v][:5]
+    fields = [
+        (k, v)
+        for k, v in (
+            ("VOL", f.number),
+            ("COMPAGNIE", f.airline),
+            ("SIÈGE", f.seat),
+            ("DURÉE", fl._hm(f.duration) if f.duration else ""),
+            ("DISTANCE", f"{fl._int_fr(fl.km(f))} km"),
+            ("APPAREIL", f.aircraft),
+        )
+        if v
+    ][:5]
     label, value = _font(font_path, 16, "SemiBold"), _font(font_path, 26, "SemiBold")
-    widths = [max(d.textlength(k, font=label), d.textlength(v, font=value)) for k, v in fields]
+    widths = [
+        max(d.textlength(k, font=label), d.textlength(v, font=value)) for k, v in fields
+    ]
     gap = (PASS_W - 2 * pad - sum(widths)) / max(len(fields) - 1, 1)
     x = pad
     for (k, v), w in zip(fields, widths):
@@ -824,7 +1077,9 @@ def render_boarding_passes(flights, path, font_path="", map_fn=flight_map):
     from PIL import Image  # lazy: Pillow
 
     cards = [boarding_pass(f, font_path, map_fn) for f in flights]
-    sheet = Image.new("RGB", (PASS_W, sum(c.height for c in cards) + 12 * (len(cards) - 1)), DARK_BG)
+    sheet = Image.new(
+        "RGB", (PASS_W, sum(c.height for c in cards) + 12 * (len(cards) - 1)), DARK_BG
+    )
     y = 0
     for c in cards:
         sheet.paste(c, (0, y))
@@ -845,29 +1100,45 @@ class Immich:
         """Queue Immich's memory generation (today ± 3 days). Its 03:00 cron
         misses while the socket-activated server sleeps: none after Oct 14 2026."""
         req = urllib.request.Request(
-            f"{self.url}/api/jobs", method="POST", data=json.dumps({"name": "memory-create"}).encode(),
-            headers={"x-api-key": self.admin_key, "Content-Type": "application/json"})
+            f"{self.url}/api/jobs",
+            method="POST",
+            data=json.dumps({"name": "memory-create"}).encode(),
+            headers={"x-api-key": self.admin_key, "Content-Type": "application/json"},
+        )
         with (self.opener or urllib.request.urlopen)(req, timeout=180):
             pass
 
     def memories(self, day):
         """[(year, images, memory id)] of Immich's "on this day" memories for
         `day`, newest year first; screenshots dropped."""
-        req = urllib.request.Request(f"{self.url}/api/memories?for={day.isoformat()}",
-                                     headers={"x-api-key": self.admin_key})
+        req = urllib.request.Request(
+            f"{self.url}/api/memories?for={day.isoformat()}",
+            headers={"x-api-key": self.admin_key},
+        )
         out = []
         for m in http_json(req, timeout=180, opener=self.opener):
             year = (m.get("data") or {}).get("year")
-            shots = [a for a in m.get("assets") or [] if not (_screenshot(a) or _whatsapp(a))]
-            if m.get("type") == "on_this_day" and year and shots and not m.get("isTrashed"):
+            shots = [
+                a for a in m.get("assets") or [] if not (_screenshot(a) or _whatsapp(a))
+            ]
+            if (
+                m.get("type") == "on_this_day"
+                and year
+                and shots
+                and not m.get("isTrashed")
+            ):
                 out.append((int(year), shots, m["id"]))
         return sorted(out, key=lambda x: -x[0])
 
     def city(self, asset_id):
         """The asset's EXIF city: the memories API sends assets without EXIF."""
-        req = urllib.request.Request(f"{self.url}/api/assets/{asset_id}", headers={"x-api-key": self.key})
+        req = urllib.request.Request(
+            f"{self.url}/api/assets/{asset_id}", headers={"x-api-key": self.key}
+        )
         try:
-            return (http_json(req, timeout=60, opener=self.opener).get("exifInfo") or {}).get("city") or ""
+            return (
+                http_json(req, timeout=60, opener=self.opener).get("exifInfo") or {}
+            ).get("city") or ""
         except (OSError, ValueError):
             return ""
 
@@ -875,22 +1146,44 @@ class Immich:
         return f"{self.url}/memories/{memory_id}"
 
     def between(self, lo, hi):
-        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
         req = urllib.request.Request(
-            f"{self.url}/api/search/metadata", method="POST",
-            data=json.dumps({"takenAfter": iso(lo), "takenBefore": iso(hi - 1),
-                             "type": "IMAGE", "visibility": "timeline",
-                             "withExif": True, "size": 250}).encode(),
-            headers={"x-api-key": self.key, "Content-Type": "application/json"})
-        items = http_json(req, timeout=180, opener=self.opener).get("assets", {}).get("items", [])
-        items = [a for a in items if a.get("type") == "IMAGE" and not a.get("isTrashed")
-                 and a.get("visibility", "timeline") == "timeline" and not _whatsapp(a)]
+            f"{self.url}/api/search/metadata",
+            method="POST",
+            data=json.dumps(
+                {
+                    "takenAfter": iso(lo),
+                    "takenBefore": iso(hi - 1),
+                    "type": "IMAGE",
+                    "visibility": "timeline",
+                    "withExif": True,
+                    "size": 250,
+                }
+            ).encode(),
+            headers={"x-api-key": self.key, "Content-Type": "application/json"},
+        )
+        items = (
+            http_json(req, timeout=180, opener=self.opener)
+            .get("assets", {})
+            .get("items", [])
+        )
+        items = [
+            a
+            for a in items
+            if a.get("type") == "IMAGE"
+            and not a.get("isTrashed")
+            and a.get("visibility", "timeline") == "timeline"
+            and not _whatsapp(a)
+        ]
         return sorted(items, key=lambda a: a.get("fileCreatedAt", ""))
 
     def preview(self, asset_id):
         req = urllib.request.Request(
             f"{self.url}/api/assets/{asset_id}/thumbnail?size=preview",
-            headers={"x-api-key": self.key})
+            headers={"x-api-key": self.key},
+        )
         with (self.opener or urllib.request.urlopen)(req, timeout=60) as resp:
             return resp.read()
 
@@ -900,8 +1193,12 @@ class Immich:
     def search_link(self, lo, hi):
         """Immich's search page over [lo, hi) (epoch s): its `query` parameter
         is the search body as JSON (web 3.3)."""
-        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
-        q = json.dumps({"takenAfter": iso(lo), "takenBefore": iso(hi - 1)}, separators=(",", ":"))
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%S.000Z"
+        )
+        q = json.dumps(
+            {"takenAfter": iso(lo), "takenBefore": iso(hi - 1)}, separators=(",", ":")
+        )
         return f"{self.url}/search?query={urllib.parse.quote(q)}"
 
 
@@ -913,19 +1210,23 @@ def fetch_image(url, opener=None):
 
 def _screenshot(asset):
     """A PNG with no camera: a phone screenshot (Oct 12 2021 was one)."""
-    return (asset.get("originalFileName", "").lower().endswith(".png")
-            and not (asset.get("exifInfo") or {}).get("make"))
+    return asset.get("originalFileName", "").lower().endswith(".png") and not (
+        asset.get("exifInfo") or {}
+    ).get("make")
 
 
-WHATSAPP_NAME = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.", re.I)
+WHATSAPP_NAME = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.", re.I
+)
 
 
 def _whatsapp(asset):
     """WhatsApp saves media as a bare UUID with EXIF stripped. The archive jobs
     only keep it off the timeline since 2026-08; the camera make spares the
     ~3% of real UUID-named shots."""
-    return (bool(WHATSAPP_NAME.match(asset.get("originalFileName", "")))
-            and not (asset.get("exifInfo") or {}).get("make"))
+    return bool(WHATSAPP_NAME.match(asset.get("originalFileName", ""))) and not (
+        asset.get("exifInfo") or {}
+    ).get("make")
 
 
 def memory_lines(day, memories, link, city=None):
@@ -935,7 +1236,9 @@ def memory_lines(day, memories, link, city=None):
     lines = []
     for y, shots, mid in memories:
         ago = day.year - y
-        cities = Counter(c for c in ((a.get("exifInfo") or {}).get("city") for a in shots) if c)
+        cities = Counter(
+            c for c in ((a.get("exifInfo") or {}).get("city") for a in shots) if c
+        )
         if not cities and city:
             cities = Counter(c for c in [city(shots[len(shots) // 2]["id"])] if c)
         bits = [f"[Il y a {ago} an{'s' if ago > 1 else ''} · {y}]({link(mid)})"]
@@ -947,7 +1250,9 @@ def memory_lines(day, memories, link, city=None):
 
 
 def _taken(asset):
-    return datetime.fromisoformat(asset["fileCreatedAt"].replace("Z", "+00:00")).timestamp()
+    return datetime.fromisoformat(
+        asset["fileCreatedAt"].replace("Z", "+00:00")
+    ).timestamp()
 
 
 BURST_GAP_S = 120
@@ -959,13 +1264,17 @@ def groups(assets, n):
     an afternoon walk stays one moment. Apr 30: 30 bursts in Rome, 9 lines."""
     if not assets or n <= 0:
         return []
-    gaps = {i: _taken(b) - _taken(a) for i, (a, b) in enumerate(zip(assets, assets[1:]), 1)}
+    gaps = {
+        i: _taken(b) - _taken(a) for i, (a, b) in enumerate(zip(assets, assets[1:]), 1)
+    }
     cuts = []
     for _ in range(n - 1):
+
         def score(i):  # longest pause; on a tie, the cut leaving the most even halves
             lo = max([0, *(c for c in cuts if c < i)])
             hi = min([len(assets), *(c for c in cuts if c > i)])
             return gaps[i], min(i - lo, hi - i)
+
         free = [i for i, g in gaps.items() if g >= BURST_GAP_S and i not in cuts]
         if not free:
             break
@@ -978,9 +1287,15 @@ def moments(assets, n=9):
     """One representative per group (see `groups`) — its favourite, else its
     middle shot — carrying `burst` = how many shots it stands for and `until`
     = its last shot's fileCreatedAt. Oldest first."""
-    return [{**next((a for a in g if a.get("isFavorite")), g[len(g) // 2]),
-             "burst": len(g), "since": g[0]["fileCreatedAt"], "until": g[-1]["fileCreatedAt"]}
-            for g in groups(assets, n)]
+    return [
+        {
+            **next((a for a in g if a.get("isFavorite")), g[len(g) // 2]),
+            "burst": len(g),
+            "since": g[0]["fileCreatedAt"],
+            "until": g[-1]["fileCreatedAt"],
+        }
+        for g in groups(assets, n)
+    ]
 
 
 def pick_photos(assets, n):
@@ -990,20 +1305,31 @@ def pick_photos(assets, n):
 
 class Memos:
     def __init__(self, base, token, opener=None):
-        self.root, self.base, self.token, self.opener = base, base + "/api/v1", token, opener
+        self.root, self.base, self.token, self.opener = (
+            base,
+            base + "/api/v1",
+            token,
+            opener,
+        )
 
     def file(self, att, filename):
-        req = urllib.request.Request(f"{self.root}/file/{att}/{urllib.parse.quote(filename)}",
-                                     headers={"Authorization": f"Bearer {self.token}"})
+        req = urllib.request.Request(
+            f"{self.root}/file/{att}/{urllib.parse.quote(filename)}",
+            headers={"Authorization": f"Bearer {self.token}"},
+        )
         with (self.opener or urllib.request.urlopen)(req, timeout=60) as resp:
             return resp.read()
 
     def call(self, method, path, body=None):
         req = urllib.request.Request(
-            self.base + path, method=method,
+            self.base + path,
+            method=method,
             data=None if body is None else json.dumps(body).encode(),
-            headers={"Authorization": f"Bearer {self.token}",
-                     "Content-Type": "application/json"})
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+        )
         return http_json(req, opener=self.opener)
 
     def upload(self, files):
@@ -1011,20 +1337,29 @@ class Memos:
         attachment names, same order."""
         names = []
         for name, mime, data, meta in files:
-            body = {"filename": name, "type": mime, "content": base64.b64encode(data).decode()}
+            body = {
+                "filename": name,
+                "type": mime,
+                "content": base64.b64encode(data).decode(),
+            }
             if meta:
                 body["mediaMetadata"] = meta
             names.append(self.call("POST", "/attachments", body)["name"])
         return names
 
     def create(self, text, atts, when, location=None):
-        body = {"content": text, "visibility": "PRIVATE",
-                "attachments": [{"name": a} for a in atts]}
+        body = {
+            "content": text,
+            "visibility": "PRIVATE",
+            "attachments": [{"name": a} for a in atts],
+        }
         if location:
             body["location"] = location
         memo = self.call("POST", "/memos", body)
         # CreateMemo ignores createTime; only an update with this mask sets it.
-        self.call("PATCH", f"/{memo['name']}?updateMask=create_time", {"createTime": when})
+        self.call(
+            "PATCH", f"/{memo['name']}?updateMask=create_time", {"createTime": when}
+        )
         return memo["name"]
 
     def update(self, name, old_text, old_atts, text, atts, when, location=None):
@@ -1045,12 +1380,24 @@ class Memos:
             new, kept = current.replace(old_text, text, 1), True
         else:
             new, kept = current, None
-        ours = set(old_atts) if old_atts is not None else {a["name"] for a in memo.get("attachments", [])}
-        theirs = [a["name"] for a in memo.get("attachments", []) if a["name"] not in ours]
+        ours = (
+            set(old_atts)
+            if old_atts is not None
+            else {a["name"] for a in memo.get("attachments", [])}
+        )
+        theirs = [
+            a["name"] for a in memo.get("attachments", []) if a["name"] not in ours
+        ]
         # Detached attachments are deleted by Memos itself.
-        self.call("PATCH", f"/{name}/attachments",
-                  {"name": name, "attachments": [{"name": a} for a in atts + theirs]})
-        body, mask = {"name": name, "content": new, "createTime": when}, ["content", "create_time"]
+        self.call(
+            "PATCH",
+            f"/{name}/attachments",
+            {"name": name, "attachments": [{"name": a} for a in atts + theirs]},
+        )
+        body, mask = (
+            {"name": name, "content": new, "createTime": when},
+            ["content", "create_time"],
+        )
         if location:
             body["location"], mask = location, mask + ["location"]
         self.call("PATCH", f"/{name}?updateMask={','.join(mask)}", body)
@@ -1064,8 +1411,12 @@ def media_metadata(data, taken, location=None, camera=None):
     `location` = (lat, lon); `camera` = (make, model)."""
     local = datetime.fromtimestamp(taken, TZ)
     off = int(local.utcoffset().total_seconds() // 60)
-    photo = {"captureTime": {"localDateTime": local.strftime("%Y-%m-%dT%H:%M:%S"),
-                             "utcOffset": f"{'+' if off >= 0 else '-'}{abs(off) // 60:02d}:{abs(off) % 60:02d}"}}
+    photo = {
+        "captureTime": {
+            "localDateTime": local.strftime("%Y-%m-%dT%H:%M:%S"),
+            "utcOffset": f"{'+' if off >= 0 else '-'}{abs(off) // 60:02d}:{abs(off) % 60:02d}",
+        }
+    }
     if location:
         photo["location"] = {"latitude": location[0], "longitude": location[1]}
     if camera and all((c or "").strip() for c in camera):
@@ -1075,6 +1426,7 @@ def media_metadata(data, taken, location=None, camera=None):
         import io
 
         from PIL import Image  # lazy: Pillow
+
         meta["width"], meta["height"] = Image.open(io.BytesIO(data)).size
     except Exception:  # size is optional; never lose the upload over it
         pass
@@ -1083,7 +1435,11 @@ def media_metadata(data, taken, location=None, camera=None):
 
 def photo_gps(asset):
     e = asset.get("exifInfo") or {}
-    return (e["latitude"], e["longitude"]) if e.get("latitude") and e.get("longitude") else None
+    return (
+        (e["latitude"], e["longitude"])
+        if e.get("latitude") and e.get("longitude")
+        else None
+    )
 
 
 def _utc(t):
@@ -1102,17 +1458,26 @@ def day_calendar(cfg, run, day, log):
     """(personal agenda lines, work summary or None); empty on any failure."""
     lo, hi = day_bounds(day)
     lo_dt, hi_dt = datetime.fromtimestamp(lo, TZ), datetime.fromtimestamp(hi, TZ)
-    blobs = lambda names, since: src.calendar_blobs(run, names, since, hi, cfg.nextcloud_db,
-                                                    cfg.runuser, cfg.psql)
+    blobs = lambda names, since: src.calendar_blobs(
+        run, names, since, hi, cfg.nextcloud_db, cfg.runuser, cfg.psql
+    )
     try:
-        agenda = src.personal_lines(
-            src.expand(blobs(cfg.personal_calendars, lo), lo_dt, hi_dt, TZ), TZ) \
-            if cfg.personal_calendars else []
+        agenda = (
+            src.personal_lines(
+                src.expand(blobs(cfg.personal_calendars, lo), lo_dt, hi_dt, TZ), TZ
+            )
+            if cfg.personal_calendars
+            else []
+        )
         work = None
         if cfg.work_calendars:
             # 30 days back, to tell the owner apart from the day's few attendees
-            wide = src.expand(blobs(cfg.work_calendars, lo - 30 * 86400),
-                              lo_dt - timedelta(days=30), hi_dt, TZ)
+            wide = src.expand(
+                blobs(cfg.work_calendars, lo - 30 * 86400),
+                lo_dt - timedelta(days=30),
+                hi_dt,
+                TZ,
+            )
             today = [e for e in wide if e.end > lo_dt and e.start < hi_dt]
             me = src.owner(wide)
             work = src.work_summary(today, lo_dt, hi_dt, me)
@@ -1130,8 +1495,18 @@ def day_family(cfg, run, tree, day, log):
     if cfg.birthday_calendars:
         lo, hi = day_bounds(day)
         try:
-            contacts = fam.contact_birthdays(src.calendar_blobs(
-                run, cfg.birthday_calendars, lo, hi, cfg.nextcloud_db, cfg.runuser, cfg.psql), day)
+            contacts = fam.contact_birthdays(
+                src.calendar_blobs(
+                    run,
+                    cfg.birthday_calendars,
+                    lo,
+                    hi,
+                    cfg.nextcloud_db,
+                    cfg.runuser,
+                    cfg.psql,
+                ),
+                day,
+            )
         except (OSError, ValueError, ImportError, subprocess.CalledProcessError) as e:
             log(f"{day}: contact birthdays unavailable ({e})")
     return fam.family_sections(contacts, tree, day, cfg.gramps_url)
@@ -1184,8 +1559,9 @@ def day_notes(cfg, run, state, day, log, now=None):
     if not cfg.dispatch_repos or hi > (now or datetime.now(timezone.utc).timestamp()):
         return []
     try:
-        notes = src.dispatch_notes(run, cfg.dispatch_repos, lo, hi, cfg.dispatch_user,
-                                   cfg.runuser, cfg.git)
+        notes = src.dispatch_notes(
+            run, cfg.dispatch_repos, lo, hi, cfg.dispatch_user, cfg.runuser, cfg.git
+        )
     except (OSError, subprocess.CalledProcessError) as e:
         log(f"{key}: project notes unavailable ({e})")
         return []
@@ -1197,7 +1573,9 @@ def day_notes(cfg, run, state, day, log, now=None):
 def day_activity(cfg, run, day, log):
     """journal_sources.activity_section of the day, or None (no steps, or FreeReps unreadable)."""
     try:
-        totals = src.activity_totals(run, *day_bounds(day), cfg.freereps_db, cfg.runuser, cfg.psql)
+        totals = src.activity_totals(
+            run, *day_bounds(day), cfg.freereps_db, cfg.runuser, cfg.psql
+        )
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: activity unavailable ({e})")
         return None
@@ -1226,20 +1604,34 @@ def day_games(cfg, run, day, log):
     None (nothing played, or Ryot down)."""
     lo, hi = day_bounds(day)
     try:
-        plays = src.game_plays(run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.ryot_v1_db,
-                               cfg.runuser, cfg.psql)
+        plays = src.game_plays(
+            run,
+            lo - STREAK_LOOKBACK_D * 86400,
+            hi,
+            cfg.ryot_db,
+            cfg.ryot_v1_db,
+            cfg.runuser,
+            cfg.psql,
+        )
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: games unavailable ({e})")
         return None
     plays, dropped = drop_imports(plays)
     if day in dropped:
-        log(f"{day}: games dropped ({dropped[day] // 3600} h pushed: a full sync, not a day)")
+        log(
+            f"{day}: games dropped ({dropped[day] // 3600} h pushed: a full sync, not a day)"
+        )
     games = src.game_sessions([p for p in plays if p[0] >= lo])
     days = {}
     for t, title, *_ in plays:
         days.setdefault(title, set()).add(rec.journal_date(t))
-    return src.game_section(games, {t: rec.streak_text(rec.streak(days[t], day)) for t, *_ in games}, TZ) \
-        if games else None
+    return (
+        src.game_section(
+            games, {t: rec.streak_text(rec.streak(days[t], day)) for t, *_ in games}, TZ
+        )
+        if games
+        else None
+    )
 
 
 def day_music(cfg, run, day, log):
@@ -1247,12 +1639,18 @@ def day_music(cfg, run, day, log):
     or None (no plays, or Ryot down). Artists V11 lacks come from V1."""
     lo, hi = day_bounds(day)
     try:
-        listens = src.music_listens(run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.runuser, cfg.psql)
+        listens = src.music_listens(
+            run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.runuser, cfg.psql
+        )
         missing = [l.track for l in listens if not l.artists and l.track]
         if missing and cfg.ryot_v1_db:
             v1 = src.music_tracks(run, missing, cfg.ryot_v1_db, cfg.runuser, cfg.psql)
-            listens = [dataclasses.replace(l, artists=v1.get(l.track, "")) if not l.artists else l
-                       for l in listens]
+            listens = [
+                dataclasses.replace(l, artists=v1.get(l.track, ""))
+                if not l.artists
+                else l
+                for l in listens
+            ]
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: music unavailable ({e})")
         return None
@@ -1263,13 +1661,17 @@ def day_music(cfg, run, day, log):
     for l in listens:
         if l.artists:
             days.setdefault(l.artists, set()).add(rec.journal_date(l.at))
-    return src.music_section(today, streaks={a: rec.streak_text(rec.streak(d, day)) for a, d in days.items()})
+    return src.music_section(
+        today, streaks={a: rec.streak_text(rec.streak(d, day)) for a, d in days.items()}
+    )
 
 
 def day_screens(cfg, run, day, log):
     """journal_sources.screen_section of the day, or None."""
     try:
-        screens = src.screen_events(run, *day_bounds(day), cfg.ryot_db, cfg.runuser, cfg.psql)
+        screens = src.screen_events(
+            run, *day_bounds(day), cfg.ryot_db, cfg.runuser, cfg.psql
+        )
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: films and series unavailable ({e})")
         return None
@@ -1281,7 +1683,9 @@ def sure_spends(cfg, opener=None):
     if not (cfg.spend_accounts or cfg.joint_accounts):
         return None
     key = read_secret(cfg.sure_key_file) if cfg.sure_key_file else ""
-    return lambda day: spend.day_spends(day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_url, key, opener)
+    return lambda day: spend.day_spends(
+        day, cfg.spend_accounts, cfg.joint_accounts, cfg.sure_url, key, opener
+    )
 
 
 def day_spend(spend_fn, day, log, today, cfg=None):
@@ -1293,8 +1697,13 @@ def day_spend(spend_fn, day, log, today, cfg=None):
     except (OSError, ValueError, KeyError, TypeError) as e:
         log(f"{day}: spending unavailable ({e})")
         return None
-    link = (spend.detail_url(cfg.sure_public_url, day, cfg.spend_accounts + cfg.joint_accounts)
-            if cfg and cfg.sure_public_url else "")
+    link = (
+        spend.detail_url(
+            cfg.sure_public_url, day, cfg.spend_accounts + cfg.joint_accounts
+        )
+        if cfg and cfg.sure_public_url
+        else ""
+    )
     return spend.spend_section(spends, (today - day).days, link)
 
 
@@ -1309,17 +1718,23 @@ def day_badges(cfg, run, day, ws, climbs, activity, energy, log):
     out = {}
     if any(w.name == "Cycling" for w in ws):
         try:
-            out["bike"] = rec.ride_badges(rec.ride_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day)
+            out["bike"] = rec.ride_badges(
+                rec.ride_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day
+            )
         except (OSError, ValueError, subprocess.CalledProcessError) as e:
             log(f"{day}: ride history unavailable ({e})")
     if activity:
         try:
-            out["activity"] = rec.step_badges(rec.step_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day)
+            out["activity"] = rec.step_badges(
+                rec.step_history(run, hi, cfg.freereps_db, cfg.runuser, cfg.psql), day
+            )
         except (OSError, ValueError, subprocess.CalledProcessError) as e:
             log(f"{day}: step history unavailable ({e})")
     if climbs:
         try:
-            out["climbing"] = rec.climbing_badges(src.climbing_sessions(cfg.arkose_sessions, 0, hi), day)
+            out["climbing"] = rec.climbing_badges(
+                src.climbing_sessions(cfg.arkose_sessions, 0, hi), day
+            )
         except (OSError, ValueError, KeyError) as e:
             log(f"{day}: climbing history unavailable ({e})")
     if energy and cfg.ha_db:
@@ -1330,9 +1745,26 @@ def day_badges(cfg, run, day, ws, climbs, activity, energy, log):
     return {k: v for k, v in out.items() if v}
 
 
-def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich=None,
-                collage_fn=render_collage, weather_fn=None, fetch_fn=fetch_image, now=None, tree=None,
-                pass_fn=render_boarding_passes, summary_fn=None, spend_fn=None):
+def journal_day(
+    cfg,
+    run,
+    memos,
+    state,
+    day,
+    uid,
+    log,
+    render_fn,
+    tmpdir,
+    immich=None,
+    collage_fn=render_collage,
+    weather_fn=None,
+    fetch_fn=fetch_image,
+    now=None,
+    tree=None,
+    pass_fn=render_boarding_passes,
+    summary_fn=None,
+    spend_fn=None,
+):
     """Create/refresh one day's memo. Returns the memo name, or None if nothing happened."""
     key = day.isoformat()
     ws = workouts(cfg, run, day)
@@ -1362,8 +1794,21 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     screens = day_screens(cfg, run, day, log)
     spending = day_spend(spend_fn, day, log, _today(now), cfg)
     # Birthdays, memories and weather come every day: alone they make no entry.
-    if not (ws or day_trips or climbs or day_photos or agenda or work or notes or flights
-            or music or games or activity or screens or spending):
+    if not (
+        ws
+        or day_trips
+        or climbs
+        or day_photos
+        or agenda
+        or work
+        or notes
+        or flights
+        or music
+        or games
+        or activity
+        or screens
+        or spending
+    ):
         return None
     badges = day_badges(cfg, run, day, ws, climbs, activity, energy, log)
     tracks = [track(cfg, run, uid, w) for w in ws]
@@ -1371,59 +1816,133 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     extra = other_trips(ws, day_trips)
     weather = None
     if weather_fn:
-        first = next((pts[0] for pts, _ in lines), None) or next(
-            (g for g in map(photo_gps, day_photos) if g), None) or cfg.home
+        first = (
+            next((pts[0] for pts, _ in lines), None)
+            or next((g for g in map(photo_gps, day_photos) if g), None)
+            or cfg.home
+        )
         try:
             weather = weather_fn(day, *first)
         except (OSError, ValueError, KeyError, IndexError) as e:
             log(f"{key}: weather unavailable ({e})")
-    sig = signature(ws, [len(t) for t in tracks], [p["id"] for p in day_photos],
-                    [agenda, work, weather, [[t.id, len(t.path), t.mode] for t in day_trips], music, games, activity, notes,
-                     [[c["_id"], c.get("tops"), c.get("tried"), c.get("retops")] for c in climbs],
-                     len(src.climbing_pictures(climbs)), [[y, [a["id"] for a in m]] for y, m, _ in memories],
-                     birthdays, genealogy, [f.id for f in flights], energy, screens, badges, spending])
+    sig = signature(
+        ws,
+        [len(t) for t in tracks],
+        [p["id"] for p in day_photos],
+        [
+            agenda,
+            work,
+            weather,
+            [[t.id, len(t.path), t.mode] for t in day_trips],
+            music,
+            games,
+            activity,
+            notes,
+            [
+                [c["_id"], c.get("tops"), c.get("tried"), c.get("retops")]
+                for c in climbs
+            ],
+            len(src.climbing_pictures(climbs)),
+            [[y, [a["id"] for a in m]] for y, m, _ in memories],
+            birthdays,
+            genealogy,
+            [f.id for f in flights],
+            energy,
+            screens,
+            badges,
+            spending,
+        ],
+    )
     # A redo is asked for because the rendering changed (place names, prompt),
     # which the signature doesn't see: always rewrite.
     if state.get(key, {}).get("sig") == sig and not cfg.redo_file:
         log(f"{key}: unchanged")
         return state[key]["memo"]
-    legs = [(place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
-            for t in tracks]
-    trip_legs = [(place(cfg, run, uid, *t.path[0]), place(cfg, run, uid, *t.path[-1]))
-                 for t in extra]
-    link =immich.link(day_photos[0]["id"]) if day_photos else ""
+    legs = [
+        (place(cfg, run, uid, *t[0]), place(cfg, run, uid, *t[-1])) if t else None
+        for t in tracks
+    ]
+    trip_legs = [
+        (place(cfg, run, uid, *t.path[0]), place(cfg, run, uid, *t.path[-1]))
+        for t in extra
+    ]
+    link = immich.link(day_photos[0]["id"]) if day_photos else ""
     shots = []
     for m in moments(day_photos, cfg.photos_max):
         gps = photo_gps(m)
-        lo, hi = _taken({"fileCreatedAt": m["since"]}), _taken({"fileCreatedAt": m["until"]})
-        url = immich.link(m["id"]) if m["burst"] == 1 else immich.search_link(lo, hi + 1)
-        shots.append((moment_time(m), url, place(cfg, run, uid, *gps).label if gps else "", m["burst"]))
-    text = content(key, ws, legs, cfg.web_url, len(day_photos), link, shots,
-                   weather, agenda, work, extra, trip_legs, music,
-                   src.climbing_section(climbs) if climbs else None, games, activity, notes,
-                   memory_lines(day, memories, immich.memory_link, immich.city) if memories else (), birthdays, genealogy,
-                   fl.flight_section(flights, every_flight) if flights else None, cfg.airtrail_url, energy,
-                   screens, badges, spending)
+        lo, hi = (
+            _taken({"fileCreatedAt": m["since"]}),
+            _taken({"fileCreatedAt": m["until"]}),
+        )
+        url = (
+            immich.link(m["id"]) if m["burst"] == 1 else immich.search_link(lo, hi + 1)
+        )
+        shots.append(
+            (
+                moment_time(m),
+                url,
+                place(cfg, run, uid, *gps).label if gps else "",
+                m["burst"],
+            )
+        )
+    text = content(
+        key,
+        ws,
+        legs,
+        cfg.web_url,
+        len(day_photos),
+        link,
+        shots,
+        weather,
+        agenda,
+        work,
+        extra,
+        trip_legs,
+        music,
+        src.climbing_section(climbs) if climbs else None,
+        games,
+        activity,
+        notes,
+        memory_lines(day, memories, immich.memory_link, immich.city)
+        if memories
+        else (),
+        birthdays,
+        genealogy,
+        fl.flight_section(flights, every_flight) if flights else None,
+        cfg.airtrail_url,
+        energy,
+        screens,
+        badges,
+        spending,
+    )
     collage = None
     if photos:
         collage_path = f"{tmpdir}/photos-{key}.jpg"
-        collage_fn([immich.preview(p["id"]) for p in photos],
-                   [tile_label(p) for p in photos], collage_path)
+        collage_fn(
+            [immich.preview(p["id"]) for p in photos],
+            [tile_label(p) for p in photos],
+            collage_path,
+        )
         with open(collage_path, "rb") as f:
             collage = f.read()
     summary, src_hash = None, summ.source_hash(text, ",".join(p["id"] for p in photos))
     if summary_fn:
         prev = state.get(key, {})
-        summary = (prev.get("summary") if prev.get("summary_src") == src_hash
-                   else summary_fn(text, summary_image(collage)))
+        summary = (
+            prev.get("summary")
+            if prev.get("summary_src") == src_hash
+            else summary_fn(text, summary_image(collage))
+        )
         if summary:
             text = f"*{src.untagged(summary)}*\n\n{text}"
         else:  # gate down: a later run retries, as the signature won't match
             log(f"{key}: no summary this run")
             sig = f"{sig}|no-summary"
     if cfg.dry_run:
-        log(f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
-            f"{len(photos)}/{len(day_photos)} photos\n{text}")
+        log(
+            f"[dry-run] {key}: {len(ws)} workouts, {len(day_trips)} trips, "
+            f"{len(photos)}/{len(day_photos)} photos\n{text}"
+        )
         return None
 
     moved = max([w.end for w in ws] + [t.end for t in day_trips], default=None)
@@ -1433,16 +1952,38 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         render_fn(lines, png_path)
         with open(png_path, "rb") as f:
             data = f.read()
-        files.append((f"map-{key}.jpg", "image/jpeg", data,
-                      media_metadata(data, moved, location=lines[-1][0][-1])))
+        files.append(
+            (
+                f"map-{key}.jpg",
+                "image/jpeg",
+                data,
+                media_metadata(data, moved, location=lines[-1][0][-1]),
+            )
+        )
     if photos:
         data = collage
         gps = next((g for g in map(photo_gps, reversed(photos)) if g), None)
-        cams = {((p.get("exifInfo") or {}).get("make"), (p.get("exifInfo") or {}).get("model"))
-                for p in photos if (p.get("exifInfo") or {}).get("make")}
-        files.append((f"photos-{key}.jpg", "image/jpeg", data,
-                      media_metadata(data, _taken(photos[-1]), location=gps,
-                                     camera=next(iter(cams)) if len(cams) == 1 else None)))
+        cams = {
+            (
+                (p.get("exifInfo") or {}).get("make"),
+                (p.get("exifInfo") or {}).get("model"),
+            )
+            for p in photos
+            if (p.get("exifInfo") or {}).get("make")
+        }
+        files.append(
+            (
+                f"photos-{key}.jpg",
+                "image/jpeg",
+                data,
+                media_metadata(
+                    data,
+                    _taken(photos[-1]),
+                    location=gps,
+                    camera=next(iter(cams)) if len(cams) == 1 else None,
+                ),
+            )
+        )
 
     tiles = []
     for url, colour, status in src.climbing_pictures(climbs)[:CLIMB_TILES_MAX]:
@@ -1456,7 +1997,9 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
         with open(climb_path, "rb") as f:
             data = f.read()
         start = datetime.fromisoformat(climbs[0]["startDate"]).timestamp()
-        files.append((f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start)))
+        files.append(
+            (f"climbing-{key}.jpg", "image/jpeg", data, media_metadata(data, start))
+        )
     if flights:
         pass_path = f"{tmpdir}/flight-{key}.jpg"
         try:
@@ -1464,26 +2007,55 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
             with open(pass_path, "rb") as f:
                 data = f.read()
             dest, took_off = flights[-1].to, flights[0].dep
-            files.append((f"flight-{key}.jpg", "image/jpeg", data,
-                          media_metadata(data, took_off.timestamp() if took_off else day_bounds(day)[0] + 8 * 3600,
-                                         location=(dest.lat, dest.lon))))
+            files.append(
+                (
+                    f"flight-{key}.jpg",
+                    "image/jpeg",
+                    data,
+                    media_metadata(
+                        data,
+                        took_off.timestamp()
+                        if took_off
+                        else day_bounds(day)[0] + 8 * 3600,
+                        location=(dest.lat, dest.lon),
+                    ),
+                )
+            )
         except OSError as e:  # map tiles down: the text section still stands
             log(f"{key}: boarding pass unavailable ({e})")
     last = next((t for t in reversed(tracks) if t), None)
     if last:
         lat, lon = last[-1]
-        location = {"placeholder": legs[tracks.index(last)][1].label, "latitude": lat, "longitude": lon}
+        location = {
+            "placeholder": legs[tracks.index(last)][1].label,
+            "latitude": lat,
+            "longitude": lon,
+        }
     elif extra:
         lat, lon = extra[-1].path[-1]
-        location = {"placeholder": trip_legs[-1][1].label, "latitude": lat, "longitude": lon}
+        location = {
+            "placeholder": trip_legs[-1][1].label,
+            "latitude": lat,
+            "longitude": lon,
+        }
     elif flights:
         dest = flights[-1].to
-        location = {"placeholder": dest.city, "latitude": dest.lat, "longitude": dest.lon}
+        location = {
+            "placeholder": dest.city,
+            "latitude": dest.lat,
+            "longitude": dest.lon,
+        }
     else:
-        gps = [p["exifInfo"] for p in reversed(day_photos)
-               if (p.get("exifInfo") or {}).get("latitude")]
-        location = gps and {"placeholder": gps[0].get("city") or "",
-                            "latitude": gps[0]["latitude"], "longitude": gps[0]["longitude"]}
+        gps = [
+            p["exifInfo"]
+            for p in reversed(day_photos)
+            if (p.get("exifInfo") or {}).get("latitude")
+        ]
+        location = gps and {
+            "placeholder": gps[0].get("city") or "",
+            "latitude": gps[0]["latitude"],
+            "longitude": gps[0]["longitude"],
+        }
     if moved:
         when = _utc(moved)
     elif day_photos:
@@ -1499,18 +2071,35 @@ def journal_day(cfg, run, memos, state, day, uid, log, render_fn, tmpdir, immich
     atts = memos.upload(files)
     prev, name = state.get(key), None
     if prev:
-        kept = memos.update(prev["memo"], prev.get("text"), prev.get("atts"),
-                            text, atts, when, location or None)
+        kept = memos.update(
+            prev["memo"],
+            prev.get("text"),
+            prev.get("atts"),
+            text,
+            atts,
+            when,
+            location or None,
+        )
         if kept is None:
-            log(f"{key}: {prev['memo']} was edited by hand; text kept, attachments refreshed")
+            log(
+                f"{key}: {prev['memo']} was edited by hand; text kept, attachments refreshed"
+            )
         if kept is not False:
             name = prev["memo"]
     if name is None:
         name = memos.create(text, atts, when, location or None)
-    state[key] = {"memo": name, "sig": sig, "text": text, "atts": atts,
-                  "files": [f[0] for f in files], "spend": spending,
-                  **({"summary": summary, "summary_src": src_hash} if summary else {})}
-    log(f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)")
+    state[key] = {
+        "memo": name,
+        "sig": sig,
+        "text": text,
+        "atts": atts,
+        "files": [f[0] for f in files],
+        "spend": spending,
+        **({"summary": summary, "summary_src": src_hash} if summary else {}),
+    }
+    log(
+        f"{key}: {name} ({len(ws)} workouts, {len(day_trips)} trips, {len(photos)} photos)"
+    )
     return name
 
 
@@ -1527,7 +2116,9 @@ def catchup_days(cfg, spend_fn, state, today=None, log=print):
         if not prev:
             continue
         now = day_spend(spend_fn, day, log, today, cfg)
-        if json.loads(json.dumps(now)) != prev.get("spend"):  # state round-trips tuples as lists
+        if json.loads(json.dumps(now)) != prev.get(
+            "spend"
+        ):  # state round-trips tuples as lists
             days.append(day)
     return sorted(days)
 
@@ -1547,17 +2138,33 @@ def send_day(cfg, state, day, run, log, memos=None, tmpdir=None):
     """Send `day`'s entry to Telegram once, as one Rich Message with its images
     on top. The daily run only, never a redo."""
     entry = state.get(day.isoformat())
-    if not cfg.telegram_send or cfg.redo_file or cfg.day or cfg.dry_run or not entry or entry.get("sent"):
+    if (
+        not cfg.telegram_send
+        or cfg.redo_file
+        or cfg.day
+        or cfg.dry_run
+        or not entry
+        or entry.get("sent")
+    ):
         return
     try:
         photos = []
-        for att, name in zip(entry.get("atts", ()), entry.get("files", ()) if memos and tmpdir else ()):
+        for att, name in zip(
+            entry.get("atts", ()), entry.get("files", ()) if memos and tmpdir else ()
+        ):
             path = f"{tmpdir}/tg-{name}"
             with open(path, "wb") as f:
                 f.write(memos.file(att, name))
             photos.append(path)
-        out = run([cfg.telegram_send, "-m", "rich", *[a for p in photos for a in ("-p", p)],
-                   telegram_text(entry, cfg.memos_public_url)])
+        out = run(
+            [
+                cfg.telegram_send,
+                "-m",
+                "rich",
+                *[a for p in photos for a in ("-p", p)],
+                telegram_text(entry, cfg.memos_public_url),
+            ]
+        )
     except (OSError, subprocess.CalledProcessError) as e:
         log(f"{day}: Telegram not sent ({e})")
         return
@@ -1573,16 +2180,25 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
     cfg = Config.from_env(env)
     log = logger(TAG)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            ).stdout
+
     try:
         token = "" if cfg.dry_run else read_secret(cfg.token_file)
         memos = Memos(cfg.memos_url, token, opener)
         state = load_json(cfg.state_path, {}) if cfg.state_path else {}
         uid = dawarich_user(cfg, run)
         try:
-            immich = Immich(*immich_settings(cfg, run, uid), opener,
-                            read_secret(cfg.immich_admin_key_file) if cfg.immich_admin_key_file else "")
+            immich = Immich(
+                *immich_settings(cfg, run, uid),
+                opener,
+                read_secret(cfg.immich_admin_key_file)
+                if cfg.immich_admin_key_file
+                else "",
+            )
             if immich.admin_key:
                 try:
                     immich.create_memories()
@@ -1600,19 +2216,48 @@ def main(env=None, run=None, opener=None, render_fn=None, today=None, sleep=time
                 log(f"no family tree: {e}")
         spend_fn = sure_spends(cfg, opener)
         with tempfile.TemporaryDirectory() as tmp:
-            for day in target_days(cfg, today) + catchup_days(cfg, spend_fn, state, today, log):
-                journal_day(cfg, run, memos, state, day, uid, log,
-                            render_fn or render, tmp, immich,
-                            collage_fn=functools.partial(render_collage, font_path=cfg.font),
-                            pass_fn=functools.partial(render_boarding_passes, font_path=cfg.font),
-                            summary_fn=(lambda t, img=None: summ.summarize(cfg.gate_url, cfg.summary_model, t, opener,
-                                                                           image=img))
-                            if cfg.gate_url else None,
-                            weather_fn=lambda d, lat, lon: src.weather_line(d, lat, lon, opener),
-                            tree=tree, spend_fn=spend_fn)
+            for day in target_days(cfg, today) + catchup_days(
+                cfg, spend_fn, state, today, log
+            ):
+                journal_day(
+                    cfg,
+                    run,
+                    memos,
+                    state,
+                    day,
+                    uid,
+                    log,
+                    render_fn or render,
+                    tmp,
+                    immich,
+                    collage_fn=functools.partial(render_collage, font_path=cfg.font),
+                    pass_fn=functools.partial(
+                        render_boarding_passes, font_path=cfg.font
+                    ),
+                    summary_fn=(
+                        lambda t, img=None: summ.summarize(
+                            cfg.gate_url, cfg.summary_model, t, opener, image=img
+                        )
+                    )
+                    if cfg.gate_url
+                    else None,
+                    weather_fn=lambda d, lat, lon: src.weather_line(
+                        d, lat, lon, opener
+                    ),
+                    tree=tree,
+                    spend_fn=spend_fn,
+                )
                 if cfg.state_path and not cfg.dry_run:
                     save_json(cfg.state_path, state)
-            send_day(cfg, state, (today or _today()) - timedelta(days=1), run, log, memos, tmp)
+            send_day(
+                cfg,
+                state,
+                (today or _today()) - timedelta(days=1),
+                run,
+                log,
+                memos,
+                tmp,
+            )
             if cfg.state_path and not cfg.dry_run:
                 save_json(cfg.state_path, state)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:

@@ -87,7 +87,11 @@ METRICS_QUERY = {
                     "left": _col("entitySchemaPluginId"),
                     "right": {
                         "type": "pluginId",
-                        "reference": {"kind": "package", "packageId": FITNESS, "scope": "system"},
+                        "reference": {
+                            "kind": "package",
+                            "packageId": FITNESS,
+                            "scope": "system",
+                        },
                     },
                 },
             ],
@@ -100,7 +104,11 @@ METRICS_QUERY = {
                 {"key": "id", "expr": _col("id")},
                 {
                     "key": "key",
-                    "expr": {"type": "jsonPath", "expr": _col("properties"), "path": ["key"]},
+                    "expr": {
+                        "type": "jsonPath",
+                        "expr": _col("properties"),
+                        "path": ["key"],
+                    },
                 },
             ],
         },
@@ -125,7 +133,8 @@ class Config:
             port=env_int("SHIM_PORT", 8347, env),
             shim_key=env_str("SHIM_KEY", "", env),
             ryot_url=env_str("RYOT_URL", "http://127.0.0.1:13350", env),
-            ryot_api_key=env_str("RYOT_API_KEY", "", env) or env_str("RYOT_TOKEN", "", env),
+            ryot_api_key=env_str("RYOT_API_KEY", "", env)
+            or env_str("RYOT_TOKEN", "", env),
             measurement_name=env_str("MEASUREMENT_NAME", "Loftilla", env),
         )
 
@@ -157,7 +166,9 @@ def metric_name(key):
 def metric_ids(cfg, keys, opener=None):
     """key -> metric entity id for `keys`, creating any metric the user lacks."""
     data = ryot.ryotql(cfg.ryot_url, cfg.ryot_api_key, METRICS_QUERY, opener=opener)
-    found = {row["key"]: row["id"] for row in data["metrics"]["items"] if row.get("key")}
+    found = {
+        row["key"]: row["id"] for row in data["metrics"]["items"] if row.get("key")
+    }
     for key in keys:
         if key not in found:
             created = ryot.invoke_operation(
@@ -183,7 +194,9 @@ def log_input(stats, ids, comment, timestamp):
     return {
         "occurredAt": timestamp,
         "comment": comment,
-        "values": [{"metricId": ids[s["name"]], "value": float(s["value"])} for s in stats],
+        "values": [
+            {"metricId": ids[s["name"]], "value": float(s["value"])} for s in stats
+        ],
         # Must not vary on retry: a reused idempotency key with a different
         # payload is a 400, not a replay.
         "submittedAt": timestamp,
@@ -269,7 +282,13 @@ def make_handler(cfg, push=None, log=log):
                 names = ", ".join(s["name"] for s in stats)
                 log(f"pushed measurement @ {ts} ({len(stats)} stats: {names})")
                 self._reply(200, "ok")
-            except (urllib.error.URLError, RuntimeError, KeyError, TypeError, ValueError) as e:
+            except (
+                urllib.error.URLError,
+                RuntimeError,
+                KeyError,
+                TypeError,
+                ValueError,
+            ) as e:
                 log(f"failed to push to Ryot: {e}")
                 self._reply(502, "ryot push failed")
 

@@ -27,16 +27,22 @@ in
         "SMART_INTERVAL=1h"
       ];
       ProtectProc = "default";
-      AmbientCapabilities    = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
-      CapabilityBoundingSet  = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
-      DeviceAllow            = [
+      AmbientCapabilities = [
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
+      ];
+      CapabilityBoundingSet = [
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
+      ];
+      DeviceAllow = [
         "/dev/nvme0n1 r"
         "/dev/nvme1n1 r"
         "/dev/sda r"
         "/dev/sdb r"
         "/dev/sdc r"
       ];
-      SupplementaryGroups    = [ "disk" ];
+      SupplementaryGroups = [ "disk" ];
     };
   };
 }

@@ -13,7 +13,9 @@
 { lib, pkgs, ... }:
 let
   # The sudo key: its own Bitwarden SSH key item, never a login key.
-  sudoKeys = [ "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBneog7+eqJyvLrDJoqjdtvlCz7dn4qp7VsXo7P1HeK1 rpi5 sudo" ];
+  sudoKeys = [
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBneog7+eqJyvLrDJoqjdtvlCz7dn4qp7VsXo7P1HeK1 rpi5 sudo"
+  ];
   agentSock = "/home/nsimon/.ssh/sudo-agent.sock";
 in
 lib.mkIf (sudoKeys != [ ]) {

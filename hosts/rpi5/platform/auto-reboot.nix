@@ -6,7 +6,12 @@
 #
 # The reboot ping goes through the one-shot seam (shared/notify.nix `send`), not
 # the :8088 aggregator, which would debounce it past the reboot.
-{ config, pkgs, telegramChatId, ... }:
+{
+  config,
+  pkgs,
+  telegramChatId,
+  ...
+}:
 let
   telegramSend = (import ../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = config.age.secrets.telegram-bot-token.path;
@@ -16,27 +21,30 @@ let
 
   autoReboot = pkgs.writeShellApplication {
     name = "auto-reboot";
-    runtimeInputs = with pkgs; [ coreutils systemd ];
+    runtimeInputs = with pkgs; [
+      coreutils
+      systemd
+    ];
     text = ''
-      pending=()
-      for f in kernel initrd kernel-modules; do
-        if [ "$(readlink -f "/run/booted-system/$f")" != "$(readlink -f "/run/current-system/$f")" ]; then
-          pending+=("$f")
-        fi
-      done
+            pending=()
+            for f in kernel initrd kernel-modules; do
+              if [ "$(readlink -f "/run/booted-system/$f")" != "$(readlink -f "/run/current-system/$f")" ]; then
+                pending+=("$f")
+              fi
+            done
 
-      if [ ''${#pending[@]} -eq 0 ]; then
-        echo "auto-reboot: booted system is current, nothing to do"
-        exit 0
-      fi
+            if [ ''${#pending[@]} -eq 0 ]; then
+              echo "auto-reboot: booted system is current, nothing to do"
+              exit 0
+            fi
 
-      echo "auto-reboot: changed since boot: ''${pending[*]}"
-      ${telegramSend} "🔄 <b>rpi5 auto-reboot</b>
-Changed since boot: <code>''${pending[*]}</code>
-Rebooting in ~1 min." >/dev/null || true
+            echo "auto-reboot: changed since boot: ''${pending[*]}"
+            ${telegramSend} "🔄 <b>rpi5 auto-reboot</b>
+      Changed since boot: <code>''${pending[*]}</code>
+      Rebooting in ~1 min." >/dev/null || true
 
-      # +1 min so this unit records success before the reboot.
-      shutdown -r +1 "auto-reboot: ''${pending[*]} changed since boot"
+            # +1 min so this unit records success before the reboot.
+            shutdown -r +1 "auto-reboot: ''${pending[*]} changed since boot"
     '';
   };
 in

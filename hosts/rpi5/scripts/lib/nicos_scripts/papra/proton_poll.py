@@ -183,8 +183,10 @@ def poll(cfg, imap, log=print, chown=chown_papra):
             continue
         for ct, fn, _disp, payload in attachments(msg):
             dest = save_attachment(cfg.dest, payload, fn, chown=chown)
-            log(f"saved: {os.path.basename(dest)} ({ct}, {len(payload)}B) "
-                f"from {msg.get('From')}")
+            log(
+                f"saved: {os.path.basename(dest)} ({ct}, {len(payload)}B) "
+                f"from {msg.get('From')}"
+            )
             saved += 1
         if mid:
             # Recorded even with 0 doc attachments, to avoid re-scanning.

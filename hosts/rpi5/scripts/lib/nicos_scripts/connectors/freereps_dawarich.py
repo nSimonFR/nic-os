@@ -81,22 +81,32 @@ def _q(cfg, run, sql, db):
 
 def routed_workouts(cfg, run):
     """[(workout_id, name, route_points)], oldest first."""
-    rows = _q(cfg, run, """
+    rows = _q(
+        cfg,
+        run,
+        """
         SELECT w.id, w.name, count(*) FROM workouts w
         JOIN workout_routes r ON r.workout_id = w.id
         GROUP BY w.id, w.name ORDER BY min(r.time)
-    """, "freereps")
+    """,
+        "freereps",
+    )
     return [(r[0], r[1], int(r[2])) for r in rows]
 
 
 def route(cfg, run, workout_id):
     """[(epoch_s, lat, lon, alt, speed, course, accuracy)] — floats or None."""
     wid = str(uuid.UUID(workout_id))  # interpolated into SQL below
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         SELECT floor(extract(epoch FROM time))::bigint, latitude, longitude,
                altitude, speed, course, horizontal_accuracy
         FROM workout_routes WHERE workout_id = '{wid}' ORDER BY time
-    """, "freereps")
+    """,
+        "freereps",
+    )
     num = lambda v: float(v) if v not in ("", None) else None
     return [(int(r[0]), *(num(v) for v in r[1:])) for r in rows]
 
@@ -110,11 +120,16 @@ def dawarich_identity(cfg, run):
     tracker = cfg.tracker_id
     if not tracker:
         # Latest live (non-imported) point = the phone app's id.
-        rows = _q(cfg, run, f"""
+        rows = _q(
+            cfg,
+            run,
+            f"""
             SELECT tracker_id FROM points
             WHERE user_id = {uid} AND import_id IS NULL AND tracker_id IS NOT NULL
             ORDER BY timestamp DESC LIMIT 1
-        """, "dawarich")
+        """,
+            "dawarich",
+        )
         tracker = rows[0][0] if rows else TAG
     return uid, api_key, tracker
 
@@ -128,16 +143,26 @@ def _overlapping(uid, start, end):
 
 def corrected_overlap(cfg, run, uid, start, end):
     """True when a hand-corrected track overlaps [start, end] (epoch s)."""
-    return bool(_q(cfg, run, f"""
+    return bool(
+        _q(
+            cfg,
+            run,
+            f"""
         SELECT 1 FROM track_segments
         WHERE corrected_at IS NOT NULL AND track_id IN ({_overlapping(uid, start, end)})
         LIMIT 1
-    """, "dawarich"))
+    """,
+            "dawarich",
+        )
+    )
 
 
 def clear_overlapping_tracks(cfg, run, uid, start, end):
     """Delete the user's tracks overlapping [start, end] (epoch s); ids deleted."""
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         WITH t AS ({_overlapping(uid, start, end)}
         ), p AS (
           UPDATE points SET track_id = NULL WHERE track_id IN (SELECT id FROM t)
@@ -145,7 +170,9 @@ def clear_overlapping_tracks(cfg, run, uid, start, end):
           DELETE FROM track_segments WHERE track_id IN (SELECT id FROM t)
         )
         DELETE FROM tracks WHERE id IN (SELECT id FROM t) RETURNING id
-    """, "dawarich")
+    """,
+        "dawarich",
+    )
     return [r[0] for r in rows]
 
 
@@ -153,7 +180,10 @@ def delete_stale_points(cfg, run, uid, workout_id, kept_ts):
     """Delete this workout's points outside `kept_ts` (epoch s); count deleted."""
     wid = str(uuid.UUID(workout_id))
     keep = ",".join(str(int(t)) for t in kept_ts) or "NULL"
-    rows = _q(cfg, run, f"""
+    rows = _q(
+        cfg,
+        run,
+        f"""
         WITH d AS (
           DELETE FROM points WHERE user_id = {uid}
             AND raw_data->'properties'->>'workout_id' = '{wid}'
@@ -161,7 +191,9 @@ def delete_stale_points(cfg, run, uid, workout_id, kept_ts):
         )
         UPDATE users SET points_count = greatest(points_count - (SELECT count(*) FROM d), 0)
         WHERE id = {uid} RETURNING (SELECT count(*) FROM d)
-    """, "dawarich")
+    """,
+        "dawarich",
+    )
     return int(rows[0][0]) if rows else 0
 
 
@@ -211,17 +243,29 @@ def payload(points, tracker, workout_id):
     every one that way; Dawarich reads a negative speed as a bad fix and leaves
     the track's mode unknown. Omitted, it derives speed from distance/time.
     """
+
     def feature(p):
         t, lat, lon, alt, speed, course, acc = p
-        props = {"timestamp": t, "device_id": tracker,
-                 "source": "freereps", "workout_id": workout_id}
-        for key, val, floor in (("altitude", alt, None), ("speed", speed, 0),
-                                ("course", course, 0), ("horizontal_accuracy", acc, 0)):
+        props = {
+            "timestamp": t,
+            "device_id": tracker,
+            "source": "freereps",
+            "workout_id": workout_id,
+        }
+        for key, val, floor in (
+            ("altitude", alt, None),
+            ("speed", speed, 0),
+            ("course", course, 0),
+            ("horizontal_accuracy", acc, 0),
+        ):
             if val is not None and (floor is None or val >= floor):
                 props[key] = val
-        return {"type": "Feature",
-                "geometry": {"type": "Point", "coordinates": [lon, lat]},
-                "properties": props}
+        return {
+            "type": "Feature",
+            "geometry": {"type": "Point", "coordinates": [lon, lat]},
+            "properties": props,
+        }
+
     return {"locations": [feature(p) for p in points]}
 
 
@@ -235,8 +279,9 @@ def sync(cfg, run, opener=None, log=print, sleep=time.sleep):
     uid, api_key, tracker = dawarich_identity(cfg, run)
     pushed = sent = 0
     for wid, name, n in todo:
-        pts = simplify(route(cfg, run, wid), cfg.tolerance_m, cfg.max_gap_s,
-                       cfg.max_accuracy_m)
+        pts = simplify(
+            route(cfg, run, wid), cfg.tolerance_m, cfg.max_gap_s, cfg.max_accuracy_m
+        )
         day = time.strftime("%Y-%m-%d", time.gmtime(pts[0][0])) if pts else "?"
         if cfg.dry_run:
             log(f"[dry-run] {day} {name} {wid}: {n} fixes -> {len(pts)} points")
@@ -247,14 +292,19 @@ def sync(cfg, run, opener=None, log=print, sleep=time.sleep):
         elif pts:
             cleared = clear_overlapping_tracks(cfg, run, uid, pts[0][0], pts[-1][0])
             status, body = post_json(
-                f"{cfg.base_url}/api/v1/points", payload(pts, tracker, wid),
-                headers={"Authorization": f"Bearer {api_key}"}, opener=opener)
+                f"{cfg.base_url}/api/v1/points",
+                payload(pts, tracker, wid),
+                headers={"Authorization": f"Bearer {api_key}"},
+                opener=opener,
+            )
             if status != 200:
                 raise RuntimeError(f"{wid}: HTTP {status} {body[:200]}")
             replaced = delete_stale_points(cfg, run, uid, wid, [p[0] for p in pts])
-            log(f"{day} {name} {wid}: {n} fixes -> {len(pts)} points, "
+            log(
+                f"{day} {name} {wid}: {n} fixes -> {len(pts)} points, "
                 f"{len(json.loads(body).get('data', []))} upserted, "
-                f"{replaced} earlier points replaced, {len(cleared)} tracks cleared")
+                f"{replaced} earlier points replaced, {len(cleared)} tracks cleared"
+            )
         state[wid] = n
         if cfg.state_path:
             save_json(cfg.state_path, state)
@@ -267,9 +317,12 @@ def main(env=None, run=None, opener=None):
     cfg = Config.from_env(env)
     log = logger(TAG)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=True).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            ).stdout
+
     try:
         pushed, sent = sync(cfg, run, opener=opener, log=log)
     except (RuntimeError, OSError, subprocess.CalledProcessError) as e:

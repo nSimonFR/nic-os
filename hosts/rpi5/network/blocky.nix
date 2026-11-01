@@ -85,7 +85,10 @@ in
 
         # Apply all denylist groups to every client on the network
         clientGroupsBlock = {
-          default = [ "ads" "threats" ];
+          default = [
+            "ads"
+            "threats"
+          ];
         };
 
         # Return 0.0.0.0 / :: for blocked queries (fastest for clients)
