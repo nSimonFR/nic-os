@@ -13,7 +13,7 @@
 # agent that called it.
 set -u
 
-source_name= message= project= immediate=false have_message=0
+source_name='' message='' project='' immediate=false have_message=0
 
 while [ $# -gt 0 ]; do
   case $1 in

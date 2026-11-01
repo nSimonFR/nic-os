@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # entire-trusk-enable [--apply] — turn Entire on, privately, in every
 # trusk-official clone or submodule under $TRUSK_DIR (default ~/MyDocuments/TRUSK),
 # up to four levels deep (trusk-infra nests its services as submodules).

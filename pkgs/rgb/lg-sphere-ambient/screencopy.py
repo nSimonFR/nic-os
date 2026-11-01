@@ -1,4 +1,5 @@
-import os, mmap
+import os
+import mmap
 from pywayland.client import Display
 from protocols.wayland import WlShm, WlOutput
 from protocols.wlr_screencopy_unstable_v1 import ZwlrScreencopyManagerV1

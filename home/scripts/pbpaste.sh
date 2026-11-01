@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Reads the Mac's clipboard over SSH, on demand. Nothing is synced or kept here.
 # MAC_CLIP_JS and MAC_LAST_SCREENSHOT are prepended by home/mac-clipboard.nix.
 host=${PBPASTE_HOST:-macbook-pro-appleosx-15}

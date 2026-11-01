@@ -1,9 +1,9 @@
 """Generic config-driven fetch and extraction. Source-specific rules are JSON data."""
 
 from __future__ import annotations
-import json, re
+import json
+import re
 from html import unescape
-from html.parser import HTMLParser
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 from .ics import parse_ics

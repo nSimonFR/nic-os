@@ -26,7 +26,7 @@ def cal(*components, header=None):
 
 
 def vevent(uid, dtstart, dtend=None, rrule=None, recurrence_id=None, extra=()):
-    lines = [f"BEGIN:VEVENT", f"UID:{uid}", f"DTSTART:{dtstart}"]
+    lines = ["BEGIN:VEVENT", f"UID:{uid}", f"DTSTART:{dtstart}"]
     if dtend:
         lines.append(f"DTEND:{dtend}")
     if rrule:

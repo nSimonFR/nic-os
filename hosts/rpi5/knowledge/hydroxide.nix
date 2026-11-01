@@ -34,7 +34,7 @@ let
   imapPort = 1143;
   carddavPort = 8083; # default 8080 collides with nginx/firefly
 
-  hydroxide = unstablePkgs.hydroxide;
+  inherit (unstablePkgs) hydroxide;
 in
 {
   users.users.hydroxide = {

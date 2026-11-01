@@ -20,7 +20,7 @@
 }:
 
 let
-  zoetrope = pkgs.callPackage ../pkgs/cli/zoetrope.nix { zoetrope-src = inputs.zoetrope-src; };
+  zoetrope = pkgs.callPackage ../pkgs/cli/zoetrope.nix { inherit (inputs) zoetrope-src; };
 
   # Exit 1 when a herdr server already answers on the API socket, which tells
   # systemd to skip the unit instead of starting a second one that cannot bind.

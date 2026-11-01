@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Build the bridge's own plugins/ directory (managed by
 # claude-remote-control.nix, run from claude-rc-prep-config at bridge start):
 # one shared set of clones, but

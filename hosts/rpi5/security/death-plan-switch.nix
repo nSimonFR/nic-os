@@ -31,7 +31,7 @@ let
     vaultHook = "${bridgeBin}/bin/dps-ea-bridge";
   };
   appDir = "${pkg}/share/switch";
-  php = pkgs.php;
+  inherit (pkgs) php;
   port = 8094; # backend vhost; the path-mux forwards /switch/* here unchanged
   socket = config.services.phpfpm.pools.${name}.socket;
 

@@ -34,7 +34,7 @@ bad() {
   printf 'FAIL — %s\n       %s\n' "$1" "$2"
   fails=$((fails + 1))
 }
-eq() { [ "$2" = "$3" ] && ok "$1" || bad "$1" "expected [$2], got [$3]"; }
+eq() { if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "expected [$2], got [$3]"; fi; }
 sent() { tail -n 1 "$CALL_LOG"; }
 has() { case "$(sent)" in *"$2"*) ok "$1" ;; *) bad "$1" "want [$2] in: $(sent)" ;; esac }
 hasnt() { case "$(sent)" in *"$2"*) bad "$1" "unwanted [$2] in: $(sent)" ;; *) ok "$1" ;; esac }
@@ -65,8 +65,11 @@ has "edits the original" "message_id=4242"
 fire ""
 has "clearing edits" "editMessageText"
 has "resolve marker sent" "✅ resolved"
-[ -e "$ALERT_STATE_DIR/disk-full.mid" ] &&
-  bad "state cleared on resolve" "mid file survived" || ok "state cleared on resolve"
+if [ -e "$ALERT_STATE_DIR/disk-full.mid" ]; then
+  bad "state cleared on resolve" "mid file survived"
+else
+  ok "state cleared on resolve"
+fi
 
 before=$(count)
 fire ""
@@ -121,7 +124,7 @@ STUB_RESPONSE='{"ok":false,"description":"chat not found"}' bash "$send" x >/dev
 eq "a rejected send still exits 0" 0 $?
 TELEGRAM_TOKEN_FILE=$tmp/nope bash "$send" x >/dev/null 2>&1
 eq "a missing token exits 0" 0 $?
-TELEGRAM_CHAT_ID= bash "$send" x >/dev/null 2>&1
+TELEGRAM_CHAT_ID='' bash "$send" x >/dev/null 2>&1
 eq "a missing chat id exits 0" 0 $?
 eq "neither dialled out" $((before + 1)) "$(count)"
 
