@@ -2,6 +2,7 @@
 let
   beszelHubPort = 8090;
   beszelAgentPort = 45876;
+  loadAlert = { value = 14; min = 15; };
 
   # Self-updating Telegram alerter. Usage:
   #   printf '%s' "$body" | ''${telegramAlert} <state-key> "<title>"
@@ -161,16 +162,18 @@ in
           printf '%s' "$BODY" | ${telegramAlert} security-drift "Security drift on rpi5"
         '';
       });
-      Environment = [
-        "SSH_USERS=${toString (lib.attrNames config.users.users)}"
-        "FUNNEL_PORTS=${toString (map (e: e.port) (lib.filter (e: e.funnel) config.nic.publicEntries))}"
-        # Keys reviewed and kept in a user's own ~/.ssh/authorized_keys, by fingerprint.
-        "ALLOWED_KEY_FINGERPRINTS="
-        "TAILSCALE_BIN=${config.services.tailscale.package}/bin/tailscale"
-        "JOURNALCTL_BIN=${config.systemd.package}/bin/journalctl"
-        "SSH_KEYGEN_BIN=${config.programs.ssh.package}/bin/ssh-keygen"
-        "IP_BIN=${pkgs.iproute2}/bin/ip"
-      ];
+    };
+    # `environment`, not serviceConfig.Environment: the latter is written unquoted,
+    # so systemd split the space-separated lists and kept only their first word.
+    environment = {
+      SSH_USERS = toString (lib.attrNames config.users.users);
+      FUNNEL_PORTS = toString (map (e: e.port) (lib.filter (e: e.funnel) config.nic.publicEntries));
+      # Keys reviewed and kept in a user's own ~/.ssh/authorized_keys, by fingerprint.
+      ALLOWED_KEY_FINGERPRINTS = "";
+      TAILSCALE_BIN = "${config.services.tailscale.package}/bin/tailscale";
+      JOURNALCTL_BIN = "${config.systemd.package}/bin/journalctl";
+      SSH_KEYGEN_BIN = "${config.programs.ssh.package}/bin/ssh-keygen";
+      IP_BIN = "${pkgs.iproute2}/bin/ip";
     };
   };
   systemd.timers.security-drift-alert = {
@@ -225,6 +228,19 @@ in
           -d '{"authAlert":{"enabled":false}}' > /dev/null \
           && echo "authAlert disabled on _superusers" \
           || echo "WARN: failed to disable authAlert" >&2
+
+        # Pin the LoadAvg15 alert (it lives in the hub DB). At value=10/min=10 it
+        # fired 28× in 12 days, alert + resolved each: build spikes peaking at
+        # 11-12 on 4 cores. Memory thrash is earlyoom-alert's job.
+        want='{"value":${toString loadAlert.value},"min":${toString loadAlert.min}}'
+        for id in $($CURL -sf -G -H "Authorization: $SU_TOKEN" "$HUB/api/collections/alerts/records" \
+            --data-urlencode "filter=(name='LoadAvg15')" --data-urlencode "fields=id,value,min" \
+            | $JQ -r --argjson w "$want" '.items[] | select(.value != $w.value or .min != $w.min) | .id'); do
+          $CURL -sf -X PATCH -H "Authorization: $SU_TOKEN" -H 'Content-Type: application/json' \
+            -d "$want" "$HUB/api/collections/alerts/records/$id" > /dev/null \
+            && echo "LoadAvg15 alert $id pinned to $want" \
+            || echo "WARN: failed to pin LoadAvg15 alert $id" >&2
+        done
 
         # Pick the first regular user and impersonate them so the refresh
         # handler's HasUser check passes (see comment block above).

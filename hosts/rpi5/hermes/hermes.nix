@@ -368,6 +368,9 @@ let
     # Messaging ignores the Agent Vault proxy env (execWrapper): Telegram is the
     # only way to reach Hermes, so it must not depend on the broker being up.
     gateway.trust_env = false;
+    # No "gateway shutting down" ping to the home DM on every restart: ~12/day
+    # (deploys + earlyoom kills). Interrupted-task pings to the active chat still go out.
+    platforms.telegram.gateway_restart_notification = false;
 
     # External memory provider. `holographic` is the local, zero-API-key store
     # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real

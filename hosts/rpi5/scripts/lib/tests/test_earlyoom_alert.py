@@ -123,12 +123,21 @@ def test_a_unit_that_comes_back_late_flips_to_back():
     assert state["episode"]["kills"][0]["status"] == "back"
 
 
-def test_expendable_kills_alone_never_ping():
+def test_expendable_kills_alone_post_nothing():
     batch = [entry(SANDBOX.replace("378266", str(p)), T0 + p % 10, f"c{p}")
              for p in range(10, 20)]
-    _, tg = run_ticks(Host([batch, []]), [T0 + 60, T0 + 1000])
+    state, tg = run_ticks(Host([batch, []]), [T0 + 60, T0 + 9 + ea.QUIET_SEC])
+    assert tg.sent == [] and tg.edits == []
+    assert state["episode"] is None
+
+
+def test_a_real_kill_after_expendable_ones_posts_the_whole_episode():
+    host = Host([[entry(SANDBOX, T0, "c1")], [entry(HERMES, T0 + 120, "c2")]],
+                units=UNITS, active={"hermes.service"})
+    _, tg = run_ticks(host, [T0 + 60, T0 + 180])
     assert len(tg.sent) == 1 and tg.sent[0]["silent"]
-    assert "×10" in tg.sent[0]["text"]
+    assert "<code>hermes</code>" in tg.sent[0]["text"]
+    assert "<code>ryot-sandboxd</code> ×1" in tg.sent[0]["text"]
 
 
 def test_a_storm_of_real_kills_pings_once():
