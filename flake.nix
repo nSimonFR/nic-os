@@ -4,6 +4,12 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/release-26.05";
 
+    # `nix fmt` + the `formatting` check (treefmt.nix).
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Left on the branch on purpose. The channel gates on Hydra but not on every
     # aarch64 job, so a rev can land a core package missing from cache.nixos.org
     # (0a3468a4, 2026-09-20: nodejs 26.9.0, ~4h of V8 on the Pi). CI's
@@ -438,6 +444,8 @@
       # hosts/beast/overlays.nix) and in the standalone home-manager configs below.
       # See pkgs/overlay.nix for what does and does not belong in it.
       nicOsOverlay = import ./pkgs/overlay.nix inputs;
+
+      treefmtFor = system: inputs.treefmt-nix.lib.evalModule nixpkgs.legacyPackages.${system} ./treefmt.nix;
     in
     {
       # Exposed so hosts/rpi5/overlays.nix and hosts/beast/overlays.nix pull the same
@@ -455,6 +463,7 @@
       # expensive on a 3.9 GB Pi.
       checks = nixpkgs.lib.genAttrs checkSystems (system: {
         inherit (self.packages.${system}) nicos-scripts;
+        formatting = (treefmtFor system).config.build.check self;
         # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
         claude-aperture-shim =
           let
@@ -468,6 +477,8 @@
               touch $out
             '';
       });
+
+      formatter = nixpkgs.lib.genAttrs devSystems (system: (treefmtFor system).config.build.wrapper);
 
       # `nix develop` — python3 + pytest to run the script tests in-tree:
       #   cd hosts/rpi5/scripts/lib && pytest
