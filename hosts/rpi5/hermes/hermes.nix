@@ -46,6 +46,10 @@
 let
   hermes = pkgs.hermes-messaging;
 
+  # Seeded into ~/.hermes/plugins/; it reads the same ~/.hermes/memory_store.db.
+  # numpy (HRR) is absent from `messaging`, so it runs keyword-only, as before.
+  holographicPlugin = pkgs.callPackage ../../../pkgs/agents/hermes-holographic.nix { };
+
   hermesHome = "/home/nsimon/.hermes";
 
   # Route through Aperture (tailnet) rather than the gate's loopback :4001, so
@@ -435,6 +439,11 @@ let
       "${skillsSource}/" "${hermesHome}/skills/"
     ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
+
+    # Memory provider plugin: owned wholly by Nix, so --delete is safe here.
+    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/holographic
+    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+      "${holographicPlugin}/" "${hermesHome}/plugins/holographic/"
 
     # Cron workspace scripts (executable). Same NO --delete rule: the workspace
     # also holds live runtime state (kanban.db, sandboxes, job-alerts/.seen_jobs.json)
