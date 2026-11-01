@@ -118,7 +118,12 @@ def api_post(base, api_key, path, payload, timeout=RYOT_WAKE_TIMEOUT, opener=Non
 def ryotql(base, api_key, queries, timeout=RYOT_WAKE_TIMEOUT, opener=None):
     """Run a RyotQL document (scoped to the key's user), returning its `data`."""
     out = api_post(
-        base, api_key, "/ryotql/execute", {"queries": queries}, timeout=timeout, opener=opener
+        base,
+        api_key,
+        "/ryotql/execute",
+        {"queries": queries},
+        timeout=timeout,
+        opener=opener,
     )
     return out.get("data") or {}
 
@@ -160,7 +165,9 @@ class RateLimited(RuntimeError):
         self.retry_after_ms = retry_after_ms
 
 
-def api_request(base, api_key, method, path, payload=None, timeout=RYOT_WAKE_TIMEOUT, opener=None):
+def api_request(
+    base, api_key, method, path, payload=None, timeout=RYOT_WAKE_TIMEOUT, opener=None
+):
     """Any-verb `/api` call; raises RateLimited on 429, RuntimeError on other errors."""
     req = urllib.request.Request(
         base.rstrip("/") + "/api" + path,
@@ -209,7 +216,10 @@ class Client:
                 self.sleep(wait)
 
     def query(self, queries):
-        return self.request("POST", "/ryotql/execute", {"queries": queries}).get("data") or {}
+        return (
+            self.request("POST", "/ryotql/execute", {"queries": queries}).get("data")
+            or {}
+        )
 
     def query_all(self, name, query):
         """Every row of one RyotQL rows query, following `after` cursors."""
@@ -238,7 +248,9 @@ class Client:
             if idempotency_key is None or SIDECAR_STARTUP_FAILED not in str(e):
                 raise
         body["idempotencyKey"] = f"{idempotency_key}~{secrets.token_hex(4)}"
-        self.log(f"Ryot {path}: sandbox never started for {idempotency_key}; retrying under a new key")
+        self.log(
+            f"Ryot {path}: sandbox never started for {idempotency_key}; retrying under a new key"
+        )
         return self.request("POST", path, body)["result"]
 
     def import_entity(self, provider_id, external_id):
@@ -250,14 +262,18 @@ class Client:
         )["jobId"]
         status = None
         for _ in range(IMPORT_POLLS):
-            res = self.request("GET", "/entity-providers/imports/" + urllib.parse.quote(job, safe=""))
+            res = self.request(
+                "GET", "/entity-providers/imports/" + urllib.parse.quote(job, safe="")
+            )
             status = res.get("status")
             if status == "completed":
                 return res["data"]["id"]
             if status in ("failed", "cancelled"):
                 self.log(f"import of {external_id} {status}: {json.dumps(res)[:300]}")
                 return ""
-        raise RuntimeError(f"import of {external_id} still {status} after {IMPORT_POLLS} polls")
+        raise RuntimeError(
+            f"import of {external_id} still {status} after {IMPORT_POLLS} polls"
+        )
 
 
 # ── RyotQL expression builders ────────────────────────────────────────────────

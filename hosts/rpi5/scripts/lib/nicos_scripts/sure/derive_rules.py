@@ -135,8 +135,11 @@ def sql_literal(value):
 def candidates_sql(kind):
     column = "category_id" if kind == "category" else "merchant_id"
     # `kind` is not interpolated from user input — it selects a fixed column.
-    unset_clause = "t.category_id IS NULL AND t.kind = 'standard'" \
-        if kind == "category" else "t.merchant_id IS NULL"
+    unset_clause = (
+        "t.category_id IS NULL AND t.kind = 'standard'"
+        if kind == "category"
+        else "t.merchant_id IS NULL"
+    )
     return f"""
         WITH hist AS (
           SELECT e.name, t.{column} AS target, COUNT(*) AS n
@@ -161,7 +164,7 @@ def candidates_sql(kind):
                (SELECT COUNT(*) FROM entries e2
                   JOIN transactions t2 ON t2.id = e2.entryable_id
                    AND e2.entryable_type = 'Transaction'
-                 WHERE e2.name = r.name AND {unset_clause.replace('t.', 't2.')})::text
+                 WHERE e2.name = r.name AND {unset_clause.replace("t.", "t2.")})::text
         FROM ranked r
         JOIN pending p ON p.name = r.name
         WHERE r.rk = 1
@@ -195,14 +198,21 @@ def select_mappings(rows, existing, min_dominance, min_observations):
         if name in existing:
             rejected.append((name, "already has a rule", dominance, total_n))
         elif total_n < min_observations:
-            rejected.append((name, f"only {total_n} observation(s)", dominance, total_n))
+            rejected.append(
+                (name, f"only {total_n} observation(s)", dominance, total_n)
+            )
         elif dominance < min_dominance:
             rejected.append((name, f"ambiguous ({dominance:.0%})", dominance, total_n))
         else:
-            accepted.append({
-                "name": name, "target": target, "dominance": dominance,
-                "observations": total_n, "pending": pending_n,
-            })
+            accepted.append(
+                {
+                    "name": name,
+                    "target": target,
+                    "dominance": dominance,
+                    "observations": total_n,
+                    "pending": pending_n,
+                }
+            )
     return accepted, rejected
 
 
@@ -227,8 +237,20 @@ def insert_sql(family_id, kind, mapping, new_uuid=None):
 
 
 def psql_rows(run, sql, cfg):
-    out = run([cfg.runuser, "-u", "postgres", "--", cfg.psql,
-               "-d", cfg.db, "-tAF" + SEP, "-c", sql])
+    out = run(
+        [
+            cfg.runuser,
+            "-u",
+            "postgres",
+            "--",
+            cfg.psql,
+            "-d",
+            cfg.db,
+            "-tAF" + SEP,
+            "-c",
+            sql,
+        ]
+    )
     return [line.split(SEP) for line in out.splitlines() if line.strip()]
 
 
@@ -236,26 +258,45 @@ def psql_exec(run, sql, cfg):
     # ON_ERROR_STOP so a failed INSERT aborts instead of leaving a rule with no
     # action attached, which Sure would render as a rule that silently does
     # nothing.
-    return run([cfg.runuser, "-u", "postgres", "--", cfg.psql,
-                "-d", cfg.db, "-v", "ON_ERROR_STOP=1", "-c", sql])
+    return run(
+        [
+            cfg.runuser,
+            "-u",
+            "postgres",
+            "--",
+            cfg.psql,
+            "-d",
+            cfg.db,
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            sql,
+        ]
+    )
 
 
-def derive(run, cfg, family_id, kinds=("category", "merchant"), log=None,
-           new_uuid=None):
+def derive(
+    run, cfg, family_id, kinds=("category", "merchant"), log=None, new_uuid=None
+):
     log = log or logger(TAG)
     created = 0
     for kind in kinds:
         rows = psql_rows(run, candidates_sql(kind), cfg)
         existing = {r[0] for r in psql_rows(run, existing_rule_names_sql(kind), cfg)}
         accepted, rejected = select_mappings(
-            rows, existing, cfg.min_dominance, cfg.min_observations)
+            rows, existing, cfg.min_dominance, cfg.min_observations
+        )
 
         covered = sum(m["pending"] for m in accepted)
-        log(f"{kind}: {len(accepted)} rule(s) covering {covered} pending row(s); "
-            f"{len(rejected)} name(s) skipped")
+        log(
+            f"{kind}: {len(accepted)} rule(s) covering {covered} pending row(s); "
+            f"{len(rejected)} name(s) skipped"
+        )
         for m in accepted:
-            log(f"  + {m['name']!r} -> {m['target']} "
-                f"({m['dominance']:.0%} of {m['observations']}, {m['pending']} pending)")
+            log(
+                f"  + {m['name']!r} -> {m['target']} "
+                f"({m['dominance']:.0%} of {m['observations']}, {m['pending']} pending)"
+            )
         for name, reason, _, _ in rejected:
             log(f"  - {name!r} skipped: {reason}")
 
@@ -292,9 +333,11 @@ def main(argv=None, env=None, run=None, log=None):
     log = log or logger(TAG)
     cfg = Config.from_env(env)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=True).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            ).stdout
 
     family_id = cfg.family_id
     if not family_id:
@@ -306,8 +349,11 @@ def main(argv=None, env=None, run=None, log=None):
         log(f"family {family_id} ({tx_count} entries)")
 
     created = derive(run, cfg, family_id, log=log)
-    log("dry run — re-run with APPLY=1 to write" if cfg.dry_run
-        else f"created {created} rule(s)")
+    log(
+        "dry run — re-run with APPLY=1 to write"
+        if cfg.dry_run
+        else f"created {created} rule(s)"
+    )
     return 0
 
 

@@ -60,10 +60,11 @@ in
 
     serviceConfig = {
       Type = "simple";
-      ExecStart = ''${lg-sphere-ambient}/bin/lg-sphere-ambient \
-        --output DP-1 --fps 30 --brightness 12 \
-        --openrgb --openrgb-devices all \
-        --openrgb-zone-sizes "motherboard/Aura Addressable 1=24,motherboard/Aura Addressable 2=0,motherboard/Aura Addressable 3=8"'';
+      ExecStart = ''
+        ${lg-sphere-ambient}/bin/lg-sphere-ambient \
+                --output DP-1 --fps 30 --brightness 12 \
+                --openrgb --openrgb-devices all \
+                --openrgb-zone-sizes "motherboard/Aura Addressable 1=24,motherboard/Aura Addressable 2=0,motherboard/Aura Addressable 3=8"'';
       Restart = "on-failure";
       RestartSec = "5s";
       # turn the lights off if the service is stopped or fails terminally

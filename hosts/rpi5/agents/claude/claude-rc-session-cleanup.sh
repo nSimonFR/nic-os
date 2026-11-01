@@ -62,7 +62,7 @@ for f in "$SESSIONS_DIR"/*.json; do
   conv_file="$(find "$PROJECTS_DIR" -name "${session_id}.jsonl" -print -quit 2>/dev/null)"
   if [ -n "$conv_file" ] && [ -f "$conv_file" ]; then
     last_mod="$(stat -c %Y "$conv_file")"
-    idle_sec=$(( now - last_mod ))
+    idle_sec=$((now - last_mod))
   else
     # No conversation file means it never got a message — use process age
     idle_sec="$(ps -o etimes= -p "$pid" 2>/dev/null | tr -d ' ')" || idle_sec=""
@@ -70,8 +70,8 @@ for f in "$SESSIONS_DIR"/*.json; do
   fi
 
   if [ "$idle_sec" -gt "$MAX_INACTIVITY" ]; then
-    idle_min=$(( idle_sec / 60 ))
-    echo "killing stale bridge session PID=$pid sid=$session_id (inactive ${idle_min}min > $((MAX_INACTIVITY/60))min)"
+    idle_min=$((idle_sec / 60))
+    echo "killing stale bridge session PID=$pid sid=$session_id (inactive ${idle_min}min > $((MAX_INACTIVITY / 60))min)"
     kill "$pid" 2>/dev/null || true
     sleep 2
     kill -9 "$pid" 2>/dev/null || true
@@ -93,7 +93,10 @@ if [ -d "$WORKTREES_DIR" ]; then
       [ -d "/proc/$pid" ] || continue
       cwd="$(jq -r '.cwd // ""' "$f")"
       case "$cwd" in
-        *"$wt_name"*) in_use=1; break ;;
+      *"$wt_name"*)
+        in_use=1
+        break
+        ;;
       esac
     done
     if [ "$in_use" = "0" ]; then
@@ -113,12 +116,12 @@ if [ -d "$WORKTREES_DIR" ]; then
         # `|| last_mod=` and not a bare pipeline: head -1 closing the pipe can
         # SIGPIPE sort, and pipefail would abort the whole run on a worktree
         # that simply has many transcripts. Empty falls through to 0 below.
-        last_mod="$(find "$conv_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\n' 2>/dev/null \
-          | cut -d. -f1 | sort -rn | head -1)" || last_mod=""
+        last_mod="$(find "$conv_dir" -maxdepth 1 -name '*.jsonl' -printf '%T@\n' 2>/dev/null |
+          cut -d. -f1 | sort -rn | head -1)" || last_mod=""
         if [ -z "$last_mod" ]; then last_mod=0; fi
       fi
-      if [ "$last_mod" -gt 0 ] && [ "$(( now - last_mod ))" -le "$MAX_INACTIVITY" ]; then
-        echo "preserving recently-active worktree: $wt_name (idle $(( (now - last_mod) / 60 ))min)"
+      if [ "$last_mod" -gt 0 ] && [ "$((now - last_mod))" -le "$MAX_INACTIVITY" ]; then
+        echo "preserving recently-active worktree: $wt_name (idle $(((now - last_mod) / 60))min)"
         continue
       fi
       echo "removing orphaned worktree: $wt_name"
@@ -159,12 +162,12 @@ if [ -d "$WORKTREES_DIR" ]; then
   # registration pins its branch). Unlock the dead ones first so prune can
   # actually do its job; live worktrees keep their locks.
   # Pure shell on purpose: awk is not in runtimeInputs.
-  git -C "$REPO_DIR" worktree list --porcelain 2>/dev/null \
-    | while read -r wt_key wt_path; do
-        [ "$wt_key" = "worktree" ] || continue
-        if [ -d "$wt_path" ]; then continue; fi
-        git -C "$REPO_DIR" worktree unlock "$wt_path" 2>/dev/null || true
-      done
+  git -C "$REPO_DIR" worktree list --porcelain 2>/dev/null |
+    while read -r wt_key wt_path; do
+      [ "$wt_key" = "worktree" ] || continue
+      if [ -d "$wt_path" ]; then continue; fi
+      git -C "$REPO_DIR" worktree unlock "$wt_path" 2>/dev/null || true
+    done
   git -C "$REPO_DIR" worktree prune 2>/dev/null || true
 fi
 

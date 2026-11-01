@@ -26,7 +26,7 @@
 # rendered at activation from that secret into /etc (never the Nix store / git).
 { config, pkgs, ... }:
 let
-  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only 
+  shimPort = 8349; # scale-to-ryot shim, 127.0.0.1 only
   scaleMac = "24:62:AB:C6:9B:16"; # the QN-Scale (local BT address, not sensitive)
   ryotUrl = "http://127.0.0.1:13350"; # Ryot V2 base; the shim appends /api
 
@@ -48,8 +48,14 @@ in
     description = "scale-to-ryot: webhook → Ryot measurement shim";
     wantedBy = [ "multi-user.target" ];
     # Reads its env once, so it starts after ryot-bootstrap has written the key.
-    after = [ "network-online.target" "ryot-bootstrap.service" ];
-    wants = [ "network-online.target" "ryot-bootstrap.service" ];
+    after = [
+      "network-online.target"
+      "ryot-bootstrap.service"
+    ];
+    wants = [
+      "network-online.target"
+      "ryot-bootstrap.service"
+    ];
     environment = {
       SHIM_PORT = toString shimPort;
       RYOT_URL = ryotUrl;
@@ -61,7 +67,10 @@ in
       Group = "scale-bridge";
       SupplementaryGroups = [ "ryot-api" ];
       # SHIM_KEY from agenix; RYOT_API_KEY from ryot-bootstrap.
-      EnvironmentFile = [ "/run/agenix/scale-bridge-env" "-/var/lib/ryot-v2/secrets/api.env" ];
+      EnvironmentFile = [
+        "/run/agenix/scale-bridge-env"
+        "-/var/lib/ryot-v2/secrets/api.env"
+      ];
       # No wait-for-Ryot: the shim needs Ryot only when a weigh-in arrives, and
       # answers 502 if it is down then.
       ExecStart = "${pkgs.nicos-scripts}/bin/scale-to-ryot";
@@ -75,8 +84,14 @@ in
     description = "ble-scale-sync: Loftilla/QN scale → shim";
     wantedBy = [ "multi-user.target" ];
     # localhost shim + local BlueZ only — no network-online dependency needed.
-    after = [ "bluetooth.service" "scale-to-ryot.service" ];
-    wants = [ "bluetooth.service" "scale-to-ryot.service" ];
+    after = [
+      "bluetooth.service"
+      "scale-to-ryot.service"
+    ];
+    wants = [
+      "bluetooth.service"
+      "scale-to-ryot.service"
+    ];
     environment = {
       CONTINUOUS_MODE = "true";
       # config.yaml is rendered at activation into /etc (holds the PII profile).

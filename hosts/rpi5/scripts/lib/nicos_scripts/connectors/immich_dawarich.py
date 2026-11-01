@@ -67,10 +67,16 @@ def _iso(epoch):
 
 def immich_settings(cfg, run, uid):
     """(url, api_key) from the Dawarich user's integration settings."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT settings->>'immich_url', settings->>'immich_api_key'
         FROM users WHERE id = {int(uid)}
-    """, "dawarich", cfg.runuser, cfg.psql)
+    """,
+        "dawarich",
+        cfg.runuser,
+        cfg.psql,
+    )
     url, key = (rows[0] + ["", ""])[:2] if rows else ("", "")
     if not url or not key:
         raise RuntimeError("Immich is not configured in Dawarich's integrations")
@@ -79,11 +85,17 @@ def immich_settings(cfg, run, uid):
 
 def backfill_start(cfg, run, uid):
     """Epoch of the newest point from a Dawarich Immich import, else 0."""
-    rows = psql_rows(run, f"""
+    rows = psql_rows(
+        run,
+        f"""
         SELECT coalesce(max(p.timestamp), 0) FROM points p
         JOIN imports i ON i.id = p.import_id
         WHERE p.user_id = {int(uid)} AND i.source = 5
-    """, "dawarich", cfg.runuser, cfg.psql)  # 5 = immich_api
+    """,
+        "dawarich",
+        cfg.runuser,
+        cfg.psql,
+    )  # 5 = immich_api
     return int(rows[0][0]) if rows else 0
 
 
@@ -92,9 +104,13 @@ def search(url, key, filters, opener=None):
     assets, page = [], 1
     while page:
         body = {**filters, "withExif": True, "size": PAGE_SIZE, "page": page}
-        status, raw = post_json(f"{url}/api/search/metadata", body,
-                                headers={"x-api-key": key}, timeout=TIMEOUT_S,
-                                opener=opener)
+        status, raw = post_json(
+            f"{url}/api/search/metadata",
+            body,
+            headers={"x-api-key": key},
+            timeout=TIMEOUT_S,
+            opener=opener,
+        )
         if status != 200:
             raise RuntimeError(f"Immich search HTTP {status} {raw[:200]}")
         found = json.loads(raw).get("assets", {})
@@ -108,20 +124,34 @@ def fix(asset):
     exif = asset.get("exifInfo") or {}
     lat, lon = exif.get("latitude"), exif.get("longitude")
     when = asset.get("fileCreatedAt") or exif.get("dateTimeOriginal")
-    if (asset.get("isTrashed") or asset.get("visibility") == "locked"
-            or not lat or not lon or not when):
+    if (
+        asset.get("isTrashed")
+        or asset.get("visibility") == "locked"
+        or not lat
+        or not lon
+        or not when
+    ):
         return None
     t = datetime.fromisoformat(when.replace("Z", "+00:00"))
     return int(t.timestamp()), float(lat), float(lon), asset["id"]
 
 
 def payload(fixes, tracker):
-    return {"locations": [
-        {"type": "Feature",
-         "geometry": {"type": "Point", "coordinates": [lon, lat]},
-         "properties": {"timestamp": t, "device_id": tracker,
-                        "source": "immich", "asset_id": aid}}
-        for t, lat, lon, aid in fixes]}
+    return {
+        "locations": [
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [lon, lat]},
+                "properties": {
+                    "timestamp": t,
+                    "device_id": tracker,
+                    "source": "immich",
+                    "asset_id": aid,
+                },
+            }
+            for t, lat, lon, aid in fixes
+        ]
+    }
 
 
 def sync(cfg, run, opener=None, log=print, now=time.time):
@@ -140,8 +170,11 @@ def sync(cfg, run, opener=None, log=print, now=time.time):
         return 0
     for i in range(0, len(fixes), BATCH):
         status, body = post_json(
-            f"{cfg.base_url}/api/v1/points", payload(fixes[i:i + BATCH], tracker),
-            headers={"Authorization": f"Bearer {api_key}"}, opener=opener)
+            f"{cfg.base_url}/api/v1/points",
+            payload(fixes[i : i + BATCH], tracker),
+            headers={"Authorization": f"Bearer {api_key}"},
+            opener=opener,
+        )
         if status != 200:
             raise RuntimeError(f"Dawarich HTTP {status} {body[:200]}")
     state["last_run"] = started
@@ -154,9 +187,12 @@ def main(env=None, run=None, opener=None):
     cfg = Config.from_env(env)
     log = logger(TAG)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=True).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            ).stdout
+
     try:
         sent = sync(cfg, run, opener=opener, log=log)
     except (RuntimeError, OSError, ValueError, subprocess.CalledProcessError) as e:

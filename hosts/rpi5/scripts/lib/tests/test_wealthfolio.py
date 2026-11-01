@@ -38,6 +38,7 @@ def fake_run(tables):
 
 # ── symbol mapping ───────────────────────────────────────────────────────────
 
+
 def test_crypto_tickers_map_to_usd_pairs():
     assert wf.map_symbol("CRYPTO:BTC") == "BTC-USD"
     assert wf.map_symbol("CRYPTO:ETH") == "ETH-USD"
@@ -48,8 +49,16 @@ def test_crypto_tickers_map_to_usd_pairs():
 
 
 def test_non_crypto_tickers_pass_through_unchanged():
-    for ticker in ("ESE.PA", "PUST.PA", "SXRT.DE", "MAGR.DE", "ETH-USD",
-                   "0P0000KXZM.F", "0P0000Q2W2.F", "0P0000VQH6.F"):
+    for ticker in (
+        "ESE.PA",
+        "PUST.PA",
+        "SXRT.DE",
+        "MAGR.DE",
+        "ETH-USD",
+        "0P0000KXZM.F",
+        "0P0000Q2W2.F",
+        "0P0000VQH6.F",
+    ):
         assert wf.map_symbol(ticker) == ticker
 
 
@@ -120,20 +129,24 @@ def test_without_backfill_only_the_latest_date_is_read():
 
 
 def test_property_and_loan_become_alternative_assets():
-    rows = [["Maison", "Property", "EUR", "338531.0", "2025-02-14", "325000.0"],
-            ["Prêt", "Loan", "EUR", "314229.0", "2025-03-01", "325000.0"]]
+    rows = [
+        ["Maison", "Property", "EUR", "338531.0", "2025-02-14", "325000.0"],
+        ["Prêt", "Loan", "EUR", "314229.0", "2025-03-01", "325000.0"],
+    ]
     got = wf.sure_alternatives(cfg(), fake_run({"'Property', 'Loan'": rows}))
     assert [a["kind"] for a in got] == ["property", "liability"]
 
 
 # ── writing Wealthfolio ──────────────────────────────────────────────────────
 
+
 def test_unresolved_symbol_aborts_the_account_without_importing(logged):
     lines, log = logged
     opener = FakeOpener([json_reply({"symbols": [{"symbol": "NOPE", "found": False}]})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    n = wf.import_snapshots(client, log, "acct", [{"date": "2026-08-14", "positions": []}],
-                            dry_run=False)
+    n = wf.import_snapshots(
+        client, log, "acct", [{"date": "2026-08-14", "positions": []}], dry_run=False
+    )
     assert n == 0
     assert any("unresolved symbols" in line for line in lines)
     # The check ran; the import did not.
@@ -144,12 +157,18 @@ def test_unresolved_symbol_aborts_the_account_without_importing(logged):
 
 def test_resolved_asset_ids_are_carried_into_the_import(logged):
     _, log = logged
-    opener = FakeOpener([
-        json_reply({"symbols": [{"symbol": "ESE.PA", "found": True, "assetId": "a-1"}]}),
-        json_reply({"snapshotsImported": 1, "snapshotsFailed": 0}),
-    ])
+    opener = FakeOpener(
+        [
+            json_reply(
+                {"symbols": [{"symbol": "ESE.PA", "found": True, "assetId": "a-1"}]}
+            ),
+            json_reply({"snapshotsImported": 1, "snapshotsFailed": 0}),
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
-    snaps = [{"date": "2026-08-14", "positions": [{"symbol": "ESE.PA", "quantity": "269"}]}]
+    snaps = [
+        {"date": "2026-08-14", "positions": [{"symbol": "ESE.PA", "quantity": "269"}]}
+    ]
     assert wf.import_snapshots(client, log, "acct", snaps, dry_run=False) == 1
     assert opener.body_of(-1)["snapshots"][0]["positions"][0]["assetId"] == "a-1"
 
@@ -158,20 +177,30 @@ def test_dry_run_checks_but_never_imports(logged):
     lines, log = logged
     opener = FakeOpener([json_reply({"symbols": []})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    assert wf.import_snapshots(client, log, "acct", [{"date": "d", "positions": []}],
-                               dry_run=True) == 0
-    assert all("/snapshots/import" != r.get_full_url().split("/api/v1")[-1]
-               for r in opener.requests)
+    assert (
+        wf.import_snapshots(
+            client, log, "acct", [{"date": "d", "positions": []}], dry_run=True
+        )
+        == 0
+    )
+    assert all(
+        "/snapshots/import" != r.get_full_url().split("/api/v1")[-1]
+        for r in opener.requests
+    )
     assert any("DRY would import" in line for line in lines)
 
 
 def test_a_closed_position_is_simply_absent_from_the_next_snapshot(logged):
     """No delete call exists, and none is needed: the snapshot IS the state."""
     _, log = logged
-    opener = FakeOpener([
-        json_reply({"symbols": [{"symbol": "ESE.PA", "found": True, "assetId": "a-1"}]}),
-        json_reply({"snapshotsImported": 2, "snapshotsFailed": 0}),
-    ])
+    opener = FakeOpener(
+        [
+            json_reply(
+                {"symbols": [{"symbol": "ESE.PA", "found": True, "assetId": "a-1"}]}
+            ),
+            json_reply({"snapshotsImported": 2, "snapshotsFailed": 0}),
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
     snaps = [
         {"date": "2026-08-13", "positions": [{"symbol": "ESE.PA", "quantity": "269"}]},
@@ -185,7 +214,9 @@ def test_existing_account_is_reused_rather_than_duplicated(logged):
     _, log = logged
     opener = FakeOpener([json_reply([{"id": "existing-id", "name": "PEA"}])])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    got = wf.ensure_account(client, log, "PEA", "SECURITIES", "EUR", "Investments", False)
+    got = wf.ensure_account(
+        client, log, "PEA", "SECURITIES", "EUR", "Investments", False
+    )
     assert got == "existing-id"
     assert len(opener.requests) == 1  # the GET only; no POST
 
@@ -194,7 +225,10 @@ def test_a_new_account_is_created_in_holdings_tracking_mode(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"id": "new-id"})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    assert wf.ensure_account(client, log, "PEA", "SECURITIES", "EUR", "Investments", False) == "new-id"
+    assert (
+        wf.ensure_account(client, log, "PEA", "SECURITIES", "EUR", "Investments", False)
+        == "new-id"
+    )
     # TRANSACTIONS would make Wealthfolio derive holdings from a trade history
     # that does not exist, silently zeroing every position.
     assert opener.body_of(-1)["trackingMode"] == "HOLDINGS"
@@ -202,35 +236,65 @@ def test_a_new_account_is_created_in_holdings_tracking_mode(logged):
 
 def test_the_loan_is_linked_to_the_property(logged):
     _, log = logged
-    opener = FakeOpener([
-        json_reply([]),                      # GET /alternative-holdings
-        json_reply({"assetId": "prop-1"}),   # POST property
-        json_reply({"assetId": "loan-1"}),   # POST liability
-        json_reply({}),                      # POST link-liability
-    ])
+    opener = FakeOpener(
+        [
+            json_reply([]),  # GET /alternative-holdings
+            json_reply({"assetId": "prop-1"}),  # POST property
+            json_reply({"assetId": "loan-1"}),  # POST liability
+            json_reply({}),  # POST link-liability
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531"},
-        {"name": "Prêt", "kind": "liability", "currency": "EUR", "value": "314229"},
-    ], "2026-08-14", dry_run=False)
-    assert opener.last.get_full_url() == "http://wf/api/v1/alternative-assets/loan-1/link-liability"
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "338531",
+            },
+            {"name": "Prêt", "kind": "liability", "currency": "EUR", "value": "314229"},
+        ],
+        "2026-08-14",
+        dry_run=False,
+    )
+    assert (
+        opener.last.get_full_url()
+        == "http://wf/api/v1/alternative-assets/loan-1/link-liability"
+    )
     assert json.loads(opener.last.data.decode())["targetAssetId"] == "prop-1"
 
 
 def test_alternative_valuations_use_the_injected_date_not_the_clock(logged):
     _, log = logged
-    opener = FakeOpener([
-        json_reply([{"id": "prop-1", "name": "Maison"}]),
-        json_reply({}),
-    ])
+    opener = FakeOpener(
+        [
+            json_reply([{"id": "prop-1", "name": "Maison"}]),
+            json_reply({}),
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "340000"},
-    ], "2026-01-02", dry_run=False)
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "340000",
+            },
+        ],
+        "2026-01-02",
+        dry_run=False,
+    )
     assert opener.body_of(-1)["date"] == "2026-01-02"
 
 
 # ── main() ───────────────────────────────────────────────────────────────────
+
 
 def test_missing_password_returns_1_before_touching_anything():
     calls = []
@@ -264,10 +328,12 @@ def test_the_session_cookie_is_carried_by_hand_not_by_a_jar():
                 "wf_session=tok-123; HttpOnly; SameSite=Lax; Secure; Path=/api"
             )
 
-    opener = FakeOpener([
-        lambda: ResponseWithCookie(b'{"authenticated":true}'),
-        json_reply([]),
-    ])
+    opener = FakeOpener(
+        [
+            lambda: ResponseWithCookie(b'{"authenticated":true}'),
+            json_reply([]),
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
     client.login("pw")
     client.accounts()
@@ -302,8 +368,12 @@ TRADE_ROWS = [
 def test_trades_carry_their_real_date_and_price():
     got = wf.sure_trades(cfg(), fake_run({"FROM trades": TRADE_ROWS}))
     assert got["PEA"][0] == {
-        "symbol": "ESE.PA", "date": "2025-04-01",
-        "quantity": "269.0", "price": "26.96", "currency": "EUR"}
+        "symbol": "ESE.PA",
+        "date": "2025-04-01",
+        "quantity": "269.0",
+        "price": "26.96",
+        "currency": "EUR",
+    }
     # Crypto tickers map the same way they do for snapshots.
     assert got["Bitcoin"][0]["symbol"] == "BTC-USD"
 
@@ -312,25 +382,44 @@ def test_a_deposit_precedes_the_buys_so_cash_never_goes_negative(logged):
     _, log = logged
     opener = FakeOpener([json_reply({"id": "a"})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    n = wf.import_trades(client, log, "acct", [
-        {"symbol": "ESE.PA", "date": "2025-04-01", "quantity": "269", "price": "26.96",
-         "currency": "EUR"},
-    ], dry_run=False)
+    n = wf.import_trades(
+        client,
+        log,
+        "acct",
+        [
+            {
+                "symbol": "ESE.PA",
+                "date": "2025-04-01",
+                "quantity": "269",
+                "price": "26.96",
+                "currency": "EUR",
+            },
+        ],
+        dry_run=False,
+    )
     assert n == 1
     bodies = [opener.body_of(i) for i in range(len(opener.requests))]
     assert bodies[0]["activityType"] == "DEPOSIT"
-    assert bodies[0]["amount"] == 7252.24        # 269 * 26.96
+    assert bodies[0]["amount"] == 7252.24  # 269 * 26.96
     assert bodies[0]["activityDate"] == "2025-04-01T00:00:00Z"
     assert bodies[1]["activityType"] == "BUY"
-    assert bodies[1]["unitPrice"] == "26.96"     # the REAL price, not a snapshot value
+    assert bodies[1]["unitPrice"] == "26.96"  # the REAL price, not a snapshot value
 
 
 def test_a_transaction_tracked_account_is_created_in_transactions_mode(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"id": "new"})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.ensure_account(client, log, "PEA", "SECURITIES", "EUR", "Investments", False,
-                      tracking_mode="TRANSACTIONS")
+    wf.ensure_account(
+        client,
+        log,
+        "PEA",
+        "SECURITIES",
+        "EUR",
+        "Investments",
+        False,
+        tracking_mode="TRANSACTIONS",
+    )
     # TRANSACTIONS is what makes TWR/IRR computable; HOLDINGS refuses both.
     assert opener.body_of(-1)["trackingMode"] == "TRANSACTIONS"
 
@@ -362,15 +451,33 @@ def test_a_duplicate_activity_is_not_an_error(logged):
 
     def duplicate(req, timeout=None):
         raise urllib.error.HTTPError(
-            req.full_url, 400, "Bad Request", {},
-            io.BytesIO(b'{"code":400,"message":"Duplicate activity detected."}'))
+            req.full_url,
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(b'{"code":400,"message":"Duplicate activity detected."}'),
+        )
 
     _, log = logged
     client = wf.Wealthfolio("http://wf", opener=duplicate)
-    assert wf.import_trades(client, log, "acct", [
-        {"symbol": "ESE.PA", "date": "2025-04-01", "quantity": "269",
-         "price": "26.96", "currency": "EUR"},
-    ], dry_run=False) == 0
+    assert (
+        wf.import_trades(
+            client,
+            log,
+            "acct",
+            [
+                {
+                    "symbol": "ESE.PA",
+                    "date": "2025-04-01",
+                    "quantity": "269",
+                    "price": "26.96",
+                    "currency": "EUR",
+                },
+            ],
+            dry_run=False,
+        )
+        == 0
+    )
 
 
 def test_a_real_error_still_raises(logged):
@@ -378,15 +485,31 @@ def test_a_real_error_still_raises(logged):
 
     def boom(req, timeout=None):
         raise urllib.error.HTTPError(
-            req.full_url, 400, "Bad Request", {},
-            io.BytesIO(b'{"code":400,"message":"Invalid symbol"}'))
+            req.full_url,
+            400,
+            "Bad Request",
+            {},
+            io.BytesIO(b'{"code":400,"message":"Invalid symbol"}'),
+        )
 
     _, log = logged
     client = wf.Wealthfolio("http://wf", opener=boom)
     try:
-        wf.import_trades(client, log, "acct", [
-            {"symbol": "NOPE", "date": "2025-04-01", "quantity": "1",
-             "price": "1", "currency": "EUR"}], dry_run=False)
+        wf.import_trades(
+            client,
+            log,
+            "acct",
+            [
+                {
+                    "symbol": "NOPE",
+                    "date": "2025-04-01",
+                    "quantity": "1",
+                    "price": "1",
+                    "currency": "EUR",
+                }
+            ],
+            dry_run=False,
+        )
     except urllib.error.HTTPError:
         return
     raise AssertionError("a non-duplicate 400 must propagate")
@@ -395,10 +518,12 @@ def test_a_real_error_still_raises(logged):
 def test_updating_a_portfolio_sends_the_id_in_the_body_too(logged):
     """The handler deserialises a full Portfolio; path-only id 422s."""
     _, log = logged
-    opener = FakeOpener([
-        json_reply([{"id": "p1", "name": "Crypto", "accountIds": ["a1"]}]),
-        json_reply({}),
-    ])
+    opener = FakeOpener(
+        [
+            json_reply([{"id": "p1", "name": "Crypto", "accountIds": ["a1"]}]),
+            json_reply({}),
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
     wf.sync_portfolios(client, log, {"Crypto": ["a1", "a2"]}, dry_run=False)
     assert opener.last.get_method() == "PUT"
@@ -408,20 +533,27 @@ def test_updating_a_portfolio_sends_the_id_in_the_body_too(logged):
 
 # ── wallet grouping ──────────────────────────────────────────────────────────
 
+
 def _with_config(groups=None, basis=None):
-    wf.load_personal_config({
-        "WEALTHFOLIO_WALLET_GROUPS": json.dumps(groups or {}),
-        "WEALTHFOLIO_COST_BASIS": json.dumps(basis or {}),
-    })
+    wf.load_personal_config(
+        {
+            "WEALTHFOLIO_WALLET_GROUPS": json.dumps(groups or {}),
+            "WEALTHFOLIO_COST_BASIS": json.dumps(basis or {}),
+        }
+    )
 
 
 def test_accounts_sharing_one_address_group_together():
     """Sure models a crypto wallet as one account PER TOKEN, so a single address
     shows up once per asset and a two-wallet portfolio reads as seven."""
-    _with_config(groups={"Coin A (addr-1)": "WalletOne",
-                         "Coin B (addr-1)": "WalletOne",
-                         "Staking (addr-1)": "WalletOne",
-                         "Coin A (addr-2)": "WalletTwo"})
+    _with_config(
+        groups={
+            "Coin A (addr-1)": "WalletOne",
+            "Coin B (addr-1)": "WalletOne",
+            "Staking (addr-1)": "WalletOne",
+            "Coin A (addr-2)": "WalletTwo",
+        }
+    )
     for name in ("Coin A (addr-1)", "Coin B (addr-1)", "Staking (addr-1)"):
         assert wf.wallet_group(name) == "WalletOne"
     assert wf.wallet_group("Coin A (addr-2)") == "WalletTwo"
@@ -444,31 +576,37 @@ def test_the_same_symbol_from_two_wallets_is_summed():
     """A wallet can hold a coin at its own address AND via staking — two Sure
     accounts, one holding. Unmerged, the snapshot carries ETH twice and the
     second silently wins."""
-    got = wf.merge_positions([
-        {"symbol": "ETH-USD", "quantity": "0.04406929", "currency": "USD"},
-        {"symbol": "ETH-USD", "quantity": "0.40010000", "currency": "USD"},
-        {"symbol": "BTC-USD", "quantity": "0.00287313", "currency": "USD"},
-    ])
+    got = wf.merge_positions(
+        [
+            {"symbol": "ETH-USD", "quantity": "0.04406929", "currency": "USD"},
+            {"symbol": "ETH-USD", "quantity": "0.40010000", "currency": "USD"},
+            {"symbol": "BTC-USD", "quantity": "0.00287313", "currency": "USD"},
+        ]
+    )
     by_symbol = {p["symbol"]: p for p in got}
     assert len(got) == 2
     assert float(by_symbol["ETH-USD"]["quantity"]) == pytest.approx(0.44416929)
 
 
 def test_merged_cost_basis_is_weighted_by_quantity():
-    got = wf.merge_positions([
-        {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
-        {"symbol": "ETH-USD", "quantity": "3", "avgCost": "200"},
-    ])
+    got = wf.merge_positions(
+        [
+            {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
+            {"symbol": "ETH-USD", "quantity": "3", "avgCost": "200"},
+        ]
+    )
     # (1*100 + 3*200) / 4 = 175 — not (100+200)/2.
     assert float(got[0]["avgCost"]) == pytest.approx(175.0)
 
 
 def test_one_missing_basis_makes_the_merged_basis_unknown():
     """Averaging over only the priced half would understate what was paid."""
-    got = wf.merge_positions([
-        {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
-        {"symbol": "ETH-USD", "quantity": "3"},
-    ])
+    got = wf.merge_positions(
+        [
+            {"symbol": "ETH-USD", "quantity": "1", "avgCost": "100"},
+            {"symbol": "ETH-USD", "quantity": "3"},
+        ]
+    )
     assert "avgCost" not in got[0]
     assert float(got[0]["quantity"]) == pytest.approx(4.0)
 
@@ -476,27 +614,42 @@ def test_one_missing_basis_makes_the_merged_basis_unknown():
 def test_a_groups_currency_is_the_majority_not_the_first_seen():
     """A grouped wallet can hold most accounts in one currency and a staking
     account in another — picking arbitrarily flips it on sort order."""
-    _with_config(groups={"Staking (addr-1)": "WalletOne",
-                         "Coin A (addr-1)": "WalletOne",
-                         "Coin B (addr-1)": "WalletOne"})
-    got = wf.group_accounts([
-        {"name": "Staking (addr-1)", "kind": "Crypto", "currency": "EUR", "id": "1"},
-        {"name": "Coin A (addr-1)", "kind": "Crypto", "currency": "USD", "id": "2"},
-        {"name": "Coin B (addr-1)", "kind": "Crypto", "currency": "USD", "id": "3"},
-        {"name": "PEA", "kind": "Investment", "currency": "EUR", "id": "4"},
-    ])
+    _with_config(
+        groups={
+            "Staking (addr-1)": "WalletOne",
+            "Coin A (addr-1)": "WalletOne",
+            "Coin B (addr-1)": "WalletOne",
+        }
+    )
+    got = wf.group_accounts(
+        [
+            {
+                "name": "Staking (addr-1)",
+                "kind": "Crypto",
+                "currency": "EUR",
+                "id": "1",
+            },
+            {"name": "Coin A (addr-1)", "kind": "Crypto", "currency": "USD", "id": "2"},
+            {"name": "Coin B (addr-1)", "kind": "Crypto", "currency": "USD", "id": "3"},
+            {"name": "PEA", "kind": "Investment", "currency": "EUR", "id": "4"},
+        ]
+    )
     assert got["WalletOne"]["currency"] == "USD"
     assert got["WalletOne"]["kind"] == "Crypto"
-    assert got["PEA"]["currency"] == "EUR"   # ungrouped, untouched
+    assert got["PEA"]["currency"] == "EUR"  # ungrouped, untouched
 
 
 # ── cost basis overrides ─────────────────────────────────────────────────────
 
+
 def test_an_override_fills_a_basis_sure_does_not_have():
     _with_config(basis={"WalletOne|BTC-USD": 200.0})
-    rows = wf.apply_cost_basis_overrides("WalletOne", [
-        {"symbol": "BTC-USD", "quantity": "0.5"},
-    ])
+    rows = wf.apply_cost_basis_overrides(
+        "WalletOne",
+        [
+            {"symbol": "BTC-USD", "quantity": "0.5"},
+        ],
+    )
     # Total over the held quantity, not over what was acquired — so it stays
     # right as the position moves.
     assert float(rows[0]["avgCost"]) == pytest.approx(400.0)
@@ -504,36 +657,45 @@ def test_an_override_fills_a_basis_sure_does_not_have():
 
 def test_an_override_never_overwrites_sures_own_basis():
     """Sure is the source of truth; the override only ever fills a gap."""
-    rows = wf.apply_cost_basis_overrides("WalletOne", [
-        {"symbol": "BTC-USD", "quantity": "0.00287313", "avgCost": "1.0"},
-    ])
+    rows = wf.apply_cost_basis_overrides(
+        "WalletOne",
+        [
+            {"symbol": "BTC-USD", "quantity": "0.00287313", "avgCost": "1.0"},
+        ],
+    )
     assert rows[0]["avgCost"] == "1.0"
 
 
 def test_a_second_account_gets_its_own_share():
     """The same asset in two wallets carries a separate total in each."""
     _with_config(basis={"WalletOne|ETH-USD": 200.0, "WalletTwo|ETH-USD": 20.0})
-    one = wf.apply_cost_basis_overrides("WalletOne", [
-        {"symbol": "ETH-USD", "quantity": "0.4"}])
-    two = wf.apply_cost_basis_overrides("WalletTwo", [
-        {"symbol": "ETH-USD", "quantity": "0.04"}])
+    one = wf.apply_cost_basis_overrides(
+        "WalletOne", [{"symbol": "ETH-USD", "quantity": "0.4"}]
+    )
+    two = wf.apply_cost_basis_overrides(
+        "WalletTwo", [{"symbol": "ETH-USD", "quantity": "0.04"}]
+    )
     assert float(one[0]["avgCost"]) == pytest.approx(500.0)
     assert float(two[0]["avgCost"]) == pytest.approx(500.0)
 
 
 def test_a_zero_quantity_position_does_not_divide_by_zero():
     _with_config(basis={"WalletOne|BTC-USD": 200.0})
-    rows = wf.apply_cost_basis_overrides("WalletOne", [
-        {"symbol": "BTC-USD", "quantity": "0"},
-    ])
+    rows = wf.apply_cost_basis_overrides(
+        "WalletOne",
+        [
+            {"symbol": "BTC-USD", "quantity": "0"},
+        ],
+    )
     assert "avgCost" not in rows[0]
 
 
 def test_the_override_reaches_positions_read_from_sure():
     """sure_positions keys on (account, date); passing the whole tuple as the
     account made every lookup miss silently and the basis stayed empty."""
-    _with_config(groups={"Coin A (addr-1)": "WalletOne"},
-                 basis={"WalletOne|BTC-USD": 200.0})
+    _with_config(
+        groups={"Coin A (addr-1)": "WalletOne"}, basis={"WalletOne|BTC-USD": 200.0}
+    )
     rows = [["Coin A (addr-1)", "2026-08-16", "CRYPTO:BTC", "0.5", "USD", "", ""]]
     got = wf.sure_positions(cfg(), fake_run({"FROM holdings": rows}), "")
     assert float(got[("WalletOne", "2026-08-16")][0]["avgCost"]) == pytest.approx(400.0)
@@ -552,10 +714,22 @@ def test_a_new_alternative_sends_its_purchase_date_and_price(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"assetId": "p1"})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Maison", "kind": "property", "currency": "EUR",
-         "value": "338531.0", "start_date": "2025-02-14", "start_value": "325000.0"},
-    ], "2026-08-16", dry_run=False)
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "338531.0",
+                "start_date": "2025-02-14",
+                "start_value": "325000.0",
+            },
+        ],
+        "2026-08-16",
+        dry_run=False,
+    )
     body = opener.body_of(-1)
     assert body["purchaseDate"] == "2025-02-14"
     assert body["purchasePrice"] == "325000.0"
@@ -566,34 +740,69 @@ def test_an_alternative_with_no_history_omits_the_purchase_fields(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"assetId": "p2"})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Thing", "kind": "other", "currency": "EUR", "value": "1.0",
-         "start_date": None, "start_value": None},
-    ], "2026-08-16", dry_run=False)
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Thing",
+                "kind": "other",
+                "currency": "EUR",
+                "value": "1.0",
+                "start_date": None,
+                "start_value": None,
+            },
+        ],
+        "2026-08-16",
+        dry_run=False,
+    )
     assert "purchaseDate" not in opener.body_of(-1)
+
 
 def test_the_loans_origin_is_restored_after_linking(logged):
     """link-liability REPLACES the metadata object rather than merging, so the
     purchase price and date are collateral — the link returns 204 and the origin
     is silently gone."""
     _, log = logged
-    opener = FakeOpener([
-        json_reply([]),                        # GET /alternative-holdings
-        json_reply({"assetId": "loan"}),       # POST liability
-        json_reply({"assetId": "prop"}),       # POST property
-        json_reply({}),                        # POST link-liability
-        json_reply({}),                        # PUT metadata
-    ])
+    opener = FakeOpener(
+        [
+            json_reply([]),  # GET /alternative-holdings
+            json_reply({"assetId": "loan"}),  # POST liability
+            json_reply({"assetId": "prop"}),  # POST property
+            json_reply({}),  # POST link-liability
+            json_reply({}),  # PUT metadata
+        ]
+    )
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Prêt", "kind": "liability", "currency": "EUR", "value": "314229",
-         "start_date": "2025-03-01", "start_value": "325000"},
-        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
-         "start_date": "2025-02-14", "start_value": "325000"},
-    ], "2026-08-16", dry_run=False)
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Prêt",
+                "kind": "liability",
+                "currency": "EUR",
+                "value": "314229",
+                "start_date": "2025-03-01",
+                "start_value": "325000",
+            },
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "338531",
+                "start_date": "2025-02-14",
+                "start_value": "325000",
+            },
+        ],
+        "2026-08-16",
+        dry_run=False,
+    )
     assert opener.last.get_full_url().endswith("/alternative-assets/loan/metadata")
     assert json.loads(opener.last.data.decode())["metadata"] == {
-        "purchase_price": "325000", "purchase_date": "2025-03-01"}
+        "purchase_price": "325000",
+        "purchase_date": "2025-03-01",
+    }
 
 
 def test_the_history_is_month_end_not_daily():
@@ -613,14 +822,28 @@ def test_a_new_alternative_gets_its_curve_backfilled(logged):
     _, log = logged
     opener = FakeOpener([json_reply([]), json_reply({"assetId": "p1"}), json_reply({})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
-         "start_date": "2025-02-14", "start_value": "325000"},
-    ], "2026-08-16", dry_run=False,
-        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]})
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "338531",
+                "start_date": "2025-02-14",
+                "start_value": "325000",
+            },
+        ],
+        "2026-08-16",
+        dry_run=False,
+        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]},
+    )
     puts = [r for r in opener.requests if r.get_full_url().endswith("/valuation")]
-    assert [json.loads(r.data.decode())["date"] for r in puts] == \
-        ["2025-02-28", "2025-05-31"]
+    assert [json.loads(r.data.decode())["date"] for r in puts] == [
+        "2025-02-28",
+        "2025-05-31",
+    ]
 
 
 def test_an_existing_alternative_is_not_re_backfilled(logged):
@@ -629,12 +852,27 @@ def test_an_existing_alternative_is_not_re_backfilled(logged):
     _, log = logged
     opener = FakeOpener([json_reply([{"id": "p1", "name": "Maison"}]), json_reply({})])
     client = wf.Wealthfolio("http://wf", opener=opener)
-    wf.sync_alternatives(client, log, [
-        {"name": "Maison", "kind": "property", "currency": "EUR", "value": "338531",
-         "start_date": "2025-02-14", "start_value": "325000"},
-    ], "2026-08-16", dry_run=False,
-        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]})
+    wf.sync_alternatives(
+        client,
+        log,
+        [
+            {
+                "name": "Maison",
+                "kind": "property",
+                "currency": "EUR",
+                "value": "338531",
+                "start_date": "2025-02-14",
+                "start_value": "325000",
+            },
+        ],
+        "2026-08-16",
+        dry_run=False,
+        history={"Maison": [("2025-02-28", "325000"), ("2025-05-31", "328500")]},
+    )
     # Only today's valuation, not the whole curve again.
-    puts = [json.loads(r.data.decode())["date"] for r in opener.requests
-            if r.get_full_url().endswith("/valuation")]
+    puts = [
+        json.loads(r.data.decode())["date"]
+        for r in opener.requests
+        if r.get_full_url().endswith("/valuation")
+    ]
     assert puts == ["2026-08-16"]

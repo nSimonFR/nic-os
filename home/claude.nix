@@ -24,13 +24,22 @@ let
     "snooze"
   ];
 
-  skillTargets = [ ".claude/skills" ".codex/skills" ".pi/agent/skills" ".dsh/skills" ];
+  skillTargets = [
+    ".claude/skills"
+    ".codex/skills"
+    ".pi/agent/skills"
+    ".dsh/skills"
+  ];
 
   # Trusk lives in the private nSimonFR/trusk checkout (Mac only), never in this
   # public repo. Out-of-store links keep it out of the store too; without the clone
   # they just dangle. Skills are named here because nix cannot read the checkout.
   truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK/trusk";
-  truskSkills = [ "ship" "trusk-data-glossary" "trusk-preview-deploy" ];
+  truskSkills = [
+    "ship"
+    "trusk-data-glossary"
+    "trusk-preview-deploy"
+  ];
   truskSlashCommandSkills = [ "ship" ];
   truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
 
@@ -42,12 +51,18 @@ let
       "MyDocuments/TRUSK/AGENTS.md".source = truskLink "AGENTS.md";
       "MyDocuments/TRUSK/notes".source = truskLink "notes";
     }
-    // lib.listToAttrs (lib.concatMap (name: map (t:
-      lib.nameValuePair "${t}/${name}" { source = truskLink "skills/${name}"; }
-    ) skillTargets) truskSkills)
-    // lib.listToAttrs (map (name:
-      lib.nameValuePair ".claude/commands/${name}.md" { source = truskLink "skills/${name}/SKILL.md"; }
-    ) truskSlashCommandSkills)
+    // lib.listToAttrs (
+      lib.concatMap (
+        name:
+        map (t: lib.nameValuePair "${t}/${name}" { source = truskLink "skills/${name}"; }) skillTargets
+      ) truskSkills
+    )
+    // lib.listToAttrs (
+      map (
+        name:
+        lib.nameValuePair ".claude/commands/${name}.md" { source = truskLink "skills/${name}/SKILL.md"; }
+      ) truskSlashCommandSkills
+    )
   );
 
   sharedSkillFiles =
@@ -60,12 +75,16 @@ let
       lineages = [ { source = ./claude-skills; } ];
     };
 
-  claudeCommandFiles = lib.listToAttrs (map (name: {
-    name = ".claude/commands/${name}.md";
-    value.source =
-      let shared = sharedSkillsDir + "/${name}";
-      in (if builtins.pathExists shared then shared else ./claude-skills + "/${name}") + "/SKILL.md";
-  }) claudeSlashCommandSkills);
+  claudeCommandFiles = lib.listToAttrs (
+    map (name: {
+      name = ".claude/commands/${name}.md";
+      value.source =
+        let
+          shared = sharedSkillsDir + "/${name}";
+        in
+        (if builtins.pathExists shared then shared else ./claude-skills + "/${name}") + "/SKILL.md";
+    }) claudeSlashCommandSkills
+  );
 
   # Batching seam (→ the :8088 aggregator). `source` is null because
   # claude-notify.sh distinguishes "Claude Code" from "Claude PushNotification"
@@ -77,7 +96,12 @@ let
   # HTTP with the bot token pasted into a shell command. Not notify.send: the
   # skill targets three different chats, so --chat is per call.
   telegramSend = pkgs.writeShellScriptBin "telegram-send" ''
-    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}''${PATH:+:$PATH}
+    export PATH=${
+      lib.makeBinPath [
+        pkgs.curl
+        pkgs.coreutils
+      ]
+    }''${PATH:+:$PATH}
     export TELEGRAM_CHAT_ID=''${TELEGRAM_CHAT_ID:-${toString telegramChatId}}
     exec ${pkgs.bash}/bin/bash ${../shared/scripts/telegram-send.sh} "$@"
   '';
@@ -132,7 +156,7 @@ let
     ]
     ++ [
       ''--set-default ANTHROPIC_BASE_URL "https://ai.gate-mintaka.ts.net"''
-      ''--set CLAUDE_CODE_PLUGIN_PREFER_HTTPS 1''
+      "--set CLAUDE_CODE_PLUGIN_PREFER_HTTPS 1"
       ''--set GIT_SSH_COMMAND "ssh -i ~/.ssh/ai_id_ed25519 -o IdentityAgent=none"''
       ''--set GIT_AUTHOR_NAME "nSimonFR-ai"''
       ''--set GIT_AUTHOR_EMAIL "265587706+nSimonFR-ai@users.noreply.github.com"''
@@ -175,156 +199,171 @@ in
   # above (shared + Claude-only), Claude slash commands (curated subset), and
   # Claude Code's own settings/hooks. The Hermes agent picks up the same shared
   # lineage via hosts/rpi5/agents/hermes/hermes.nix.
-  home.file = sharedSkillFiles // claudeCommandFiles // truskFiles // {
-    # Writable settings.json — symlinked to the repo checkout so /voice etc.
-    # can update it at runtime.
-    ".claude/settings.json".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+  home.file =
+    sharedSkillFiles
+    // claudeCommandFiles
+    // truskFiles
+    // {
+      # Writable settings.json — symlinked to the repo checkout so /voice etc.
+      # can update it at runtime.
+      ".claude/settings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
-    # Standing user instructions for every regular Claude Code session.
-    ".claude/CLAUDE.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
-    ".claude/claude-global-prompt.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/claude-global-prompt.md";
-    ".claude-secondary/CLAUDE.md".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
+      # Standing user instructions for every regular Claude Code session.
+      ".claude/CLAUDE.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
+      ".claude/claude-global-prompt.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/claude-global-prompt.md";
+      ".claude-secondary/CLAUDE.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-global.md";
 
-    # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
-    # spare login (see hosts/rpi5/claude/claude-oauth-2.nix). Its settings.json was previously
-    # unmanaged; point it at the SAME baseline as ~/.claude so it inherits the
-    # Aperture gate URL, permissions and hooks — one source of truth. Writable
-    # out-of-store symlink; note runtime toggles (/voice, theme, …) are shared
-    # with the primary config since both symlink the same file.
-    ".claude-secondary/settings.json".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
+      # Second Claude config dir (~/.claude-secondary) — tiny-llm-gate's acct2
+      # spare login (see hosts/rpi5/claude/claude-oauth-2.nix). Its settings.json was previously
+      # unmanaged; point it at the SAME baseline as ~/.claude so it inherits the
+      # Aperture gate URL, permissions and hooks — one source of truth. Writable
+      # out-of-store symlink; note runtime toggles (/voice, theme, …) are shared
+      # with the primary config since both symlink the same file.
+      ".claude-secondary/settings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-settings.json";
 
-    # Keybindings — Enter submits, Shift+Enter inserts a newline. Symlinked to
-    # the repo checkout (not the Nix store) so it stays hand-editable.
-    # Baseline: home/dotfiles/claude-keybindings.json
-    ".claude/keybindings.json".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-keybindings.json";
+      # Keybindings — Enter submits, Shift+Enter inserts a newline. Symlinked to
+      # the repo checkout (not the Nix store) so it stays hand-editable.
+      # Baseline: home/dotfiles/claude-keybindings.json
+      ".claude/keybindings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-keybindings.json";
 
-    # Custom theme, selected by claude-settings.json's `"theme": "custom:nic-dim"`
-    # (the `custom:` prefix is literal, and the slug is this FILENAME, not the
-    # file's `name` field — so renaming the link breaks the setting).
-    #
-    # It exists to drag the `inactive` colour down, which is the only lever on the
-    # permission-mode row under the input box: that row cannot be hidden, and
-    # `default` is the one mode coloured `inactive` rather than yellow/red.
-    #
-    # Both config dirs get it: settings.json is shared between ~/.claude and
-    # ~/.claude-secondary, so the theme setting resolves in both, and a
-    # `custom:` slug with no matching file silently falls back to the base theme.
-    # Out-of-store symlink so the colour can be retuned with a restart, no rebuild.
-    ".claude/themes/nic-dim.json".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
-    ".claude-secondary/themes/nic-dim.json".source =
-      config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
+      # Custom theme, selected by claude-settings.json's `"theme": "custom:nic-dim"`
+      # (the `custom:` prefix is literal, and the slug is this FILENAME, not the
+      # file's `name` field — so renaming the link breaks the setting).
+      #
+      # It exists to drag the `inactive` colour down, which is the only lever on the
+      # permission-mode row under the input box: that row cannot be hidden, and
+      # `default` is the one mode coloured `inactive` rather than yellow/red.
+      #
+      # Both config dirs get it: settings.json is shared between ~/.claude and
+      # ~/.claude-secondary, so the theme setting resolves in both, and a
+      # `custom:` slug with no matching file silently falls back to the base theme.
+      # Out-of-store symlink so the colour can be retuned with a restart, no rebuild.
+      ".claude/themes/nic-dim.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
+      ".claude-secondary/themes/nic-dim.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${config.home.homeDirectory}/nic-os/home/dotfiles/claude-theme.json";
 
-    # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
-    # under three hook events in claude-settings.json: UserPromptSubmit
-    # (`activity`), Notification (`notification`, idle-gated), and
-    # PostToolUse/PushNotification (`push`, always through). Shared with the
-    # remote-control bridge via the ~/.claude-rc/hooks symlink.
-    #
-    # The script owns the idle gating only; the payload + POST to the :8088
-    # aggregator is the shared seam (shared/notify.nix `agent`), handed over as
-    # $AGENT_NOTIFY. This wrapper is the sole entry point, so that variable is
-    # always set.
-    ".claude/hooks/claude-notify" = {
-      source = pkgs.writeShellScript "claude-notify" ''
-        export AGENT_NOTIFY=${agentNotify}
-        exec ${pkgs.bash}/bin/bash ${./scripts/claude-notify.sh} "$@"
-      '';
-      executable = true;
+      # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
+      # under three hook events in claude-settings.json: UserPromptSubmit
+      # (`activity`), Notification (`notification`, idle-gated), and
+      # PostToolUse/PushNotification (`push`, always through). Shared with the
+      # remote-control bridge via the ~/.claude-rc/hooks symlink.
+      #
+      # The script owns the idle gating only; the payload + POST to the :8088
+      # aggregator is the shared seam (shared/notify.nix `agent`), handed over as
+      # $AGENT_NOTIFY. This wrapper is the sole entry point, so that variable is
+      # always set.
+      ".claude/hooks/claude-notify" = {
+        source = pkgs.writeShellScript "claude-notify" ''
+          export AGENT_NOTIFY=${agentNotify}
+          exec ${pkgs.bash}/bin/bash ${./scripts/claude-notify.sh} "$@"
+        '';
+        executable = true;
+      };
+
+      # Wrapper for `claude remote-control` that bypasses the HM-generated
+      # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
+      ".claude/bin/claude-rc" = {
+        executable = true;
+        source = pkgs.writeShellScript "claude-rc" ''
+          exec "${claudeCodePkg}/bin/claude" remote-control "$@"
+        '';
+      };
+
+      # PostToolUse hook: mirror writes under
+      # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
+      # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge.
+      # Shipped as a console script of the nicos-scripts package rather than a raw
+      # .py: a loose file relies on a `python3` happening to be on the hook's PATH
+      # and declares no dependencies. The wrapper pins its own interpreter.
+      # herdr's agent-state hook: reports agent_session_id + agent_session_path on
+      # SessionStart, which is what lets `[session] resume_agents_on_restore` bring
+      # a pane back as its conversation instead of a bare shell. Registered in
+      # dotfiles/claude-settings.json.
+      #
+      # Vendored rather than installed by `herdr integration install claude`. That
+      # installer writes BOTH the script and a settings registration — and
+      # ~/.claude/settings.json is an out-of-store symlink to
+      # dotfiles/claude-settings.json, so "registering" means editing a tracked
+      # file in this repo. Running it at activation therefore dirtied the working
+      # tree on every switch and appended a duplicate SessionStart entry with a
+      # host-absolute path. The cost of vendoring is drift: the copy carries
+      # HERDR_INTEGRATION_VERSION, so check `herdr integration status
+      # --outdated-only` after a herdr bump and re-copy when it complains.
+      ".claude/hooks/herdr-agent-state.sh" = {
+        source = ./scripts/herdr-agent-state.sh;
+        executable = true;
+      };
+
+      # SessionStart hook: report `cc` as this pane's display agent, so herdr's
+      # agent panel shows the kind inline instead of on a row of its own.
+      ".claude/hooks/herdr-agent-code" = {
+        source = ./scripts/herdr-agent-code.sh;
+        executable = true;
+      };
+
+      # Spawned by the status line when the session name changes: /rename becomes
+      # the herdr workspace label, unless that label was set by hand.
+      ".claude/hooks/herdr-title-sync" = {
+        executable = true;
+        source = lib.getExe (
+          pkgs.writeShellApplication {
+            name = "herdr-title-sync";
+            runtimeInputs = [
+              pkgs.herdr-fork
+              pkgs.jq
+            ];
+            text = builtins.readFile ./scripts/herdr-title-sync.sh;
+          }
+        );
+      };
+
+      # PostToolUse hook on Bash: register each command with atuin under a
+      # separate host (ATUIN_HOST_NAME=claude-code) plus a sentinel cwd
+      # (~/.claude/bash) so commands sync across devices but stay out of the
+      # human's host-/workspace-filtered interactive recall (dotfiles/atuin.toml
+      # uses filter_mode = "host" and workspace = true).
+      ".claude/hooks/bash-history" = {
+        source = ./scripts/claude-bash-history.sh;
+        executable = true;
+      };
+
+      # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
+      # Code time-on-task lands in WakaTime stats alongside editor activity.
+      ".claude/hooks/wakatime" = {
+        source = ./scripts/claude-wakatime.sh;
+        executable = true;
+      };
+
+      # settings.json `statusLine` — the prompt line under the input box. Styled
+      # after the spaceship-prompt zsh theme (home/zsh.nix) so the terminal reads
+      # the same whichever side of it you are on; see home/scripts/claude-statusline.sh.
+      #
+      # Wrapped rather than linked bare (like claude-notify above): Claude Code
+      # re-runs this on a 300ms debounce, and a status line that silently degrades
+      # because `jq` happened to be missing from the invoking PATH is worse than
+      # one that never ships. Pinning jq+git here makes the render hermetic — the
+      # script needs nothing else, which is why `rev`/`cut`/`seq` were factored
+      # out of it in favour of bash builtins.
+      ".claude/hooks/statusline" = {
+        executable = true;
+        source = pkgs.writeShellScript "claude-statusline" ''
+          export PATH=${
+            lib.makeBinPath [
+              pkgs.jq
+              pkgs.git
+              pkgs.gawk
+            ]
+          }''${PATH:+:$PATH}
+          exec ${pkgs.bash}/bin/bash ${./scripts/claude-statusline.sh} "$@"
+        '';
+      };
     };
-
-    # Wrapper for `claude remote-control` that bypasses the HM-generated
-    # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
-    ".claude/bin/claude-rc" = {
-      executable = true;
-      source = pkgs.writeShellScript "claude-rc" ''
-        exec "${claudeCodePkg}/bin/claude" remote-control "$@"
-      '';
-    };
-
-    # PostToolUse hook: mirror writes under
-    # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
-    # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge.
-    # Shipped as a console script of the nicos-scripts package rather than a raw
-    # .py: a loose file relies on a `python3` happening to be on the hook's PATH
-    # and declares no dependencies. The wrapper pins its own interpreter.
-    # herdr's agent-state hook: reports agent_session_id + agent_session_path on
-    # SessionStart, which is what lets `[session] resume_agents_on_restore` bring
-    # a pane back as its conversation instead of a bare shell. Registered in
-    # dotfiles/claude-settings.json.
-    #
-    # Vendored rather than installed by `herdr integration install claude`. That
-    # installer writes BOTH the script and a settings registration — and
-    # ~/.claude/settings.json is an out-of-store symlink to
-    # dotfiles/claude-settings.json, so "registering" means editing a tracked
-    # file in this repo. Running it at activation therefore dirtied the working
-    # tree on every switch and appended a duplicate SessionStart entry with a
-    # host-absolute path. The cost of vendoring is drift: the copy carries
-    # HERDR_INTEGRATION_VERSION, so check `herdr integration status
-    # --outdated-only` after a herdr bump and re-copy when it complains.
-    ".claude/hooks/herdr-agent-state.sh" = {
-      source = ./scripts/herdr-agent-state.sh;
-      executable = true;
-    };
-
-    # SessionStart hook: report `cc` as this pane's display agent, so herdr's
-    # agent panel shows the kind inline instead of on a row of its own.
-    ".claude/hooks/herdr-agent-code" = {
-      source = ./scripts/herdr-agent-code.sh;
-      executable = true;
-    };
-
-    # Spawned by the status line when the session name changes: /rename becomes
-    # the herdr workspace label, unless that label was set by hand.
-    ".claude/hooks/herdr-title-sync" = {
-      executable = true;
-      source = lib.getExe (pkgs.writeShellApplication {
-        name = "herdr-title-sync";
-        runtimeInputs = [ pkgs.herdr-fork pkgs.jq ];
-        text = builtins.readFile ./scripts/herdr-title-sync.sh;
-      });
-    };
-
-    # PostToolUse hook on Bash: register each command with atuin under a
-    # separate host (ATUIN_HOST_NAME=claude-code) plus a sentinel cwd
-    # (~/.claude/bash) so commands sync across devices but stay out of the
-    # human's host-/workspace-filtered interactive recall (dotfiles/atuin.toml
-    # uses filter_mode = "host" and workspace = true).
-    ".claude/hooks/bash-history" = {
-      source = ./scripts/claude-bash-history.sh;
-      executable = true;
-    };
-
-    # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
-    # Code time-on-task lands in WakaTime stats alongside editor activity.
-    ".claude/hooks/wakatime" = {
-      source = ./scripts/claude-wakatime.sh;
-      executable = true;
-    };
-
-    # settings.json `statusLine` — the prompt line under the input box. Styled
-    # after the spaceship-prompt zsh theme (home/zsh.nix) so the terminal reads
-    # the same whichever side of it you are on; see home/scripts/claude-statusline.sh.
-    #
-    # Wrapped rather than linked bare (like claude-notify above): Claude Code
-    # re-runs this on a 300ms debounce, and a status line that silently degrades
-    # because `jq` happened to be missing from the invoking PATH is worse than
-    # one that never ships. Pinning jq+git here makes the render hermetic — the
-    # script needs nothing else, which is why `rev`/`cut`/`seq` were factored
-    # out of it in favour of bash builtins.
-    ".claude/hooks/statusline" = {
-      executable = true;
-      source = pkgs.writeShellScript "claude-statusline" ''
-        export PATH=${lib.makeBinPath [ pkgs.jq pkgs.git pkgs.gawk ]}''${PATH:+:$PATH}
-        exec ${pkgs.bash}/bin/bash ${./scripts/claude-statusline.sh} "$@"
-      '';
-    };
-  };
 
 }

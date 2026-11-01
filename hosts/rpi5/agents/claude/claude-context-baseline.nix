@@ -17,7 +17,12 @@
 #                  (then journalctl -u claude-context-baseline -n 5)
 # See the `claude-context-baseline` entry point of the nicos-scripts package
 # (hosts/rpi5/scripts/lib/nicos_scripts/claude/context_baseline.py).
-{ config, pkgs, telegramChatId, ... }:
+{
+  config,
+  pkgs,
+  telegramChatId,
+  ...
+}:
 let
   # The self-updating alerter (send-once / edit-in-place / resolve), same seam as
   # monitoring.nix. Correct here rather than the one-shot `send` because this is a

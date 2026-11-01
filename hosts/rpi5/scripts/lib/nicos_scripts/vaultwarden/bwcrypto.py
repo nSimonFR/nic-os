@@ -90,7 +90,9 @@ def _oaep():
     from cryptography.hazmat.primitives import hashes
     from cryptography.hazmat.primitives.asymmetric import padding
 
-    return padding.OAEP(mgf=padding.MGF1(hashes.SHA1()), algorithm=hashes.SHA1(), label=None)
+    return padding.OAEP(
+        mgf=padding.MGF1(hashes.SHA1()), algorithm=hashes.SHA1(), label=None
+    )
 
 
 def rsa_encrypt(data, public_b64):
@@ -107,5 +109,6 @@ def rsa_decrypt(encstring, private_der):
     kind, _, rest = encstring.partition(".")
     if kind != "4":
         raise ValueError(f"unsupported asymmetric EncString type {kind}")
-    return load_der_private_key(private_der, None).decrypt(base64.b64decode(rest), _oaep())
-
+    return load_der_private_key(private_der, None).decrypt(
+        base64.b64decode(rest), _oaep()
+    )

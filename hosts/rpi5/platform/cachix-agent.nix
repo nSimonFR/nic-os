@@ -1,7 +1,12 @@
 # Cachix Deploy agent — activates the system that .github/workflows/deploy-rpi5.yml
 # built and pushed to nsimon-nicos. The Pi never evaluates the config itself:
 # that eval peaks at ~2.1 GiB RSS and earlyoom SIGTERMs it (2026-10-01).
-{ config, pkgs, inputs, ... }:
+{
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 let
   cfg = config.services.cachix-agent;
 

@@ -24,12 +24,20 @@ from ..secrets import env_str
 TAG = "security-drift"
 
 # Loopback, RFC1918, link-local, Tailscale's CGNAT range and ULA prefix.
-TRUSTED_NETS = [ipaddress.ip_network(n) for n in (
-    "127.0.0.0/8", "::1/128",
-    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-    "169.254.0.0/16", "fe80::/10",
-    "100.64.0.0/10", "fd7a:115c:a1e0::/48",
-)]
+TRUSTED_NETS = [
+    ipaddress.ip_network(n)
+    for n in (
+        "127.0.0.0/8",
+        "::1/128",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "fe80::/10",
+        "100.64.0.0/10",
+        "fd7a:115c:a1e0::/48",
+    )
+]
 
 # The peer in sshd's "from X port", "closed by X port", "user U X port" lines;
 # never "on X port 22", which is the Pi's own address.
@@ -54,6 +62,7 @@ class Config:
     def from_env(cls, env=None):
         def words(name):
             return frozenset(env_str(name, "", env).split())
+
         return cls(
             allowed_keys=words("ALLOWED_KEY_FINGERPRINTS"),
             funnel_ports=words("FUNNEL_PORTS"),
@@ -67,6 +76,7 @@ class Config:
 
 
 # ── checks ───────────────────────────────────────────────────────────────────
+
 
 def parse_fingerprints(keygen_out):
     """(fingerprint, comment) per line of `ssh-keygen -lf`."""
@@ -105,15 +115,21 @@ def unexpected_funnels(cfg, run):
         live = funnel_ports(run([cfg.tailscale, "funnel", "status", "--json"]))
     except ValueError:
         return ["could not parse `tailscale funnel status --json`"]
-    return [f"unexpected funnel on port {p} (declared: {' '.join(sorted(cfg.funnel_ports))})"
-            for p in sorted(live - cfg.funnel_ports)]
+    return [
+        f"unexpected funnel on port {p} (declared: {' '.join(sorted(cfg.funnel_ports))})"
+        for p in sorted(live - cfg.funnel_ports)
+    ]
 
 
 def own_addrs(ip_json):
     """The host's own addresses, from `ip -j addr`. Its global IPv6 is not in
     any private range, and the Pi does ssh to itself."""
-    return {a["local"] for link in json.loads(ip_json or "[]")
-            for a in link.get("addr_info", []) if "local" in a}
+    return {
+        a["local"]
+        for link in json.loads(ip_json or "[]")
+        for a in link.get("addr_info", [])
+        if "local" in a
+    }
 
 
 def is_trusted(addr, own=frozenset()):
@@ -130,15 +146,18 @@ def external_ssh(cfg, run):
         own = own_addrs(run([cfg.ip, "-j", "addr"]))
     except ValueError:
         own = set()
-    log_text = run([cfg.journalctl, "-u", "sshd", "--since", cfg.since,
-                    "-o", "cat", "--no-pager"])
+    log_text = run(
+        [cfg.journalctl, "-u", "sshd", "--since", cfg.since, "-o", "cat", "--no-pager"]
+    )
     seen = {}
     for m in FROM_RE.finditer(log_text):
         addr = m.group(1)
         if not is_trusted(addr, own):
             seen[addr] = seen.get(addr, 0) + 1
-    return [f"SSH from outside the LAN/tailnet: {a} ×{n} — check router port-forwards"
-            for a, n in sorted(seen.items())]
+    return [
+        f"SSH from outside the LAN/tailnet: {a} ×{n} — check router port-forwards"
+        for a, n in sorted(seen.items())
+    ]
 
 
 def assess(cfg, run, home_of, exists):
@@ -159,15 +178,20 @@ def main(argv=None, env=None, run=None, home_of=None, exists=None, log=None):
     # stdout is the alert body; logs go to stderr.
     log = log or logger(TAG, stream=lambda: sys.stderr)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True,
-                                  check=False).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=False
+            ).stdout
+
     if home_of is None:
+
         def home_of(user):
             try:
                 return pwd.getpwnam(user).pw_dir
             except KeyError:
                 return None
+
     exists = exists or os.path.exists
 
     body = assess(cfg, run, home_of, exists)

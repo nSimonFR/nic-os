@@ -145,9 +145,7 @@ def scan(cfg, now=None, lister=None, mtime=None, reader=open):
     path -> (mtime, text) instead of building a transcript tree on disk.
     """
     now = time.time() if now is None else now
-    paths = sorted(
-        (lister or (lambda: cfg.projects_dir.glob("*/*.jsonl")))()
-    )
+    paths = sorted((lister or (lambda: cfg.projects_dir.glob("*/*.jsonl")))())
     stat = mtime or (lambda p: Path(p).stat().st_mtime)
     rows = []
     for path in paths:

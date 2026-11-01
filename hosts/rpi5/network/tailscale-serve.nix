@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   ts = "${pkgs.tailscale}/bin/tailscale";
 
@@ -10,19 +15,35 @@ let
   # single Front Proxy funnel on 443 — they must NOT get their own serve/funnel command
   # (a second bind on 443 would conflict). They still appear as homepage tiles.
   directEntries = builtins.filter (e: !e.proxied) entries;
-  serveEntries  = builtins.filter (e: !e.funnel) directEntries;
+  serveEntries = builtins.filter (e: !e.funnel) directEntries;
   funnelEntries = builtins.filter (e: e.funnel) directEntries;
 
-  serveUp   = lib.concatMapStringsSep "\n  " (e: "${ts} serve   --bg --https=${toString e.port} ${e.backend}") serveEntries;
-  funnelUp  = lib.concatMapStringsSep "\n  " (e: "${ts} funnel  --bg --https=${toString e.port} ${e.backend}") funnelEntries;
-  serveDown = lib.concatMapStringsSep "\n  " (e: "${ts} serve  --https=${toString e.port} off || true") serveEntries;
-  funnelDown= lib.concatMapStringsSep "\n  " (e: "${ts} funnel --https=${toString e.port} off || true") funnelEntries;
+  serveUp = lib.concatMapStringsSep "\n  " (
+    e: "${ts} serve   --bg --https=${toString e.port} ${e.backend}"
+  ) serveEntries;
+  funnelUp = lib.concatMapStringsSep "\n  " (
+    e: "${ts} funnel  --bg --https=${toString e.port} ${e.backend}"
+  ) funnelEntries;
+  serveDown = lib.concatMapStringsSep "\n  " (
+    e: "${ts} serve  --https=${toString e.port} off || true"
+  ) serveEntries;
+  funnelDown = lib.concatMapStringsSep "\n  " (
+    e: "${ts} funnel --https=${toString e.port} off || true"
+  ) funnelEntries;
 in
 {
   systemd.services.tailscale-serve = {
     description = "Tailscale Serve + Funnel";
-    after    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
-    wants    = [ "network-online.target" "tailscaled.service" "tailscale-autoconnect.service" ];
+    after = [
+      "network-online.target"
+      "tailscaled.service"
+      "tailscale-autoconnect.service"
+    ];
+    wants = [
+      "network-online.target"
+      "tailscaled.service"
+      "tailscale-autoconnect.service"
+    ];
     requires = [ "tailscale-autoconnect.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {

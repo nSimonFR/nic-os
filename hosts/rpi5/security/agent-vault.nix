@@ -20,37 +20,145 @@
 # credentials and services on every start, so a lost DB is a
 # restart. Admin UI (tailnet): owner admin@agent-vault.local, password in
 # /run/agenix/agent-vault-admin-password.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
-  pkg       = pkgs.callPackage ../../../pkgs/services/agent-vault.nix { };
-  stateDir  = "/var/lib/agent-vault";
+  pkg = pkgs.callPackage ../../../pkgs/services/agent-vault.nix { };
+  stateDir = "/var/lib/agent-vault";
   hermesDir = "/var/lib/agent-vault-hermes";
-  apiPort   = 14321;
+  apiPort = 14321;
   proxyPort = 14322;
 
   # `in` is the security boundary: a placeholder on any other surface is
   # forwarded literally. Each key must exist in agent-brokered-env or credFiles.
   brokered = [
-    { name = "tavily";        host = "api.tavily.com";                    keys = [ "TAVILY_API_KEY" ];               "in" = [ "header" "body" ]; }
-    { name = "google-places"; host = "places.googleapis.com";             keys = [ "GOOGLE_PLACES_API_KEY" ];        "in" = [ "header" "query" "body" ]; }
-    { name = "google-maps";   host = "maps.googleapis.com";               keys = [ "GOOGLE_PLACES_API_KEY" ];        "in" = [ "header" "query" ]; }
-    { name = "gemini";        host = "generativelanguage.googleapis.com"; keys = [ "GEMINI_API_KEY" ];               "in" = [ "header" "query" ]; }
-    { name = "linear";        host = "api.linear.app";                    keys = [ "LINEAR_KEY" "LINEAR_KEY_TRUSK" ]; "in" = [ "header" ]; }
-    { name = "typesafe";      host = "api.typesafe.ai";                   keys = [ "TYPESAFE_API_KEY" ];             "in" = [ "header" ]; }
+    {
+      name = "tavily";
+      host = "api.tavily.com";
+      keys = [ "TAVILY_API_KEY" ];
+      "in" = [
+        "header"
+        "body"
+      ];
+    }
+    {
+      name = "google-places";
+      host = "places.googleapis.com";
+      keys = [ "GOOGLE_PLACES_API_KEY" ];
+      "in" = [
+        "header"
+        "query"
+        "body"
+      ];
+    }
+    {
+      name = "google-maps";
+      host = "maps.googleapis.com";
+      keys = [ "GOOGLE_PLACES_API_KEY" ];
+      "in" = [
+        "header"
+        "query"
+      ];
+    }
+    {
+      name = "gemini";
+      host = "generativelanguage.googleapis.com";
+      keys = [ "GEMINI_API_KEY" ];
+      "in" = [
+        "header"
+        "query"
+      ];
+    }
+    {
+      name = "linear";
+      host = "api.linear.app";
+      keys = [
+        "LINEAR_KEY"
+        "LINEAR_KEY_TRUSK"
+      ];
+      "in" = [ "header" ];
+    }
+    {
+      name = "typesafe";
+      host = "api.typesafe.ai";
+      keys = [ "TYPESAFE_API_KEY" ];
+      "in" = [ "header" ];
+    }
     # Loopback services: the alias resolves to 127.0.0.1 (networking.hosts below).
-    { name = "home-assistant"; host = "ha.home.arpa:8123";        keys = [ "HA_TOKEN" ];         "in" = [ "header" ]; }
-    { name = "dawarich";       host = "dawarich.home.arpa:13900"; keys = [ "DAWARICH_API_KEY" ]; "in" = [ "header" "query" ]; }
+    {
+      name = "home-assistant";
+      host = "ha.home.arpa:8123";
+      keys = [ "HA_TOKEN" ];
+      "in" = [ "header" ];
+    }
+    {
+      name = "dawarich";
+      host = "dawarich.home.arpa:13900";
+      keys = [ "DAWARICH_API_KEY" ];
+      "in" = [
+        "header"
+        "query"
+      ];
+    }
     # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`.
-    { name = "ryot";           host = "ryot.home.arpa:13350";     keys = [ "RYOT_API_KEY" ];     "in" = [ "header" ]; }
-    { name = "immich";         host = "immich.home.arpa:2283";    keys = [ "IMMICH_API_KEY" ];   "in" = [ "header" ]; }
+    {
+      name = "ryot";
+      host = "ryot.home.arpa:13350";
+      keys = [ "RYOT_API_KEY" ];
+      "in" = [ "header" ];
+    }
+    {
+      name = "immich";
+      host = "immich.home.arpa:2283";
+      keys = [ "IMMICH_API_KEY" ];
+      "in" = [ "header" ];
+    }
     # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`.
-    { name = "sure";           host = "sure.home.arpa:13334";     keys = [ "SURE_API_KEY" ];     "in" = [ "header" ]; }
+    {
+      name = "sure";
+      host = "sure.home.arpa:13334";
+      keys = [ "SURE_API_KEY" ];
+      "in" = [ "header" ];
+    }
     # Attached, not substituted: whatever the client sends is replaced.
-    { name = "github-api";     host = "api.github.com";     auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
-    { name = "github-uploads"; host = "uploads.github.com"; auth = { type = "bearer"; token = "GITHUB_AI_TOKEN"; }; }
-    { name = "github-git";     host = "github.com";         auth = { type = "basic"; username = "GITHUB_GIT_USER"; password = "GITHUB_AI_TOKEN"; }; }
+    {
+      name = "github-api";
+      host = "api.github.com";
+      auth = {
+        type = "bearer";
+        token = "GITHUB_AI_TOKEN";
+      };
+    }
+    {
+      name = "github-uploads";
+      host = "uploads.github.com";
+      auth = {
+        type = "bearer";
+        token = "GITHUB_AI_TOKEN";
+      };
+    }
+    {
+      name = "github-git";
+      host = "github.com";
+      auth = {
+        type = "basic";
+        username = "GITHUB_GIT_USER";
+        password = "GITHUB_AI_TOKEN";
+      };
+    }
     # Deploy status and logs by UUID: /api/v1/deploy/{deployment,logs}/<uuid>.
-    { name = "cachix";         host = "app.cachix.org";     auth = { type = "bearer"; token = "CACHIX_ACTIVATE_TOKEN"; }; }
+    {
+      name = "cachix";
+      host = "app.cachix.org";
+      auth = {
+        type = "bearer";
+        token = "CACHIX_ACTIVATE_TOKEN";
+      };
+    }
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
@@ -64,8 +172,9 @@ let
   servicesFile = pkgs.writeText "agent-vault-services.json" (builtins.toJSON brokered);
 in
 {
-  networking.hosts."127.0.0.1" = map (s: lib.head (lib.splitString ":" s.host))
-    (lib.filter (s: lib.hasSuffix ".home.arpa" (lib.head (lib.splitString ":" s.host))) brokered);
+  networking.hosts."127.0.0.1" = map (s: lib.head (lib.splitString ":" s.host)) (
+    lib.filter (s: lib.hasSuffix ".home.arpa" (lib.head (lib.splitString ":" s.host))) brokered
+  );
 
   users.users.agent-vault = {
     isSystemUser = true;
@@ -107,7 +216,11 @@ in
       ProtectHome = true;
       PrivateTmp = true;
       NoNewPrivileges = true;
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
     };
   };
 
@@ -119,8 +232,11 @@ in
     partOf = [ "agent-vault.service" ];
     # A re-encrypted secret is a new store path, so a rotated key re-applies.
     restartTriggers = [
-      config.age.secrets.agent-brokered-env.file config.age.secrets.github-ai-token.file
-      config.age.secrets.immich-api-key.file config.age.secrets.sure-journal-api-key.file servicesFile
+      config.age.secrets.agent-brokered-env.file
+      config.age.secrets.github-ai-token.file
+      config.age.secrets.immich-api-key.file
+      config.age.secrets.sure-journal-api-key.file
+      servicesFile
     ];
     environment = {
       AGENT_VAULT_ADDR = "http://127.0.0.1:${toString apiPort}";
@@ -128,7 +244,9 @@ in
       AGENT_VAULT_ADMIN_EMAIL = "admin@agent-vault.local";
       AGENT_VAULT_ADMIN_PASSWORD_FILE = config.age.secrets.agent-vault-admin-password.path;
       AGENT_VAULT_CREDS_FILE = config.age.secrets.agent-brokered-env.path;
-      AGENT_VAULT_CRED_FILES = lib.concatStringsSep "," (lib.mapAttrsToList (k: v: "${k}=${v}") credFiles);
+      AGENT_VAULT_CRED_FILES = lib.concatStringsSep "," (
+        lib.mapAttrsToList (k: v: "${k}=${v}") credFiles
+      );
       AGENT_VAULT_SERVICES_FILE = "${servicesFile}";
       AGENT_VAULT_OUT_DIR = hermesDir;
       # Telegram is Hermes' lifeline; .ts.net covers Aperture (the LLM path).

@@ -71,7 +71,9 @@ class Config:
                 "AIRBNB_RULES", f"{hermes_home}/skills/airbnb-pricing/rules.json", env
             ),
             state_path=env_str(
-                "AIRBNB_STATE", f"{hermes_home}/workspace/airbnb-pricing/state.json", env
+                "AIRBNB_STATE",
+                f"{hermes_home}/workspace/airbnb-pricing/state.json",
+                env,
             ),
             today=date.fromisoformat(today) if today else None,
         )
@@ -93,8 +95,11 @@ def subscription_source(cfg, opener=None):
             "<d:prop><cs:source/></d:prop></d:propfind>"
         ).encode(),
         method="PROPFIND",
-        headers={"Authorization": _auth(cfg), "Depth": "0",
-                 "Content-Type": 'application/xml; charset="utf-8"'},
+        headers={
+            "Authorization": _auth(cfg),
+            "Depth": "0",
+            "Content-Type": 'application/xml; charset="utf-8"',
+        },
     )
     with (opener or urllib.request.urlopen)(req, timeout=30) as resp:
         root = ElementTree.fromstring(resp.read())
@@ -115,7 +120,10 @@ def year_bookings(cfg, year, opener=None):
     lo = datetime(year, 1, 1, tzinfo=cal.UTC)
     hi = datetime(year + 1, 1, 1, tzinfo=cal.UTC)
     view = cal.Config(
-        base=cfg.base, user=cfg.user, password=cfg.password, calendar=cfg.bookings_calendar
+        base=cfg.base,
+        user=cfg.user,
+        password=cfg.password,
+        calendar=cfg.bookings_calendar,
     )
     blobs = cal.report(view, cal.query_body(lo, hi, expand=False), opener=opener)
     out = []
@@ -123,7 +131,7 @@ def year_bookings(cfg, year, opener=None):
         for comp in parse_events(blob):
             summary = comp["summary"]
             if summary.startswith(BOOKING_PREFIX):
-                guest = summary[len(BOOKING_PREFIX):].split(" — ")[0].strip()
+                guest = summary[len(BOOKING_PREFIX) :].split(" — ")[0].strip()
                 out.append({**comp, "guest": guest})
     return out
 
@@ -141,7 +149,9 @@ def parse_events(blob):
     out = []
     for comp in cal.parse_components(blob):
         start = _as_date(comp["dtstart"][1])
-        end = _as_date(comp["dtend"][1]) if "dtend" in comp else start + timedelta(days=1)
+        end = (
+            _as_date(comp["dtend"][1]) if "dtend" in comp else start + timedelta(days=1)
+        )
         out.append({"start": start, "end": end, "summary": comp.get("summary") or ""})
     return out
 
@@ -179,13 +189,21 @@ def price_runs(rules, run, prices):
     """Consecutive nights at one price → one {first_night, last_night, price, net}."""
     out = []
     for night, price in zip(run, prices):
-        if out and out[-1]["price"] == price and out[-1]["_last"] == night - timedelta(days=1):
+        if (
+            out
+            and out[-1]["price"] == price
+            and out[-1]["_last"] == night - timedelta(days=1)
+        ):
             out[-1]["_last"] = night
         else:
             out.append({"_first": night, "_last": night, "price": price})
     return [
-        {"first_night": r["_first"].isoformat(), "last_night": r["_last"].isoformat(),
-         "price": r["price"], "net": host_net(rules, r["price"])}
+        {
+            "first_night": r["_first"].isoformat(),
+            "last_night": r["_last"].isoformat(),
+            "price": r["price"],
+            "net": host_net(rules, r["price"]),
+        }
         for r in out
     ]
 
@@ -234,10 +252,14 @@ def build_facts(rules, feed_events, bookings, today):
     gap_facts = []
     for run in gaps:
         lead = (run[0] - today).days
-        prices = [nightly_price(rules, n, (n - today).days, cap_info["binding"]) for n in run]
+        prices = [
+            nightly_price(rules, n, (n - today).days, cap_info["binding"]) for n in run
+        ]
         orphan = len(run) < min_stay
         if orphan:
-            prices = [round(p * (1 + rules["orphan_premium_pct"] / 100)) for p in prices]
+            prices = [
+                round(p * (1 + rules["orphan_premium_pct"] / 100)) for p in prices
+            ]
         gap_facts.append(
             {
                 "check_in": run[0].isoformat(),
@@ -258,7 +280,9 @@ def build_facts(rules, feed_events, bookings, today):
             m["sellable"] += 1
             m["booked"] += n in booked
     for m in months.values():
-        m["occupancy_pct"] = round(100 * m["booked"] / m["sellable"]) if m["sellable"] else None
+        m["occupancy_pct"] = (
+            round(100 * m["booked"] / m["sellable"]) if m["sellable"] else None
+        )
 
     future_feed = {n for n in feed_reserved if n >= today}
     future_perso = {n for n in perso if n >= today}
@@ -273,13 +297,20 @@ def build_facts(rules, feed_events, bookings, today):
         "gaps": gap_facts,
         "reserved": [[s.isoformat(), e.isoformat()] for s, e in reserved_ranges],
         "upcoming_guests": [
-            {"guest": b["guest"], "check_in": b["start"].isoformat(),
-             "check_out": b["end"].isoformat()}
+            {
+                "guest": b["guest"],
+                "check_in": b["start"].isoformat(),
+                "check_out": b["end"].isoformat(),
+            }
             for b in upcoming
         ],
         "mismatch": {
-            "in_airbnb_not_in_perso": sorted(n.isoformat() for n in future_feed - future_perso),
-            "in_perso_not_in_airbnb": sorted(n.isoformat() for n in future_perso - future_feed),
+            "in_airbnb_not_in_perso": sorted(
+                n.isoformat() for n in future_feed - future_perso
+            ),
+            "in_perso_not_in_airbnb": sorted(
+                n.isoformat() for n in future_perso - future_feed
+            ),
         },
     }
 
@@ -302,7 +333,9 @@ def triggers(rules, facts, state, today):
         key = f"{gap['check_in']}|{gap['nights']}"
         if alerted.get(key) != gap["tier_discount_pct"]:
             alerted[key] = gap["tier_discount_pct"]
-            reasons.append(f"urgent_gap {gap['check_in']} ({gap['nights']}n, J-{gap['lead_days']})")
+            reasons.append(
+                f"urgent_gap {gap['check_in']} ({gap['nights']}n, J-{gap['lead_days']})"
+            )
     alerted = {k: v for k, v in alerted.items() if k.split("|")[0] >= today.isoformat()}
 
     weekly = (
@@ -312,7 +345,10 @@ def triggers(rules, facts, state, today):
     if weekly:
         reasons.insert(0, "weekly_summary")
 
-    season_over = today > date.fromisoformat(facts["season_end"]) or facts["cap"]["remaining"] <= 0
+    season_over = (
+        today > date.fromisoformat(facts["season_end"])
+        or facts["cap"]["remaining"] <= 0
+    )
     if season_over and not state.get("season_over_notified"):
         reasons.append("season_over")
 
@@ -339,8 +375,11 @@ def run(cfg, rules, state, opener=None):
 
 def main(argv=None, env=None):
     ap = argparse.ArgumentParser(prog="hermes-airbnb-pricing")
-    ap.add_argument("--no-state", action="store_true",
-                    help="read the state but never write it (hand runs)")
+    ap.add_argument(
+        "--no-state",
+        action="store_true",
+        help="read the state but never write it (hand runs)",
+    )
     ap.add_argument("--force", action="store_true", help="wake even with no trigger")
     args = ap.parse_args(argv)
 

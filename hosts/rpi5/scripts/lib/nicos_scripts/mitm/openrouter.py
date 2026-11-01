@@ -56,7 +56,12 @@ def _make_response(status: int, headers: dict):
 
 
 class OpenRouterToGate:
-    def __init__(self, gate_host: str = "127.0.0.1", gate_port: int = 4001, make_response=_make_response):
+    def __init__(
+        self,
+        gate_host: str = "127.0.0.1",
+        gate_port: int = 4001,
+        make_response=_make_response,
+    ):
         self.gate_host = gate_host
         self.gate_port = gate_port
         self.make_response = make_response

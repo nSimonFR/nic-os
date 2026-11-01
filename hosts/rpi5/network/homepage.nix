@@ -1,4 +1,11 @@
-{ config, lib, pkgs, tailnetFqdn, apertureUrl, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  tailnetFqdn,
+  apertureUrl,
+  ...
+}:
 let
   # Every service that declared a public face, in `public.order`
   # (hosts/rpi5/lib/service-registration.nix). Was services-registry.nix.
@@ -23,10 +30,14 @@ let
   # publicUrl already folds in the port rule (omitted on 443, the bare-URL funnel)
   # and the path-mux prefix. deepLink is the cosmetic tail — only Home Assistant
   # sets one, to land on its "Mine" dashboard.
-  serviceTiles = map (e: e.tile // {
-    inherit (e) order;
-    href = e.publicUrl + lib.optionalString (e.tile.deepLink != null) e.tile.deepLink;
-  }) visibleEntries;
+  serviceTiles = map (
+    e:
+    e.tile
+    // {
+      inherit (e) order;
+      href = e.publicUrl + lib.optionalString (e.tile.deepLink != null) e.tile.deepLink;
+    }
+  ) visibleEntries;
 
   # Things this host neither runs nor routes — Aperture only, see
   # `nic.externalTiles` in lib/service-registration.nix. href is given outright.
@@ -34,9 +45,9 @@ let
 
   # One number line for both lists. Ties break on name so the order is stable
   # across evals even though the uniqueness assertion covers services only.
-  allTiles = lib.sort
-    (a: b: if a.order != b.order then a.order < b.order else a.name < b.name)
-    (serviceTiles ++ externalTiles);
+  allTiles = lib.sort (a: b: if a.order != b.order then a.order < b.order else a.name < b.name) (
+    serviceTiles ++ externalTiles
+  );
 
   # Build tile config, including widget if the entry has one.
   #
@@ -45,18 +56,26 @@ let
   # 404 on `/` and Hydroxide answers 401, none of which means "unhealthy" — and
   # (b) kept every socket-activated backend pinned in memory on a 3.9 GB box.
   # Liveness is Beszel's job; the tiles are links plus a daily stat.
-  mkTile = t:
-    { inherit (t) icon href description; }
+  mkTile =
+    t:
+    {
+      inherit (t) icon href description;
+    }
     // lib.optionalAttrs (t.widget != null) { inherit (t) widget; };
 
   # Build the services list: one attrset per category, each containing service tiles
   servicesByCategory = builtins.filter (group: group != null) (
-    map (cat:
-      let entries = builtins.filter (t: t.category == cat) allTiles;
-      in if entries == [] then null
-      else {
-        "${cat}" = map (t: { "${t.name}" = mkTile t; }) entries;
-      }
+    map (
+      cat:
+      let
+        entries = builtins.filter (t: t.category == cat) allTiles;
+      in
+      if entries == [ ] then
+        null
+      else
+        {
+          "${cat}" = map (t: { "${t.name}" = mkTile t; }) entries;
+        }
     ) categoryOrder
   );
 
@@ -74,7 +93,8 @@ in
   # tile references {{HOMEPAGE_VAR_*}} any more — every widget reads the
   # homepage-stats aggregator instead — so these are really for homepage-stats,
   # which reads the same file. Kept on the dashboard unit as the ordering anchor.
-  systemd.services.homepage-dashboard.serviceConfig.EnvironmentFile = lib.mkForce "/run/homepage-dashboard/env";
+  systemd.services.homepage-dashboard.serviceConfig.EnvironmentFile =
+    lib.mkForce "/run/homepage-dashboard/env";
   systemd.services.homepage-dashboard.after = [ "homepage-dashboard-env.service" ];
   systemd.services.homepage-dashboard.requires = [ "homepage-dashboard-env.service" ];
 
@@ -125,7 +145,10 @@ in
     # into the daily cache. Ordering is not a guarantee (systemd starts, it does
     # not wait for the port), which is why an errored key is now retried rather
     # than frozen; this just makes the race rare instead of routine.
-    after = [ "homepage-dashboard-env.service" "wealthfolio.service" ];
+    after = [
+      "homepage-dashboard-env.service"
+      "wealthfolio.service"
+    ];
     serviceConfig = {
       Type = "simple";
       Restart = "on-failure";
@@ -172,23 +195,74 @@ in
       # — two clean rows — until Aperture graduated to a real tile and left 5,
       # which at 3 columns is a row of three and an orphaned pair.
       layout = [
-        { "Quick Links" = { style = "row"; columns = 5; header = false; }; }
-        { "Apps"        = { style = "row"; columns = 4; }; }
-        { "Backend"     = { style = "row"; columns = 4; }; }
+        {
+          "Quick Links" = {
+            style = "row";
+            columns = 5;
+            header = false;
+          };
+        }
+        {
+          "Apps" = {
+            style = "row";
+            columns = 4;
+          };
+        }
+        {
+          "Backend" = {
+            style = "row";
+            columns = 4;
+          };
+        }
       ];
     };
 
     bookmarks = [
       {
         "Quick Links" = [
-          { "GitHub Notifications" = [{ icon = "github.svg"; href = "https://github.com/notifications"; }]; }
-          { "Tailscale Admin" = [{ icon = "tailscale.svg"; href = "https://login.tailscale.com/admin/machines"; }]; }
-          { "nic-os PRs" = [{ icon = "github.svg"; href = "https://github.com/nSimonFR/nic-os/pulls"; }]; }
+          {
+            "GitHub Notifications" = [
+              {
+                icon = "github.svg";
+                href = "https://github.com/notifications";
+              }
+            ];
+          }
+          {
+            "Tailscale Admin" = [
+              {
+                icon = "tailscale.svg";
+                href = "https://login.tailscale.com/admin/machines";
+              }
+            ];
+          }
+          {
+            "nic-os PRs" = [
+              {
+                icon = "github.svg";
+                href = "https://github.com/nSimonFR/nic-os/pulls";
+              }
+            ];
+          }
           # Aperture was here. It is a real tile now (aperture-sync.nix, via
           # nic.externalTiles) because a bookmark cannot carry a widget, and the
           # most expensive thing on the box should show its token rate.
-          { "IT Tools" = [{ icon = "si-hackthebox"; href = "https://it-tools.tech/"; }]; }
-          { "BentoPDF" = [{ icon = "mdi-file-pdf-box"; href = "https://bentopdf.com/"; }]; }
+          {
+            "IT Tools" = [
+              {
+                icon = "si-hackthebox";
+                href = "https://it-tools.tech/";
+              }
+            ];
+          }
+          {
+            "BentoPDF" = [
+              {
+                icon = "mdi-file-pdf-box";
+                href = "https://bentopdf.com/";
+              }
+            ];
+          }
         ];
       }
     ];
@@ -200,14 +274,22 @@ in
         resources = {
           cpu = true;
           memory = true;
-          disk = [ "/" "/home" "/mnt/data" ];
+          disk = [
+            "/"
+            "/home"
+            "/mnt/data"
+          ];
           expanded = true;
         };
       }
       {
         datetime = {
           locale = "fr";
-          format = { dateStyle = "full"; timeStyle = "short"; hourCycle = "h23"; };
+          format = {
+            dateStyle = "full";
+            timeStyle = "short";
+            hourCycle = "h23";
+          };
         };
       }
       {
@@ -237,15 +319,18 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.homepage = {
-    backup        = [ "none" ];
-    backupNote    = "dashboard config is generated from nic.services.*.public; the stats aggregator only caches";
-    heavyUnits    = [ "homepage-dashboard.service" "homepage-stats.service" ];
+    backup = [ "none" ];
+    backupNote = "dashboard config is generated from nic.services.*.public; the stats aggregator only caches";
+    heavyUnits = [
+      "homepage-dashboard.service"
+      "homepage-stats.service"
+    ];
     heavyPriority = 160;
 
     # No tile: the dashboard does not link to itself.
     public = {
-      order   = 360;
-      port    = 8082;
+      order = 360;
+      port = 8082;
       backend = "http://127.0.0.1:8082";
     };
   };

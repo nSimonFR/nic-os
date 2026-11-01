@@ -53,14 +53,14 @@
 # checkouts and for other agents' worktrees.
 
 case "${CLAUDE_CONFIG_DIR:-}" in
-  */.claude-rc) ;;
-  *) exit 0 ;;
+*/.claude-rc) ;;
+*) exit 0 ;;
 esac
 
 top=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
 case "$top" in
-  */.claude/worktrees/*) ;;
-  *) exit 0 ;;
+*/.claude/worktrees/*) ;;
+*) exit 0 ;;
 esac
 
 # The gate URL now lives as a wrapper default in home/claude.nix, not in
@@ -82,7 +82,7 @@ if [ -s "$settings" ]; then
   tmp="$settings.tmp.$$"
   if jq --arg gate "$gate" '.env.ANTHROPIC_BASE_URL = $gate
       | .env._CLAUDE_CODE_ASSUME_FIRST_PARTY_BASE_URL = "1"' \
-      "$settings" >"$tmp" 2>/dev/null; then
+    "$settings" >"$tmp" 2>/dev/null; then
     mv "$tmp" "$settings"
   else
     rm -f "$tmp"

@@ -59,7 +59,13 @@
 # hidden by `category = "Infrastructure"`, enforced in three overlapping places
 # (a name test for "Homepage", a category test, and omission from
 # `categoryOrder`) none of which said "hidden".
-{ config, lib, pkgs, tailnetFqdn, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  tailnetFqdn,
+  ...
+}:
 
 let
   cfg = config.nic.services;
@@ -77,17 +83,19 @@ let
   # redirects (bare `/` → Nextcloud, the two DAV auto-discovery paths, and the
   # `= /foo` → `/foo/` pairs) exempt themselves by carrying no proxyPass, so
   # there is no list to keep in step for them.
-  proxyLocationNames =
-    lib.attrNames (lib.filterAttrs (_: l: (l.proxyPass or null) != null) frontProxyLocations);
+  proxyLocationNames = lib.attrNames (
+    lib.filterAttrs (_: l: (l.proxyPass or null) != null) frontProxyLocations
+  );
 
   # { name, value } pairs ordered heaviest → lightest for the stop list. Ties
   # break on name so the derivation is stable across evals.
-  orderedEntries = lib.sort
-    (a: b:
-      if a.value.heavyPriority != b.value.heavyPriority
-      then a.value.heavyPriority < b.value.heavyPriority
-      else a.name < b.name)
-    (lib.mapAttrsToList (name: value: { inherit name value; }) cfg);
+  orderedEntries = lib.sort (
+    a: b:
+    if a.value.heavyPriority != b.value.heavyPriority then
+      a.value.heavyPriority < b.value.heavyPriority
+    else
+      a.name < b.name
+  ) (lib.mapAttrsToList (name: value: { inherit name value; }) cfg);
 
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
 
@@ -144,19 +152,19 @@ let
 
   # Sorted so the derivation is stable across evals; `unique` because nothing
   # stops two services from naming one shared dump unit.
-  allBackupUnits =
-    lib.sort (a: b: a < b)
-      (lib.unique (lib.concatMap (s: s.backupUnits) (lib.attrValues cfg)));
+  allBackupUnits = lib.sort (a: b: a < b) (
+    lib.unique (lib.concatMap (s: s.backupUnits) (lib.attrValues cfg))
+  );
 
   # Every service with a public face, ascending by `order`, each entry carrying
   # its attr name so consumers key on the same string every other seam does.
   # Ties break on name so the list is stable even if the uniqueness assertion is
   # ever relaxed.
-  publicEntries =
-    lib.sort
-      (a: b: if a.order != b.order then a.order < b.order else a.name < b.name)
-      (lib.mapAttrsToList (name: s: { inherit name; } // s.public)
-        (lib.filterAttrs (_: s: s.public != null) cfg));
+  publicEntries = lib.sort (a: b: if a.order != b.order then a.order < b.order else a.name < b.name) (
+    lib.mapAttrsToList (name: s: { inherit name; } // s.public) (
+      lib.filterAttrs (_: s: s.public != null) cfg
+    )
+  );
 
   muxPaths = map (e: e.muxPath) (lib.filter (e: e.muxPath != null) publicEntries);
 
@@ -182,7 +190,10 @@ let
       };
 
       category = lib.mkOption {
-        type = lib.types.enum [ "Apps" "Backend" ];
+        type = lib.types.enum [
+          "Apps"
+          "Backend"
+        ];
         description = ''
           Which dashboard group the tile renders under. Grouping only — a
           service that should not render omits `tile` entirely rather than
@@ -266,256 +277,273 @@ let
   };
 
   # A service's reachable-from-outside surface.
-  publicModule = lib.types.submodule ({ config, ... }: {
-    options = {
-      order = lib.mkOption {
-        type = lib.types.int;
-        default = 500;
-        description = ''
-          Sort key, ascending, for both the dashboard tile row and the order in
-          which serve/funnel commands are emitted. Spaced by 10 to leave room
-          to insert without renumbering — same convention as `heavyPriority`.
-          Asserted unique: equal keys would make the emit order depend on
-          attrset iteration rather than on a decision.
+  publicModule = lib.types.submodule (
+    { config, ... }: {
+      options = {
+        order = lib.mkOption {
+          type = lib.types.int;
+          default = 500;
+          description = ''
+            Sort key, ascending, for both the dashboard tile row and the order in
+            which serve/funnel commands are emitted. Spaced by 10 to leave room
+            to insert without renumbering — same convention as `heavyPriority`.
+            Asserted unique: equal keys would make the emit order depend on
+            attrset iteration rather than on a decision.
 
-          It sorts WITHIN a tile's category, not across categories: homepage.nix
-          groups by `tile.category` first and walks `categoryOrder`, so a Backend
-          tile renders after every Apps tile whatever its number. The blocks are
-          therefore free to be laid out for legibility rather than for global
-          sequence.
+            It sorts WITHIN a tile's category, not across categories: homepage.nix
+            groups by `tile.category` first and walks `categoryOrder`, so a Backend
+            tile renders after every Apps tile whatever its number. The blocks are
+            therefore free to be laid out for legibility rather than for global
+            sequence.
 
-          ⚠ THE APPS BLOCK IS GROUPED IN FOURS, and that is not cosmetic: the
-            dashboard renders Apps at `columns = 4` (see homepage.nix's `layout`),
-            so a group of three or five does not end where a row ends and the
-            grid stops carrying any meaning. The first pass here grouped by
-            subject alone and every boundary landed mid-row — Ryot separated from
-            FreeReps and BeaverHabits, Karakeep separated from the rest of the
-            library, Beszel stranded at the end of a row of unrelated tiles.
+            ⚠ THE APPS BLOCK IS GROUPED IN FOURS, and that is not cosmetic: the
+              dashboard renders Apps at `columns = 4` (see homepage.nix's `layout`),
+              so a group of three or five does not end where a row ends and the
+              grid stops carrying any meaning. The first pass here grouped by
+              subject alone and every boundary landed mid-row — Ryot separated from
+              FreeReps and BeaverHabits, Karakeep separated from the rest of the
+              library, Beszel stranded at the end of a row of unrelated tiles.
 
-            Each row is four tiles wide:
+              Each row is four tiles wide:
 
-              10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
-              50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
-              90–120  the day             — Calino, BeaverHabits, FreeReps, Ryot
-              130–160  kept and locked    — Home Assistant, Beszel, Karakeep,
-                                            Vaultwarden
-              170–200  making             — Aperture, DeepSeek Harness, Wakapi,
-                                            Reactive Resume
-              210–240  the rest           — Forgejo, Gramps Web, ShowMyCards, Notes
-              250–260  the journal, then the switch — Memos, Death Plan Switch
+                10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
+                50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
+                90–120  the day             — Calino, BeaverHabits, FreeReps, Ryot
+                130–160  kept and locked    — Home Assistant, Beszel, Karakeep,
+                                              Vaultwarden
+                170–200  making             — Aperture, DeepSeek Harness, Wakapi,
+                                              Reactive Resume
+                210–240  the rest           — Forgejo, Gramps Web, ShowMyCards, Notes
+                250–260  the journal, then the switch — Memos, Death Plan Switch
 
-            The rows are the OWNER'S CHOICE and not derivable from anything in
-            the tree, which is the whole reason they are written down here. Do not
-            re-derive them from what the tiles "obviously" have in common: several
-            deliberately run one idea into another rather than carrying a single
-            label — row 1 is the two money tiles then the two map ones, row 2
-            walks the file cabinet from the DAV root out through photos and notes
-            to scanned paper. A row has to be one thought, not one word.
+              The rows are the OWNER'S CHOICE and not derivable from anything in
+              the tree, which is the whole reason they are written down here. Do not
+              re-derive them from what the tiles "obviously" have in common: several
+              deliberately run one idea into another rather than carrying a single
+              label — row 1 is the two money tiles then the two map ones, row 2
+              walks the file cabinet from the DAV root out through photos and notes
+              to scanned paper. A row has to be one thought, not one word.
 
-            The last row is short because 26 does not divide by four.
+              The last row is short because 26 does not divide by four.
 
-            ADDING A TILE means deciding which row it joins and renumbering that
-            row's neighbours, not appending after 260.
+              ADDING A TILE means deciding which row it joins and renumbering that
+              row's neighbours, not appending after 260.
 
-            300–380  Backend tiles and the untiled routed services. Backend is
-                     three tiles now that dsh moved into Apps (an interactive
-                     agent belongs with what it is used to build, not with the
-                     never-visited plumbing).
-        '';
-        example = 120;
+              300–380  Backend tiles and the untiled routed services. Backend is
+                       three tiles now that dsh moved into Apps (an interactive
+                       agent belongs with what it is used to build, not with the
+                       never-visited plumbing).
+          '';
+          example = 120;
+        };
+
+        port = lib.mkOption {
+          type = lib.types.port;
+          description = ''
+            External tailnet HTTPS port that `tailscale serve` (or `funnel`)
+            binds. 443 for anything behind the path-mux, since one funnel on 443
+            fronts them all.
+          '';
+          example = 3600;
+        };
+
+        backend = lib.mkOption {
+          type = lib.types.str;
+          description = ''
+            Where Tailscale Serve forwards. Usually the socket-activate proxy
+            port rather than the service's real bind, so a request wakes it.
+          '';
+          example = "http://127.0.0.1:8310";
+        };
+
+        funnel = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Publicly reachable via `tailscale funnel` instead of tailnet-only
+            `tailscale serve`. Tailscale permits funnels on 443, 8443 and 10000
+            only — asserted below, because that limit was documented in prose in
+            three places here and enforced nowhere.
+          '';
+        };
+
+        authenticated = lib.mkOption {
+          type = lib.types.nullOr lib.types.bool;
+          default = null;
+          description = ''
+            Whether the service makes its own users log in. Must be `true` for
+            anything internet-reachable (funnel or proxied), so a new public
+            service has to answer it. `false` documents a tailnet-only service
+            that trusts the tailnet as its auth (FreeReps).
+          '';
+        };
+
+        proxied = lib.mkOption {
+          type = lib.types.bool;
+          default = false;
+          description = ''
+            Fronted by the nginx path-mux (front-proxy.nix) behind the single 443
+            funnel. No serve/funnel command is emitted for these — a second bind
+            on 443 would conflict — but the tile still renders. Requires
+            `muxPath`, and is mutually exclusive with `funnel`.
+          '';
+        };
+
+        muxPath = lib.mkOption {
+          type = lib.types.nullOr lib.types.str;
+          default = null;
+          description = ''
+            Prefix under which the path-mux fronts this service, folded into
+            `publicUrl`. The nginx `location` block itself stays in
+            front-proxy.nix — the forwarding rules there are genuinely bespoke
+            per service (body sizes, stream buffering, whether the prefix is
+            stripped) and pushing them through an option would only be a
+            passthrough of nginx config. Asserted to have a matching location, so
+            declaring one without the other fails eval instead of serving a 404.
+          '';
+          example = "/ryot";
+        };
+
+        tile = lib.mkOption {
+          type = lib.types.nullOr tileModule;
+          default = null;
+          description = ''
+            Dashboard tile, or null for a service that is routed but renders
+            nothing.
+          '';
+        };
+
+        publicUrl = lib.mkOption {
+          type = lib.types.str;
+          readOnly = true;
+          description = ''
+            Derived: the URL this service is reachable at. `:port` is omitted on
+            443 (the bare-URL funnel) and `muxPath` is folded in, so the two
+            shapes — `https://host:3600` and `https://host/ryot` — come out of
+            one rule instead of being spelled at each call site. Read this from
+            the owning module for its own origin / APP_URL / NEXTAUTH_URL.
+          '';
+        };
       };
 
-      port = lib.mkOption {
-        type = lib.types.port;
-        description = ''
-          External tailnet HTTPS port that `tailscale serve` (or `funnel`)
-          binds. 443 for anything behind the path-mux, since one funnel on 443
-          fronts them all.
-        '';
-        example = 3600;
+      config.publicUrl =
+        "https://${tailnetFqdn}"
+        + lib.optionalString (config.port != 443) ":${toString config.port}"
+        + lib.optionalString (config.muxPath != null) config.muxPath;
+    }
+  );
+
+  serviceModule = lib.types.submodule (
+    { name, ... }: {
+      options = {
+        public = lib.mkOption {
+          type = lib.types.nullOr publicModule;
+          default = null;
+          description = ''
+            How ${name} is reached from outside, and how it appears on the
+            dashboard. null for a service with no public face — it still
+            registers here for backup and heavy-unit accounting.
+          '';
+        };
+
+        backup = lib.mkOption {
+          type = lib.types.listOf (
+            lib.types.enum [
+              "postgres"
+              "unit"
+              "mnt-data"
+              "none"
+            ]
+          );
+          description = ''
+            Every mechanism by which ${name}'s persistent state reaches
+            `/mnt/data` — and from there Storj, since restic
+            (`storj-backup.nix`) backs up `/mnt/data` and nothing else. A list,
+            because services routinely use more than one: Forgejo has a Postgres
+            dump, a state tarball unit, and repositories sitting on the HDD.
+
+            - `postgres`  — dumped by `services.postgresqlBackup`; requires
+                            `postgresDatabases`.
+            - `unit`      — a dedicated unit writes a dump under
+                            `/mnt/data/backups/…`; requires `backupUnits`, and
+                            each named unit must actually exist.
+            - `mnt-data`  — state already lives under `/mnt/data`, so restic
+                            covers it with no dump step.
+            - `none`      — nothing worth backing up; requires `backupNote`, and
+                            cannot be combined with the others.
+
+            No default: every registered service answers this question.
+          '';
+          example = [
+            "postgres"
+            "mnt-data"
+          ];
+        };
+
+        postgresDatabases = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = ''
+            Databases appended to `services.postgresqlBackup.databases`. Real
+            database names, not service names (`sure_production`,
+            `nextcloud_production`, …).
+          '';
+          example = [ "airtrail" ];
+        };
+
+        backupUnits = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = ''
+            Units (with `.service`) that dump this service's state onto
+            `/mnt/data`. Asserted to exist, so a typo — or a `backup = [ "unit" ]`
+            written before the unit was — fails evaluation rather than silently
+            backing up nothing.
+          '';
+          example = [ "papra-backup.service" ];
+        };
+
+        backupNote = lib.mkOption {
+          type = lib.types.str;
+          default = "";
+          description = ''
+            Why there is nothing to back up. Required when `backup = [ "none" ]`,
+            so a deliberate decision reads differently from an oversight.
+          '';
+          example = "stateless — everything it serves comes from the nix store";
+        };
+
+        heavyUnits = lib.mkOption {
+          type = lib.types.listOf lib.types.str;
+          default = [ ];
+          description = ''
+            Units stopped by the cachix-agent deploy (heavy-shed) to
+            free RSS before a build. List every unit the service actually runs
+            (web + workers + its search backend), not just the socket-activated
+            `realUnit` — the workers are where the RSS is.
+
+            Infra (tailscaled, nginx, postgresql, redis, blocky) is deliberately
+            never listed: stopping it breaks the rebuild itself.
+          '';
+          example = [
+            "karakeep-web.service"
+            "karakeep-workers.service"
+          ];
+        };
+
+        heavyPriority = lib.mkOption {
+          type = lib.types.int;
+          default = 500;
+          description = ''
+            Sort key for the stop list, ascending — heaviest first, so the largest
+            RSS is freed soonest. Existing services are spaced by 10 to leave room
+            to insert without renumbering.
+          '';
+          example = 110;
+        };
       };
-
-      backend = lib.mkOption {
-        type = lib.types.str;
-        description = ''
-          Where Tailscale Serve forwards. Usually the socket-activate proxy
-          port rather than the service's real bind, so a request wakes it.
-        '';
-        example = "http://127.0.0.1:8310";
-      };
-
-      funnel = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Publicly reachable via `tailscale funnel` instead of tailnet-only
-          `tailscale serve`. Tailscale permits funnels on 443, 8443 and 10000
-          only — asserted below, because that limit was documented in prose in
-          three places here and enforced nowhere.
-        '';
-      };
-
-      authenticated = lib.mkOption {
-        type = lib.types.nullOr lib.types.bool;
-        default = null;
-        description = ''
-          Whether the service makes its own users log in. Must be `true` for
-          anything internet-reachable (funnel or proxied), so a new public
-          service has to answer it. `false` documents a tailnet-only service
-          that trusts the tailnet as its auth (FreeReps).
-        '';
-      };
-
-      proxied = lib.mkOption {
-        type = lib.types.bool;
-        default = false;
-        description = ''
-          Fronted by the nginx path-mux (front-proxy.nix) behind the single 443
-          funnel. No serve/funnel command is emitted for these — a second bind
-          on 443 would conflict — but the tile still renders. Requires
-          `muxPath`, and is mutually exclusive with `funnel`.
-        '';
-      };
-
-      muxPath = lib.mkOption {
-        type = lib.types.nullOr lib.types.str;
-        default = null;
-        description = ''
-          Prefix under which the path-mux fronts this service, folded into
-          `publicUrl`. The nginx `location` block itself stays in
-          front-proxy.nix — the forwarding rules there are genuinely bespoke
-          per service (body sizes, stream buffering, whether the prefix is
-          stripped) and pushing them through an option would only be a
-          passthrough of nginx config. Asserted to have a matching location, so
-          declaring one without the other fails eval instead of serving a 404.
-        '';
-        example = "/ryot";
-      };
-
-      tile = lib.mkOption {
-        type = lib.types.nullOr tileModule;
-        default = null;
-        description = ''
-          Dashboard tile, or null for a service that is routed but renders
-          nothing.
-        '';
-      };
-
-      publicUrl = lib.mkOption {
-        type = lib.types.str;
-        readOnly = true;
-        description = ''
-          Derived: the URL this service is reachable at. `:port` is omitted on
-          443 (the bare-URL funnel) and `muxPath` is folded in, so the two
-          shapes — `https://host:3600` and `https://host/ryot` — come out of
-          one rule instead of being spelled at each call site. Read this from
-          the owning module for its own origin / APP_URL / NEXTAUTH_URL.
-        '';
-      };
-    };
-
-    config.publicUrl =
-      "https://${tailnetFqdn}"
-      + lib.optionalString (config.port != 443) ":${toString config.port}"
-      + lib.optionalString (config.muxPath != null) config.muxPath;
-  });
-
-  serviceModule = lib.types.submodule ({ name, ... }: {
-    options = {
-      public = lib.mkOption {
-        type = lib.types.nullOr publicModule;
-        default = null;
-        description = ''
-          How ${name} is reached from outside, and how it appears on the
-          dashboard. null for a service with no public face — it still
-          registers here for backup and heavy-unit accounting.
-        '';
-      };
-
-      backup = lib.mkOption {
-        type = lib.types.listOf (lib.types.enum [ "postgres" "unit" "mnt-data" "none" ]);
-        description = ''
-          Every mechanism by which ${name}'s persistent state reaches
-          `/mnt/data` — and from there Storj, since restic
-          (`storj-backup.nix`) backs up `/mnt/data` and nothing else. A list,
-          because services routinely use more than one: Forgejo has a Postgres
-          dump, a state tarball unit, and repositories sitting on the HDD.
-
-          - `postgres`  — dumped by `services.postgresqlBackup`; requires
-                          `postgresDatabases`.
-          - `unit`      — a dedicated unit writes a dump under
-                          `/mnt/data/backups/…`; requires `backupUnits`, and
-                          each named unit must actually exist.
-          - `mnt-data`  — state already lives under `/mnt/data`, so restic
-                          covers it with no dump step.
-          - `none`      — nothing worth backing up; requires `backupNote`, and
-                          cannot be combined with the others.
-
-          No default: every registered service answers this question.
-        '';
-        example = [ "postgres" "mnt-data" ];
-      };
-
-      postgresDatabases = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = ''
-          Databases appended to `services.postgresqlBackup.databases`. Real
-          database names, not service names (`sure_production`,
-          `nextcloud_production`, …).
-        '';
-        example = [ "airtrail" ];
-      };
-
-      backupUnits = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = ''
-          Units (with `.service`) that dump this service's state onto
-          `/mnt/data`. Asserted to exist, so a typo — or a `backup = [ "unit" ]`
-          written before the unit was — fails evaluation rather than silently
-          backing up nothing.
-        '';
-        example = [ "papra-backup.service" ];
-      };
-
-      backupNote = lib.mkOption {
-        type = lib.types.str;
-        default = "";
-        description = ''
-          Why there is nothing to back up. Required when `backup = [ "none" ]`,
-          so a deliberate decision reads differently from an oversight.
-        '';
-        example = "stateless — everything it serves comes from the nix store";
-      };
-
-      heavyUnits = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = ''
-          Units stopped by the cachix-agent deploy (heavy-shed) to
-          free RSS before a build. List every unit the service actually runs
-          (web + workers + its search backend), not just the socket-activated
-          `realUnit` — the workers are where the RSS is.
-
-          Infra (tailscaled, nginx, postgresql, redis, blocky) is deliberately
-          never listed: stopping it breaks the rebuild itself.
-        '';
-        example = [ "karakeep-web.service" "karakeep-workers.service" ];
-      };
-
-      heavyPriority = lib.mkOption {
-        type = lib.types.int;
-        default = 500;
-        description = ''
-          Sort key for the stop list, ascending — heaviest first, so the largest
-          RSS is freed soonest. Existing services are spaced by 10 to leave room
-          to insert without renumbering.
-        '';
-        example = 110;
-      };
-    };
-  });
+    }
+  );
 
   # One message per failing service, naming the service.
   assertFor = f: lib.mapAttrsToList f cfg;
@@ -613,60 +641,75 @@ in
   };
 
   config = {
-    services.postgresqlBackup.databases =
-      lib.concatMap (s: s.postgresDatabases) (lib.attrValues cfg);
+    services.postgresqlBackup.databases = lib.concatMap (s: s.postgresDatabases) (lib.attrValues cfg);
 
     assertions =
-      assertFor (name: s: {
-        assertion = s.backup != [ ];
-        message =
-          "nic.services.${name}.backup is empty. State how the service's persistent "
-          + "state reaches Storj, or [ \"none\" ] with a backupNote if there is none.";
-      })
-      ++ assertFor (name: s: {
-        assertion = (s.postgresDatabases != [ ]) == (lib.elem "postgres" s.backup);
-        message =
-          "nic.services.${name}: postgresDatabases and backup = [ … \"postgres\" … ] "
-          + "must agree. Either the database is dumped and unlisted, or it is listed "
-          + "and never dumped.";
-      })
-      ++ assertFor (name: s: {
-        assertion = (s.backupUnits != [ ]) == (lib.elem "unit" s.backup);
-        message =
-          "nic.services.${name}: backupUnits and backup = [ … \"unit\" … ] must agree. "
-          + "Name the unit that does the dumping, or drop \"unit\" from backup.";
-      })
-      ++ lib.concatLists (assertFor (name: s:
-        map (unit: {
-          assertion = config.systemd.services ? ${lib.removeSuffix ".service" unit};
+      assertFor (
+        name: s: {
+          assertion = s.backup != [ ];
           message =
-            "nic.services.${name}.backupUnits names \"${unit}\", which does not exist. "
-            + "Either the unit was never written or the name is a typo — either way "
-            + "the service is unbacked.";
-        }) s.backupUnits))
-      ++ assertFor (name: s: {
-        assertion = lib.elem "none" s.backup -> s.backup == [ "none" ];
-        message =
-          "nic.services.${name} combines backup = \"none\" with a real backup "
-          + "mechanism. Pick one.";
-      })
-      ++ assertFor (name: s: {
-        assertion = lib.elem "none" s.backup -> s.backupNote != "";
-        message =
-          "nic.services.${name} has backup = [ \"none\" ] but no backupNote. Say why "
-          + "there is nothing to back up, so the next reader can tell a deliberate "
-          + "decision from an oversight.";
-      })
+            "nic.services.${name}.backup is empty. State how the service's persistent "
+            + "state reaches Storj, or [ \"none\" ] with a backupNote if there is none.";
+        }
+      )
+      ++ assertFor (
+        name: s: {
+          assertion = (s.postgresDatabases != [ ]) == (lib.elem "postgres" s.backup);
+          message =
+            "nic.services.${name}: postgresDatabases and backup = [ … \"postgres\" … ] "
+            + "must agree. Either the database is dumped and unlisted, or it is listed "
+            + "and never dumped.";
+        }
+      )
+      ++ assertFor (
+        name: s: {
+          assertion = (s.backupUnits != [ ]) == (lib.elem "unit" s.backup);
+          message =
+            "nic.services.${name}: backupUnits and backup = [ … \"unit\" … ] must agree. "
+            + "Name the unit that does the dumping, or drop \"unit\" from backup.";
+        }
+      )
+      ++ lib.concatLists (
+        assertFor (
+          name: s:
+          map (unit: {
+            assertion = config.systemd.services ? ${lib.removeSuffix ".service" unit};
+            message =
+              "nic.services.${name}.backupUnits names \"${unit}\", which does not exist. "
+              + "Either the unit was never written or the name is a typo — either way "
+              + "the service is unbacked.";
+          }) s.backupUnits
+        )
+      )
+      ++ assertFor (
+        name: s: {
+          assertion = lib.elem "none" s.backup -> s.backup == [ "none" ];
+          message =
+            "nic.services.${name} combines backup = \"none\" with a real backup " + "mechanism. Pick one.";
+        }
+      )
+      ++ assertFor (
+        name: s: {
+          assertion = lib.elem "none" s.backup -> s.backupNote != "";
+          message =
+            "nic.services.${name} has backup = [ \"none\" ] but no backupNote. Say why "
+            + "there is nothing to back up, so the next reader can tell a deliberate "
+            + "decision from an oversight.";
+        }
+      )
       ++ [
-        (let
-          dupes = dupesIn allHeavyUnits;
-        in {
-          assertion = dupes == [ ];
-          message =
-            "nic.services.*.heavyUnits declares these units more than once: "
-            + lib.concatStringsSep ", " dupes
-            + ". Each unit belongs to exactly one service.";
-        })
+        (
+          let
+            dupes = dupesIn allHeavyUnits;
+          in
+          {
+            assertion = dupes == [ ];
+            message =
+              "nic.services.*.heavyUnits declares these units more than once: "
+              + lib.concatStringsSep ", " dupes
+              + ". Each unit belongs to exactly one service.";
+          }
+        )
       ]
 
       # ── The public face ────────────────────────────────────────────────────
@@ -693,7 +736,13 @@ in
           + "tailnet-only.";
       })
       ++ assertForPublic (e: {
-        assertion = e.funnel -> lib.elem e.port [ 443 8443 10000 ];
+        assertion =
+          e.funnel
+          -> lib.elem e.port [
+            443
+            8443
+            10000
+          ];
         message =
           "nic.services.${e.name}.public asks to funnel port ${toString e.port}. "
           + "Tailscale permits funnels on 443, 8443 and 10000 only, and all "
@@ -701,8 +750,7 @@ in
           + "tailscale-serve.service, not here.";
       })
       ++ assertForPublic (e: {
-        assertion =
-          e.muxPath == null || lib.any (loc: lib.hasPrefix e.muxPath loc) proxyLocationNames;
+        assertion = e.muxPath == null || lib.any (loc: lib.hasPrefix e.muxPath loc) proxyLocationNames;
         message =
           "nic.services.${e.name}.public.muxPath is \"${e.muxPath}\" but no "
           + "front-proxy location proxies it (see hosts/rpi5/network/front-proxy.nix). "
@@ -710,46 +758,55 @@ in
           + "would link straight to a 404.";
       })
       ++ [
-        (let
-          claimed = loc: lib.any (p: lib.hasPrefix p loc) muxPaths;
-          orphans = lib.filter
-            (loc: !(claimed loc) && !(lib.elem loc config.nic.frontProxy.unclaimed))
-            proxyLocationNames;
-        in {
-          assertion = orphans == [ ];
-          message =
-            "front-proxy proxies "
-            + lib.concatStringsSep ", " orphans
-            + " but no service claims it via public.muxPath. Either a service "
-            + "was deleted and its nginx location left behind — proxying to a "
-            + "dead port, which answers 502 rather than 404 — or the location "
-            + "is deliberate and belongs in nic.frontProxy.unclaimed with a "
-            + "comment saying why.";
-        })
-        (let
-          # Proxied entries all share 443 behind the one funnel, so uniqueness
-          # only holds among the entries that bind a port of their own.
-          ports = map (e: e.port) (lib.filter (e: !e.proxied) publicEntries);
-          dupes = dupesIn ports;
-        in {
-          assertion = dupes == [ ];
-          message =
-            "Two services claim the same tailnet port: "
-            + lib.concatStringsSep ", " (map toString dupes)
-            + ". Tailscale Serve binds one backend per port, so the later "
-            + "command silently wins.";
-        })
-        (let
-          dupes = dupesIn (map (e: e.order) publicEntries);
-        in {
-          assertion = dupes == [ ];
-          message =
-            "nic.services.*.public.order is reused: "
-            + lib.concatStringsSep ", " (map toString dupes)
-            + ". Equal keys make tile and serve order depend on attrset "
-            + "iteration rather than on a decision. Keys are spaced by 10 — "
-            + "pick a gap.";
-        })
+        (
+          let
+            claimed = loc: lib.any (p: lib.hasPrefix p loc) muxPaths;
+            orphans = lib.filter (
+              loc: !(claimed loc) && !(lib.elem loc config.nic.frontProxy.unclaimed)
+            ) proxyLocationNames;
+          in
+          {
+            assertion = orphans == [ ];
+            message =
+              "front-proxy proxies "
+              + lib.concatStringsSep ", " orphans
+              + " but no service claims it via public.muxPath. Either a service "
+              + "was deleted and its nginx location left behind — proxying to a "
+              + "dead port, which answers 502 rather than 404 — or the location "
+              + "is deliberate and belongs in nic.frontProxy.unclaimed with a "
+              + "comment saying why.";
+          }
+        )
+        (
+          let
+            # Proxied entries all share 443 behind the one funnel, so uniqueness
+            # only holds among the entries that bind a port of their own.
+            ports = map (e: e.port) (lib.filter (e: !e.proxied) publicEntries);
+            dupes = dupesIn ports;
+          in
+          {
+            assertion = dupes == [ ];
+            message =
+              "Two services claim the same tailnet port: "
+              + lib.concatStringsSep ", " (map toString dupes)
+              + ". Tailscale Serve binds one backend per port, so the later "
+              + "command silently wins.";
+          }
+        )
+        (
+          let
+            dupes = dupesIn (map (e: e.order) publicEntries);
+          in
+          {
+            assertion = dupes == [ ];
+            message =
+              "nic.services.*.public.order is reused: "
+              + lib.concatStringsSep ", " (map toString dupes)
+              + ". Equal keys make tile and serve order depend on attrset "
+              + "iteration rather than on a decision. Keys are spaced by 10 — "
+              + "pick a gap.";
+          }
+        )
       ];
   };
 }

@@ -91,7 +91,9 @@ def cfg_for(tmp_path, db, **kw):
     )
 
 
-def row(sid, *, set_code="abc", cn="1", lang="en", qty=1, binder="b1", finish="nonFoil"):
+def row(
+    sid, *, set_code="abc", cn="1", lang="en", qty=1, binder="b1", finish="nonFoil"
+):
     """One Moxfield collection row, in Moxfield's shape."""
     return {
         "card": {"scryfall_id": sid, "set": set_code, "cn": cn, "name": f"card-{sid}"},
@@ -102,9 +104,11 @@ def row(sid, *, set_code="abc", cn="1", lang="en", qty=1, binder="b1", finish="n
     }
 
 
-STORAGE = {("GET", "/storage/with-counts"): [
-    {"id": 10, "name": "Binder One", "storage_type": "Binder"},
-]}
+STORAGE = {
+    ("GET", "/storage/with-counts"): [
+        {"id": 10, "name": "Binder One", "storage_type": "Binder"},
+    ]
+}
 
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -145,7 +149,9 @@ def held(item_id, sid, qty=1, loc=10, treat="nonfoil"):
     }
 
 
-def test_mirror_refuses_when_the_diff_would_delete_most_of_the_inventory(tmp_path, capsys):
+def test_mirror_refuses_when_the_diff_would_delete_most_of_the_inventory(
+    tmp_path, capsys
+):
     # One card on Moxfield, ten unrelated cards in ShowMyCards: the diff says
     # "delete ten". A renamed binder or a partial API response looks exactly like
     # this, and there is no undo.
@@ -183,7 +189,9 @@ def test_force_prune_overrides_the_ceiling(tmp_path):
 
 def test_a_prune_under_the_ceiling_proceeds(tmp_path):
     # 1 of 10 cards removed = 10%, well under the 30% ceiling.
-    db = make_db(tmp_path, [(f"s{i}", f"o-s{i}", "abc", str(i), "en") for i in range(1, 11)])
+    db = make_db(
+        tmp_path, [(f"s{i}", f"o-s{i}", "abc", str(i), "en") for i in range(1, 11)]
+    )
     current = [held(i, f"s{i}") for i in range(1, 11)]
     smc = FakeSmc(responses=STORAGE, paged={"/inventory/": current})
     cfg = cfg_for(tmp_path, db, dry_run=False)
@@ -214,7 +222,9 @@ def test_an_empty_inventory_is_never_blocked_by_the_ceiling(tmp_path):
 
 
 def test_dry_run_computes_the_diff_and_writes_nothing(tmp_path):
-    db = make_db(tmp_path, [("s1", "o-s1", "abc", "1", "en"), ("s2", "o-s2", "abc", "2", "en")])
+    db = make_db(
+        tmp_path, [("s1", "o-s1", "abc", "1", "en"), ("s2", "o-s2", "abc", "2", "en")]
+    )
     smc = FakeSmc(responses=STORAGE, paged={"/inventory/": [held(1, "s2", qty=3)]})
     cfg = cfg_for(tmp_path, db)  # dry_run defaults True
     con = mox.open_db(cfg)
@@ -238,12 +248,23 @@ def test_dry_run_does_not_create_storage_locations(tmp_path):
 
 
 def test_dry_run_reconcile_writes_nothing(tmp_path):
-    smc = FakeSmc(paged={"/lists/7/items": [
-        {"id": 1, "scryfall_id": "s1", "treatment": "nonfoil",
-         "desired_quantity": 1, "collected_quantity": 0},
-    ]})
+    smc = FakeSmc(
+        paged={
+            "/lists/7/items": [
+                {
+                    "id": 1,
+                    "scryfall_id": "s1",
+                    "treatment": "nonfoil",
+                    "desired_quantity": 1,
+                    "collected_quantity": 0,
+                },
+            ]
+        }
+    )
     cfg = cfg_for(tmp_path, "unused")
-    counts = mox.reconcile(cfg, smc, 7, {("s1", "nonfoil"): 4}, {"s1": "o1"}, {("s1", "nonfoil"): 2})
+    counts = mox.reconcile(
+        cfg, smc, 7, {("s1", "nonfoil"): 4}, {"s1": "o1"}, {("s1", "nonfoil"): 2}
+    )
     assert counts == (0, 1, 0)
     assert smc.writes == []
 
@@ -371,7 +392,9 @@ def test_a_card_in_no_binder_is_left_unassigned_and_counted(tmp_path):
     con = mox.open_db(cfg)
     try:
         smc = FakeSmc(responses=STORAGE)
-        wanted, stats = mox.build_wanted_inventory(cfg, smc, con, [row("s1", binder=None)])
+        wanted, stats = mox.build_wanted_inventory(
+            cfg, smc, con, [row("s1", binder=None)]
+        )
     finally:
         con.close()
     assert wanted == {("s1", "nonfoil", None): 1}
@@ -407,7 +430,13 @@ def test_duplicate_rows_for_one_key_keep_the_first_and_drop_the_rest(tmp_path):
     db = make_db(tmp_path, [("s1", "o-s1", "abc", "1", "en")])
     smc = FakeSmc(
         responses=STORAGE,
-        paged={"/inventory/": [held(1, "s1", qty=1), held(2, "s1", qty=1), held(3, "s1", qty=1)]},
+        paged={
+            "/inventory/": [
+                held(1, "s1", qty=1),
+                held(2, "s1", qty=1),
+                held(3, "s1", qty=1),
+            ]
+        },
     )
     cfg = cfg_for(tmp_path, db, dry_run=False, force_prune=True)
     con = mox.open_db(cfg)
@@ -437,12 +466,14 @@ def test_a_card_with_no_local_oracle_id_is_skipped_on_post(tmp_path):
 
 
 def test_a_binder_renamed_on_moxfield_renames_the_location(tmp_path):
-    smc = FakeSmc(responses={
-        ("GET", "/storage/with-counts"): [
-            {"id": 10, "name": "Magic Big Box", "storage_type": "Box"}
-        ],
-        ("PUT", "/storage/10"): lambda body: body,
-    })
+    smc = FakeSmc(
+        responses={
+            ("GET", "/storage/with-counts"): [
+                {"id": 10, "name": "Magic Big Box", "storage_type": "Box"}
+            ],
+            ("PUT", "/storage/10"): lambda body: body,
+        }
+    )
     (tmp_path / "binders.json").write_text(json.dumps({"b1": 10}))
     cfg = cfg_for(tmp_path, "unused", dry_run=False)
     rows = [row("s1", binder="b1")]
@@ -471,10 +502,12 @@ def test_a_corrupt_state_file_falls_back_to_name_adoption(tmp_path, capsys):
 
 
 def test_an_unseen_binder_is_created_with_a_type_inferred_from_its_name(tmp_path):
-    smc = FakeSmc(responses={
-        ("GET", "/storage/with-counts"): [],
-        ("POST", "/storage"): lambda body: {"id": 99, **body},
-    })
+    smc = FakeSmc(
+        responses={
+            ("GET", "/storage/with-counts"): [],
+            ("POST", "/storage"): lambda body: {"id": 99, **body},
+        }
+    )
     cfg = cfg_for(tmp_path, "unused", dry_run=False)
     rows = [row("s1", binder="b9")]
     rows[0]["tradeBinder"]["name"] = "Green Deck Box"
@@ -486,8 +519,13 @@ def test_an_unseen_binder_is_created_with_a_type_inferred_from_its_name(tmp_path
 
 @pytest.mark.parametrize(
     ("name", "expected"),
-    [("Big Box", "Box"), ("Green Deck Box", "Box"), ("BOOK - Red Dragon", "Binder"),
-     ("EDH - Errant", "Binder"), (None, "Binder")],
+    [
+        ("Big Box", "Box"),
+        ("Green Deck Box", "Box"),
+        ("BOOK - Red Dragon", "Binder"),
+        ("EDH - Errant", "Binder"),
+        (None, "Binder"),
+    ],
 )
 def test_storage_type_is_inferred_from_the_name(name, expected):
     assert mox.infer_storage_type(name) == expected
@@ -501,7 +539,10 @@ def test_ownership_collapses_printing_and_finish(tmp_path):
     # binder.
     db = make_db(
         tmp_path,
-        [("en-id", "oracle-1", "abc", "42", "en"), ("fr-id", "oracle-1", "abc", "42", "fr")],
+        [
+            ("en-id", "oracle-1", "abc", "42", "en"),
+            ("fr-id", "oracle-1", "abc", "42", "fr"),
+        ],
         inventories=[("en-id", 2), ("fr-id", 3)],
     )
     con = sqlite3.connect(db)
@@ -522,8 +563,12 @@ def test_two_printings_of_one_card_share_a_single_ownership_pool():
 
 def test_allocation_is_deterministic_regardless_of_dict_order():
     oids = {"a": "o", "b": "o"}
-    first = mox.allocate_collected({("a", "nonfoil"): 2, ("b", "nonfoil"): 2}, oids, {"o": 3})
-    second = mox.allocate_collected({("b", "nonfoil"): 2, ("a", "nonfoil"): 2}, oids, {"o": 3})
+    first = mox.allocate_collected(
+        {("a", "nonfoil"): 2, ("b", "nonfoil"): 2}, oids, {"o": 3}
+    )
+    second = mox.allocate_collected(
+        {("b", "nonfoil"): 2, ("a", "nonfoil"): 2}, oids, {"o": 3}
+    )
     assert first == second
 
 
@@ -539,29 +584,49 @@ def deck_with(boards):
 
 
 def test_only_the_deck_proper_is_synced_and_the_rest_is_reported():
-    deck = deck_with({
-        "commanders": {"count": 1, "cards": {"a": {"quantity": 1, "card": {"scryfall_id": "c1"}}}},
-        "mainboard": {"count": 2, "cards": {"b": {"quantity": 2, "card": {"scryfall_id": "m1"}}}},
-        "sideboard": {"count": 7, "cards": {"c": {"quantity": 7, "card": {"scryfall_id": "s1"}}}},
-        "maybeboard": {"count": 0, "cards": {}},
-    })
+    deck = deck_with(
+        {
+            "commanders": {
+                "count": 1,
+                "cards": {"a": {"quantity": 1, "card": {"scryfall_id": "c1"}}},
+            },
+            "mainboard": {
+                "count": 2,
+                "cards": {"b": {"quantity": 2, "card": {"scryfall_id": "m1"}}},
+            },
+            "sideboard": {
+                "count": 7,
+                "cards": {"c": {"quantity": 7, "card": {"scryfall_id": "s1"}}},
+            },
+            "maybeboard": {"count": 0, "cards": {}},
+        }
+    )
     wanted, excluded = mox.parse_deck(deck)
     assert wanted == {("c1", "nonfoil"): 1, ("m1", "nonfoil"): 2}
     assert excluded == {"sideboard": 7}  # empty boards are not reported
 
 
 def test_foil_entries_get_their_own_treatment_and_sum_separately():
-    deck = deck_with({"mainboard": {"count": 3, "cards": {
-        "a": {"quantity": 1, "card": {"scryfall_id": "x"}, "isFoil": True},
-        "b": {"quantity": 2, "card": {"scryfall_id": "x"}},
-        "c": {"quantity": 1, "card": {"scryfall_id": "x"}, "isFoil": True},
-    }}})
+    deck = deck_with(
+        {
+            "mainboard": {
+                "count": 3,
+                "cards": {
+                    "a": {"quantity": 1, "card": {"scryfall_id": "x"}, "isFoil": True},
+                    "b": {"quantity": 2, "card": {"scryfall_id": "x"}},
+                    "c": {"quantity": 1, "card": {"scryfall_id": "x"}, "isFoil": True},
+                },
+            }
+        }
+    )
     wanted, _ = mox.parse_deck(deck)
     assert wanted == {("x", "foil"): 2, ("x", "nonfoil"): 2}
 
 
 def test_entries_without_a_scryfall_id_are_dropped():
-    deck = deck_with({"mainboard": {"count": 1, "cards": {"a": {"quantity": 1, "card": {}}}}})
+    deck = deck_with(
+        {"mainboard": {"count": 1, "cards": {"a": {"quantity": 1, "card": {}}}}}
+    )
     assert mox.parse_deck(deck) == ({}, {})
 
 
@@ -617,19 +682,38 @@ def test_new_items_get_a_follow_up_put_to_carry_ownership(tmp_path):
     )
     assert counts == (1, 0, 0)
     assert smc.writes == [
-        ("POST", "/lists/7/items/batch", {"items": [
-            {"scryfall_id": "s1", "oracle_id": "o1", "treatment": "nonfoil",
-             "desired_quantity": 3},
-        ]}),
+        (
+            "POST",
+            "/lists/7/items/batch",
+            {
+                "items": [
+                    {
+                        "scryfall_id": "s1",
+                        "oracle_id": "o1",
+                        "treatment": "nonfoil",
+                        "desired_quantity": 3,
+                    },
+                ]
+            },
+        ),
         ("PUT", "/lists/7/items/55", {"desired_quantity": 3, "collected_quantity": 2}),
     ]
 
 
 def test_an_item_whose_ownership_changed_is_updated_even_when_desired_did_not(tmp_path):
-    smc = FakeSmc(paged={"/lists/7/items": [
-        {"id": 1, "scryfall_id": "s1", "treatment": "nonfoil",
-         "desired_quantity": 4, "collected_quantity": 1},
-    ]})
+    smc = FakeSmc(
+        paged={
+            "/lists/7/items": [
+                {
+                    "id": 1,
+                    "scryfall_id": "s1",
+                    "treatment": "nonfoil",
+                    "desired_quantity": 4,
+                    "collected_quantity": 1,
+                },
+            ]
+        }
+    )
     cfg = cfg_for(tmp_path, "unused", dry_run=False)
     assert mox.reconcile(
         cfg, smc, 7, {("s1", "nonfoil"): 4}, {"s1": "o1"}, {("s1", "nonfoil"): 3}
@@ -640,10 +724,19 @@ def test_an_item_whose_ownership_changed_is_updated_even_when_desired_did_not(tm
 
 
 def test_an_unchanged_item_is_left_alone(tmp_path):
-    smc = FakeSmc(paged={"/lists/7/items": [
-        {"id": 1, "scryfall_id": "s1", "treatment": "nonfoil",
-         "desired_quantity": 4, "collected_quantity": 3},
-    ]})
+    smc = FakeSmc(
+        paged={
+            "/lists/7/items": [
+                {
+                    "id": 1,
+                    "scryfall_id": "s1",
+                    "treatment": "nonfoil",
+                    "desired_quantity": 4,
+                    "collected_quantity": 3,
+                },
+            ]
+        }
+    )
     cfg = cfg_for(tmp_path, "unused", dry_run=False)
     assert mox.reconcile(
         cfg, smc, 7, {("s1", "nonfoil"): 4}, {"s1": "o1"}, {("s1", "nonfoil"): 3}
@@ -652,10 +745,19 @@ def test_an_unchanged_item_is_left_alone(tmp_path):
 
 
 def test_items_no_longer_in_the_deck_are_removed(tmp_path):
-    smc = FakeSmc(paged={"/lists/7/items": [
-        {"id": 9, "scryfall_id": "gone", "treatment": "nonfoil",
-         "desired_quantity": 1, "collected_quantity": 0},
-    ]})
+    smc = FakeSmc(
+        paged={
+            "/lists/7/items": [
+                {
+                    "id": 9,
+                    "scryfall_id": "gone",
+                    "treatment": "nonfoil",
+                    "desired_quantity": 1,
+                    "collected_quantity": 0,
+                },
+            ]
+        }
+    )
     cfg = cfg_for(tmp_path, "unused", dry_run=False)
     assert mox.reconcile(cfg, smc, 7, {}, {}, {}) == (0, 0, 1)
     assert smc.writes == [("DELETE", "/lists/7/items/9", None)]
@@ -666,38 +768,46 @@ def test_items_no_longer_in_the_deck_are_removed(tmp_path):
 
 def test_a_private_collection_fails_loudly():
     # Reading it as "the user owns nothing" would delete the whole inventory.
-    op = FakeOpener([json_reply({"collectionVisibility": "private", "collectionPublicId": "c1"})])
+    op = FakeOpener(
+        [json_reply({"collectionVisibility": "private", "collectionPublicId": "c1"})]
+    )
     client = mox.Moxfield("ua", opener=op, sleep=lambda _: None)
     with pytest.raises(RuntimeError, match="not publicly readable"):
         client.collection("nSimon")
 
 
 def test_a_truncated_collection_response_fails_loudly():
-    op = FakeOpener([
-        json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
-        json_reply({"data": [row("s1")], "totalResults": 99, "totalPages": 1}),
-    ])
+    op = FakeOpener(
+        [
+            json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
+            json_reply({"data": [row("s1")], "totalResults": 99, "totalPages": 1}),
+        ]
+    )
     client = mox.Moxfield("ua", opener=op, sleep=lambda _: None)
     with pytest.raises(RuntimeError, match="truncated"):
         client.collection("nSimon")
 
 
 def test_an_empty_collection_fails_loudly():
-    op = FakeOpener([
-        json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
-        json_reply({"data": [], "totalResults": 0, "totalPages": 1}),
-    ])
+    op = FakeOpener(
+        [
+            json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
+            json_reply({"data": [], "totalResults": 0, "totalPages": 1}),
+        ]
+    )
     client = mox.Moxfield("ua", opener=op, sleep=lambda _: None)
     with pytest.raises(RuntimeError, match="refusing to prune everything"):
         client.collection("nSimon")
 
 
 def test_a_paginated_collection_is_concatenated():
-    op = FakeOpener([
-        json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
-        json_reply({"data": [row("s1")], "totalPages": 2, "totalResults": 2}),
-        json_reply({"data": [row("s2")], "totalPages": 2, "totalResults": 2}),
-    ])
+    op = FakeOpener(
+        [
+            json_reply({"collectionVisibility": "public", "collectionPublicId": "c1"}),
+            json_reply({"data": [row("s1")], "totalPages": 2, "totalResults": 2}),
+            json_reply({"data": [row("s2")], "totalPages": 2, "totalResults": 2}),
+        ]
+    )
     client = mox.Moxfield("ua", opener=op, sleep=lambda _: None)
     assert len(client.collection("nSimon")) == 2
 
@@ -713,17 +823,23 @@ def test_deck_search_asks_for_illegal_decks_too():
 
 def test_decks_reachable_through_two_users_are_deduped():
     deck = {"publicId": "P1", "name": "Shared", "createdByUser": {"userName": "other"}}
-    op = FakeOpener([
-        json_reply({"data": [deck], "totalPages": 1}),
-        json_reply({"data": [deck], "totalPages": 1}),
-    ])
+    op = FakeOpener(
+        [
+            json_reply({"data": [deck], "totalPages": 1}),
+            json_reply({"data": [deck], "totalPages": 1}),
+        ]
+    )
     client = mox.Moxfield("ua", opener=op, sleep=lambda _: None)
-    assert client.discover_decks(["nSimon", "Hexaphrodite"]) == [("P1", "Shared", "other")]
+    assert client.discover_decks(["nSimon", "Hexaphrodite"]) == [
+        ("P1", "Shared", "other")
+    ]
 
 
 def test_the_user_agent_identifies_the_project():
     op = FakeOpener([json_reply({"data": [], "totalPages": 1})])
-    mox.Moxfield("nic-os-moxfield-sync/1.0", opener=op, sleep=lambda _: None).discover_decks(["u"])
+    mox.Moxfield(
+        "nic-os-moxfield-sync/1.0", opener=op, sleep=lambda _: None
+    ).discover_decks(["u"])
     assert op.last.get_header("User-agent") == "nic-os-moxfield-sync/1.0"
 
 
@@ -764,11 +880,13 @@ def test_trailing_slashes_are_normalised_away_to_save_a_redirect():
 
 
 def test_paged_walks_every_page():
-    op = FakeOpener([
-        json_reply({"data": [1], "total_pages": 3}),
-        json_reply({"data": [2], "total_pages": 3}),
-        json_reply({"data": [3], "total_pages": 3}),
-    ])
+    op = FakeOpener(
+        [
+            json_reply({"data": [1], "total_pages": 3}),
+            json_reply({"data": [2], "total_pages": 3}),
+            json_reply({"data": [3], "total_pages": 3}),
+        ]
+    )
     assert mox.Smc("http://smc/api", opener=op).paged("/inventory/") == [1, 2, 3]
     assert "page=3" in op.last.full_url
 
@@ -851,12 +969,19 @@ def test_an_unchanged_deck_costs_no_writes(tmp_path):
             return [("P1", "Deck", "nSimon")]
 
         def deck(self, pid):
-            return {"name": "Deck", "boards": {"mainboard": {
-                "count": 1, "cards": {"a": {"quantity": 1, "card": {"scryfall_id": "s1"}}}}}}
+            return {
+                "name": "Deck",
+                "boards": {
+                    "mainboard": {
+                        "count": 1,
+                        "cards": {"a": {"quantity": 1, "card": {"scryfall_id": "s1"}}},
+                    }
+                },
+            }
 
-    smc = FakeSmc(responses={("GET", "/lists"): [
-        {"id": 1, "name": "Deck", "description": "P1"}
-    ]})
+    smc = FakeSmc(
+        responses={("GET", "/lists"): [{"id": 1, "name": "Deck", "description": "P1"}]}
+    )
     totals, ok = mox.sync_decks(cfg, smc, Fake())
     assert ok is True
     assert totals["unchanged"] == 1

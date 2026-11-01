@@ -36,7 +36,11 @@ S'il y a plusieurs moments, garde l'ordre de la journée (les heures sont dans l
 
 Forme : une seule phrase en français, 20 mots au plus, de préférence nominale, comme une note de carnet (« Matinée à Lisbonne, puis dîner chez des amis. »). Énonce les faits sans inventer de ressenti ni d'action (pas de « j'ai appris », « j'ai fêté », « j'ai profité »). Pas de remplissage : ni météo, ni trajet, ni formule creuse (« sans autre événement », « journée bien remplie ») pour allonger. Aucun chiffre sauf s'il fait la journée, pas d'emoji, pas de guillemets.
 """
-SKIP = ("### 🕰", "### 🌳", "### 🎂")  # the past, and birthdays the calendar may not hold
+SKIP = (
+    "### 🕰",
+    "### 🌳",
+    "### 🎂",
+)  # the past, and birthdays the calendar may not hold
 
 
 def visible(text):
@@ -57,7 +61,9 @@ def visible(text):
 
 def source_hash(text, image_key=""):
     """Changes with the visible text, the photos or the prompt: any one means a new sentence."""
-    return hashlib.sha256((PROMPT + visible(text) + image_key).encode()).hexdigest()[:16]
+    return hashlib.sha256((PROMPT + visible(text) + image_key).encode()).hexdigest()[
+        :16
+    ]
 
 
 def summarize(gate, model, text, opener=None, timeout=120, image=None):
@@ -65,17 +71,42 @@ def summarize(gate, model, text, opener=None, timeout=120, image=None):
     the collage's JPEG bytes, sent alongside the text."""
     user = visible(text)
     if image:
-        user = [{"type": "text", "text": user},
-                {"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(image).decode()}}]
-    body = json.dumps({"model": model, "temperature": 0.2,
-                       "messages": [{"role": "system", "content": PROMPT},
-                                    {"role": "user", "content": user}]}).encode()
-    req = urllib.request.Request(f"{gate}/v1/chat/completions", data=body, method="POST",
-                                 headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"})
+        user = [
+            {"type": "text", "text": user},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": "data:image/jpeg;base64," + base64.b64encode(image).decode()
+                },
+            },
+        ]
+    body = json.dumps(
+        {
+            "model": model,
+            "temperature": 0.2,
+            "messages": [
+                {"role": "system", "content": PROMPT},
+                {"role": "user", "content": user},
+            ],
+        }
+    ).encode()
+    req = urllib.request.Request(
+        f"{gate}/v1/chat/completions",
+        data=body,
+        method="POST",
+        headers={"Authorization": "Bearer ollama", "Content-Type": "application/json"},
+    )
     try:
         with (opener or urllib.request.urlopen)(req, timeout=timeout) as r:
             content = json.load(r)["choices"][0]["message"]["content"]
-    except (urllib.error.URLError, TimeoutError, socket.timeout, KeyError, IndexError, ValueError):
+    except (
+        urllib.error.URLError,
+        TimeoutError,
+        socket.timeout,
+        KeyError,
+        IndexError,
+        ValueError,
+    ):
         return None
-    line = " ".join(content.split()).strip().strip("*_\"«» ")
+    line = " ".join(content.split()).strip().strip('*_"«» ')
     return line or None

@@ -104,10 +104,14 @@ def preview(cfg, asset_id, opener=None):
 def send_photo(token, chat_id, image, opener=None):
     boundary = "----Hermes" + secrets.token_hex(16)
     body = (
-        f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
-        f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="burgie.jpg"\r\n'
-        "Content-Type: image/jpeg\r\n\r\n"
-    ).encode() + image + f"\r\n--{boundary}--\r\n".encode()
+        (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="chat_id"\r\n\r\n{chat_id}\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="burgie.jpg"\r\n'
+            "Content-Type: image/jpeg\r\n\r\n"
+        ).encode()
+        + image
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
     req = urllib.request.Request(
         f"https://api.telegram.org/bot{token}/sendPhoto",
         data=body,
@@ -142,13 +146,17 @@ def fetch_immich(cfg, opener, choice, sleep):
         except (urllib.error.URLError, TimeoutError) as e:
             if attempt == IMMICH_ATTEMPTS:
                 raise
-            log(f"immich attempt {attempt} failed ({e}); retrying in {IMMICH_RETRY_SECONDS}s")
+            log(
+                f"immich attempt {attempt} failed ({e}); retrying in {IMMICH_RETRY_SECONDS}s"
+            )
             sleep(IMMICH_RETRY_SECONDS)
 
 
 def run(cfg, opener=None, choice=secrets.choice, token=None, sleep=time.sleep):
     jobs = json.loads(Path(cfg.hermes_home, "cron", "jobs.json").read_text())
-    chat_id = origin_chat(jobs.get("jobs", jobs) if isinstance(jobs, dict) else jobs, cfg.job_id)
+    chat_id = origin_chat(
+        jobs.get("jobs", jobs) if isinstance(jobs, dict) else jobs, cfg.job_id
+    )
 
     album, asset, image = fetch_immich(cfg, opener, choice, sleep)
     send_photo(token or read_secret(cfg.token_file), chat_id, image, opener=opener)

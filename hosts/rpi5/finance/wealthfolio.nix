@@ -106,7 +106,12 @@
 # betting real holdings on. The hash (argon2id PHC string) and WF_SECRET_KEY —
 # which encrypts stored broker/API credentials — both come from the agenix env
 # file so neither lands in the world-readable Nix store.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   wealthfolio = pkgs.callPackage ../../../pkgs/services/wealthfolio.nix { };
 
@@ -190,12 +195,20 @@ in
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
       ProtectControlGroups = true;
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
       RestrictNamespaces = true;
       LockPersonality = true;
       MemoryDenyWriteExecute = true;
       SystemCallArchitectures = "native";
-      SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+      SystemCallFilter = [
+        "@system-service"
+        "~@privileged"
+        "~@resources"
+      ];
     };
   };
 
@@ -239,13 +252,25 @@ in
           mappings = [
             # Carries the investments total — net worth is mostly the flat, so
             # the bracket says how much of it is actually market-exposed.
-            { field = "net_worth"; label = "Net Worth"; format = "text"; }
+            {
+              field = "net_worth";
+              label = "Net Worth";
+              format = "text";
+            }
             # Carries "(+€9,783)" — market value less cost basis.
-            { field = "invested"; label = "Invested"; format = "text"; }
+            {
+              field = "invested";
+              label = "Invested";
+              format = "text";
+            }
             # Carries "2.24% (+€881)" — the euro figure is that percentage
             # restated against the portfolio value 30 days ago, not a separate
             # claim. See fetch_wealthfolio.
-            { field = "return_30d"; label = "30d"; format = "text"; }
+            {
+              field = "return_30d";
+              label = "30d";
+              format = "text";
+            }
           ];
         };
       };

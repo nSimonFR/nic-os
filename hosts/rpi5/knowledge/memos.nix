@@ -7,7 +7,15 @@
 # nixpkgs module; package from unstable because release-26.05 ships 0.25.3,
 # older than MCP (0.27) and the Calendar/Map pages (0.31). Always-on, no socket
 # activation: a Go binary at tens of MB, and MCP clients would pin it awake.
-{ config, pkgs, unstablePkgs, tinyLlmGateUrl, telegramChatId, username, ... }:
+{
+  config,
+  pkgs,
+  unstablePkgs,
+  tinyLlmGateUrl,
+  telegramChatId,
+  username,
+  ...
+}:
 let
   internalPort = 13356;
   dataDir = "/var/lib/memos";
@@ -23,7 +31,11 @@ let
   };
   journalService = { description, extraEnv }: {
     inherit description;
-    after = [ "memos.service" "postgresql.service" "freereps-to-dawarich.service" ];
+    after = [
+      "memos.service"
+      "postgresql.service"
+      "freereps-to-dawarich.service"
+    ];
     wants = [ "memos.service" ];
     serviceConfig = {
       Type = "oneshot";
@@ -57,7 +69,8 @@ let
         # One-line summary on top, by gpt-6-luna (cloud, ChatGPT plan): it sees the
         # visible text only — no links, no collapsed blocks, no family history.
         "TINY_LLM_GATE_URL=${tinyLlmGateUrl}"
-      ] ++ extraEnv;
+      ]
+      ++ extraEnv;
       TimeoutStartSec = "45min";
     };
   };
@@ -101,7 +114,10 @@ in
     # journal entry lands in the next night's dump; `after` covers a catch-up
     # run of both timers at boot.
     after = [ "journal-daily.service" ];
-    serviceConfig = { Type = "oneshot"; User = "memos"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "memos";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -114,7 +130,10 @@ in
   systemd.timers.memos-backup = {
     description = "Daily Memos backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 04:15:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 04:15:00";
+      Persistent = true;
+    };
   };
 
   # One journal entry per day (workouts + Immich photos). The day ends at 04:00; the
@@ -139,23 +158,29 @@ in
 
   systemd.timers.journal-daily = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 08:00:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 08:00:00";
+      Persistent = true;
+    };
   };
 
   nic.services.memos = {
-    backup      = [ "unit" "mnt-data" ];
+    backup = [
+      "unit"
+      "mnt-data"
+    ];
     backupUnits = [ "memos-backup.service" ];
 
     public = {
       # Alone on a seventh Apps row until it is given a place in one of the six.
-      order         = 250;
-      port          = 4020;
-      backend       = "http://127.0.0.1:${toString internalPort}";
+      order = 250;
+      port = 4020;
+      backend = "http://127.0.0.1:${toString internalPort}";
       authenticated = true;
       tile = {
-        name        = "Memos";
-        icon        = "memos.png";
-        category    = "Apps";
+        name = "Memos";
+        icon = "memos.png";
+        category = "Apps";
         description = "Work journal";
         # homepage-stats reads journal-daily's state on each request; see fetch_memos.
         widget = {
@@ -163,9 +188,21 @@ in
           url = "http://127.0.0.1:8087/memos";
           refreshInterval = 3600000;
           mappings = [
-            { field = "days";     label = "Days";     format = "number"; }
-            { field = "agenda";   label = "Agenda";   format = "number"; }
-            { field = "activity"; label = "Activity"; format = "text"; }
+            {
+              field = "days";
+              label = "Days";
+              format = "number";
+            }
+            {
+              field = "agenda";
+              label = "Agenda";
+              format = "number";
+            }
+            {
+              field = "activity";
+              label = "Activity";
+              format = "text";
+            }
           ];
         };
       };

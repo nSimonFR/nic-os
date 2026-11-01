@@ -198,7 +198,9 @@ def resolve_igdb_ids(appids, token, igdb_map, cfg, opener=None, sleep=time.sleep
     )
 
 
-def playtime_deltas(games, igdb_map, prev_games, min_delta_min=1, inflight=None, now=""):
+def playtime_deltas(
+    games, igdb_map, prev_games, min_delta_min=1, inflight=None, now=""
+):
     """Plays to log: games whose playtime grew by >= min_delta_min since the last
     logged total, each stamped with the `submitted_at` to send.
 
@@ -227,7 +229,9 @@ def playtime_deltas(games, igdb_map, prev_games, min_delta_min=1, inflight=None,
                 "delta": delta,
                 "submitted_at": sent["submittedAt"] if sent else now,
                 # "" = occurs now: an inflight play from before playedAt existed.
-                "played_at": sent.get("playedAt", "") if sent else epoch_iso(g.get("rtime_last_played")),
+                "played_at": sent.get("playedAt", "")
+                if sent
+                else epoch_iso(g.get("rtime_last_played")),
             }
         )
     return plays
@@ -297,7 +301,11 @@ def epoch_iso(t):
     """Steam's epoch seconds as Ryot's ISO instant; "" for none (0 = never played)."""
     if not t:
         return ""
-    return datetime.fromtimestamp(int(t), timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(int(t), timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def submission_id(appid, total):
@@ -312,7 +320,9 @@ def activity_payload(entity_id, play):
         "entry": {
             "kind": "complete",
             "entityId": entity_id,
-            "when": {"kind": "date", "finishedOn": play["played_at"]} if play.get("played_at") else {"kind": "now"},
+            "when": {"kind": "date", "finishedOn": play["played_at"]}
+            if play.get("played_at")
+            else {"kind": "now"},
             "timeSpent": play["delta"],
             "consumedOn": "Steam",
         },
@@ -349,7 +359,11 @@ class RyotClient:
     def post(self, path, payload):
         return self._paced(
             lambda: ryot.api_post(
-                self.cfg.ryot_url, self.cfg.ryot_api_key, path, payload, opener=self.opener
+                self.cfg.ryot_url,
+                self.cfg.ryot_api_key,
+                path,
+                payload,
+                opener=self.opener,
             )
         )
 
@@ -360,7 +374,9 @@ class RyotClient:
                 headers={"X-Api-Key": self.cfg.ryot_api_key},
             )
             try:
-                return http_json(req, timeout=ryot.RYOT_WAKE_TIMEOUT, opener=self.opener)
+                return http_json(
+                    req, timeout=ryot.RYOT_WAKE_TIMEOUT, opener=self.opener
+                )
             except urllib.error.HTTPError as e:
                 raise RuntimeError(
                     f"Ryot {path} -> {e.code}: {e.read().decode()[:500]}"
@@ -389,17 +405,22 @@ class RyotClient:
     def import_game(self, provider_id, igdb_id):
         """Import an IGDB game; its entity id, or "" when the import failed."""
         job = self.post(
-            "/entity-providers/imports", {"providerId": provider_id, "externalId": igdb_id}
+            "/entity-providers/imports",
+            {"providerId": provider_id, "externalId": igdb_id},
         )["jobId"]
         for _ in range(IMPORT_POLLS):
-            res = self.get("/entity-providers/imports/" + urllib.parse.quote(job, safe=""))
+            res = self.get(
+                "/entity-providers/imports/" + urllib.parse.quote(job, safe="")
+            )
             status = res.get("status")
             if status == "completed":
                 return res["data"]["id"]
             if status in ("failed", "cancelled"):
                 log(f"IGDB {igdb_id}: import {status}: {json.dumps(res)[:300]}")
                 return ""
-        raise RuntimeError(f"IGDB {igdb_id}: import still {status} after {IMPORT_POLLS} polls")
+        raise RuntimeError(
+            f"IGDB {igdb_id}: import still {status} after {IMPORT_POLLS} polls"
+        )
 
     def log_play(self, entity_id, play):
         payload = activity_payload(entity_id, play)
@@ -429,7 +450,11 @@ def resolve_entities(client, plays, entity_map):
 
 
 def now_iso():
-    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def main(env=None, opener=None, sleep=time.sleep, now=None):
@@ -457,7 +482,12 @@ def main(env=None, opener=None, sleep=time.sleep, now=None):
 
     appids = [g.get("appid") for g in games if g.get("appid") is not None]
     resolve_igdb_ids(
-        appids, get_twitch_token(cfg, opener=opener), igdb_map, cfg, opener=opener, sleep=sleep
+        appids,
+        get_twitch_token(cfg, opener=opener),
+        igdb_map,
+        cfg,
+        opener=opener,
+        sleep=sleep,
     )
     save_json(cfg.igdb_map_file, igdb_map)
 
@@ -490,12 +520,18 @@ def main(env=None, opener=None, sleep=time.sleep, now=None):
         entity = entity_map.get(p["appid"])
         if not entity:
             # Not cached: an import failure may be the provider, not the id.
-            log(f"{p['name']}: no Ryot entity for IGDB {p['igdb_id']}; retrying next run")
+            log(
+                f"{p['name']}: no Ryot entity for IGDB {p['igdb_id']}; retrying next run"
+            )
             failed += 1
             continue
         # Recorded before sending: a retry must resend the same occurredAt, or Ryot
         # answers mutation-conflict for the reused submissionId.
-        inflight[p["appid"]] = {"total": p["total"], "submittedAt": p["submitted_at"], "playedAt": p["played_at"]}
+        inflight[p["appid"]] = {
+            "total": p["total"],
+            "submittedAt": p["submitted_at"],
+            "playedAt": p["played_at"],
+        }
         save()
         try:
             client.log_play(entity, p)
@@ -508,8 +544,11 @@ def main(env=None, opener=None, sleep=time.sleep, now=None):
         del inflight[p["appid"]]
         save()
 
-    log(f"done; {len(plays) - failed} logged, {failed} failed, {len(new_games)} tracked")
+    log(
+        f"done; {len(plays) - failed} logged, {failed} failed, {len(new_games)} tracked"
+    )
     return 1 if failed else 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

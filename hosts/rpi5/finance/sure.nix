@@ -1,9 +1,21 @@
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, apertureUrl, tailnetFqdn, telegramChatId, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  pgHost,
+  pgPort,
+  redisHost,
+  redisPort,
+  apertureUrl,
+  tailnetFqdn,
+  telegramChatId,
+  ...
+}:
 let
   # externalPort: where Tailscale Serve (→ :3333) and the socket-activate
   # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
   externalPort = 13334;
-  backendPort  = 13335;
+  backendPort = 13335;
 
   # rootVhostPort: the nginx vhost that gives Sure an origin of its own, where
   # the app sits at the root (see the vhost below). rootServePort: the tailnet
@@ -31,7 +43,7 @@ let
   # Setting them here also avoids the hosting-settings UI accidentally
   # overwriting the route when the admin page is saved.
   sureLlmEnv = {
-    OPENAI_URI_BASE     = "${apertureUrl}/v1/";
+    OPENAI_URI_BASE = "${apertureUrl}/v1/";
     # GPT-6 Luna, served by the plan's codex surface since ~2026-09 (4/4 strict
     # categorisations, same as gpt-6-sol, 2026-09-24). Notes below are the
     # 5.6-era evaluation that picked the Luna tier for this workload.
@@ -60,51 +72,50 @@ let
     # `openai/` prefix is load-bearing too: Aperture resolves a bare
     # `gpt-6-luna` to the gate's `asale/gpt-6-luna` alias, which 402'd every
     # call from 2026-10-18 (1638 failures, nothing categorized).
-    OPENAI_MODEL        = "openai/gpt-6-luna";
+    OPENAI_MODEL = "openai/gpt-6-luna";
     OPENAI_ACCESS_TOKEN = "unused"; # real auth lives in the gate's codex OAuth
     # The 2048 default leaves only 1280 input tokens, but the auto_categorize
     # prompt (full category list) needs ~1352 → categories were never assigned.
     # gpt-5.6 has ample context; 8192 gives 7424 input budget.
-    LLM_CONTEXT_WINDOW  = "8192";
+    LLM_CONTEXT_WINDOW = "8192";
   };
 in
 {
   # ── for-sure: combined Swile + Sumeria Lunchflow connector ────────────────
   # Single service on port 8340; Sure connects to http://127.0.0.1:8340/api/v1
   services.sumeria-mitm = {
-    enable           = true;
-    tokenFileGroup   = "for-sure";
+    enable = true;
+    tokenFileGroup = "for-sure";
   };
 
   services.for-sure = {
-    enable                = true;
-    port                  = 8340;
-    apiKeyFile            = "/run/agenix/for-sure-api-key";
-    swile.accountName     = "Swile";
-    sumeria.tokenFile     = config.services.sumeria-mitm.tokenFile;
+    enable = true;
+    port = 8340;
+    apiKeyFile = "/run/agenix/for-sure-api-key";
+    swile.accountName = "Swile";
+    sumeria.tokenFile = config.services.sumeria-mitm.tokenFile;
 
     # for-sure's only Telegram alerts: Sumeria tokens expired (401) or token
     # file missing — i.e. the MITM needs a fresh capture from the phone.
     telegram.botTokenFile = config.age.secrets.telegram-bot-token.path;
-    telegram.chatId       = toString telegramChatId;
+    telegram.chatId = toString telegramChatId;
   };
-
 
   # ── PostgreSQL: sure_production database + sure_user ──────────────────────
   nic.pgRole.sure = {
-    db           = "sure_production";
-    user         = "sure_user";
+    db = "sure_production";
+    user = "sure_user";
     passwordFile = "/run/agenix/sure-pg-password";
-    description  = "Set sure_user PostgreSQL password";
+    description = "Set sure_user PostgreSQL password";
   };
 
   # ── Sure application (native Nix, via sure-nix flake) ─────────────────────
   services.sure = {
-    enable          = true;
-    port            = backendPort;
+    enable = true;
+    port = backendPort;
     environmentFile = "/run/agenix/sure-app-env";
-    databaseUrl     = "postgresql://sure_user@${pgHost}/sure_production";
-    redisUrl        = "redis://${redisHost}:${toString redisPort}/2";
+    databaseUrl = "postgresql://sure_user@${pgHost}/sure_production";
+    redisUrl = "redis://${redisHost}:${toString redisPort}/2";
     # Stop the AI auto-categorizer from labeling internal transfers
     # (kind=funds_movement) — it mislabeled Livret A moves as "Investment
     # Contributions". Optional source patch, enabled here per-deployment.
@@ -138,17 +149,17 @@ in
   # plan's "PartOf wakes the web" claim doesn't hold — PartOf only
   # propagates stops.
   services.socketActivate.sure = {
-    enable    = true;
-    realUnit  = "sure-web.service";
-    listen    = [ "127.0.0.1:${toString externalPort}" ];
-    backend   = "127.0.0.1:${toString backendPort}";
-    idleSec   = 600;
+    enable = true;
+    realUnit = "sure-web.service";
+    listen = [ "127.0.0.1:${toString externalPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
     readyProbe = {
       # App mounts under /sure (Rack::URLMap, keyed on RAILS_RELATIVE_URL_ROOT
       # set on sure-web below), so the root /up now 404s — probe /sure/up.
-      url          = "http://127.0.0.1:${toString backendPort}/sure/up";
+      url = "http://127.0.0.1:${toString backendPort}/sure/up";
       expectStatus = 200;
-      timeoutSec   = 60;
+      timeoutSec = 60;
     };
     workers."sure-worker.service".policy = "sleepWith";
   };
@@ -200,15 +211,16 @@ in
   # glibc malloc arenas to curb RSS on a 4 GB RPi5.
   # Note: jemalloc was tested but increases RSS on aarch64 + Ruby YJIT.
   systemd.services.sure-worker.environment = {
-    RAILS_MAX_THREADS    = "1";
-    SIDEKIQ_CONCURRENCY  = "1";  # default 5 — personal app only needs 1 worker thread
-    MALLOC_ARENA_MAX     = "2";
-    RUBY_YJIT_ENABLE     = "0";  # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
-    RAILS_RELATIVE_URL_ROOT = "/sure";  # match sure-web so job/mailer URLs prefix /sure
-  } // sureLlmEnv;
+    RAILS_MAX_THREADS = "1";
+    SIDEKIQ_CONCURRENCY = "1"; # default 5 — personal app only needs 1 worker thread
+    MALLOC_ARENA_MAX = "2";
+    RUBY_YJIT_ENABLE = "0"; # YJIT JIT-compiles into memory; not worth it for low-traffic personal app
+    RAILS_RELATIVE_URL_ROOT = "/sure"; # match sure-web so job/mailer URLs prefix /sure
+  }
+  // sureLlmEnv;
   systemd.services.sure-web.environment = {
-    WEB_CONCURRENCY  = "0";  # single-process Puma (no forked workers) — saves ~80 MB on RPi5
-    RAILS_MAX_THREADS = "3";  # default 5; 3 is plenty for single-user
+    WEB_CONCURRENCY = "0"; # single-process Puma (no forked workers) — saves ~80 MB on RPi5
+    RAILS_MAX_THREADS = "3"; # default 5; 3 is plenty for single-user
     MALLOC_ARENA_MAX = "2";
     RUBY_YJIT_ENABLE = "0";
     # Serve under /sure on the 443 path-mux (front-proxy.nix). sure-nix's
@@ -216,11 +228,12 @@ in
     # and path-helpers prefix /sure (assets already do via relative_url_root).
     # The proxy passes /sure through UNCHANGED — URLMap does the internal strip.
     RAILS_RELATIVE_URL_ROOT = "/sure";
-  } // sureLlmEnv;
+  }
+  // sureLlmEnv;
 
   # sure-setup (migrations) must run after the password is set
   systemd.services.sure-setup = {
-    after    = [ "sure-pg-setup.service" ];
+    after = [ "sure-pg-setup.service" ];
     requires = [ "sure-pg-setup.service" ];
   };
 
@@ -245,7 +258,13 @@ in
   # — Tailscale funnels 443/8443/10000 and all three are allocated. The 443 /sure
   # mux is untouched and remains the URL to use from outside the tailnet.
   services.nginx.virtualHosts."sure-root" = {
-    listen = [ { addr = "127.0.0.1"; port = rootVhostPort; ssl = false; } ];
+    listen = [
+      {
+        addr = "127.0.0.1";
+        port = rootVhostPort;
+        ssl = false;
+      }
+    ];
 
     # Relative Location headers on the redirect below — otherwise nginx builds
     # it from its own listen socket and leaks http://127.0.0.1:8093.
@@ -272,7 +291,9 @@ in
       # Where the desktop app navigates once the check passes. A redirect rather
       # than a proxy so the webview's address bar, and everything it resolves
       # relative to it, agree with the /sure prefix Rails emits.
-      "= /" = { return = "301 /sure/"; };
+      "= /" = {
+        return = "301 /sure/";
+      };
 
       # Everything a root-assuming client asks for (/sessions/new, /api/v1/…,
       # /cable, /auth/…), re-rooted under /sure. The trailing slash on both sides
@@ -281,7 +302,7 @@ in
       # never doubled up.
       "/" = {
         proxyPass = "http://127.0.0.1:${toString externalPort}/sure/";
-        proxyWebsockets = true;   # /cable
+        proxyWebsockets = true; # /cable
         extraConfig = fwdToSure;
       };
 
@@ -303,35 +324,38 @@ in
   # so this fires at most once per ~3h token rotation.
   systemd.paths.sumeria-sync-trigger = {
     description = "Watch Sumeria token file for changes";
-    wantedBy    = [ "multi-user.target" ];
+    wantedBy = [ "multi-user.target" ];
     pathConfig.PathModified = config.services.sumeria-mitm.tokenFile;
   };
 
   systemd.services.sumeria-sync-trigger = {
     description = "Trigger Sure sync after Sumeria token refresh";
-    after       = [ "sure-web.service" "sure-worker.service" ];
+    after = [
+      "sure-web.service"
+      "sure-worker.service"
+    ];
     # Requires sure-web (not just sure-worker) so that under socket-activate
     # both tiers wake together — sure-worker has wantedBy=sure-web from the
     # socket-activate module, so pulling in web pulls in worker too.
-    requires    = [ "sure-web.service" ];
+    requires = [ "sure-web.service" ];
     serviceConfig = {
-      Type             = "oneshot";
-      User             = config.services.sure.user;
-      Group            = config.services.sure.group;
+      Type = "oneshot";
+      User = config.services.sure.user;
+      Group = config.services.sure.group;
       WorkingDirectory = "${config.services.sure.package}/share/sure";
-      EnvironmentFile  = config.services.sure.environmentFile;
+      EnvironmentFile = config.services.sure.environmentFile;
       # The script below waits for the sync to actually finish, which is well
       # past systemd's 90s default for a oneshot. Must exceed the in-script
       # deadline, or systemd would SIGTERM us mid-import — the exact failure
       # this unit is being fixed for.
-      TimeoutStartSec  = "20min";
+      TimeoutStartSec = "20min";
     };
     environment = {
-      RAILS_ENV          = "production";
-      DATABASE_URL       = config.services.sure.databaseUrl;
-      REDIS_URL          = config.services.sure.redisUrl;
+      RAILS_ENV = "production";
+      DATABASE_URL = config.services.sure.databaseUrl;
+      REDIS_URL = config.services.sure.redisUrl;
       BUNDLE_FORCE_RUBY_PLATFORM = "1";
-      HOME               = config.services.sure.dataDir;
+      HOME = config.services.sure.dataDir;
     };
     # This oneshot must outlive the sync it triggers: it holds sure-web up (and
     # sure-worker with it, via sleepWith), so when it exits the worker is torn
@@ -375,41 +399,44 @@ in
   # already links to it, and the dashboard is read in a browser, where the mux
   # URL is the right one (it works from outside the tailnet; this does not).
   nic.services.sure-root = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote = "stateless — an nginx vhost; the app's state is registered on nic.services.sure";
     # nginx is infra that heavy-shed deliberately leaves up, and Sure's
     # own units are listed on nic.services.sure.
     heavyUnits = [ ];
 
     public = {
-      order   = 11;   # untiled; sits with sure (10), before wealthfolio (20)
-      port    = rootServePort;
+      order = 11; # untiled; sits with sure (10), before wealthfolio (20)
+      port = rootServePort;
       backend = "http://127.0.0.1:${toString rootVhostPort}";
     };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.sure = {
-    backup            = [ "postgres" ];
+    backup = [ "postgres" ];
     postgresDatabases = [ "sure_production" ];
-    heavyUnits        = [ "sure-worker.service" "sure-web.service" ];
-    heavyPriority     = 70;
+    heavyUnits = [
+      "sure-worker.service"
+      "sure-web.service"
+    ];
+    heavyPriority = 70;
 
     # Passed through the path-mux UNCHANGED (no prefix strip): config.ru mounts
     # the app under RAILS_RELATIVE_URL_ROOT=/sure via Rack::URLMap, which does the
     # SCRIPT_NAME strip itself. Backend is the socket-activate port, so a request
     # wakes Puma.
     public = {
-      order   = 10;
-      port    = 443;
+      order = 10;
+      port = 443;
       backend = "http://127.0.0.1:13334";
       proxied = true;
       authenticated = true;
       muxPath = "/sure";
       tile = {
-        name        = "Sure";
-        icon        = "maybe.svg";
-        category    = "Apps";
+        name = "Sure";
+        icon = "maybe.svg";
+        category = "Apps";
         description = "Personal finance";
         widget = {
           type = "customapi";
@@ -429,9 +456,21 @@ in
             #   Cash   total, then what is not tied up in the Livret A
             #   Spent  the month so far, then what is left of the budget
             #   Food   what has gone from the envelope, then what is left
-            { field = "cash"; label = "Cash"; format = "text"; }
-            { field = "spend"; label = "Spent"; format = "text"; }
-            { field = "food"; label = "Food"; format = "text"; }
+            {
+              field = "cash";
+              label = "Cash";
+              format = "text";
+            }
+            {
+              field = "spend";
+              label = "Spent";
+              format = "text";
+            }
+            {
+              field = "food";
+              label = "Food";
+              format = "text";
+            }
           ];
         };
       };

@@ -31,6 +31,7 @@ Dates: --start/--end accept 'YYYY-MM-DD' (all-day) or 'YYYY-MM-DDTHH:MM'
 `list` accept 'YYYY-MM-DD'. Times without an offset are treated as floating
 local time (the server renders them in the viewer's zone).
 """
+
 import argparse
 import base64
 import hashlib
@@ -42,8 +43,9 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 
-DEFAULT_BASE = ("https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/"
-                "calendars/nsimon/")
+DEFAULT_BASE = (
+    "https://rpi5.gate-mintaka.ts.net/nextcloud/remote.php/dav/calendars/nsimon/"
+)
 
 
 def cfg():
@@ -60,8 +62,9 @@ def cfg():
 def _password():
     if os.environ.get("CALDAV_PASSWORD"):
         return os.environ["CALDAV_PASSWORD"]
-    path = os.environ.get("CALDAV_PASSWORD_FILE",
-                          "/run/agenix/nextcloud-homepage-password")
+    path = os.environ.get(
+        "CALDAV_PASSWORD_FILE", "/run/agenix/nextcloud-homepage-password"
+    )
     with open(path, encoding="utf-8") as f:
         return f.read().strip()
 
@@ -76,7 +79,8 @@ def _request(method, url, user, body=None, headers=None, timeout=30):
     if headers:
         h.update(headers)
     req = urllib.request.Request(
-        url, data=body.encode() if body else None, headers=h, method=method)
+        url, data=body.encode() if body else None, headers=h, method=method
+    )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read().decode("utf-8", "replace")
@@ -89,8 +93,14 @@ def _request(method, url, user, body=None, headers=None, timeout=30):
 
 # ---------------------------------------------------------------- iCalendar --
 def _esc(s):
-    return ((s or "").replace("\\", "\\\\").replace(";", "\\;")
-            .replace(",", "\\,").replace("\r", "").replace("\n", "\\n"))
+    return (
+        (s or "")
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r", "")
+        .replace("\n", "\\n")
+    )
 
 
 def _unesc(s):
@@ -132,8 +142,11 @@ def _unfold(text):
 
 
 def _parse_dt(value, all_day):
-    return (datetime.fromisoformat(value[:10]).date() if all_day
-            else datetime.fromisoformat(value))
+    return (
+        datetime.fromisoformat(value[:10]).date()
+        if all_day
+        else datetime.fromisoformat(value)
+    )
 
 
 def _fmt_dt(dt, all_day):
@@ -153,8 +166,9 @@ def make_uid(summary, start):
     return "nc-cal-" + hashlib.sha1(key.encode()).hexdigest()[:16] + "@nic-os"
 
 
-def build_ics(uid, summary, start, end=None, all_day=None,
-              location=None, description=None):
+def build_ics(
+    uid, summary, start, end=None, all_day=None, location=None, description=None
+):
     if all_day is None:
         all_day = _looks_all_day(start)
     s = _parse_dt(start, all_day)
@@ -194,8 +208,11 @@ def parse_vevent(ics):
     body = m.group(1) if m else text
     ev = {}
     for line in body.splitlines():
-        m = re.match(r"^(UID|SUMMARY|DTSTART|DTEND|LOCATION|DESCRIPTION|RRULE)"
-                     r"(;[^:]*)?:(.*)$", line)
+        m = re.match(
+            r"^(UID|SUMMARY|DTSTART|DTEND|LOCATION|DESCRIPTION|RRULE)"
+            r"(;[^:]*)?:(.*)$",
+            line,
+        )
         if not m:
             continue
         key, params, val = m.group(1), m.group(2) or "", m.group(3)
@@ -227,10 +244,17 @@ def _cal_url(c, cal):
 
 
 def cmd_calendars(c, _):
-    body = ('<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
-            "<d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>")
-    _, xml = _request("PROPFIND", c["base"], c["user"], body,
-                      {"Depth": "1", "Content-Type": "application/xml"})
+    body = (
+        '<?xml version="1.0"?><d:propfind xmlns:d="DAV:">'
+        "<d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>"
+    )
+    _, xml = _request(
+        "PROPFIND",
+        c["base"],
+        c["user"],
+        body,
+        {"Depth": "1", "Content-Type": "application/xml"},
+    )
     found = False
     for resp in re.findall(r"(?is)<[^>]*response>.*?</[^>]*response>", xml):
         if "calendar" not in resp.lower():
@@ -257,11 +281,19 @@ def _report(c, cal, start, end):
         '<c:filter><c:comp-filter name="VCALENDAR">'
         '<c:comp-filter name="VEVENT">'
         f'<c:time-range start="{start}" end="{end}"/>'
-        "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>")
-    _, xml = _request("REPORT", _cal_url(c, cal), c["user"], body,
-                      {"Depth": "1", "Content-Type": "application/xml"})
+        "</c:comp-filter></c:comp-filter></c:filter></c:calendar-query>"
+    )
+    _, xml = _request(
+        "REPORT",
+        _cal_url(c, cal),
+        c["user"],
+        body,
+        {"Depth": "1", "Content-Type": "application/xml"},
+    )
     events = []
-    for block in re.findall(r"(?is)<[^>]*calendar-data[^>]*>(.*?)</[^>]*calendar-data>", xml):
+    for block in re.findall(
+        r"(?is)<[^>]*calendar-data[^>]*>(.*?)</[^>]*calendar-data>", xml
+    ):
         ics = html.unescape(block).strip()
         if "BEGIN:VEVENT" in ics:
             events.append(parse_vevent(ics))
@@ -272,14 +304,18 @@ def _report(c, cal, start, end):
 def cmd_list(c, a):
     cal = a.calendar or c["cal"]
     now = datetime.now(timezone.utc)
-    frm = (datetime.fromisoformat(a.frm).replace(tzinfo=timezone.utc)
-           if a.frm else now)
-    to = (datetime.fromisoformat(a.to).replace(tzinfo=timezone.utc)
-          if a.to else now + timedelta(days=30))
-    events = _report(c, cal, frm.strftime("%Y%m%dT%H%M%SZ"),
-                     to.strftime("%Y%m%dT%H%M%SZ"))
+    frm = datetime.fromisoformat(a.frm).replace(tzinfo=timezone.utc) if a.frm else now
+    to = (
+        datetime.fromisoformat(a.to).replace(tzinfo=timezone.utc)
+        if a.to
+        else now + timedelta(days=30)
+    )
+    events = _report(
+        c, cal, frm.strftime("%Y%m%dT%H%M%SZ"), to.strftime("%Y%m%dT%H%M%SZ")
+    )
     if a.json:
         import json
+
         print(json.dumps(events, ensure_ascii=False, indent=2))
         return
     if not events:
@@ -299,11 +335,16 @@ def cmd_list(c, a):
 def cmd_add(c, a):
     cal = a.calendar or c["cal"]
     uid = make_uid(a.summary, a.start)
-    ics = build_ics(uid, a.summary, a.start, a.end, a.all_day or None,
-                    a.location, a.description)
+    ics = build_ics(
+        uid, a.summary, a.start, a.end, a.all_day or None, a.location, a.description
+    )
     status, _ = _request(
-        "PUT", f"{_cal_url(c, cal)}{uid}.ics", c["user"], ics,
-        {"Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*"})
+        "PUT",
+        f"{_cal_url(c, cal)}{uid}.ics",
+        c["user"],
+        ics,
+        {"Content-Type": "text/calendar; charset=utf-8", "If-None-Match": "*"},
+    )
     print(f"added ({status}) to '{cal}': {a.summary}")
     print(f"uid: {uid}")
 
@@ -322,8 +363,8 @@ def cmd_edit(c, a):
     all_day = a.all_day or None
     new = build_ics(a.uid, summary, start, end, all_day, location, description)
     status, _ = _request(
-        "PUT", url, c["user"], new,
-        {"Content-Type": "text/calendar; charset=utf-8"})
+        "PUT", url, c["user"], new, {"Content-Type": "text/calendar; charset=utf-8"}
+    )
     print(f"edited ({status}) in '{cal}': {summary}")
     print(f"uid: {a.uid}")
 
@@ -335,7 +376,9 @@ def cmd_delete(c, a):
 
 
 def main():
-    p = argparse.ArgumentParser(prog="nc-cal", description="Zero-dependency CalDAV client")
+    p = argparse.ArgumentParser(
+        prog="nc-cal", description="Zero-dependency CalDAV client"
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("calendars", help="list calendar collections")
@@ -371,8 +414,13 @@ def main():
 
     a = p.parse_args()
     c = cfg()
-    {"calendars": cmd_calendars, "list": cmd_list, "add": cmd_add,
-     "edit": cmd_edit, "delete": cmd_delete}[a.cmd](c, a)
+    {
+        "calendars": cmd_calendars,
+        "list": cmd_list,
+        "add": cmd_add,
+        "edit": cmd_edit,
+        "delete": cmd_delete,
+    }[a.cmd](c, a)
 
 
 if __name__ == "__main__":

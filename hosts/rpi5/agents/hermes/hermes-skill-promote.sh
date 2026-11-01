@@ -54,7 +54,10 @@ if ! systemctl --user is-active --quiet hermes.service; then
   exit 0
 fi
 
-[ -d "$HERMES_SKILLS_DIR" ] || { log "no skills dir at $HERMES_SKILLS_DIR"; exit 0; }
+[ -d "$HERMES_SKILLS_DIR" ] || {
+  log "no skills dir at $HERMES_SKILLS_DIR"
+  exit 0
+}
 
 # builtinNames = frontmatter names Hermes ships inside its binary (Source=builtin).
 # Fail SAFE: Hermes always has ~70 builtins; an empty list means the CLI failed

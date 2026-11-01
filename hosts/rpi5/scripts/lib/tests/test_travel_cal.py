@@ -26,13 +26,17 @@ def cfg_for(tmp_path=None, **kw):
 
 def test_the_nextcloud_web_base_is_derived_from_the_caldav_url():
     cfg = tc.Config.from_env(
-        {"NEXTCLOUD_CALDAV_URL": "https://h/nextcloud/remote.php/dav/calendars/nsimon"})
+        {"NEXTCLOUD_CALDAV_URL": "https://h/nextcloud/remote.php/dav/calendars/nsimon"}
+    )
     assert cfg.caldav_home == "https://h/nextcloud/remote.php/dav/calendars/nsimon/"
     assert cfg.nc_web == "https://h/nextcloud"
 
 
 def test_the_gate_url_loses_its_trailing_slash():
-    assert tc.Config.from_env({"TINY_LLM_GATE_URL": "http://x:4001/"}).gate == "http://x:4001"
+    assert (
+        tc.Config.from_env({"TINY_LLM_GATE_URL": "http://x:4001/"}).gate
+        == "http://x:4001"
+    )
 
 
 # ── candidate screening ───────────────────────────────────────────────────────
@@ -41,7 +45,7 @@ def test_the_gate_url_loses_its_trailing_slash():
 @pytest.mark.parametrize(
     ("frm", "subject", "expected"),
     [
-        ("noreply@airbnb.com", "Anything at all", True),        # sender domain
+        ("noreply@airbnb.com", "Anything at all", True),  # sender domain
         ("someone@example.com", "Your booking is confirmed", True),  # subject net
         ("someone@example.com", "Réservation confirmée", True),
         ("someone@example.com", "Newsletter", False),
@@ -52,25 +56,31 @@ def test_candidate_screening(frm, subject, expected):
     assert tc.is_candidate(frm, subject) is expected
 
 
-@pytest.mark.parametrize("subject", [
-    "Inquiry about your place",
-    "Request to book: Zen Flat",
-    "Pending: Reservation Request",
-    "Réservation en attente",
-    "Demande de réservation",
-    "Saved search: Lisbon",
-    "Price alert for CDG→LIS",
-])
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "Inquiry about your place",
+        "Request to book: Zen Flat",
+        "Pending: Reservation Request",
+        "Réservation en attente",
+        "Demande de réservation",
+        "Saved search: Lisbon",
+        "Price alert for CDG→LIS",
+    ],
+)
 def test_queries_are_dropped_deterministically(subject):
     # Never an event, whatever the model says — an inquiry is not a booking.
     assert tc.NEGATIVE_SUBJECT_RE.search(subject)
 
 
-@pytest.mark.parametrize("subject", [
-    "Reservation confirmed",
-    "Your trip to Lisbon",
-    "Booking confirmation AF1234",
-])
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "Reservation confirmed",
+        "Your trip to Lisbon",
+        "Booking confirmation AF1234",
+    ],
+)
 def test_confirmations_are_not_dropped(subject):
     assert not tc.NEGATIVE_SUBJECT_RE.search(subject)
 
@@ -88,8 +98,13 @@ def test_a_malformed_header_falls_back_to_the_raw_string():
 
 @pytest.mark.parametrize(
     ("frm", "platform"),
-    [("noreply@airbnb.com", "Airbnb"), ("x@sncf-connect.com", "SNCF Connect"),
-     ("x@oui.sncf", "SNCF"), ("x@ba.com", "British Airways"), ("x@unknown.com", "")],
+    [
+        ("noreply@airbnb.com", "Airbnb"),
+        ("x@sncf-connect.com", "SNCF Connect"),
+        ("x@oui.sncf", "SNCF"),
+        ("x@ba.com", "British Airways"),
+        ("x@unknown.com", ""),
+    ],
 )
 def test_the_platform_label_comes_from_the_sender(frm, platform):
     assert tc.source_platform(frm) == platform
@@ -104,7 +119,8 @@ def test_a_fenced_json_reply_is_parsed():
 
 def test_json_embedded_in_prose_is_recovered():
     assert tc._parse_json('Sure! {"is_booking": false} hope that helps') == {
-        "is_booking": False}
+        "is_booking": False
+    }
     assert tc._parse_json('here you go: [{"a": 1}]') == [{"a": 1}]
 
 
@@ -120,7 +136,7 @@ def test_unparseable_output_returns_none_and_never_raises():
     [
         ({"is_booking": True}, [{"is_booking": True}]),
         ([{"a": 1}, "junk", {"b": 2}], [{"a": 1}, {"b": 2}]),
-        ({"bookings": [{"a": 1}]}, [{"a": 1}]),          # a round-trip, wrapped
+        ({"bookings": [{"a": 1}]}, [{"a": 1}]),  # a round-trip, wrapped
         ({"results": [{"a": 1}]}, [{"a": 1}]),
         (None, []),
         ("nonsense", []),
@@ -213,10 +229,18 @@ def test_the_confirmation_and_the_reminder_of_one_stay_share_a_uid():
     # This is what makes the CalDAV PUT idempotent: three emails about one trip
     # must not become three events. Confirmation codes are missing from some of
     # them, so they cannot be the identity.
-    confirmation = {"type": "stay", "start": "2026-09-01", "end": "2026-09-08",
-                    "confirmation_code": "HMABC123"}
-    reminder = {"type": "stay", "start": "2026-09-01T00:00", "end": "2026-09-08",
-                "confirmation_code": ""}
+    confirmation = {
+        "type": "stay",
+        "start": "2026-09-01",
+        "end": "2026-09-08",
+        "confirmation_code": "HMABC123",
+    }
+    reminder = {
+        "type": "stay",
+        "start": "2026-09-01T00:00",
+        "end": "2026-09-08",
+        "confirmation_code": "",
+    }
     assert tc.booking_uid(confirmation) == tc.booking_uid(reminder)
 
 
@@ -242,50 +266,93 @@ def ics_lines(b, uid="uid@nic-os"):
 
 
 def test_a_stay_becomes_an_all_day_event():
-    lines = ics_lines({"type": "stay", "start": "2026-09-01", "end": "2026-09-08",
-                       "all_day": True, "title": "Airbnb — Lisbon"})
+    lines = ics_lines(
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "end": "2026-09-08",
+            "all_day": True,
+            "title": "Airbnb — Lisbon",
+        }
+    )
     assert "DTSTART;VALUE=DATE:20260901" in lines
     assert "DTEND;VALUE=DATE:20260908" in lines
 
 
 def test_a_stay_with_both_times_becomes_a_timed_event():
-    lines = ics_lines({"type": "stay", "start": "2026-09-01", "end": "2026-09-08",
-                       "all_day": True, "checkin_time": "16:00",
-                       "checkout_time": "10:30", "title": "Hotel"})
+    lines = ics_lines(
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "end": "2026-09-08",
+            "all_day": True,
+            "checkin_time": "16:00",
+            "checkout_time": "10:30",
+            "title": "Hotel",
+        }
+    )
     assert "DTSTART:20260901T160000" in lines
     assert "DTEND:20260908T103000" in lines
 
 
 def test_a_stay_with_only_one_time_stays_all_day():
-    lines = ics_lines({"type": "stay", "start": "2026-09-01", "end": "2026-09-08",
-                       "all_day": True, "checkin_time": "16:00", "title": "Hotel"})
+    lines = ics_lines(
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "end": "2026-09-08",
+            "all_day": True,
+            "checkin_time": "16:00",
+            "title": "Hotel",
+        }
+    )
     assert "DTSTART;VALUE=DATE:20260901" in lines
 
 
 def test_a_missing_end_gets_a_default_duration():
     # sabre-dav rejects a zero-length event.
     assert "DTEND:20260901T100000" in ics_lines(
-        {"type": "train", "start": "2026-09-01T08:00", "title": "OUIGO"})
+        {"type": "train", "start": "2026-09-01T08:00", "title": "OUIGO"}
+    )
     assert "DTEND;VALUE=DATE:20260902" in ics_lines(
-        {"type": "stay", "start": "2026-09-01", "all_day": True, "title": "Hotel"})
+        {"type": "stay", "start": "2026-09-01", "all_day": True, "title": "Hotel"}
+    )
 
 
 def test_a_reversed_span_is_corrected_rather_than_rejected():
-    lines = ics_lines({"type": "flight", "start": "2026-09-01T20:00",
-                       "end": "2026-09-01T08:00", "title": "AF1234"})
+    lines = ics_lines(
+        {
+            "type": "flight",
+            "start": "2026-09-01T20:00",
+            "end": "2026-09-01T08:00",
+            "title": "AF1234",
+        }
+    )
     assert "DTEND:20260901T220000" in lines
 
 
 def test_a_mixed_timezone_span_does_not_crash():
     # One side aware, the other naive → TypeError on comparison; must fall back.
-    lines = ics_lines({"type": "flight", "start": "2026-09-01T08:00+02:00",
-                       "end": "2026-09-01T11:00", "title": "AF1234"})
+    lines = ics_lines(
+        {
+            "type": "flight",
+            "start": "2026-09-01T08:00+02:00",
+            "end": "2026-09-01T11:00",
+            "title": "AF1234",
+        }
+    )
     assert any(line.startswith("DTEND:") for line in lines)
 
 
 def test_an_aware_datetime_is_converted_to_utc():
-    lines = ics_lines({"type": "flight", "start": "2026-09-01T08:00+02:00",
-                       "end": "2026-09-01T11:00+02:00", "title": "AF1234"})
+    lines = ics_lines(
+        {
+            "type": "flight",
+            "start": "2026-09-01T08:00+02:00",
+            "end": "2026-09-01T11:00+02:00",
+            "title": "AF1234",
+        }
+    )
     assert "DTSTART:20260901T060000Z" in lines
     assert "DTEND:20260901T090000Z" in lines
 
@@ -297,33 +364,65 @@ def test_an_unparseable_start_raises_so_the_caller_can_skip_permanently():
 
 def test_the_platform_prefixes_the_summary_unless_already_present():
     assert "SUMMARY:Airbnb · Zen Flat" in ics_lines(
-        {"type": "stay", "start": "2026-09-01", "all_day": True,
-         "title": "Zen Flat", "_platform": "Airbnb"})
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "all_day": True,
+            "title": "Zen Flat",
+            "_platform": "Airbnb",
+        }
+    )
     assert "SUMMARY:Airbnb — Lisbon" in ics_lines(
-        {"type": "stay", "start": "2026-09-01", "all_day": True,
-         "title": "Airbnb — Lisbon", "_platform": "Airbnb"})
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "all_day": True,
+            "title": "Airbnb — Lisbon",
+            "_platform": "Airbnb",
+        }
+    )
 
 
 def test_the_platform_becomes_a_category():
     assert "CATEGORIES:Airbnb" in ics_lines(
-        {"type": "stay", "start": "2026-09-01", "all_day": True,
-         "title": "x", "_platform": "Airbnb"})
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "all_day": True,
+            "title": "x",
+            "_platform": "Airbnb",
+        }
+    )
 
 
 def test_transit_is_categorised_as_transports_whatever_the_platform():
     for platform in ("Trainline", ""):
         assert "CATEGORIES:Transports" in ics_lines(
-            {"type": "train", "start": "2026-09-01T10:00", "title": "x",
-             "_platform": platform})
+            {
+                "type": "train",
+                "start": "2026-09-01T10:00",
+                "title": "x",
+                "_platform": platform,
+            }
+        )
 
 
 def test_the_description_names_the_source_email():
-    body = "\r\n".join(ics_lines({
-        "type": "stay", "start": "2026-09-01", "all_day": True, "title": "x",
-        "confirmation_code": "REF1", "notes": "2 guests",
-        "_source_from": "noreply@airbnb.com", "_source_subject": "Reservation confirmed",
-        "_source_date": "2026-08-01",
-    }))
+    body = "\r\n".join(
+        ics_lines(
+            {
+                "type": "stay",
+                "start": "2026-09-01",
+                "all_day": True,
+                "title": "x",
+                "confirmation_code": "REF1",
+                "notes": "2 guests",
+                "_source_from": "noreply@airbnb.com",
+                "_source_subject": "Reservation confirmed",
+                "_source_date": "2026-08-01",
+            }
+        )
+    )
     assert "Ref: REF1" in body
     assert "2 guests" in body
     assert "Reservation confirmed" in body
@@ -332,8 +431,14 @@ def test_the_description_names_the_source_email():
 
 @pytest.mark.parametrize(
     ("raw", "expected"),
-    [("a;b", "a\\;b"), ("a,b", "a\\,b"), ("a\\b", "a\\\\b"), ("a\nb", "a\\nb"),
-     ("a\r\nb", "a\\nb"), (None, "")],
+    [
+        ("a;b", "a\\;b"),
+        ("a,b", "a\\,b"),
+        ("a\\b", "a\\\\b"),
+        ("a\nb", "a\\nb"),
+        ("a\r\nb", "a\\nb"),
+        (None, ""),
+    ],
 )
 def test_ical_special_characters_are_escaped(raw, expected):
     assert tc.esc(raw) == expected
@@ -384,8 +489,11 @@ class FakeHttp:
 def test_a_put_targets_the_uid_named_resource(tmp_path):
     pw = tmp_path / "pw"
     pw.write_text("secret\n")
-    cfg = tc.Config(nc_cal="travel", nc_pass_file=str(pw),
-                    caldav_home="https://h/dav/calendars/nsimon/")
+    cfg = tc.Config(
+        nc_cal="travel",
+        nc_pass_file=str(pw),
+        caldav_home="https://h/dav/calendars/nsimon/",
+    )
     http = FakeHttp(204)
     assert tc.caldav_put(cfg, "uid@nic-os", "BEGIN:VCALENDAR", opener=http) == 204
     req = http.requests[0]
@@ -419,7 +527,8 @@ def test_the_calendar_list_is_parsed_from_the_propfind_response():
 def test_the_event_link_points_at_the_trip_month():
     cfg = tc.Config(caldav_home="https://h/nextcloud/remote.php/dav/calendars/nsimon/")
     assert tc.event_link(cfg, {"start": "2026-09-01"}) == (
-        "https://h/nextcloud/apps/calendar/dayGridMonth/2026-09-01")
+        "https://h/nextcloud/apps/calendar/dayGridMonth/2026-09-01"
+    )
 
 
 # ── body extraction ───────────────────────────────────────────────────────────
@@ -428,8 +537,11 @@ def test_the_event_link_points_at_the_trip_month():
 def message(parts, headers=()):
     lines = ["From: sender@airbnb.com", "Subject: Reservation confirmed"]
     lines += list(headers)
-    lines += ["MIME-Version: 1.0",
-              'Content-Type: multipart/alternative; boundary="B"', ""]
+    lines += [
+        "MIME-Version: 1.0",
+        'Content-Type: multipart/alternative; boundary="B"',
+        "",
+    ]
     for ct, payload in parts:
         lines += ["--B", f"Content-Type: {ct}; charset=utf-8", "", payload]
     lines.append("--B--")
@@ -471,16 +583,26 @@ class FakeImap:
         if "HEADER.FIELDS" in what:
             data = []
             for num, msg in self.messages:
-                head = "\r\n".join(
-                    f"{k}: {msg.get(k)}" for k in ("From", "Subject", "Message-ID")
-                    if msg.get(k)
-                ).encode() + b"\r\n\r\n"
+                head = (
+                    "\r\n".join(
+                        f"{k}: {msg.get(k)}"
+                        for k in ("From", "Subject", "Message-ID")
+                        if msg.get(k)
+                    ).encode()
+                    + b"\r\n\r\n"
+                )
                 struct = " ".join(
                     f'("{p.get_content_maintype().upper()}" "{p.get_content_subtype().upper()}"'
                     f' NIL NIL NIL "BASE64" {len(p.get_payload())})'
-                    for p in msg.walk() if not p.is_multipart())
-                data.append((num + f" (BODYSTRUCTURE ({struct}) BODY[HEADER.FIELDS".encode(),
-                             head))
+                    for p in msg.walk()
+                    if not p.is_multipart()
+                )
+                data.append(
+                    (
+                        num + f" (BODYSTRUCTURE ({struct}) BODY[HEADER.FIELDS".encode(),
+                        head,
+                    )
+                )
             return "OK", data
         for num, msg in self.messages:
             if num == spec:
@@ -492,16 +614,24 @@ class FakeImap:
 
 
 def booking_mail(num, mid, subject="Reservation confirmed", frm="noreply@airbnb.com"):
-    msg = message([("text/plain", "your stay is confirmed")],
-                  headers=[f"Message-ID: {mid}", "Date: Sat, 01 Aug 2026 10:00:00 +0000"])
+    msg = message(
+        [("text/plain", "your stay is confirmed")],
+        headers=[f"Message-ID: {mid}", "Date: Sat, 01 Aug 2026 10:00:00 +0000"],
+    )
     del msg["From"], msg["Subject"]
     msg["From"] = frm
     msg["Subject"] = subject
     return (num, msg)
 
 
-STAY = {"is_booking": True, "type": "stay", "start": "2026-09-01",
-        "end": "2026-09-08", "all_day": True, "title": "Airbnb — Lisbon"}
+STAY = {
+    "is_booking": True,
+    "type": "stay",
+    "start": "2026-09-01",
+    "end": "2026-09-08",
+    "all_day": True,
+    "title": "Airbnb — Lisbon",
+}
 
 
 def fresh_state():
@@ -513,7 +643,10 @@ def test_a_confirmed_booking_is_written_and_the_message_marked_seen():
     state = fresh_state()
     puts = []
     results = tc.scan(
-        cfg_for(nc_cal="travel"), imap, state, dry_run=False,
+        cfg_for(nc_cal="travel"),
+        imap,
+        state,
+        dry_run=False,
         extract=lambda text: [dict(STAY)],
         put=lambda uid, ics: puts.append((uid, ics)),
         now=NOW,
@@ -532,8 +665,15 @@ def test_a_caldav_failure_leaves_the_message_unseen_for_retry():
     def failing_put(uid, ics):
         raise OSError("nextcloud down")
 
-    results = tc.scan(cfg_for(nc_cal="travel"), imap, state, dry_run=False,
-                      extract=lambda text: [dict(STAY)], put=failing_put, now=NOW)
+    results = tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        state,
+        dry_run=False,
+        extract=lambda text: [dict(STAY)],
+        put=failing_put,
+        now=NOW,
+    )
     assert results[0][2] is False
     assert state["seen"] == []
 
@@ -545,9 +685,13 @@ def test_a_malformed_booking_is_a_permanent_skip():
     state = fresh_state()
     puts = []
     results = tc.scan(
-        cfg_for(nc_cal="travel"), imap, state, dry_run=False,
+        cfg_for(nc_cal="travel"),
+        imap,
+        state,
+        dry_run=False,
         extract=lambda text: [{**STAY, "start": "next tuesday"}],
-        put=lambda uid, ics: puts.append(uid), now=NOW,
+        put=lambda uid, ics: puts.append(uid),
+        now=NOW,
     )
     assert results == []
     assert puts == []
@@ -559,9 +703,15 @@ def test_a_trip_that_already_ended_is_dropped():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     state = fresh_state()
     puts = []
-    tc.scan(cfg_for(nc_cal="travel"), imap, state, dry_run=False,
-            extract=lambda text: [{**STAY, "start": "2026-01-01", "end": "2026-01-08"}],
-            put=lambda uid, ics: puts.append(uid), now=NOW)
+    tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        state,
+        dry_run=False,
+        extract=lambda text: [{**STAY, "start": "2026-01-01", "end": "2026-01-08"}],
+        put=lambda uid, ics: puts.append(uid),
+        now=NOW,
+    )
     assert puts == []
     assert state["seen"] == ["<m1@x>"]
 
@@ -569,18 +719,30 @@ def test_a_trip_that_already_ended_is_dropped():
 def test_a_trip_ending_within_the_grace_window_is_kept():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     puts = []
-    tc.scan(cfg_for(nc_cal="travel"), imap, fresh_state(), dry_run=False,
-            extract=lambda text: [{**STAY, "start": "2026-08-01", "end": "2026-08-05"}],
-            put=lambda uid, ics: puts.append(uid), now=NOW)
+    tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        fresh_state(),
+        dry_run=False,
+        extract=lambda text: [{**STAY, "start": "2026-08-01", "end": "2026-08-05"}],
+        put=lambda uid, ics: puts.append(uid),
+        now=NOW,
+    )
     assert len(puts) == 1
 
 
 def test_a_non_booking_answer_writes_nothing():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     puts = []
-    tc.scan(cfg_for(nc_cal="travel"), imap, fresh_state(), dry_run=False,
-            extract=lambda text: [{"is_booking": False}], put=lambda u, i: puts.append(u),
-            now=NOW)
+    tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        fresh_state(),
+        dry_run=False,
+        extract=lambda text: [{"is_booking": False}],
+        put=lambda u, i: puts.append(u),
+        now=NOW,
+    )
     assert puts == []
 
 
@@ -588,27 +750,48 @@ def test_a_non_travel_type_writes_nothing():
     # Concerts, restaurants and laser tag are not travel.
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     puts = []
-    tc.scan(cfg_for(nc_cal="travel"), imap, fresh_state(), dry_run=False,
-            extract=lambda text: [{**STAY, "type": "concert"}],
-            put=lambda u, i: puts.append(u), now=NOW)
+    tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        fresh_state(),
+        dry_run=False,
+        extract=lambda text: [{**STAY, "type": "concert"}],
+        put=lambda u, i: puts.append(u),
+        now=NOW,
+    )
     assert puts == []
 
 
 def test_two_emails_about_one_booking_write_once_per_scan():
     imap = FakeImap([booking_mail(b"1", "<m1@x>"), booking_mail(b"2", "<m2@x>")])
     puts = []
-    tc.scan(cfg_for(nc_cal="travel"), imap, fresh_state(), dry_run=False,
-            extract=lambda text: [dict(STAY)], put=lambda uid, i: puts.append(uid),
-            now=NOW)
+    tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        fresh_state(),
+        dry_run=False,
+        extract=lambda text: [dict(STAY)],
+        put=lambda uid, i: puts.append(uid),
+        now=NOW,
+    )
     assert len(puts) == 1
 
 
 def test_a_query_email_is_screened_out_before_the_model_is_asked():
-    imap = FakeImap([booking_mail(b"1", "<m1@x>", subject="Pending: Reservation Request")])
+    imap = FakeImap(
+        [booking_mail(b"1", "<m1@x>", subject="Pending: Reservation Request")]
+    )
     state = fresh_state()
     asked = []
-    tc.scan(cfg_for(), imap, state, dry_run=False,
-            extract=lambda text: asked.append(text) or [], put=lambda u, i: None, now=NOW)
+    tc.scan(
+        cfg_for(),
+        imap,
+        state,
+        dry_run=False,
+        extract=lambda text: asked.append(text) or [],
+        put=lambda u, i: None,
+        now=NOW,
+    )
     assert asked == []
     assert state["seen"] == ["<m1@x>"]  # and never asked again
 
@@ -617,17 +800,30 @@ def test_an_already_seen_message_is_skipped():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     state = {"seen": ["<m1@x>"], "last_scan": 0}
     asked = []
-    tc.scan(cfg_for(), imap, state, dry_run=False,
-            extract=lambda text: asked.append(text) or [], put=lambda u, i: None, now=NOW)
+    tc.scan(
+        cfg_for(),
+        imap,
+        state,
+        dry_run=False,
+        extract=lambda text: asked.append(text) or [],
+        put=lambda u, i: None,
+        now=NOW,
+    )
     assert asked == []
 
 
 def test_dry_run_never_writes():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     puts = []
-    results = tc.scan(cfg_for(nc_cal="travel"), imap, fresh_state(), dry_run=True,
-                      extract=lambda text: [dict(STAY)],
-                      put=lambda uid, ics: puts.append(uid), now=NOW)
+    results = tc.scan(
+        cfg_for(nc_cal="travel"),
+        imap,
+        fresh_state(),
+        dry_run=True,
+        extract=lambda text: [dict(STAY)],
+        put=lambda uid, ics: puts.append(uid),
+        now=NOW,
+    )
     assert puts == []
     assert results[0][2] is False
 
@@ -641,33 +837,60 @@ def test_an_upstream_outage_stops_the_scan_and_propagates():
         raise tc.UpstreamDown("beast asleep")
 
     with pytest.raises(tc.UpstreamDown):
-        tc.scan(cfg_for(), imap, state, dry_run=False, extract=down,
-                put=lambda u, i: None, now=NOW)
+        tc.scan(
+            cfg_for(),
+            imap,
+            state,
+            dry_run=False,
+            extract=down,
+            put=lambda u, i: None,
+            now=NOW,
+        )
     assert state["seen"] == []
 
 
 def test_an_extract_error_that_is_not_an_outage_skips_only_that_message():
     imap = FakeImap([booking_mail(b"1", "<m1@x>")])
     state = fresh_state()
-    tc.scan(cfg_for(), imap, state, dry_run=False,
-            extract=lambda text: (_ for _ in ()).throw(ValueError("weird")),
-            put=lambda u, i: None, now=NOW)
+    tc.scan(
+        cfg_for(),
+        imap,
+        state,
+        dry_run=False,
+        extract=lambda text: (_ for _ in ()).throw(ValueError("weird")),
+        put=lambda u, i: None,
+        now=NOW,
+    )
     # Not marked seen: the message is retried, but the scan continued.
     assert state["seen"] == []
 
 
 def test_the_first_scan_searches_back_over_the_lookback_window():
     imap = FakeImap([])
-    tc.scan(cfg_for(lookback_days=365), imap, fresh_state(), dry_run=True,
-            extract=lambda t: [], put=lambda u, i: None, now=NOW)
+    tc.scan(
+        cfg_for(lookback_days=365),
+        imap,
+        fresh_state(),
+        dry_run=True,
+        extract=lambda t: [],
+        put=lambda u, i: None,
+        now=NOW,
+    )
     assert imap.searched == ("SINCE", "06-Aug-2025")
 
 
 def test_a_later_scan_searches_from_two_days_before_the_last_one():
     imap = FakeImap([])
     last = int(datetime(2026, 8, 5, tzinfo=timezone.utc).timestamp())
-    tc.scan(cfg_for(), imap, {"seen": [], "last_scan": last}, dry_run=True,
-            extract=lambda t: [], put=lambda u, i: None, now=NOW)
+    tc.scan(
+        cfg_for(),
+        imap,
+        {"seen": [], "last_scan": last},
+        dry_run=True,
+        extract=lambda t: [],
+        put=lambda u, i: None,
+        now=NOW,
+    )
     assert imap.searched == ("SINCE", "03-Aug-2026")
 
 
@@ -695,16 +918,24 @@ def test_a_missing_or_corrupt_state_file_starts_clean(tmp_path):
 
 
 def test_a_booking_line_reads_as_a_summary():
-    line = tc.fmt_booking({"type": "stay", "start": "2026-09-01", "end": "2026-09-08",
-                           "title": "Airbnb — Lisbon", "location": "Lisbon",
-                           "confirmation_code": "REF1"})
+    line = tc.fmt_booking(
+        {
+            "type": "stay",
+            "start": "2026-09-01",
+            "end": "2026-09-08",
+            "title": "Airbnb — Lisbon",
+            "location": "Lisbon",
+            "confirmation_code": "REF1",
+        }
+    )
     assert line == "stay  2026-09-01 → 2026-09-08  Airbnb — Lisbon @ Lisbon [REF1]"
 
 
 def test_the_telegram_summary_escapes_html_and_links_each_event():
     cfg = tc.Config(caldav_home="https://h/nextcloud/remote.php/dav/calendars/n/")
-    msg = tc.telegram_summary(cfg, [({"type": "stay", "start": "2026-09-01",
-                                      "title": "A & B"}, "uid", True)])
+    msg = tc.telegram_summary(
+        cfg, [({"type": "stay", "start": "2026-09-01", "title": "A & B"}, "uid", True)]
+    )
     assert "A &amp; B" in msg
     assert "apps/calendar/dayGridMonth/2026-09-01" in msg
 
@@ -720,8 +951,11 @@ def test_the_summary_goes_through_the_shared_one_shot_sender():
     # Not hand-rolled here: shared/notify.nix `send` owns parse mode, urlencoding
     # and timeouts for every one-shot sender.
     calls = []
-    tc.telegram(tc.Config(telegram_send="/nix/store/x/bin/send"), "hi",
-                run=lambda argv, **kw: calls.append((argv, kw)))
+    tc.telegram(
+        tc.Config(telegram_send="/nix/store/x/bin/send"),
+        "hi",
+        run=lambda argv, **kw: calls.append((argv, kw)),
+    )
     argv, kw = calls[0]
     assert argv == ["/nix/store/x/bin/send", "hi"]
     assert kw["check"] is False and kw["timeout"] == 30
@@ -741,42 +975,64 @@ def test_a_telegram_failure_never_propagates(capsys):
 def with_pdf(item, name="ticket.pdf", payload=b"%PDF-1.7 ticket"):
     num, msg = item
     import base64 as b64
+
     raw = msg.as_string().replace(
         "--B--",
         "--B\r\nContent-Type: application/pdf\r\n"
         f'Content-Disposition: attachment; filename="{name}"\r\n'
         "Content-Transfer-Encoding: base64\r\n\r\n"
-        + b64.b64encode(payload).decode() + "\r\n--B--")
+        + b64.b64encode(payload).decode()
+        + "\r\n--B--",
+    )
     return num, email.message_from_string(raw)
 
 
 def doc_mail(num, mid, subject="Votre facture", frm="factures@edf.fr"):
-    return with_pdf(booking_mail(num, mid, subject=subject, frm=frm), name="facture.pdf")
+    return with_pdf(
+        booking_mail(num, mid, subject=subject, frm=frm), name="facture.pdf"
+    )
 
 
 def filing_cfg(tmp_path, **kw):
     dest = tmp_path / "ingest"
     dest.mkdir()
-    return cfg_for(tmp_path, nc_cal="travel", papra_dest=str(dest),
-                   papra_poll_state=str(tmp_path / "poll-seen"), **kw), dest
+    return cfg_for(
+        tmp_path,
+        nc_cal="travel",
+        papra_dest=str(dest),
+        papra_poll_state=str(tmp_path / "poll-seen"),
+        **kw,
+    ), dest
 
 
-def run_scan(cfg, imap, state=None, extract=lambda t: [dict(STAY)], judge=None,
-             dry_run=False):
+def run_scan(
+    cfg, imap, state=None, extract=lambda t: [dict(STAY)], judge=None, dry_run=False
+):
     filed, asked = [], []
 
     def judge_fn(text):
         asked.append(text)
         return (judge or (lambda t: None))(text)
 
-    tc.scan(cfg, imap, state or fresh_state(), dry_run=dry_run, extract=extract,
-            put=lambda u, i: None, now=NOW, judge=judge_fn, filed=filed,
-            chown=lambda p: None)
+    tc.scan(
+        cfg,
+        imap,
+        state or fresh_state(),
+        dry_run=dry_run,
+        extract=extract,
+        put=lambda u, i: None,
+        now=NOW,
+        judge=judge_fn,
+        filed=filed,
+        chown=lambda p: None,
+    )
     return filed, asked
 
 
 def test_a_pdf_is_detected_from_bodystructure_without_a_fetch():
-    assert tc.maybe_has_doc('(("TEXT" "PLAIN" NIL NIL NIL "7BIT" 10)("APPLICATION" "PDF" NIL))')
+    assert tc.maybe_has_doc(
+        '(("TEXT" "PLAIN" NIL NIL NIL "7BIT" 10)("APPLICATION" "PDF" NIL))'
+    )
     assert not tc.maybe_has_doc('("TEXT" "HTML" NIL NIL NIL "7BIT" 900)')
     assert not tc.maybe_has_doc('("IMAGE" "PNG" NIL NIL NIL "BASE64" 1200)')  # a logo
     assert tc.maybe_has_doc('("IMAGE" "JPEG" NIL NIL NIL "BASE64" 450000)')
@@ -788,9 +1044,14 @@ def test_documents_are_named_from_the_trip_or_the_judge():
     assert tc.trip_doc_name("ticket.pdf", b) == "2026-08-03 SNCF Connect - ticket.pdf"
     assert tc.trip_doc_name("ticket.pdf", {}) == "ticket.pdf"
     judged = {"issuer": "EDF", "doc_date": "2026-07-31"}
-    assert tc.judged_doc_name("f.pdf", judged, date(2026, 8, 1)) == "2026-07-31 EDF - f.pdf"
-    assert tc.judged_doc_name("f.pdf", {"doc_date": "juillet"}, date(2026, 8, 1)) == \
-        "2026-08-01 - f.pdf"
+    assert (
+        tc.judged_doc_name("f.pdf", judged, date(2026, 8, 1))
+        == "2026-07-31 EDF - f.pdf"
+    )
+    assert (
+        tc.judged_doc_name("f.pdf", {"doc_date": "juillet"}, date(2026, 8, 1))
+        == "2026-08-01 - f.pdf"
+    )
 
 
 def test_a_confirmed_trip_files_its_ticket(tmp_path):
@@ -804,11 +1065,17 @@ def test_a_confirmed_trip_files_its_ticket(tmp_path):
 
 def test_a_reminder_for_a_known_trip_still_files_its_document(tmp_path):
     cfg, dest = filing_cfg(tmp_path)
-    imap = FakeImap([with_pdf(booking_mail(b"1", "<m1@x>")),
-                     with_pdf(booking_mail(b"2", "<m2@x>"), name="boarding.pdf")])
+    imap = FakeImap(
+        [
+            with_pdf(booking_mail(b"1", "<m1@x>")),
+            with_pdf(booking_mail(b"2", "<m2@x>"), name="boarding.pdf"),
+        ]
+    )
     filed, _ = run_scan(cfg, imap)
-    assert sorted(filed) == ["2026-09-01 Airbnb - boarding.pdf",
-                             "2026-09-01 Airbnb - ticket.pdf"]
+    assert sorted(filed) == [
+        "2026-09-01 Airbnb - boarding.pdf",
+        "2026-09-01 Airbnb - ticket.pdf",
+    ]
 
 
 def test_a_document_the_label_feeder_already_filed_is_skipped(tmp_path):
@@ -823,9 +1090,12 @@ def test_other_mail_with_a_document_is_filed_when_judged_worth_keeping(tmp_path)
     state = fresh_state()
     extracted = []
     filed, asked = run_scan(
-        cfg, FakeImap([doc_mail(b"1", "<m1@x>")]), state=state,
+        cfg,
+        FakeImap([doc_mail(b"1", "<m1@x>")]),
+        state=state,
         extract=lambda t: extracted.append(t) or [],
-        judge=lambda t: {"archive": True, "issuer": "EDF", "doc_date": "2026-07-31"})
+        judge=lambda t: {"archive": True, "issuer": "EDF", "doc_date": "2026-07-31"},
+    )
     assert filed == ["2026-07-31 EDF - facture.pdf"]
     assert len(asked) == 1 and extracted == []  # never through the trip parser
     assert state["seen"] == ["<m1@x>"]
@@ -833,8 +1103,11 @@ def test_other_mail_with_a_document_is_filed_when_judged_worth_keeping(tmp_path)
 
 def test_marketing_is_judged_and_not_filed(tmp_path):
     cfg, dest = filing_cfg(tmp_path)
-    filed, asked = run_scan(cfg, FakeImap([doc_mail(b"1", "<m1@x>")]),
-                            judge=lambda t: {"archive": False, "kind": "brochure"})
+    filed, asked = run_scan(
+        cfg,
+        FakeImap([doc_mail(b"1", "<m1@x>")]),
+        judge=lambda t: {"archive": False, "kind": "brochure"},
+    )
     assert filed == [] and len(asked) == 1
     assert list(dest.iterdir()) == []
 
@@ -849,15 +1122,18 @@ def test_file_all_mail_off_only_files_trips(tmp_path):
 
 def test_no_papra_dest_is_a_pure_calendar_sync(tmp_path):
     cfg = cfg_for(tmp_path, nc_cal="travel")
-    filed, asked = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>")),
-                                           doc_mail(b"2", "<m2@x>")]))
+    filed, asked = run_scan(
+        cfg,
+        FakeImap([with_pdf(booking_mail(b"1", "<m1@x>")), doc_mail(b"2", "<m2@x>")]),
+    )
     assert filed == [] and asked == []
 
 
 def test_a_dry_run_lists_documents_without_writing_them(tmp_path):
     cfg, dest = filing_cfg(tmp_path)
-    filed, _ = run_scan(cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>"))]),
-                        dry_run=True)
+    filed, _ = run_scan(
+        cfg, FakeImap([with_pdf(booking_mail(b"1", "<m1@x>"))]), dry_run=True
+    )
     assert filed == ["2026-09-01 Airbnb - ticket.pdf (application/pdf, 15B)"]
     assert list(dest.iterdir()) == []
 

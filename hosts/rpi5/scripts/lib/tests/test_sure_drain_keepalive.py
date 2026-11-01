@@ -9,10 +9,20 @@ from nicos_scripts.sure import drain_keepalive as dk
 
 
 def cfg(**kw):
-    base = dict(redis_cli="redis-cli", redis_db=2, curl="curl",
-                wake_url="http://127.0.0.1:13334/sure/up", timeout=90,
-                queues=("scheduled", "high_priority", "medium_priority",
-                        "low_priority", "default"))
+    base = dict(
+        redis_cli="redis-cli",
+        redis_db=2,
+        curl="curl",
+        wake_url="http://127.0.0.1:13334/sure/up",
+        timeout=90,
+        queues=(
+            "scheduled",
+            "high_priority",
+            "medium_priority",
+            "low_priority",
+            "default",
+        ),
+    )
     base.update(kw)
     return dk.Config(**base)
 
@@ -38,17 +48,22 @@ def wake_urls(calls):
 
 # ── must wake ────────────────────────────────────────────────────────────────
 
+
 def test_a_backlog_triggers_exactly_one_wake():
     calls = []
-    dk.main(env={}, run=fake_run({"medium_priority": 946}, calls),
-            log=lambda m: None)
+    dk.main(env={}, run=fake_run({"medium_priority": 946}, calls), log=lambda m: None)
     assert wake_urls(calls) == ["http://127.0.0.1:13334/sure/up"]
 
 
 def test_work_on_any_watched_queue_wakes():
     """Not just the enrichment queue — a stuck sync backlog matters too."""
-    for q in ("scheduled", "high_priority", "medium_priority",
-              "low_priority", "default"):
+    for q in (
+        "scheduled",
+        "high_priority",
+        "medium_priority",
+        "low_priority",
+        "default",
+    ):
         calls = []
         dk.main(env={}, run=fake_run({q: 1}, calls), log=lambda m: None)
         assert wake_urls(calls), f"{q} did not wake"
@@ -61,6 +76,7 @@ def test_the_wake_hits_the_proxy_not_the_backend():
 
 
 # ── must NOT wake ────────────────────────────────────────────────────────────
+
 
 def test_empty_queues_do_not_wake():
     calls = []
@@ -84,6 +100,7 @@ def test_only_llen_is_used_so_future_dated_jobs_cannot_pin_it_awake():
 
 
 # ── an unreadable Redis must not read as "empty" ─────────────────────────────
+
 
 def test_unparseable_llen_is_none_not_zero():
     def run(cmd):
@@ -109,10 +126,14 @@ def test_an_unreadable_redis_fails_loudly_and_does_not_wake():
 
 # ── reporting ────────────────────────────────────────────────────────────────
 
+
 def test_the_log_line_names_the_busy_queues_biggest_first():
     msgs = []
-    dk.main(env={}, run=fake_run({"medium_priority": 946, "high_priority": 15}),
-            log=msgs.append)
+    dk.main(
+        env={},
+        run=fake_run({"medium_priority": 946, "high_priority": 15}),
+        log=msgs.append,
+    )
     assert "961 jobs pending" in msgs[0]
     assert msgs[0].index("medium_priority=946") < msgs[0].index("high_priority=15")
 
@@ -122,6 +143,7 @@ def test_empty_queues_are_left_out_of_the_summary():
 
 
 # ── config ───────────────────────────────────────────────────────────────────
+
 
 def test_defaults_need_no_env():
     c = dk.Config.from_env({})

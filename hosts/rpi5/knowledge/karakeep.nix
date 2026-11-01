@@ -19,18 +19,25 @@
 # keeps link crawling, readable-text extraction, favicons, AI tagging/summaries,
 # embeddings and full-text search without it. To restore screenshots later,
 # offload the browser to beast (x86_64, cached) and set BROWSER_WEB_URL.
-{ config, pkgs, lib, tailnetFqdn, tinyLlmGateUrl, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  tailnetFqdn,
+  tinyLlmGateUrl,
+  ...
+}:
 let
-  webPort   = 13200;   # karakeep-web PORT (real backend bind)
-  proxyPort = 8210;    # socket-activate proxy listen; Tailscale Serve points here
+  webPort = 13200; # karakeep-web PORT (real backend bind)
+  proxyPort = 8210; # socket-activate proxy listen; Tailscale Serve points here
   # External tailnet HTTPS port: declared once in nic.services.karakeep.public
   # below, which also derives publicUrl for NEXTAUTH_URL.
 in
 {
   services.karakeep = {
     enable = true;
-    browser.enable = false;      # local Chromium disabled — no cached aarch64 build (see header)
-    meilisearch.enable = true;   # auto-enables services.meilisearch (:7700, dev/keyless on localhost)
+    browser.enable = false; # local Chromium disabled — no cached aarch64 build (see header)
+    meilisearch.enable = true; # auto-enables services.meilisearch (:7700, dev/keyless on localhost)
 
     extraEnvironment = {
       PORT = toString webPort;
@@ -52,11 +59,11 @@ in
       DISABLE_SIGNUPS = "true";
 
       # ── AI auto-tagging via local inference (tiny-llm-gate → beast Ollama) ──
-      OPENAI_API_KEY  = "ollama";                       # value ignored by tiny-llm-gate
-      OPENAI_BASE_URL = "${tinyLlmGateUrl}/v1";          # http://127.0.0.1:4001/v1
-      INFERENCE_TEXT_MODEL  = "gemma4:e4b";              # text tagging/summaries on beast
-      INFERENCE_IMAGE_MODEL = "gemma4:e4b";              # image tagging (drop if not multimodal)
-      EMBEDDING_TEXT_MODEL  = "text-embedding-3-small";  # → qwen3-embedding:8b via gate alias
+      OPENAI_API_KEY = "ollama"; # value ignored by tiny-llm-gate
+      OPENAI_BASE_URL = "${tinyLlmGateUrl}/v1"; # http://127.0.0.1:4001/v1
+      INFERENCE_TEXT_MODEL = "gemma4:e4b"; # text tagging/summaries on beast
+      INFERENCE_IMAGE_MODEL = "gemma4:e4b"; # image tagging (drop if not multimodal)
+      EMBEDDING_TEXT_MODEL = "text-embedding-3-small"; # → qwen3-embedding:8b via gate alias
     };
   };
 
@@ -68,7 +75,7 @@ in
   # Order the search backend ahead of the consumers so a cold wake doesn't hit
   # Meilisearch before it is listening. meilisearch is a sleepWith worker below
   # (wantedBy = karakeep-web), so this only adds ordering — no dependency cycle.
-  systemd.services.karakeep-web.after     = [ "meilisearch.service" ];
+  systemd.services.karakeep-web.after = [ "meilisearch.service" ];
   systemd.services.karakeep-workers.after = [ "meilisearch.service" ];
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ─────────────
@@ -84,22 +91,22 @@ in
   # the extension/app first wakes the stack; the worker then crawls + AI-tags it
   # asynchronously.
   services.socketActivate.karakeep = {
-    enable   = true;
+    enable = true;
     realUnit = "karakeep-web.service";
-    listen   = [ "127.0.0.1:${toString proxyPort}" ];
-    backend  = "127.0.0.1:${toString webPort}";
-    idleSec  = 600;
+    listen = [ "127.0.0.1:${toString proxyPort}" ];
+    backend = "127.0.0.1:${toString webPort}";
+    idleSec = 600;
     readyProbe = {
       # Next.js cold start binds ~seconds after systemd marks the unit active.
       # /api/health is karakeep's health endpoint; confirmed against the live
       # backend during bring-up.
-      url          = "http://127.0.0.1:${toString webPort}/api/health";
+      url = "http://127.0.0.1:${toString webPort}/api/health";
       expectStatus = 200;
-      timeoutSec   = 60;
+      timeoutSec = 60;
     };
     workers = {
       "karakeep-workers.service".policy = "sleepWith";
-      "meilisearch.service".policy      = "sleepWith";
+      "meilisearch.service".policy = "sleepWith";
     };
   };
 
@@ -114,9 +121,9 @@ in
   # own, so it belongs to this registration. Its index is rebuildable from the
   # bookmarks in db.db and is deliberately not backed up.
   nic.services.karakeep = {
-    backup        = [ "unit" ];
-    backupUnits   = [ "karakeep-backup.service" ];   # backups.nix
-    heavyUnits    = [
+    backup = [ "unit" ];
+    backupUnits = [ "karakeep-backup.service" ]; # backups.nix
+    heavyUnits = [
       "karakeep-web.service"
       "karakeep-workers.service"
       "meilisearch.service"
@@ -124,13 +131,13 @@ in
     heavyPriority = 125;
 
     public = {
-      order   = 150;   # row 4, kept and locked: Home Assistant, Beszel, here, Vaultwarden
-      port    = 3500;
+      order = 150; # row 4, kept and locked: Home Assistant, Beszel, here, Vaultwarden
+      port = 3500;
       backend = "http://127.0.0.1:8210";
       tile = {
-        name        = "Karakeep";
-        icon        = "karakeep.svg";
-        category    = "Apps";
+        name = "Karakeep";
+        icon = "karakeep.svg";
+        category = "Apps";
         description = "Bookmarks + read-later (AI-tagged)";
         # Stats via homepage-stats.py reading karakeep's SQLite read-only (no API
         # key, never wakes karakeep → preserves idle-sleep). NOT the native
@@ -145,9 +152,21 @@ in
             # which would also be 0: with 32 tags over 15 bookmarks this collection
             # is over-tagged, so what the tagger has NOT reached is the actionable
             # count.
-            { field = "bookmarks"; label = "Bookmarks"; format = "number"; }
-            { field = "untagged";  label = "Untagged";  format = "number"; }
-            { field = "tags";      label = "Tags";      format = "number"; }
+            {
+              field = "bookmarks";
+              label = "Bookmarks";
+              format = "number";
+            }
+            {
+              field = "untagged";
+              label = "Untagged";
+              format = "number";
+            }
+            {
+              field = "tags";
+              label = "Tags";
+              format = "number";
+            }
           ];
         };
       };

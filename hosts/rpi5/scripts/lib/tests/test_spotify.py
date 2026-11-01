@@ -41,7 +41,10 @@ def lookup_reply(tracks, provider="prov"):
             "data": {
                 "p": rows([{"id": provider}]),
                 "t": rows(
-                    [{"id": e, "externalId": t, "providerId": provider} for t, e in tracks.items()]
+                    [
+                        {"id": e, "externalId": t, "providerId": provider}
+                        for t, e in tracks.items()
+                    ]
                 ),
             }
         }
@@ -57,7 +60,9 @@ SAVED = json_reply({"result": {"count": 1, "status": "saved"}})
 
 def http_error(code, body):
     def raise_():
-        raise urllib.error.HTTPError("http://ryot", code, "err", {}, io.BytesIO(body.encode()))
+        raise urllib.error.HTTPError(
+            "http://ryot", code, "err", {}, io.BytesIO(body.encode())
+        )
 
     return raise_
 
@@ -104,7 +109,9 @@ def test_iso_to_ms_assumes_utc_when_no_offset_is_given():
 
 
 def test_ms_to_iso_round_trips():
-    assert spotify.ms_to_iso(ms("2026-08-06T10:00:00.123Z")) == "2026-08-06T10:00:00.123Z"
+    assert (
+        spotify.ms_to_iso(ms("2026-08-06T10:00:00.123Z")) == "2026-08-06T10:00:00.123Z"
+    )
 
 
 def test_key_ms_round_trips_a_listen_key():
@@ -132,7 +139,10 @@ def test_prune_keys_keeps_everything_when_there_is_no_high_water_mark():
 
 def test_new_listens_skips_already_pushed_keys():
     out, _ = spotify.new_listens(
-        [item("t1", "One", "2026-08-06T10:00:00Z"), item("t2", "Two", "2026-08-06T10:30:00Z")],
+        [
+            item("t1", "One", "2026-08-06T10:00:00Z"),
+            item("t2", "Two", "2026-08-06T10:30:00Z"),
+        ],
         {key("t1", "2026-08-06T10:00:00Z")},
     )
     assert [x["track_id"] for x in out] == ["t2"]
@@ -169,7 +179,10 @@ def test_items_without_a_track_id_or_timestamp_are_skipped():
 
 def test_the_bootstrap_floor_retires_old_keys_without_logging_them():
     out, retired = spotify.new_listens(
-        [item("t1", "Old", "2026-08-06T09:00:00Z"), item("t2", "New", "2026-08-06T11:00:00Z")],
+        [
+            item("t1", "Old", "2026-08-06T09:00:00Z"),
+            item("t2", "New", "2026-08-06T11:00:00Z"),
+        ],
         set(),
         floor_ms=ms("2026-08-06T10:00:00Z"),
     )
@@ -251,8 +264,16 @@ def test_resolve_ignores_entities_of_another_provider_and_imports_the_rest():
                         "p": rows([{"id": "prov"}]),
                         "t": rows(
                             [
-                                {"id": "met_1", "externalId": "t1", "providerId": "prov"},
-                                {"id": "met_x", "externalId": "t2", "providerId": "other"},
+                                {
+                                    "id": "met_1",
+                                    "externalId": "t1",
+                                    "providerId": "prov",
+                                },
+                                {
+                                    "id": "met_x",
+                                    "externalId": "t2",
+                                    "providerId": "other",
+                                },
                             ]
                         ),
                     }
@@ -319,7 +340,16 @@ def test_client_folds_a_non_429_error_into_runtime_error():
 def test_query_all_follows_the_cursor():
     op = FakeOpener(
         [
-            json_reply({"data": {"c": {"items": [1], "pageInfo": {"hasMore": True, "nextCursor": "n"}}}}),
+            json_reply(
+                {
+                    "data": {
+                        "c": {
+                            "items": [1],
+                            "pageInfo": {"hasMore": True, "nextCursor": "n"},
+                        }
+                    }
+                }
+            ),
             json_reply({"data": {"c": rows([2])}}),
         ]
     )
@@ -352,17 +382,25 @@ def test_main_logs_a_new_listen_with_its_real_played_at(tmp_path):
     assert rc == 0
     (body,) = ops(op)
     assert body["idempotencyKey"] == body["payload"]["submissionId"]
-    assert body["payload"]["entry"]["when"] == {"kind": "date", "finishedOn": "2026-08-06T10:00:00.000Z"}
+    assert body["payload"]["entry"]["when"] == {
+        "kind": "date",
+        "finishedOn": "2026-08-06T10:00:00.000Z",
+    }
     assert op.last.get_header("X-api-key") == "key"
     assert saved_state(tmp_path) == {
         "newest_ms": ms("2026-08-06T10:00:00Z"),
         "pushed": [key("t1", "2026-08-06T10:00:00Z")],
     }
-    assert json.loads((tmp_path / "spotify-entities.json").read_text()) == {"t1": "met_1"}
+    assert json.loads((tmp_path / "spotify-entities.json").read_text()) == {
+        "t1": "met_1"
+    }
 
 
 def test_main_does_not_call_ryot_for_a_listen_already_pushed(tmp_path):
-    state = {"newest_ms": ms("2026-08-06T10:00:00Z"), "pushed": [key("t1", "2026-08-06T10:00:00Z")]}
+    state = {
+        "newest_ms": ms("2026-08-06T10:00:00Z"),
+        "pushed": [key("t1", "2026-08-06T10:00:00Z")],
+    }
     rc, op, _ = run(
         tmp_path,
         [
@@ -384,7 +422,13 @@ def test_main_records_but_does_not_relog_a_listen_ryot_already_has(tmp_path):
             json_reply({"access_token": "tok"}),
             json_reply({"items": [item("t1", "One", "2026-08-06T10:00:00Z")]}),
             completes_reply(
-                [{"id": "ev1", "entityId": "met_1", "occurredAt": "2026-08-06T10:00:00.000Z"}]
+                [
+                    {
+                        "id": "ev1",
+                        "entityId": "met_1",
+                        "occurredAt": "2026-08-06T10:00:00.000Z",
+                    }
+                ]
             ),
         ],
         entities={"t1": "met_1"},
@@ -395,7 +439,10 @@ def test_main_records_but_does_not_relog_a_listen_ryot_already_has(tmp_path):
 
 
 def test_main_recovers_a_late_listen_behind_the_high_water_mark(tmp_path):
-    state = {"newest_ms": ms("2026-08-06T12:00:00Z"), "pushed": [key("t1", "2026-08-06T12:00:00Z")]}
+    state = {
+        "newest_ms": ms("2026-08-06T12:00:00Z"),
+        "pushed": [key("t1", "2026-08-06T12:00:00Z")],
+    }
     rc, op, _ = run(
         tmp_path,
         [
@@ -427,7 +474,9 @@ def test_main_cuts_over_from_a_v1_state_file(tmp_path):
     state = {
         "newest_ms": ms("2026-08-06T10:00:00Z"),
         "known": ["t1"],
-        "pending": [{"identifier": "t1", "source_id": "One", "ended_on": "2026-08-06T10:00:00Z"}],
+        "pending": [
+            {"identifier": "t1", "source_id": "One", "ended_on": "2026-08-06T10:00:00Z"}
+        ],
         "pushed": [key("t1", "2026-08-06T10:00:00Z")],
     }
     rc, op, _ = run(
@@ -448,7 +497,9 @@ def test_main_skips_a_v1_pending_listen_that_v1_did_complete(tmp_path):
     state = {
         "newest_ms": ms("2026-08-06T09:00:00Z"),
         "known": ["t1"],
-        "pending": [{"identifier": "t1", "source_id": "One", "ended_on": "2026-08-06T10:00:00Z"}],
+        "pending": [
+            {"identifier": "t1", "source_id": "One", "ended_on": "2026-08-06T10:00:00Z"}
+        ],
         "pushed": [],
     }
     rc, op, _ = run(
@@ -458,7 +509,13 @@ def test_main_skips_a_v1_pending_listen_that_v1_did_complete(tmp_path):
             json_reply({"items": []}),
             completes_reply(
                 # V1's completion re-push, ~1 h after the play.
-                [{"id": "ev1", "entityId": "met_1", "occurredAt": "2026-08-06T11:02:00.000Z"}]
+                [
+                    {
+                        "id": "ev1",
+                        "entityId": "met_1",
+                        "occurredAt": "2026-08-06T11:02:00.000Z",
+                    }
+                ]
             ),
         ],
         state=state,
@@ -499,7 +556,9 @@ def test_main_migrates_a_state_file_written_before_per_listen_keys(tmp_path):
 
 
 def test_main_does_not_write_state_when_there_is_nothing_to_do(tmp_path):
-    rc, op, _ = run(tmp_path, [json_reply({"access_token": "tok"}), json_reply({"items": []})])
+    rc, op, _ = run(
+        tmp_path, [json_reply({"access_token": "tok"}), json_reply({"items": []})]
+    )
     assert rc == 0
     assert len(op.requests) == 2
     assert not (tmp_path / "spotify-cursor.json").exists()

@@ -37,13 +37,23 @@ USAGE
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --dry-run) DRY_RUN=1 ;;
-    --no-mark-read) NO_MARK_READ=1 ;;
-    --rich) RICH=1 ;;
-    --plain) RICH=0 ;;
-    --rich-collapsible-all) RICH=1; RICH_LAYOUT=collapsible-all ;;
-    -h|--help) usage; exit 0 ;;
-    *) echo "unknown arg: $1" >&2; usage >&2; exit 2 ;;
+  --dry-run) DRY_RUN=1 ;;
+  --no-mark-read) NO_MARK_READ=1 ;;
+  --rich) RICH=1 ;;
+  --plain) RICH=0 ;;
+  --rich-collapsible-all)
+    RICH=1
+    RICH_LAYOUT=collapsible-all
+    ;;
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  *)
+    echo "unknown arg: $1" >&2
+    usage >&2
+    exit 2
+    ;;
   esac
   shift
 done
@@ -85,8 +95,8 @@ is_renovate_pr() {
   local errors="$TMPDIR/daily_pending_digest_renovate_lookup_errors"
 
   [ "$repo" = "$RENOVATE_REPO" ] || return 1
-  [[ "$subject_url" == "https://api.github.com/repos/$RENOVATE_REPO/pulls/"* ]] || return 1
-  [[ "${subject_url##*/}" =~ ^[0-9]+$ ]] || return 1
+  [[ $subject_url == "https://api.github.com/repos/$RENOVATE_REPO/pulls/"* ]] || return 1
+  [[ ${subject_url##*/} =~ ^[0-9]+$ ]] || return 1
 
   if ! pr_json=$(gh api "$subject_url" 2>/dev/null); then
     printf '%s\n' "$subject_url" >>"$errors"
@@ -131,7 +141,7 @@ format_github() {
       repo=$(jq -r '.repository.full_name' <<<"$notification")
       title=$(jq -r '.subject.title' <<<"$notification")
       subject_url=$(jq -r '.subject.url' <<<"$notification")
-      if { [ "$repo" = "$PR_ALLOW_REPO" ] && [[ "$title" =~ $PR_ALLOW_TITLE ]]; } ||
+      if { [ "$repo" = "$PR_ALLOW_REPO" ] && [[ $title =~ $PR_ALLOW_TITLE ]]; } ||
         is_renovate_pr "$repo" "$subject_url"; then
         printf '%s\n' "$notification"
       fi
@@ -162,8 +172,8 @@ format_github() {
     while IFS= read -r notification; do
       subject_type=$(jq -r '.subject.type' <<<"$notification")
       subject_url=$(jq -r '.subject.url' <<<"$notification")
-      if [ "$subject_type" = "Release" ] && [[ "$subject_url" =~ ^https://api.github.com/repos/.*/releases/[0-9]+$ ]]; then
-        if public_url=$(gh api "$subject_url" --jq '.html_url' 2>/dev/null) && [[ "$public_url" =~ ^https://github.com/ ]]; then
+      if [ "$subject_type" = "Release" ] && [[ $subject_url =~ ^https://api.github.com/repos/.*/releases/[0-9]+$ ]]; then
+        if public_url=$(gh api "$subject_url" --jq '.html_url' 2>/dev/null) && [[ $public_url =~ ^https://github.com/ ]]; then
           jq --arg url "$public_url" '.subject.url = $url' <<<"$notification"
           continue
         fi
@@ -295,7 +305,10 @@ build_message() {
 
 send_telegram() {
   local token
-  token=$(telegram_token) || { echo "missing Telegram bot token" >&2; return 1; }
+  token=$(telegram_token) || {
+    echo "missing Telegram bot token" >&2
+    return 1
+  }
   local response="$TMPDIR/daily_pending_digest_telegram_response.json"
 
   if [ "$RICH" -eq 1 ]; then

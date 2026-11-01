@@ -1,4 +1,9 @@
-{ lib, pkgs, python3, python3Packages }:
+{
+  lib,
+  pkgs,
+  python3,
+  python3Packages,
+}:
 
 let
   library = python3Packages.buildPythonPackage {
@@ -16,7 +21,11 @@ let
         --replace-fail 'setup_requires=["pytest-runner", ],' "" \
         --replace-fail 'tests_require=["pytest", ],' ""
     '';
-    propagatedBuildInputs = with python3Packages; [ requests geopy urllib3 ];
+    propagatedBuildInputs = with python3Packages; [
+      requests
+      geopy
+      urllib3
+    ];
     pythonRelaxDeps = [ "urllib3" ];
     doCheck = false;
     meta = {

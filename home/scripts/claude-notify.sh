@@ -36,7 +36,7 @@ now=$(date +%s)
 
 if [ "$mode" = "activity" ]; then
   mkdir -p "$STATE_DIR" 2>/dev/null
-  printf '%s' "$now" > "$ACTIVITY_FILE" 2>/dev/null
+  printf '%s' "$now" >"$ACTIVITY_FILE" 2>/dev/null
   exit 0
 fi
 
@@ -48,7 +48,7 @@ if [ "$mode" = "notification" ]; then
   if [ -f "$ACTIVITY_FILE" ]; then
     last=$(cat "$ACTIVITY_FILE" 2>/dev/null)
     [ -z "$last" ] && last=0
-    if [ "$(( now - last ))" -lt "$IDLE_THRESHOLD" ]; then
+    if [ "$((now - last))" -lt "$IDLE_THRESHOLD" ]; then
       exit 0
     fi
   fi

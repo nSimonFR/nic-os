@@ -33,7 +33,11 @@ TODAY = date(2026, 10, 2)  # a Friday
 
 
 def ev(start, end, summary=ap.RESERVED):
-    return {"start": date.fromisoformat(start), "end": date.fromisoformat(end), "summary": summary}
+    return {
+        "start": date.fromisoformat(start),
+        "end": date.fromisoformat(end),
+        "summary": summary,
+    }
 
 
 def booking(start, end, guest="G"):
@@ -107,7 +111,10 @@ def test_gaps_skip_booked_and_blocked_nights_and_flag_orphans():
         ev("2026-10-13", "2026-10-31"),
     ]
     facts = ap.build_facts(rules(season_end="2026-10-30"), feed, [], TODAY)
-    got = [(g["check_in"], g["check_out"], g["bookable_at_min_stay"]) for g in facts["gaps"]]
+    got = [
+        (g["check_in"], g["check_out"], g["bookable_at_min_stay"])
+        for g in facts["gaps"]
+    ]
     assert got == [
         ("2026-10-02", "2026-10-05", True),
         ("2026-10-08", "2026-10-09", False),
@@ -119,9 +126,16 @@ def test_gaps_skip_booked_and_blocked_nights_and_flag_orphans():
 
 
 def test_months_exclude_blocked_nights_from_sellable():
-    feed = [ev("2026-12-21", "2027-01-01", "Airbnb (Not available)"), ev("2026-12-01", "2026-12-06")]
+    feed = [
+        ev("2026-12-21", "2027-01-01", "Airbnb (Not available)"),
+        ev("2026-12-01", "2026-12-06"),
+    ]
     facts = ap.build_facts(rules(), feed, [], date(2026, 12, 1))
-    assert facts["months"]["2026-12"] == {"sellable": 20, "booked": 5, "occupancy_pct": 25}
+    assert facts["months"]["2026-12"] == {
+        "sellable": 20,
+        "booked": 5,
+        "occupancy_pct": 25,
+    }
 
 
 def test_mismatch_reports_future_nights_on_one_side_only():
@@ -150,8 +164,10 @@ def test_first_run_does_not_report_every_booking_as_new():
 
 def test_new_and_cancelled_bookings_are_diffed_against_state():
     facts = _facts([ev("2026-10-20", "2026-10-31")], season_end="2026-10-30")
-    prev = {"reserved": [["2026-10-09", "2026-10-11"], ["2026-09-01", "2026-09-03"]],
-            "last_weekly": None}
+    prev = {
+        "reserved": [["2026-10-09", "2026-10-11"], ["2026-09-01", "2026-09-03"]],
+        "last_weekly": None,
+    }
     reasons, _ = ap.triggers(RULES, facts, prev, TODAY)
     assert "new_booking 2026-10-20→2026-10-31" in reasons
     assert "cancelled 2026-10-09→2026-10-11" in reasons
@@ -161,7 +177,9 @@ def test_new_and_cancelled_bookings_are_diffed_against_state():
 def test_urgent_gap_fires_once_per_ladder_step():
     feed = [ev("2026-10-07", "2026-10-31")]  # gap Oct 2–6
     facts = _facts(feed, season_end="2026-10-30")
-    reasons, state = ap.triggers(RULES, facts, {"reserved": [["2026-10-07", "2026-10-31"]]}, TODAY)
+    reasons, state = ap.triggers(
+        RULES, facts, {"reserved": [["2026-10-07", "2026-10-31"]]}, TODAY
+    )
     assert reasons == ["urgent_gap 2026-10-02 (5n, J-0)"]
     again, _ = ap.triggers(RULES, facts, state, TODAY)
     assert again == []
@@ -208,8 +226,13 @@ REPORT = (
 
 
 def test_run_reads_the_subscription_source_then_the_feed_then_perso():
-    fake = FakeOpener([lambda: FakeResponse(PROPFIND), lambda: FakeResponse(ICS),
-                       lambda: FakeResponse(REPORT)])
+    fake = FakeOpener(
+        [
+            lambda: FakeResponse(PROPFIND),
+            lambda: FakeResponse(ICS),
+            lambda: FakeResponse(REPORT),
+        ]
+    )
     cfg = ap.Config(password="p", today=TODAY)
     facts, _, _ = ap.run(cfg, rules(season_end="2026-10-15"), {}, opener=fake)
     assert fake.requests[0].get_method() == "PROPFIND"
@@ -230,13 +253,20 @@ def test_subscription_source_rejects_a_plain_calendar(opener):
         raise AssertionError("expected ValueError")
 
 
-def test_main_is_silent_and_writes_state_when_nothing_triggers(tmp_path, capsys, monkeypatch):
+def test_main_is_silent_and_writes_state_when_nothing_triggers(
+    tmp_path, capsys, monkeypatch
+):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text(json.dumps(rules(season_end="2026-10-30")))
     state_file = tmp_path / "s" / "state.json"
-    monkeypatch.setattr(ap, "run", lambda cfg, r, s: ({"gaps": [], "cap": {}}, [], {"x": 1}))
-    env = {"CALDAV_PASSWORD": "p", "AIRBNB_RULES": str(rules_file),
-           "AIRBNB_STATE": str(state_file)}
+    monkeypatch.setattr(
+        ap, "run", lambda cfg, r, s: ({"gaps": [], "cap": {}}, [], {"x": 1})
+    )
+    env = {
+        "CALDAV_PASSWORD": "p",
+        "AIRBNB_RULES": str(rules_file),
+        "AIRBNB_STATE": str(state_file),
+    }
     assert ap.main([], env) == 0
     assert capsys.readouterr().out.strip().splitlines()[-1] == ap.SILENT
     assert json.loads(state_file.read_text()) == {"x": 1}
@@ -246,9 +276,14 @@ def test_main_no_state_never_writes(tmp_path, capsys, monkeypatch):
     rules_file = tmp_path / "rules.json"
     rules_file.write_text("{}")
     state_file = tmp_path / "state.json"
-    monkeypatch.setattr(ap, "run", lambda cfg, r, s: ({"gaps": [], "cap": {}}, ["x"], {"x": 1}))
-    env = {"CALDAV_PASSWORD": "p", "AIRBNB_RULES": str(rules_file),
-           "AIRBNB_STATE": str(state_file)}
+    monkeypatch.setattr(
+        ap, "run", lambda cfg, r, s: ({"gaps": [], "cap": {}}, ["x"], {"x": 1})
+    )
+    env = {
+        "CALDAV_PASSWORD": "p",
+        "AIRBNB_RULES": str(rules_file),
+        "AIRBNB_STATE": str(state_file),
+    }
     assert ap.main(["--no-state"], env) == 0
     assert not state_file.exists()
     assert json.loads(capsys.readouterr().out)["triggers"] == ["x"]

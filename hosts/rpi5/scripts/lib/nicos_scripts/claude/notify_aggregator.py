@@ -101,7 +101,7 @@ class Aggregator:
         # Insertion-ordered mapping: formatted-line -> occurrence count (dedup ×N).
         self._pending = {}
         self._first_ts = 0.0  # when the current batch started accumulating
-        self._last_ts = 0.0   # most recent event (drives the quiet/debounce window)
+        self._last_ts = 0.0  # most recent event (drives the quiet/debounce window)
 
     def format_line(self, host, project, message):
         host = (host or "unknown").split(".")[0]
@@ -154,7 +154,7 @@ class Aggregator:
     def build_text(self, pending):
         lines = ["🤖 Claude Code"]
         items = list(pending.items())
-        for line, count in items[:self.cfg.max_lines]:
+        for line, count in items[: self.cfg.max_lines]:
             lines.append(line + (f" ×{count}" if count > 1 else ""))
         if len(items) > self.cfg.max_lines:
             lines.append(f"… +{len(items) - self.cfg.max_lines} more")

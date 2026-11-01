@@ -9,7 +9,17 @@
 #
 # Same shape as sure.nix / airtrail.nix: shared system PostgreSQL + shared
 # Redis, password set via a oneshot ALTER USER service, secrets via agenix.
-{ config, pkgs, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  pgHost,
+  pgPort,
+  redisHost,
+  redisPort,
+  tailnetFqdn,
+  ...
+}:
 let
   # Internal nginx port. Nextcloud is served at https://<tailnetFqdn>/nextcloud on the
   # public 443 Tailscale Funnel via the nginx path-mux (front-proxy.nix), which strips
@@ -30,32 +40,32 @@ let
   # this list is disabled by nextcloud-disable-defaults below.
   appsToKeep = [
     # ── Core: required for the server itself ──────────────────────────────
-    "dav"                  # CalDAV/CardDAV
-    "files"                # core files app
-    "settings"             # admin/personal settings UI
-    "theming"              # branding/colors
-    "theming_customcss"    # admin custom CSS (nic-cloud 2026 glass theme; CSS lives in DB)
-    "provisioning_api"     # users/groups REST API (DAVx⁵ / clients use it)
-    "oauth2"               # OAuth provider — needed for app passwords
+    "dav" # CalDAV/CardDAV
+    "files" # core files app
+    "settings" # admin/personal settings UI
+    "theming" # branding/colors
+    "theming_customcss" # admin custom CSS (nic-cloud 2026 glass theme; CSS lives in DB)
+    "provisioning_api" # users/groups REST API (DAVx⁵ / clients use it)
+    "oauth2" # OAuth provider — needed for app passwords
     "twofactor_backupcodes"
     "twofactor_totp"
-    "notifications"        # client-sync notifications
+    "notifications" # client-sync notifications
     "comments"
-    "contactsinteraction"  # "recently contacted" sidebar feed for Contacts
-    "serverinfo"           # /ocs/v2.php/apps/serverinfo (homepage widget hook)
-    "bruteforcesettings"   # rate-limit failed logins
-    "app_api"              # ExApps framework (required by core in v33+)
-    "profile"              # user profile pages
+    "contactsinteraction" # "recently contacted" sidebar feed for Contacts
+    "serverinfo" # /ocs/v2.php/apps/serverinfo (homepage widget hook)
+    "bruteforcesettings" # rate-limit failed logins
+    "app_api" # ExApps framework (required by core in v33+)
+    "profile" # user profile pages
     # ── Files (filebrowser replacement) ────────────────────────────────────
-    "files_sharing"        # internal share links + public links
-    "files_versions"       # automatic file version history
-    "files_trashbin"       # safety net before permanent delete
-    "files_pdfviewer"      # in-browser PDF preview
-    "files_downloadlimit"  # let admin cap download counts on shares
-    "files_external"       # read-only Papra archive mount (papra.nix)
-    "text"                 # collaborative text editor (md, txt)
-    "systemtags"           # tag files for organisation
-    "activity"             # change feed (file events) — useful as a log
+    "files_sharing" # internal share links + public links
+    "files_versions" # automatic file version history
+    "files_trashbin" # safety net before permanent delete
+    "files_pdfviewer" # in-browser PDF preview
+    "files_downloadlimit" # let admin cap download counts on shares
+    "files_external" # read-only Papra archive mount (papra.nix)
+    "text" # collaborative text editor (md, txt)
+    "systemtags" # tag files for organisation
+    "activity" # change feed (file events) — useful as a log
     # ── PIM ───────────────────────────────────────────────────────────────
     "calendar"
     "contacts"
@@ -66,8 +76,8 @@ let
     # ── Custom CSS (edit via Theming admin → Custom CSS) ──────────────────
     "theming_customcss"
     # ── Productivity / collaboration ──────────────────────────────────────
-    "cospend"           # Group expenses split (trips, colocs)
-    "cookbook"          # Recipe manager with schema.org URL import
+    "cospend" # Group expenses split (trips, colocs)
+    "cookbook" # Recipe manager with schema.org URL import
     # ── Mail (IMAP/SMTP through hydroxide bridge) ─────────────────────────
     "mail"
     # ── Forced by Nextcloud core (occ app:disable refuses) ────────────────
@@ -79,33 +89,48 @@ let
   ];
 
   # Shared shape for the Nextcloud orchestration oneshots below.
-  mkServiceConfig = { description, syslog, after, requires, script, before ? [ ] }: {
-    inherit description after before requires script;
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      StandardOutput = "journal";
-      StandardError = "journal";
-      SyslogIdentifier = syslog;
+  mkServiceConfig =
+    {
+      description,
+      syslog,
+      after,
+      requires,
+      script,
+      before ? [ ],
+    }:
+    {
+      inherit
+        description
+        after
+        before
+        requires
+        script
+        ;
+      wantedBy = [ "multi-user.target" ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+        StandardOutput = "journal";
+        StandardError = "journal";
+        SyslogIdentifier = syslog;
+      };
     };
-  };
 in
 {
   # ── PostgreSQL: nextcloud_production database + nextcloud_user ─────────────
   nic.pgRole.nextcloud = {
-    db           = "nextcloud_production";
-    user         = "nextcloud_user";
+    db = "nextcloud_production";
+    user = "nextcloud_user";
     passwordFile = "/run/agenix/nextcloud-pg-password";
     privateUsers = false;
   };
 
   # ── Nextcloud (native nixpkgs module) ──────────────────────────────────────
   services.nextcloud = {
-    enable   = true;
-    package  = pkgs.nextcloud33;
+    enable = true;
+    package = pkgs.nextcloud33;
     hostName = tailnetFqdn;
-    https    = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
+    https = true; # URLs generated as https:// (TLS terminated by Tailscale Serve)
 
     # DISABLED: appstoreEnable = true causes app-store mail to conflict with
     # extraApps mail, triggering "Cannot redeclare class ComposerAutoloaderInitMail".
@@ -125,15 +150,16 @@ in
     # if maintenance:install is run (i.e. on a fresh datadir); it never needs
     # to be a real secret and can sit world-readable in the nix store.
     config = {
-      adminuser     = "nsimon";
-      adminpassFile = builtins.toString (pkgs.writeText "nextcloud-admin-bootstrap-placeholder"
-        "ChangeMeOnFreshInstallViaOccUserResetpassword");
+      adminuser = "nsimon";
+      adminpassFile = builtins.toString (
+        pkgs.writeText "nextcloud-admin-bootstrap-placeholder" "ChangeMeOnFreshInstallViaOccUserResetpassword"
+      );
 
-      dbtype     = "pgsql";
+      dbtype = "pgsql";
       # `dbhost` accepts a `host:port` suffix; the module has no `dbport` option.
-      dbhost     = "${pgHost}:${toString pgPort}";
-      dbname     = "nextcloud_production";
-      dbuser     = "nextcloud_user";
+      dbhost = "${pgHost}:${toString pgPort}";
+      dbname = "nextcloud_production";
+      dbuser = "nextcloud_user";
       dbpassFile = "/run/agenix/nextcloud-pg-password";
     };
 
@@ -144,7 +170,7 @@ in
     configureRedis = false;
     caching = {
       redis = true;
-      apcu  = true; # local opcode/data cache
+      apcu = true; # local opcode/data cache
     };
 
     # Pre-install Contacts, Calendar, Tasks. extraAppsEnable enables them on
@@ -160,13 +186,13 @@ in
 
     # Default settings; the module merges these into config.php.
     settings = {
-      trusted_domains   = [ tailnetFqdn ];
-      trusted_proxies   = [ "127.0.0.1" ];
+      trusted_domains = [ tailnetFqdn ];
+      trusted_proxies = [ "127.0.0.1" ];
       overwriteprotocol = "https";
-      overwritehost     = tailnetFqdn; # bare host on the 443 Funnel (no port suffix)
+      overwritehost = tailnetFqdn; # bare host on the 443 Funnel (no port suffix)
       # Served behind the nginx path-mux at /nextcloud (front-proxy.nix strips the
       # prefix); overwritewebroot makes Nextcloud regenerate its links under /nextcloud.
-      overwritewebroot  = "/nextcloud";
+      overwritewebroot = "/nextcloud";
       overwritecondaddr = "^127\\.0\\.0\\.1$";
 
       # Default phone region for unparsed numbers in addressbooks (Contacts app
@@ -175,17 +201,20 @@ in
 
       # OpenKnowledge keeps its config and edit history in these inside NOTES/
       # (open-knowledge.nix); they are not user files.
-      excluded_directories = [ ".git" ".ok" ];
+      excluded_directories = [
+        ".git"
+        ".ok"
+      ];
 
       # Wire shared redis (databases.nix) for distributed cache + locking.
       # `configureRedis = false` above suppresses the module's auto-spawned
       # redis-nextcloud instance, so we set these keys ourselves.
       "memcache.distributed" = "\\OC\\Memcache\\Redis";
-      "memcache.locking"     = "\\OC\\Memcache\\Redis";
-      "memcache.local"       = "\\OC\\Memcache\\APCu";
+      "memcache.locking" = "\\OC\\Memcache\\Redis";
+      "memcache.local" = "\\OC\\Memcache\\APCu";
       redis = {
-        host    = redisHost;
-        port    = redisPort;
+        host = redisHost;
+        port = redisPort;
         dbindex = redisDb;
       };
 
@@ -198,14 +227,14 @@ in
       # mail_smtppassword is set at runtime by nextcloud-mail-account-setup
       # (it's a secret, can't go in nix store). All other keys go here so
       # they aren't overridden by the nextcloud module's defaults JSON.
-      mail_smtphost     = "127.0.0.1";
-      mail_smtpport     = 1025;
-      mail_smtpsecure   = "";          # plaintext on localhost, no TLS
-      mail_smtpauth     = true;
-      mail_smtpname     = "nsimon@protonmail.com";
-      mail_smtpmode     = "smtp";
+      mail_smtphost = "127.0.0.1";
+      mail_smtpport = 1025;
+      mail_smtpsecure = ""; # plaintext on localhost, no TLS
+      mail_smtpauth = true;
+      mail_smtpname = "nsimon@protonmail.com";
+      mail_smtpmode = "smtp";
       mail_from_address = "nsimon";
-      mail_domain       = "protonmail.com";
+      mail_domain = "protonmail.com";
     };
 
     # PHP-FPM tuning for a 4-GiB RPi5 sharing with Immich/HA/AFFiNE/Sure.
@@ -214,24 +243,28 @@ in
     # DAV reachability is unaffected because nginx still listens and php-fpm
     # spins a worker on the next request (~50ms cost vs `dynamic`).
     poolSettings = {
-      "pm"                       = "ondemand";
-      "pm.max_children"          = "8";
-      "pm.process_idle_timeout"  = "60s";
-      "pm.max_requests"          = "500";
+      "pm" = "ondemand";
+      "pm.max_children" = "8";
+      "pm.process_idle_timeout" = "60s";
+      "pm.max_requests" = "500";
     };
 
     phpOptions = {
-      "opcache.memory_consumption"    = "96";
+      "opcache.memory_consumption" = "96";
       "opcache.interned_strings_buffer" = "12";
       "opcache.max_accelerated_files" = "10000";
-      "opcache.revalidate_freq"       = "60";
+      "opcache.revalidate_freq" = "60";
     };
   };
 
   # Bind nginx vhost to 127.0.0.1:<port> only. Tailscale Serve forwards from
   # the tailnet interface; no need to listen on the Internet.
   services.nginx.virtualHosts.${tailnetFqdn}.listen = lib.mkForce [
-    { addr = "127.0.0.1"; port = port; ssl = false; }
+    {
+      addr = "127.0.0.1";
+      port = port;
+      ssl = false;
+    }
   ];
 
   # ── Nextcloud service orchestration ──────────────────────────────────────────
@@ -239,68 +272,74 @@ in
   # the same app (see [[known_issue_nextcloud_extraapps_appstore_dup]]).
   # Order: cleanup → setup → appstore-enable → disable-defaults.
 
-    systemd.services.nextcloud-cleanup = mkServiceConfig {
-      description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
-      syslog = "nextcloud-cleanup";
-      after = [ "nextcloud-pg-setup.service" ];
-      before = [ "nextcloud-setup.service" ];
-      requires = [ "nextcloud-pg-setup.service" ];
-      script = ''
-        set -eu
-        store_apps="${datadir}/store-apps"
-        config_php="${datadir}/config/config.php"
-        for app in mail contacts calendar tasks; do
-          app_dir="$store_apps/$app"
-          [ -d "$app_dir" ] && [ ! -L "$app_dir" ] && rm -rf "$app_dir"
-        done
-        grep -q "'maintenance' => true" "$config_php" 2>/dev/null && \
-          ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" "$config_php" || true
-      '';
-    };
+  systemd.services.nextcloud-cleanup = mkServiceConfig {
+    description = "Nextcloud: cleanup store-apps duplicates and stale maintenance mode";
+    syslog = "nextcloud-cleanup";
+    after = [ "nextcloud-pg-setup.service" ];
+    before = [ "nextcloud-setup.service" ];
+    requires = [ "nextcloud-pg-setup.service" ];
+    script = ''
+      set -eu
+      store_apps="${datadir}/store-apps"
+      config_php="${datadir}/config/config.php"
+      for app in mail contacts calendar tasks; do
+        app_dir="$store_apps/$app"
+        [ -d "$app_dir" ] && [ ! -L "$app_dir" ] && rm -rf "$app_dir"
+      done
+      grep -q "'maintenance' => true" "$config_php" 2>/dev/null && \
+        ${pkgs.gnused}/bin/sed -i "s/'maintenance' => true,/'maintenance' => false,/" "$config_php" || true
+    '';
+  };
 
-    systemd.services.nextcloud-setup = {
-      after    = [ "nextcloud-cleanup.service" ];
-      requires = [ "nextcloud-cleanup.service" ];
-    };
+  systemd.services.nextcloud-setup = {
+    after = [ "nextcloud-cleanup.service" ];
+    requires = [ "nextcloud-cleanup.service" ];
+  };
 
-    systemd.services.nextcloud-appstore-enable = mkServiceConfig {
-      description = "Nextcloud: exit maintenance and install non-bundled apps";
-      syslog = "nextcloud-appstore";
-      after = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
-      before = [ "nextcloud-disable-defaults.service" ];
-      requires = [ "nextcloud-setup.service" ];
-      script = ''
-        ${config.services.nextcloud.occ}/bin/nextcloud-occ maintenance:mode --off
-        for app in assistant integration_openai; do
-          ${config.services.nextcloud.occ}/bin/nextcloud-occ app:install "$app" 2>/dev/null || true
-        done
-      '';
-    };
+  systemd.services.nextcloud-appstore-enable = mkServiceConfig {
+    description = "Nextcloud: exit maintenance and install non-bundled apps";
+    syslog = "nextcloud-appstore";
+    after = [
+      "nextcloud-setup.service"
+      "phpfpm-nextcloud.service"
+    ];
+    before = [ "nextcloud-disable-defaults.service" ];
+    requires = [ "nextcloud-setup.service" ];
+    script = ''
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ maintenance:mode --off
+      for app in assistant integration_openai; do
+        ${config.services.nextcloud.occ}/bin/nextcloud-occ app:install "$app" 2>/dev/null || true
+      done
+    '';
+  };
 
-    systemd.services.nextcloud-disable-defaults = mkServiceConfig {
-      description = "Nextcloud: enforce app whitelist";
-      syslog = "nextcloud-whitelist";
-      after = [ "nextcloud-appstore-enable.service" "phpfpm-nextcloud.service" ];
-      requires = [ "nextcloud-appstore-enable.service" ];
-      script = ''
-        set -eu
-        occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
-        keep=" ${lib.concatStringsSep " " appsToKeep} "
-        # occ prints warnings (e.g. an orphaned apps_paths entry after a
-        # package bump) to *stdout* ahead of the JSON, which would break the
-        # jq parse and fail the unit. Strip everything before the first `{`.
-        enabled_str=$($occ app:list --output=json 2>/dev/null | sed -n '/^{/,$p' | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
-        for app in $enabled_str; do
-          case "$keep" in
-            *" $app "*) ;;
-            *) $occ app:disable "$app" 2>/dev/null || true ;;
-          esac
-        done
-        for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
-          echo "$enabled_str" | grep -q "^$app$" || $occ app:enable "$app" 2>/dev/null || true
-        done
-      '';
-    };
+  systemd.services.nextcloud-disable-defaults = mkServiceConfig {
+    description = "Nextcloud: enforce app whitelist";
+    syslog = "nextcloud-whitelist";
+    after = [
+      "nextcloud-appstore-enable.service"
+      "phpfpm-nextcloud.service"
+    ];
+    requires = [ "nextcloud-appstore-enable.service" ];
+    script = ''
+      set -eu
+      occ="${config.services.nextcloud.occ}/bin/nextcloud-occ"
+      keep=" ${lib.concatStringsSep " " appsToKeep} "
+      # occ prints warnings (e.g. an orphaned apps_paths entry after a
+      # package bump) to *stdout* ahead of the JSON, which would break the
+      # jq parse and fail the unit. Strip everything before the first `{`.
+      enabled_str=$($occ app:list --output=json 2>/dev/null | sed -n '/^{/,$p' | ${pkgs.jq}/bin/jq -r '.enabled | keys[]')
+      for app in $enabled_str; do
+        case "$keep" in
+          *" $app "*) ;;
+          *) $occ app:disable "$app" 2>/dev/null || true ;;
+        esac
+      done
+      for app in${lib.concatMapStrings (a: " ${a}") appsToKeep}; do
+        echo "$enabled_str" | grep -q "^$app$" || $occ app:enable "$app" 2>/dev/null || true
+      done
+    '';
+  };
 
   # ── Bind-mount /mnt/data/cloud → user-files dir ────────────────────────────
   # Tailscale Drive shares /mnt/data/cloud (see tailscale-serve.nix). Bind-
@@ -343,13 +382,15 @@ in
       ];
     };
   };
-  systemd.mounts = [{
-    where = "/mnt/data/cloud";
-    what  = "${datadir}/data/nsimon/files";
-    type  = "none";
-    options = "bind";
-    wantedBy = [ "local-fs.target" ];
-  }];
+  systemd.mounts = [
+    {
+      where = "/mnt/data/cloud";
+      what = "${datadir}/data/nsimon/files";
+      type = "none";
+      options = "bind";
+      wantedBy = [ "local-fs.target" ];
+    }
+  ];
 
   # ── serverinfo NC-Token for the homepage widget ──────────────────────────
   # The homepage Nextcloud widget hits the serverinfo API, which accepts an
@@ -361,7 +402,10 @@ in
   # invalidates the appconfig cache; idempotent (same value each boot).
   systemd.services.nextcloud-serverinfo-token = {
     description = "Set Nextcloud serverinfo NC-Token for the homepage widget";
-    after    = [ "nextcloud-setup.service" "phpfpm-nextcloud.service" ];
+    after = [
+      "nextcloud-setup.service"
+      "phpfpm-nextcloud.service"
+    ];
     requires = [ "nextcloud-setup.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
@@ -383,7 +427,10 @@ in
   # from agenix and registers it with the Mail app via occ. Idempotent.
   systemd.services.nextcloud-mail-account-setup = {
     description = "Pre-seed Nextcloud Mail account against hydroxide bridge";
-    after    = [ "nextcloud-disable-defaults.service" "hydroxide.service" ];
+    after = [
+      "nextcloud-disable-defaults.service"
+      "hydroxide.service"
+    ];
     requires = [ "nextcloud-disable-defaults.service" ];
     wantedBy = [ "multi-user.target" ];
     serviceConfig = {
@@ -418,7 +465,10 @@ in
   # No heavyUnits: Nextcloud runs as php-fpm behind nginx, and nginx is infra
   # that heavy-shed deliberately leaves up.
   nic.services.nextcloud = {
-    backup            = [ "postgres" "mnt-data" ];
+    backup = [
+      "postgres"
+      "mnt-data"
+    ];
     postgresDatabases = [ "nextcloud_production" ];
 
     # The main human-facing app on the 443 funnel; front-proxy.nix redirects the
@@ -426,16 +476,16 @@ in
     # root, and overwritewebroot only rewrites the links it generates.
     public = {
       # Swapped with AFFiNE (was 25) so Calino (35) follows immediately.
-      order    = 50;
-      port     = 443;
-      backend  = "http://127.0.0.1:8091";
-      proxied  = true;
+      order = 50;
+      port = 443;
+      backend = "http://127.0.0.1:8091";
+      proxied = true;
       authenticated = true;
-      muxPath  = "/nextcloud";
+      muxPath = "/nextcloud";
       tile = {
-        name        = "Nextcloud";
-        icon        = "nextcloud.svg";
-        category    = "Apps";
+        name = "Nextcloud";
+        icon = "nextcloud.svg";
+        category = "Apps";
         description = "Files + Contacts + Calendar (DAV)";
         # Was the native `nextcloud` widget, which always renders four stats
         # (freespace/activeusers/numfiles/numshares) and re-authenticates against
@@ -450,9 +500,21 @@ in
           # what this instance actually does is back Calino and the phone's CardDAV
           # sync. Files stays; it is the one original field that grows.
           mappings = [
-            { field = "files";    label = "Files";    format = "number"; }
-            { field = "contacts"; label = "Contacts"; format = "number"; }
-            { field = "storage";  label = "Storage";  format = "bytes"; }
+            {
+              field = "files";
+              label = "Files";
+              format = "number";
+            }
+            {
+              field = "contacts";
+              label = "Contacts";
+              format = "number";
+            }
+            {
+              field = "storage";
+              label = "Storage";
+              format = "bytes";
+            }
           ];
         };
       };

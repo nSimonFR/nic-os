@@ -250,9 +250,23 @@ in
           mappings = [
             # float, not number: these carry a decimal (210.4 km, 78.4 kg) and
             # `number` would drop it — same reason wakapi's hour fields are float.
-            { field = "km"; label = "This month"; format = "float"; suffix = " km"; }
-            { field = "steps"; label = "Steps"; format = "number"; }
-            { field = "weight"; label = "Weight"; format = "float"; suffix = " kg"; }
+            {
+              field = "km";
+              label = "This month";
+              format = "float";
+              suffix = " km";
+            }
+            {
+              field = "steps";
+              label = "Steps";
+              format = "number";
+            }
+            {
+              field = "weight";
+              label = "Weight";
+              format = "float";
+              suffix = " kg";
+            }
           ];
         };
       };

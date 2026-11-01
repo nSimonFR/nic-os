@@ -14,8 +14,20 @@ import sqlite3
 from collections import deque
 from dataclasses import dataclass, field
 
-MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août",
-          "septembre", "octobre", "novembre", "décembre"]
+MONTHS = [
+    "janvier",
+    "février",
+    "mars",
+    "avril",
+    "mai",
+    "juin",
+    "juillet",
+    "août",
+    "septembre",
+    "octobre",
+    "novembre",
+    "décembre",
+]
 BIRTH, DEATH, BURIAL, MARRIAGE = 12, 13, 15, 1
 PRIMARY = 1  # EventRoleType: the person's own event
 MAX_AGE = 105  # born longer ago with no death recorded = not living
@@ -42,7 +54,9 @@ class Event:
 def _name(js):
     n = js["primary_name"]
     given = n.get("call") or re.split(r"[ ,]+", n.get("first_name", "").strip())[0]
-    surname = " ".join(s["surname"] for s in n.get("surname_list", []) if s.get("surname"))
+    surname = " ".join(
+        s["surname"] for s in n.get("surname_list", []) if s.get("surname")
+    )
     return " ".join(x for x in (given, surname) if x) or js["gramps_id"]
 
 
@@ -56,7 +70,12 @@ class Tree:
     """The Gramps tree, loaded once: people, families, events, place names."""
 
     def __init__(self, people, families, events, home):
-        self.people, self.families, self.events, self.home = people, families, events, home
+        self.people, self.families, self.events, self.home = (
+            people,
+            families,
+            events,
+            home,
+        )
         self._up = {}
 
     @classmethod
@@ -65,23 +84,45 @@ class Tree:
 
         db = connect(f"file:{path}?mode=ro", uri=True)
         try:
-            rows = lambda table: [json.loads(j) for (j,) in db.execute(f"SELECT json_data FROM {table}")]
+            rows = lambda table: [
+                json.loads(j) for (j,) in db.execute(f"SELECT json_data FROM {table}")
+            ]
             places = {p["handle"]: p["name"]["value"] for p in rows("place")}
-            events = {e["handle"]: Event(e["gramps_id"], e["type"]["value"], _exact(e["date"]),
-                                         places.get(e.get("place"), ""))
-                      for e in rows("event")}
+            events = {
+                e["handle"]: Event(
+                    e["gramps_id"],
+                    e["type"]["value"],
+                    _exact(e["date"]),
+                    places.get(e.get("place"), ""),
+                )
+                for e in rows("event")
+            }
             people, home = {}, None
             for p in rows("person"):
                 people[p["handle"]] = Person(
-                    p["gramps_id"], _name(p), p["gender"] == 0, p["parent_family_list"], p["family_list"],
-                    [r["ref"] for r in p["event_ref_list"] if r["role"]["value"] == PRIMARY])
+                    p["gramps_id"],
+                    _name(p),
+                    p["gender"] == 0,
+                    p["parent_family_list"],
+                    p["family_list"],
+                    [
+                        r["ref"]
+                        for r in p["event_ref_list"]
+                        if r["role"]["value"] == PRIMARY
+                    ],
+                )
                 if p["gramps_id"] == home_id:
                     home = p["handle"]
-            families = {f["handle"]: {"id": f["gramps_id"], "father": f.get("father_handle"),
-                                      "mother": f.get("mother_handle"),
-                                      "children": [c["ref"] for c in f["child_ref_list"]],
-                                      "events": [r["ref"] for r in f["event_ref_list"]]}
-                        for f in rows("family")}
+            families = {
+                f["handle"]: {
+                    "id": f["gramps_id"],
+                    "father": f.get("father_handle"),
+                    "mother": f.get("mother_handle"),
+                    "children": [c["ref"] for c in f["child_ref_list"]],
+                    "events": [r["ref"] for r in f["event_ref_list"]],
+                }
+                for f in rows("family")
+            }
         finally:
             db.close()
         if home is None:
@@ -91,7 +132,9 @@ class Tree:
     def parents(self, h):
         for fam in self.people[h].parents:
             f = self.families.get(fam, {})
-            yield from (p for p in (f.get("father"), f.get("mother")) if p in self.people)
+            yield from (
+                p for p in (f.get("father"), f.get("mother")) if p in self.people
+            )
 
     def ancestors(self, h):
         """{handle: generations up}, `h` itself at 0."""
@@ -110,7 +153,9 @@ class Tree:
         """(a, b, common ancestor): generations from home and from `h` up to
         their nearest common ancestor, or None if not related by blood."""
         mine, theirs = self.ancestors(self.home), self.ancestors(h)
-        common = [(mine[c] + theirs[c], mine[c], c) for c in mine.keys() & theirs.keys()]
+        common = [
+            (mine[c] + theirs[c], mine[c], c) for c in mine.keys() & theirs.keys()
+        ]
         if not common:
             return None
         _, a, c = min(common)
@@ -119,7 +164,11 @@ class Tree:
     def spouses(self, h):
         for fam in self.people[h].families:
             f = self.families.get(fam, {})
-            yield from (p for p in (f.get("father"), f.get("mother")) if p and p != h and p in self.people)
+            yield from (
+                p
+                for p in (f.get("father"), f.get("mother"))
+                if p and p != h and p in self.people
+            )
 
     def living(self, h):
         types = {self.events[e].type for e in self.people[h].events if e in self.events}
@@ -137,7 +186,11 @@ class Tree:
             r = self.blood(s)
             if r and s != self.home:
                 kin, f = self._kin(s, *r), self.people[s].female
-                of = f"{'de la' if f else 'du'} {kin}" if " de " in kin else f"de {_possessive(kin, f)}"
+                of = (
+                    f"{'de la' if f else 'du'} {kin}"
+                    if " de " in kin
+                    else f"de {_possessive(kin, f)}"
+                )
                 return f"{'épouse' if self.people[h].female else 'époux'} {of}"
         return ""
 
@@ -150,25 +203,39 @@ class Tree:
         if a == 1 and b == 1:
             return "sœur" if f else "frère"
         if a == 1:
-            return "arrière-" * max(b - 3, 0) + "petite-" * (b > 2) + "nièce" if f else \
-                "arrière-" * max(b - 3, 0) + "petit-" * (b > 2) + "neveu"
+            return (
+                "arrière-" * max(b - 3, 0) + "petite-" * (b > 2) + "nièce"
+                if f
+                else "arrière-" * max(b - 3, 0) + "petit-" * (b > 2) + "neveu"
+            )
         if b == 1:
             if a <= 4:
-                return "arrière-" * (a - 3) + "grand-" * (a > 2) + ("tante" if f else "oncle")
+                return (
+                    "arrière-" * (a - 3)
+                    + "grand-" * (a > 2)
+                    + ("tante" if f else "oncle")
+                )
             anc = self._via(self.home, a - 1, common, 1)
             return f"{'sœur' if f else 'frère'} de {_possessive(_up(a - 1, anc.female), anc.female)}"
         if a == b:
             return _cousin(a, f)
         if a > b:  # cousin of one of my ancestors
             anc = self._via(self.home, a - b, common, b)
-            return f"{_cousin(b, f)} de {_possessive(_up(a - b, anc.female), anc.female)}"
+            return (
+                f"{_cousin(b, f)} de {_possessive(_up(a - b, anc.female), anc.female)}"
+            )
         mid = self._via(h, b - a, common, a)  # a cousin of mine, `h` descends from
         return f"{_down(b - a, f)} de {_possessive(_cousin(a, mid.female), mid.female)}"
 
     def _via(self, h, up, common, rest):
         """The ancestor `up` generations above `h` that is `rest` below `common`."""
-        return self.people[next(x for x, g in self.ancestors(h).items()
-                                if g == up and self.ancestors(x).get(common) == rest)]
+        return self.people[
+            next(
+                x
+                for x, g in self.ancestors(h).items()
+                if g == up and self.ancestors(x).get(common) == rest
+            )
+        ]
 
 
 def _up(k, f):
@@ -189,8 +256,10 @@ def _down(k, f):
 
 def _cousin(k, f):
     word = "cousine" if f else "cousin"
-    return {2: f"{word} germaine" if f else f"{word} germain",
-            3: f"{word} issue de germains" if f else f"{word} issu de germains"}.get(k, f"{word} au {k - 1}ᵉ degré")
+    return {
+        2: f"{word} germaine" if f else f"{word} germain",
+        3: f"{word} issue de germains" if f else f"{word} issu de germains",
+    }.get(k, f"{word} au {k - 1}ᵉ degré")
 
 
 def _possessive(kin, female):
@@ -247,13 +316,20 @@ def tree_lines(tree, day, url):
     who = lambda h: link("person", tree.people[h].id, tree.people[h].name)
     at = lambda ev: f" à {ev.place}" if ev.place else ""
     # `, ton grand-oncle, à Brest` — the closing comma only before a place
-    then = lambda kin, ev: (f", {kin}" if kin else "") + ("," if kin and ev.place else "") + at(ev)
+    then = lambda kin, ev: (
+        (f", {kin}" if kin else "") + ("," if kin and ev.place else "") + at(ev)
+    )
     out = []
     for h, p in tree.people.items():
         seen = set()  # merged duplicates can carry the same event twice
         for eh in p.events:
             ev = tree.events.get(eh)
-            if not ev or ev.type not in (BIRTH, DEATH) or not _on(ev.date, day) or ev.type in seen:
+            if (
+                not ev
+                or ev.type not in (BIRTH, DEATH)
+                or not _on(ev.date, day)
+                or ev.type in seen
+            ):
                 continue
             seen.add(ev.type)
             years = day.year - ev.date[0]
@@ -262,16 +338,33 @@ def tree_lines(tree, day, url):
             kin = tree.relation(h)
             when = link("event", ev.id, date_fr(ev.date))
             if ev.type == BIRTH and tree.living(h) and years <= MAX_AGE:
-                text = (f"🎂 C'est ton anniversaire : {years} ans ({when})" if h == tree.home else
-                        f"🎂 {who(h)}{f', {kin},' if kin else ''} fête ses {years} ans ({when})")
+                text = (
+                    f"🎂 C'est ton anniversaire : {years} ans ({when})"
+                    if h == tree.home
+                    else f"🎂 {who(h)}{f', {kin},' if kin else ''} fête ses {years} ans ({when})"
+                )
                 out.append(Line(_rank(tree, h), text, True))
             elif ev.type == BIRTH:
-                out.append(Line(_rank(tree, h), f"👶 Il y a {years} ans naissait {who(h)}"
-                                f"{then(kin, ev)} ({when})", False))
+                out.append(
+                    Line(
+                        _rank(tree, h),
+                        f"👶 Il y a {years} ans naissait {who(h)}"
+                        f"{then(kin, ev)} ({when})",
+                        False,
+                    )
+                )
             else:
-                out.append(Line(_rank(tree, h), f"🕯 Il y a {years} ans s'éteignait {who(h)}"
-                                f"{then(kin, ev)} ({when})", False))
-    weddings = set()  # a couple entered twice (or one wedding in two families) shows once
+                out.append(
+                    Line(
+                        _rank(tree, h),
+                        f"🕯 Il y a {years} ans s'éteignait {who(h)}"
+                        f"{then(kin, ev)} ({when})",
+                        False,
+                    )
+                )
+    weddings = (
+        set()
+    )  # a couple entered twice (or one wedding in two families) shows once
     for fam in tree.families.values():
         for eh in fam["events"]:
             ev = tree.events.get(eh)
@@ -285,15 +378,30 @@ def tree_lines(tree, day, url):
             weddings.add(key)
             when = link("event", ev.id, date_fr(ev.date))
             kin = couple_kin(tree, *pair) if len(pair) == 2 else ""
-            names = " et ".join(f"{who(x)}" + ("" if kin or not tree.relation(x) else f" ({tree.relation(x)})")
-                                for x in pair)
+            names = " et ".join(
+                f"{who(x)}"
+                + ("" if kin or not tree.relation(x) else f" ({tree.relation(x)})")
+                for x in pair
+            )
             rank = min(_rank(tree, x) for x in pair)
             if all(tree.living(x) for x in pair) and years <= 80:
-                out.append(Line(rank, f"💍 {names}{f', {kin},' if kin else ''} fêtent leurs "
-                                f"{years} ans de mariage ({when})", False))  # genealogy, not 🎂
+                out.append(
+                    Line(
+                        rank,
+                        f"💍 {names}{f', {kin},' if kin else ''} fêtent leurs "
+                        f"{years} ans de mariage ({when})",
+                        False,
+                    )
+                )  # genealogy, not 🎂
             else:
-                out.append(Line(rank, f"💍 Il y a {years} ans, {names}{f', {kin},' if kin else ''} "
-                                f"se mariaient{at(ev)} ({when})", False))
+                out.append(
+                    Line(
+                        rank,
+                        f"💍 Il y a {years} ans, {names}{f', {kin},' if kin else ''} "
+                        f"se mariaient{at(ev)} ({when})",
+                        False,
+                    )
+                )
     return sorted(out, key=lambda l: (l.rank, l.text))
 
 
@@ -316,10 +424,19 @@ def contact_birthdays(blobs, day):
             start = ev.decoded("DTSTART")
             if not _on((start.year, start.month, start.day), day):
                 continue
-            year = None if str(ev.get("X-NEXTCLOUD-BC-UNKNOWN-YEAR", "0")) == "1" else \
-                int(str(ev.get("X-NEXTCLOUD-BC-YEAR") or start.year))
+            year = (
+                None
+                if str(ev.get("X-NEXTCLOUD-BC-UNKNOWN-YEAR", "0")) == "1"
+                else int(str(ev.get("X-NEXTCLOUD-BC-YEAR") or start.year))
+            )
             m = _BC_NAME.match(str(ev.get("SUMMARY", "")).strip())
-            out.add((m.group(1) if m else str(ev.get("SUMMARY")), year, (start.month, start.day)))
+            out.add(
+                (
+                    m.group(1) if m else str(ev.get("SUMMARY")),
+                    year,
+                    (start.month, start.day),
+                )
+            )
     return sorted(out, key=lambda x: x[0])
 
 
@@ -340,7 +457,9 @@ def birthday_lines(contacts, tree, day):
                     names.add((ev.date[1], ev.date[2], _first(p.name)))
     lines = []
     for name, year, (m, d) in contacts:
-        if (year, m, d) in dates or any((m, d, _first(w)) in names for w in name.split(maxsplit=1)[-1:] + [name]):
+        if (year, m, d) in dates or any(
+            (m, d, _first(w)) in names for w in name.split(maxsplit=1)[-1:] + [name]
+        ):
             continue
         age = day.year - year if year else None
         lines.append(f"🎂 {name}" + (f" · {age} ans" if age and age > 0 else ""))

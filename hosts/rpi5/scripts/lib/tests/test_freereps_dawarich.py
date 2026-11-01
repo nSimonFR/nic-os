@@ -22,8 +22,15 @@ def north(t, metres, east=0.0):
 class FakePg:
     """Answers psql_rows by matching on the SQL text."""
 
-    def __init__(self, workouts, routes, users=(("1", "KEY"),), tracker="PHONE", corrected=False):
-        self.workouts, self.routes, self.users, self.tracker = workouts, routes, users, tracker
+    def __init__(
+        self, workouts, routes, users=(("1", "KEY"),), tracker="PHONE", corrected=False
+    ):
+        self.workouts, self.routes, self.users, self.tracker = (
+            workouts,
+            routes,
+            users,
+            tracker,
+        )
         self.corrected = corrected
         self.sql = []
 
@@ -34,8 +41,10 @@ class FakePg:
             rows = self.workouts
         elif "FROM workout_routes" in sql:
             wid = sql.split("workout_id = '")[1][:36]
-            rows = [(t, lat, lon, alt, sp, co, acc)
-                    for t, lat, lon, alt, sp, co, acc in self.routes[wid]]
+            rows = [
+                (t, lat, lon, alt, sp, co, acc)
+                for t, lat, lon, alt, sp, co, acc in self.routes[wid]
+            ]
         elif "FROM users" in sql:
             rows = self.users
         elif "tracker_id FROM points" in sql:
@@ -72,7 +81,9 @@ def test_simplify_keeps_only_the_ends_of_a_straight_line():
 
 
 def test_simplify_keeps_a_corner():
-    pts = [north(t, t * 5) for t in range(0, 30)] + [north(t, 145, (t - 29) * 5) for t in range(30, 60)]
+    pts = [north(t, t * 5) for t in range(0, 30)] + [
+        north(t, 145, (t - 29) * 5) for t in range(30, 60)
+    ]
     assert [p[0] for p in fd.simplify(pts, 10, 120, 50)] == [0, 29, 59]
 
 
@@ -84,7 +95,9 @@ def test_simplify_keeps_a_fix_at_least_every_max_gap():
 
 
 def test_payload_omits_apples_invalid_minus_one():
-    props = fd.payload([(100, 48.8, 2.3, 30.0, -1.0, -1.0, 4.0)], "PHONE", W1)["locations"][0]["properties"]
+    props = fd.payload([(100, 48.8, 2.3, 30.0, -1.0, -1.0, 4.0)], "PHONE", W1)[
+        "locations"
+    ][0]["properties"]
     assert "speed" not in props and "course" not in props and props["altitude"] == 30.0
 
 
@@ -97,14 +110,22 @@ def test_payload_is_lonlat_and_skips_missing_values():
     body = fd.payload([(100, 48.8, 2.3, None, 4.0, None, 3.0)], "PHONE", W1)
     f = body["locations"][0]
     assert f["geometry"]["coordinates"] == [2.3, 48.8]
-    assert f["properties"] == {"timestamp": 100, "device_id": "PHONE", "source": "freereps",
-                               "workout_id": W1, "speed": 4.0, "horizontal_accuracy": 3.0}
+    assert f["properties"] == {
+        "timestamp": 100,
+        "device_id": "PHONE",
+        "source": "freereps",
+        "workout_id": W1,
+        "speed": 4.0,
+        "horizontal_accuracy": 3.0,
+    }
 
 
 def test_pushes_new_routes_under_the_phone_tracker(tmp_path):
     pg = FakePg([(W1, "Cycling", 3)], {W1: [fix(0), fix(5), fix(10)]})
     op = ok_opener()
-    assert fd.sync(cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None) == (1, 2)
+    assert fd.sync(
+        cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None
+    ) == (1, 2)
     req = op.last
     assert req.full_url == "http://127.0.0.1:13900/api/v1/points"
     assert req.headers["Authorization"] == "Bearer KEY"
@@ -114,7 +135,9 @@ def test_pushes_new_routes_under_the_phone_tracker(tmp_path):
 
 def test_clears_overlapping_tracks_before_the_push(tmp_path):
     pg = FakePg([(W1, "Cycling", 2)], {W1: [fix(100), fix(200)]})
-    fd.sync(cfg(tmp_path), pg, opener=ok_opener(), log=lambda m: None, sleep=lambda s: None)
+    fd.sync(
+        cfg(tmp_path), pg, opener=ok_opener(), log=lambda m: None, sleep=lambda s: None
+    )
     clear = next(s for s in pg.sql if "DELETE FROM tracks" in s)
     assert "to_timestamp(100)" in clear and "to_timestamp(200)" in clear
     stale = next(s for s in pg.sql if "DELETE FROM points" in s)
@@ -125,7 +148,9 @@ def test_clears_overlapping_tracks_before_the_push(tmp_path):
 def test_skips_a_ride_overlapping_a_hand_corrected_track(tmp_path):
     pg = FakePg([(W1, "Cycling", 1)], {W1: [fix(0)]}, corrected=True)
     op, lines = ok_opener(), []
-    assert fd.sync(cfg(tmp_path), pg, opener=op, log=lines.append, sleep=lambda s: None) == (1, 0)
+    assert fd.sync(
+        cfg(tmp_path), pg, opener=op, log=lines.append, sleep=lambda s: None
+    ) == (1, 0)
     assert op.requests == [] and not any("DELETE" in s for s in pg.sql)
     assert "hand-corrected" in lines[0]
     assert json.loads((tmp_path / "state.json").read_text()) == {W1: 1}
@@ -141,8 +166,13 @@ def test_skips_unchanged_and_resends_a_grown_route(tmp_path):
     (tmp_path / "state.json").write_text(json.dumps({W1: 3, W2: 1}))
     pg = FakePg([(W1, "Cycling", 3), (W2, "Cycling", 2)], {W2: [fix(0), fix(9)]})
     op = ok_opener()
-    assert fd.sync(cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None) == (1, 2)
-    assert len(op.requests) == 1 and op.body_of()["locations"][0]["properties"]["workout_id"] == W2
+    assert fd.sync(
+        cfg(tmp_path), pg, opener=op, log=lambda m: None, sleep=lambda s: None
+    ) == (1, 2)
+    assert (
+        len(op.requests) == 1
+        and op.body_of()["locations"][0]["properties"]["workout_id"] == W2
+    )
 
 
 def test_nothing_new_touches_neither_dawarich_nor_its_db(tmp_path):
@@ -156,7 +186,13 @@ def test_nothing_new_touches_neither_dawarich_nor_its_db(tmp_path):
 def test_dry_run_posts_nothing_and_saves_nothing(tmp_path):
     pg = FakePg([(W1, "Cycling", 2)], {W1: [fix(0), fix(5)]})
     op, lines = ok_opener(), []
-    fd.sync(cfg(tmp_path, dry_run=True), pg, opener=op, log=lines.append, sleep=lambda s: None)
+    fd.sync(
+        cfg(tmp_path, dry_run=True),
+        pg,
+        opener=op,
+        log=lines.append,
+        sleep=lambda s: None,
+    )
     assert op.requests == [] and not (tmp_path / "state.json").exists()
     assert "[dry-run]" in lines[0]
 

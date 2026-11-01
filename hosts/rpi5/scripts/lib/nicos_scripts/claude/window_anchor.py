@@ -116,7 +116,10 @@ def plan(cfg, now, reset):
         why = f"window open until {reset.astimezone(now.tzinfo):%H:%M}"
     local = at.astimezone(now.tzinfo).time()
     if not cfg.day_start <= local < cfg.day_end:
-        return None, f"{why}; {local:%H:%M} is outside {cfg.day_start:%H:%M}-{cfg.day_end:%H:%M}"
+        return (
+            None,
+            f"{why}; {local:%H:%M} is outside {cfg.day_start:%H:%M}-{cfg.day_end:%H:%M}",
+        )
     return at, why
 
 
@@ -127,9 +130,18 @@ def ping(cfg, run=None, log=log):
     and still showed no window 8s after one that had opened it.
     """
     argv = [
-        cfg.claude, "-p", "hi", "--model", cfg.model,
-        "--setting-sources", "", "--strict-mcp-config", "--tools", "",
-        "--output-format", "json",
+        cfg.claude,
+        "-p",
+        "hi",
+        "--model",
+        cfg.model,
+        "--setting-sources",
+        "",
+        "--strict-mcp-config",
+        "--tools",
+        "",
+        "--output-format",
+        "json",
     ]
     if cfg.dry_run:
         log(f"DRY RUN — would run {' '.join(argv)}")
@@ -149,7 +161,9 @@ def ping(cfg, run=None, log=log):
         log(f"ping: unreadable result: {res.stdout.strip()[:300]}")
         return False
     if result.get("is_error") or not any(m.startswith("claude-") for m in models):
-        log(f"ping did not reach Anthropic: is_error={result.get('is_error')} models={models}")
+        log(
+            f"ping did not reach Anthropic: is_error={result.get('is_error')} models={models}"
+        )
         return False
     log(f"pinged {', '.join(models)}")
     return True

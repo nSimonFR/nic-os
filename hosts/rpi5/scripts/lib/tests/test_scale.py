@@ -56,7 +56,9 @@ def test_a_zero_weight_is_still_reported():
 
 
 def test_absent_and_non_numeric_fields_are_skipped():
-    stats = scale.build_statistics({"weight": "82.35", "bmi": "n/a", "muscleMass": None})
+    stats = scale.build_statistics(
+        {"weight": "82.35", "bmi": "n/a", "muscleMass": None}
+    )
     assert stats == [{"name": "weight", "value": "82.35"}]
 
 
@@ -93,7 +95,9 @@ SAVED = {"result": {"count": 2, "status": "saved"}}
 
 
 def cfg_v2(**env):
-    return scale.Config.from_env({"RYOT_API_KEY": "key", "RYOT_URL": "http://ryot", **env})
+    return scale.Config.from_env(
+        {"RYOT_API_KEY": "key", "RYOT_URL": "http://ryot", **env}
+    )
 
 
 def test_config_defaults_to_the_v2_base_and_falls_back_to_ryot_token():
@@ -135,7 +139,9 @@ def test_a_retry_of_the_same_push_sends_a_byte_identical_request():
     bodies = []
     for _ in range(2):
         op = FakeOpener([json_reply(METRICS), json_reply(SAVED)])
-        scale.push_to_ryot(cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op)
+        scale.push_to_ryot(
+            cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op
+        )
         bodies.append(op.body_of(1))
     assert bodies[0] == bodies[1]
 
@@ -143,7 +149,9 @@ def test_a_retry_of_the_same_push_sends_a_byte_identical_request():
 def test_a_different_weigh_in_gets_a_different_idempotency_key():
     a = scale.submission_id([{"name": "weight", "value": "82"}], TS)
     b = scale.submission_id([{"name": "weight", "value": "83"}], TS)
-    c = scale.submission_id([{"name": "weight", "value": "82"}], "2026-08-07T00:00:00+00:00")
+    c = scale.submission_id(
+        [{"name": "weight", "value": "82"}], "2026-08-07T00:00:00+00:00"
+    )
     assert len({a, b, c}) == 3
 
 
@@ -154,7 +162,9 @@ def test_a_missing_metric_is_created_before_logging():
     scale.push_to_ryot(cfg_v2(), stats, timestamp=TS, opener=op)
 
     create = op.requests[1]
-    assert create.full_url.endswith("/plugins/ryot/fitness/operations/measurement-metric-create")
+    assert create.full_url.endswith(
+        "/plugins/ryot/fitness/operations/measurement-metric-create"
+    )
     # Ryot derives the metric key from the name, so it must round-trip to body_fat.
     assert op.body_of(1) == {"payload": {"name": "Body Fat"}}
     assert op.body_of(2)["payload"]["values"][1] == {"metricId": "m-fat", "value": 18.5}
@@ -166,20 +176,33 @@ def test_metric_names_round_trip_to_their_keys():
 
 
 def test_an_incomplete_save_is_an_error():
-    op = FakeOpener([json_reply(METRICS), json_reply({"result": {"count": 1, "status": "incomplete"}})])
+    op = FakeOpener(
+        [
+            json_reply(METRICS),
+            json_reply({"result": {"count": 1, "status": "incomplete"}}),
+        ]
+    )
     with pytest.raises(RuntimeError, match="not fully saved"):
-        scale.push_to_ryot(cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op)
+        scale.push_to_ryot(
+            cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op
+        )
 
 
 def test_an_http_error_carries_ryots_reason():
     def rejected():
         raise urllib.error.HTTPError(
-            "http://ryot", 422, "Unprocessable", {}, io.BytesIO(b'{"_tag":"PluginOperationRejected"}')
+            "http://ryot",
+            422,
+            "Unprocessable",
+            {},
+            io.BytesIO(b'{"_tag":"PluginOperationRejected"}'),
         )
 
     op = FakeOpener([json_reply(METRICS), rejected])
     with pytest.raises(RuntimeError, match="422.*PluginOperationRejected"):
-        scale.push_to_ryot(cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op)
+        scale.push_to_ryot(
+            cfg_v2(), [{"name": "weight", "value": "82"}], timestamp=TS, opener=op
+        )
 
 
 def test_the_v2_client_outwaits_a_cold_start():

@@ -35,22 +35,42 @@ class Spend:
 
 def _counts(t):
     transfer = t.get("transfer")
-    return not transfer or (transfer.get("other_account") or {}).get("account_type") == "loan"
+    return (
+        not transfer
+        or (transfer.get("other_account") or {}).get("account_type") == "loan"
+    )
 
 
-def day_spends(day, accounts, joint=(), url="http://127.0.0.1:13334/sure", key="", opener=None):
+def day_spends(
+    day, accounts, joint=(), url="http://127.0.0.1:13334/sure", key="", opener=None
+):
     """The day's Spends on `accounts` and the `joint` ones (Sure account names)."""
     names, spends, page = set(accounts) | set(joint), [], 1
     while True:
-        q = urllib.parse.urlencode({"start_date": day.isoformat(), "end_date": day.isoformat(),
-                                    "per_page": 100, "page": page})
-        reply = get_json(f"{url}/api/v1/transactions?{q}", {"X-Api-Key": key, "Accept": "application/json"},
-                         timeout=120, opener=opener)
+        q = urllib.parse.urlencode(
+            {
+                "start_date": day.isoformat(),
+                "end_date": day.isoformat(),
+                "per_page": 100,
+                "page": page,
+            }
+        )
+        reply = get_json(
+            f"{url}/api/v1/transactions?{q}",
+            {"X-Api-Key": key, "Accept": "application/json"},
+            timeout=120,
+            opener=opener,
+        )
         for t in reply.get("transactions", []):
             if t["account"]["name"] in names and _counts(t):
-                spends.append(Spend(t["account"]["name"] in joint, -t["signed_amount_cents"] / 100,
-                                    (t.get("merchant") or {}).get("name") or t["name"],
-                                    (t.get("category") or {}).get("name") or ""))
+                spends.append(
+                    Spend(
+                        t["account"]["name"] in joint,
+                        -t["signed_amount_cents"] / 100,
+                        (t.get("merchant") or {}).get("name") or t["name"],
+                        (t.get("category") or {}).get("name") or "",
+                    )
+                )
         if page >= (reply.get("pagination") or {}).get("total_pages", 1):
             return sorted(spends, key=lambda s: -s.amount)
         page += 1

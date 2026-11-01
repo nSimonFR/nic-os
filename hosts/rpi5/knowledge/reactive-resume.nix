@@ -19,7 +19,16 @@
 #
 # Migrations self-apply on boot inside the app (apps/server/src/startup/checks.ts),
 # so there is no migrate oneshot — the app just needs a reachable DB.
-{ config, lib, pgHost, pgPort, redisHost, redisPort, tailnetFqdn, ... }:
+{
+  config,
+  lib,
+  pgHost,
+  pgPort,
+  redisHost,
+  redisPort,
+  tailnetFqdn,
+  ...
+}:
 let
   osUser = "reactive-resume"; # systemd/service identity (hyphen per convention)
   dbUser = "reactive_resume"; # postgres role == db name (no hyphen quoting needed)
@@ -27,7 +36,7 @@ let
   dataDir = "/var/lib/reactive-resume";
 
   backendPort = 13337; # real Node bind (localhost only)
-  proxyPort   = 13336; # socket-activate proxy listen; front-proxy /rxresume/ → here
+  proxyPort = 13336; # socket-activate proxy listen; front-proxy /rxresume/ → here
   # Served publicly behind the 443 nginx path-mux (front-proxy.nix) at /rxresume.
   # appUrl carries the sub-path (server builds absolute PDF/storage/share URLs
   # from it) and basePath is the Vite build-time base — the two MUST match.
@@ -44,11 +53,11 @@ in
   # restart. The app's After=reactive-resume-pg-setup ordering makes this rerun
   # first.
   nic.pgRole.reactive-resume = {
-    db              = dbName;
-    user            = dbUser;
-    passwordFile    = "/run/agenix/reactive-resume-db-password";
+    db = dbName;
+    user = dbUser;
+    passwordFile = "/run/agenix/reactive-resume-db-password";
     restartTriggers = [ config.age.secrets.reactive-resume-db-password.file ];
-    description     = "Set reactive_resume PostgreSQL password + ownership";
+    description = "Set reactive_resume PostgreSQL password + ownership";
   };
 
   # ── Runtime env file (DATABASE_URL with password + AUTH_SECRET) ───────────
@@ -130,8 +139,14 @@ in
   # The env/pg-setup oneshots keep their own wantedBy=multi-user.target, so they
   # run at boot and are ready ("active (exited)") before the first cold wake.
   systemd.services.reactive-resume = {
-    after = [ "reactive-resume-pg-setup.service" "reactive-resume-env.service" ];
-    requires = [ "reactive-resume-pg-setup.service" "reactive-resume-env.service" ];
+    after = [
+      "reactive-resume-pg-setup.service"
+      "reactive-resume-env.service"
+    ];
+    requires = [
+      "reactive-resume-pg-setup.service"
+      "reactive-resume-env.service"
+    ];
     restartTriggers = [
       config.age.secrets.reactive-resume-db-password.file
       config.age.secrets.reactive-resume-auth-secret.file
@@ -145,39 +160,39 @@ in
   # server binds ~30s after systemd "active" (startup + idempotent boot
   # migrations) — the proxy holds the first connection until the backend answers.
   services.socketActivate.reactive-resume = {
-    enable   = true;
+    enable = true;
     realUnit = "reactive-resume.service";
-    listen   = [ "127.0.0.1:${toString proxyPort}" ];
-    backend  = "127.0.0.1:${toString backendPort}";
-    idleSec  = 600;
+    listen = [ "127.0.0.1:${toString proxyPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
     readyProbe = {
-      url          = "http://127.0.0.1:${toString backendPort}/api/health";
+      url = "http://127.0.0.1:${toString backendPort}/api/health";
       expectStatus = 200;
-      timeoutSec   = 120;
+      timeoutSec = 120;
     };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.reactive-resume = {
-    backup            = [ "postgres" ];
+    backup = [ "postgres" ];
     postgresDatabases = [ "reactive_resume" ];
-    heavyUnits        = [ "reactive-resume.service" ];
-    heavyPriority     = 30;
+    heavyUnits = [ "reactive-resume.service" ];
+    heavyPriority = 30;
 
     # Prefix STRIPPED by front-proxy.nix — the server is root-native; the SPA is
     # built with Vite base=/rxresume/ so the browser requests everything under
     # /rxresume/, and the server's browser-facing URLs carry it via APP_URL.
     public = {
-      order   = 200;
-      port    = 443;
+      order = 200;
+      port = 443;
       backend = "http://127.0.0.1:13336";
       proxied = true;
       authenticated = true;
       muxPath = basePath;
       tile = {
-        name        = "Reactive Resume";
-        icon        = "reactive-resume.svg";
-        category    = "Apps";
+        name = "Reactive Resume";
+        icon = "reactive-resume.svg";
+        category = "Apps";
         description = "Resume builder";
         # Queries Reactive Resume's Postgres directly (scram auth via agenix
         # password). Postgres isn't socket-activated, so this never wakes the Node
@@ -194,9 +209,22 @@ in
             # "in 90 days" reads all 14, so no fixed window fits. `Public` stays at 0
             # deliberately — like beszel's Alerts it is an alarm, not a statistic:
             # nothing should be on the public internet, and a 1 is worth seeing.
-            { field = "resumes"; label = "Resumes"; format = "number"; }
-            { field = "updated"; label = "Updated"; format = "number"; suffix = "d ago"; }
-            { field = "public";  label = "Public";  format = "number"; }
+            {
+              field = "resumes";
+              label = "Resumes";
+              format = "number";
+            }
+            {
+              field = "updated";
+              label = "Updated";
+              format = "number";
+              suffix = "d ago";
+            }
+            {
+              field = "public";
+              label = "Public";
+              format = "number";
+            }
           ];
         };
       };

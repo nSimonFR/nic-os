@@ -123,7 +123,8 @@ def read_documents(papra_db):
             did: {"name": name, "key": key, "date": ddate, "tags": []}
             for did, name, key, ddate in con.execute(
                 "SELECT id, original_name, original_storage_key, document_date "
-                "FROM documents WHERE is_deleted = 0 AND deleted_at IS NULL")
+                "FROM documents WHERE is_deleted = 0 AND deleted_at IS NULL"
+            )
         }
         for did, tag in con.execute(
             "SELECT dt.document_id, t.name FROM documents_tags dt "
@@ -145,7 +146,9 @@ def classify(doc):
         return folder, None
     if not doc["date"]:
         return folder, UNDATED_YEAR
-    return folder, str(datetime.datetime.fromtimestamp(doc["date"] // 1000, datetime.UTC).year)
+    return folder, str(
+        datetime.datetime.fromtimestamp(doc["date"] // 1000, datetime.UTC).year
+    )
 
 
 def target_rel(doc_id, doc, taken):
@@ -255,7 +258,15 @@ def connect_pg(cfg):
 
 
 def occ_scan(cfg, run):
-    run([cfg.occ, "files:scan", "--path", f"/{cfg.nc_user}/files/{cfg.mount}", "--quiet"])
+    run(
+        [
+            cfg.occ,
+            "files:scan",
+            "--path",
+            f"/{cfg.nc_user}/files/{cfg.mount}",
+            "--quiet",
+        ]
+    )
 
 
 def archive_fileids(cur, cfg):
@@ -263,8 +274,10 @@ def archive_fileids(cur, cfg):
 
     A local:: storage's oc_filecache paths are relative to the mount root.
     """
-    cur.execute("SELECT numeric_id FROM oc_storages WHERE id = %s",
-                (f"local::{cfg.archive.rstrip('/')}/",))
+    cur.execute(
+        "SELECT numeric_id FROM oc_storages WHERE id = %s",
+        (f"local::{cfg.archive.rstrip('/')}/",),
+    )
     row = cur.fetchone()
     if not row:
         return None
@@ -279,16 +292,23 @@ def sync_tags(cfg, cur, docs, papra_tags, placed, fileids):
     survives.
     """
     names = sorted({t for d in docs.values() for t in d["tags"]})
-    cur.execute("SELECT name, id FROM oc_systemtag WHERE visibility = 1 AND name = ANY(%s)",
-                (papra_tags,))
+    cur.execute(
+        "SELECT name, id FROM oc_systemtag WHERE visibility = 1 AND name = ANY(%s)",
+        (papra_tags,),
+    )
     owned = {i for _n, i in cur.fetchall()}
-    cur.execute("SELECT name, id FROM oc_systemtag WHERE visibility = 1 AND name = ANY(%s)",
-                (names,))
+    cur.execute(
+        "SELECT name, id FROM oc_systemtag WHERE visibility = 1 AND name = ANY(%s)",
+        (names,),
+    )
     tagids = dict(cur.fetchall())
     for name in names:
         if name not in tagids and cfg.apply:
-            cur.execute("INSERT INTO oc_systemtag(name, visibility, editable) "
-                        "VALUES(%s, 1, 1) RETURNING id", (name,))
+            cur.execute(
+                "INSERT INTO oc_systemtag(name, visibility, editable) "
+                "VALUES(%s, 1, 1) RETURNING id",
+                (name,),
+            )
             tagids[name] = cur.fetchone()[0]
     owned |= set(tagids.values())
 
@@ -298,35 +318,47 @@ def sync_tags(cfg, cur, docs, papra_tags, placed, fileids):
         if fid is None:
             continue
         want = {tagids[t] for t in docs[did]["tags"] if t in tagids}
-        cur.execute("SELECT systemtagid FROM oc_systemtag_object_mapping "
-                    "WHERE objecttype = 'files' AND objectid = %s", (str(fid),))
+        cur.execute(
+            "SELECT systemtagid FROM oc_systemtag_object_mapping "
+            "WHERE objecttype = 'files' AND objectid = %s",
+            (str(fid),),
+        )
         have = {r[0] for r in cur.fetchall()}
         for tid in sorted(want - have):
             if cfg.apply:
-                cur.execute("INSERT INTO oc_systemtag_object_mapping"
-                            "(objectid, objecttype, systemtagid) VALUES(%s, 'files', %s)",
-                            (str(fid), tid))
+                cur.execute(
+                    "INSERT INTO oc_systemtag_object_mapping"
+                    "(objectid, objecttype, systemtagid) VALUES(%s, 'files', %s)",
+                    (str(fid), tid),
+                )
             added += 1
         for tid in sorted((have & owned) - want):
             if cfg.apply:
-                cur.execute("DELETE FROM oc_systemtag_object_mapping WHERE objecttype = 'files' "
-                            "AND objectid = %s AND systemtagid = %s", (str(fid), tid))
+                cur.execute(
+                    "DELETE FROM oc_systemtag_object_mapping WHERE objecttype = 'files' "
+                    "AND objectid = %s AND systemtagid = %s",
+                    (str(fid), tid),
+                )
             removed += 1
         tagged += 1
     # A move outside Nextcloud is a delete + create to its scanner, so the old
     # fileid's mappings are left pointing at nothing.
     if cfg.apply and owned:
-        cur.execute("DELETE FROM oc_systemtag_object_mapping m WHERE objecttype = 'files' "
-                    "AND systemtagid = ANY(%s) AND NOT EXISTS "
-                    "(SELECT 1 FROM oc_filecache f WHERE f.fileid::text = m.objectid)",
-                    (sorted(owned),))
+        cur.execute(
+            "DELETE FROM oc_systemtag_object_mapping m WHERE objecttype = 'files' "
+            "AND systemtagid = ANY(%s) AND NOT EXISTS "
+            "(SELECT 1 FROM oc_filecache f WHERE f.fileid::text = m.objectid)",
+            (sorted(owned),),
+        )
         removed += max(cur.rowcount, 0)
     return tagged, added, removed
 
 
 def reconcile(cfg, connect=None, run=None, log=None):
     log = log or logger("papra-nc-sync")
-    run = run or (lambda argv: subprocess.run(argv, check=True, stdout=subprocess.DEVNULL))
+    run = run or (
+        lambda argv: subprocess.run(argv, check=True, stdout=subprocess.DEVNULL)
+    )
     connect = connect or connect_pg
 
     docs, papra_tags = read_documents(cfg.papra_db)
@@ -349,19 +381,25 @@ def reconcile(cfg, connect=None, run=None, log=None):
         cur = conn.cursor()
         fileids = archive_fileids(cur, cfg)
         if fileids is None:
-            log(f"no Nextcloud storage for local::{cfg.archive}/ — is papra-nc-archive-mount up?")
+            log(
+                f"no Nextcloud storage for local::{cfg.archive}/ — is papra-nc-archive-mount up?"
+            )
             return 1
         changed = copied or moved or removed
-        if cfg.apply and (changed or any(rel not in fileids for rel in placed.values())):
+        if cfg.apply and (
+            changed or any(rel not in fileids for rel in placed.values())
+        ):
             occ_scan(cfg, run)
             fileids = archive_fileids(cur, cfg)
         tagged, added, dropped = sync_tags(cfg, cur, docs, papra_tags, placed, fileids)
     finally:
         conn.close()
 
-    log(f"DONE {'' if cfg.apply else '(dry-run) '}{len(placed)} filed "
+    log(
+        f"DONE {'' if cfg.apply else '(dry-run) '}{len(placed)} filed "
         f"(+{copied} copied, {moved} moved, {removed} pruned); {tagged} files tagged "
-        f"(+{added}/-{dropped} tags), {len(placed) - tagged} awaiting scan")
+        f"(+{added}/-{dropped} tags), {len(placed) - tagged} awaiting scan"
+    )
     return 0
 
 

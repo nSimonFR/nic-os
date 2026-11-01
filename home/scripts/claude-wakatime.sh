@@ -21,8 +21,8 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null)
 # from a linked worktree, so its parent is the repo root in both cases.
 gitdir=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
 case "$gitdir" in
-  */.git) project=$(basename "${gitdir%/.git}") ;;
-  *) project=$(basename "$cwd") ;;
+*/.git) project=$(basename "${gitdir%/.git}") ;;
+*) project=$(basename "$cwd") ;;
 esac
 [ -z "$project" ] && project=$(basename "$cwd")
 

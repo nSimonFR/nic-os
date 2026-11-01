@@ -112,7 +112,10 @@ def test_series_kinds_reads_pass_one_and_first_component_wins():
 def test_read_clock_converts_absolute_but_never_shifts_floating():
     """The regression the two-pass design exists for: Nextcloud labels a floating
     18:00 as `18:00Z`, which read as UTC becomes 20:00 Paris."""
-    assert cal.read_clock("", "20260826T140000Z", cal.KIND_ABSOLUTE).strftime("%H:%M") == "16:00"
+    assert (
+        cal.read_clock("", "20260826T140000Z", cal.KIND_ABSOLUTE).strftime("%H:%M")
+        == "16:00"
+    )
     floating = cal.read_clock("", "20260822T180000Z", cal.KIND_FLOATING)
     assert floating.strftime("%H:%M") == "18:00" and floating.tzinfo == cal.TZ
     assert cal.read_clock("VALUE=DATE", "20260827", cal.KIND_DATE) == date(2026, 8, 27)
@@ -122,13 +125,17 @@ def test_read_clock_converts_absolute_but_never_shifts_floating():
 def test_build_instances_applies_the_series_kind_not_the_payload():
     kinds = cal.series_kinds([_ics(ZONED_MASTER, FLOATING_MASTER)])
     by_uid = {
-        e["uid"]: e for e in cal.build_instances([_ics(ZONED_INSTANCE, FLOATING_INSTANCE)], kinds)
+        e["uid"]: e
+        for e in cal.build_instances([_ics(ZONED_INSTANCE, FLOATING_INSTANCE)], kinds)
     }
     assert by_uid["menage"]["start"].strftime("%H:%M") == "16:00"
     assert by_uid["festnoz"]["start"].strftime("%H:%M") == "18:00"
     assert by_uid["festnoz"]["end"].strftime("%H:%M") == "00:00"
     # An unknown uid falls back to the payload's own claim.
-    assert cal.build_instances([_ics(ZONED_INSTANCE)], {})[0]["start"].strftime("%H:%M") == "16:00"
+    assert (
+        cal.build_instances([_ics(ZONED_INSTANCE)], {})[0]["start"].strftime("%H:%M")
+        == "16:00"
+    )
 
 
 def test_parse_components_unfolds_unescapes_and_skips_dtstart_less_events():
@@ -136,7 +143,10 @@ def test_parse_components_unfolds_unescapes_and_skips_dtstart_less_events():
         "BEGIN:VEVENT\r\nUID:c\r\nDTSTART;VALUE=DATE:20260901\r\n"
         "SUMMARY:A long title that the\r\n  server folded\r\nEND:VEVENT\r\n"
     )
-    assert cal.parse_components(_ics(folded))[0]["summary"] == "A long title that the server folded"
+    assert (
+        cal.parse_components(_ics(folded))[0]["summary"]
+        == "A long title that the server folded"
+    )
     escaped = (
         "BEGIN:VEVENT\r\nUID:d\r\nDTSTART;VALUE=DATE:20260901\r\n"
         "SUMMARY:Foo\\, bar\\; baz\\nnext\r\nEND:VEVENT\r\n"
@@ -160,7 +170,11 @@ def test_build_digest_labels_relative_days_and_sorts_all_day_first():
     events = [
         {"start": today, "all_day": True, "summary": "A"},
         {"start": today + timedelta(days=1), "all_day": True, "summary": "B"},
-        {"start": datetime(2026, 8, 25, 9, 0, tzinfo=TZ), "all_day": False, "summary": "Timed"},
+        {
+            "start": datetime(2026, 8, 25, 9, 0, tzinfo=TZ),
+            "all_day": False,
+            "summary": "Timed",
+        },
         {"start": date(2026, 8, 25), "all_day": True, "summary": "AllDay"},
     ]
     out = cal.build_digest(events, today, 14)
@@ -180,13 +194,17 @@ def test_collect_joins_both_passes_in_order_and_filters_the_window(opener):
     late = "BEGIN:VEVENT\r\nUID:late\r\nDTSTART;VALUE=DATE:20261001\r\nEND:VEVENT\r\n"
     fake = opener(
         [
-            lambda: FakeResponse(_multistatus(_ics(ZONED_MASTER, FLOATING_MASTER)).encode()),
+            lambda: FakeResponse(
+                _multistatus(_ics(ZONED_MASTER, FLOATING_MASTER)).encode()
+            ),
             lambda: FakeResponse(
                 _multistatus(_ics(ZONED_INSTANCE, FLOATING_INSTANCE, late)).encode()
             ),
         ]
     )
-    events = cal.collect(cal.Config(password="pw"), today=date(2026, 8, 21), opener=fake)
+    events = cal.collect(
+        cal.Config(password="pw"), today=date(2026, 8, 21), opener=fake
+    )
     by_uid = {e["uid"]: e for e in events}
     assert by_uid["festnoz"]["start"].strftime("%H:%M") == "18:00"
     assert by_uid["menage"]["start"].strftime("%H:%M") == "16:00"
@@ -205,7 +223,10 @@ def test_config_strips_crlf_and_tolerates_a_missing_password_file(tmp_path):
     path = tmp_path / "pw"
     path.write_text("filepw\r\n")
     assert cal.Config.from_env({"CALDAV_PASSWORD_FILE": str(path)}).password == "filepw"
-    assert cal.Config.from_env({"CALDAV_PASSWORD_FILE": str(tmp_path / "nope")}).password == ""
+    assert (
+        cal.Config.from_env({"CALDAV_PASSWORD_FILE": str(tmp_path / "nope")}).password
+        == ""
+    )
 
 
 def test_calendar_main_without_a_password_is_fatal_and_silent(capsys):
@@ -242,7 +263,9 @@ def _state(tmp_path, paths):
 
 
 def test_config_parses_watch_paths_with_a_default():
-    assert cal and zen.Config.from_env({"ZEN_WATCH_PATHS": "a/b.mjs:c/d.mjs"}).watch_paths == (
+    assert cal and zen.Config.from_env(
+        {"ZEN_WATCH_PATHS": "a/b.mjs:c/d.mjs"}
+    ).watch_paths == (
         "a/b.mjs",
         "c/d.mjs",
     )
@@ -261,7 +284,11 @@ def test_first_run_reports_only_what_exists_and_saves_a_baseline(opener, tmp_pat
         [
             json_reply(RELEASE),
             json_reply(_tree(SYNC, "src/other.mjs")),
-            json_reply(_commit("2026-07-04T09:18:08Z", "gh-14470: Add space and container sync")),
+            json_reply(
+                _commit(
+                    "2026-07-04T09:18:08Z", "gh-14470: Add space and container sync"
+                )
+            ),
         ]
     )
     out = zen.run(zen.Config(state_file=state), opener=fake)
@@ -286,7 +313,10 @@ def test_always_report_restores_the_weekly_heartbeat(opener, tmp_path):
     baseline = {SYNC: True, WORKSPACES: False, zen.DEFAULT_WATCH_PATHS[2]: False}
     fake = opener([json_reply(RELEASE), json_reply(_tree(SYNC))])
     cfg = zen.Config(state_file=_state(tmp_path, baseline), always_report=True)
-    assert zen.run(cfg, opener=fake) == "Zen : aucun changement matériel détecté cette semaine."
+    assert (
+        zen.run(cfg, opener=fake)
+        == "Zen : aucun changement matériel détecté cette semaine."
+    )
 
 
 def test_an_appearing_path_speaks_and_a_vanishing_one_too(opener, tmp_path):
@@ -295,7 +325,9 @@ def test_an_appearing_path_speaks_and_a_vanishing_one_too(opener, tmp_path):
         [
             json_reply(RELEASE),
             json_reply(_tree(SYNC, WORKSPACES)),
-            json_reply(_commit("2026-08-20T17:16:13Z", "gh-14470: Add tab and folder sync")),
+            json_reply(
+                _commit("2026-08-20T17:16:13Z", "gh-14470: Add tab and folder sync")
+            ),
         ]
     )
     out = zen.run(zen.Config(state_file=_state(tmp_path, baseline)), opener=fake)
@@ -350,7 +382,11 @@ def test_silent_when_every_no_agent_binding_resolves(tmp_path):
         [
             {"id": "a", "no_agent": True, "script": "zen-watch.sh"},
             {"id": "b", "no_agent": False, "script": None},  # LLM job: not our problem
-            {"id": "c", "no_agent": True, "script": ""},  # no script yet: not a mismatch
+            {
+                "id": "c",
+                "no_agent": True,
+                "script": "",
+            },  # no script yet: not a mismatch
         ],
         seeded=["zen-watch.sh"],
     )
@@ -360,7 +396,14 @@ def test_silent_when_every_no_agent_binding_resolves(tmp_path):
 def test_names_the_job_when_its_script_is_gone(tmp_path):
     cfg = _home(
         tmp_path,
-        [{"id": "b201", "name": "Veille Zen", "no_agent": True, "script": "zen-watch.sh"}],
+        [
+            {
+                "id": "b201",
+                "name": "Veille Zen",
+                "no_agent": True,
+                "script": "zen-watch.sh",
+            }
+        ],
         seeded=[],
     )
     out = chk.run(cfg)
@@ -369,7 +412,9 @@ def test_names_the_job_when_its_script_is_gone(tmp_path):
 
 def test_a_directory_is_not_a_script_and_dict_shaped_jobs_are_read(tmp_path):
     (tmp_path / "scripts" / "zen-watch.sh").mkdir(parents=True)
-    cfg = _home(tmp_path, {"jobs": [{"id": "a", "no_agent": True, "script": "zen-watch.sh"}]})
+    cfg = _home(
+        tmp_path, {"jobs": [{"id": "a", "no_agent": True, "script": "zen-watch.sh"}]}
+    )
     assert "zen-watch.sh" in chk.run(cfg)
 
 
@@ -406,7 +451,11 @@ def _mcp_home(tmp_path, servers, tokens):
 def test_mcp_silent_while_tokens_are_far_from_expiry_or_refreshable(tmp_path):
     cfg = _mcp_home(
         tmp_path,
-        {"t3": {"url": "u", "auth": "oauth"}, "g": {"url": "u", "auth": "oauth"}, "notes": {"url": "u"}},
+        {
+            "t3": {"url": "u", "auth": "oauth"},
+            "g": {"url": "u", "auth": "oauth"},
+            "notes": {"url": "u"},
+        },
         {
             "t3": {"access_token": "a", "expires_at": NOW + 20 * DAY},
             "g": {"access_token": "a", "refresh_token": "r", "expires_at": NOW - DAY},

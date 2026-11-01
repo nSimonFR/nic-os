@@ -22,7 +22,10 @@
 
     plugins = [
       # Will load the whole folder and source nsimon.plugin.zsh:
-      { name = "nsimon"; src = ./dotfiles/zsh; }
+      {
+        name = "nsimon";
+        src = ./dotfiles/zsh;
+      }
     ];
 
     initContent = ''

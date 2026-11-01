@@ -131,10 +131,18 @@ def base_router(assets, album_names=("src", "dst"), me=ME):
     r.json("GET", "/api/users/me", {"id": me})
     r.json("GET", f"/api/albums/{SRC}", {"id": SRC, "albumName": album_names[0]})
     r.json("GET", f"/api/albums/{DST}", {"id": DST, "albumName": album_names[1]})
-    r.json("POST", "/api/search/metadata", {
-        "assets": {"items": assets, "total": len(assets), "count": len(assets),
-                   "nextPage": None}
-    })
+    r.json(
+        "POST",
+        "/api/search/metadata",
+        {
+            "assets": {
+                "items": assets,
+                "total": len(assets),
+                "count": len(assets),
+                "nextPage": None,
+            }
+        },
+    )
     return r
 
 
@@ -149,6 +157,7 @@ def owner_router(buckets, columns, me=ME):
 
 
 # --- config: the safe defaults -----------------------------------------------
+
 
 def test_empty_env_cannot_write_or_replace():
     c = adopt.Config.from_env(env())
@@ -173,18 +182,22 @@ def test_target_defaults_to_source_album():
     assert cfg(target=DST).target_album == DST
 
 
-@pytest.mark.parametrize("bad", [
-    {"key": ""},                                          # no api key
-    {"source": "", "owner": ""},                          # no source at all
-    {"source": "", "owner": "u1", "target": ""},          # owner mode, no album
-    {"source": "", "owner": "u1", "replace": True},       # replace with no album
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"key": ""},  # no api key
+        {"source": "", "owner": ""},  # no source at all
+        {"source": "", "owner": "u1", "target": ""},  # owner mode, no album
+        {"source": "", "owner": "u1", "replace": True},  # replace with no album
+    ],
+)
 def test_unusable_config_is_fatal(bad):
     with pytest.raises(adopt.AdoptError):
         adopt.run(cfg(**bad))
 
 
 # --- dry run ------------------------------------------------------------------
+
 
 def test_dry_run_writes_nothing(logged):
     lines, log = logged
@@ -205,15 +218,19 @@ def test_my_own_assets_are_never_adopted(logged):
 
 # --- the Live Photo ordering ---------------------------------------------------
 
+
 def test_motion_video_is_uploaded_before_the_still_that_links_it(logged):
     lines, log = logged
     r = base_router([still("still1", motion="mov1")])
     r.json("GET", "/api/assets/mov1", still("mov1", name="IMG.MOV"))
     r.on("GET", "/api/assets/mov1/original", b"MOVBYTES")
     r.on("GET", "/api/assets/still1/original", b"HEICBYTES")
-    r.json("POST", "/api/assets",
-           {"id": "new-mov", "status": "created"},
-           {"id": "new-still", "status": "created"})
+    r.json(
+        "POST",
+        "/api/assets",
+        {"id": "new-mov", "status": "created"},
+        {"id": "new-still", "status": "created"},
+    )
     r.json("PUT", "/assets", [{"id": "new-still", "success": True}])
 
     adopt.run(cfg(), opener=r, log=log)
@@ -257,6 +274,7 @@ def test_upload_carries_over_dates_and_filename(logged):
 
 # --- idempotency: the server's half, and ours --------------------------------
 
+
 def test_duplicate_upload_status_is_reused_not_retried(logged):
     lines, log = logged
     r = base_router([still("s1")])
@@ -275,7 +293,9 @@ def test_state_stops_a_second_run_re_downloading(tmp_path, logged):
         r = base_router([still("s1")])
         r.on("GET", "/api/assets/s1/original", b"X")
         r.json("POST", "/api/assets", {"id": "new1", "status": "created"})
-        r.json("PUT", "/assets", [{"id": "new1", "success": False, "error": "duplicate"}])
+        r.json(
+            "PUT", "/assets", [{"id": "new1", "success": False, "error": "duplicate"}]
+        )
         adopt.run(cfg(tmp=state), opener=r, log=log)
         return r
 
@@ -284,8 +304,8 @@ def test_state_stops_a_second_run_re_downloading(tmp_path, logged):
     assert json.loads(state.read_text())["adopted"] == {"s1": "new1"}
 
     second = run_once()
-    assert second.uploads() == []                                    # no re-upload
-    assert "/api/assets/s1/original" not in second.paths("GET")      # no re-download
+    assert second.uploads() == []  # no re-upload
+    assert "/api/assets/s1/original" not in second.paths("GET")  # no re-download
     # ...but membership is still re-asserted, so a hand-removed copy comes back.
     assert json.loads(second.bodies("PUT", "/assets")[0])["ids"] == ["new1"]
 
@@ -305,11 +325,15 @@ def test_unwritable_state_warns_but_still_adds_to_the_album(logged):
 
 # --- pagination ---------------------------------------------------------------
 
+
 def test_album_assets_follows_next_page():
     r = Router()
-    r.json("POST", "/api/search/metadata",
-           {"assets": {"items": [still("a")], "total": 1, "count": 1, "nextPage": "2"}},
-           {"assets": {"items": [still("b")], "total": 1, "count": 1, "nextPage": None}})
+    r.json(
+        "POST",
+        "/api/search/metadata",
+        {"assets": {"items": [still("a")], "total": 1, "count": 1, "nextPage": "2"}},
+        {"assets": {"items": [still("b")], "total": 1, "count": 1, "nextPage": None}},
+    )
     got = adopt.album_assets(cfg(), SRC, opener=r)
     assert [a["id"] for a in got] == ["a", "b"]
     pages = [json.loads(b)["page"] for b in r.bodies("POST", "/api/search/metadata")]
@@ -318,12 +342,19 @@ def test_album_assets_follows_next_page():
 
 # --- owner mode ---------------------------------------------------------------
 
+
 def test_owner_mode_walks_every_bucket_and_only_timeline_visibility():
     r = owner_router(
-        [{"timeBucket": "2026-07-01", "count": 2}, {"timeBucket": "2026-06-01", "count": 1}],
+        [
+            {"timeBucket": "2026-07-01", "count": 2},
+            {"timeBucket": "2026-06-01", "count": 1},
+        ],
         {
-            "2026-07-01": {"id": ["a", "b"], "ownerId": ["u1", "u1"],
-                           "livePhotoVideoId": [None, "mov"]},
+            "2026-07-01": {
+                "id": ["a", "b"],
+                "ownerId": ["u1", "u1"],
+                "livePhotoVideoId": [None, "mov"],
+            },
             "2026-06-01": {"id": ["c"], "ownerId": ["u1"], "livePhotoVideoId": [None]},
         },
     )
@@ -357,8 +388,13 @@ def test_owner_mode_never_adopts_my_own_uploads(logged):
     lines, log = logged
     r = owner_router(
         [{"timeBucket": "2026-07-01", "count": 2}],
-        {"2026-07-01": {"id": ["mine", "theirs"], "ownerId": [ME, THEM],
-                        "livePhotoVideoId": [None, None]}},
+        {
+            "2026-07-01": {
+                "id": ["mine", "theirs"],
+                "ownerId": [ME, THEM],
+                "livePhotoVideoId": [None, None],
+            }
+        },
     )
     r.json("GET", "/api/assets/theirs", still("theirs"))
     r.on("GET", "/api/assets/theirs/original", b"B")
@@ -370,6 +406,7 @@ def test_owner_mode_never_adopts_my_own_uploads(logged):
 
 
 # --- replace: the destructive path -------------------------------------------
+
 
 def test_replace_off_leaves_the_sharers_entry_alone(logged):
     lines, log = logged
@@ -386,11 +423,21 @@ def test_replace_removes_only_originals_whose_copy_landed(logged):
     r = base_router([still("s1"), still("s2")])
     r.on("GET", "/api/assets/s1/original", b"A")
     r.on("GET", "/api/assets/s2/original", b"B")
-    r.json("POST", "/api/assets",
-           {"id": "new1", "status": "created"}, {"id": "new2", "status": "created"})
+    r.json(
+        "POST",
+        "/api/assets",
+        {"id": "new1", "status": "created"},
+        {"id": "new2", "status": "created"},
+    )
     # new2 never made it into the target album.
-    r.json("PUT", "/assets", [{"id": "new1", "success": True},
-                              {"id": "new2", "success": False, "error": "no_permission"}])
+    r.json(
+        "PUT",
+        "/assets",
+        [
+            {"id": "new1", "success": True},
+            {"id": "new2", "success": False, "error": "no_permission"},
+        ],
+    )
     r.json("DELETE", "/assets", [{"id": "s1", "success": True}])
 
     adopt.run(cfg(replace=True), opener=r, log=log)
@@ -404,13 +451,27 @@ def test_replace_counts_an_already_in_album_copy_as_landed(tmp_path, logged):
     r = base_router([still("s1"), still("s2")])
     r.on("GET", "/api/assets/s1/original", b"A")
     r.on("GET", "/api/assets/s2/original", b"B")
-    r.json("POST", "/api/assets",
-           {"id": "new1", "status": "created"}, {"id": "new2", "status": "duplicate"})
+    r.json(
+        "POST",
+        "/api/assets",
+        {"id": "new1", "status": "created"},
+        {"id": "new2", "status": "duplicate"},
+    )
     # `duplicate` on the PUT means "already in this album" — that is landed, and
     # must not be lumped in with a real permission refusal.
-    r.json("PUT", "/assets", [{"id": "new1", "success": True},
-                              {"id": "new2", "success": False, "error": "duplicate"}])
-    r.json("DELETE", "/assets", [{"id": "s1", "success": True}, {"id": "s2", "success": True}])
+    r.json(
+        "PUT",
+        "/assets",
+        [
+            {"id": "new1", "success": True},
+            {"id": "new2", "success": False, "error": "duplicate"},
+        ],
+    )
+    r.json(
+        "DELETE",
+        "/assets",
+        [{"id": "s1", "success": True}, {"id": "s2", "success": True}],
+    )
     adopt.run(cfg(tmp=state, replace=True), opener=r, log=log)
     assert json.loads(r.bodies("DELETE", "/assets")[0])["ids"] == ["s1", "s2"]
 
@@ -422,13 +483,16 @@ def test_replace_reports_a_refusal_instead_of_pretending(logged):
     r.json("POST", "/api/assets", {"id": "new1", "status": "created"})
     r.json("PUT", "/assets", [{"id": "new1", "success": True}])
     # Not my album -> the server refuses the removal per-asset.
-    r.json("DELETE", "/assets", [{"id": "s1", "success": False, "error": "no_permission"}])
+    r.json(
+        "DELETE", "/assets", [{"id": "s1", "success": False, "error": "no_permission"}]
+    )
     adopt.run(cfg(replace=True), opener=r, log=log)
     assert any("refused" in x for x in lines)
     assert any("removed 0/1" in x for x in lines)
 
 
 # --- partial failure ----------------------------------------------------------
+
 
 def test_one_bad_asset_does_not_abandon_the_rest(tmp_path, logged):
     lines, log = logged
@@ -450,6 +514,7 @@ def test_one_bad_asset_does_not_abandon_the_rest(tmp_path, logged):
 
 
 # --- argv ---------------------------------------------------------------------
+
 
 def seen_config(monkeypatch, argv, env):
     """Run main() and hand back the Config it built, without doing any I/O."""

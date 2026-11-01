@@ -129,7 +129,8 @@ def load_personal_config(env=None):
     COST_BASIS_OVERRIDES = {
         tuple(k.split("|", 1)): float(v)
         for k, v in json.loads(
-            env_str("WEALTHFOLIO_COST_BASIS", "{}", env) or "{}").items()
+            env_str("WEALTHFOLIO_COST_BASIS", "{}", env) or "{}"
+        ).items()
     }
 
 
@@ -195,13 +196,15 @@ def merge_positions(rows):
             continue
         qty = float(cur["quantity"]) + float(pos["quantity"])
         if "avgCost" in cur and "avgCost" in pos:
-            cost = (float(cur["quantity"]) * float(cur["avgCost"])
-                    + float(pos["quantity"]) * float(pos["avgCost"]))
+            cost = float(cur["quantity"]) * float(cur["avgCost"]) + float(
+                pos["quantity"]
+            ) * float(pos["avgCost"])
             cur["avgCost"] = f"{cost / qty:.8f}" if qty else cur["avgCost"]
         else:
             cur.pop("avgCost", None)
         cur["quantity"] = f"{qty:.8f}"
     return list(merged.values())
+
 
 # Wealthfolio's own default_group_for_account_type, restated so the sidebar
 # groups match what the app would have chosen by hand.
@@ -218,7 +221,7 @@ def map_symbol(ticker):
     if ticker in SYMBOL_OVERRIDES:
         return SYMBOL_OVERRIDES[ticker]
     if ticker.startswith("CRYPTO:"):
-        return f"{ticker[len('CRYPTO:'):]}-USD"
+        return f"{ticker[len('CRYPTO:') :]}-USD"
     return ticker
 
 
@@ -254,14 +257,27 @@ class Config:
 
 # ── Sure (read side) ─────────────────────────────────────────────────────────
 
+
 def pg(cfg, run, sql):
     """Read-only SELECT as the postgres superuser over the local socket.
 
     Peer auth, same as homepage/stats.py: the sync user cannot read
     sure-pg-password (it is owned by postgres), and does not need to.
     """
-    out = run([cfg.runuser, "-u", "postgres", "--", cfg.psql,
-               "-d", cfg.sure_db, "-tAF\x1f", "-c", sql])
+    out = run(
+        [
+            cfg.runuser,
+            "-u",
+            "postgres",
+            "--",
+            cfg.psql,
+            "-d",
+            cfg.sure_db,
+            "-tAF\x1f",
+            "-c",
+            sql,
+        ]
+    )
     rows = []
     for line in out.splitlines():
         if line.strip():
@@ -271,15 +287,18 @@ def pg(cfg, run, sql):
 
 def sure_accounts(cfg, run):
     """Sure's non-draft accounts, as (id, name, accountable_type, currency)."""
-    rows = pg(cfg, run, """
+    rows = pg(
+        cfg,
+        run,
+        """
         SELECT id, name, accountable_type, currency
         FROM accounts
         WHERE status <> 'draft'
         ORDER BY name
-    """)
+    """,
+    )
     return [
-        {"id": r[0], "name": r[1].strip(), "kind": r[2], "currency": r[3]}
-        for r in rows
+        {"id": r[0], "name": r[1].strip(), "kind": r[2], "currency": r[3]} for r in rows
     ]
 
 
@@ -292,11 +311,18 @@ def sure_positions(cfg, run, since):
     would otherwise erase a basis Wealthfolio already knows.
     """
     bound = f"AND h.date >= DATE '{since}'" if since else ""
-    latest_only = "" if since else """
+    latest_only = (
+        ""
+        if since
+        else """
         AND h.date = (SELECT max(date) FROM holdings h2
                       WHERE h2.account_id = h.account_id AND h2.qty > 0)
     """
-    rows = pg(cfg, run, f"""
+    )
+    rows = pg(
+        cfg,
+        run,
+        f"""
         SELECT a.name, h.date, s.ticker, h.qty, h.currency,
                COALESCE(
                  h.cost_basis,
@@ -313,12 +339,16 @@ def sure_positions(cfg, run, since):
         JOIN securities s ON s.id = h.security_id
         WHERE h.qty > 0 {bound} {latest_only}
         ORDER BY a.name, h.date, s.ticker
-    """)
+    """,
+    )
     out = {}
     for name, date, ticker, qty, ccy, basis, mic in rows:
         symbol = map_symbol(ticker)
-        pos = {"symbol": symbol, "quantity": qty,
-               "currency": "USD" if is_crypto_pair(symbol) else ccy}
+        pos = {
+            "symbol": symbol,
+            "quantity": qty,
+            "currency": "USD" if is_crypto_pair(symbol) else ccy,
+        }
         # Crypto has no cost basis in Sure at all. Sending 0 would render as a
         # 100%-gain position; omitting it leaves the column honestly blank.
         # Crypto used to be excluded here, because Sure had no cost basis for
@@ -339,7 +369,9 @@ def sure_positions(cfg, run, since):
         # strictly better than anything Sure can tell us.
         out.setdefault((wallet_group(name.strip()), date), []).append(pos)
     # k is (account, date) — the override is keyed on the account alone.
-    return {k: apply_cost_basis_overrides(k[0], merge_positions(v)) for k, v in out.items()}
+    return {
+        k: apply_cost_basis_overrides(k[0], merge_positions(v)) for k, v in out.items()
+    }
 
 
 def sure_trades(cfg, run):
@@ -353,7 +385,10 @@ def sure_trades(cfg, run):
     for it — both of which it refuses in holdings mode, because it has no
     observed cash flows to compute them from.
     """
-    rows = pg(cfg, run, """
+    rows = pg(
+        cfg,
+        run,
+        """
         SELECT a.name, s.ticker, e.date, t.qty, t.price, t.currency
         FROM trades t
         JOIN entries e ON e.entryable_id = t.id AND e.entryable_type = 'Trade'
@@ -361,14 +396,20 @@ def sure_trades(cfg, run):
         JOIN securities s ON s.id = t.security_id
         WHERE a.status <> 'draft' AND t.qty > 0
         ORDER BY e.date
-    """)
+    """,
+    )
     out = {}
     for name, ticker, date, qty, price, ccy in rows:
         symbol = map_symbol(ticker)
-        out.setdefault(wallet_group(name.strip()), []).append({
-            "symbol": symbol, "date": date, "quantity": qty, "price": price,
-            "currency": "USD" if is_crypto_pair(symbol) else ccy,
-        })
+        out.setdefault(wallet_group(name.strip()), []).append(
+            {
+                "symbol": symbol,
+                "date": date,
+                "quantity": qty,
+                "price": price,
+                "currency": "USD" if is_crypto_pair(symbol) else ccy,
+            }
+        )
     return out
 
 
@@ -386,7 +427,10 @@ def sure_alternatives(cfg, run):
     loan). The first balance row is the same fact recorded differently, and it
     exists for both.
     """
-    rows = pg(cfg, run, """
+    rows = pg(
+        cfg,
+        run,
+        """
         SELECT a.name, a.accountable_type, a.currency, a.balance,
                (SELECT b.date::text FROM balances b WHERE b.account_id = a.id
                 ORDER BY b.date LIMIT 1),
@@ -395,11 +439,15 @@ def sure_alternatives(cfg, run):
         FROM accounts a
         WHERE a.accountable_type IN ('Property', 'Loan') AND a.status <> 'draft'
         ORDER BY a.accountable_type
-    """)
+    """,
+    )
     kinds = {"Property": "property", "Loan": "liability"}
     return [
         {
-            "name": n.strip(), "kind": kinds[t], "currency": c, "value": bal,
+            "name": n.strip(),
+            "kind": kinds[t],
+            "currency": c,
+            "value": bal,
             "start_date": first_date or None,
             "start_value": first_amount or None,
         }
@@ -408,6 +456,7 @@ def sure_alternatives(cfg, run):
 
 
 # ── Wealthfolio (write side) ─────────────────────────────────────────────────
+
 
 class Wealthfolio:
     """The REST API, carrying the session cookie by hand.
@@ -462,22 +511,33 @@ class Wealthfolio:
         return self.call("GET", "/accounts") or []
 
 
-def ensure_account(wf, log, name, account_type, currency, group, dry_run,
-                   tracking_mode="HOLDINGS"):
+def ensure_account(
+    wf, log, name, account_type, currency, group, dry_run, tracking_mode="HOLDINGS"
+):
     """Create the account if absent; return its id (None when dry and absent)."""
     for a in wf.accounts():
         if a["name"] == name:
             return a["id"]
     if dry_run:
-        log(f"DRY would create account {name} ({account_type}/{currency}, {tracking_mode})")
+        log(
+            f"DRY would create account {name} ({account_type}/{currency}, {tracking_mode})"
+        )
         return None
-    created = wf.call("POST", "/accounts", {
-        "name": name, "accountType": account_type, "group": group,
-        "currency": currency, "isDefault": False, "isActive": True,
-        # HOLDINGS unless the caller has real trades to offer. TRANSACTIONS on
-        # an account with no trade history would silently zero every position.
-        "trackingMode": tracking_mode,
-    })
+    created = wf.call(
+        "POST",
+        "/accounts",
+        {
+            "name": name,
+            "accountType": account_type,
+            "group": group,
+            "currency": currency,
+            "isDefault": False,
+            "isActive": True,
+            # HOLDINGS unless the caller has real trades to offer. TRANSACTIONS on
+            # an account with no trade history would silently zero every position.
+            "trackingMode": tracking_mode,
+        },
+    )
     log(f"created account {name} -> {created['id'][:8]}")
     return created["id"]
 
@@ -491,14 +551,19 @@ def import_snapshots(wf, log, account_id, snapshots, dry_run):
     """
     payload = {"accountId": account_id, "snapshots": snapshots}
     checked = wf.call("POST", "/snapshots/import/check", payload)
-    missing = [s["symbol"] for s in (checked or {}).get("symbols", []) if not s.get("found")]
+    missing = [
+        s["symbol"] for s in (checked or {}).get("symbols", []) if not s.get("found")
+    ]
     if missing:
         log(f"ERROR unresolved symbols {sorted(set(missing))} — account skipped")
         return 0
 
     # Carry the resolved assetIds back so the import does not re-resolve them.
-    resolved = {s["symbol"]: s.get("assetId")
-                for s in (checked or {}).get("symbols", []) if s.get("assetId")}
+    resolved = {
+        s["symbol"]: s.get("assetId")
+        for s in (checked or {}).get("symbols", [])
+        if s.get("assetId")
+    }
     for snap in snapshots:
         for pos in snap["positions"]:
             if pos["symbol"] in resolved:
@@ -509,7 +574,9 @@ def import_snapshots(wf, log, account_id, snapshots, dry_run):
         return 0
     result = wf.call("POST", "/snapshots/import", payload)
     if result.get("snapshotsFailed"):
-        log(f"WARN {result['snapshotsFailed']} snapshot(s) failed: {result.get('errors')}")
+        log(
+            f"WARN {result['snapshotsFailed']} snapshot(s) failed: {result.get('errors')}"
+        )
     return result.get("snapshotsImported", 0)
 
 
@@ -520,14 +587,18 @@ def sure_alternative_history(cfg, run):
     curve at this resolution — a mortgage amortises monthly and the flat is
     revalued a few times a year — for a thirtieth of the API calls.
     """
-    rows = pg(cfg, run, """
+    rows = pg(
+        cfg,
+        run,
+        """
         SELECT a.name, max(b.date)::text,
                (array_agg(b.balance ORDER BY b.date DESC))[1]::text
         FROM balances b JOIN accounts a ON a.id = b.account_id
         WHERE a.accountable_type IN ('Property', 'Loan') AND a.status <> 'draft'
         GROUP BY a.name, to_char(b.date, 'YYYY-MM')
         ORDER BY a.name, max(b.date)
-    """)
+    """,
+    )
     out = {}
     for name, date, value in rows:
         out.setdefault(name.strip(), []).append((date, value))
@@ -549,15 +620,23 @@ def sync_alternatives(wf, log, alternatives, today, dry_run, history=None):
         if alt["name"] in existing:
             ids[alt["kind"]] = existing[alt["name"]]["id"]
             if not dry_run:
-                wf.call("PUT", f"/alternative-assets/{ids[alt['kind']]}/valuation",
-                        {"value": alt["value"], "date": today})
+                wf.call(
+                    "PUT",
+                    f"/alternative-assets/{ids[alt['kind']]}/valuation",
+                    {"value": alt["value"], "date": today},
+                )
             continue
         if dry_run:
-            log(f"DRY would create {alt['kind']} {alt['name']} = {alt['value']} {alt['currency']}")
+            log(
+                f"DRY would create {alt['kind']} {alt['name']} = {alt['value']} {alt['currency']}"
+            )
             continue
         body = {
-            "kind": alt["kind"], "name": alt["name"], "currency": alt["currency"],
-            "currentValue": alt["value"], "valueDate": today,
+            "kind": alt["kind"],
+            "name": alt["name"],
+            "currency": alt["currency"],
+            "currentValue": alt["value"],
+            "valueDate": today,
         }
         if alt.get("start_value") and alt.get("start_date"):
             body["purchasePrice"] = alt["start_value"]
@@ -569,14 +648,20 @@ def sync_alternatives(wf, log, alternatives, today, dry_run, history=None):
         # points do not change once written, and re-pushing 32 valuations every
         # morning would be 32 calls to say nothing.
         for date, value in (history or {}).get(alt["name"], []):
-            wf.call("PUT", f"/alternative-assets/{ids[alt['kind']]}/valuation",
-                    {"value": value, "date": date})
+            wf.call(
+                "PUT",
+                f"/alternative-assets/{ids[alt['kind']]}/valuation",
+                {"value": value, "date": date},
+            )
         if (history or {}).get(alt["name"]):
             log(f"  backfilled {len(history[alt['name']])} month-end valuations")
 
     if not dry_run and "liability" in ids and "property" in ids:
-        wf.call("POST", f"/alternative-assets/{ids['liability']}/link-liability",
-                {"targetAssetId": ids["property"]})
+        wf.call(
+            "POST",
+            f"/alternative-assets/{ids['liability']}/link-liability",
+            {"targetAssetId": ids["property"]},
+        )
         # link-liability REPLACES the asset's metadata object rather than
         # merging into it, so purchase_price/purchase_date are collateral: the
         # link returns 204 and the origin is silently gone. Verified against the
@@ -585,9 +670,16 @@ def sync_alternatives(wf, log, alternatives, today, dry_run, history=None):
         # survives it.
         origin = next((a for a in alternatives if a["kind"] == "liability"), None)
         if origin and origin.get("start_value") and origin.get("start_date"):
-            wf.call("PUT", f"/alternative-assets/{ids['liability']}/metadata",
-                    {"metadata": {"purchase_price": origin["start_value"],
-                                  "purchase_date": origin["start_date"]}})
+            wf.call(
+                "PUT",
+                f"/alternative-assets/{ids['liability']}/metadata",
+                {
+                    "metadata": {
+                        "purchase_price": origin["start_value"],
+                        "purchase_date": origin["start_date"],
+                    }
+                },
+            )
         log("linked liability -> property")
 
 
@@ -599,9 +691,13 @@ def build_snapshots(positions):
     """
     by_account = {}
     for (name, date), pos in positions.items():
-        by_account.setdefault(name, []).append({
-            "date": date, "positions": pos, "cashBalances": {},
-        })
+        by_account.setdefault(name, []).append(
+            {
+                "date": date,
+                "positions": pos,
+                "cashBalances": {},
+            }
+        )
     for snapshots in by_account.values():
         snapshots.sort(key=lambda s: s["date"])
     return by_account
@@ -619,14 +715,20 @@ def sync_portfolios(wf, log, members, dry_run):
     for name, account_ids in sorted(members.items()):
         if not account_ids:
             continue
-        body = {"name": name, "accountIds": sorted(account_ids),
-                "description": "Mirrored from Sure"}
+        body = {
+            "name": name,
+            "accountIds": sorted(account_ids),
+            "description": "Mirrored from Sure",
+        }
         if name in existing:
             if not dry_run:
                 # `id` in the BODY as well as the path — the handler
                 # deserialises a full Portfolio and 422s without it.
-                wf.call("PUT", f"/portfolios/{existing[name]['id']}",
-                        {**body, "id": existing[name]["id"]})
+                wf.call(
+                    "PUT",
+                    f"/portfolios/{existing[name]['id']}",
+                    {**body, "id": existing[name]["id"]},
+                )
             continue
         if dry_run:
             log(f"DRY would create portfolio {name} ({len(account_ids)} accounts)")
@@ -648,7 +750,9 @@ def post_activity(wf, body):
         wf.call("POST", "/activities", body)
         return True
     except urllib.error.HTTPError as exc:
-        if exc.code == 400 and "Duplicate activity" in exc.read().decode(errors="replace"):
+        if exc.code == 400 and "Duplicate activity" in exc.read().decode(
+            errors="replace"
+        ):
             return False
         raise
 
@@ -667,27 +771,42 @@ def import_trades(wf, log, account_id, trades, dry_run):
 
     first = min(t["date"] for t in trades)
     funding = sum(float(t["quantity"]) * float(t["price"]) for t in trades)
-    post_activity(wf, {
-        "accountId": account_id, "activityType": "DEPOSIT",
-        "activityDate": f"{first}T00:00:00Z", "amount": round(funding, 2),
-        "currency": trades[0]["currency"], "isDraft": False,
-        "comment": "Opening balance imported from Sure",
-    })
+    post_activity(
+        wf,
+        {
+            "accountId": account_id,
+            "activityType": "DEPOSIT",
+            "activityDate": f"{first}T00:00:00Z",
+            "amount": round(funding, 2),
+            "currency": trades[0]["currency"],
+            "isDraft": False,
+            "comment": "Opening balance imported from Sure",
+        },
+    )
     n = 0
     for t in trades:
-        n += post_activity(wf, {
-            "accountId": account_id,
-            "asset": {
-                "symbol": t["symbol"],
-                "kind": "CRYPTO" if is_crypto_pair(t["symbol"]) else "SECURITY",
-                "quoteMode": "MARKET", "quoteCcy": t["currency"],
-                "providerId": "YAHOO", "providerSymbol": t["symbol"],
+        n += post_activity(
+            wf,
+            {
+                "accountId": account_id,
+                "asset": {
+                    "symbol": t["symbol"],
+                    "kind": "CRYPTO" if is_crypto_pair(t["symbol"]) else "SECURITY",
+                    "quoteMode": "MARKET",
+                    "quoteCcy": t["currency"],
+                    "providerId": "YAHOO",
+                    "providerSymbol": t["symbol"],
+                },
+                "activityType": "BUY",
+                "activityDate": f"{t['date']}T00:00:00Z",
+                "quantity": t["quantity"],
+                "unitPrice": t["price"],
+                "currency": t["currency"],
+                "fee": "0",
+                "isDraft": False,
+                "comment": "Imported from Sure",
             },
-            "activityType": "BUY", "activityDate": f"{t['date']}T00:00:00Z",
-            "quantity": t["quantity"], "unitPrice": t["price"],
-            "currency": t["currency"], "fee": "0", "isDraft": False,
-            "comment": "Imported from Sure",
-        })
+        )
     return n
 
 
@@ -704,7 +823,9 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         import subprocess
 
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True, check=True).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=True
+            ).stdout
 
     wf = Wealthfolio(cfg.wf_url, opener=opener)
     try:
@@ -727,7 +848,8 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
         if date == latest or cfg.backfill_from:
             held.setdefault(name, set()).update(p["symbol"] for p in pos)
     by_trade = {
-        name: rows for name, rows in trades.items()
+        name: rows
+        for name, rows in trades.items()
         if held.get(name) and held[name] <= {r["symbol"] for r in rows}
     }
 
@@ -748,12 +870,19 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             log(f"WARN {name} is a {src['kind']} — not an account type Wealthfolio has")
             continue
         account_id = ensure_account(
-            wf, log, name, account_type, src["currency"],
-            GROUPS.get(account_type, "Investments"), cfg.dry_run,
+            wf,
+            log,
+            name,
+            account_type,
+            src["currency"],
+            GROUPS.get(account_type, "Investments"),
+            cfg.dry_run,
         )
         if not account_id:
             continue
-        members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
+        members.setdefault(GROUPS.get(account_type, "Investments"), []).append(
+            account_id
+        )
         account_ids[name] = account_id
         imported += import_snapshots(wf, log, account_id, snapshots, cfg.dry_run)
 
@@ -765,25 +894,40 @@ def main(argv=None, env=None, opener=None, run=None, today=None):
             continue
         account_type = ACCOUNT_TYPES.get(src["kind"], "SECURITIES")
         account_id = ensure_account(
-            wf, log, name, account_type, src["currency"],
-            GROUPS.get(account_type, "Investments"), cfg.dry_run,
+            wf,
+            log,
+            name,
+            account_type,
+            src["currency"],
+            GROUPS.get(account_type, "Investments"),
+            cfg.dry_run,
             tracking_mode="TRANSACTIONS",
         )
         if account_id:
-            members.setdefault(GROUPS.get(account_type, "Investments"), []).append(account_id)
+            members.setdefault(GROUPS.get(account_type, "Investments"), []).append(
+                account_id
+            )
             account_ids[name] = account_id
             imported += import_trades(wf, log, account_id, rows, cfg.dry_run)
 
     sync_portfolios(wf, log, members, cfg.dry_run)
-    sync_alternatives(wf, log, sure_alternatives(cfg, run), today, cfg.dry_run,
-                      history=sure_alternative_history(cfg, run))
+    sync_alternatives(
+        wf,
+        log,
+        sure_alternatives(cfg, run),
+        today,
+        cfg.dry_run,
+        history=sure_alternative_history(cfg, run),
+    )
 
     if not cfg.dry_run:
         # Refresh quotes so the new positions price immediately rather than
         # waiting for the server's own 4-hourly scheduler.
         wf.call("POST", "/market-data/sync", {"refetchAll": False})
-    log(f"{'DRY RUN — ' if cfg.dry_run else ''}{imported} snapshot(s) imported "
-        f"across {len(by_account)} account(s)")
+    log(
+        f"{'DRY RUN — ' if cfg.dry_run else ''}{imported} snapshot(s) imported "
+        f"across {len(by_account)} account(s)"
+    )
     return 0
 
 

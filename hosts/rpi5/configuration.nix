@@ -63,8 +63,10 @@ let
       inherit (pkgs) bash;
       path = pkgs.lib.makeBinPath [ pkgs.coreutils ];
       installDeviceTree =
-        let args = lib.optionalString (!rpiCfg.useGenerationDeviceTree) " -r";
-        in "${deviceTreeInstaller}${args}";
+        let
+          args = lib.optionalString (!rpiCfg.useGenerationDeviceTree) " -r";
+        in
+        "${deviceTreeInstaller}${args}";
     };
   };
 
@@ -84,7 +86,10 @@ let
     isExecutable = true;
     replacements = {
       inherit (pkgs) bash;
-      path = pkgs.lib.makeBinPath [ pkgs.coreutils pkgs.gnused ];
+      path = pkgs.lib.makeBinPath [
+        pkgs.coreutils
+        pkgs.gnused
+      ];
       installFirmwareBuilder = firmwareInstaller;
       nixosGenerationsDir = rpiCfg.nixosGenerationsDir;
       nixosGenBuilder = kernelbootGenBuilder;
@@ -167,21 +172,21 @@ in
   # - vfs_cache_pressure 50: retain dentries/inodes longer under pressure,
   #   reducing metadata I/O on the SD card.
   boot.kernel.sysctl = {
-    "vm.swappiness"             = 150;
+    "vm.swappiness" = 150;
     # Redis NixOS module also sets this to "1"; mkForce overrides it.
     # overcommit=0 (heuristic) is safe for our small Redis instances.
-    "vm.overcommit_memory"      = lib.mkForce 0;
+    "vm.overcommit_memory" = lib.mkForce 0;
     "vm.watermark_scale_factor" = 50;
-    "vm.vfs_cache_pressure"     = 50;
+    "vm.vfs_cache_pressure" = 50;
     # nixpkgs sets 33 because its `isYes "ARM64_16K_PAGES"` check returns
     # false against the nixos-raspberrypi kernel (its config isn't exposed
     # the standard way). The RPi5 kernel actually has 16K pages + 47-bit VA
     # → ARCH_MMAP_RND_BITS_MAX=30, so writing 33 fails with EINVAL and
     # crashes systemd-sysctl. Force the kernel's true max.
-    "vm.mmap_rnd_bits"          = lib.mkForce 30;
+    "vm.mmap_rnd_bits" = lib.mkForce 30;
     # dirty_ratio 20% (~800 MB) let a store unpack flush in bursts long enough
     # to starve PID 1 past the 30s watchdog (2026-10-23); keep writeback steady.
-    "vm.dirty_bytes"            = 134217728;
+    "vm.dirty_bytes" = 134217728;
     "vm.dirty_background_bytes" = 33554432;
   };
 
@@ -198,15 +203,17 @@ in
     # fired — 7 watchdog resets 2026-09-20..22.
     # 15/8 sat at the idle floor: 26 kills on 2026-10-02, mostly Immich cold
     # starts killed ~1s after boot.
-    freeMemThreshold      = 10;
-    freeMemKillThreshold  = 5;
-    freeSwapThreshold     = 100;
+    freeMemThreshold = 10;
+    freeMemKillThreshold = 5;
+    freeSwapThreshold = 100;
     freeSwapKillThreshold = 100;
     extraArgs = [
       # Prefer expendable heavy processes: immich transcoding/API and ffmpeg.
-      "--prefer" "(immich|ffmpeg)"
+      "--prefer"
+      "(immich|ffmpeg)"
       # Protect critical infrastructure from being the first killed.
-      "--avoid"  "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
+      "--avoid"
+      "(postgres|redis-server|blocky|nginx|tailscaled|sshd|journald)"
     ];
   };
 
@@ -287,7 +294,6 @@ in
     KbdInteractiveAuthentication = false;
   };
 
-
   environment.systemPackages = with pkgs; [
     vim
     wget
@@ -295,15 +301,13 @@ in
     tree
     ethtool
     wakeonlan
-    sqlite  # SQL database for structured data storage
+    sqlite # SQL database for structured data storage
     blogwatcherPkg
     hydroxide
     immich-cli
-    dnsutils  # dig, nslookup
+    dnsutils # dig, nslookup
     smartmontools
   ];
-
-
 
   # Headless box: gpg-agent doubles as the SSH agent (BeAsT uses Bitwarden's).
   programs.gnupg.agent.enableSSHSupport = true;
@@ -332,16 +336,20 @@ in
     "/home" = {
       device = "/dev/disk/by-label/HOME_SSD";
       fsType = "ext4";
-      options = [ "noatime" "nofail" ];
+      options = [
+        "noatime"
+        "nofail"
+      ];
     };
     "/mnt/data" = {
       device = "/dev/disk/by-label/DATA_HDD";
       fsType = "ext4";
-      options = [ "noatime" "nofail" ];
+      options = [
+        "noatime"
+        "nofail"
+      ];
     };
   };
-
-
 
   zramSwap = {
     memoryPercent = 200; # 200% of 4 GiB ≈ 8 GiB virtual; actual RAM bounded by zstd compression (~3-4x)
@@ -407,7 +415,6 @@ in
   # flake's build closure (keep-outputs/keep-derivations above), so old
   # generations are the first thing that has to go.
   nix.gc.options = "--delete-older-than 7d";
-
 
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
   # See tailscale-serve.nix.

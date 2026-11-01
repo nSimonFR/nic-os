@@ -5,7 +5,12 @@
 # always-on watcher took the Pi (3.9 GB) down on 2026-10-26.
 # `entire brain setup` writes that watcher with the store path baked in; the
 # copy is removed before linking, or it would block Home Manager.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   generated = "entire-brain-watch.service";
   logs = "${config.home.homeDirectory}/.local/state/entire/logs/watch.log";

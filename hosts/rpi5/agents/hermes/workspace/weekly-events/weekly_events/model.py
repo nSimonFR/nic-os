@@ -4,9 +4,26 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 FIELDS = (
-    "source_id", "external_id", "title", "games", "description", "start_at", "end_at",
-    "timezone", "venue", "city", "organizer", "price", "capacity", "registered",
-    "remaining_seats", "registration_url", "event_url", "calendar_url", "status", "content_hash",
+    "source_id",
+    "external_id",
+    "title",
+    "games",
+    "description",
+    "start_at",
+    "end_at",
+    "timezone",
+    "venue",
+    "city",
+    "organizer",
+    "price",
+    "capacity",
+    "registered",
+    "remaining_seats",
+    "registration_url",
+    "event_url",
+    "calendar_url",
+    "status",
+    "content_hash",
 )
 
 

@@ -283,7 +283,11 @@ in
       # AF_UNIX is load-bearing, not boilerplate: glibc's NSS talks to
       # systemd-resolved over /run/systemd/resolve/io.systemd.Resolve, so without
       # it every fetch dies on name resolution rather than on the network.
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
     };
   };
   systemd.timers.ics-mirror = {
@@ -316,7 +320,10 @@ in
     # (~127 MB peak RSS, measured). Cheap to shed while a build needs the RAM —
     # heavy-shed only restores units that were active, so the dormant oneshot is
     # never spuriously started. nginx stays up: it is infra.
-    heavyUnits = [ "ics-mirror.timer" "ics-mirror.service" ];
+    heavyUnits = [
+      "ics-mirror.timer"
+      "ics-mirror.service"
+    ];
 
     public = {
       # Directly after Nextcloud (30), which is the store these numbers come from;
@@ -339,9 +346,21 @@ in
           url = "http://127.0.0.1:8087/calino";
           refreshInterval = 3600000;
           mappings = [
-            { field = "today"; label = "Today"; format = "number"; }
-            { field = "week"; label = "7 days"; format = "number"; }
-            { field = "tasks"; label = "Tasks due"; format = "number"; }
+            {
+              field = "today";
+              label = "Today";
+              format = "number";
+            }
+            {
+              field = "week";
+              label = "7 days";
+              format = "number";
+            }
+            {
+              field = "tasks";
+              label = "Tasks due";
+              format = "number";
+            }
           ];
         };
       };

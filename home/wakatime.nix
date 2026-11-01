@@ -1,4 +1,10 @@
-{ pkgs, unstablePkgs, lib, config, ... }:
+{
+  pkgs,
+  unstablePkgs,
+  lib,
+  config,
+  ...
+}:
 {
   # unstable ships wakatime-cli 2.x (2.26.0 as of 2026-09); stable (25.11) still pins 1.130.1 which
   # predates the [api_urls] config section. We need >=2.x so ~/.wakatime.cfg's

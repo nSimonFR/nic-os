@@ -11,8 +11,15 @@ import hashlib
 import os
 import sqlite3
 
-SIGNALS = ("needs_reply", "deadline", "money", "security", "human_sender",
-           "bulk", "urgency")
+SIGNALS = (
+    "needs_reply",
+    "deadline",
+    "money",
+    "security",
+    "human_sender",
+    "bulk",
+    "urgency",
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS messages (
@@ -91,9 +98,19 @@ def upsert_seen(conn, envelopes, now, state="unread"):
                  last_seen = excluded.last_seen,
                  state     = excluded.state,
                  url       = excluded.url""",
-            (key, env.get("account", ""), env.get("source", ""),
-             env.get("thread", ""), env.get("from", ""), env.get("subject", ""),
-             env.get("date", ""), env.get("url", ""), now, now, state),
+            (
+                key,
+                env.get("account", ""),
+                env.get("source", ""),
+                env.get("thread", ""),
+                env.get("from", ""),
+                env.get("subject", ""),
+                env.get("date", ""),
+                env.get("url", ""),
+                now,
+                now,
+                state,
+            ),
         )
     conn.commit()
     return keys
@@ -115,9 +132,15 @@ def save_classification(conn, key, result, model, now):
               jev_model = ?, classified_at = ?, input_tokens = ?
             WHERE key = ?""",
         tuple(sig.get(s) for s in SIGNALS)
-        + (result.get("rank"), result.get("disposition"),
-           result.get("disposition_confidence"), model, now,
-           int((result.get("usage") or {}).get("input_tokens") or 0), key),
+        + (
+            result.get("rank"),
+            result.get("disposition"),
+            result.get("disposition_confidence"),
+            model,
+            now,
+            int((result.get("usage") or {}).get("input_tokens") or 0),
+            key,
+        ),
     )
 
 
@@ -147,21 +170,28 @@ def reconcile(conn, accounts, seen_keys, now):
 
 def live_ranked(conn):
     """Classified, still-present messages, best first — the digest's input."""
-    return [dict(r) for r in conn.execute(
-        "SELECT * FROM messages WHERE state = 'unread' AND classified_at IS NOT NULL "
-        "ORDER BY rank DESC, date DESC, subject ASC")]
+    return [
+        dict(r)
+        for r in conn.execute(
+            "SELECT * FROM messages WHERE state = 'unread' AND classified_at IS NOT NULL "
+            "ORDER BY rank DESC, date DESC, subject ASC"
+        )
+    ]
 
 
 def mark_surfaced(conn, keys, now):
     for key in keys:
         conn.execute(
             "UPDATE messages SET surfaced_count = surfaced_count + 1, "
-            "last_surfaced = ? WHERE key = ?", (now, key))
+            "last_surfaced = ? WHERE key = ?",
+            (now, key),
+        )
     conn.commit()
 
 
 def spend(conn):
     row = conn.execute(
         "SELECT COUNT(*) n, COALESCE(SUM(input_tokens),0) t FROM messages "
-        "WHERE classified_at IS NOT NULL").fetchone()
+        "WHERE classified_at IS NOT NULL"
+    ).fetchone()
     return {"classified": row["n"], "input_tokens": row["t"]}

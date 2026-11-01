@@ -1,4 +1,9 @@
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.sumeria-mitm;
 
@@ -60,14 +65,14 @@ in
     enable = lib.mkEnableOption "Sumeria token extractor (a tailnet-mitm target)";
 
     tokenFile = lib.mkOption {
-      type        = lib.types.str;
-      default     = "/var/lib/sumeria-mitm/tokens.json";
+      type = lib.types.str;
+      default = "/var/lib/sumeria-mitm/tokens.json";
       description = "Path where captured Sumeria tokens are written";
     };
 
     tokenFileGroup = lib.mkOption {
-      type        = lib.types.str;
-      default     = "sumeria-mitm";
+      type = lib.types.str;
+      default = "sumeria-mitm";
       description = "Group that gets read access to the token file (set to consumer's group)";
     };
   };
@@ -79,12 +84,15 @@ in
       # lc.lydia-app.com round-robins across several VIPs; all are advertised.
       # The authenticated calls are back on api.lydia-app.com (2026-10-05): with
       # only lc routed, the app's lc calls carried no tokens.
-      hosts       = [ "lc.${apiDomain}" "api.${apiDomain}" ];
-      allowHosts  = apiDomainRe;
-      addon       = "${tokenExtractor}";
+      hosts = [
+        "lc.${apiDomain}"
+        "api.${apiDomain}"
+      ];
+      allowHosts = apiDomainRe;
+      addon = "${tokenExtractor}";
       environment.SUMERIA_TOKEN_FILE = cfg.tokenFile;
       # lc.lydia-app.com has AAAA records since ~2026-10; without this, v6 clients bypass rpi5.
-      ipv6        = true;
+      ipv6 = true;
     };
   };
 }

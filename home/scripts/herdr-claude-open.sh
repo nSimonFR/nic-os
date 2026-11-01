@@ -18,31 +18,31 @@ from="$HERDR_ACTIVE_PANE_ID"
 cwd="${HERDR_ACTIVE_PANE_CWD:-$PWD}"
 
 case "${2:-}" in
-  "") run=claude ;;
-  asale) run=claude-asale ;;
-  *)
-    echo "usage: herdr-claude-open <down|right|tab|workspace> [asale]" >&2
-    exit 1
-    ;;
+"") run=claude ;;
+asale) run=claude-asale ;;
+*)
+  echo "usage: herdr-claude-open <down|right|tab|workspace> [asale]" >&2
+  exit 1
+  ;;
 esac
 
 case "${1:-down}" in
-  down | right)
-    pane=$(herdr pane split --pane "$from" --direction "$1" --cwd "$cwd" --focus |
-      jq -r '.result.pane.pane_id')
-    ;;
-  tab)
-    pane=$(herdr tab create --workspace "$HERDR_ACTIVE_WORKSPACE_ID" --cwd "$cwd" --focus |
-      jq -r '.result.root_pane.pane_id')
-    ;;
-  workspace)
-    pane=$(herdr workspace create --cwd "$cwd" --label "${cwd##*/}" --focus |
-      jq -r '.result.root_pane.pane_id')
-    ;;
-  *)
-    echo "usage: herdr-claude-open <down|right|tab|workspace>" >&2
-    exit 1
-    ;;
+down | right)
+  pane=$(herdr pane split --pane "$from" --direction "$1" --cwd "$cwd" --focus |
+    jq -r '.result.pane.pane_id')
+  ;;
+tab)
+  pane=$(herdr tab create --workspace "$HERDR_ACTIVE_WORKSPACE_ID" --cwd "$cwd" --focus |
+    jq -r '.result.root_pane.pane_id')
+  ;;
+workspace)
+  pane=$(herdr workspace create --cwd "$cwd" --label "${cwd##*/}" --focus |
+    jq -r '.result.root_pane.pane_id')
+  ;;
+*)
+  echo "usage: herdr-claude-open <down|right|tab|workspace>" >&2
+  exit 1
+  ;;
 esac
 
 # The calling pane's Claude session, when it has one. With nothing to fork there

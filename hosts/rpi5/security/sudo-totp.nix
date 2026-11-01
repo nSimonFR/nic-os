@@ -20,14 +20,19 @@ in
       order = 11600; # before unix (11700, off) and the closing pam_deny
       control = "sufficient";
       modulePath = "${pkgs.google-authenticator}/lib/security/pam_google_authenticator.so";
-      args = [ "secret=${secretDir}/\${USER}" "user=root" ];
+      args = [
+        "secret=${secretDir}/\${USER}"
+        "user=root"
+      ];
     };
   };
 
-  security.sudo.extraRules = [{
-    users = [ "nsimon" ];
-    commands = [{ command = "ALL"; }];
-  }];
+  security.sudo.extraRules = [
+    {
+      users = [ "nsimon" ];
+      commands = [ { command = "ALL"; } ];
+    }
+  ];
   # A cached sudo would turn one code into minutes of root for every agent.
   security.sudo.extraConfig = ''
     Defaults:nsimon timestamp_timeout=0

@@ -92,7 +92,11 @@ in
   systemd.services.affine-mcp = {
     description = "AFFiNE MCP server (DAWNCR0W) — write-capable bridge";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network.target" "affine.service" "affine-mcp-env.service" ];
+    after = [
+      "network.target"
+      "affine.service"
+      "affine-mcp-env.service"
+    ];
     wants = [ "affine.service" ];
     requires = [ "affine-mcp-env.service" ];
     # Pick up rotated tokens on rebuild — restart triggers fire on .age
@@ -131,26 +135,34 @@ in
       ProtectKernelTunables = true;
       ProtectKernelModules = true;
       ProtectControlGroups = true;
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
       LockPersonality = true;
       RestrictRealtime = true;
       RestrictNamespaces = true;
-      SystemCallFilter = [ "@system-service" "~@privileged" "~@resources" ];
+      SystemCallFilter = [
+        "@system-service"
+        "~@privileged"
+        "~@resources"
+      ];
     };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.affine-mcp = {
-    backup        = [ "none" ];
-    backupNote    = "stateless bridge — every document it serves lives in AFFiNE's Postgres";
-    heavyUnits    = [ "affine-mcp.service" ];
+    backup = [ "none" ];
+    backupNote = "stateless bridge — every document it serves lives in AFFiNE's Postgres";
+    heavyUnits = [ "affine-mcp.service" ];
     heavyPriority = 60;
 
     # No tile: an internal MCP gateway, not user-facing. Backend is the
     # tiny-llm-gate mount rather than the service's own bind.
     public = {
-      order   = 310;
-      port    = 7020;
+      order = 310;
+      port = 7020;
       backend = "http://127.0.0.1:4001/mcp/affine";
     };
   };

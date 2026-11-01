@@ -12,11 +12,20 @@ def fixed(n):
 
 def test_secret_file_is_pam_google_authenticator_format():
     text = st.secret_file("ABCDEF")
-    assert text.splitlines() == ["ABCDEF", '" RATE_LIMIT 3 30', '" WINDOW_SIZE 3', '" DISALLOW_REUSE', '" TOTP_AUTH']
+    assert text.splitlines() == [
+        "ABCDEF",
+        '" RATE_LIMIT 3 30',
+        '" WINDOW_SIZE 3',
+        '" DISALLOW_REUSE',
+        '" TOTP_AUTH',
+    ]
 
 
 def test_otpauth_uri():
-    assert st.otpauth("ABC", "nsimon") == "otpauth://totp/rpi5%20sudo%3Ansimon?secret=ABC&issuer=rpi5%20sudo"
+    assert (
+        st.otpauth("ABC", "nsimon")
+        == "otpauth://totp/rpi5%20sudo%3Ansimon?secret=ABC&issuer=rpi5%20sudo"
+    )
 
 
 def test_enroll_writes_a_private_file_and_stores_the_same_secret(tmp_path):
@@ -33,13 +42,19 @@ def test_enroll_writes_a_private_file_and_stores_the_same_secret(tmp_path):
 def test_enroll_refuses_to_overwrite(tmp_path):
     path = tmp_path / "nsimon"
     path.write_text("OLD\n")
-    assert st.enroll(str(path), "nsimon", lambda u: pytest.fail("stored"), log=lambda m: None) == 3
+    assert (
+        st.enroll(
+            str(path), "nsimon", lambda u: pytest.fail("stored"), log=lambda m: None
+        )
+        == 3
+    )
     assert path.read_text() == "OLD\n"
 
 
 def test_enroll_leaves_nothing_when_the_vault_fails(tmp_path):
     def broken(uri):
         raise st.VaultError("down")
+
     with pytest.raises(st.VaultError):
         st.enroll(str(tmp_path / "nsimon"), "nsimon", broken, log=lambda m: None)
     assert os.listdir(tmp_path) == []

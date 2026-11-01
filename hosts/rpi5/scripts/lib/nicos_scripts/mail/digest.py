@@ -31,14 +31,14 @@ DEFAULT_DB = "/home/nsimon/.mail-digest/mail.db"
 DEFAULT_PROTON_USER = "nsimon@protonmail.com"
 DEFAULT_QUERY = "in:inbox is:unread"
 BACKFILL_QUERY = "in:inbox newer_than:90d"
-FOLD_AT = 5          # past this many items a section collapses into <details>
+FOLD_AT = 5  # past this many items a section collapses into <details>
 SUBJECT_MAX = 58
 
 
 @dataclass(frozen=True)
 class Config:
     db: str = DEFAULT_DB
-    gmail: tuple = ()          # ((role, address), …)
+    gmail: tuple = ()  # ((role, address), …)
     proton_role: str = "personal"
     proton_index: str = "0"
     proton_user: str = DEFAULT_PROTON_USER
@@ -66,7 +66,8 @@ class Config:
             proton_index=env_str("MAIL_PROTON_INDEX", "0", env),
             proton_user=env_str("PROTON_USER", DEFAULT_PROTON_USER, env),
             proton_pass_file=env_str(
-                "PROTON_PASS_FILE", "/run/agenix/protonmail-bridge-password", env),
+                "PROTON_PASS_FILE", "/run/agenix/protonmail-bridge-password", env
+            ),
             query=env_str("MAIL_QUERY", DEFAULT_QUERY, env),
             endpoint=env_str("TYPESAFE_ENDPOINT", jev.DEFAULT_ENDPOINT, env),
             model=env_str("TYPESAFE_MODEL", jev.DEFAULT_MODEL, env),
@@ -92,13 +93,17 @@ def collect(cfg, query, run=None, connect=None):
             out.append(row)
     if cfg.proton_user:
         connect = connect or fetch.imap_connect
-        M = connect(fetch.IMAP_HOST, fetch.IMAP_PORT, cfg.proton_user,
-                    read_secret(cfg.proton_pass_file))
+        M = connect(
+            fetch.IMAP_HOST,
+            fetch.IMAP_PORT,
+            cfg.proton_user,
+            read_secret(cfg.proton_pass_file),
+        )
         try:
             criteria = "ALL" if "newer_than" in query else "UNSEEN"
-            for row in fetch.imap(M, criteria,
-                                  source=f"proton:{cfg.proton_index}",
-                                  limit=cfg.limit):
+            for row in fetch.imap(
+                M, criteria, source=f"proton:{cfg.proton_index}", limit=cfg.limit
+            ):
                 row["account"] = cfg.proton_role
                 out.append(row)
         finally:
@@ -113,13 +118,23 @@ def classify_pending(cfg, conn, pending, now, post=None):
     """Run Jev over rows that have never been classified. Returns usage."""
     if not pending:
         return {"messages": 0, "failed": 0, "input_tokens": 0, "usd": 0.0}
-    envelopes = [{"id": r["key"], "account": r["account"], "source": r["source"],
-                  "threadId": r["thread"], "from": r["sender"],
-                  "subject": r["subject"], "date": r["date"],
-                  "body": r.get("body", "")} for r in pending]
+    envelopes = [
+        {
+            "id": r["key"],
+            "account": r["account"],
+            "source": r["source"],
+            "threadId": r["thread"],
+            "from": r["sender"],
+            "subject": r["subject"],
+            "date": r["date"],
+            "body": r.get("body", ""),
+        }
+        for r in pending
+    ]
     kwargs = {"post": post} if post else {}
     results, usage = jev.classify(
-        envelopes, jev.resolve_key(), cfg.endpoint, cfg.model, **kwargs)
+        envelopes, jev.resolve_key(), cfg.endpoint, cfg.model, **kwargs
+    )
     for res in results:
         store.save_classification(conn, res["id"], res, cfg.model, now)
     conn.commit()
@@ -183,8 +198,11 @@ def section(title, emoji, rows):
         return [f"## {emoji} {title}", "", "- none", ""]
     body = [bullet(r) for r in rows]
     if len(rows) > FOLD_AT:
-        return ([f"<details><summary>{emoji} {title} ({len(rows)})</summary>", ""]
-                + body + ["", "</details>", ""])
+        return (
+            [f"<details><summary>{emoji} {title} ({len(rows)})</summary>", ""]
+            + body
+            + ["", "</details>", ""]
+        )
     return [f"## {emoji} {title}", ""] + body + [""]
 
 
@@ -214,8 +232,7 @@ def important_counts(cfg, run=None):
     out = {}
     for role, address in cfg.gmail:
         try:
-            rows = fetch.gmail(address, "in:inbox is:important",
-                               limit=500, run=run)
+            rows = fetch.gmail(address, "in:inbox is:important", limit=500, run=run)
             out[role] = out.get(role, 0) + len(rows)
         except fetch.FetchFailed:
             out.setdefault(role, 0)
@@ -236,13 +253,21 @@ def send(cfg, text, run=None):
 
 def main(argv=None, env=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("--backfill", action="store_true",
-                    help="widen to 90 days, read and unread, and do not send")
-    ap.add_argument("--dry-run", action="store_true",
-                    help="print the digest instead of sending it")
+    ap.add_argument(
+        "--backfill",
+        action="store_true",
+        help="widen to 90 days, read and unread, and do not send",
+    )
+    ap.add_argument(
+        "--dry-run", action="store_true", help="print the digest instead of sending it"
+    )
     ap.add_argument("--max", type=int, default=None)
-    ap.add_argument("--batch", type=int, default=None,
-                    help="classify at most N messages this run (cost control)")
+    ap.add_argument(
+        "--batch",
+        type=int,
+        default=None,
+        help="classify at most N messages this run (cost control)",
+    )
     args = ap.parse_args(argv)
 
     cfg = Config.from_env(env)
@@ -275,8 +300,10 @@ def main(argv=None, env=None):
         row["body"] = bodies.get(row["key"], "")
     usage = classify_pending(cfg, conn, pending, now)
     failed = usage["failed"]
-    log(f"fetched {len(envelopes)}, {len(pending)} pending, "
-        f"classified {usage['messages']}, failed {failed}, ${usage['usd']:.4f}")
+    log(
+        f"fetched {len(envelopes)}, {len(pending)} pending, "
+        f"classified {usage['messages']}, failed {failed}, ${usage['usd']:.4f}"
+    )
 
     # "classified 0" is the signature of a healthy re-run AND of a dead API.
     # Only the pending count tells them apart, so branch on it rather than on
@@ -293,8 +320,7 @@ def main(argv=None, env=None):
         warning = f"{failed} message(s) non classé(s) — {first[:120]}"
 
     if not args.backfill:
-        store.reconcile(conn, [r for r, _ in cfg.gmail] + [cfg.proton_role],
-                        keys, now)
+        store.reconcile(conn, [r for r, _ in cfg.gmail] + [cfg.proton_role], keys, now)
 
     if args.backfill:
         log(f"backfill done: {store.spend(conn)}")
@@ -314,8 +340,7 @@ def main(argv=None, env=None):
         print(text)
         return 0
 
-    surfaced = [r["key"] for k in ("top_actions", "read_if_time")
-                for r in buckets[k]]
+    surfaced = [r["key"] for k in ("top_actions", "read_if_time") for r in buckets[k]]
     if not send(cfg, text):
         log("FATAL: telegram send rejected")
         return 1

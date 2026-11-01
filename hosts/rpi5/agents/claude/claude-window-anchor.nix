@@ -34,7 +34,11 @@
   systemd.timers.claude-window-anchor = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = [ "*-*-* 07:00:00" "*-*-* 12:00:00" "*-*-* 17:00:00" ];
+      OnCalendar = [
+        "*-*-* 07:00:00"
+        "*-*-* 12:00:00"
+        "*-*-* 17:00:00"
+      ];
       # Catch-up after a reboot is safe: the script skips pings outside 07:00–20:00.
       Persistent = true;
     };

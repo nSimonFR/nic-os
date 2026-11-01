@@ -68,7 +68,9 @@ def run(cfg, opener=open):
 
     missing = unbound(jobs, home / "scripts")
     if not missing:
-        log(f"{sum(1 for j in jobs if j.get('no_agent'))} no_agent bindings all resolve")
+        log(
+            f"{sum(1 for j in jobs if j.get('no_agent'))} no_agent bindings all resolve"
+        )
         return ""
 
     return "\n".join(

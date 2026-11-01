@@ -63,7 +63,9 @@ def _link_session(flow: http.HTTPFlow) -> None:
     if root is None:
         return
     # Re-serialising is safe for prompt caching, which keys on content, not bytes.
-    flow.request.content = json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode()
+    flow.request.content = json.dumps(
+        body, ensure_ascii=False, separators=(",", ":")
+    ).encode()
     flow.request.headers["X-Claude-Code-Session-Id"] = root
 
 

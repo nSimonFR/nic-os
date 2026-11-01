@@ -105,12 +105,37 @@ IDLE_DRAIN_TIMEOUT = 60  # finite timeout for the IDLE DONE-drain
 # Senders whose mail is worth handing to the LLM. Substring match on the From
 # address. Broad on purpose — the LLM guardrail is what actually decides.
 SENDER_DOMAINS = (
-    "airbnb.", "booking.com", "hotels.com", "expedia.", "agoda.com",
-    "marriott.", "accor.", "hilton.", "ihg.com", "vrbo.com", "abritel.",
-    "airfrance.", "klm.", "easyjet.", "ryanair.", "transavia.",
-    "lufthansa.", "ba.com", "britishairways.", "vueling.", "wizzair.",
-    "sncf.", "oui.sncf", "sncf-connect.", "trainline.", "thetrainline.",
-    "eurostar.", "flixbus.", "blablacar.", "renfe.", "trenitalia.",
+    "airbnb.",
+    "booking.com",
+    "hotels.com",
+    "expedia.",
+    "agoda.com",
+    "marriott.",
+    "accor.",
+    "hilton.",
+    "ihg.com",
+    "vrbo.com",
+    "abritel.",
+    "airfrance.",
+    "klm.",
+    "easyjet.",
+    "ryanair.",
+    "transavia.",
+    "lufthansa.",
+    "ba.com",
+    "britishairways.",
+    "vueling.",
+    "wizzair.",
+    "sncf.",
+    "oui.sncf",
+    "sncf-connect.",
+    "trainline.",
+    "thetrainline.",
+    "eurostar.",
+    "flixbus.",
+    "blablacar.",
+    "renfe.",
+    "trenitalia.",
 )
 # Subject keywords (any language we care about) as a fallback net.
 SUBJECT_RE = re.compile(
@@ -135,17 +160,37 @@ TRAVEL_TYPES = {"stay", "flight", "train", "bus", "ferry", "car"}
 # Map a sender to a human platform label shown on the event (title prefix +
 # iCal CATEGORIES) — e.g. an Airbnb reservation reads as "Airbnb".
 SOURCE_PLATFORMS = (
-    ("airbnb.", "Airbnb"), ("booking.com", "Booking.com"), ("hotels.com", "Hotels.com"),
-    ("expedia.", "Expedia"), ("agoda.", "Agoda"), ("vrbo.", "Vrbo"), ("abritel.", "Abritel"),
-    ("marriott.", "Marriott"), ("accor.", "Accor"), ("hilton.", "Hilton"), ("ihg.com", "IHG"),
-    ("thetrainline.", "Trainline"), ("trainline.", "Trainline"),
-    ("sncf-connect.", "SNCF Connect"), ("oui.sncf", "SNCF"), ("sncf.", "SNCF"),
-    ("eurostar.", "Eurostar"), ("flixbus.", "FlixBus"), ("blablacar.", "BlaBlaCar"),
-    ("renfe.", "Renfe"), ("trenitalia.", "Trenitalia"),
-    ("airfrance.", "Air France"), ("klm.", "KLM"), ("easyjet.", "easyJet"),
-    ("ryanair.", "Ryanair"), ("transavia.", "Transavia"), ("lufthansa.", "Lufthansa"),
-    ("vueling.", "Vueling"), ("wizzair.", "Wizz Air"),
-    ("britishairways.", "British Airways"), ("ba.com", "British Airways"),
+    ("airbnb.", "Airbnb"),
+    ("booking.com", "Booking.com"),
+    ("hotels.com", "Hotels.com"),
+    ("expedia.", "Expedia"),
+    ("agoda.", "Agoda"),
+    ("vrbo.", "Vrbo"),
+    ("abritel.", "Abritel"),
+    ("marriott.", "Marriott"),
+    ("accor.", "Accor"),
+    ("hilton.", "Hilton"),
+    ("ihg.com", "IHG"),
+    ("thetrainline.", "Trainline"),
+    ("trainline.", "Trainline"),
+    ("sncf-connect.", "SNCF Connect"),
+    ("oui.sncf", "SNCF"),
+    ("sncf.", "SNCF"),
+    ("eurostar.", "Eurostar"),
+    ("flixbus.", "FlixBus"),
+    ("blablacar.", "BlaBlaCar"),
+    ("renfe.", "Renfe"),
+    ("trenitalia.", "Trenitalia"),
+    ("airfrance.", "Air France"),
+    ("klm.", "KLM"),
+    ("easyjet.", "easyJet"),
+    ("ryanair.", "Ryanair"),
+    ("transavia.", "Transavia"),
+    ("lufthansa.", "Lufthansa"),
+    ("vueling.", "Vueling"),
+    ("wizzair.", "Wizz Air"),
+    ("britishairways.", "British Airways"),
+    ("ba.com", "British Airways"),
 )
 
 SYSTEM_PROMPT = (
@@ -225,14 +270,18 @@ class Config:
             lookback_days=env_int("LOOKBACK_DAYS", DEFAULT_LOOKBACK_DAYS, env),
             state_dir=env_str("STATE_DIR", DEFAULT_STATE_DIR, env),
             rescan_seconds=env_int("RESCAN_SECONDS", DEFAULT_RESCAN_SECONDS, env),
-            caldav_home=env_str("NEXTCLOUD_CALDAV_URL", DEFAULT_CALDAV_HOME, env).rstrip("/") + "/",
+            caldav_home=env_str(
+                "NEXTCLOUD_CALDAV_URL", DEFAULT_CALDAV_HOME, env
+            ).rstrip("/")
+            + "/",
             nc_user=env_str("NEXTCLOUD_USER", "nsimon", env),
             nc_pass_file=env_str("NEXTCLOUD_PASS_FILE", DEFAULT_NC_PASS_FILE, env),
             nc_cal=env_str("NEXTCLOUD_CAL", "", env),
             telegram_send=env_str("TELEGRAM_SEND", "", env),
             papra_dest=env_str("PAPRA_DEST", "", env),
             papra_poll_state=env_str("PAPRA_POLL_STATE", DEFAULT_PAPRA_POLL_STATE, env),
-            file_all_mail=env_str("PAPRA_FILE_ALL_MAIL", "1", env) not in ("0", "", "false"),
+            file_all_mail=env_str("PAPRA_FILE_ALL_MAIL", "1", env)
+            not in ("0", "", "false"),
         )
 
     @property
@@ -247,6 +296,7 @@ class Config:
 
 
 # ── small utils ─────────────────────────────────────────────────────────────
+
 
 def source_platform(frm):
     frm = (frm or "").lower()
@@ -271,8 +321,8 @@ def load_state(cfg):
     s = load_json(cfg.state_file, {})
     if not isinstance(s, dict):
         s = {}
-    s.setdefault("seen", [])       # processed Message-IDs
-    s.setdefault("last_scan", 0)   # epoch of last successful scan
+    s.setdefault("seen", [])  # processed Message-IDs
+    s.setdefault("last_scan", 0)  # epoch of last successful scan
     return s
 
 
@@ -284,9 +334,12 @@ def save_state(cfg, s):
 
 # ── IMAP ────────────────────────────────────────────────────────────────────
 
+
 def imap_connect(cfg):
     M = imaplib.IMAP4(cfg.imap_host, cfg.imap_port)
-    M.socket().settimeout(SOCKET_TIMEOUT)  # login/select/search/fetch can't hang forever
+    M.socket().settimeout(
+        SOCKET_TIMEOUT
+    )  # login/select/search/fetch can't hang forever
     M.login(cfg.proton_user, read_secret(cfg.proton_pass_file))
     mbox = f'"{cfg.mailbox}"' if " " in cfg.mailbox else cfg.mailbox
     typ, _ = M.select(mbox, readonly=True)
@@ -301,9 +354,10 @@ def fetch_headers(M, ids, chunk=500):
     `chunk` messages; BODYSTRUCTURE rides in the FETCH prelude for free."""
     out, structs = {}, {}
     for i in range(0, len(ids), chunk):
-        batch = b",".join(ids[i:i + chunk])
+        batch = b",".join(ids[i : i + chunk])
         typ, data = M.fetch(
-            batch, "(BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)])")
+            batch, "(BODYSTRUCTURE BODY.PEEK[HEADER.FIELDS (FROM SUBJECT MESSAGE-ID)])"
+        )
         if typ != "OK":
             continue
         for item in data:
@@ -336,7 +390,9 @@ def body_text(msg):
         elif ct == "text/html" and htmltext is None:
             htmltext = _decode(part)
     text = plain or _strip_html(htmltext or "")
-    return re.sub(r"\n{3,}", "\n\n", text).strip()[:12000]  # keep both legs of a round-trip
+    return re.sub(r"\n{3,}", "\n\n", text).strip()[
+        :12000
+    ]  # keep both legs of a round-trip
 
 
 def _decode(part):
@@ -354,6 +410,7 @@ def _strip_html(s):
 
 # ── extraction via tiny-llm-gate ────────────────────────────────────────────
 
+
 class UpstreamDown(Exception):
     """The LLM gate or its model is unavailable (host down, plan quota hit). Signals the
     daemon to back off rather than hammer every candidate."""
@@ -362,14 +419,16 @@ class UpstreamDown(Exception):
 def llm_json(cfg, system_prompt, text, opener=None):
     """One temperature-0 completion parsed as JSON (None if unparseable). Raises
     UpstreamDown when the gate or its model is unavailable, so callers back off."""
-    body = json.dumps({
-        "model": cfg.model,
-        "temperature": 0,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": text},
-        ],
-    }).encode()
+    body = json.dumps(
+        {
+            "model": cfg.model,
+            "temperature": 0,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": text},
+            ],
+        }
+    ).encode()
     req = urllib.request.Request(
         f"{cfg.gate}/v1/chat/completions",
         data=body,
@@ -435,9 +494,16 @@ def _parse_json(content):
 
 # ── iCalendar / CalDAV ──────────────────────────────────────────────────────
 
+
 def esc(s):
-    return ((s or "").replace("\\", "\\\\").replace(";", "\\;")
-            .replace(",", "\\,").replace("\r", "").replace("\n", "\\n"))
+    return (
+        (s or "")
+        .replace("\\", "\\\\")
+        .replace(";", "\\;")
+        .replace(",", "\\,")
+        .replace("\r", "")
+        .replace("\n", "\\n")
+    )
 
 
 def _fold(line):
@@ -461,8 +527,11 @@ def _fold(line):
 
 def _parse_dt(value, all_day):
     """Parse a booking date/datetime. Raises ValueError on unparseable input."""
-    return datetime.fromisoformat(value[:10]).date() if all_day \
+    return (
+        datetime.fromisoformat(value[:10]).date()
+        if all_day
         else datetime.fromisoformat(value)
+    )
 
 
 def _fmt_dt(dt, all_day):
@@ -553,7 +622,11 @@ def build_ics(b, uid, now=None):
     # Title prefixed with the source platform, e.g. "Airbnb · Mélissa Manté — …".
     title = b.get("title") or "Travel booking"
     platform = b.get("_platform") or ""
-    summary = f"{platform} · {title}" if platform and platform.lower() not in title.lower() else title
+    summary = (
+        f"{platform} · {title}"
+        if platform and platform.lower() not in title.lower()
+        else title
+    )
     stamp = (now or datetime.now(timezone.utc)).strftime("%Y%m%dT%H%M%SZ")
     lines = [
         "BEGIN:VCALENDAR",
@@ -585,10 +658,14 @@ def build_ics(b, uid, now=None):
     src_subject = b.get("_source_subject")
     src_date = b.get("_source_date")
     if src_subject or src_from:
-        meta = ", ".join(p for p in [
-            f"from {src_from}" if src_from else "",
-            f"on {src_date}" if src_date else "",
-        ] if p)
+        meta = ", ".join(
+            p
+            for p in [
+                f"from {src_from}" if src_from else "",
+                f"on {src_date}" if src_date else "",
+            ]
+            if p
+        )
         desc.append(f'Email: "{src_subject or ""}"' + (f" ({meta})" if meta else ""))
     desc.append("added by travel-cal-sync")
     lines.append("DESCRIPTION:" + esc(" — ".join(desc)))
@@ -598,7 +675,8 @@ def build_ics(b, uid, now=None):
 
 def _nc_auth(cfg):
     tok = base64.b64encode(
-        f"{cfg.nc_user}:{read_secret(cfg.nc_pass_file)}".encode()).decode()
+        f"{cfg.nc_user}:{read_secret(cfg.nc_pass_file)}".encode()
+    ).decode()
     return "Basic " + tok
 
 
@@ -607,9 +685,12 @@ def caldav_put(cfg, uid, ics, opener=None):
         raise RuntimeError("NEXTCLOUD_CAL is not set — cannot write events")
     url = f"{cfg.caldav_home}{cfg.nc_cal}/{uid}.ics"
     req = urllib.request.Request(
-        url, data=ics.encode(),
-        headers={"Authorization": _nc_auth(cfg),
-                 "Content-Type": "text/calendar; charset=utf-8"},
+        url,
+        data=ics.encode(),
+        headers={
+            "Authorization": _nc_auth(cfg),
+            "Content-Type": "text/calendar; charset=utf-8",
+        },
         method="PUT",
     )
     with (opener or urllib.request.urlopen)(req, timeout=30) as r:
@@ -622,9 +703,13 @@ def list_calendars(cfg, opener=None):
         "<d:prop><d:displayname/><d:resourcetype/></d:prop></d:propfind>"
     )
     req = urllib.request.Request(
-        cfg.caldav_home, data=body.encode(),
-        headers={"Authorization": _nc_auth(cfg), "Depth": "1",
-                 "Content-Type": "application/xml"},
+        cfg.caldav_home,
+        data=body.encode(),
+        headers={
+            "Authorization": _nc_auth(cfg),
+            "Depth": "1",
+            "Content-Type": "application/xml",
+        },
         method="PROPFIND",
     )
     with (opener or urllib.request.urlopen)(req, timeout=30) as r:
@@ -705,8 +790,9 @@ def maybe_has_doc(bodystructure):
         return False
     if "PDF" in bodystructure.upper():
         return True
-    return any(int(m) >= proton_poll.MIN_IMG_BYTES
-               for m in _IMG_SIZE_RE.findall(bodystructure))
+    return any(
+        int(m) >= proton_poll.MIN_IMG_BYTES for m in _IMG_SIZE_RE.findall(bodystructure)
+    )
 
 
 def _prefixed(fn, *parts):
@@ -743,8 +829,19 @@ def file_documents(cfg, msg, namer, dry_run, chown=proton_poll.chown_papra):
 
 # ── scan ────────────────────────────────────────────────────────────────────
 
-def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
-         judge=None, filed=None, chown=proton_poll.chown_papra):
+
+def scan(
+    cfg,
+    M,
+    state,
+    dry_run,
+    extract=None,
+    put=None,
+    now=None,
+    judge=None,
+    filed=None,
+    chown=proton_poll.chown_papra,
+):
     """One pass. Returns list of (booking, uid, written_bool); Papra filenames are
     appended to `filed` when given."""
     extract = extract or (lambda text: extract_booking(cfg, text))
@@ -767,7 +864,9 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
     seen = set(state["seen"])
     results = []
     done_uids = set()  # collapse multiple emails of the same booking within a scan
-    papra_seen = proton_poll.load_seen(cfg.papra_poll_state) if cfg.papra_dest else set()
+    papra_seen = (
+        proton_poll.load_seen(cfg.papra_poll_state) if cfg.papra_dest else set()
+    )
     for num in nums:
         head = heads.get(num.decode())
         if head is None:
@@ -778,8 +877,9 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
         frm = decode_header(head.get("From"))
         subj = decode_header(head.get("Subject"))
         # "Queries" (inquiries / pending requests / searches) are never bookings.
-        is_travel = bool(not NEGATIVE_SUBJECT_RE.search(subj or "")
-                         and is_candidate(frm, subj))
+        is_travel = bool(
+            not NEGATIVE_SUBJECT_RE.search(subj or "") and is_candidate(frm, subj)
+        )
         may_file = bool(cfg.papra_dest and mid not in papra_seen)
         has_doc = may_file and maybe_has_doc(structs.get(num.decode()))
         # Nothing to do → marked seen so it isn't reprocessed.
@@ -818,8 +918,12 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
         # reminder whose event already exists still files its boarding pass.
         doc_booking = None
         for b in bookings:
-            if (not isinstance(b, dict) or not b.get("is_booking")
-                    or not b.get("start") or b.get("type") not in TRAVEL_TYPES):
+            if (
+                not isinstance(b, dict)
+                or not b.get("is_booking")
+                or not b.get("start")
+                or b.get("type") not in TRAVEL_TYPES
+            ):
                 continue
             if recent:
                 roll_year_forward(b, recv_date)  # fix a dropped/mis-guessed year
@@ -869,15 +973,22 @@ def scan(cfg, M, state, dry_run, extract=None, put=None, now=None,
         try:
             if doc_booking is not None and may_file:
                 filed += file_documents(
-                    cfg, msg, lambda fn: trip_doc_name(fn, doc_booking), dry_run, chown)
+                    cfg, msg, lambda fn: trip_doc_name(fn, doc_booking), dry_run, chown
+                )
             elif has_doc and cfg.file_all_mail:
                 judged = judge(text)
                 if judged and judged.get("archive"):
                     filed += file_documents(
-                        cfg, msg, lambda fn: judged_doc_name(fn, judged, recv_date),
-                        dry_run, chown)
+                        cfg,
+                        msg,
+                        lambda fn: judged_doc_name(fn, judged, recv_date),
+                        dry_run,
+                        chown,
+                    )
                 elif judged:
-                    log(f"papra: not archiving {subj!r} (kind={judged.get('kind') or '?'})")
+                    log(
+                        f"papra: not archiving {subj!r} (kind={judged.get('kind') or '?'})"
+                    )
         except UpstreamDown:
             raise
         except Exception as e:  # noqa: BLE001
@@ -911,17 +1022,24 @@ def event_link(cfg, b):
 def telegram_summary(cfg, new, filed=()):
     parts = []
     if new:
-        parts.append("🧳 <b>Travel bookings added to calendar</b>\n" + "\n".join(
-            f'• {html.escape(fmt_booking(b))}\n'
-            f'  <a href="{event_link(cfg, b)}">📅 Open in calendar</a>'
-            for b, _, _ in new))
+        parts.append(
+            "🧳 <b>Travel bookings added to calendar</b>\n"
+            + "\n".join(
+                f"• {html.escape(fmt_booking(b))}\n"
+                f'  <a href="{event_link(cfg, b)}">📅 Open in calendar</a>'
+                for b, _, _ in new
+            )
+        )
     if filed:
-        parts.append("📄 <b>Filed to Papra</b>\n" + "\n".join(
-            f"• {html.escape(n)}" for n in filed))
+        parts.append(
+            "📄 <b>Filed to Papra</b>\n"
+            + "\n".join(f"• {html.escape(n)}" for n in filed)
+        )
     return "\n\n".join(parts)
 
 
 # ── IDLE ────────────────────────────────────────────────────────────────────
+
 
 def idle_wait(M, timeout):
     """Block until new mail (EXISTS/RECENT) or timeout. Returns True if woken."""
@@ -956,6 +1074,7 @@ def idle_wait(M, timeout):
 
 # ── modes ───────────────────────────────────────────────────────────────────
 
+
 def run_dry_run(cfg, connect=None):
     # Fresh state (NOT the daemon's persisted state): re-evaluate the entire
     # LOOKBACK window so the review list is complete, regardless of what the
@@ -973,8 +1092,10 @@ def run_dry_run(cfg, connect=None):
             M.logout()
         except Exception:  # noqa: BLE001
             pass
-    print(f"\n=== {len(results)} travel booking(s) detected "
-          f"(last {cfg.lookback_days} days) ===")
+    print(
+        f"\n=== {len(results)} travel booking(s) detected "
+        f"(last {cfg.lookback_days} days) ==="
+    )
     for b, uid, _ in results:
         print("  " + fmt_booking(b))
     if cfg.papra_dest:

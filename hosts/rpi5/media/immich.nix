@@ -1,17 +1,26 @@
-{ pkgs, lib, unstablePkgs, redisHost, redisPort, beastHost, immichVersion, ... }:
+{
+  pkgs,
+  lib,
+  unstablePkgs,
+  redisHost,
+  redisPort,
+  beastHost,
+  immichVersion,
+  ...
+}:
 let
   # externalPort: where mobile/web clients reach Immich (Tailscale Funnel
   # terminates :10000 → http://127.0.0.1:2283). backendPort: where Immich
   # actually binds, behind the socket-activate proxy.
   externalPort = 2283;
-  backendPort  = 2284;
+  backendPort = 2284;
 in
 {
   services.immich = {
-    enable        = true;
-    package       = unstablePkgs.immich;
-    port          = backendPort;
-    host          = "127.0.0.1";
+    enable = true;
+    package = unstablePkgs.immich;
+    port = backendPort;
+    host = "127.0.0.1";
     mediaLocation = "/mnt/data/immich";
 
     # No local ML: inference runs on beast's GPU (hosts/beast/immich-ml.nix). The
@@ -27,13 +36,13 @@ in
     # clip.modelName forces a one-time full-library re-embed on beast.
     settings.machineLearning = {
       enabled = true;
-      urls    = [ "http://${beastHost}:3003" ];
+      urls = [ "http://${beastHost}:3003" ];
       clip = {
-        enabled   = true;
+        enabled = true;
         modelName = "ViT-H-14-378-quickgelu__dfn5b"; # largest CLIP (quality ~0.83)
       };
       facialRecognition = {
-        enabled   = true;
+        enabled = true;
         modelName = "buffalo_l";
       };
     };
@@ -46,8 +55,8 @@ in
     # dedicated redis-immich instance. Saves ~7 MB RAM + one systemd unit.
     redis = {
       enable = false;
-      host   = redisHost;
-      port   = redisPort;
+      host = redisHost;
+      port = redisPort;
     };
     environment.REDIS_DBINDEX = "1";
     # The module hardcodes this to localhost:3003 (no mkDefault); force it to
@@ -96,13 +105,21 @@ in
 
   # Bind SSD dirs into the HDD mediaLocation so immich finds them there.
   # library + upload stay on HDD; thumbs, encoded-video, profile, backups on SSD.
-  systemd.mounts = map (sub: {
-    where = "/mnt/data/immich/${sub}";
-    what = "/var/lib/immich/${sub}";
-    type = "none";
-    options = "bind";
-    wantedBy = [ "local-fs.target" ];
-  }) [ "thumbs" "encoded-video" "profile" "backups" ];
+  systemd.mounts =
+    map
+      (sub: {
+        where = "/mnt/data/immich/${sub}";
+        what = "/var/lib/immich/${sub}";
+        type = "none";
+        options = "bind";
+        wantedBy = [ "local-fs.target" ];
+      })
+      [
+        "thumbs"
+        "encoded-video"
+        "profile"
+        "backups"
+      ];
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ──────────
   # Immich is the first Funnel-exposed service in the socket-activate set:
@@ -114,15 +131,15 @@ in
   # generated after 2026-10-14. immich-nightly-wake below keeps the 03:00
   # NightlyJobs tick (memories, cleanups, DB dump) inside a waking window.
   services.socketActivate.immich = {
-    enable    = true;
-    realUnit  = "immich-server.service";
-    listen    = [ "127.0.0.1:${toString externalPort}" ];
-    backend   = "127.0.0.1:${toString backendPort}";
-    idleSec   = 1800;
+    enable = true;
+    realUnit = "immich-server.service";
+    listen = [ "127.0.0.1:${toString externalPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 1800;
     readyProbe = {
-      url          = "http://127.0.0.1:${toString backendPort}/api/server/ping";
+      url = "http://127.0.0.1:${toString backendPort}/api/server/ping";
       expectStatus = 200;
-      timeoutSec   = 60;
+      timeoutSec = 60;
     };
   };
 
@@ -137,8 +154,11 @@ in
     '';
   };
   systemd.timers.immich-nightly-wake = {
-    wantedBy    = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 02:55:00"; Persistent = false; };
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 02:55:00";
+      Persistent = false;
+    };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
@@ -159,30 +179,45 @@ in
   # a path that does not depend on Immich's own job working, or on anyone
   # noticing that it has stopped.
   nic.services.immich = {
-    backup            = [ "mnt-data" "postgres" ];
+    backup = [
+      "mnt-data"
+      "postgres"
+    ];
     postgresDatabases = [ "immich" ];
-    heavyUnits    = [ "immich-server.service" ];
+    heavyUnits = [ "immich-server.service" ];
     heavyPriority = 10;
 
     public = {
-      order   = 60;
-      port    = 10000;
+      order = 60;
+      port = 10000;
       backend = "http://127.0.0.1:2283";
-      funnel  = true;
+      funnel = true;
       authenticated = true;
       tile = {
-        name        = "Immich";
-        icon        = "immich.svg";
-        category    = "Apps";
+        name = "Immich";
+        icon = "immich.svg";
+        category = "Apps";
         description = "Photo management";
         widget = {
           type = "customapi";
           url = "http://127.0.0.1:8087/immich";
           refreshInterval = 3600000;
           mappings = [
-            { field = "photos"; label = "Photos"; format = "number"; }
-            { field = "videos"; label = "Videos"; format = "number"; }
-            { field = "usage";  label = "Storage"; format = "bytes"; }
+            {
+              field = "photos";
+              label = "Photos";
+              format = "number";
+            }
+            {
+              field = "videos";
+              label = "Videos";
+              format = "number";
+            }
+            {
+              field = "usage";
+              label = "Storage";
+              format = "bytes";
+            }
           ];
         };
       };

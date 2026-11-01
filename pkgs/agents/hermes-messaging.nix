@@ -3,7 +3,11 @@
 #
 # Built by upstream's own flake (`hermes-agent` input), not by a derivation
 # here: the version is that input's tag in flake.nix, which Renovate bumps.
-{ lib, hermes-agent, hermesPkgs }:
+{
+  lib,
+  hermes-agent,
+  hermesPkgs,
+}:
 let
   # v0.22.5's pinned node segfaults on aarch64 (exit 139 building hermes-tui):
   # nixpkgs' patchelf 0.19.2 corrupts it (NixOS/patchelf#674). Rebuild the pm
@@ -19,12 +23,19 @@ let
       })
     ];
   });
-  pmPackages = lib.mapAttrs (
-    _: drv:
-    drv.overrideAttrs (old: {
-      nativeBuildInputs = [ patchelfFixed ] ++ (old.nativeBuildInputs or [ ]);
-    })
-  ) (lib.filterAttrs (_: lib.isDerivation) (hermesPkgs.callPackage "${hermes-agent}/nix/pm-packages.nix" { }));
+  pmPackages =
+    lib.mapAttrs
+      (
+        _: drv:
+        drv.overrideAttrs (old: {
+          nativeBuildInputs = [ patchelfFixed ] ++ (old.nativeBuildInputs or [ ]);
+        })
+      )
+      (
+        lib.filterAttrs (_: lib.isDerivation) (
+          hermesPkgs.callPackage "${hermes-agent}/nix/pm-packages.nix" { }
+        )
+      );
 in
 hermes-agent.packages.${hermesPkgs.stdenv.hostPlatform.system}.messaging.override {
   inherit pmPackages;

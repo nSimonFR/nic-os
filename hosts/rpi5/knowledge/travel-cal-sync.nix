@@ -20,7 +20,14 @@
 # dashboard widget) is a full user token, so it authenticates CalDAV writes too.
 # The mailbox is opened read-only and never mutated. Crash-loops surface via the
 # existing systemd-failed Telegram alert in monitoring.nix.
-{ config, pkgs, telegramChatId, tinyLlmGateUrl, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  telegramChatId,
+  tinyLlmGateUrl,
+  tailnetFqdn,
+  ...
+}:
 let
   # One-shot seam (shared/notify.nix): a booking summary is an event, not a
   # condition that later resolves.
@@ -34,8 +41,14 @@ in
   systemd.services.travel-cal-sync = {
     description = "Event-driven Proton -> Nextcloud travel-booking calendar sync";
     wantedBy = [ "multi-user.target" ];
-    after = [ "hydroxide.service" "network-online.target" ];
-    wants = [ "hydroxide.service" "network-online.target" ];
+    after = [
+      "hydroxide.service"
+      "network-online.target"
+    ];
+    wants = [
+      "hydroxide.service"
+      "network-online.target"
+    ];
     environment = {
       TINY_LLM_GATE_URL = tinyLlmGateUrl;
       # Cloud, on the ChatGPT plan: the beast-only gemma4:e4b stalled every scan

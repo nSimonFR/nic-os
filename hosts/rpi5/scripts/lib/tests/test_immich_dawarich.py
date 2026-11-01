@@ -8,7 +8,9 @@ NOW = 1_800_000_000
 
 
 class FakePg:
-    def __init__(self, settings=("https://immich.test/", "IKEY"), backfill=1_776_703_425):
+    def __init__(
+        self, settings=("https://immich.test/", "IKEY"), backfill=1_776_703_425
+    ):
         self.settings, self.backfill = settings, backfill
 
     def __call__(self, cmd):
@@ -27,8 +29,12 @@ class FakePg:
 
 
 def asset(aid, lat=48.8, lon=2.3, when="2026-10-20T08:00:00.000Z", **kw):
-    return {"id": aid, "fileCreatedAt": when,
-            "exifInfo": {"latitude": lat, "longitude": lon}, **kw}
+    return {
+        "id": aid,
+        "fileCreatedAt": when,
+        "exifInfo": {"latitude": lat, "longitude": lon},
+        **kw,
+    }
 
 
 def page(items, next_page=None):
@@ -44,8 +50,12 @@ def bodies(opener, path):
 
 
 def test_first_run_backfills_from_last_import_and_pages(tmp_path):
-    op = FakeOpener([page([asset("a")], "2"), page([asset("b", lat=None)]), json_reply({})])
-    sent = im.sync(cfg(tmp_path), FakePg(), opener=op, log=lambda _: None, now=lambda: NOW)
+    op = FakeOpener(
+        [page([asset("a")], "2"), page([asset("b", lat=None)]), json_reply({})]
+    )
+    sent = im.sync(
+        cfg(tmp_path), FakePg(), opener=op, log=lambda _: None, now=lambda: NOW
+    )
     search = bodies(op, "/api/search/metadata")
     assert search[0]["takenAfter"] == "2026-04-20T16:43:45Z"
     assert [b["page"] for b in search] == [1, 2]
@@ -64,8 +74,16 @@ def test_first_run_backfills_from_last_import_and_pages(tmp_path):
 def test_next_run_asks_for_updates_since_last_run_minus_overlap(tmp_path):
     (tmp_path / "s.json").write_text(json.dumps({"last_run": NOW}))
     op = FakeOpener([page([])])
-    assert im.sync(cfg(tmp_path), FakePg(), opener=op, log=lambda _: None,
-                   now=lambda: NOW + 86400) == 0
+    assert (
+        im.sync(
+            cfg(tmp_path),
+            FakePg(),
+            opener=op,
+            log=lambda _: None,
+            now=lambda: NOW + 86400,
+        )
+        == 0
+    )
     (search,) = bodies(op, "/api/search/metadata")
     assert search["updatedAfter"] == im._iso(NOW - im.OVERLAP_S)
     assert not bodies(op, "/api/v1/points")

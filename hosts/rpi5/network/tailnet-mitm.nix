@@ -4,7 +4,12 @@
 # traffic to them flows through rpi5; their :443 is REDIRECTed to mitmproxy, which
 # decrypts only the targets' hosts and runs each target's addon. Clients must trust
 # the CA in ${stateDir}/mitmproxy and accept subnet routes.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 let
   cfg = config.services.tailnet-mitm;
   targets = lib.attrValues cfg.targets;
@@ -24,7 +29,14 @@ let
   # list>` on every boot, which drops these IPs.
   routeUpdateScript = pkgs.writeShellApplication {
     name = "tailnet-mitm-route-update";
-    runtimeInputs = with pkgs; [ dig gnugrep coreutils jq tailscale ipset ];
+    runtimeInputs = with pkgs; [
+      dig
+      gnugrep
+      coreutils
+      jq
+      tailscale
+      ipset
+    ];
     text = ''
       STATE_FILE="${stateDir}/routes.txt"
       V4_HOSTS=(${lib.escapeShellArgs (lib.concatMap (t: t.hosts) targets)})
@@ -93,33 +105,41 @@ in
     };
     targets = lib.mkOption {
       default = { };
-      type = lib.types.attrsOf (lib.types.submodule {
-        options = {
-          hosts = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            description = "Hostnames whose IPs are advertised as subnet routes";
+      type = lib.types.attrsOf (
+        lib.types.submodule {
+          options = {
+            hosts = lib.mkOption {
+              type = lib.types.listOf lib.types.str;
+              description = "Hostnames whose IPs are advertised as subnet routes";
+            };
+            allowHosts = lib.mkOption {
+              type = lib.types.str;
+              description = "mitmproxy --allow-hosts regex (matched against host:port)";
+            };
+            addon = lib.mkOption {
+              type = lib.types.str;
+              description = "Addon script path (mitmdump -s)";
+            };
+            environment = lib.mkOption {
+              type = lib.types.attrsOf lib.types.str;
+              default = { };
+            };
+            ipv6 = lib.mkOption {
+              type = lib.types.bool;
+              default = false;
+              description = "Also route the AAAA records here, only to drop them, so clients fall back to the intercepted IPv4";
+            };
           };
-          allowHosts = lib.mkOption {
-            type = lib.types.str;
-            description = "mitmproxy --allow-hosts regex (matched against host:port)";
-          };
-          addon = lib.mkOption { type = lib.types.str; description = "Addon script path (mitmdump -s)"; };
-          environment = lib.mkOption {
-            type = lib.types.attrsOf lib.types.str;
-            default = { };
-          };
-          ipv6 = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = "Also route the AAAA records here, only to drop them, so clients fall back to the intercepted IPv4";
-          };
-        };
-      });
+        }
+      );
     };
   };
 
   config = lib.mkIf (cfg.targets != { }) {
-    users.users.${user} = { isSystemUser = true; group = user; };
+    users.users.${user} = {
+      isSystemUser = true;
+      group = user;
+    };
     users.groups.${user} = { };
 
     systemd.tmpfiles.rules = [ "d ${stateDir} 0750 ${user} ${cfg.stateGroup} - -" ];
@@ -151,12 +171,15 @@ in
         LimitNOFILE = 65536;
       };
 
-      environment = lib.mkMerge (map (t: t.environment) targets ++ [
-        # mitmdump's stdout is block-buffered, so with this service's low traffic
-        # the journal lagged by *days* — the 2026-09-08 breakage only surfaced in
-        # the log when the process was restarted 6 days later. Keep it live.
-        { PYTHONUNBUFFERED = "1"; }
-      ]);
+      environment = lib.mkMerge (
+        map (t: t.environment) targets
+        ++ [
+          # mitmdump's stdout is block-buffered, so with this service's low traffic
+          # the journal lagged by *days* — the 2026-09-08 breakage only surfaced in
+          # the log when the process was restarted 6 days later. Keep it live.
+          { PYTHONUNBUFFERED = "1"; }
+        ]
+      );
     };
 
     # Only traffic to advertised routes reaches rpi5 on tailscale0, so a per-client

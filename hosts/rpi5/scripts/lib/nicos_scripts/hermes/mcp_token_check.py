@@ -52,7 +52,9 @@ def _load(path, opener):
 
 def oauth_servers(config):
     servers = (config or {}).get("mcp_servers") or {}
-    return sorted(name for name, entry in servers.items() if (entry or {}).get("auth") == "oauth")
+    return sorted(
+        name for name, entry in servers.items() if (entry or {}).get("auth") == "oauth"
+    )
 
 
 def problem(tokens, now, warn_days):
@@ -82,7 +84,9 @@ def run(cfg, opener=open, now=None):
 
     issues = []
     for name in oauth_servers(config):
-        why = problem(_load(home / "mcp-tokens" / f"{name}.json", opener), now, cfg.warn_days)
+        why = problem(
+            _load(home / "mcp-tokens" / f"{name}.json", opener), now, cfg.warn_days
+        )
         log(f"{name}: {why or 'ok'}")
         if why:
             issues.append((name, why))

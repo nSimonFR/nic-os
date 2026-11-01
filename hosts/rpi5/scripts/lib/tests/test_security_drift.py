@@ -8,11 +8,15 @@ KEYGEN = (
     "256 SHA256:TRz3managed no comment (ED25519)\n"
     "256 SHA256:lqIv4iphone iPhone herdr-pair:iPhone (ED25519)\n"
 )
-FUNNEL = json.dumps({"AllowFunnel": {
-    "rpi5.gate-mintaka.ts.net:443": True,
-    "rpi5.gate-mintaka.ts.net:8443": True,
-    "rpi5.gate-mintaka.ts.net:10000": True,
-}})
+FUNNEL = json.dumps(
+    {
+        "AllowFunnel": {
+            "rpi5.gate-mintaka.ts.net:443": True,
+            "rpi5.gate-mintaka.ts.net:8443": True,
+            "rpi5.gate-mintaka.ts.net:10000": True,
+        }
+    }
+)
 SSHD = (
     "Accepted publickey for nsimon from 127.0.0.1 port 51234 ssh2: ED25519 SHA256:x\n"
     "Connection closed by 192.168.1.20 port 40000 [preauth]\n"
@@ -22,15 +26,26 @@ SSHD = (
 
 
 def cfg(**kw):
-    base = dict(allowed_keys=frozenset({"SHA256:TRz3managed"}),
-                funnel_ports=frozenset({"443", "8443", "10000"}),
-                users=("root", "nsimon"))
+    base = dict(
+        allowed_keys=frozenset({"SHA256:TRz3managed"}),
+        funnel_ports=frozenset({"443", "8443", "10000"}),
+        users=("root", "nsimon"),
+    )
     base.update(kw)
     return drift.Config(**base)
 
 
-OWN = json.dumps([{"ifname": "end0", "addr_info": [
-    {"local": "192.168.1.68"}, {"local": "2a02:8424:5da0:e301:2ecf:67ff:fe01:a4e1"}]}])
+OWN = json.dumps(
+    [
+        {
+            "ifname": "end0",
+            "addr_info": [
+                {"local": "192.168.1.68"},
+                {"local": "2a02:8424:5da0:e301:2ecf:67ff:fe01:a4e1"},
+            ],
+        }
+    ]
+)
 
 
 def fake_run(keygen=KEYGEN, funnel=FUNNEL, sshd=SSHD, own=OWN):
@@ -44,6 +59,7 @@ def fake_run(keygen=KEYGEN, funnel=FUNNEL, sshd=SSHD, own=OWN):
         if "sshd" in cmd:
             return sshd
         return ""
+
     return run
 
 
@@ -52,9 +68,12 @@ def homes(**h):
 
 
 def check(c=None, run=None, home_of=None, exists=None):
-    return drift.assess(c or cfg(), run or fake_run(),
-                        home_of or homes(nsimon="/home/nsimon"),
-                        exists or (lambda p: True))
+    return drift.assess(
+        c or cfg(),
+        run or fake_run(),
+        home_of or homes(nsimon="/home/nsimon"),
+        exists or (lambda p: True),
+    )
 
 
 def test_clean_state_is_silent():
@@ -79,9 +98,13 @@ def test_missing_file_or_deleted_user_is_silent():
 
 
 def test_extra_funnel_pages():
-    funnel = json.dumps({"AllowFunnel": {"h:443": True, "h:3960": True, "h:8443": False}})
-    body = check(cfg(allowed_keys=frozenset({"SHA256:TRz3managed", "SHA256:lqIv4iphone"})),
-                 run=fake_run(funnel=funnel))
+    funnel = json.dumps(
+        {"AllowFunnel": {"h:443": True, "h:3960": True, "h:8443": False}}
+    )
+    body = check(
+        cfg(allowed_keys=frozenset({"SHA256:TRz3managed", "SHA256:lqIv4iphone"})),
+        run=fake_run(funnel=funnel),
+    )
     assert body.startswith("unexpected funnel on port 3960")
     assert "8443" not in body.split("(")[0]
 
@@ -119,8 +142,13 @@ def test_public_ssh_source_pages_once_per_address():
 
 
 def test_from_env_parses_word_lists():
-    c = drift.Config.from_env({"FUNNEL_PORTS": "443 8443", "SSH_USERS": "root nsimon",
-                               "ALLOWED_KEY_FINGERPRINTS": "SHA256:a SHA256:b"})
+    c = drift.Config.from_env(
+        {
+            "FUNNEL_PORTS": "443 8443",
+            "SSH_USERS": "root nsimon",
+            "ALLOWED_KEY_FINGERPRINTS": "SHA256:a SHA256:b",
+        }
+    )
     assert c.funnel_ports == {"443", "8443"}
     assert c.users == ("root", "nsimon")
     assert c.allowed_keys == {"SHA256:a", "SHA256:b"}
@@ -133,8 +161,12 @@ def test_from_env_defaults_are_strict():
 
 
 def test_main_prints_only_the_body(capsys):
-    drift.main(env={"SSH_USERS": "nsimon", "FUNNEL_PORTS": "443 8443 10000"},
-               run=fake_run(), home_of=homes(nsimon="/home/nsimon"),
-               exists=lambda p: True, log=lambda m: None)
+    drift.main(
+        env={"SSH_USERS": "nsimon", "FUNNEL_PORTS": "443 8443 10000"},
+        run=fake_run(),
+        home_of=homes(nsimon="/home/nsimon"),
+        exists=lambda p: True,
+        log=lambda m: None,
+    )
     out = capsys.readouterr().out
     assert out.count("unmanaged SSH key") == 2

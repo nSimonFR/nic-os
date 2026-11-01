@@ -55,7 +55,13 @@ in
 {
   services.nginx.virtualHosts."front-proxy" = {
     # Only vhost on this port; Tailscale terminates TLS and forwards plain HTTP here.
-    listen = [ { addr = "127.0.0.1"; port = 8092; ssl = false; } ];
+    listen = [
+      {
+        addr = "127.0.0.1";
+        port = 8092;
+        ssl = false;
+      }
+    ];
 
     # Emit relative Location headers on our `return 301`s. Otherwise nginx builds
     # absolute redirects from its own listen socket (http://<host>:8092/…), leaking
@@ -67,11 +73,15 @@ in
 
     locations = {
       # Bare URL → Nextcloud (the main human-facing app on this funnel).
-      "= /" = { return = "301 /nextcloud/"; };
+      "= /" = {
+        return = "301 /nextcloud/";
+      };
 
       # Nextcloud: trailing slashes on both location and proxyPass strip /nextcloud
       # before forwarding to NC's root vhost.
-      "= /nextcloud" = { return = "301 /nextcloud/"; };
+      "= /nextcloud" = {
+        return = "301 /nextcloud/";
+      };
       "/nextcloud/" = {
         proxyPass = "http://127.0.0.1:8091/";
         proxyWebsockets = true;
@@ -88,7 +98,9 @@ in
       # Fastify server mounts /callback, /linear-webhook, /github-webhook at its
       # root, so /cyrus/linear-webhook → 3456/linear-webhook. proxyWebsockets in
       # case any endpoint upgrades (harmless otherwise).
-      "= /cyrus" = { return = "301 /cyrus/"; };
+      "= /cyrus" = {
+        return = "301 /cyrus/";
+      };
       "/cyrus/" = {
         proxyPass = "http://127.0.0.1:3456/";
         proxyWebsockets = true;
@@ -112,7 +124,9 @@ in
       # /api, /auth), and the server's browser-facing URLs (PDF/storage/share) carry
       # /rxresume via APP_URL. Proxy to the socket-activate port (13336) so a request
       # wakes the Node backend; readyProbe hits /api/health.
-      "= /rxresume" = { return = "301 /rxresume/"; };
+      "= /rxresume" = {
+        return = "301 /rxresume/";
+      };
       "/rxresume/" = {
         proxyPass = "http://127.0.0.1:13336/";
         proxyWebsockets = true;
@@ -143,7 +157,9 @@ in
 
       # Death Plan Switch (PHP-FPM). Prefix KEPT: its vhost serves /switch/* from
       # the package's share/ root, and the app builds its links from SCRIPT_NAME.
-      "= /switch" = { return = "301 /switch/"; };
+      "= /switch" = {
+        return = "301 /switch/";
+      };
       "/switch/" = {
         proxyPass = "http://127.0.0.1:8094";
         extraConfig = fwdHeaders;
@@ -151,7 +167,9 @@ in
 
       # Vaultwarden (socket-activated). Prefix KEPT: DOMAIN=…/vaultwarden makes it
       # serve under the prefix. X-Client-IP feeds its login rate limit (IP_HEADER).
-      "= /vaultwarden" = { return = "301 /vaultwarden/"; };
+      "= /vaultwarden" = {
+        return = "301 /vaultwarden/";
+      };
       "/vaultwarden/" = {
         proxyPass = "http://127.0.0.1:8222";
         proxyWebsockets = true;
@@ -173,8 +191,12 @@ in
       };
 
       # CalDAV/CardDAV auto-discovery at the domain root → Nextcloud's DAV endpoint.
-      "= /.well-known/caldav"  = { return = "301 /nextcloud/remote.php/dav/"; };
-      "= /.well-known/carddav" = { return = "301 /nextcloud/remote.php/dav/"; };
+      "= /.well-known/caldav" = {
+        return = "301 /nextcloud/remote.php/dav/";
+      };
+      "= /.well-known/carddav" = {
+        return = "301 /nextcloud/remote.php/dav/";
+      };
     };
   };
 
@@ -185,7 +207,7 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.front-proxy = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote = "stateless — this is an nginx vhost generated from the config above";
     # nginx is infra that heavy-shed deliberately leaves up.
     heavyUnits = [ ];
@@ -193,10 +215,10 @@ in
     # No tile: the mux is how other services are reached, not a destination.
     # This is the single public 443 funnel that fronts every `proxied` service.
     public = {
-      order   = 350;
-      port    = 443;
+      order = 350;
+      port = 443;
       backend = "http://127.0.0.1:8092";
-      funnel  = true;
+      funnel = true;
       authenticated = true;
     };
   };

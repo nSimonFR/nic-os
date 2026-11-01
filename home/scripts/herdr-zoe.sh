@@ -34,13 +34,13 @@ kind=$(printf '%s' "$pane" | jq -r '.agent_session.kind // empty' 2>/dev/null ||
 id=$(printf '%s' "$pane" | jq -r '.agent_session.value // empty' 2>/dev/null || true)
 
 case "$agent" in
-  claude | codex)
-    if [ "$kind" = "id" ] && [ -n "$id" ]; then
-      # The agent is live, so open at the live edge; space and the scrubber go back.
-      zoe --provider "$agent" --follow "$id" || die "zoe exited with status $?"
-      exit 0
-    fi
-    ;;
+claude | codex)
+  if [ "$kind" = "id" ] && [ -n "$id" ]; then
+    # The agent is live, so open at the live edge; space and the scrubber go back.
+    zoe --provider "$agent" --follow "$id" || die "zoe exited with status $?"
+    exit 0
+  fi
+  ;;
 esac
 
 # No usable id: fall back to this project's newest session.

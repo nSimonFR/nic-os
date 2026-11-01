@@ -27,12 +27,15 @@ stdenv.mkDerivation rec {
     hash = "sha256-duCqFXZk7grNIsRK/4vu4EAkCZAmkYtcUrk8pKh9QcE=";
   };
 
-  nativeBuildInputs = [ autoPatchelfHook zstd ];
+  nativeBuildInputs = [
+    autoPatchelfHook
+    zstd
+  ];
   buildInputs = [
     stdenv.cc.cc.lib # libstdc++
-    zlib             # libz
-    sqlcipher        # libsqlcipher
-    libgcc           # libgomp (via libseeta)
+    zlib # libz
+    sqlcipher # libsqlcipher
+    libgcc # libgomp (via libseeta)
   ];
 
   unpackPhase = ''

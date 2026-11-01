@@ -52,8 +52,9 @@ class ArkoseToken:
     def _save(self, user_id, token):
         now = self.clock()
         old = _read(self.path)
-        if (old.get("userId"), old.get("token")) == (user_id, token) \
-                and now - old.get("capturedAt", 0) < MIN_REWRITE_S:
+        if (old.get("userId"), old.get("token")) == (user_id, token) and now - old.get(
+            "capturedAt", 0
+        ) < MIN_REWRITE_S:
             return
         tmp = self.path + ".tmp"
         with open(tmp, "w") as f:
