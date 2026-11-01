@@ -23,13 +23,31 @@
 # applies to queued jobs, so an already-completed dump costs nothing).
 #
 # `After=` only, deliberately not `Wants=`: a dump that fails must not stop the
-# upload of the twenty that succeeded. The cost of that choice is that a failed
-# dump leaves restic uploading yesterday's file, and nothing here notices —
-# `systemd-failed-alert` (monitoring.nix) catches a unit that *fails*, not one
+# upload of the twenty that succeeded. A failed dump leaves restic uploading
+# yesterday's file; `backup-freshness` below is what notices — including a unit
 # that exits 0 having written nothing, which is how Immich's `pg_dump` went 34
 # days unseen.
-{ config, ... }:
+{ config, lib, pkgs, ... }:
 let
+  restic = config.services.restic.backups.storj-daily;
+
+  # Same repo/credentials/cache as the backup unit, minus PATH and unset vars.
+  resticEnv = lib.filterAttrs (n: v: v != null && n != "PATH")
+    config.systemd.services.restic-backups-storj-daily.environment;
+
+  resticLimits = {
+    Nice = 10;
+    IOSchedulingClass = "idle";
+    MemoryMax = "512M";
+    CPUQuota = "50%";
+  };
+
+  backupFreshness = pkgs.writeShellApplication {
+    name = "backup-freshness";
+    runtimeInputs = with pkgs; [ coreutils findutils jq restic.package ];
+    text = builtins.readFile ./scripts/backup-freshness.sh;
+  };
+
   # Every unit that writes a dump under /mnt/data/backups, derived rather than
   # listed: the postgres ones from the databases each service registered, the
   # rest from `nic.services.*.backupUnits`. A new service with a dump unit is
@@ -50,6 +68,8 @@ in
     paths = [ "/mnt/data" ];
     exclude = [
       "lost+found"
+      "/mnt/data/nix-build" # nix's build-dir (configuration.nix): transient
+      "/mnt/data/swapfile"
     ];
 
     timerConfig = {
@@ -65,6 +85,7 @@ in
 
     pruneOpts = [
       "--keep-daily 7"
+      "--keep-weekly 4"
       "--keep-monthly 6"
     ];
 
@@ -80,11 +101,44 @@ in
 
     # Resource limits: RPi5 has 4 GiB RAM; prevent restic from competing
     # with HA, Immich, etc.
-    serviceConfig = {
-      Nice = 10;
-      IOSchedulingClass = "idle";
-      MemoryMax = "512M";
-      CPUQuota = "50%";
+    serviceConfig = resticLimits;
+  };
+
+  # ── Verification ────────────────────────────────────────────────────────────
+  # Both fail loudly; systemd-failed-alert (monitoring.nix) relays to Telegram.
+  systemd.services.backup-freshness = {
+    description = "Check every dump and the Storj snapshot are fresh";
+    after = [ "restic-backups-storj-daily.service" ];
+    environment = resticEnv // {
+      PG_DIR = config.services.postgresqlBackup.location;
+      PG_DBS = toString config.services.postgresqlBackup.databases;
+      DUMP_ROOT = "/mnt/data/backups";
+      MAX_AGE_H = "26";
     };
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = lib.getExe backupFreshness;
+    };
+  };
+
+  systemd.timers.backup-freshness = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "*-*-* 07:00:00"; Persistent = true; };
+  };
+
+  # Reads back a random 5% of pack data each week (~4 GB of Storj egress at
+  # 76 GiB stored), so the whole repo is re-read about every five months.
+  systemd.services.restic-check-storj = {
+    description = "restic integrity check of the Storj repository";
+    environment = resticEnv;
+    serviceConfig = resticLimits // {
+      Type = "oneshot";
+      ExecStart = "${lib.getExe restic.package} check --read-data-subset=5%";
+    };
+  };
+
+  systemd.timers.restic-check-storj = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = { OnCalendar = "Wed *-*-* 11:00:00"; Persistent = true; };
   };
 }

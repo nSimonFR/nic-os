@@ -109,13 +109,10 @@ in
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
-      # -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks
-      # → absolute path via --use-compress-program (same fix as gramps-web).
-      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
-        -cf "/mnt/data/backups/forgejo/forgejo-state-$STAMP.tar.gz" \
+      ${pkgs.gnutar}/bin/tar -cf "/mnt/data/backups/forgejo/forgejo-state-$STAMP.tar" \
         -C /var/lib/forgejo --exclude=./dump --exclude=./log .
       ${pkgs.findutils}/bin/find /mnt/data/backups/forgejo \
-        -name "forgejo-state-*.tar.gz" -mtime +7 -delete
+        -name "forgejo-state-*.tar*" -mtime +7 -delete
     '';
   };
 
