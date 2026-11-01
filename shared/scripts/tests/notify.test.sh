@@ -14,12 +14,15 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/bin"
 
-cat >"$tmp/bin/curl" <<'STUB'
-#!/usr/bin/env bash
+# $BASH, not /usr/bin/env: the Nix build sandbox has no /usr/bin.
+{
+  printf '#!%s\n' "$BASH"
+  cat <<'STUB'
 printf '%s' "$*" | tr '\n' '|' >> "$CALL_LOG"; printf '\n' >> "$CALL_LOG"
 default='{"ok":true,"result":{"message_id":'"${STUB_MESSAGE_ID:-4242}"'}}'
 printf '%s\n' "${STUB_RESPONSE:-$default}"
 STUB
+} >"$tmp/bin/curl"
 chmod +x "$tmp/bin/curl"
 printf 'fake-token\n' >"$tmp/token"
 printf 'not-really-a-jpeg\n' >"$tmp/pic.jpg"
