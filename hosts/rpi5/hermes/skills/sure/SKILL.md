@@ -31,6 +31,19 @@ Links for the user go to the web UI, **`https://rpi5.gate-mintaka.ts.net/sure`**
 (e.g. `/transactions?q[start_date]=2026-10-01&q[end_date]=2026-10-31`). The API
 URL above only resolves on rpi5; never send it.
 
+## The API reference
+
+The full OpenAPI spec for the deployed version is at `/etc/sure/openapi.json`
+(about 300 KB). Query the part you need with jq; never read the whole file.
+Paths in the spec start with `/api/v1`, which `$SURE` already includes.
+
+```bash
+S=/etc/sure/openapi.json
+jq -r '.paths | to_entries[] | .key as $p | .value | keys[] | select(. != "parameters") | "\(ascii_upcase) \($p)"' $S   # every endpoint
+jq '.paths["/api/v1/transactions"].get.parameters | map({name, description})' $S                                        # an endpoint's filters
+jq '.paths["/api/v1/transactions/{id}"].patch.requestBody.content["application/json"].schema' $S                       # a write's body
+```
+
 ## Conventions
 
 - **Amounts**: `amount` is a formatted string (`"€33.33"`). Compute with
@@ -41,32 +54,13 @@ URL above only resolves on rpi5; never send it.
 - **Categories** are numbered top-level groups (`0 - Food`, `2 - Essentials`, …)
   with subcategories (`0 - Food & Drink`). A transaction's `category` can be `null`
   (uncategorized).
-- **Pagination**: list endpoints return `pagination:{page, per_page, total_count,
-  total_pages}`, with `per_page` capped at 100. Loop over `page` until
-  `total_pages`. Asking for a page past the end returns the last page again.
+- **Pagination**: `per_page` is capped at 100. Loop over `page` until
+  `pagination.total_pages`. Asking for a page past the end returns the last page
+  again.
 - Currency is EUR, apart from a few crypto accounts held in USD.
 
-## Read
-
-```bash
-# Net worth, assets, liabilities
-curl -sS "${H[@]}" "$SURE/balance_sheet" | jq '{net_worth: .net_worth.formatted, assets: .assets.formatted, liabilities: .liabilities.formatted}'
-
-# Accounts and balances
-curl -sS "${H[@]}" "$SURE/accounts" | jq -r '.accounts[] | [.name, .account_type, .balance] | @tsv'
-
-# Transactions, filtered. Filters: start_date, end_date (YYYY-MM-DD), type=expense|income,
-# account_id, category_id, merchant_id, tag_ids[], min_amount, max_amount,
-# search (matches name, notes and merchant, case-insensitive)
-curl -sS "${H[@]}" "$SURE/transactions?start_date=2026-10-01&end_date=2026-10-31&type=expense&per_page=100&page=1" \
-  | jq -r '.transactions[] | [.date, .amount, .name, .account.name, (.category.name // "—")] | @tsv'
-
-# One transaction
-curl -sS "${H[@]}" "$SURE/transactions/<id>" | jq .
-```
-
-Spending by category for a month: fetch every page of `type=expense`, drop
-`transfer != null`, then group:
+Spending by category for a month: fetch every page of
+`/transactions?type=expense&start_date=…&end_date=…&per_page=100`, then:
 
 ```bash
 jq -s '[.[].transactions[] | select(.transfer == null)]
@@ -75,23 +69,12 @@ jq -s '[.[].transactions[] | select(.transfer == null)]
   | sort_by(-.eur)' page1.json page2.json
 ```
 
-Other read endpoints, all `GET`: `categories`, `merchants`, `tags`, `budgets`
-(one per month), `budget_categories`, `recurring_transactions`, `holdings`,
-`trades`, `valuations`, `balances`, `transfers`, `syncs/latest`.
+## Writes — only when the user asks for that change
 
-## Write — only when the user asks for that change
-
-Updates take a `PATCH` with the fields nested under `transaction`. Look the ids up
-first (`categories`, `tags`, `merchants`), then read the result back:
-
-```bash
-curl -sS -X PATCH "${H[@]}" -H "Content-Type: application/json" "$SURE/transactions/<id>" \
-  -d '{"transaction":{"category_id":"<category id>","notes":"…"}}' | jq '{name, category: .category.name, notes}'
-```
-
-Writable fields: `category_id`, `merchant_id`, `notes`, `name`, `date`, `tag_ids`.
-Sending `tag_ids` **replaces** the whole tag list, so send the existing ids plus the
-new one.
+Edit a transaction with `PATCH $SURE/transactions/<id>`, fields nested under
+`{"transaction":{…}}`. Look the ids up first (`categories`, `tags`, `merchants`),
+then read the result back. Sending `tag_ids` **replaces** the whole tag list, so
+send the existing ids plus the new one.
 
 Never do the following, even if it looks like it would help:
 
