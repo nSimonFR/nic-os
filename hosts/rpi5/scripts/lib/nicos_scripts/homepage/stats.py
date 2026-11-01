@@ -859,7 +859,7 @@ def discover_calendars(cfg, run):
     Two kinds of collection are deliberately dropped:
 
       * `{DAV:}collection` + `{http://calendarserver.org/ns/}subscribed` — the webcal
-        subscriptions (here: TRUSK, Google, Airbnb). They advertise VEVENT and answer
+        subscriptions (here: TRUSK, Airbnb). They advertise VEVENT and answer
         a calendar-query with 207, but the answer is ALWAYS zero objects: Nextcloud
         does not expose a subscription's cached contents over DAV, the refresh is the
         client's job. Querying them costs requests and can only ever add 0, so their
