@@ -45,7 +45,7 @@ let
   backupFreshness = pkgs.writeShellApplication {
     name = "backup-freshness";
     runtimeInputs = with pkgs; [ coreutils findutils jq restic.package ];
-    text = builtins.readFile ./scripts/backup-freshness.sh;
+    text = builtins.readFile ../scripts/backup-freshness.sh;
   };
 
   # Every unit that writes a dump under /mnt/data/backups, derived rather than
