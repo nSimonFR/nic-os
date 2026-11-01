@@ -1,0 +1,6 @@
+target-version = "py312"
+
+[lint]
+# E731 (lambda assignment) and E741 (`l`, `O` names) are style calls the code
+# makes on purpose; every other default rule is enforced.
+ignore = ["E731", "E741"]
