@@ -183,7 +183,7 @@ in
         #
         #    ON-DEMAND ACCESS, deliberately, in two places: Hermes declares
         #    `gpt-6` alongside `gpt-5.6` so its Telegram `/model` picker can
-        #    switch a single SESSION to Astra (hosts/rpi5/hermes/hermes.nix
+        #    switch a single SESSION to Astra (hosts/rpi5/agents/hermes/hermes.nix
         #    `gateModels`), and dsh keeps both GPT-6 tiers in its selectable
         #    model list. Both are per-conversation opt-ins that fall back to
         #    gpt-5.6 on restart — no path where GPT-6 becomes the standing

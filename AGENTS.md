@@ -77,7 +77,7 @@ Every system-invoked Python script lives in the **`nicos-scripts`** package
 - tests in `tests/`, run in `checkPhase`: `nix build .#checks.aarch64-linux.nicos-scripts`.
   In-tree: `nix develop`, then `cd hosts/rpi5/scripts/lib && pytest`.
 
-Exception: `hosts/rpi5/hermes/skills/*/scripts/*.py` are invoked **by the model** at the
+Exception: `hosts/rpi5/agents/hermes/skills/*/scripts/*.py` are invoked **by the model** at the
 path each SKILL.md documents, so their interface is already a hand-runnable argv. Leave
 them there.
 

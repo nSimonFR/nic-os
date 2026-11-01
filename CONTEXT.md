@@ -86,7 +86,7 @@ tile config.
 `SKILL.md` alone.
 
 **lineage** — a directory whose immediate children are skills. Four exist:
-`shared/skills`, `shared/mtg-skills`, `hosts/rpi5/hermes/skills`,
+`shared/skills`, `shared/mtg-skills`, `hosts/rpi5/agents/hermes/skills`,
 `home/claude-skills`.
 
 **surface** — an agent installation with its own skills directory (Claude Code,
