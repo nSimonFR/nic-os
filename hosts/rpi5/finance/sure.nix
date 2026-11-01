@@ -186,10 +186,11 @@ in
   # uptime, not order.
   # The API spec, for Hermes' sure skill to query with jq. Sure serves it at
   # /api-docs only in development; this one tracks the deployed version.
-  environment.etc."sure/openapi.json".source = pkgs.runCommand "sure-openapi.json"
-    { nativeBuildInputs = [ pkgs.yq-go ]; } ''
-      yq -o=json '.' ${config.services.sure.package}/share/sure/docs/api/openapi.yaml > $out
-    '';
+  environment.etc."sure/openapi.json".source =
+    pkgs.runCommand "sure-openapi.json" { nativeBuildInputs = [ pkgs.yq-go ]; }
+      ''
+        yq -o=json '.' ${config.services.sure.package}/share/sure/docs/api/openapi.yaml > $out
+      '';
 
   systemd.services.sure-drain-keepalive = {
     description = "Hold Sure awake while Sidekiq has queued work";
