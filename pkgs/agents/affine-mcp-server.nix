@@ -1,6 +1,6 @@
 # DAWNCR0W/affine-mcp-server — write-capable MCP server for AFFiNE workspaces.
 #
-# Service module (port, secrets oneshot, unit, Serve entry): hosts/rpi5/affine-mcp.nix.
+# Service module (port, secrets oneshot, unit, Serve entry): hosts/rpi5/knowledge/affine-mcp.nix.
 {
   lib,
   buildNpmPackage,

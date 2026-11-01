@@ -1,5 +1,5 @@
 # Keeps the Bitwarden SSH agent reverse-forwarded to the Pi, where `mac-sudo`
-# asks it for a signature (hosts/rpi5/sudo-ssh-agent.nix). The Pi admits it on
+# asks it for a signature (hosts/rpi5/security/sudo-ssh-agent.nix). The Pi admits it on
 # tailnet identity (Tailscale SSH), so no key is offered and a reconnect never
 # pops a Bitwarden prompt. sshd's StreamLocalBindUnlink doesn't apply to
 # tailscaled, so the tunnel clears a stale socket itself.

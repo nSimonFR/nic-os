@@ -16,9 +16,9 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Version pins that no built-in manager reads: AFFiNE's container tag in a Nix let-binding (hosts/rpi5/affine.nix, installed by affine-sync.service), and the hand-pinned from-source packages under pkgs/. Opt-in per package via a `# renovate:` comment directly above the version, so adding a package here is a deliberate act and the ones left out stay out. Each excluded package says why in its own file.",
+      "description": "Version pins that no built-in manager reads: AFFiNE's container tag in a Nix let-binding (hosts/rpi5/knowledge/affine.nix, installed by affine-sync.service), and the hand-pinned from-source packages under pkgs/. Opt-in per package via a `# renovate:` comment directly above the version, so adding a package here is a deliberate act and the ones left out stay out. Each excluded package says why in its own file.",
       "managerFilePatterns": [
-        "hosts/rpi5/affine.nix",
+        "hosts/rpi5/knowledge/affine.nix",
         "pkgs/**/*.nix"
       ],
       "matchStrings": [

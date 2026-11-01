@@ -9,7 +9,7 @@
 # `pkgs.showmycards` via an overlay.
 #
 # Upstream bundles backend + frontend in one supervisord container. We build
-# both and expose two wrappers consumed by hosts/rpi5/showmycards.nix:
+# both and expose two wrappers consumed by hosts/rpi5/life/showmycards.nix:
 #   * $out/bin/showmycards-backend   — Go/Fiber API (SQLite, cgo); GODEBUG pinned
 #   * $out/bin/showmycards-frontend  — SvelteKit adapter-node server (`node build`)
 #
@@ -238,7 +238,7 @@ stdenv.mkDerivation {
     # The tygo-generated TypeScript types are the only machine-readable
     # description of this API — upstream's DEVELOPMENT.md advertises Swagger at
     # /swagger, but there is no backend/docs, no @Router annotations, and the
-    # route 404s. Ship them so hosts/rpi5/showmycards.nix can surface them at a stable
+    # route 404s. Ship them so hosts/rpi5/life/showmycards.nix can surface them at a stable
     # /etc path for the `showmycards` agent skill to read: request/response
     # shapes and the limit constants then track the pinned source automatically
     # instead of rotting in hand-written prose.

@@ -1,6 +1,6 @@
 # The wrapped `dsh` binary, shared by the two surfaces that need it: the
 # home-manager module beside this file (interactive `dsh --profile headless`)
-# and hosts/rpi5/dsh.nix's `dsh web` unit. One derivation, so the service and
+# and hosts/rpi5/agents/dsh.nix's `dsh web` unit. One derivation, so the service and
 # the CLI can never drift apart, and the unit's ExecStart stays a store path
 # that nixos-rebuild actually tracks.
 { pkgs, lib, inputs }:
@@ -35,6 +35,6 @@ pkgs.symlinkJoin {
       --suffix PATH : "${lib.makeBinPath agentTools}"
   '';
 
-  # symlinkJoin drops passthru, and hosts/rpi5/dsh.nix wants `lib.getExe`.
+  # symlinkJoin drops passthru, and hosts/rpi5/agents/dsh.nix wants `lib.getExe`.
   meta.mainProgram = "dsh";
 }

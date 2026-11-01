@@ -3,7 +3,7 @@
 # as a plain systemd service built from nixpkgs with a CUDA onnxruntime,
 # mirroring the ollama-cuda pattern (see services.ollama in configuration.nix).
 #
-# The rpi5 runs the Immich *server* but no local ML (see hosts/rpi5/immich.nix); it
+# The rpi5 runs the Immich *server* but no local ML (see hosts/rpi5/media/immich.nix); it
 # points IMMICH_MACHINE_LEARNING_URL at this host over the tailnet. Running the
 # heavy ViT-H-14-378 CLIP model here on the 3080 Ti gives far better search
 # (French, text-in-image, rare subjects) than the rpi5's tiny default model.

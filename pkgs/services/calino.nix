@@ -5,7 +5,7 @@
 # CalDAV/CardDAV straight from the browser: credentials live in localStorage,
 # the event cache is Dexie/IndexedDB. So this derivation is a `vite build` whose
 # only output is a directory of static files — nothing to run, nothing to keep
-# resident, nothing to back up. hosts/rpi5/calino.nix points an nginx vhost at
+# resident, nothing to back up. hosts/rpi5/knowledge/calino.nix points an nginx vhost at
 # `$out/share/calino/dist` and re-proxies Nextcloud's DAV endpoint under the same
 # origin (SabreDAV has no CORS knob, and upstream's answer is a whole extra
 # CORS-proxy container).
@@ -32,7 +32,7 @@
   pnpm_10_latest,
   # The public origin Calino is served at, baked into index.html at build time
   # (canonical link, OG/Twitter cards, JSON-LD). MUST NOT end in a slash — the
-  # template interpolates `%VITE_SITE_URL%/`. hosts/rpi5/calino.nix passes the
+  # template interpolates `%VITE_SITE_URL%/`. hosts/rpi5/knowledge/calino.nix passes the
   # publicUrl derived from the port it declares.
   siteUrl ? "http://localhost",
 }:

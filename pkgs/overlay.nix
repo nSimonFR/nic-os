@@ -6,7 +6,7 @@
 # everywhere, and `nix build .#rtk` builds exactly what the system runs.
 #
 # WHAT DOESN'T: a package used in exactly one place. Those stay
-# `pkgs.callPackage ../pkgs/<name>.nix { }` at their single use site — an
+# `pkgs.callPackage ./<name>.nix { }` at their single use site — an
 # overlay entry would add a name to every host's `pkgs` for no gain. Move one
 # here the moment a second consumer appears.
 #
@@ -17,17 +17,17 @@
 # in flake.nix — all via `outputs.overlays.nic-os`.
 inputs: final: _prev: {
   # RTK (Rust Token Killer) — built from the rtk-src flake input.
-  # Consumers: hosts/rpi5/cyrus.nix, home/, and `nix build .#rtk`.
+  # Consumers: hosts/rpi5/agents/cyrus.nix, home/, and `nix build .#rtk`.
   rtk = final.callPackage ./agents/rtk.nix { rtk-src = inputs.rtk-src; };
 
-  # T3 Code CLI/server. Consumers: hosts/rpi5/t3code.nix (server) and
+  # T3 Code CLI/server. Consumers: hosts/rpi5/agents/t3code.nix (server) and
   # hosts/nbookpro/linear-t3-relay.nix (pairing codes on the Mac).
   t3code = final.callPackage ./agents/t3code.nix { };
   t3code-desktop = final.callPackage ./agents/t3code-desktop.nix { };
 
   # ShowMyCards (MTG collection manager) — built from the showmycards-src flake
   # input; the prebuilt upstream image is amd64-only.
-  # Consumers: hosts/rpi5/showmycards.nix and `nix build .#showmycards`.
+  # Consumers: hosts/rpi5/life/showmycards.nix and `nix build .#showmycards`.
   showmycards = final.callPackage ./services/showmycards.nix {
     showmycards-src = inputs.showmycards-src;
     # backend/go.mod requires `go 1.26.3` and a pure build can't fetch a
@@ -39,7 +39,7 @@ inputs: final: _prev: {
 
   # FreeReps (self-hosted Apple Health server) — built from source; upstream
   # publishes only a docker-compose stack.
-  # Consumers: hosts/rpi5/freereps.nix (the service) and
+  # Consumers: hosts/rpi5/life/freereps.nix (the service) and
   # hosts/rpi5/hermes/hermes.nix (the `-mcp` stdio server), plus
   # `nix build .#freereps`.
   freereps = final.callPackage ./services/freereps.nix { };

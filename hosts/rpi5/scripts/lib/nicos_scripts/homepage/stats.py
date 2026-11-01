@@ -145,38 +145,38 @@ class Config:
 
     # Read karakeep's SQLite directly (read-only) instead of its HTTP API: no API
     # key needed, and — crucially — it never wakes karakeep, so the socket-activated
-    # idle-sleep (hosts/rpi5/karakeep.nix) is preserved. -readonly avoids creating
+    # idle-sleep (hosts/rpi5/knowledge/karakeep.nix) is preserved. -readonly avoids creating
     # root-owned -wal/-shm files that would break karakeep (runs as the karakeep user).
     karakeep_db: str = "/var/lib/karakeep/db.db"
-    # Same direct-DB-read trick for Papra (hosts/rpi5/papra.nix) and Gramps Web
-    # (hosts/rpi5/gramps-web.nix) — both socket-activated, both read read-only so polling
+    # Same direct-DB-read trick for Papra (hosts/rpi5/knowledge/papra.nix) and Gramps Web
+    # (hosts/rpi5/knowledge/gramps-web.nix) — both socket-activated, both read read-only so polling
     # never wakes them.
     papra_db: str = "/var/lib/papra/db.sqlite"
     gramps_trees_glob: str = "/var/lib/gramps-web/data/grampsdb/*/sqlite.db"
     # Vaultwarden and Wakapi: same direct-SQLite-read trick as Papra/Karakeep above.
     vaultwarden_db: str = "/var/lib/vaultwarden/db.sqlite3"
     wakapi_db: str = "/var/lib/wakapi/wakapi.db"
-    # Beszel's PocketBase database (hosts/rpi5/monitoring.nix). DynamicUser + StateDirectory
+    # Beszel's PocketBase database (hosts/rpi5/platform/monitoring.nix). DynamicUser + StateDirectory
     # puts it under /var/lib/private, which is 0700 root — this service runs as root, so
     # the same read-only-SQLite trick applies. Reading it here replaces the native beszel
     # widget, which needed a superuser password in plaintext in the tile config.
     beszel_db: str = "/var/lib/private/beszel-hub/beszel_data/data.db"
-    # BeaverHabits (hosts/rpi5/beaverhabits.nix): the whole habit list is one JSON blob per
+    # BeaverHabits (hosts/rpi5/life/beaverhabits.nix): the whole habit list is one JSON blob per
     # user in habit_list.data — read-only, so polling never wakes the idle service.
     beaverhabits_db: str = "/var/lib/beaverhabits/habits.db"
     switch_dir: str = "/mnt/data/death-plan-switch"
-    # ShowMyCards (hosts/rpi5/showmycards.nix): socket-activated with a 600s idle timer, so
+    # ShowMyCards (hosts/rpi5/life/showmycards.nix): socket-activated with a 600s idle timer, so
     # the same read-only-SQLite trick applies — its HTTP API is the ONLY thing that can
     # wake it, and a widget polling :8330 would pin both processes awake permanently on
     # a 3.9 GB box. The DB is 0750 showmycards:showmycards; this service runs as root.
     # Lives on /mnt/data, never / (the catalogue is ~0.9 GB).
     showmycards_db: str = "/mnt/data/showmycards/database.db"
-    # OpenKnowledge notes (hosts/rpi5/open-knowledge.nix): plain markdown, counted from
+    # OpenKnowledge notes (hosts/rpi5/knowledge/open-knowledge.nix): plain markdown, counted from
     # the filesystem so the poll never touches the app.
     notes_dir: str = "/mnt/data/cloud/NOTES"
     journal_state: str = "/var/lib/journal-daily/days.json"
 
-    # Reactive Resume's Postgres role/db (hosts/rpi5/reactive-resume.nix, shared cluster).
+    # Reactive Resume's Postgres role/db (hosts/rpi5/knowledge/reactive-resume.nix, shared cluster).
     # pg_hba requires scram-sha-256 for this role (see pg_hba_file_rules), so the
     # password is read from the same agenix secret reactive-resume-env uses; root
     # can read it despite owner=postgres (root bypasses file permission bits).
@@ -186,12 +186,12 @@ class Config:
     rxresume_role: str = "reactive_resume"
     rxresume_pw_file: str = "/run/agenix/reactive-resume-db-password"
 
-    # AFFiNE's own Postgres (hosts/rpi5/affine.nix). Read as the postgres superuser
+    # AFFiNE's own Postgres (hosts/rpi5/knowledge/affine.nix). Read as the postgres superuser
     # over the Unix socket, same as forgejo/dawarich — AFFiNE connects over that
     # socket with no password role of its own.
     affine_db: str = "affine"
 
-    # Nextcloud (hosts/rpi5/nextcloud.nix) is the one tile left that genuinely needs
+    # Nextcloud (hosts/rpi5/knowledge/nextcloud.nix) is the one tile left that genuinely needs
     # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
         "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
@@ -201,7 +201,7 @@ class Config:
     # Both sources are read in one fetch; Nextcloud is always-on, so neither wakes
     # anything.
     nextcloud_db: str = "nextcloud_production"
-    # Calino (hosts/rpi5/calino.nix) stores nothing of its own — the calendars it
+    # Calino (hosts/rpi5/knowledge/calino.nix) stores nothing of its own — the calendars it
     # renders are Nextcloud's — so its tile reads Nextcloud's CalDAV. Same always-on
     # backend as nextcloud_info_url, and no Host header is needed: overwritecondaddr
     # matches 127.0.0.1 unconditionally, so NC builds its own hrefs regardless.
@@ -220,14 +220,14 @@ class Config:
     wealthfolio_db: str = "/var/lib/wealthfolio/wealthfolio.db"
     immich_url: str = "http://127.0.0.1:2283"
     hass_url: str = "http://127.0.0.1:8123"
-    # Home Assistant's recorder database (hosts/rpi5/home-assistant.nix). The tile
+    # Home Assistant's recorder database (hosts/rpi5/home-assistant/default.nix). The tile
     # needs LONG-TERM STATISTICS — ha-linky's hourly Enedis backfill — and those are
     # not on the REST API at all, only on the websocket one. Read-only, and this
     # service runs as root so hass's 0700 state dir is reachable, same as
     # wealthfolio_db. HA is always-on, so nothing here is about avoiding a wake.
     hass_db: str = "/var/lib/hass/home-assistant_v2.db"
 
-    # dsh's session log (hosts/rpi5/dsh.nix). One directory per workspace, one
+    # dsh's session log (hosts/rpi5/agents/dsh.nix). One directory per workspace, one
     # per session inside it, and the transcript is zstd-compressed JSONL. Read
     # off disk rather than through dsh's HTTP API for the usual reason: dsh-web is
     # socket-activated with a 900s idle timer, and a daily poll would wake a
@@ -237,7 +237,7 @@ class Config:
     dsh_sessions_glob: str = (
         "/home/nsimon/.dsh/sessions/*/session-*/session.jsonl.zstd")
 
-    # Aperture's Prometheus endpoint (hosts/rpi5/aperture-sync.nix grants
+    # Aperture's Prometheus endpoint (hosts/rpi5/agents/aperture-sync.nix grants
     # `read_metrics` to nSimonFR@github; without it this 403s, and `admin` does
     # NOT imply it). Aperture is a Tailscale-managed service on the tailnet, not a
     # unit on this host — it is the one tile whose data comes from off-box, which
@@ -358,7 +358,7 @@ class Stats:
 def env_var(cfg, name):
     """Read a HOMEPAGE_VAR_* value out of the env file homepage-dashboard shares.
 
-    Written by the homepage-dashboard-env oneshot (hosts/rpi5/homepage.nix), so the
+    Written by the homepage-dashboard-env oneshot (hosts/rpi5/network/homepage.nix), so the
     secrets live in exactly one place for both the dashboard and this aggregator.
     """
     with open(cfg.env_file) as f:
@@ -682,7 +682,7 @@ def fetch_immich(cfg, run):
 
 def fetch_nextcloud(cfg, run):
     # serverinfo's OCS API, authenticated with the NC-Token it was configured with
-    # (hosts/rpi5/nextcloud.nix enables the "serverinfo" app for exactly this). Basic auth
+    # (hosts/rpi5/knowledge/nextcloud.nix enables the "serverinfo" app for exactly this). Basic auth
     # as nsimon 401s. Replaces the native `nextcloud` homepage widget, which always
     # renders freespace/activeusers/numfiles/numshares and only lets `fields` filter
     # which of them survive.
@@ -722,7 +722,7 @@ def fetch_nextcloud(cfg, run):
 
 # ── Calino / CalDAV ───────────────────────────────────────────────────────────
 #
-# Calino (hosts/rpi5/calino.nix) has no store and no process of its own, so there is
+# Calino (hosts/rpi5/knowledge/calino.nix) has no store and no process of its own, so there is
 # no database to read and no API to call — its tile has to read the calendars it
 # renders, which are Nextcloud's. That means CalDAV, and CalDAV is the reason these
 # three numbers are all COUNTS obtained with a server-side filter:
@@ -1196,7 +1196,7 @@ def fetch_reactive_resume(cfg, run):
 
 
 def fetch_gramps_web(cfg, run, find=None):
-    # Multi-tree (hosts/rpi5/gramps-web.nix tree = "*"): sum counts across every
+    # Multi-tree (hosts/rpi5/knowledge/gramps-web.nix tree = "*"): sum counts across every
     # tree's SQLite database rather than assuming a single tree.
     dbs = (find or glob.glob)(cfg.gramps_trees_glob)
 
@@ -1399,7 +1399,7 @@ def fetch_airtrail(cfg, run):
     }
 
 
-# Ryot V2 (hosts/rpi5/ryot.nix) keeps no per-day rollup. Hours = completed movies
+# Ryot V2 (hosts/rpi5/media/ryot.nix) keeps no per-day rollup. Hours = completed movies
 # and episodes by runtime (minutes) plus music by track duration (seconds); games
 # are left out, their Steam playtime would swamp everything else.
 RYOT_MEDIA_HOURS_SQL = """
@@ -1455,7 +1455,7 @@ def _day_stats(text):
 
 
 def fetch_memos(cfg, run):
-    # journal-daily's state (hosts/rpi5/memos.nix) has one key per day it wrote,
+    # journal-daily's state (hosts/rpi5/knowledge/memos.nix) has one key per day it wrote,
     # so Memos is never asked.
     with open(cfg.journal_state) as f:
         state = json.load(f)
@@ -1818,7 +1818,7 @@ def fetch_homeassistant(cfg, run):
 # refresh and the startup backfill. Keeping it a dict rather than a call list means
 # a newly added widget cannot be wired into one and forgotten in the other.
 def fetch_switch(cfg, run, now=None):
-    # Death Plan Switch keeps its state in JSON files (hosts/rpi5/death-plan-switch.nix);
+    # Death Plan Switch keeps its state in JSON files (hosts/rpi5/security/death-plan-switch.nix);
     # this service runs as root, so it reads them past their 0700 directory.
     def load(name):
         with open(os.path.join(cfg.switch_dir, name + ".json")) as f:

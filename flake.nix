@@ -174,7 +174,7 @@
 
     # BeaverHabits habit tracker — Python/NiceGUI, packaged via uv2nix. First
     # Python native app here; its flake carries the uv2nix stack itself, so we
-    # only pin nixpkgs. See hosts/rpi5/beaverhabits.nix.
+    # only pin nixpkgs. See hosts/rpi5/life/beaverhabits.nix.
     beaverhabits-nix = {
       url = "github:nSimonFR/beaverhabits-nix";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -272,7 +272,7 @@
     };
 
     # Cyrus — Linear coding-agent dispatcher (cyrusagents/cyrus). Source-only
-    # input (`flake = false`): hosts/rpi5/cyrus.nix vendors it and builds with pnpm
+    # input (`flake = false`): hosts/rpi5/agents/cyrus.nix vendors it and builds with pnpm
     # at service start. Tracks the default branch (no tag), so `nix flake
     # update` auto-bumps it; cyrus-build.service rebuilds once per rev change.
     # To pin a specific commit/tag instead, append `/<rev-or-tag>` to the URL.
@@ -520,7 +520,7 @@
           # Expose Ryot as a standalone target (`nix build .#ryot`) so its heavy
           # Rust LTO + Node build can be isolated/pinned and optionally pushed to
           # a binary cache (Cachix/attic). Built locally on the Pi by default —
-          # there is no prebuild CI cache (garnix is deprecated). See hosts/rpi5/ryot.nix.
+          # there is no prebuild CI cache (garnix is deprecated). See hosts/rpi5/media/ryot.nix.
           aarch64-linux.ryot =
             self.nixosConfigurations.${rpiconfig}.config.services.ryot.package;
           # ShowMyCards — `nix build .#showmycards` to isolate its Go (cgo) +
@@ -532,7 +532,7 @@
           # compile from a full rebuild. Same reasoning as showmycards above:
           # no prebuild cache, and this one is OOM-prone on a 4 GB box because
           # the tailscale dependency tree and a Rollup build land in one
-          # derivation. See hosts/rpi5/freereps.nix.
+          # derivation. See hosts/rpi5/life/freereps.nix.
           aarch64-linux.freereps =
             self.nixosConfigurations.${rpiconfig}.pkgs.freereps;
           # Hermes Agent — lean `messaging` variant. Exposed as a standalone

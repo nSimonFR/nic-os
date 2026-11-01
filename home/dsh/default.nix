@@ -4,7 +4,7 @@
 #
 # dsh ships no TUI (the package was deleted upstream on 2026-08-04), so the
 # interactive surface is a Web UI — run as a tailnet service by
-# hosts/rpi5/dsh.nix. What this module gives every host is the binary itself
+# hosts/rpi5/agents/dsh.nix. What this module gives every host is the binary itself
 # (`dsh --profile headless "…"` for one-shot work) plus the config both
 # surfaces read out of ~/.dsh.
 {

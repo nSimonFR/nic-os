@@ -35,7 +35,7 @@ TAG = "sure-drain-keepalive"
 DEFAULT_REDIS_CLI = "redis-cli"
 DEFAULT_REDIS_DB = 2
 DEFAULT_CURL = "curl"
-# The socket-activation proxy's listen address (hosts/rpi5/sure.nix externalPort).
+# The socket-activation proxy's listen address (hosts/rpi5/finance/sure.nix externalPort).
 # Must be the PROXY, not the backend: connecting straight to sure-web bypasses
 # the proxy and so does not reset --exit-idle-time.
 DEFAULT_WAKE_URL = "http://127.0.0.1:13334/sure/up"

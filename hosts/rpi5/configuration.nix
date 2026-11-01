@@ -111,75 +111,15 @@ in
     ./lib/service-registration.nix
     ./lib/pg-role.nix
     ./secrets.nix
-    ./databases.nix
-    ./home-assistant.nix
-    ./tailscale-serve.nix
-    ./blocky.nix
-    ./monitoring.nix
-    ./security-policy.nix
-    # beast-wake + the four-hourly "beast is idling powered-on" backstop.
-    ./beast-power.nix
-    ./agent-access.nix
-    ./sudo-totp.nix
-    ./sudo-ssh-agent.nix
-    ./immich.nix
-    ./immich-clip.nix
-    ./immich-adopt.nix
-    ./sure.nix
-    ./papra.nix
-    ./karakeep.nix
-    ./airtrail.nix
-    ./beaverhabits.nix
-    ./freereps.nix
-    ./wealthfolio.nix
-    ./wealthfolio-sync.nix
-    ./showmycards.nix
-    ./searxng.nix
-    ./open-knowledge.nix
-    ./memos.nix
-    ./moxfield-sync.nix
-    ./nextcloud.nix
-    ./calino.nix
-    ./death-plan-switch.nix
-    ./front-proxy.nix
-    ./tailnet-mitm.nix
-    ./sumeria-mitm.nix
-    ./arkose-sync.nix
-    ./entire.nix
-    ./hydroxide.nix
-    ./vaultwarden.nix
-    ./forgejo.nix
-    ./dawarich.nix
-    ./affine.nix
-    ./affine-mcp.nix
-    ./reactive-resume.nix
-    ./cyrus.nix
-    ./dsh.nix
-    ./t3code.nix
-    ./tiny-llm-gate.nix
-    ./agent-vault.nix
-    ./aperture-sync.nix
-    ./cachix-agent.nix
-    # Everything Claude Code on this host — bridge, OAuth keep-warm, the two
-    # alert oneshots — lives under ./claude/ (same shape as ./hermes/).
-    ./claude/claude-remote-control.nix
-    ./claude/claude-account-healthcheck.nix
-    ./claude/claude-notify-aggregator.nix
-    ./claude/claude-context-baseline.nix
-    ./claude/claude-window-anchor.nix
-    ./claude/t3-settle-retro.nix
-    ./gramps-web.nix
-    ./epicgames-freegames.nix
-    ./travel-cal-sync.nix
-    ./ryot.nix
-    ./ryot-connectors.nix
-    ./scale-bridge.nix
-    ./homepage.nix
-    ./backups.nix
-    ./auto-reboot.nix
-    ./storj-backup.nix
-    ./wakapi.nix
-    ./sidestore-reflector.nix
+    ./home-assistant
+    ./platform
+    ./network
+    ./security
+    ./agents
+    ./finance
+    ./media
+    ./knowledge
+    ./life
     # Tailscale with server features (subnet routing, SSH, exit node)
     # Subnet routes advertised through RPi5:
     #   - 10.7.0.1/32: SideStore's fixed "virtual computer" address. Advertising
@@ -288,7 +228,7 @@ in
   # cyrus-linear-*.age files with real values from the Linear OAuth app and
   # `systemctl restart cyrus`.
   # Model (opus), ultracode mode, and the managed repository set are configured
-  # as defaults in ./cyrus.nix (single-host bespoke module). Override there.
+  # as defaults in ./agents/cyrus.nix (single-host bespoke module). Override there.
   services.cyrus.enable = true;
 
   # Transparent interception for these devices (tailnet-mitm.nix). Sumeria's

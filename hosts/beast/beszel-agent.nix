@@ -13,7 +13,7 @@ in
     # `serviceConfig` put it in [Service], where systemd ignores it (it warns and
     # carries on), so the unit started with no env file, failed on the missing
     # EnvironmentFile, and restart-looped instead of staying inactive. The rpi5's
-    # copy of this module has always had it right — see hosts/rpi5/monitoring.nix.
+    # copy of this module has always had it right — see hosts/rpi5/platform/monitoring.nix.
     unitConfig.ConditionPathExists = "/etc/beszel/agent.env";
     serviceConfig = {
       ExecStart = "${pkgs.beszel}/bin/beszel-agent";

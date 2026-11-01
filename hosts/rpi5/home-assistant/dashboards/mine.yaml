@@ -1,5 +1,5 @@
 # Home Assistant "Mine" dashboard - versioned in nic-os (YAML mode).
-# Loaded via services.home-assistant activation in hosts/rpi5/home-assistant.nix.
+# Loaded via services.home-assistant activation in hosts/rpi5/home-assistant/default.nix.
 # Edit here + rebuild; NOT editable from the HA UI.
 views:
 - title: Home

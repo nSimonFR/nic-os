@@ -3,8 +3,8 @@
 #
 # Usage:
 #   Import with role parameter:
-#     imports = [ (import ../shared/tailscale.nix { role = "client"; }) ];
-#     imports = [ (import ../shared/tailscale.nix { role = "server"; enableSSH = true; }) ];
+#     imports = [ (import ./tailscale.nix { role = "client"; }) ];
+#     imports = [ (import ./tailscale.nix { role = "server"; enableSSH = true; }) ];
 #
 # Roles:
 #   - "client": Accept routes and DNS (default)
