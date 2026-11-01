@@ -1,5 +1,6 @@
 from __future__ import annotations
-import json, sqlite3
+import json
+import sqlite3
 from pathlib import Path
 from .model import Event
 

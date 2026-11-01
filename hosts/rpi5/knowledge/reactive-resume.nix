@@ -30,7 +30,6 @@
   ...
 }:
 let
-  osUser = "reactive-resume"; # systemd/service identity (hyphen per convention)
   dbUser = "reactive_resume"; # postgres role == db name (no hyphen quoting needed)
   dbName = "reactive_resume";
   dataDir = "/var/lib/reactive-resume";
@@ -100,7 +99,7 @@ in
     enable = true;
     host = "127.0.0.1";
     port = backendPort;
-    appUrl = appUrl;
+    inherit appUrl;
     # Build the SPA for the /rxresume sub-path (Vite base + router basepath +
     # client/server URL bases). Rebuilds the package from the reactive-resume-nix
     # base-path patch. MUST end with a slash and match appUrl's path.

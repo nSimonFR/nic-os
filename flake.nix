@@ -571,7 +571,7 @@
         # nixos-raspberrypi.cachix.org).
         # This is NOT the same as inputs.nixos-raspberrypi.inputs.nixpkgs.follows (which would
         # break the kernel cache).
-        nixpkgs = inputs.nixpkgs;
+        inherit (inputs) nixpkgs;
         specialArgs = baseArgs rpiconfig // {
           inherit (rpi5Params)
             tailnetFqdn
@@ -581,7 +581,7 @@
             beastHost
             immichVersion
             ;
-          nixos-raspberrypi = inputs.nixos-raspberrypi;
+          inherit (inputs) nixos-raspberrypi;
           unstablePkgs = unstableFor "aarch64-linux";
         };
         modules = [
@@ -649,7 +649,7 @@
               system = "x86_64-linux";
               config.allowUnfree = true;
               overlays = [
-                (final: prev: {
+                (_final: prev: {
                   code-cursor = prev.code-cursor.overrideAttrs (old: {
                     src = prev.appimageTools.extract {
                       pname = "cursor";

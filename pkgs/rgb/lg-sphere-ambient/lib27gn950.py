@@ -66,7 +66,7 @@ def _send(s, dev):
 def send_command(cmd, dev):
     header = "5343c"
     end = "4544"
-    if type(cmd) == str:
+    if isinstance(cmd, str):
         cmd = (cmd,)
     if not hasattr(dev, "__iter__"):
         dev = (dev,)

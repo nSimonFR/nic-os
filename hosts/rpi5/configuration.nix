@@ -91,7 +91,7 @@ let
         pkgs.gnused
       ];
       installFirmwareBuilder = firmwareInstaller;
-      nixosGenerationsDir = rpiCfg.nixosGenerationsDir;
+      inherit (rpiCfg) nixosGenerationsDir;
       nixosGenBuilder = kernelbootGenBuilder;
     };
   };
@@ -99,9 +99,7 @@ in
 {
   # Override the bootloader installer (nixos-raspberrypi sets mkOverride 60;
   # mkForce = priority 50 wins) with the patched version built above.
-  system.build.installBootLoader = lib.mkForce (
-    "${patchedBootloader} -g ${toString rpiCfg.configurationLimit} -f ${rpiCfg.firmwarePath} -c"
-  );
+  system.build.installBootLoader = lib.mkForce "${patchedBootloader} -g ${toString rpiCfg.configurationLimit} -f ${rpiCfg.firmwarePath} -c";
 
   # Workaround for nixpkgs 25.11 rename.nix <-> nixos-raspberrypi conflict
   disabledModules = [ "rename.nix" ];

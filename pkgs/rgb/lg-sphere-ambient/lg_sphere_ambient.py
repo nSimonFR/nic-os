@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """LG 38GN950 sphere-lighting ambient sync daemon."""
 
-import argparse, os, signal, sys, time, logging
+import argparse
+import os
+import signal
+import sys
+import time
+import logging
 import numpy as np
 import hid
 import lib27gn950 as lg
@@ -236,7 +241,6 @@ class OpenRGBSink:
             return
         perled = perled or {}
         r, g, b = rgb
-        global_col = RGBColor(r, g, b)
         dead = []
         for dev in self.devices:
             plan = self._zone_plan.get(id(dev))

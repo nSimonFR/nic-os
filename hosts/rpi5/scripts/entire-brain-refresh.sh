@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # entire-brain-refresh — one Brain pass over a clean nic-os clone at origin/main.
 # Brain refuses a dirty worktree, and ~/nic-os carries other sessions' edits.
 # Its sessions come from the checkpoint refs, which live in the private repo.

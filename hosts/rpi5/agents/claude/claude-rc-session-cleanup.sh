@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Kill stale bridge sessions and clean up orphaned worktrees.
 # Works around: anthropics/claude-code#29313, #26725
 #

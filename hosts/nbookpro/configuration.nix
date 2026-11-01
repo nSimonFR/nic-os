@@ -22,12 +22,16 @@
   # apps, but nixpkgs release-25.11 still ships mas 2.2.2 (pre-`get`). Pull mas
   # from nixpkgs-unstable (6.0.1+) so masApps entries can actually install.
   nixpkgs.overlays = [
-    (final: prev: {
-      mas =
-        (import inputs.nixpkgs-unstable {
-          inherit (prev.stdenv.hostPlatform) system;
-          config.allowUnfree = true;
-        }).mas;
+    (_final: prev: {
+      inherit
+        (
+          (import inputs.nixpkgs-unstable {
+            inherit (prev.stdenv.hostPlatform) system;
+            config.allowUnfree = true;
+          })
+        )
+        mas
+        ;
     })
   ];
 

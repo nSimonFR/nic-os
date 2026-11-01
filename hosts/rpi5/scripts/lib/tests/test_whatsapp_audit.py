@@ -30,7 +30,7 @@ class Immich:
 
     def __call__(self, req, timeout=None):
         self.requests.append(req)
-        url, body = req.full_url, json.loads(req.data or b"{}")
+        url = req.full_url
         if req.get_method() == "PUT":
             if isinstance(self.put, Exception):
                 raise self.put

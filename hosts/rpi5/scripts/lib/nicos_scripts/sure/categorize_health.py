@@ -35,7 +35,7 @@ telegram-alert, which owns sending and dedup.
 """
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from ..logs import logger
 from ..pg import psql_rows

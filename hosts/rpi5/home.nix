@@ -39,14 +39,14 @@ in
   home.packages = with pkgs; [
     nodejs_22
     pnpm
-    (callPackage ../../pkgs/cli/gogcli.nix { gogcli-src = inputs.gogcli-src; })
-    (callPackage ../../pkgs/cli/goplaces.nix { goplaces-src = inputs.goplaces-src; })
+    (callPackage ../../pkgs/cli/gogcli.nix { inherit (inputs) gogcli-src; })
+    (callPackage ../../pkgs/cli/goplaces.nix { inherit (inputs) goplaces-src; })
     (callPackage ../../pkgs/cli/populartimes.nix { })
     (lib.hiPrio ghBrokered)
   ];
 
   home = {
-    username = username;
+    inherit username;
     homeDirectory = "/home/${username}";
   };
 

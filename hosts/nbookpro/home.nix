@@ -15,7 +15,7 @@
   ];
 
   home = {
-    username = username;
+    inherit username;
     homeDirectory = "/Users/${username}";
 
     # T3 Code desktop with the Issues page; replaces the manually installed nightly.
