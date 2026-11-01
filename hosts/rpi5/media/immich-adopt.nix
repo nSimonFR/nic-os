@@ -1,4 +1,9 @@
-{ pkgs, config, lib, ... }:
+{
+  pkgs,
+  config,
+  lib,
+  ...
+}:
 # immich-adopt — keep other people's shared photos as photos *I* own.
 #
 # An Immich asset has exactly one owner and album sharing does not change that:
@@ -54,7 +59,10 @@ let
     description = "Adopt ${job.description} into Nico's library";
     # Nothing to adopt if the API is down, and a failed run is retried by the
     # timer rather than being worth an alert.
-    after = [ "immich-server.service" "network-online.target" ];
+    after = [
+      "immich-server.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     serviceConfig = {
       Type = "oneshot";

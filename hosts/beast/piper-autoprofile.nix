@@ -4,7 +4,7 @@ let
   # ============================================
   # CONFIGURE HERE
   # ============================================
-  deviceProduct = "G502";  # grep pattern matched against ratbagctl list output
+  deviceProduct = "G502"; # grep pattern matched against ratbagctl list output
 
   defaultProfile = 1;
 
@@ -16,9 +16,9 @@ let
 
   # Generate bash case patterns from the profiles attrset
   profilePatterns = lib.concatStringsSep "\n" (
-    lib.mapAttrsToList (pattern: profile: ''
-      *"${pattern}"*) ratbag_set_profile ${toString profile} ;;'')
-    profiles
+    lib.mapAttrsToList (
+      pattern: profile: ''*"${pattern}"*) ratbag_set_profile ${toString profile} ;;''
+    ) profiles
   );
 
   # Generate grep patterns for checking if any game is running

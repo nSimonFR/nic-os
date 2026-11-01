@@ -68,7 +68,7 @@ for reg in known_marketplaces.json installed_plugins.json; do
   rm -f "$dst/$reg"
   jq --arg src "$src" --arg dst "$dst" \
     'walk(if type == "string" and startswith($src) then $dst + .[($src | length):] else . end)' \
-    "$src/$reg" > "$dst/$reg"
+    "$src/$reg" >"$dst/$reg"
 done
 
 # Everything else (blocklist.json, .last_inuse_sweep, ...) carries no per-config
@@ -77,7 +77,7 @@ for entry in "$src"/* "$src"/.[!.]*; do
   [ -e "$entry" ] || continue
   name="$(basename "$entry")"
   case "$name" in
-    marketplaces | cache | known_marketplaces.json | installed_plugins.json) continue ;;
+  marketplaces | cache | known_marketplaces.json | installed_plugins.json) continue ;;
   esac
   ln -sfn "$entry" "$dst/$name"
 done

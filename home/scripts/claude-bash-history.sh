@@ -26,7 +26,7 @@ mkdir -p "$SENTINEL" 2>/dev/null
 
 # Per-Claude-session UUID so all calls in one session group together.
 if [ ! -s "$SESSION_FILE" ]; then
-  atuin uuid > "$SESSION_FILE" 2>/dev/null || exit 0
+  atuin uuid >"$SESSION_FILE" 2>/dev/null || exit 0
 fi
 ATUIN_SESSION=$(cat "$SESSION_FILE" 2>/dev/null) || exit 0
 [ -z "$ATUIN_SESSION" ] && exit 0

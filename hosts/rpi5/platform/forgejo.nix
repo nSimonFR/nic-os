@@ -1,11 +1,17 @@
-{ config, pkgs, lib, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  tailnetFqdn,
+  ...
+}:
 let
   # externalPort: what Tailscale Serve exposes and ROOT_URL advertises.
   # Now bound by the socket-activate proxy (hosts/rpi5/lib/socket-activate.nix),
   # which forwards to forgejo on backendPort when there is traffic.
   externalPort = 3100;
-  backendPort  = 3101;
-  sshPort      = 2222;
+  backendPort = 3101;
+  sshPort = 2222;
 
   earl-grey-theme = pkgs.fetchurl {
     url = "https://raw.githubusercontent.com/Troplo/earl-grey/master/theme-earl-grey.css";
@@ -26,14 +32,14 @@ in
 
     settings = {
       server = {
-        HTTP_ADDR          = "127.0.0.1";
-        HTTP_PORT          = backendPort;
-        DOMAIN             = tailnetFqdn;
-        ROOT_URL           = "https://${tailnetFqdn}:${toString externalPort}/";
-        START_SSH_SERVER   = true;
-        SSH_SERVER_HOST    = "127.0.0.1";
+        HTTP_ADDR = "127.0.0.1";
+        HTTP_PORT = backendPort;
+        DOMAIN = tailnetFqdn;
+        ROOT_URL = "https://${tailnetFqdn}:${toString externalPort}/";
+        START_SSH_SERVER = true;
+        SSH_SERVER_HOST = "127.0.0.1";
         BUILTIN_SSH_SERVER_USER = "git";
-        SSH_PORT           = sshPort;
+        SSH_PORT = sshPort;
       };
 
       service = {
@@ -41,7 +47,7 @@ in
       };
 
       mirror = {
-        ENABLED          = true;
+        ENABLED = true;
         DEFAULT_INTERVAL = "8h";
       };
 
@@ -105,7 +111,10 @@ in
 
   systemd.services.forgejo-state-backup = {
     description = "Forgejo state backup (secrets, config, avatars)";
-    serviceConfig = { Type = "oneshot"; User = "forgejo"; };
+    serviceConfig = {
+      Type = "oneshot";
+      User = "forgejo";
+    };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
@@ -119,7 +128,10 @@ in
   systemd.timers.forgejo-state-backup = {
     description = "Daily Forgejo state backup timer";
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:15:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:15:00";
+      Persistent = true;
+    };
   };
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ────────
@@ -127,25 +139,32 @@ in
   # listens there and wakes forgejo on first request; after idleSec of
   # quiet, forgejo stops to free its ~80 MB RSS.
   services.socketActivate.forgejo = {
-    enable    = true;
-    realUnit  = "forgejo.service";
-    listen    = [ "127.0.0.1:${toString externalPort}" ];
-    backend   = "127.0.0.1:${toString backendPort}";
-    idleSec   = 600;
+    enable = true;
+    realUnit = "forgejo.service";
+    listen = [ "127.0.0.1:${toString externalPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
   };
 
   # ── GitHub mirror sync (discover + create new mirrors) ────────────────
   systemd.services.forgejo-mirror-sync = {
     description = "Discover and mirror new GitHub repos into Forgejo";
-    after    = [ "forgejo.service" "network-online.target" ];
-    wants    = [ "network-online.target" ];
+    after = [
+      "forgejo.service"
+      "network-online.target"
+    ];
+    wants = [ "network-online.target" ];
     requires = [ "forgejo.service" ];
     serviceConfig = {
       Type = "oneshot";
       User = "nsimon";
       LoadCredential = "github:${config.age.secrets.forgejo-github-mirror-token.path}";
     };
-    path = [ pkgs.gh pkgs.curl pkgs.jq ];
+    path = [
+      pkgs.gh
+      pkgs.curl
+      pkgs.jq
+    ];
     environment.HOME = "/home/nsimon";
     script = ''
       set -euo pipefail
@@ -241,22 +260,26 @@ in
   # DB dump carries the data, the state tarball carries the secret_key that
   # makes the dump decryptable, and the repositories are already on the HDD.
   nic.services.forgejo = {
-    backup            = [ "postgres" "unit" "mnt-data" ];
+    backup = [
+      "postgres"
+      "unit"
+      "mnt-data"
+    ];
     postgresDatabases = [ "forgejo" ];
-    backupUnits       = [ "forgejo-state-backup.service" ];
-    heavyUnits        = [ "forgejo.service" ];
-    heavyPriority     = 130;
+    backupUnits = [ "forgejo-state-backup.service" ];
+    heavyUnits = [ "forgejo.service" ];
+    heavyPriority = 130;
 
     # externalPort is also the socket-activate listen (see below), so the literal
     # stays local; only the URL shape is derived.
     public = {
-      order   = 210;
-      port    = externalPort;
+      order = 210;
+      port = externalPort;
       backend = "http://127.0.0.1:${toString externalPort}";
       tile = {
-        name        = "Forgejo";
-        icon        = "forgejo.svg";
-        category    = "Apps";
+        name = "Forgejo";
+        icon = "forgejo.svg";
+        category = "Apps";
         description = "Git hosting";
         widget = {
           type = "customapi";
@@ -268,9 +291,21 @@ in
             # ever been used. What this instance is FOR is mirroring, so the second
             # field now asks whether the mirrors are running. It earned itself on
             # the first fetch: all 68 are overdue, newest sync 2026-08-11.
-            { field = "repositories";  label = "Repos";   format = "number"; }
-            { field = "stale_mirrors"; label = "Overdue"; format = "number"; }
-            { field = "size";          label = "Size";    format = "bytes"; }
+            {
+              field = "repositories";
+              label = "Repos";
+              format = "number";
+            }
+            {
+              field = "stale_mirrors";
+              label = "Overdue";
+              format = "number";
+            }
+            {
+              field = "size";
+              label = "Size";
+              format = "bytes";
+            }
           ];
         };
       };

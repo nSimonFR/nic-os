@@ -23,7 +23,12 @@
 #   * the step is SELF-CONTAINED (it does its own type check and its own album
 #     add) because Immich reads workflow_step with no ORDER BY, so a filter cannot
 #     reliably gate a later action step. Do not chain assetAddToAlbums after it.
-{ config, pkgs, beastHost, ... }:
+{
+  config,
+  pkgs,
+  beastHost,
+  ...
+}:
 
 let
   stateDir = "/var/lib/immich-clip";

@@ -41,7 +41,15 @@
 #                  (must be exact — cyrus mounts at /linear-webhook, NOT /webhooks/linear)
 #   Scopes:        write, app:assignable, app:mentionable
 #   Webhook event: "Agent session events"
-{ config, lib, pkgs, unstablePkgs, apertureUrl, inputs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  unstablePkgs,
+  apertureUrl,
+  inputs,
+  ...
+}:
 let
   cfg = config.services.cyrus;
 
@@ -114,10 +122,21 @@ let
   # teamKey / [repo=...] description tag lands there instead of triggering
   # cyrus's "Which repository should I work in?" prompt. Other repos match via
   # their name as the routing label. Wired into the repositories option default.
-  mkRepo = name: { inherit name; url = "https://github.com/nSimonFR/${name}.git"; };
-  managedRepos =
-    [ (mkRepo "nic-os" // { catchAll = true; }) ]
-    ++ map mkRepo [ "amarre" "for-sure" "gleaner" "sure-nix" "terradex" "tiny-llm-gate" ];
+  mkRepo = name: {
+    inherit name;
+    url = "https://github.com/nSimonFR/${name}.git";
+  };
+  managedRepos = [
+    (mkRepo "nic-os" // { catchAll = true; })
+  ]
+  ++ map mkRepo [
+    "amarre"
+    "for-sure"
+    "gleaner"
+    "sure-nix"
+    "terradex"
+    "tiny-llm-gate"
+  ];
 in
 {
   options.services.cyrus = {
@@ -222,47 +241,51 @@ in
     };
 
     repositories = lib.mkOption {
-      type = lib.types.listOf (lib.types.submodule ({ config, ... }: {
-        options = {
-          name = lib.mkOption {
-            type = lib.types.str;
-            description = "Local repo name.";
-          };
-          url = lib.mkOption {
-            type = lib.types.str;
-            description = "HTTPS clone URL; cyrus user uses gh credential helper.";
-          };
-          workspace = lib.mkOption {
-            type = lib.types.str;
-            default = "nSimon";
-            description = "Linear workspace display name. Must match the workspace OAuth'd via `cyrus self-auth-linear`.";
-          };
-          routingLabels = lib.mkOption {
-            type = lib.types.listOf lib.types.str;
-            default = [ config.name ];
-            defaultText = lib.literalExpression "[ name ]";
-            description = ''
-              Linear labels that route issues to this repo. Default is the
-              repo name (matches cyrus `self-add-repo` default).
+      type = lib.types.listOf (
+        lib.types.submodule (
+          { config, ... }: {
+            options = {
+              name = lib.mkOption {
+                type = lib.types.str;
+                description = "Local repo name.";
+              };
+              url = lib.mkOption {
+                type = lib.types.str;
+                description = "HTTPS clone URL; cyrus user uses gh credential helper.";
+              };
+              workspace = lib.mkOption {
+                type = lib.types.str;
+                default = "nSimon";
+                description = "Linear workspace display name. Must match the workspace OAuth'd via `cyrus self-auth-linear`.";
+              };
+              routingLabels = lib.mkOption {
+                type = lib.types.listOf lib.types.str;
+                default = [ config.name ];
+                defaultText = lib.literalExpression "[ name ]";
+                description = ''
+                  Linear labels that route issues to this repo. Default is the
+                  repo name (matches cyrus `self-add-repo` default).
 
-              Set to `[]` to make this repo a **catch-all**: any issue with
-              no matching routing label / projectKey / teamKey / `[repo=...]`
-              tag lands here instead of triggering cyrus's "Which repository
-              should I work in?" comment. Only one repo can be catch-all
-              (first one wins in RepositoryRouter).
-            '';
-          };
-          catchAll = lib.mkOption {
-            type = lib.types.bool;
-            default = false;
-            description = ''
-              Convenience flag — sets `routingLabels = []` so cyrus's
-              RepositoryRouter treats this repo as the fallback for issues
-              that don't match any other route.
-            '';
-          };
-        };
-      }));
+                  Set to `[]` to make this repo a **catch-all**: any issue with
+                  no matching routing label / projectKey / teamKey / `[repo=...]`
+                  tag lands here instead of triggering cyrus's "Which repository
+                  should I work in?" comment. Only one repo can be catch-all
+                  (first one wins in RepositoryRouter).
+                '';
+              };
+              catchAll = lib.mkOption {
+                type = lib.types.bool;
+                default = false;
+                description = ''
+                  Convenience flag — sets `routingLabels = []` so cyrus's
+                  RepositoryRouter treats this repo as the fallback for issues
+                  that don't match any other route.
+                '';
+              };
+            };
+          }
+        )
+      );
       # Defined as `managedRepos` at the top of this file for easy editing.
       default = managedRepos;
       description = ''
@@ -347,7 +370,7 @@ in
     programs.nix-ld = {
       enable = true;
       libraries = with pkgs; [
-        stdenv.cc.cc.lib  # libstdc++, libgcc_s
+        stdenv.cc.cc.lib # libstdc++, libgcc_s
         zlib
         openssl
         curl
@@ -361,30 +384,30 @@ in
       group = cfg.user;
       home = "/var/lib/cyrus";
       createHome = true;
-      shell = pkgs.bashInteractive;  # needed for `gh auth login` interactive flow
+      shell = pkgs.bashInteractive; # needed for `gh auth login` interactive flow
       description = "Cyrus Linear agent";
     };
-    users.groups.${cfg.user} = {};
+    users.groups.${cfg.user} = { };
 
     age.secrets.cyrus-linear-client-id = {
-      file  = ../secrets/cyrus-linear-client-id.age;
+      file = ../secrets/cyrus-linear-client-id.age;
       owner = cfg.user;
-      mode  = "0400";
+      mode = "0400";
     };
     age.secrets.cyrus-linear-client-secret = {
-      file  = ../secrets/cyrus-linear-client-secret.age;
+      file = ../secrets/cyrus-linear-client-secret.age;
       owner = cfg.user;
-      mode  = "0400";
+      mode = "0400";
     };
     age.secrets.cyrus-linear-webhook-secret = {
-      file  = ../secrets/cyrus-linear-webhook-secret.age;
+      file = ../secrets/cyrus-linear-webhook-secret.age;
       owner = cfg.user;
-      mode  = "0400";
+      mode = "0400";
     };
     age.secrets.cyrus-github-webhook-secret = {
-      file  = ../secrets/cyrus-github-webhook-secret.age;
+      file = ../secrets/cyrus-github-webhook-secret.age;
       owner = cfg.user;
-      mode  = "0400";
+      mode = "0400";
     };
 
     # ── One-shot source build ──────────────────────────────────────────────
@@ -524,59 +547,59 @@ in
         CYRUS_HOST_EXTERNAL=true
         GITHUB_WEBHOOK_SECRET=$(cat ${config.age.secrets.cyrus-github-webhook-secret.path})
         ${lib.optionalString cfg.enableBrowserUse ''
-        # ── Browser use ──
-        # CYRUS_BROWSER_USE_ENABLED is the only knob cyrus reads; everything
-        # below configures the `agent-browser` CLI the addendum tells the agent
-        # to call. See RunnerConfigBuilder.ts → appendBrowserUseAddendum().
-        CYRUS_BROWSER_USE_ENABLED=true
-        # agent-browser's own `install` subcommand fetches a Chrome for Testing
-        # build — a generic dynamically-linked ELF that cannot execve on NixOS.
-        # Point it at nixpkgs' chromium instead and never run `install`.
-        # Note: do NOT also set AGENT_BROWSER_ENGINE=chromium. The engine is a
-        # protocol selector, not a browser name, and its only values are
-        # `chrome` (CDP, the default) and `lightpanda` — "chromium" is rejected
-        # outright and every invocation dies with "Unknown engine". Chromium is
-        # a chrome-engine browser; the path below is the whole configuration.
-        AGENT_BROWSER_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
-        # SOCKET_DIR otherwise falls back to XDG_RUNTIME_DIR, which a system
-        # user under systemd does not have; the daemon then has nowhere to put
-        # its control socket. /tmp is private to the service (PrivateTmp=true)
-        # and shares the browser daemon's lifetime, which is what we want.
-        AGENT_BROWSER_SOCKET_DIR=/tmp/agent-browser
-        # Without this, `agent-browser skills …` dies with "Skills directory not
-        # found. Set AGENT_BROWSER_SKILLS_DIR or reinstall via npm" — it looks
-        # for the data relative to an npm install prefix we do not have. That
-        # matters more than it sounds: the SKILL.md we stage into
-        # ~/.claude/skills is only a discovery *stub* whose entire job is to
-        # send the agent to `agent-browser skills get core` for the real
-        # 516-line usage guide. Unset, the stub is a dead end and the agent
-        # falls back to guessing at the CLI.
-        AGENT_BROWSER_SKILLS_DIR=${agent-browser}/share/agent-browser/skill-data
-        # AGENT_BROWSER_SCREENSHOT_DIR is deliberately NOT set. Its default is
-        # $HOME/.agent-browser/tmp/screenshots, which is writable here, and
-        # pinning it anywhere else would fight the addendum's own advice to the
-        # agent — write screenshots into the workspace so cyrus's attachment
-        # upload flow finds them, which the agent does by passing an explicit
-        # relative path. An env default cannot express "the current worktree".
-        # Chromium's default /dev/shm sizing assumptions do not hold inside a
-        # hardened unit — without this the renderer dies on large pages.
-        AGENT_BROWSER_ARGS="--disable-dev-shm-usage --disable-gpu"
-        # agent-browser leaves its daemon (and the Chromium it owns) resident
-        # for an hour of inactivity by default. That is a fine trade on a
-        # workstation and a bad one here: ~500MB idling on a 4GB box between
-        # Linear issues. Five minutes still covers a single agent session's
-        # bursty back-and-forth, and the next command just starts a fresh
-        # daemon.
-        #
-        # It also bounds a sharp edge worth knowing about: the daemon inherits
-        # its cwd from whichever invocation first started it, and every
-        # *relative* path an agent later passes to `screenshot` resolves
-        # against that cwd — not the caller's. In normal operation the first
-        # call comes from the agent's worktree, so the addendum's advice to
-        # write ./screenshot.png does land in the workspace. But a daemon that
-        # outlived the previous session would silently write into the previous
-        # worktree, and once that worktree is gone, into a read-only /.
-        AGENT_BROWSER_IDLE_TIMEOUT_MS=300000
+          # ── Browser use ──
+          # CYRUS_BROWSER_USE_ENABLED is the only knob cyrus reads; everything
+          # below configures the `agent-browser` CLI the addendum tells the agent
+          # to call. See RunnerConfigBuilder.ts → appendBrowserUseAddendum().
+          CYRUS_BROWSER_USE_ENABLED=true
+          # agent-browser's own `install` subcommand fetches a Chrome for Testing
+          # build — a generic dynamically-linked ELF that cannot execve on NixOS.
+          # Point it at nixpkgs' chromium instead and never run `install`.
+          # Note: do NOT also set AGENT_BROWSER_ENGINE=chromium. The engine is a
+          # protocol selector, not a browser name, and its only values are
+          # `chrome` (CDP, the default) and `lightpanda` — "chromium" is rejected
+          # outright and every invocation dies with "Unknown engine". Chromium is
+          # a chrome-engine browser; the path below is the whole configuration.
+          AGENT_BROWSER_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
+          # SOCKET_DIR otherwise falls back to XDG_RUNTIME_DIR, which a system
+          # user under systemd does not have; the daemon then has nowhere to put
+          # its control socket. /tmp is private to the service (PrivateTmp=true)
+          # and shares the browser daemon's lifetime, which is what we want.
+          AGENT_BROWSER_SOCKET_DIR=/tmp/agent-browser
+          # Without this, `agent-browser skills …` dies with "Skills directory not
+          # found. Set AGENT_BROWSER_SKILLS_DIR or reinstall via npm" — it looks
+          # for the data relative to an npm install prefix we do not have. That
+          # matters more than it sounds: the SKILL.md we stage into
+          # ~/.claude/skills is only a discovery *stub* whose entire job is to
+          # send the agent to `agent-browser skills get core` for the real
+          # 516-line usage guide. Unset, the stub is a dead end and the agent
+          # falls back to guessing at the CLI.
+          AGENT_BROWSER_SKILLS_DIR=${agent-browser}/share/agent-browser/skill-data
+          # AGENT_BROWSER_SCREENSHOT_DIR is deliberately NOT set. Its default is
+          # $HOME/.agent-browser/tmp/screenshots, which is writable here, and
+          # pinning it anywhere else would fight the addendum's own advice to the
+          # agent — write screenshots into the workspace so cyrus's attachment
+          # upload flow finds them, which the agent does by passing an explicit
+          # relative path. An env default cannot express "the current worktree".
+          # Chromium's default /dev/shm sizing assumptions do not hold inside a
+          # hardened unit — without this the renderer dies on large pages.
+          AGENT_BROWSER_ARGS="--disable-dev-shm-usage --disable-gpu"
+          # agent-browser leaves its daemon (and the Chromium it owns) resident
+          # for an hour of inactivity by default. That is a fine trade on a
+          # workstation and a bad one here: ~500MB idling on a 4GB box between
+          # Linear issues. Five minutes still covers a single agent session's
+          # bursty back-and-forth, and the next command just starts a fresh
+          # daemon.
+          #
+          # It also bounds a sharp edge worth knowing about: the daemon inherits
+          # its cwd from whichever invocation first started it, and every
+          # *relative* path an agent later passes to `screenshot` resolves
+          # against that cwd — not the caller's. In normal operation the first
+          # call comes from the agent's worktree, so the addendum's advice to
+          # write ./screenshot.png does land in the workspace. But a daemon that
+          # outlived the previous session would silently write into the previous
+          # worktree, and once that worktree is gone, into a read-only /.
+          AGENT_BROWSER_IDLE_TIMEOUT_MS=300000
         ''}
         ENVEOF
         chown ${cfg.user}:${cfg.user} /run/cyrus/env
@@ -594,7 +617,10 @@ in
         "tiny-llm-gate.service"
       ];
       wants = [ "network-online.target" ];
-      requires = [ "cyrus-env.service" "cyrus-build.service" ];
+      requires = [
+        "cyrus-env.service"
+        "cyrus-build.service"
+      ];
       restartTriggers = [
         config.age.secrets.cyrus-linear-client-id.file
         config.age.secrets.cyrus-linear-client-secret.file
@@ -627,7 +653,8 @@ in
         # rewritten `rtk …` commands execute in the agent's shell — both need
         # rtk on PATH (inherited by the SDK-spawned claude child).
         pkgs.rtk
-      ] ++ lib.optionals cfg.enableBrowserUse [
+      ]
+      ++ lib.optionals cfg.enableBrowserUse [
         # The browser-use addendum names `agent-browser` as a bare command, so
         # it has to resolve on the agent's shell PATH (inherited from here via
         # the SDK-spawned claude). chromium is reached through
@@ -663,7 +690,12 @@ in
         # `uv_interface_addresses returned Unknown system error 97`
         # (EAFNOSUPPORT) immediately after binding. AF_PACKET would also work
         # via SIOCGIFCONF, but AF_NETLINK is the modern path libuv prefers.
-        RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
+        RestrictAddressFamilies = [
+          "AF_INET"
+          "AF_INET6"
+          "AF_UNIX"
+          "AF_NETLINK"
+        ];
       };
     };
 
@@ -695,7 +727,10 @@ in
       description = "Install the RTK PreToolUse hook and ultracode settings into cyrus's Claude settings";
       wantedBy = [ "multi-user.target" ];
       before = [ "cyrus.service" ];
-      path = [ pkgs.jq pkgs.coreutils ];
+      path = [
+        pkgs.jq
+        pkgs.coreutils
+      ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -730,7 +765,10 @@ in
       after = [ "cyrus-build.service" ];
       requires = [ "cyrus-build.service" ];
       before = [ "cyrus.service" ];
-      path = [ pkgs.jq pkgs.coreutils ];
+      path = [
+        pkgs.jq
+        pkgs.coreutils
+      ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -757,11 +795,17 @@ in
     # Reads services.cyrus.repositories, ensures each is in config.json by
     # invoking `cyrus self-add-repo` for any missing entry. No-op if Linear
     # OAuth hasn't been bootstrapped yet (linearWorkspaces empty).
-    systemd.services.cyrus-sync-repos = lib.mkIf (cfg.repositories != []) {
+    systemd.services.cyrus-sync-repos = lib.mkIf (cfg.repositories != [ ]) {
       description = "Sync declared cyrus repositories with runtime config.json";
       wantedBy = [ "multi-user.target" ];
-      after = [ "cyrus-build.service" "cyrus-env.service" ];
-      requires = [ "cyrus-build.service" "cyrus-env.service" ];
+      after = [
+        "cyrus-build.service"
+        "cyrus-env.service"
+      ];
+      requires = [
+        "cyrus-build.service"
+        "cyrus-env.service"
+      ];
       path = [
         pkgs.nodejs_22
         pkgs.git
@@ -786,10 +830,11 @@ in
         let
           normalized = map (r: {
             inherit (r) name url workspace;
-            routingLabels = if r.catchAll then [] else r.routingLabels;
+            routingLabels = if r.catchAll then [ ] else r.routingLabels;
           }) cfg.repositories;
           reposJson = builtins.toJSON normalized;
-        in ''
+        in
+        ''
           set -e
           CONFIG=/var/lib/cyrus/.cyrus/config.json
           CHANGED=0
@@ -854,13 +899,20 @@ in
     # webhook exists pointing at our /github-webhook endpoint. Idempotent:
     # POSTs a new hook only if no existing one targets the same URL.
     # Uses the GITHUB_TOKEN already in /run/cyrus/env (sourced from gh CLI).
-    systemd.services.cyrus-sync-github-webhooks = lib.mkIf (cfg.repositories != []) {
+    systemd.services.cyrus-sync-github-webhooks = lib.mkIf (cfg.repositories != [ ]) {
       description = "Sync declared cyrus repositories with GitHub webhooks";
       wantedBy = [ "multi-user.target" ];
-      after = [ "cyrus-env.service" "network-online.target" ];
+      after = [
+        "cyrus-env.service"
+        "network-online.target"
+      ];
       requires = [ "cyrus-env.service" ];
       wants = [ "network-online.target" ];
-      path = [ pkgs.curl pkgs.jq pkgs.gnused ];
+      path = [
+        pkgs.curl
+        pkgs.jq
+        pkgs.gnused
+      ];
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
@@ -873,7 +925,8 @@ in
           reposJson = builtins.toJSON cfg.repositories;
           # cyrus's /github-webhook endpoint
           hookUrl = "${cfg.baseUrl}/github-webhook";
-        in ''
+        in
+        ''
           set -eu
           declared='${reposJson}'
           echo "$declared" | jq -c '.[]' | while read -r entry; do
@@ -935,7 +988,7 @@ in
 
     # ── Service registration (hosts/rpi5/lib/service-registration.nix) ────────────
     nic.services.cyrus = {
-      backup     = [ "none" ];
+      backup = [ "none" ];
       backupNote =
         "everything under /var/lib/cyrus is rebuildable: src/ + .pnpm are a "
         + "vendored build keyed on .built-rev, .cyrus/config.json is regenerated "
@@ -950,16 +1003,16 @@ in
       # /callback, /linear-webhook and /github-webhook at its root and knows its
       # public base only via CYRUS_BASE_URL.
       public = {
-        order   = 330;
-        port    = 443;
+        order = 330;
+        port = 443;
         backend = "http://127.0.0.1:${toString cfg.port}";
         proxied = true;
         authenticated = true; # webhooks are signature-checked (LINEAR_/GITHUB_WEBHOOK_SECRET)
         muxPath = "/cyrus";
         tile = {
-          name        = "Cyrus";
-          icon        = "mdi-robot-outline";
-          category    = "Backend";
+          name = "Cyrus";
+          icon = "mdi-robot-outline";
+          category = "Backend";
           description = "Linear coding-agent (cyrusagents/cyrus)";
         };
       };

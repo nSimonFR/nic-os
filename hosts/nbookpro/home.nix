@@ -1,4 +1,11 @@
-{ pkgs, lib, username, unstablePkgs, tailnetFqdn, ... }:
+{
+  pkgs,
+  lib,
+  username,
+  unstablePkgs,
+  tailnetFqdn,
+  ...
+}:
 {
   imports = [
     ./applications-patch.nix
@@ -16,7 +23,11 @@
       pkgs.t3code-desktop
       (pkgs.writeShellApplication {
         name = "entire-trusk-enable";
-        runtimeInputs = [ (pkgs.callPackage ../../pkgs/cli/entire.nix { }) pkgs.git pkgs.jq ];
+        runtimeInputs = [
+          (pkgs.callPackage ../../pkgs/cli/entire.nix { })
+          pkgs.git
+          pkgs.jq
+        ];
         text = builtins.readFile ./scripts/entire-trusk-enable.sh;
       })
     ];

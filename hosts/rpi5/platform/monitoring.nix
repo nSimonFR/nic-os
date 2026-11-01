@@ -1,8 +1,18 @@
-{ config, pkgs, lib, telegramChatId, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  telegramChatId,
+  tailnetFqdn,
+  ...
+}:
 let
   beszelHubPort = 8090;
   beszelAgentPort = 45876;
-  loadAlert = { value = 14; min = 15; };
+  loadAlert = {
+    value = 14;
+    min = 15;
+  };
 
   # Self-updating Telegram alerter. Usage:
   #   printf '%s' "$body" | ''${telegramAlert} <state-key> "<title>"
@@ -36,7 +46,10 @@ in
   systemd.services.beszel-agent = {
     description = "Beszel monitoring agent";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network-online.target" "beszel-hub.service" ];
+    after = [
+      "network-online.target"
+      "beszel-hub.service"
+    ];
     wants = [ "network-online.target" ];
     # smartctl on PATH so Beszel can collect SMART data from /dev/sda + /dev/sdb.
     path = [ pkgs.smartmontools ];
@@ -62,11 +75,20 @@ in
       # NVMe admin passthrough (none present today but cheap to have).
       # Ambient caps required because DynamicUser=true means beszel-agent runs
       # as an unprivileged user; bounding-set alone would be insufficient.
-      AmbientCapabilities    = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
-      CapabilityBoundingSet  = [ "CAP_SYS_RAWIO" "CAP_SYS_ADMIN" ];
+      AmbientCapabilities = [
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
+      ];
+      CapabilityBoundingSet = [
+        "CAP_SYS_RAWIO"
+        "CAP_SYS_ADMIN"
+      ];
       # Allow read access to the raw block devices.
-      DeviceAllow            = [ "/dev/sda r" "/dev/sdb r" ];
-      SupplementaryGroups    = [ "disk" ];
+      DeviceAllow = [
+        "/dev/sda r"
+        "/dev/sdb r"
+      ];
+      SupplementaryGroups = [ "disk" ];
     };
   };
 
@@ -154,14 +176,16 @@ in
     description = "Alert on security state the Nix config cannot see";
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = lib.getExe (pkgs.writeShellApplication {
-        name = "security-drift-alert";
-        text = ''
-          BODY=$(${pkgs.nicos-scripts}/bin/security-drift || true)
-          [ -n "$BODY" ] && BODY="<code>$BODY</code>"
-          printf '%s' "$BODY" | ${telegramAlert} security-drift "Security drift on rpi5"
-        '';
-      });
+      ExecStart = lib.getExe (
+        pkgs.writeShellApplication {
+          name = "security-drift-alert";
+          text = ''
+            BODY=$(${pkgs.nicos-scripts}/bin/security-drift || true)
+            [ -n "$BODY" ] && BODY="<code>$BODY</code>"
+            printf '%s' "$BODY" | ${telegramAlert} security-drift "Security drift on rpi5"
+          '';
+        }
+      );
     };
     # `environment`, not serviceConfig.Environment: the latter is written unquoted,
     # so systemd split the space-separated lists and kept only their first word.
@@ -285,7 +309,7 @@ in
   # Beszel's public face lived in services-registry.nix while its state never
   # answered the backup question at all — this closes both.
   nic.services.beszel = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote =
       "monitoring history only. The PocketBase DB sits under "
       + "/var/lib/private/beszel-hub (DynamicUser + StateDirectory), outside "
@@ -297,13 +321,13 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 140;
-      port    = 3000;
+      order = 140;
+      port = 3000;
       backend = "http://127.0.0.1:${toString beszelHubPort}";
       tile = {
-        name        = "Beszel";
-        icon        = "beszel.svg";
-        category    = "Apps";
+        name = "Beszel";
+        icon = "beszel.svg";
+        category = "Apps";
         description = "System monitoring";
         # Was the native `beszel` widget, which needed a Beszel superuser password
         # in plaintext in the registry (and could only render two stats without
@@ -322,11 +346,24 @@ in
           # carries the fleet size implicitly — it reads 1 whenever beast is
           # suspended, which is normal and most of the time.
           mappings = [
-            { field = "up";        label = "Up";        format = "number"; }
-            { field = "alerts";    label = "Alerts";    format = "number"; }
+            {
+              field = "up";
+              label = "Up";
+              format = "number";
+            }
+            {
+              field = "alerts";
+              label = "Alerts";
+              format = "number";
+            }
             # float + suffix, not `number`: this carries a decimal (56.0 °C) and
             # `number` would drop it — same reason freereps' km/kg are floats.
-            { field = "peak_temp"; label = "Peak 24h";  format = "float"; suffix = " °C"; }
+            {
+              field = "peak_temp";
+              label = "Peak 24h";
+              format = "float";
+              suffix = " °C";
+            }
           ];
         };
       };
@@ -343,16 +380,18 @@ in
       Type = "oneshot";
       DynamicUser = true;
       LoadCredential = "ping:${config.age.secrets.rpi5-healthcheck.path}";
-      ExecStart = lib.getExe (pkgs.writeShellApplication {
-        name = "healthchecks-heartbeat";
-        runtimeInputs = [ pkgs.curl ];
-        text = ''
-          ping=$(cat "$CREDENTIALS_DIRECTORY/ping")
-          code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' https://${tailnetFqdn}/ || true)
-          if [ "$code" = 000 ] || [ "$code" -ge 400 ]; then ping="$ping/fail"; fi
-          curl -fsS -m 30 --retry 3 --data-raw "GET / → $code" "$ping" >/dev/null
-        '';
-      });
+      ExecStart = lib.getExe (
+        pkgs.writeShellApplication {
+          name = "healthchecks-heartbeat";
+          runtimeInputs = [ pkgs.curl ];
+          text = ''
+            ping=$(cat "$CREDENTIALS_DIRECTORY/ping")
+            code=$(curl -s -m 30 -o /dev/null -w '%{http_code}' https://${tailnetFqdn}/ || true)
+            if [ "$code" = 000 ] || [ "$code" -ge 400 ]; then ping="$ping/fail"; fi
+            curl -fsS -m 30 --retry 3 --data-raw "GET / → $code" "$ping" >/dev/null
+          '';
+        }
+      );
     };
   };
   systemd.timers.healthchecks-heartbeat = {

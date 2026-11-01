@@ -22,9 +22,9 @@ in
 
   config = lib.mkMerge [
     {
-      nic.userSecrets = lib.mapAttrs
-        (n: _: if fromSystem then "/run/agenix/${n}" else config.age.secrets.${n}.path)
-        files;
+      nic.userSecrets = lib.mapAttrs (
+        n: _: if fromSystem then "/run/agenix/${n}" else config.age.secrets.${n}.path
+      ) files;
     }
     (lib.mkIf (!fromSystem) {
       age.identityPaths = [ "${config.home.homeDirectory}/.ssh/age" ];

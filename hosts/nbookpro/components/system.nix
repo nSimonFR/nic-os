@@ -18,7 +18,7 @@
       } || true
     fi
   '';
-  
+
   keyboard = {
     enableKeyMapping = true;
     remapCapsLockToEscape = true;

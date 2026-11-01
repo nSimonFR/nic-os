@@ -55,7 +55,9 @@ class Config:
         raw = env_str("ZEN_WATCH_PATHS", "", env).strip()
         return cls(
             repo=env_str("ZEN_REPO", "zen-browser/desktop", env),
-            state_file=os.path.expanduser(env_str("ZEN_STATE_FILE", DEFAULT_STATE, env)),
+            state_file=os.path.expanduser(
+                env_str("ZEN_STATE_FILE", DEFAULT_STATE, env)
+            ),
             watch_paths=tuple(p for p in raw.split(":") if p) or DEFAULT_WATCH_PATHS,
             always_report=env_str("ZEN_ALWAYS_REPORT", "", env).strip() == "1",
             token=env_str("GITHUB_TOKEN", "", env),
@@ -63,14 +65,19 @@ class Config:
 
 
 def _headers(cfg):
-    headers = {"Accept": "application/vnd.github+json", "User-Agent": "nic-os-zen-watch"}
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "nic-os-zen-watch",
+    }
     if cfg.token:
         headers["Authorization"] = f"Bearer {cfg.token}"
     return headers
 
 
 def latest_release(cfg, opener=None):
-    d = get_json(f"{API}/repos/{cfg.repo}/releases/latest", _headers(cfg), opener=opener)
+    d = get_json(
+        f"{API}/repos/{cfg.repo}/releases/latest", _headers(cfg), opener=opener
+    )
     return {
         "tag": d.get("tag_name") or "",
         "published": (d.get("published_at") or "")[:10],
@@ -83,7 +90,9 @@ def tree_paths(cfg, ref, opener=None):
     beats the code-search API, which returns 0 hits for this repo even for paths
     that demonstrably exist."""
     d = get_json(
-        f"{API}/repos/{cfg.repo}/git/trees/{ref}?recursive=1", _headers(cfg), opener=opener
+        f"{API}/repos/{cfg.repo}/git/trees/{ref}?recursive=1",
+        _headers(cfg),
+        opener=opener,
     )
     if d.get("truncated"):
         log("WARNING: tree response truncated — presence checks may be wrong")

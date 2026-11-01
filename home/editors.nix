@@ -1,8 +1,13 @@
-{ pkgs, lib, config, host, ... }:
+{
+  pkgs,
+  lib,
+  config,
+  host,
+  ...
+}:
 let
   wakatimeExt = pkgs.vscode-extensions.wakatime.vscode-wakatime;
-  cursorPrefix =
-    if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config";
+  cursorPrefix = if pkgs.stdenv.isDarwin then "Library/Application Support" else ".config";
 in
 {
   # ── Vim ─────────────────────────────────────────────────────────────

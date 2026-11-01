@@ -21,12 +21,18 @@ let
 in
 {
   services.tailnet-mitm.targets.arkose = {
-    hosts = [ "plus.arkose.com" "www.sboulder.com" ];
+    hosts = [
+      "plus.arkose.com"
+      "www.sboulder.com"
+    ];
     allowHosts = "^(plus\\.arkose\\.com|(www\\.)?sboulder\\.com):";
     addon = "${pkgs.nicos-scripts}/${pkgs.python3.sitePackages}/nicos_scripts/mitm/arkose.py";
   };
 
-  users.users.arkose-sync = { isSystemUser = true; group = "arkose-sync"; };
+  users.users.arkose-sync = {
+    isSystemUser = true;
+    group = "arkose-sync";
+  };
   users.groups.arkose-sync = { };
 
   systemd.tmpfiles.rules = [ "d ${dir} 0770 arkose-sync ${mitmGroup} - -" ];

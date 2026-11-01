@@ -1,9 +1,18 @@
 # dawarich.nix — self-hosted location history (Google Timeline alternative)
 # Uses the native NixOS module (services.dawarich) — Rails + Sidekiq + PostGIS + Redis
-{ config, pkgs, lib, unstablePkgs, tailnetFqdn, redisHost, redisPort, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  unstablePkgs,
+  tailnetFqdn,
+  redisHost,
+  redisPort,
+  ...
+}:
 let
   internalPort = 13900; # the wake socket; every caller uses this
-  backendPort  = 13901; # Puma, behind the proxy
+  backendPort = 13901; # Puma, behind the proxy
 in
 {
   services.dawarich = {
@@ -22,8 +31,8 @@ in
     # dedicated redis-dawarich instance. Saves ~7 MB RAM + one systemd unit.
     redis = {
       createLocally = false;
-      host          = redisHost;
-      port          = redisPort;
+      host = redisHost;
+      port = redisPort;
     };
 
     # Auto-generate SECRET_KEY_BASE (stored at /var/lib/dawarich/secrets/secret-key-base)
@@ -63,13 +72,13 @@ in
   # The iOS app keeps unsent points and re-sends them (an hour of outage arrived
   # in one batch), so a slow wake delays points rather than losing them.
   services.socketActivate.dawarich = {
-    enable    = true;
-    realUnit  = "dawarich-web.service";
-    listen    = [ "127.0.0.1:${toString internalPort}" ];
-    backend   = "127.0.0.1:${toString backendPort}";
-    idleSec   = 600;
+    enable = true;
+    realUnit = "dawarich-web.service";
+    listen = [ "127.0.0.1:${toString internalPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
     readyProbe = {
-      url        = "http://127.0.0.1:${toString backendPort}/api/v1/health";
+      url = "http://127.0.0.1:${toString backendPort}/api/v1/health";
       timeoutSec = 300;
     };
     workers."dawarich-sidekiq-all.service".policy = "sleepWith";
@@ -81,8 +90,7 @@ in
   # Geoapify reverse geocoding — drives visit suggestions (nightly sidekiq job)
   # and on-demand address lookups in the web UI.
   # Key is injected via EnvironmentFile to keep it out of the nix store.
-  systemd.services.dawarich-web.serviceConfig.EnvironmentFile =
-    "/run/agenix/dawarich-geoapify";
+  systemd.services.dawarich-web.serviceConfig.EnvironmentFile = "/run/agenix/dawarich-geoapify";
   systemd.services.dawarich-sidekiq-all.serviceConfig.EnvironmentFile =
     "/run/agenix/dawarich-geoapify";
 
@@ -91,7 +99,7 @@ in
   # socket, the API keys included.
   systemd.services.freereps-to-dawarich = {
     description = "Push FreeReps workout routes and Immich photo fixes into Dawarich";
-    after    = [ "postgresql.service" ];
+    after = [ "postgresql.service" ];
     serviceConfig = {
       Type = "oneshot";
       # Wake Dawarich through its socket first: a cold start outlasts post_json's 60 s.
@@ -114,24 +122,30 @@ in
   };
   systemd.timers.freereps-to-dawarich = {
     wantedBy = [ "timers.target" ];
-    timerConfig = { OnCalendar = "*-*-* 03:30:00"; Persistent = true; };
+    timerConfig = {
+      OnCalendar = "*-*-* 03:30:00";
+      Persistent = true;
+    };
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.dawarich = {
-    backup            = [ "postgres" ];
+    backup = [ "postgres" ];
     postgresDatabases = [ "dawarich" ];
-    heavyUnits        = [ "dawarich-sidekiq-all.service" "dawarich-web.service" ];
-    heavyPriority     = 40;
+    heavyUnits = [
+      "dawarich-sidekiq-all.service"
+      "dawarich-web.service"
+    ];
+    heavyPriority = 40;
 
     public = {
-      order   = 30;
-      port    = 3900;
+      order = 30;
+      port = 3900;
       backend = "http://127.0.0.1:${toString internalPort}";
       tile = {
-        name        = "Dawarich";
-        icon        = "dawarich.svg";
-        category    = "Apps";
+        name = "Dawarich";
+        icon = "dawarich.svg";
+        category = "Apps";
         description = "Location history";
         # Postgres read as superuser via the aggregator — no native widget, and no
         # role password on the tile.
@@ -147,9 +161,21 @@ in
             # 2026-04-19 (known_issue_dawarich_no_visits_sparse_points). `Visits`
             # stays all-time on purpose — a "visits this week" field would read 0
             # and look like a display bug rather than the symptom it is.
-            { field = "points_7d"; label = "Points 7d"; format = "number"; }
-            { field = "trips";     label = "Trips";     format = "number"; }
-            { field = "visits";    label = "Visits";    format = "number"; }
+            {
+              field = "points_7d";
+              label = "Points 7d";
+              format = "number";
+            }
+            {
+              field = "trips";
+              label = "Trips";
+              format = "number";
+            }
+            {
+              field = "visits";
+              label = "Visits";
+              format = "number";
+            }
           ];
         };
       };

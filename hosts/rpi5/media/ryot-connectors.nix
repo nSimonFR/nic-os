@@ -13,14 +13,22 @@
 #
 # The API key comes from ryot-bootstrap (/var/lib/ryot-v2/secrets/api.env); the connectors' own
 # credentials stay in agenix. Code: the nicos-scripts package, one console script each.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
-  stateDir   = "/var/lib/ryot-connectors";
+  stateDir = "/var/lib/ryot-connectors";
   secretsEnv = "/var/lib/ryot-v2/secrets/api.env";
 
   # No wantedBy: only the timer starts it, not every activation.
   connector = { exe, envFiles }: {
-    after = [ "ryot-bootstrap.service" "network-online.target" ];
+    after = [
+      "ryot-bootstrap.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     environment = {
       STATE_DIR = stateDir;
@@ -53,23 +61,35 @@ in
   };
   users.groups.ryot-connector = { };
 
-  systemd.services.spotify-to-ryot = connector {
-    exe = "spotify-to-ryot";
-    envFiles = [ "/run/agenix/spotify-connector-env" ];
-  } // { description = "Spotify recently-played → Ryot"; };
+  systemd.services.spotify-to-ryot =
+    connector {
+      exe = "spotify-to-ryot";
+      envFiles = [ "/run/agenix/spotify-connector-env" ];
+    }
+    // {
+      description = "Spotify recently-played → Ryot";
+    };
 
-  systemd.services.steam-to-ryot = connector {
-    exe = "steam-to-ryot";
-    envFiles = [ "/run/agenix/steam-connector-env" ];
-  } // { description = "Steam playtime → Ryot"; };
+  systemd.services.steam-to-ryot =
+    connector {
+      exe = "steam-to-ryot";
+      envFiles = [ "/run/agenix/steam-connector-env" ];
+    }
+    // {
+      description = "Steam playtime → Ryot";
+    };
 
-  systemd.services.plex-to-ryot = connector {
-    exe = "plex-to-ryot";
-    envFiles = [ "/run/agenix/ryot-import-env" ]; # PLEX_IMPORT_SERVERS
-  } // { description = "Plex watch history → Ryot"; };
+  systemd.services.plex-to-ryot =
+    connector {
+      exe = "plex-to-ryot";
+      envFiles = [ "/run/agenix/ryot-import-env" ]; # PLEX_IMPORT_SERVERS
+    }
+    // {
+      description = "Plex watch history → Ryot";
+    };
 
   # Spotify exposes only the last 50 plays, so hourly keeps well inside the window.
   systemd.timers.spotify-to-ryot = timer "Hourly Spotify → Ryot" "*-*-* *:17:00";
-  systemd.timers.steam-to-ryot   = timer "Daily Steam → Ryot" "*-*-* 04:50:00";
-  systemd.timers.plex-to-ryot    = timer "Hourly Plex → Ryot" "*-*-* *:37:00";
+  systemd.timers.steam-to-ryot = timer "Daily Steam → Ryot" "*-*-* 04:50:00";
+  systemd.timers.plex-to-ryot = timer "Hourly Plex → Ryot" "*-*-* *:37:00";
 }

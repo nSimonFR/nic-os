@@ -113,15 +113,24 @@ def wait_ready(cfg, opener=None, sleep=time.sleep, budget=READY_WAIT_S, step=10)
 
 def key_works(cfg, key, opener=None):
     # An empty RyotQL document passes auth and fails validation (400); a bad key is 401.
-    status, _, _ = request(cfg, "POST", "/api/ryotql/execute", {"queries": {}},
-                           {"X-Api-Key": key}, opener=opener)
+    status, _, _ = request(
+        cfg,
+        "POST",
+        "/api/ryotql/execute",
+        {"queries": {}},
+        {"X-Api-Key": key},
+        opener=opener,
+    )
     return status != 401
 
 
 def session_cookie(headers):
     """The Better Auth session cookie from a sign-in response, as `name=value`."""
-    values = headers.get_all("Set-Cookie") if hasattr(headers, "get_all") else \
-        [headers.get("Set-Cookie", "")]
+    values = (
+        headers.get_all("Set-Cookie")
+        if hasattr(headers, "get_all")
+        else [headers.get("Set-Cookie", "")]
+    )
     for value in values or []:
         pair = (value or "").split(";", 1)[0]
         if "session_token=" in pair:
@@ -130,27 +139,49 @@ def session_cookie(headers):
 
 
 def sign_in(cfg, password, opener=None):
-    status, _, headers = request(cfg, "POST", "/api/auth/sign-in/email",
-                                 {"email": cfg.email, "password": password}, opener=opener)
+    status, _, headers = request(
+        cfg,
+        "POST",
+        "/api/auth/sign-in/email",
+        {"email": cfg.email, "password": password},
+        opener=opener,
+    )
     return session_cookie(headers) if status == 200 else None
 
 
 def reset_password(cfg, user_id, password, opener=None):
-    status, body, _ = request(cfg, "POST", f"/api/instance-admin/users/{user_id}/reset-password",
-                              {}, {"Admin-Access-Token": cfg.admin_token}, opener=opener)
+    status, body, _ = request(
+        cfg,
+        "POST",
+        f"/api/instance-admin/users/{user_id}/reset-password",
+        {},
+        {"Admin-Access-Token": cfg.admin_token},
+        opener=opener,
+    )
     if status != 200 or "resetUrl" not in body:
         raise RuntimeError(f"admin reset-password failed ({status})")
     query = urllib.parse.urlparse(body["resetUrl"]).query
     token = urllib.parse.parse_qs(query).get("token", [""])[0]
-    status, _, _ = request(cfg, "POST", "/api/auth/reset-password",
-                           {"newPassword": password, "token": token}, opener=opener)
+    status, _, _ = request(
+        cfg,
+        "POST",
+        "/api/auth/reset-password",
+        {"newPassword": password, "token": token},
+        opener=opener,
+    )
     if status != 200:
         raise RuntimeError(f"reset-password failed ({status})")
 
 
 def create_key(cfg, cookie, opener=None):
-    status, body, _ = request(cfg, "POST", "/api/auth/api-key/create", {"name": KEY_NAME},
-                              {"Cookie": cookie}, opener=opener)
+    status, body, _ = request(
+        cfg,
+        "POST",
+        "/api/auth/api-key/create",
+        {"name": KEY_NAME},
+        {"Cookie": cookie},
+        opener=opener,
+    )
     if status != 200 or not body.get("key"):
         raise RuntimeError(f"api-key create failed ({status})")
     return body["key"]
@@ -175,7 +206,9 @@ def write_secret(path, text, group=None, mode=0o600):
 
 
 def ensure_key(cfg, run, opener=None, new_password=None, write=write_secret):
-    if cfg.key_file.exists() and key_works(cfg, cfg.key_file.read_text().strip(), opener):
+    if cfg.key_file.exists() and key_works(
+        cfg, cfg.key_file.read_text().strip(), opener
+    ):
         log("API key works — nothing to do")
         return "kept"
 

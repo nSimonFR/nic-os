@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 # Aperture inference shim — lets one session have Aperture capture AND Remote
 # Control, which are otherwise mutually exclusive: Remote Control refuses to run
 # unless ANTHROPIC_BASE_URL is api.anthropic.com, while Aperture only records
@@ -33,9 +38,12 @@ let
   # for it (~/.claude-aperture-shim/mitmproxy-ca-cert.pem) before using the proxy.
   shimCmd = [
     "${pkgs.mitmproxy}/bin/mitmdump"
-    "--set" "confdir=${stateDir}"
-    "--listen-host" "127.0.0.1"
-    "-p" (toString port)
+    "--set"
+    "confdir=${stateDir}"
+    "--listen-host"
+    "127.0.0.1"
+    "-p"
+    (toString port)
     # Intercept api.anthropic.com ONLY; blind-tunnel every other host. Without
     # this, mitmproxy re-signs TLS for everything the session touches, and any
     # client that doesn't read NODE_EXTRA_CA_CERTS fails: `curl` in the Bash tool,
@@ -46,9 +54,11 @@ let
     # `^(?!api\.anthropic\.com)` matches — so that spelling ignored EVERYTHING,
     # tunnelling inference straight to Anthropic and silently bypassing Aperture
     # while every functional check still passed.
-    "--set" ''allow_hosts=api\.anthropic\.com''
+    "--set"
+    ''allow_hosts=api\.anthropic\.com''
     # The whole directory, so the addon can import session_link.py.
-    "-s" "${./claude-aperture-shim}/aperture_shim.py"
+    "-s"
+    "${./claude-aperture-shim}/aperture_shim.py"
   ];
 
 in

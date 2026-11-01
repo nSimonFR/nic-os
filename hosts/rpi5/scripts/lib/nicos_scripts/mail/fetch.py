@@ -20,8 +20,15 @@ IMAP_HOST = "127.0.0.1"
 IMAP_PORT = 1143
 SOCKET_TIMEOUT = 60
 
-GOG_FIELDS = ("--include-body", "--body-format", "text", "--wrap-untrusted",
-              "--json", "--results-only", "--no-input")
+GOG_FIELDS = (
+    "--include-body",
+    "--body-format",
+    "text",
+    "--wrap-untrusted",
+    "--json",
+    "--results-only",
+    "--no-input",
+)
 
 
 class FetchFailed(Exception):
@@ -30,8 +37,19 @@ class FetchFailed(Exception):
 
 def gmail(account, query, limit=200, run=None):
     run = run or subprocess.run
-    cmd = ["gog", "gmail", "messages", "search", query, "--all",
-           "--max", str(limit), "--account", account, *GOG_FIELDS]
+    cmd = [
+        "gog",
+        "gmail",
+        "messages",
+        "search",
+        query,
+        "--all",
+        "--max",
+        str(limit),
+        "--account",
+        account,
+        *GOG_FIELDS,
+    ]
     proc = run(cmd, capture_output=True, text=True, timeout=300)
     if proc.returncode != 0:
         raise FetchFailed(f"gog {account}: {(proc.stderr or '').strip()[:200]}")
@@ -72,12 +90,14 @@ def imap(M, criteria="ALL", source="proton", limit=200):
         if typ != "OK" or not payload or not isinstance(payload[0], tuple):
             continue
         msg = email.message_from_bytes(payload[0][1])
-        out.append({
-            "id": num.decode(),
-            "source": source,
-            "from": decode_header(msg.get("From", "")),
-            "subject": decode_header(msg.get("Subject", "")),
-            "date": msg.get("Date", ""),
-            "body": body_text(msg),
-        })
+        out.append(
+            {
+                "id": num.decode(),
+                "source": source,
+                "from": decode_header(msg.get("From", "")),
+                "subject": decode_header(msg.get("Subject", "")),
+                "date": msg.get("Date", ""),
+                "body": body_text(msg),
+            }
+        )
     return out

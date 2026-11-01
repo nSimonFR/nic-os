@@ -37,16 +37,22 @@
 #   means wiping the DB first:
 #       sudo systemctl stop showmycards-proxy.socket showmycards-frontend showmycards-backend
 #       sudo rm -f /mnt/data/showmycards/database.db{,-wal,-shm}
-{ config, pkgs, lib, tailnetFqdn, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  tailnetFqdn,
+  ...
+}:
 let
-  backendPort  = 13344;  # Go API (real backend bind, localhost only)
-  internalPort = 13343;  # SvelteKit node server (real frontend bind, localhost only)
-  proxyPort    = 8330;   # socket-activate proxy listen; moxfield-sync writes here
-  roPort       = 8331;   # nginx read-only guard; Tailscale Serve → here (see below)
+  backendPort = 13344; # Go API (real backend bind, localhost only)
+  internalPort = 13343; # SvelteKit node server (real frontend bind, localhost only)
+  proxyPort = 8330; # socket-activate proxy listen; moxfield-sync writes here
+  roPort = 8331; # nginx read-only guard; Tailscale Serve → here (see below)
   # External tailnet HTTPS port: declared once in nic.services.showmycards.public
   # below, which also derives publicUrl for `origin`.
-  dataDir      = "/mnt/data/showmycards";
-  origin       = config.nic.services.showmycards.public.publicUrl;
+  dataDir = "/mnt/data/showmycards";
+  origin = config.nic.services.showmycards.public.publicUrl;
 in
 {
   users.users.showmycards = {
@@ -81,22 +87,22 @@ in
   # at rest.
   systemd.services.showmycards-backend = {
     description = "ShowMyCards backend (Go/Fiber API, SQLite)";
-    after    = [ "network-online.target" ];
-    wants    = [ "network-online.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
     environment = {
-      PORT            = toString backendPort;
-      DATABASE_PATH   = "${dataDir}/database.db";
-      DATA_DIR        = "${dataDir}/data";
+      PORT = toString backendPort;
+      DATABASE_PATH = "${dataDir}/database.db";
+      DATA_DIR = "${dataDir}/data";
       ALLOWED_ORIGINS = origin;
-      LOG_LEVEL       = "info";
+      LOG_LEVEL = "info";
       # GODEBUG=http2client=0 is baked into the package wrapper (see
       # pkgs/services/showmycards.nix) so the streamed all_cards import doesn't fail.
     };
     serviceConfig = {
       ExecStart = "${pkgs.showmycards}/bin/showmycards-backend";
-      User      = "showmycards";
-      Group     = "showmycards";
-      Restart   = "on-failure";
+      User = "showmycards";
+      Group = "showmycards";
+      Restart = "on-failure";
       RestartSec = 5;
     };
   };
@@ -108,16 +114,16 @@ in
   systemd.services.showmycards-frontend = {
     description = "ShowMyCards frontend (SvelteKit adapter-node)";
     environment = {
-      HOST               = "127.0.0.1";
-      PORT               = toString internalPort;
-      ORIGIN             = origin;  # adapter-node CSRF origin (else form POSTs 403)
-      PUBLIC_BACKEND_URL = "http://127.0.0.1:${toString backendPort}";  # $env/dynamic/public, runtime
+      HOST = "127.0.0.1";
+      PORT = toString internalPort;
+      ORIGIN = origin; # adapter-node CSRF origin (else form POSTs 403)
+      PUBLIC_BACKEND_URL = "http://127.0.0.1:${toString backendPort}"; # $env/dynamic/public, runtime
     };
     serviceConfig = {
       ExecStart = "${pkgs.showmycards}/bin/showmycards-frontend";
-      User      = "showmycards";
-      Group     = "showmycards";
-      Restart   = "on-failure";
+      User = "showmycards";
+      Group = "showmycards";
+      Restart = "on-failure";
       RestartSec = 5;
     };
   };
@@ -134,7 +140,13 @@ in
   # talks to 127.0.0.1:8330 directly, and is not reachable from the tailnet — keeps
   # full access. Read-only is therefore a property of the ROUTE, not the service.
   services.nginx.virtualHosts."showmycards-ro" = {
-    listen = [ { addr = "127.0.0.1"; port = roPort; ssl = false; } ];
+    listen = [
+      {
+        addr = "127.0.0.1";
+        port = roPort;
+        ssl = false;
+      }
+    ];
     locations."/" = {
       proxyPass = "http://127.0.0.1:${toString proxyPort}";
       proxyWebsockets = true;
@@ -162,17 +174,17 @@ in
   # reports ready once the whole chain (frontend + backend) is up. See the FIRST
   # BOOT note above before the initial import.
   services.socketActivate.showmycards = {
-    enable   = true;
+    enable = true;
     realUnit = "showmycards-frontend.service";
-    listen   = [ "127.0.0.1:${toString proxyPort}" ];
-    backend  = "127.0.0.1:${toString internalPort}";
-    idleSec  = 600;
+    listen = [ "127.0.0.1:${toString proxyPort}" ];
+    backend = "127.0.0.1:${toString internalPort}";
+    idleSec = 600;
     # Backend sleeps alongside the frontend (wantedBy + partOf = frontend).
     workers."showmycards-backend.service".policy = "sleepWith";
     readyProbe = {
-      url          = "http://127.0.0.1:${toString internalPort}/api/health";
+      url = "http://127.0.0.1:${toString internalPort}/api/health";
       expectStatus = 200;
-      timeoutSec   = 60;
+      timeoutSec = 60;
     };
   };
 
@@ -182,8 +194,11 @@ in
   # heavy list, so a rebuild left the SvelteKit frontend and the Go backend
   # resident — fixed by declaring them here.
   nic.services.showmycards = {
-    backup        = [ "mnt-data" ];
-    heavyUnits    = [ "showmycards-frontend.service" "showmycards-backend.service" ];
+    backup = [ "mnt-data" ];
+    heavyUnits = [
+      "showmycards-frontend.service"
+      "showmycards-backend.service"
+    ];
     heavyPriority = 155;
 
     # backend is :8331 (the nginx read-only guard), NOT :8330 (the socket-activate
@@ -191,14 +206,14 @@ in
     # would be reverted by the next daily sync. moxfield-sync itself still writes
     # via :8330, which the tailnet cannot reach.
     public = {
-      order   = 230;
-      port    = 3550;
+      order = 230;
+      port = 3550;
       backend = "http://127.0.0.1:8331";
       authenticated = false;
       tile = {
-        name        = "ShowMyCards";
-        icon        = "mdi-cards-playing-outline";
-        category    = "Apps";
+        name = "ShowMyCards";
+        icon = "mdi-cards-playing-outline";
+        category = "Apps";
         description = "Magic: The Gathering collection";
         # Reads ShowMyCards' SQLite directly rather than its HTTP API: :8330 is the
         # only thing that wakes the service, so an API-backed widget would pin it
@@ -212,9 +227,22 @@ in
           # total_collection_value, which is a different currency or blend and could
           # not be reproduced.
           mappings = [
-            { field = "cards"; label = "Cards"; format = "number"; }
-            { field = "decks"; label = "Decks"; format = "number"; }
-            { field = "value"; label = "Value"; format = "float"; prefix = "€"; }
+            {
+              field = "cards";
+              label = "Cards";
+              format = "number";
+            }
+            {
+              field = "decks";
+              label = "Decks";
+              format = "number";
+            }
+            {
+              field = "value";
+              label = "Value";
+              format = "float";
+              prefix = "€";
+            }
           ];
         };
       };

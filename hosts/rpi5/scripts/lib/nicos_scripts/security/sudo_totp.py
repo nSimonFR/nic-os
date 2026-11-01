@@ -59,7 +59,9 @@ def enroll(path, user, store, rand=secrets.token_bytes, log=print):
     except BaseException:
         os.unlink(tmp)
         raise
-    log(f"enrolled {user}: {ITEM!r} is in Vaultwarden's Agents org; clone it to your vault, then delete it")
+    log(
+        f"enrolled {user}: {ITEM!r} is in Vaultwarden's Agents org; clone it to your vault, then delete it"
+    )
     return 0
 
 
@@ -69,7 +71,9 @@ def vault_env(env=None):
     user = env.get("SUDO_TOTP_USER", "nsimon")
     env.setdefault("VAULT_AGENT_EMAIL", f"{user}+agents@pm.me")
     env.setdefault("VAULT_OWNER_EMAIL", f"{user}@pm.me")
-    env.setdefault("VAULT_AGENT_PASSWORD_FILE", "/run/agenix/vaultwarden-agent-password")
+    env.setdefault(
+        "VAULT_AGENT_PASSWORD_FILE", "/run/agenix/vaultwarden-agent-password"
+    )
     return env
 
 
@@ -79,15 +83,26 @@ def vault_store(env=None, opener=None):
     cfg = agents.Config(env)
 
     def store(uri):
-        agent = agents.Agent(cfg, Vault(cfg, opener, device=(agents.DEVICE_ID, agents.TAG)),
-                             read_secret(cfg.password_file))
-        item = {"name": ITEM, "username": env_str("SUDO_TOTP_USER", "nsimon", env), "password": None,
-                "uris": [], "totp": uri,
-                "notes": "sudo on rpi5. Clone it to your personal vault, delete it here, "
-                         "then have an agent run `vault-agent purge --name \"rpi5 sudo (TOTP)\"`."}
+        agent = agents.Agent(
+            cfg,
+            Vault(cfg, opener, device=(agents.DEVICE_ID, agents.TAG)),
+            read_secret(cfg.password_file),
+        )
+        item = {
+            "name": ITEM,
+            "username": env_str("SUDO_TOTP_USER", "nsimon", env),
+            "password": None,
+            "uris": [],
+            "totp": uri,
+            "notes": "sudo on rpi5. Clone it to your personal vault, delete it here, "
+            'then have an agent run `vault-agent purge --name "rpi5 sudo (TOTP)"`.',
+        }
         result, rc = agents.add(agent, item, False, cfg.dry_run, lambda m: None)
         if rc:
-            raise VaultError(f"{ITEM!r} already exists in the Agents org; delete and purge it first")
+            raise VaultError(
+                f"{ITEM!r} already exists in the Agents org; delete and purge it first"
+            )
+
     return store
 
 

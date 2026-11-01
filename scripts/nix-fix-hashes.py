@@ -53,7 +53,9 @@ from pathlib import Path
 INTERP = re.compile(r"\$\{([a-zA-Z_][\w.-]*)\}")
 
 BINDING = re.compile(r'^\s*(?P<key>[a-zA-Z_][\w-]*)\s*=\s*"(?P<val>[^"]*)"\s*;', re.M)
-BARE_BINDING = re.compile(r"^\s*(?P<key>[a-zA-Z_][\w-]*)\s*=\s*(?P<val>[a-zA-Z_][\w.-]*)\s*;", re.M)
+BARE_BINDING = re.compile(
+    r"^\s*(?P<key>[a-zA-Z_][\w-]*)\s*=\s*(?P<val>[a-zA-Z_][\w.-]*)\s*;", re.M
+)
 HASH_LINE = re.compile(r'(?P<key>\bhash|\bnpmDepsHash)\s*=\s*"(?P<val>[^"]*)"')
 
 # `<attr> = <something>fetch<Something> {` — the opening of a fetcher call. The
@@ -86,8 +88,12 @@ GOT = re.compile(r"got:\s+(?P<val>sha256-\S+)")
 # copied from a published manifest rather than computed. Checking them is
 # therefore a JSON fetch and a string compare, with no Nix invocation and
 # nothing downloaded: cheaper than the tarball path below.
-MANIFEST_URL = "https://downloads.claude.ai/claude-code-releases/{version}/manifest.zst.json"
-MANIFEST_VERSION = re.compile(r'#\s*renovate:[^\n]*\n\s*version\s*=\s*"(?P<val>[^"]+)"\s*;')
+MANIFEST_URL = (
+    "https://downloads.claude.ai/claude-code-releases/{version}/manifest.zst.json"
+)
+MANIFEST_VERSION = re.compile(
+    r'#\s*renovate:[^\n]*\n\s*version\s*=\s*"(?P<val>[^"]+)"\s*;'
+)
 MANIFEST_PLATFORM = re.compile(
     r'"(?P<key>[a-z0-9]+-[a-z0-9-]+)"\s*=\s*\{[^{}]*?checksum\s*=\s*"(?P<val>[0-9a-f]{64})"',
     re.S,
@@ -135,7 +141,9 @@ class Package:
 def run(*cmd: str) -> str:
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
-        raise Problem(f"{cmd[0]} failed: {(proc.stderr or proc.stdout).strip().splitlines()[-1:]}")
+        raise Problem(
+            f"{cmd[0]} failed: {(proc.stderr or proc.stdout).strip().splitlines()[-1:]}"
+        )
     return proc.stdout.strip()
 
 
@@ -182,7 +190,9 @@ def fetcher_blocks(text: str) -> list[tuple[str, str, str]]:
                     break
             i += 1
         else:
-            raise Problem(f"unbalanced braces after `{match['attr']} = {match['fetcher']} {{`")
+            raise Problem(
+                f"unbalanced braces after `{match['attr']} = {match['fetcher']} {{`"
+            )
         blocks.append((match["attr"], match["fetcher"], text[match.end() : i]))
     return blocks
 
@@ -234,8 +244,13 @@ def parse(path: Path) -> Package:
         match = HASH_LINE.search(body)
         if not match:
             continue
-        if fetcher.split(".")[-1] in DERIVABLE_FETCHERS and match["val"].startswith("sha256-"):
-            derived_pins[f"{attr}.hash"], derived_attrs[f"{attr}.hash"] = match["val"], attr
+        if fetcher.split(".")[-1] in DERIVABLE_FETCHERS and match["val"].startswith(
+            "sha256-"
+        ):
+            derived_pins[f"{attr}.hash"], derived_attrs[f"{attr}.hash"] = (
+                match["val"],
+                attr,
+            )
         else:
             # Bare label: main() supplies the "a build output, not a fetch;
             # recompute with lib.fakeHash" explanation for every entry.
@@ -243,20 +258,30 @@ def parse(path: Path) -> Package:
     unverifiable = [key for key in unverifiable if key not in derived_attrs]
 
     if not refetchable:
-        raise Problem("no fetchFromGitHub or fetchurl — nothing this script knows how to fetch")
+        raise Problem(
+            "no fetchFromGitHub or fetchurl — nothing this script knows how to fetch"
+        )
     if len(refetchable) > 1:
         names = ", ".join(f"{a} = {f}" for a, f, _ in refetchable)
-        raise Problem(f"more than one re-fetchable fetcher ({names}) — recompute this one by hand")
+        raise Problem(
+            f"more than one re-fetchable fetcher ({names}) — recompute this one by hand"
+        )
 
     attr, fetcher, body = refetchable[0]
     unpack = REFETCHABLE[fetcher.split(".")[-1]]
 
     # Only this block's hash is ours to check. `npmDepsHash` stays file-scoped:
     # it sits on the mkDerivation, not inside the fetcher.
-    pinned = {m["key"]: m["val"] for m in HASH_LINE.finditer(body) if m["key"] == "hash"}
+    pinned = {
+        m["key"]: m["val"] for m in HASH_LINE.finditer(body) if m["key"] == "hash"
+    }
     if "hash" not in pinned:
         raise Problem(f"`{attr} = {fetcher}` pins no literal `hash`")
-    top_level = {m["key"]: m["val"] for m in HASH_LINE.finditer(text) if m["key"] == "npmDepsHash"}
+    top_level = {
+        m["key"]: m["val"]
+        for m in HASH_LINE.finditer(text)
+        if m["key"] == "npmDepsHash"
+    }
     pinned.update(top_level)
 
     # Prefer the fetcher's own bindings over file-level ones, so a top-level
@@ -281,7 +306,9 @@ def parse(path: Path) -> Package:
         tarball = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
     else:  # fetchurl
         if "url" not in local:
-            raise Problem("fetchurl with no literal `url` binding — recompute this one by hand")
+            raise Problem(
+                "fetchurl with no literal `url` binding — recompute this one by hand"
+            )
         tarball = resolve(local["url"], local)
 
     root = re.search(r'sourceRoot\s*=\s*"\$\{[^}]+\}/(?P<sub>[^"]+)"', text)
@@ -330,10 +357,14 @@ def fetch(pkg: Package) -> None:
         # The store path here is the tarball itself, so there is no tree to read a
         # lockfile out of. No package needs this yet; fail loudly rather than
         # silently leaving npmDepsHash unchecked the way a stale `hash` was.
-        raise Problem("pins npmDepsHash alongside fetchurl — recompute this one by hand")
+        raise Problem(
+            "pins npmDepsHash alongside fetchurl — recompute this one by hand"
+        )
     lock = src / pkg.npm_root / "package-lock.json"
     if not lock.is_file():
-        raise Problem(f"pins npmDepsHash but the tag has no {pkg.npm_root or '.'}/package-lock.json")
+        raise Problem(
+            f"pins npmDepsHash but the tag has no {pkg.npm_root or '.'}/package-lock.json"
+        )
     pkg.actual["npmDepsHash"] = run(
         "nix", "run", "nixpkgs#prefetch-npm-deps", "--", str(lock)
     ).splitlines()[-1]
@@ -355,15 +386,20 @@ def derive(pkg: Package) -> None:
     for key, attr in pkg.derived.items():
         expr = (
             f'(builtins.getFlake "{nixpkgs_ref()}").legacyPackages.${{builtins.currentSystem}}'
-            f'.callPackage {pkg.path.resolve()} {{ }}'
+            f".callPackage {pkg.path.resolve()} {{ }}"
         )
         try:
-            drv = run("nix", "eval", "--impure", "--raw", "--expr", f"({expr}).{attr}.drvPath")
+            drv = run(
+                "nix", "eval", "--impure", "--raw", "--expr", f"({expr}).{attr}.drvPath"
+            )
         except Problem as exc:
-            raise Problem(f"cannot evaluate {attr} via callPackage {{ }}: {exc}") from exc
+            raise Problem(
+                f"cannot evaluate {attr} via callPackage {{ }}: {exc}"
+            ) from exc
         proc = subprocess.run(
             ["nix", "build", "--no-link", "--impure", "--expr", f"({expr}).{attr}"],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if proc.returncode == 0:
             pkg.actual[key] = pkg.pinned[key]
@@ -371,7 +407,9 @@ def derive(pkg: Package) -> None:
         mismatch, got = MISMATCH.search(proc.stderr), GOT.search(proc.stderr)
         if not (mismatch and got and mismatch["drv"] == drv):
             tail = proc.stderr.strip().splitlines()[-3:]
-            raise Problem(f"building {attr} failed without a usable hash mismatch: {tail}")
+            raise Problem(
+                f"building {attr} failed without a usable hash mismatch: {tail}"
+            )
         pkg.actual[key] = got["val"]
 
 
@@ -401,15 +439,27 @@ def candidates(paths: list[str]) -> list[Path]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("paths", nargs="*", help="package files (default: every Renovate-tracked one under pkgs/)")
-    parser.add_argument("--write", action="store_true", help="rewrite drifted hashes in place")
-    parser.add_argument("--json", action="store_true", help="machine-readable report on stdout")
+    parser.add_argument(
+        "paths",
+        nargs="*",
+        help="package files (default: every Renovate-tracked one under pkgs/)",
+    )
+    parser.add_argument(
+        "--write", action="store_true", help="rewrite drifted hashes in place"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="machine-readable report on stdout"
+    )
     # A package this script cannot fetch (no fetchFromGitHub, or a hash that is a
     # build output) is reported either way. It only *fails* under --strict, and CI
     # does not pass it: a required check that such a package can never satisfy —
     # not even after a human pins the right hash by hand — is a gate people learn
     # to route around. --strict is for auditing the tree on purpose.
-    parser.add_argument("--strict", action="store_true", help="also fail on packages that cannot be verified")
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="also fail on packages that cannot be verified",
+    )
     args = parser.parse_args(argv)
 
     report: dict[str, dict[str, object]] = {}
@@ -443,7 +493,14 @@ def main(argv: list[str] | None = None) -> int:
             unverified.append(note)
 
         if not pkg.drift:
-            print(f"ok {path}" + (f" (except {', '.join(pkg.unverifiable)})" if pkg.unverifiable else ""))
+            print(
+                f"ok {path}"
+                + (
+                    f" (except {', '.join(pkg.unverifiable)})"
+                    if pkg.unverifiable
+                    else ""
+                )
+            )
             report[str(path)] = {"status": "ok", "unverifiable": pkg.unverifiable}
             continue
 

@@ -21,7 +21,10 @@ stdenv.mkDerivation rec {
     hash = "sha256-+QLdjfJ7oLCAU66R49KHHU/drhXRUlBYRmjLpCYlmnk=";
   };
 
-  nativeBuildInputs = [ autoPatchelfHook zstd ];
+  nativeBuildInputs = [
+    autoPatchelfHook
+    zstd
+  ];
   buildInputs = [
     systemd # libudev
   ];

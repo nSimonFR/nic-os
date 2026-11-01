@@ -16,15 +16,37 @@ PROVIDERS = {"movie.tmdb": "pm", "show.tmdb": "ps", "anime.anilist": "pa"}
 
 # Fribb rows (compacted): [anilist, tvdb, tmdb_tv, season, episode_offset]
 FRIBB = [
-    {"anilist_id": 162147, "tvdb_id": 431703, "themoviedb_id": {"tv": 221301},
-     "season": {"tvdb": 1, "tmdb": 1}},
-    {"anilist_id": 175035, "tvdb_id": 431703, "themoviedb_id": {"tv": 221301},
-     "season": {"tvdb": 1, "tmdb": 1}, "episode_offset": {"tvdb": 4, "tmdb": 4}},
-    {"anilist_id": 145139, "tvdb_id": 348545, "themoviedb_id": {"tv": 85937},
-     "season": {"tvdb": 4, "tmdb": 4}},
-    {"anilist_id": 235, "tvdb_id": 72454, "themoviedb_id": {"tv": 30983}, "season": None},
-    {"anilist_id": 779, "tvdb_id": 72454, "themoviedb_id": {"tv": 30983},
-     "season": {"tvdb": 0, "tmdb": 0}},
+    {
+        "anilist_id": 162147,
+        "tvdb_id": 431703,
+        "themoviedb_id": {"tv": 221301},
+        "season": {"tvdb": 1, "tmdb": 1},
+    },
+    {
+        "anilist_id": 175035,
+        "tvdb_id": 431703,
+        "themoviedb_id": {"tv": 221301},
+        "season": {"tvdb": 1, "tmdb": 1},
+        "episode_offset": {"tvdb": 4, "tmdb": 4},
+    },
+    {
+        "anilist_id": 145139,
+        "tvdb_id": 348545,
+        "themoviedb_id": {"tv": 85937},
+        "season": {"tvdb": 4, "tmdb": 4},
+    },
+    {
+        "anilist_id": 235,
+        "tvdb_id": 72454,
+        "themoviedb_id": {"tv": 30983},
+        "season": None,
+    },
+    {
+        "anilist_id": 779,
+        "tvdb_id": 72454,
+        "themoviedb_id": {"tv": 30983},
+        "season": {"tvdb": 0, "tmdb": 0},
+    },
     {"anilist_id": None, "tvdb_id": 1, "themoviedb_id": {"tv": 2}},
     {"anilist_id": 9, "themoviedb_id": {"movie": [129]}},
 ]
@@ -32,14 +54,29 @@ INDEX = plex.compact_fribb(FRIBB)
 
 
 def movie(rk, title, at, tmdb, **kw):
-    return {"ratingKey": rk, "title": title, "lastViewedAt": at, "viewCount": 1,
-            "Guid": [{"id": f"tmdb://{tmdb}"}, {"id": "imdb://tt1"}], **kw}
+    return {
+        "ratingKey": rk,
+        "title": title,
+        "lastViewedAt": at,
+        "viewCount": 1,
+        "Guid": [{"id": f"tmdb://{tmdb}"}, {"id": "imdb://tt1"}],
+        **kw,
+    }
 
 
 def episode(rk, show_rk, s, e, at, tmdb_ep="", **kw):
     g = [{"id": f"tmdb://{tmdb_ep}"}] if tmdb_ep else []
-    return {"ratingKey": rk, "grandparentRatingKey": show_rk, "grandparentTitle": "?",
-            "parentIndex": s, "index": e, "lastViewedAt": at, "viewCount": 1, "Guid": g, **kw}
+    return {
+        "ratingKey": rk,
+        "grandparentRatingKey": show_rk,
+        "grandparentTitle": "?",
+        "parentIndex": s,
+        "index": e,
+        "lastViewedAt": at,
+        "viewCount": 1,
+        "Guid": g,
+        **kw,
+    }
 
 
 class World:
@@ -69,13 +106,15 @@ class World:
         self.requests.append(req)
         url = req.full_url
         if url.startswith(PLEX):
-            return self.plex(req, url[len(PLEX):])
+            return self.plex(req, url[len(PLEX) :])
         if "anime-lists" in url:
             self.fribb_fetches += 1
             return FakeResponse(json.dumps(self.fribb).encode())
         path = urllib.parse.urlparse(url).path.removeprefix("/api")
         body = json.loads(req.data.decode()) if req.data else None
-        return FakeResponse(json.dumps(self.ryot(req.get_method(), path, body)).encode())
+        return FakeResponse(
+            json.dumps(self.ryot(req.get_method(), path, body)).encode()
+        )
 
     # Plex
     def plex(self, req, path):
@@ -121,14 +160,23 @@ class World:
         if table == "sandboxProvider":
             items = [{"id": i, "slug": s} for s, i in PROVIDERS.items()]
         elif table == "event" and name == "m":
-            items = [{"at": plex.ms_to_iso(self.latest_plex * 1000)}] if self.latest_plex else []
+            items = (
+                [{"at": plex.ms_to_iso(self.latest_plex * 1000)}]
+                if self.latest_plex
+                else []
+            )
         elif table == "event":
             ids = set(preds["entityId"])
             items = [e for e in self.events if e["entityId"] in ids]
         elif q["from"]["alias"] == "ep":
             show, seasons = preds["sourceEntityId"][0], set(preds["seasonNumber"])
             items = [
-                {"id": e["id"], "externalId": e["externalId"], "season": e["season"], "episode": e["episode"]}
+                {
+                    "id": e["id"],
+                    "externalId": e["externalId"],
+                    "season": e["season"],
+                    "episode": e["episode"],
+                }
                 for e in self.episodes
                 if e["show"] == show and e["season"] in seasons
             ]
@@ -136,16 +184,29 @@ class World:
             slug, exts = preds["entitySchemaSlug"][0], set(preds["externalId"])
             if slug == "show-episode":
                 items = [
-                    {"id": e["id"], "externalId": e["externalId"], "season": e["season"], "episode": e["episode"]}
+                    {
+                        "id": e["id"],
+                        "externalId": e["externalId"],
+                        "season": e["season"],
+                        "episode": e["episode"],
+                    }
                     for e in self.episodes
                     if e["externalId"] in exts
                 ]
             else:
-                items = [{"id": i, "externalId": x} for (s, x), i in self.entities.items() if s == slug and x in exts]
+                items = [
+                    {"id": i, "externalId": x}
+                    for (s, x), i in self.entities.items()
+                    if s == slug and x in exts
+                ]
         return {"items": items, "pageInfo": {"hasMore": False, "nextCursor": None}}
 
     def plex_paths(self):
-        return [r.full_url[len(PLEX):] for r in self.requests if r.full_url.startswith(PLEX)]
+        return [
+            r.full_url[len(PLEX) :]
+            for r in self.requests
+            if r.full_url.startswith(PLEX)
+        ]
 
 
 def flatten(where):
@@ -195,7 +256,10 @@ def saved(tmp_path, name="plex-cursor.json"):
 
 def test_config_accepts_the_import_secret_name_and_skips_malformed_pairs():
     cfg = plex.Config.from_env(
-        {"PLEX_IMPORT_SERVERS": "https://a:1/|ta, broken ,https://b:2|tb", "PLEX_ANIME_LIBRARIES": "Anime, Kids"}
+        {
+            "PLEX_IMPORT_SERVERS": "https://a:1/|ta, broken ,https://b:2|tb",
+            "PLEX_ANIME_LIBRARIES": "Anime, Kids",
+        }
     )
     assert cfg.servers == (("https://a:1", "ta"), ("https://b:2", "tb"))
     assert cfg.anime_libraries == {"Anime", "Kids"}
@@ -207,7 +271,9 @@ def test_config_with_no_env_has_no_servers():
 
 def test_main_refuses_to_start_without_servers_or_key(tmp_path):
     lines = []
-    rc = plex.main([], env={"STATE_DIR": str(tmp_path)}, opener=World(), log=lines.append)
+    rc = plex.main(
+        [], env={"STATE_DIR": str(tmp_path)}, opener=World(), log=lines.append
+    )
     assert rc == 1
     assert "RYOT_API_KEY" in lines[0] and "PLEX_SERVERS" in lines[0]
 
@@ -232,7 +298,9 @@ def test_the_token_travels_in_a_header_never_in_the_url(tmp_path):
 
 def test_viewed_since_pages_through_a_large_backlog(tmp_path):
     w = World()
-    w.items["2"] = [movie(str(i), f"M{i}", T0 + 1 + i, i) for i in range(plex.PLEX_PAGE + 5)]
+    w.items["2"] = [
+        movie(str(i), f"M{i}", T0 + 1 + i, i) for i in range(plex.PLEX_PAGE + 5)
+    ]
     items = plex.viewed_since((PLEX, TOKEN), "2", 1, T0, opener=w)
     assert len(items) == plex.PLEX_PAGE + 5
 
@@ -279,7 +347,9 @@ def test_the_dataset_is_cached_and_refreshed_weekly(tmp_path):
 
 def test_a_failed_download_falls_back_to_the_stale_copy(tmp_path):
     cfg = plex.Config(state_dir=str(tmp_path))
-    (tmp_path / "plex-anime-lists.json").write_text(json.dumps({"fetched_at": 0, "entries": INDEX}))
+    (tmp_path / "plex-anime-lists.json").write_text(
+        json.dumps({"fetched_at": 0, "entries": INDEX})
+    )
 
     def down(req, timeout=None):
         raise urllib.error.URLError("offline")
@@ -293,7 +363,14 @@ def test_a_failed_download_falls_back_to_the_stale_copy(tmp_path):
 
 
 def view(**kw):
-    base = dict(server=1, library="1/2", rating_key="10", at=1_790_000_060, title="T", kind="movie")
+    base = dict(
+        server=1,
+        library="1/2",
+        rating_key="10",
+        at=1_790_000_060,
+        title="T",
+        kind="movie",
+    )
     return plex.View(**{**base, **kw})
 
 
@@ -303,18 +380,37 @@ def test_payload_shapes_per_kind():
     assert m == {
         "submissionId": "plex-1-10-1790000060",
         "submittedAt": at,
-        "entry": {"kind": "complete", "entityId": "m1", "when": {"kind": "date", "finishedOn": at},
-                  "consumedOn": "Plex"},
+        "entry": {
+            "kind": "complete",
+            "entityId": "m1",
+            "when": {"kind": "date", "finishedOn": at},
+            "consumedOn": "Plex",
+        },
     }
-    s = plex.activity_payload(view(kind="show"), {"show": "s1", "episode": "e1"})["entry"]
-    assert s["kind"] == "episodes" and s["parentEntityId"] == "s1" and s["episodeEntityIds"] == ["e1"]
+    s = plex.activity_payload(view(kind="show"), {"show": "s1", "episode": "e1"})[
+        "entry"
+    ]
+    assert (
+        s["kind"] == "episodes"
+        and s["parentEntityId"] == "s1"
+        and s["episodeEntityIds"] == ["e1"]
+    )
     a = plex.activity_payload(view(kind="anime", anime_episode=3), {"entity": "a1"})
-    assert a["entry"] == {"kind": "progress", "entityId": "a1", "position": 3, "consumedOn": "Plex"}
+    assert a["entry"] == {
+        "kind": "progress",
+        "entityId": "a1",
+        "position": 3,
+        "consumedOn": "Plex",
+    }
     assert a["submittedAt"] == at  # = the progress event's occurredAt
 
 
 def test_cursor_passes_every_done_view_but_stops_before_a_pending_one():
-    vs = [view(rating_key="a", at=100), view(rating_key="b", at=200), view(rating_key="c", at=300)]
+    vs = [
+        view(rating_key="a", at=100),
+        view(rating_key="b", at=200),
+        view(rating_key="c", at=300),
+    ]
     ids = [v.submission_id for v in vs]
     assert plex.advance(50, vs, set(ids)) == 300
     assert plex.advance(50, vs, {ids[0], ids[2]}) == 199
@@ -336,12 +432,26 @@ def full_world():
     w.items["1"] = [episode("20", "300", 3, 8, T0 + 300, tmdb_ep="5678354")]
     w.items["4"] = [episode("30", "400", 1, 5, T0 + 400)]
     w.shows = {
-        "300": {"title": "INVINCIBLE", "Guid": [{"id": "tmdb://95557"}, {"id": "tvdb://368207"}]},
-        "400": {"title": "Pokémon Concierge", "Guid": [{"id": "tvdb://431703"}, {"id": "tmdb://221301"}]},
+        "300": {
+            "title": "INVINCIBLE",
+            "Guid": [{"id": "tmdb://95557"}, {"id": "tvdb://368207"}],
+        },
+        "400": {
+            "title": "Pokémon Concierge",
+            "Guid": [{"id": "tvdb://431703"}, {"id": "tmdb://221301"}],
+        },
     }
     w.entities[("movie", "194")] = "m-amelie"
     w.entities[("show", "95557")] = "s-inv"
-    w.episodes = [{"id": "ep-inv-3-8", "externalId": "5678354", "show": "s-inv", "season": 3, "episode": 8}]
+    w.episodes = [
+        {
+            "id": "ep-inv-3-8",
+            "externalId": "5678354",
+            "show": "s-inv",
+            "season": 3,
+            "episode": 8,
+        }
+    ]
     return w
 
 
@@ -351,16 +461,24 @@ def test_first_run_starts_after_the_newest_plex_event_and_logs_each_kind(tmp_pat
     assert rc == 0
     entries = {o["submissionId"]: o["entry"] for o in w.ops}
     assert set(entries) == {
-        f"plex-1-10-{T0 + 100}", f"plex-1-11-{T0 + 200}", f"plex-1-20-{T0 + 300}", f"plex-1-30-{T0 + 400}"
+        f"plex-1-10-{T0 + 100}",
+        f"plex-1-11-{T0 + 200}",
+        f"plex-1-20-{T0 + 300}",
+        f"plex-1-30-{T0 + 400}",
     }
     assert entries[f"plex-1-10-{T0 + 100}"]["entityId"] == "m-amelie"
     assert entries[f"plex-1-11-{T0 + 200}"] == {
-        "kind": "complete", "entityId": "new-movie-129", "consumedOn": "Plex",
+        "kind": "complete",
+        "entityId": "new-movie-129",
+        "consumedOn": "Plex",
         "when": {"kind": "date", "finishedOn": plex.ms_to_iso((T0 + 200) * 1000)},
     }
     assert entries[f"plex-1-20-{T0 + 300}"]["episodeEntityIds"] == ["ep-inv-3-8"]
     assert entries[f"plex-1-30-{T0 + 400}"] == {
-        "kind": "progress", "entityId": "new-anime-175035", "position": 1, "consumedOn": "Plex",
+        "kind": "progress",
+        "entityId": "new-anime-175035",
+        "position": 1,
+        "consumedOn": "Plex",
     }
     state = saved(tmp_path)
     assert state["start_at"] == T0
@@ -375,14 +493,25 @@ def test_a_second_run_asks_plex_from_each_cursor_and_logs_nothing(tmp_path):
     w2.entities.update({("movie", "129"): "x", ("anime", "175035"): "y"})
     rc, lines = run(tmp_path, w2)
     assert rc == 0 and w2.ops == []
-    assert any(f"/library/sections/2/all?type=1&lastViewedAt>>={T0 + 200}&" in p for p in w2.plex_paths())
+    assert any(
+        f"/library/sections/2/all?type=1&lastViewedAt>>={T0 + 200}&" in p
+        for p in w2.plex_paths()
+    )
 
 
 def test_a_view_already_in_ryot_at_that_exact_second_is_not_relogged(tmp_path):
     w = full_world()
     w.events = [
-        {"id": "v1", "entityId": "m-amelie", "occurredAt": plex.ms_to_iso((T0 + 100) * 1000)},
-        {"id": "v2", "entityId": "ep-inv-3-8", "occurredAt": plex.ms_to_iso((T0 + 999) * 1000)},
+        {
+            "id": "v1",
+            "entityId": "m-amelie",
+            "occurredAt": plex.ms_to_iso((T0 + 100) * 1000),
+        },
+        {
+            "id": "v2",
+            "entityId": "ep-inv-3-8",
+            "occurredAt": plex.ms_to_iso((T0 + 999) * 1000),
+        },
     ]
     rc, lines = run(tmp_path, w)
     ids = [o["submissionId"] for o in w.ops]
@@ -393,10 +522,22 @@ def test_a_view_already_in_ryot_at_that_exact_second_is_not_relogged(tmp_path):
 
 def test_an_unmappable_anime_episode_falls_back_to_the_tmdb_show(tmp_path):
     w = full_world()
-    w.items = {"2": [], "1": [], "4": [episode("31", "500", 2, 1, T0 + 10, tmdb_ep="777")]}
+    w.items = {
+        "2": [],
+        "1": [],
+        "4": [episode("31", "500", 2, 1, T0 + 10, tmdb_ep="777")],
+    }
     w.shows["500"] = {"title": "Unknown Anime", "Guid": [{"id": "tmdb://1234"}]}
     w.entities[("show", "1234")] = "s-unk"
-    w.episodes = [{"id": "ep-unk", "externalId": "777", "show": "s-unk", "season": 2, "episode": 1}]
+    w.episodes = [
+        {
+            "id": "ep-unk",
+            "externalId": "777",
+            "show": "s-unk",
+            "season": 2,
+            "episode": 1,
+        }
+    ]
     rc, lines = run(tmp_path, w)
     assert w.ops[0]["entry"]["kind"] == "episodes"
     assert w.ops[0]["entry"]["parentEntityId"] == "s-unk"
@@ -406,10 +547,20 @@ def test_an_unmappable_anime_episode_falls_back_to_the_tmdb_show(tmp_path):
 def conan_world(tmdb_season):
     w = World()
     w.items["4"] = [episode("40", "600", 32, 1, T0 + 10, tmdb_ep="4940802")]
-    w.shows["600"] = {"title": "Detective Conan", "Guid": [{"id": "tvdb://72454"}, {"id": "tmdb://30983"}]}
+    w.shows["600"] = {
+        "title": "Detective Conan",
+        "Guid": [{"id": "tvdb://72454"}, {"id": "tmdb://30983"}],
+    }
     w.entities[("show", "30983")] = "s-conan"
-    w.episodes = [{"id": "ep-conan", "externalId": "4940802", "show": "s-conan", "season": tmdb_season,
-                   "episode": 1109}]
+    w.episodes = [
+        {
+            "id": "ep-conan",
+            "externalId": "4940802",
+            "show": "s-conan",
+            "season": tmdb_season,
+            "episode": 1109,
+        }
+    ]
     return w
 
 
@@ -417,7 +568,10 @@ def test_an_absolute_run_maps_through_the_tmdb_episode_number(tmp_path):
     w = conan_world(tmdb_season=1)
     rc, lines = run(tmp_path, w)
     assert w.ops[0]["entry"] == {
-        "kind": "progress", "entityId": "new-anime-235", "position": 1109, "consumedOn": "Plex",
+        "kind": "progress",
+        "entityId": "new-anime-235",
+        "position": 1109,
+        "consumedOn": "Plex",
     }
 
 
@@ -455,8 +609,18 @@ def test_a_failed_import_holds_the_cursor_and_retries_until_it_gives_up(tmp_path
 def full_world_unimportable():
     w = full_world()
     w.importable = False
-    w.events = [{"id": "x", "entityId": "m-amelie", "occurredAt": plex.ms_to_iso((T0 + 100) * 1000)},
-                {"id": "y", "entityId": "ep-inv-3-8", "occurredAt": plex.ms_to_iso((T0 + 300) * 1000)}]
+    w.events = [
+        {
+            "id": "x",
+            "entityId": "m-amelie",
+            "occurredAt": plex.ms_to_iso((T0 + 100) * 1000),
+        },
+        {
+            "id": "y",
+            "entityId": "ep-inv-3-8",
+            "occurredAt": plex.ms_to_iso((T0 + 300) * 1000),
+        },
+    ]
     return w
 
 
@@ -466,7 +630,9 @@ def test_a_reused_key_with_another_target_counts_as_present(tmp_path):
     body = '{"reason":{"diagnostics":[{"code":"operation-idempotency-conflict"}]}}'
 
     def conflict():
-        return urllib.error.HTTPError("http://ryot", 400, "bad", {}, io.BytesIO(body.encode()))
+        return urllib.error.HTTPError(
+            "http://ryot", 400, "bad", {}, io.BytesIO(body.encode())
+        )
 
     w.op_error = conflict
     rc, lines = run(tmp_path, w)
@@ -478,7 +644,9 @@ def test_ryot_down_is_fatal_and_keeps_the_old_cursor(tmp_path):
     w = full_world()
 
     def boom():
-        return urllib.error.HTTPError("http://ryot", 500, "err", {}, io.BytesIO(b"oops"))
+        return urllib.error.HTTPError(
+            "http://ryot", 500, "err", {}, io.BytesIO(b"oops")
+        )
 
     w.op_error = boom
     state = {"start_at": T0, "cursors": {"1/2": T0}}

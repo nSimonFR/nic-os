@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """LG 38GN950 sphere-lighting ambient sync daemon."""
+
 import argparse, os, signal, sys, time, logging
 import numpy as np
 import hid
 import lib27gn950 as lg
 from screencopy import Screencopy
 
-log = logging.getLogger('lg-sphere-ambient')
+log = logging.getLogger("lg-sphere-ambient")
 
 # 48 LED zones around the sphere: top16 + right8 + bottom16 + left8
 N_TOP, N_SIDE, BAND = 16, 8, 4
+
 
 # ------------------------------------------------------------------
 # Optional OpenRGB sink — picks up the same sampled frame and pushes a
@@ -19,14 +21,23 @@ class OpenRGBSink:
     # spam the log or stall the main capture loop.
     RECONNECT_BACKOFF = 5.0
 
-    def __init__(self, host, port, allowed_types, zone_sizes, perled_specs,
-                 perled_reverse, gpu_logo_threshold):
+    def __init__(
+        self,
+        host,
+        port,
+        allowed_types,
+        zone_sizes,
+        perled_specs,
+        perled_reverse,
+        gpu_logo_threshold,
+    ):
         """zone_sizes:     [(device_type, zone_name, led_count)] resized on connect.
         perled_specs:  [(device_type, zone_name)] zones that take per-LED ambilight
                        colours (Hyperion-style strip mapping) instead of the single
                        global colour. Anything not listed gets the global colour.
         gpu_logo_threshold: luminance below this turns the GPU SINGLE COLOR zone off."""
-        self.host = host; self.port = port
+        self.host = host
+        self.port = port
         self.allowed = set(t.lower() for t in allowed_types)
         self.zone_sizes = zone_sizes
         self.perled_specs = set((d.lower(), z) for d, z in perled_specs)
@@ -40,7 +51,7 @@ class OpenRGBSink:
         # SAME .name AND empty .serial — keying by name would collide
         # and silently make one of the sticks stop updating.
         self.last_dev_colors = {}  # {id(dev): [(r,g,b), ...]}
-        self._zone_plan = {}       # {id(dev): [(zone_name, led_count, is_perled), ...]}
+        self._zone_plan = {}  # {id(dev): [(zone_name, led_count, is_perled), ...]}
 
     def _apply_zone_sizes(self):
         """Make sure ARGB headers (etc.) are sized to what's physically wired."""
@@ -49,16 +60,21 @@ class OpenRGBSink:
         changed = False
         for d in self.client.devices:
             for dtype, zname, n in self.zone_sizes:
-                if d.type.name.lower() != dtype.lower(): continue
+                if d.type.name.lower() != dtype.lower():
+                    continue
                 for z in d.zones:
-                    if z.name != zname: continue
-                    if len(z.leds) == n: continue
+                    if z.name != zname:
+                        continue
+                    if len(z.leds) == n:
+                        continue
                     try:
                         z.resize(n)
                         log.info("resized %s / %s: -> %d LEDs", d.name, zname, n)
                         changed = True
                     except Exception as e:
-                        log.warning("resize %s/%s -> %d failed: %s", d.name, zname, n, e)
+                        log.warning(
+                            "resize %s/%s -> %d failed: %s", d.name, zname, n, e
+                        )
         if changed:
             # refresh device snapshots so device.leds reflects new sizes
             self.client.update()
@@ -69,8 +85,7 @@ class OpenRGBSink:
         mode. Used by both _connect() (first time) and rescan() (after a
         hotplug). Drops dedup state so the next push re-asserts colours."""
         self.devices = [
-            d for d in self.client.devices
-            if d.type.name.lower() in self.allowed
+            d for d in self.client.devices if d.type.name.lower() in self.allowed
         ]
         for d in self.devices:
             self._force_direct_mode(d)
@@ -83,15 +98,19 @@ class OpenRGBSink:
                 key = (d.type.name.lower(), z.name)
                 is_perled = key in self.perled_specs and len(z.leds) > 0
                 plan.append((z.name, len(z.leds), is_perled))
-                if is_perled: perled_count += 1
+                if is_perled:
+                    perled_count += 1
             self._zone_plan[id(d)] = plan
         verb = "connected" if initial else "rescan"
-        log.info("openrgb %s — %d/%d devices in scope: %s", verb,
-                 len(self.devices), len(self.client.devices),
-                 [d.name for d in self.devices])
+        log.info(
+            "openrgb %s — %d/%d devices in scope: %s",
+            verb,
+            len(self.devices),
+            len(self.client.devices),
+            [d.name for d in self.devices],
+        )
         if perled_count:
-            log.info("openrgb per-LED zones (ambilight): %s",
-                     self.get_perled_info())
+            log.info("openrgb per-LED zones (ambilight): %s", self.get_perled_info())
 
     def rescan(self):
         """Re-enumerate devices from the OpenRGB server. Picks up hot-
@@ -109,11 +128,13 @@ class OpenRGBSink:
             old_names = tuple(d.name for d in self.devices)
             self.client.update()
             new_ids = tuple(
-                id(d) for d in self.client.devices
+                id(d)
+                for d in self.client.devices
                 if d.type.name.lower() in self.allowed
             )
             new_names = tuple(
-                d.name for d in self.client.devices
+                d.name
+                for d in self.client.devices
                 if d.type.name.lower() in self.allowed
             )
             # When the underlying SDK rebuilds the device list, every
@@ -135,13 +156,13 @@ class OpenRGBSink:
         """Many devices (G502, ASUS mb) default to 'Off' / a pattern mode that
         silently overrides per-LED writes. Force 'Direct' if the device has it."""
         mode_names = [m.name for m in dev.modes]
-        if 'Direct' not in mode_names:
+        if "Direct" not in mode_names:
             return
         cur = mode_names[dev.active_mode] if dev.modes else None
-        if cur == 'Direct':
+        if cur == "Direct":
             return
         try:
-            dev.set_mode('Direct')
+            dev.set_mode("Direct")
             log.info("switched %s from %r to Direct mode", dev.name, cur)
         except Exception as e:
             log.warning("set_mode Direct on %s failed: %s", dev.name, e)
@@ -153,13 +174,15 @@ class OpenRGBSink:
         self.last_attempt = now
         try:
             from openrgb import OpenRGBClient
+
             self.client = OpenRGBClient(self.host, self.port, name="lg-sphere-ambient")
             self._apply_zone_sizes()
             self._build_state(initial=True)
             return True
         except Exception as e:
             log.warning("openrgb connect failed: %s", e)
-            self.client = None; self.devices = []
+            self.client = None
+            self.devices = []
             return False
 
     def get_perled_info(self):
@@ -169,7 +192,7 @@ class OpenRGBSink:
         vectors before calling push()."""
         out = []
         for d in self.devices:
-            for (zname, n, is_perled) in self._zone_plan.get(id(d), []):
+            for zname, n, is_perled in self._zone_plan.get(id(d), []):
                 if is_perled and n > 0:
                     out.append((d.name, zname, n))
         return out
@@ -208,6 +231,7 @@ class OpenRGBSink:
         entirely. min_delta=4 ≈ imperceptible.
         """
         from openrgb.utils import RGBColor
+
         if self.client is None and not self._connect():
             return
         perled = perled or {}
@@ -216,30 +240,35 @@ class OpenRGBSink:
         dead = []
         for dev in self.devices:
             plan = self._zone_plan.get(id(dev))
-            if not plan: continue
+            if not plan:
+                continue
             # Assemble the per-LED tuple vector in device-LED order.
             colors = []
-            gpu_single = (dev.type.name == 'GPU')
-            for (zname, n, is_perled) in plan:
-                if n == 0: continue
+            gpu_single = dev.type.name == "GPU"
+            for zname, n, is_perled in plan:
+                if n == 0:
+                    continue
                 key = (dev.name, zname)
                 if is_perled and key in perled and len(perled[key]) == n:
                     colors.extend(perled[key])
-                elif gpu_single and 'SINGLE' in zname.upper():
+                elif gpu_single and "SINGLE" in zname.upper():
                     # GeForce RTX side logo forced off — keep it dark
                     # regardless of scene luma (gpu_logo_threshold ignored).
                     colors.extend([(0, 0, 0)] * n)
                 else:
                     colors.extend([(r, g, b)] * n)
-            if not colors: continue
+            if not colors:
+                continue
             # Vector dedup — channel-max-abs over every LED.
             prev = self.last_dev_colors.get(id(dev))
             if prev is not None and len(prev) == len(colors):
                 md = 0
-                for (nr,ng,nb),(pr,pg,pb) in zip(colors, prev):
-                    d_ = max(abs(nr-pr), abs(ng-pg), abs(nb-pb))
-                    if d_ > md: md = d_
-                    if md >= min_delta: break
+                for (nr, ng, nb), (pr, pg, pb) in zip(colors, prev):
+                    d_ = max(abs(nr - pr), abs(ng - pg), abs(nb - pb))
+                    if d_ > md:
+                        md = d_
+                    if md >= min_delta:
+                        break
                 if md < min_delta:
                     continue
             try:
@@ -255,26 +284,30 @@ class OpenRGBSink:
 
     def stop(self):
         try:
-            if self.client: self.client.disconnect()
-        except Exception: pass
+            if self.client:
+                self.client.disconnect()
+        except Exception:
+            pass
+
 
 def find_wayland_socket():
     """If WAYLAND_DISPLAY isn't set, look in XDG_RUNTIME_DIR."""
-    if os.environ.get('WAYLAND_DISPLAY'):
+    if os.environ.get("WAYLAND_DISPLAY"):
         return
-    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
     if not runtime:
         return
     for entry in sorted(os.listdir(runtime)):
-        if entry.startswith('wayland-') and not entry.endswith('.lock'):
+        if entry.startswith("wayland-") and not entry.endswith(".lock"):
             path = os.path.join(runtime, entry)
             try:
                 if os.path.exists(path):
-                    os.environ['WAYLAND_DISPLAY'] = entry
+                    os.environ["WAYLAND_DISPLAY"] = entry
                     log.info("auto-detected WAYLAND_DISPLAY=%s", entry)
                     return
             except OSError:
                 continue
+
 
 # ------------------------------------------------------------------
 # Colour-extraction algorithms.
@@ -293,6 +326,7 @@ def find_wayland_socket():
 # any saturation at all.
 
 NBINS = 16
+
 
 def rgb_to_hsl(rgb_u8):
     # rgb_u8: (..., 3) uint8 → H,S,L floats in [0,1]
@@ -317,31 +351,40 @@ def rgb_to_hsl(rgb_u8):
     H = np.where(mask, H, 0.0)
     return H, S, L
 
+
 def hsl_to_rgb(h, s, l):
     # scalars → (r, g, b) uint8
     def hue2rgb(p, q, t):
         t = t % 1.0
-        if t < 1/6: return p + (q - p) * 6 * t
-        if t < 1/2: return q
-        if t < 2/3: return p + (q - p) * (2/3 - t) * 6
+        if t < 1 / 6:
+            return p + (q - p) * 6 * t
+        if t < 1 / 2:
+            return q
+        if t < 2 / 3:
+            return p + (q - p) * (2 / 3 - t) * 6
         return p
+
     if s == 0:
         v = int(round(l * 255))
         return v, v, v
     q = l * (1 + s) if l < 0.5 else l + s - l * s
     p = 2 * l - q
-    r = hue2rgb(p, q, h + 1/3)
+    r = hue2rgb(p, q, h + 1 / 3)
     g = hue2rgb(p, q, h)
-    b = hue2rgb(p, q, h - 1/3)
-    return int(round(r*255)), int(round(g*255)), int(round(b*255))
+    b = hue2rgb(p, q, h - 1 / 3)
+    return int(round(r * 255)), int(round(g * 255)), int(round(b * 255))
+
 
 def pick_color_mean(pixels_bgr):
-    if pixels_bgr.size == 0: return (0, 0, 0)
+    if pixels_bgr.size == 0:
+        return (0, 0, 0)
     m = pixels_bgr.reshape(-1, 3).mean(axis=0)
-    return (int(m[2]), int(m[1]), int(m[0]))   # BGR → RGB
+    return (int(m[2]), int(m[1]), int(m[0]))  # BGR → RGB
+
 
 def pick_color_hue_histogram(pixels_bgr):
-    if pixels_bgr.size == 0: return (0, 0, 0)
+    if pixels_bgr.size == 0:
+        return (0, 0, 0)
     # BGR → RGB before HSL
     flat = pixels_bgr.reshape(-1, 3)[:, ::-1]
     H, S, L = rgb_to_hsl(flat)
@@ -360,33 +403,40 @@ def pick_color_hue_histogram(pixels_bgr):
     final_L = float(np.clip((L * w).sum() / w.sum(), 0.15, 0.55))
     return hsl_to_rgb(winner_hue, 1.0, final_L)
 
+
 # 2 = every other pixel along both axes → 4× fewer pixels through the
 # HSL conversion. Edge bands are tiny and have huge spatial redundancy;
 # this is loss-free for the histogram (which counts hue bins, not pixels).
 SS = 2
 
-def sample_zones(mm, w, h, stride, algo='hue-histogram'):
-    pick = pick_color_hue_histogram if algo == 'hue-histogram' else pick_color_mean
-    a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
+
+def sample_zones(mm, w, h, stride, algo="hue-histogram"):
+    pick = pick_color_hue_histogram if algo == "hue-histogram" else pick_color_mean
+    a = np.frombuffer(mm, dtype=np.uint8, count=stride * h).reshape(h, stride // 4, 4)
     a = a[:, :w]
     out = []
     band = a[:BAND:1, ::SS, :3]
     for k in range(N_TOP):
-        x0 = (k*w//N_TOP)//SS; x1 = ((k+1)*w//N_TOP)//SS
+        x0 = (k * w // N_TOP) // SS
+        x1 = ((k + 1) * w // N_TOP) // SS
         out.append(pick(band[:, x0:x1]))
-    band = a[::SS, w-BAND::1, :3]
+    band = a[::SS, w - BAND :: 1, :3]
     for k in range(N_SIDE):
-        y0 = (k*h//N_SIDE)//SS; y1 = ((k+1)*h//N_SIDE)//SS
+        y0 = (k * h // N_SIDE) // SS
+        y1 = ((k + 1) * h // N_SIDE) // SS
         out.append(pick(band[y0:y1]))
-    band = a[h-BAND::1, ::SS, :3]
+    band = a[h - BAND :: 1, ::SS, :3]
     for k in range(N_TOP):
-        x0 = (k*w//N_TOP)//SS; x1 = ((k+1)*w//N_TOP)//SS
+        x0 = (k * w // N_TOP) // SS
+        x1 = ((k + 1) * w // N_TOP) // SS
         out.append(pick(band[:, x0:x1]))
     band = a[::SS, :BAND:1, :3]
     for k in range(N_SIDE):
-        y0 = (k*h//N_SIDE)//SS; y1 = ((k+1)*h//N_SIDE)//SS
+        y0 = (k * h // N_SIDE) // SS
+        y1 = ((k + 1) * h // N_SIDE) // SS
         out.append(pick(band[y0:y1]))
-    return [f"{r:02x}{g:02x}{b:02x}" for r,g,b in out]
+    return [f"{r:02x}{g:02x}{b:02x}" for r, g, b in out]
+
 
 # Whole-screen subsample stride for pick_global_color. 16× on each axis
 # = 240×100 = 24k pixels on the 3840×1600 LG output, same ballpark as the
@@ -399,6 +449,7 @@ SS_GLOBAL = 16
 # too thin to be representative. 64 px ≈ 4% of screen height, matches
 # what Hyperion uses by default.
 PERLED_BAND = 64
+
 
 def sample_perled_zones(mm, w, h, stride, specs, reverse_set=None):
     """Hyperion-style per-LED ambilight sampling for OpenRGB strips.
@@ -417,14 +468,15 @@ def sample_perled_zones(mm, w, h, stride, specs, reverse_set=None):
     between neighbours. Mean is what Hyperion uses for ambilight strips
     and gives smooth left-to-right gradients.
     """
-    if not specs: return {}
+    if not specs:
+        return {}
     reverse_set = reverse_set or set()
-    a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
+    a = np.frombuffer(mm, dtype=np.uint8, count=stride * h).reshape(h, stride // 4, 4)
     a = a[:, :w]
-    band = a[h-PERLED_BAND::SS, ::SS, :3]  # (band_h, bw, 3) BGR
+    band = a[h - PERLED_BAND :: SS, ::SS, :3]  # (band_h, bw, 3) BGR
     bw = band.shape[1]
     out = {}
-    for (dev_name, zone_name, n) in specs:
+    for dev_name, zone_name, n in specs:
         group = bw // n
         if group >= 1:
             # Vectorised mean: reshape the band into (band_h, n, group, 3)
@@ -440,7 +492,7 @@ def sample_perled_zones(mm, w, h, stride, specs, reverse_set=None):
             colors = []
             for k in range(n):
                 x0 = (k * bw) // n
-                x1 = max(x0 + 1, ((k+1) * bw) // n)
+                x1 = max(x0 + 1, ((k + 1) * bw) // n)
                 m = band[:, x0:x1].reshape(-1, 3).mean(axis=0)
                 colors.append((int(m[2]), int(m[1]), int(m[0])))
         if (dev_name, zone_name) in reverse_set:
@@ -448,7 +500,8 @@ def sample_perled_zones(mm, w, h, stride, specs, reverse_set=None):
         out[(dev_name, zone_name)] = colors
     return out
 
-def pick_global_color(mm, w, h, stride, algo='hue-histogram'):
+
+def pick_global_color(mm, w, h, stride, algo="hue-histogram"):
     """One colour for the whole screen — used by the OpenRGB fan-out.
 
     Samples a heavily-subsampled grid of the entire framebuffer (not
@@ -458,76 +511,119 @@ def pick_global_color(mm, w, h, stride, algo='hue-histogram'):
     care of the rest — a mostly-grey desktop with a small saturated
     accent will still resolve to that accent's hue.
     """
-    pick = pick_color_hue_histogram if algo == 'hue-histogram' else pick_color_mean
-    a = np.frombuffer(mm, dtype=np.uint8, count=stride*h).reshape(h, stride//4, 4)
+    pick = pick_color_hue_histogram if algo == "hue-histogram" else pick_color_mean
+    a = np.frombuffer(mm, dtype=np.uint8, count=stride * h).reshape(h, stride // 4, 4)
     a = a[:, :w]
     # whole-screen strided view → (h/SS_GLOBAL, w/SS_GLOBAL, 3) BGR pixels
     pixels = a[::SS_GLOBAL, ::SS_GLOBAL, :3].reshape(-1, 3)
     return pick(pixels)
 
+
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--output', default='DP-1', help='wayland output name')
-    ap.add_argument('--fps', type=int, default=30, help='sampler/push rate cap')
-    ap.add_argument('--brightness', type=int, default=12, choices=range(1, 13))
-    ap.add_argument('--cursor', action='store_true', help='include cursor in capture')
-    ap.add_argument('--debug', action='store_true')
-    ap.add_argument('--openrgb', action='store_true', help='also push averaged colour to OpenRGB SDK')
-    ap.add_argument('--openrgb-host', default='127.0.0.1')
-    ap.add_argument('--openrgb-port', type=int, default=6742)
+    ap.add_argument("--output", default="DP-1", help="wayland output name")
+    ap.add_argument("--fps", type=int, default=30, help="sampler/push rate cap")
+    ap.add_argument("--brightness", type=int, default=12, choices=range(1, 13))
+    ap.add_argument("--cursor", action="store_true", help="include cursor in capture")
+    ap.add_argument("--debug", action="store_true")
+    ap.add_argument(
+        "--openrgb",
+        action="store_true",
+        help="also push averaged colour to OpenRGB SDK",
+    )
+    ap.add_argument("--openrgb-host", default="127.0.0.1")
+    ap.add_argument("--openrgb-port", type=int, default=6742)
     # DRAM and motherboard by default; gamepad is opt-in because pushing
     # ambient over the DualSense lightbar can fight with the game.
-    ap.add_argument('--openrgb-devices', default='dram,motherboard',
-                    help='comma-separated device types: dram,motherboard,gamepad,keyboard,mouse,headset,all')
-    ap.add_argument('--openrgb-zone-sizes', default="",
-                    help='comma-separated zone size specs: device_type/Zone Name=N,...  '
-                         '(applied on every OpenRGB connect; idempotent)')
-    ap.add_argument('--openrgb-perled-zones',
-                    default='motherboard/Aura Addressable 1,motherboard/Aura Addressable 3',
-                    help='comma-separated device_type/Zone Name list. These zones get '
-                         'Hyperion-style per-LED ambilight colours sampled across the bottom '
-                         'of the screen instead of the single global colour. All other zones '
-                         'still get the global colour. Empty string disables per-LED entirely.')
-    ap.add_argument('--openrgb-perled-reverse', default="",
-                    help='comma-separated device_type/Zone Name list whose LED order should '
-                         'be reversed (use when the cable enters on the right of the case so '
-                         'OpenRGB LED 0 is physically the rightmost LED).')
-    ap.add_argument('--gpu-logo-threshold', type=int, default=30,
-                    help='luma (0-255) below which the GPU SINGLE COLOR zone (the FE GeForce '
-                         'side logo) is turned off. Default 30 ~ typical dark desktop')
-    ap.add_argument('--algo', default='hue-histogram', choices=['mean','hue-histogram'],
-                    help='colour-extraction algorithm. mean = plain edge-band average; '
-                         'hue-histogram = Cornell-style importance-weighted hue histogram '
-                         '(more saturated output, less washout on dark scenes). default hue-histogram.')
-    ap.add_argument('--ema', type=float, default=0.25,
-                    help='temporal smoothing on the algorithm output (per-zone and global): '
-                         'new = ema*current + (1-ema)*prev. 0 = no smoothing, 1 = no history. '
-                         'Default 0.25 means each push is ~25%% new + ~75%% the previous frame, '
-                         'which kills the hue-bin-flip flashing on close-tie scenes without '
-                         'feeling laggy on real scene cuts.')
-    ap.add_argument('--capture-recycle', type=float, default=1.0,
-                    help='tear down + recreate the wlr-screencopy session every N seconds '
-                         'to defeat Hyprland fullscreen-mode-2 stale-buffer lock. '
-                         '0 = never recycle. default 1.0s (bounds staleness to <= 1s).')
-    ap.add_argument('--openrgb-rescan-interval', type=float, default=10.0,
-                    help='seconds between OpenRGB device-list rescans. Catches hot-plugged '
-                         'controllers without restarting the daemon. 0 to disable.')
-    ap.add_argument('--openrgb-fps', type=float, default=10.0,
-                    help='OpenRGB push rate (Hz). The 6 device set_color calls per frame at '
-                         'the full 30 fps can race on the OpenRGB server with fast=True; lower '
-                         'rates also stop hardware controllers (Corsair RAM, ASUS Aura) from '
-                         'visibly flickering when re-asserted to near-equal colours. '
-                         'Default 10 Hz. Set higher for snappier sync to fast scene cuts.')
+    ap.add_argument(
+        "--openrgb-devices",
+        default="dram,motherboard",
+        help="comma-separated device types: dram,motherboard,gamepad,keyboard,mouse,headset,all",
+    )
+    ap.add_argument(
+        "--openrgb-zone-sizes",
+        default="",
+        help="comma-separated zone size specs: device_type/Zone Name=N,...  "
+        "(applied on every OpenRGB connect; idempotent)",
+    )
+    ap.add_argument(
+        "--openrgb-perled-zones",
+        default="motherboard/Aura Addressable 1,motherboard/Aura Addressable 3",
+        help="comma-separated device_type/Zone Name list. These zones get "
+        "Hyperion-style per-LED ambilight colours sampled across the bottom "
+        "of the screen instead of the single global colour. All other zones "
+        "still get the global colour. Empty string disables per-LED entirely.",
+    )
+    ap.add_argument(
+        "--openrgb-perled-reverse",
+        default="",
+        help="comma-separated device_type/Zone Name list whose LED order should "
+        "be reversed (use when the cable enters on the right of the case so "
+        "OpenRGB LED 0 is physically the rightmost LED).",
+    )
+    ap.add_argument(
+        "--gpu-logo-threshold",
+        type=int,
+        default=30,
+        help="luma (0-255) below which the GPU SINGLE COLOR zone (the FE GeForce "
+        "side logo) is turned off. Default 30 ~ typical dark desktop",
+    )
+    ap.add_argument(
+        "--algo",
+        default="hue-histogram",
+        choices=["mean", "hue-histogram"],
+        help="colour-extraction algorithm. mean = plain edge-band average; "
+        "hue-histogram = Cornell-style importance-weighted hue histogram "
+        "(more saturated output, less washout on dark scenes). default hue-histogram.",
+    )
+    ap.add_argument(
+        "--ema",
+        type=float,
+        default=0.25,
+        help="temporal smoothing on the algorithm output (per-zone and global): "
+        "new = ema*current + (1-ema)*prev. 0 = no smoothing, 1 = no history. "
+        "Default 0.25 means each push is ~25%% new + ~75%% the previous frame, "
+        "which kills the hue-bin-flip flashing on close-tie scenes without "
+        "feeling laggy on real scene cuts.",
+    )
+    ap.add_argument(
+        "--capture-recycle",
+        type=float,
+        default=1.0,
+        help="tear down + recreate the wlr-screencopy session every N seconds "
+        "to defeat Hyprland fullscreen-mode-2 stale-buffer lock. "
+        "0 = never recycle. default 1.0s (bounds staleness to <= 1s).",
+    )
+    ap.add_argument(
+        "--openrgb-rescan-interval",
+        type=float,
+        default=10.0,
+        help="seconds between OpenRGB device-list rescans. Catches hot-plugged "
+        "controllers without restarting the daemon. 0 to disable.",
+    )
+    ap.add_argument(
+        "--openrgb-fps",
+        type=float,
+        default=10.0,
+        help="OpenRGB push rate (Hz). The 6 device set_color calls per frame at "
+        "the full 30 fps can race on the OpenRGB server with fast=True; lower "
+        "rates also stop hardware controllers (Corsair RAM, ASUS Aura) from "
+        "visibly flickering when re-asserted to near-equal colours. "
+        "Default 10 Hz. Set higher for snappier sync to fast scene cuts.",
+    )
     args = ap.parse_args()
     logging.basicConfig(
         level=logging.DEBUG if args.debug else logging.INFO,
-        format='%(asctime)s %(levelname)s %(message)s',
+        format="%(asctime)s %(levelname)s %(message)s",
     )
     find_wayland_socket()
 
     stop = [False]
+
     def on_signal(sig, frame):
-        log.info("signal %d, shutting down", sig); stop[0] = True
+        log.info("signal %d, shutting down", sig)
+        stop[0] = True
+
     signal.signal(signal.SIGTERM, on_signal)
     signal.signal(signal.SIGINT, on_signal)
 
@@ -537,14 +633,15 @@ def main():
         mons = lg.find_monitors()
         if mons:
             try:
-                dev = hid.Device(path=mons[0]['path'])
-                log.info("opened %s serial=%s", mons[0]['model'], mons[0]['serial'])
+                dev = hid.Device(path=mons[0]["path"])
+                log.info("opened %s serial=%s", mons[0]["model"], mons[0]["serial"])
                 break
             except Exception as e:
                 log.warning("hid open failed: %s", e)
         log.info("no LG monitor on USB, retrying...")
         time.sleep(5)
-    if stop[0]: return 0
+    if stop[0]:
+        return 0
 
     cap = Screencopy(output_name=args.output, overlay_cursor=1 if args.cursor else 0)
     try:
@@ -553,62 +650,95 @@ def main():
         log.error("screencopy failed to start: %s", e)
         return 1
 
-    lg.send_command(lg.control_commands['color_video_sync'], dev)
+    lg.send_command(lg.control_commands["color_video_sync"], dev)
     lg.send_command(lg.brightness_commands[args.brightness], dev)
     log.info("ambient loop running at %d fps target on %s", args.fps, args.output)
 
     # Optional OpenRGB fan-out
     orgb = None
     if args.openrgb:
-        allowed = [t.strip() for t in args.openrgb_devices.split(',') if t.strip()]
-        if 'all' in allowed:
+        allowed = [t.strip() for t in args.openrgb_devices.split(",") if t.strip()]
+        if "all" in allowed:
             # Every OpenRGB DeviceType. Keep in sync with openrgb.utils.DeviceType —
             # adding a new type means anything hot-plugged of that class joins the
             # ambient sync automatically without a flag change.
-            allowed = ['motherboard','dram','gpu','cooler','ledstrip','keyboard',
-                       'mouse','mousemat','headset','headset_stand','gamepad','light',
-                       'speaker','virtual','storage','case','microphone','accessory',
-                       'keypad','unknown']
+            allowed = [
+                "motherboard",
+                "dram",
+                "gpu",
+                "cooler",
+                "ledstrip",
+                "keyboard",
+                "mouse",
+                "mousemat",
+                "headset",
+                "headset_stand",
+                "gamepad",
+                "light",
+                "speaker",
+                "virtual",
+                "storage",
+                "case",
+                "microphone",
+                "accessory",
+                "keypad",
+                "unknown",
+            ]
         zone_sizes = []
-        for spec in args.openrgb_zone_sizes.split(','):
+        for spec in args.openrgb_zone_sizes.split(","):
             spec = spec.strip()
-            if not spec: continue
+            if not spec:
+                continue
             try:
-                lhs, n = spec.rsplit('=', 1)
-                dtype, zname = lhs.split('/', 1)
+                lhs, n = spec.rsplit("=", 1)
+                dtype, zname = lhs.split("/", 1)
                 zone_sizes.append((dtype.strip(), zname.strip(), int(n)))
             except Exception as e:
                 log.error("bad --openrgb-zone-sizes entry %r: %s", spec, e)
         perled_specs = []
-        for spec in args.openrgb_perled_zones.split(','):
+        for spec in args.openrgb_perled_zones.split(","):
             spec = spec.strip()
-            if not spec: continue
+            if not spec:
+                continue
             try:
-                dtype, zname = spec.split('/', 1)
+                dtype, zname = spec.split("/", 1)
                 perled_specs.append((dtype.strip(), zname.strip()))
             except Exception as e:
                 log.error("bad --openrgb-perled-zones entry %r: %s", spec, e)
         perled_reverse = []
-        for spec in args.openrgb_perled_reverse.split(','):
+        for spec in args.openrgb_perled_reverse.split(","):
             spec = spec.strip()
-            if not spec: continue
+            if not spec:
+                continue
             try:
-                dtype, zname = spec.split('/', 1)
+                dtype, zname = spec.split("/", 1)
                 perled_reverse.append((dtype.strip(), zname.strip()))
             except Exception as e:
                 log.error("bad --openrgb-perled-reverse entry %r: %s", spec, e)
-        orgb = OpenRGBSink(args.openrgb_host, args.openrgb_port, allowed, zone_sizes,
-                           perled_specs, perled_reverse, args.gpu_logo_threshold)
+        orgb = OpenRGBSink(
+            args.openrgb_host,
+            args.openrgb_port,
+            allowed,
+            zone_sizes,
+            perled_specs,
+            perled_reverse,
+            args.gpu_logo_threshold,
+        )
 
-    log.info("colour algorithm: %s  ema=%.2f  capture-recycle=%.1fs  openrgb-fps=%.1f",
-             args.algo, args.ema, args.capture_recycle, args.openrgb_fps)
+    log.info(
+        "colour algorithm: %s  ema=%.2f  capture-recycle=%.1fs  openrgb-fps=%.1f",
+        args.algo,
+        args.ema,
+        args.capture_recycle,
+        args.openrgb_fps,
+    )
     period = 1.0 / args.fps
     next_t = time.perf_counter()
     frame_idx = 0
     ema = args.ema
-    prev_zones = None      # list of 48 (r,g,b) ints
-    prev_global = None     # one (r,g,b)
-    prev_perled = {}       # {(dev_name, zone_name): [(r,g,b), ...]}
+    prev_zones = None  # list of 48 (r,g,b) ints
+    prev_global = None  # one (r,g,b)
+    prev_perled = {}  # {(dev_name, zone_name): [(r,g,b), ...]}
     # OpenRGB rate limiting — independent of main fps so the LG ring keeps
     # its 30 fps per-zone sync while OpenRGB devices update at a saner
     # rate that doesn't race on the SDK server.
@@ -616,8 +746,12 @@ def main():
     next_orgb_t = 0.0
     # Hot-plug rescan timer — calls orgb.rescan() periodically so a
     # newly-plugged device shows up without restarting the daemon.
-    rescan_period = args.openrgb_rescan_interval if args.openrgb_rescan_interval > 0 else 0
-    next_rescan_t = time.perf_counter() + rescan_period if rescan_period else float('inf')
+    rescan_period = (
+        args.openrgb_rescan_interval if args.openrgb_rescan_interval > 0 else 0
+    )
+    next_rescan_t = (
+        time.perf_counter() + rescan_period if rescan_period else float("inf")
+    )
     # Periodic Screencopy recycle: Hyprland's wlr-screencopy implementation
     # locks long-lived clients to whatever frame was current when the
     # session started during fullscreen-mode-2 windows on the output. The
@@ -626,12 +760,17 @@ def main():
     last_recycle = time.perf_counter()
     try:
         while not stop[0]:
-            if (args.capture_recycle > 0 and
-                    time.perf_counter() - last_recycle > args.capture_recycle):
-                try: cap.stop()
-                except Exception as e: log.warning("cap.stop failed: %s", e)
-                cap = Screencopy(output_name=args.output,
-                                 overlay_cursor=1 if args.cursor else 0)
+            if (
+                args.capture_recycle > 0
+                and time.perf_counter() - last_recycle > args.capture_recycle
+            ):
+                try:
+                    cap.stop()
+                except Exception as e:
+                    log.warning("cap.stop failed: %s", e)
+                cap = Screencopy(
+                    output_name=args.output, overlay_cursor=1 if args.cursor else 0
+                )
                 cap.start()
                 last_recycle = time.perf_counter()
             mm, w, h, stride = cap.next_frame()
@@ -644,12 +783,17 @@ def main():
             else:
                 smoothed_zones = []
                 for raw_hex, prev_rgb in zip(raw_zones, prev_zones):
-                    r = int(raw_hex[0:2], 16); g = int(raw_hex[2:4], 16); b = int(raw_hex[4:6], 16)
-                    nr = int(ema*r + (1-ema)*prev_rgb[0])
-                    ng = int(ema*g + (1-ema)*prev_rgb[1])
-                    nb = int(ema*b + (1-ema)*prev_rgb[2])
+                    r = int(raw_hex[0:2], 16)
+                    g = int(raw_hex[2:4], 16)
+                    b = int(raw_hex[4:6], 16)
+                    nr = int(ema * r + (1 - ema) * prev_rgb[0])
+                    ng = int(ema * g + (1 - ema) * prev_rgb[1])
+                    nb = int(ema * b + (1 - ema) * prev_rgb[2])
                     smoothed_zones.append(f"{nr:02x}{ng:02x}{nb:02x}")
-            prev_zones = [(int(c[0:2],16), int(c[2:4],16), int(c[4:6],16)) for c in smoothed_zones]
+            prev_zones = [
+                (int(c[0:2], 16), int(c[2:4], 16), int(c[4:6], 16))
+                for c in smoothed_zones
+            ]
             lg.send_video_sync_data(smoothed_zones, dev)
 
             if orgb is not None:
@@ -670,26 +814,35 @@ def main():
                         push_color = raw_global
                     else:
                         push_color = (
-                            int(ema*raw_global[0] + (1-ema)*prev_global[0]),
-                            int(ema*raw_global[1] + (1-ema)*prev_global[1]),
-                            int(ema*raw_global[2] + (1-ema)*prev_global[2]),
+                            int(ema * raw_global[0] + (1 - ema) * prev_global[0]),
+                            int(ema * raw_global[1] + (1 - ema) * prev_global[1]),
+                            int(ema * raw_global[2] + (1 - ema) * prev_global[2]),
                         )
                     prev_global = push_color
                     perled_specs = orgb.get_perled_info()
                     perled_reverse_set = orgb.get_perled_reverse_set()
-                    raw_perled = sample_perled_zones(mm, w, h, stride, perled_specs,
-                                                     reverse_set=perled_reverse_set)
+                    raw_perled = sample_perled_zones(
+                        mm, w, h, stride, perled_specs, reverse_set=perled_reverse_set
+                    )
                     push_perled = {}
                     for key, raw_colors in raw_perled.items():
                         prev_colors = prev_perled.get(key)
-                        if prev_colors is None or ema >= 1.0 or len(prev_colors) != len(raw_colors):
+                        if (
+                            prev_colors is None
+                            or ema >= 1.0
+                            or len(prev_colors) != len(raw_colors)
+                        ):
                             smoothed = raw_colors
                         else:
                             smoothed = [
-                                (int(ema*r + (1-ema)*pr),
-                                 int(ema*g + (1-ema)*pg),
-                                 int(ema*b + (1-ema)*pb))
-                                for (r,g,b),(pr,pg,pb) in zip(raw_colors, prev_colors)
+                                (
+                                    int(ema * r + (1 - ema) * pr),
+                                    int(ema * g + (1 - ema) * pg),
+                                    int(ema * b + (1 - ema) * pb),
+                                )
+                                for (r, g, b), (pr, pg, pb) in zip(
+                                    raw_colors, prev_colors
+                                )
                             ]
                         push_perled[key] = smoothed
                         prev_perled[key] = smoothed
@@ -697,26 +850,41 @@ def main():
                     next_orgb_t = now + orgb_period
                     frame_idx += 1
                     if args.debug and frame_idx % 20 == 0:
-                        log.debug("pushed rgb=%s (raw=%s) zone0=%s zone16=%s perled_zones=%d",
-                                  push_color, raw_global, smoothed_zones[0], smoothed_zones[16],
-                                  len(push_perled))
+                        log.debug(
+                            "pushed rgb=%s (raw=%s) zone0=%s zone16=%s perled_zones=%d",
+                            push_color,
+                            raw_global,
+                            smoothed_zones[0],
+                            smoothed_zones[16],
+                            len(push_perled),
+                        )
             next_t += period
             sl = next_t - time.perf_counter()
-            if sl > 0: time.sleep(sl)
+            if sl > 0:
+                time.sleep(sl)
             elif sl < -0.25:
                 next_t = time.perf_counter()  # we fell behind; resync
     except Exception as e:
-        log.error("loop crashed: %s", e); raise
+        log.error("loop crashed: %s", e)
+        raise
     finally:
-        try: lg.send_command(lg.control_commands['turn_off'], dev)
-        except Exception: pass
-        try: dev.close()
-        except Exception: pass
-        try: cap.stop()
-        except Exception: pass
-        if orgb is not None: orgb.stop()
+        try:
+            lg.send_command(lg.control_commands["turn_off"], dev)
+        except Exception:
+            pass
+        try:
+            dev.close()
+        except Exception:
+            pass
+        try:
+            cap.stop()
+        except Exception:
+            pass
+        if orgb is not None:
+            orgb.stop()
         log.info("clean exit")
     return 0
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     sys.exit(main())

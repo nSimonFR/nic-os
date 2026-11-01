@@ -223,7 +223,9 @@ def as_date(value):
     if not m:
         return None
     try:
-        return datetime.date(int(m.group(1)[:4]), int(m.group(1)[4:6]), int(m.group(1)[6:8]))
+        return datetime.date(
+            int(m.group(1)[:4]), int(m.group(1)[4:6]), int(m.group(1)[6:8])
+        )
     except ValueError:
         return None
 
@@ -237,9 +239,7 @@ def rrule_end(rrule, start):
     """
     if not rrule:
         return start
-    fields = dict(
-        part.split("=", 1) for part in rrule.split(";") if "=" in part
-    )
+    fields = dict(part.split("=", 1) for part in rrule.split(";") if "=" in part)
     until = fields.get("UNTIL")
     if until:
         return as_date(until)
@@ -376,7 +376,9 @@ def canonical_digest(header, components, indices):
       component blocks are sorted before hashing so only real content counts.
     """
     blocks = sorted(
-        "\r\n".join(l for l in components[i]["logical"] if prop_name(l) not in VOLATILE_PROPS)
+        "\r\n".join(
+            l for l in components[i]["logical"] if prop_name(l) not in VOLATILE_PROPS
+        )
         for i in indices
     )
     head = [l for l in header if prop_name(l) not in VOLATILE_PROPS]

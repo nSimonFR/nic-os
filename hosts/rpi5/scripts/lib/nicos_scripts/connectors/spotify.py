@@ -107,9 +107,7 @@ class Config:
 
 
 def get_access_token(cfg, opener=None):
-    creds = base64.b64encode(
-        f"{cfg.client_id}:{cfg.client_secret}".encode()
-    ).decode()
+    creds = base64.b64encode(f"{cfg.client_id}:{cfg.client_secret}".encode()).decode()
     return post_form(
         "https://accounts.spotify.com/api/token",
         {"grant_type": "refresh_token", "refresh_token": cfg.refresh_token},
@@ -224,7 +222,9 @@ def v1_pending_listens(pending):
             ms = iso_to_ms(p["ended_on"])
         except (KeyError, ValueError):
             continue
-        out.append(listen(p["identifier"], p.get("source_id", p["identifier"]), ms, True))
+        out.append(
+            listen(p["identifier"], p.get("source_id", p["identifier"]), ms, True)
+        )
     return out
 
 
@@ -266,11 +266,20 @@ def _lit(value):
 
 
 def _eq(alias, field, value):
-    return {"type": "comparison", "operator": "eq", "left": _col(alias, field), "right": _lit(value)}
+    return {
+        "type": "comparison",
+        "operator": "eq",
+        "left": _col(alias, field),
+        "right": _lit(value),
+    }
 
 
 def _in(alias, field, values):
-    return {"type": "in", "expr": _col(alias, field), "values": [_lit(v) for v in values]}
+    return {
+        "type": "in",
+        "expr": _col(alias, field),
+        "values": [_lit(v) for v in values],
+    }
 
 
 def _rows(table, alias, where, fields, limit=RYOTQL_CHUNK):
@@ -288,13 +297,22 @@ def _rows(table, alias, where, fields, limit=RYOTQL_CHUNK):
 
 
 def provider_query():
-    return _rows("sandboxProvider", "p", _eq("p", "slug", PROVIDER_SLUG), {"id": _col("p", "id")}, 1)
+    return _rows(
+        "sandboxProvider",
+        "p",
+        _eq("p", "slug", PROVIDER_SLUG),
+        {"id": _col("p", "id")},
+        1,
+    )
 
 
 def tracks_query(track_ids):
     where = {
         "type": "and",
-        "predicates": [_eq("e", "entitySchemaSlug", "music"), _in("e", "externalId", track_ids)],
+        "predicates": [
+            _eq("e", "entitySchemaSlug", "music"),
+            _in("e", "externalId", track_ids),
+        ],
     }
     fields = {
         "id": _col("e", "id"),
@@ -314,7 +332,11 @@ def completes_query(entity_ids, since_ms):
                 "type": "comparison",
                 "operator": "gte",
                 "left": _col("v", "occurredAt"),
-                "right": {"type": "cast", "target": "date", "expr": _lit(ms_to_iso(since_ms))},
+                "right": {
+                    "type": "cast",
+                    "target": "date",
+                    "expr": _lit(ms_to_iso(since_ms)),
+                },
             },
         ],
     }
@@ -322,7 +344,11 @@ def completes_query(entity_ids, since_ms):
         "id": _col("v", "id"),
         "entityId": _col("v", "entityId"),
         "occurredAt": _col("v", "occurredAt"),
-        "consumedOn": {"type": "jsonPath", "expr": _col("v", "properties"), "path": ["consumedOn"]},
+        "consumedOn": {
+            "type": "jsonPath",
+            "expr": _col("v", "properties"),
+            "path": ["consumedOn"],
+        },
     }
     return _rows("event", "v", where, fields)
 
@@ -364,7 +390,9 @@ def existing_completes(client, entity_ids, since_ms):
     out = {}
     ids = sorted(set(entity_ids))
     for i in range(0, len(ids), RYOTQL_CHUNK):
-        rows = client.query_all("c", completes_query(ids[i : i + RYOTQL_CHUNK], since_ms))
+        rows = client.query_all(
+            "c", completes_query(ids[i : i + RYOTQL_CHUNK], since_ms)
+        )
         for row in rows:
             out.setdefault(row["entityId"], []).append(
                 {
@@ -396,7 +424,10 @@ def log_listens(client, listens, entity_map, completes, pushed, log=log):
             continue
         payload = activity_payload(entity_id, lsn)
         result = client.operation(
-            MEDIA, "media-activity-log", payload, idempotency_key=payload["submissionId"]
+            MEDIA,
+            "media-activity-log",
+            payload,
+            idempotency_key=payload["submissionId"],
         )
         if isinstance(result, dict) and result.get("status") == "saved":
             pushed.add(lsn["key"])
@@ -428,13 +459,19 @@ def main(env=None, opener=None, sleep=time.sleep, log=log):
         log(f"FATAL: Spotify API failed: {e}")
         return 1
 
-    listens, retired = new_listens(items, pushed, floor_ms=prev_newest if legacy else None)
+    listens, retired = new_listens(
+        items, pushed, floor_ms=prev_newest if legacy else None
+    )
     pushed.update(retired)
-    listens += [p for p in v1_pending_listens(state.get("pending")) if p["key"] not in pushed]
+    listens += [
+        p for p in v1_pending_listens(state.get("pending")) if p["key"] not in pushed
+    ]
 
     def save():
         newest = max([prev_newest] + [key_ms(k) or 0 for k in pushed])
-        save_json(cfg.cursor_file, {"newest_ms": newest, "pushed": prune_keys(pushed, newest)})
+        save_json(
+            cfg.cursor_file, {"newest_ms": newest, "pushed": prune_keys(pushed, newest)}
+        )
 
     if not listens:
         log("no new listens")
@@ -442,14 +479,18 @@ def main(env=None, opener=None, sleep=time.sleep, log=log):
             save()
         return 0
 
-    client = ryot.Client(cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log)
+    client = ryot.Client(
+        cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log
+    )
     entity_map = load_json(cfg.entity_map_file, {})
     try:
         unresolved = resolve_entities(
             client, [x["track_id"] for x in listens], entity_map, log=log
         )
         save_json(cfg.entity_map_file, entity_map, sort_keys=True)
-        ids = {entity_map[x["track_id"]] for x in listens if x["track_id"] in entity_map}
+        ids = {
+            entity_map[x["track_id"]] for x in listens if x["track_id"] in entity_map
+        }
         completes = existing_completes(client, ids, min(x["ms"] for x in listens))
         written, skipped, failed = log_listens(
             client, listens, entity_map, completes, pushed, log=log

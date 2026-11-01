@@ -32,7 +32,11 @@ buildNpmPackage rec {
   nodejs = nodejs_22;
   # @abandonware/noble + bluetooth-hci-socket native addons need node-gyp
   # (python) and libudev.
-  nativeBuildInputs = [ python3 pkg-config makeWrapper ];
+  nativeBuildInputs = [
+    python3
+    pkg-config
+    makeWrapper
+  ];
   buildInputs = [ systemdLibs ];
   # The app runs straight from TypeScript source via tsx (main = src/index.ts);
   # there is no compiled dist, so skip the `tsc` build.

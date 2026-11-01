@@ -54,7 +54,11 @@ def parse_export(records):
     for r in records:
         uri = r.get("spotify_track_uri") or ""
         ms_played = r.get("ms_played") or 0
-        if not uri.startswith("spotify:track:") or ms_played < MIN_MS_PLAYED or not r.get("ts"):
+        if (
+            not uri.startswith("spotify:track:")
+            or ms_played < MIN_MS_PLAYED
+            or not r.get("ts")
+        ):
             filtered += 1
             continue
         tid = uri.rsplit(":", 1)[1]
@@ -171,7 +175,8 @@ def load_records(paths):
 
 def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
     ap = argparse.ArgumentParser(
-        prog="spotify-backfill", description="Backfill Spotify's extended streaming history into Ryot."
+        prog="spotify-backfill",
+        description="Backfill Spotify's extended streaming history into Ryot.",
     )
     ap.add_argument("files", nargs="+", help="Streaming_History_Audio_*.json")
     ap.add_argument("--apply", action="store_true", help="write (default: dry run)")
@@ -188,11 +193,17 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
         log(f"no plays to backfill ({filtered} filtered, {duplicates} duplicates)")
         return 0
 
-    client = ryot.Client(cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log)
+    client = ryot.Client(
+        cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log
+    )
     entity_map = load_json(cfg.entity_map_file, {})
     try:
         spotify.resolve_entities(
-            client, [p["track_id"] for p in plays], entity_map, import_missing=not dry_run, log=log
+            client,
+            [p["track_id"] for p in plays],
+            entity_map,
+            import_missing=not dry_run,
+            log=log,
         )
         if not dry_run:
             ensure_dir(cfg.state_dir)
@@ -206,7 +217,10 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
         return 1
 
     actions = plan(plays, entity_map, completes)
-    log(("dry run: " if dry_run else "plan: ") + summarize(actions, filtered, duplicates, dry_run))
+    log(
+        ("dry run: " if dry_run else "plan: ")
+        + summarize(actions, filtered, duplicates, dry_run)
+    )
     if dry_run:
         for action, p, ev in [a for a in actions if a[0] == "correct"][:10]:
             log(
@@ -222,9 +236,13 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
             if action == "correct":
                 client.request("PATCH", "/events/" + ev["id"], correction(p))
                 corrected += 1
-        news = [new_event(entity_map[p["track_id"]], p) for a, p, _ in actions if a == "new"]
+        news = [
+            new_event(entity_map[p["track_id"]], p) for a, p, _ in actions if a == "new"
+        ]
         for i in range(0, len(news), EVENT_BATCH):
-            created += create_events(client, news[i : i + EVENT_BATCH], sleep=sleep, log=log)
+            created += create_events(
+                client, news[i : i + EVENT_BATCH], sleep=sleep, log=log
+            )
             log(f"created {created}/{len(news)}")
     except (urllib.error.URLError, RuntimeError, KeyError) as e:
         log(f"FATAL: Ryot failed after {corrected} corrections, {created} new: {e}")

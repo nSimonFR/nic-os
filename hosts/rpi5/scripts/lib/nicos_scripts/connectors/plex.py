@@ -69,7 +69,9 @@ PROVIDERS = {"movie": "movie.tmdb", "show": "show.tmdb", "anime": "anime.anilist
 PLEX_TYPE = {"movie": 1, "episode": 4}
 PLEX_PAGE = 200
 PLEX_TIMEOUT = 60
-FRIBB_URL = "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json"
+FRIBB_URL = (
+    "https://raw.githubusercontent.com/Fribb/anime-lists/master/anime-list-full.json"
+)
 FRIBB_MAX_AGE = 7 * 24 * 3600
 # A view that keeps failing stops holding its library's cursor after this many runs.
 MAX_ATTEMPTS = 5
@@ -86,11 +88,15 @@ class Config:
 
     @classmethod
     def from_env(cls, env=None):
-        raw = env_str("PLEX_SERVERS", "", env) or env_str("PLEX_IMPORT_SERVERS", "", env)
+        raw = env_str("PLEX_SERVERS", "", env) or env_str(
+            "PLEX_IMPORT_SERVERS", "", env
+        )
         return cls(
             servers=parse_servers(raw),
             anime_libraries=frozenset(
-                t.strip() for t in env_str("PLEX_ANIME_LIBRARIES", "Anime", env).split(",") if t.strip()
+                t.strip()
+                for t in env_str("PLEX_ANIME_LIBRARIES", "Anime", env).split(",")
+                if t.strip()
             ),
             ryot_url=env_str("RYOT_URL", DEFAULT_RYOT_URL, env),
             ryot_api_key=env_str("RYOT_API_KEY", "", env),
@@ -120,7 +126,9 @@ def plex_get(server, path, opener=None):
     req = urllib.request.Request(
         url + path, headers={"Accept": "application/json", "X-Plex-Token": token}
     )
-    return http_json(req, timeout=PLEX_TIMEOUT, opener=opener).get("MediaContainer") or {}
+    return (
+        http_json(req, timeout=PLEX_TIMEOUT, opener=opener).get("MediaContainer") or {}
+    )
 
 
 def list_sections(server, opener=None):
@@ -161,15 +169,19 @@ def show_guids(server_no, server, rating_key, cache, opener=None):
     """The show's guids, cached per `<server#>:<ratingKey>` (they do not change)."""
     key = f"{server_no}:{rating_key}"
     if key not in cache:
-        mc = plex_get(server, f"/library/metadata/{rating_key}?includeGuids=1", opener=opener)
+        mc = plex_get(
+            server, f"/library/metadata/{rating_key}?includeGuids=1", opener=opener
+        )
         meta = (mc.get("Metadata") or [{}])[0]
         cache[key] = {"title": meta.get("title", ""), **guids(meta)}
     return cache[key]
 
 
 def finished(item):
-    return bool(item.get("lastViewedAt")) and (item.get("viewCount") or 0) >= 1 and not item.get(
-        "viewOffset"
+    return (
+        bool(item.get("lastViewedAt"))
+        and (item.get("viewCount") or 0) >= 1
+        and not item.get("viewOffset")
     )
 
 
@@ -295,7 +307,9 @@ def map_anime(index, tvdb, tmdb, season, episode):
                 ties += 1
         if best and not ties:
             return best[0], episode - best[1]
-        absolute = absolute_anime(index, tvdb if scheme == "tvdb" else "", tmdb if scheme == "tmdb" else "")
+        absolute = absolute_anime(
+            index, tvdb if scheme == "tvdb" else "", tmdb if scheme == "tmdb" else ""
+        )
         if season == 1 and absolute:
             return absolute, episode
     return None
@@ -314,9 +328,11 @@ def absolute_anime(index, tvdb, tmdb):
 
 
 def ms_to_iso(ms):
-    return datetime.fromtimestamp(ms / 1000, timezone.utc).isoformat(
-        timespec="milliseconds"
-    ).replace("+00:00", "Z")
+    return (
+        datetime.fromtimestamp(ms / 1000, timezone.utc)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z")
+    )
 
 
 def iso_to_s(iso):
@@ -339,7 +355,9 @@ def latest_plex_event_query():
     return ryot.ql_rows(
         "event",
         "v",
-        ryot.ql_cmp("eq", ryot.ql_prop("v", "consumedOn", "text"), ryot.ql_lit(CONSUMED_ON)),
+        ryot.ql_cmp(
+            "eq", ryot.ql_prop("v", "consumedOn", "text"), ryot.ql_lit(CONSUMED_ON)
+        ),
         {"at": ryot.ql_col("v", "occurredAt")},
         limit=1,
         order_by=[{"direction": "desc", "expr": ryot.ql_col("v", "occurredAt")}],
@@ -353,7 +371,10 @@ def entities_query(slug, provider_id, external_ids):
         ryot.ql_in(ryot.ql_col("e", "externalId"), external_ids),
     )
     return ryot.ql_rows(
-        "entity", "e", where, {"id": ryot.ql_col("e", "id"), "externalId": ryot.ql_col("e", "externalId")}
+        "entity",
+        "e",
+        where,
+        {"id": ryot.ql_col("e", "id"), "externalId": ryot.ql_col("e", "externalId")},
     )
 
 
@@ -361,8 +382,16 @@ def show_episodes_query(show_id, seasons):
     """A show's episodes in `seasons`, through show -> season -> episode."""
     col = ryot.ql_col
     joins = [
-        ryot.ql_join("relationship", "se", ryot.ql_cmp("eq", col("se", "targetEntityId"), col("ep", "id"))),
-        ryot.ql_join("relationship", "ss", ryot.ql_cmp("eq", col("ss", "targetEntityId"), col("se", "sourceEntityId"))),
+        ryot.ql_join(
+            "relationship",
+            "se",
+            ryot.ql_cmp("eq", col("se", "targetEntityId"), col("ep", "id")),
+        ),
+        ryot.ql_join(
+            "relationship",
+            "ss",
+            ryot.ql_cmp("eq", col("ss", "targetEntityId"), col("se", "sourceEntityId")),
+        ),
     ]
     where = ryot.ql_and(
         ryot.ql_eq("ss", "sourceEntityId", show_id),
@@ -396,7 +425,11 @@ def events_query(entity_ids, since_ms):
         ryot.ql_cmp(
             "gte",
             ryot.ql_col("v", "occurredAt"),
-            {"type": "cast", "target": "date", "expr": ryot.ql_lit(ms_to_iso(since_ms))},
+            {
+                "type": "cast",
+                "target": "date",
+                "expr": ryot.ql_lit(ms_to_iso(since_ms)),
+            },
         ),
     )
     fields = {
@@ -434,7 +467,9 @@ class Ryot:
 
     def resolve(self, kind, external_ids):
         """Fill entity_map[`kind:ext`] for `external_ids`; returns those still missing."""
-        todo = sorted({x for x in external_ids if x and f"{kind}:{x}" not in self.entity_map})
+        todo = sorted(
+            {x for x in external_ids if x and f"{kind}:{x}" not in self.entity_map}
+        )
         if not todo:
             return []
         provider = self.providers[PROVIDERS[kind]]
@@ -465,13 +500,21 @@ class Ryot:
         tmdb_ids = sorted({v.episode_tmdb for v in views if v.episode_tmdb})
         provider = self.providers[PROVIDERS["show"]]
         for i in range(0, len(tmdb_ids), CHUNK):
-            for row in self.client.query_all("e", episodes_by_tmdb_query(provider, tmdb_ids[i : i + CHUNK])):
-                by_tmdb[row["externalId"]] = (row["id"], int(row["season"]), int(row["episode"]))
+            for row in self.client.query_all(
+                "e", episodes_by_tmdb_query(provider, tmdb_ids[i : i + CHUNK])
+            ):
+                by_tmdb[row["externalId"]] = (
+                    row["id"],
+                    int(row["season"]),
+                    int(row["episode"]),
+                )
         rest = [v for v in views if v.episode_tmdb not in by_tmdb]
         by_number = {}
         if rest:
             seasons = {v.season for v in rest}
-            for row in self.client.query_all("e", show_episodes_query(show_id, seasons)):
+            for row in self.client.query_all(
+                "e", show_episodes_query(show_id, seasons)
+            ):
                 key = (int(row["season"]), int(row["episode"]))
                 by_number[key] = (row["id"], *key)
         for v in views:
@@ -485,7 +528,9 @@ class Ryot:
         out = set()
         ids = sorted(set(entity_ids))
         for i in range(0, len(ids), CHUNK):
-            for row in self.client.query_all("c", events_query(ids[i : i + CHUNK], since_ms)):
+            for row in self.client.query_all(
+                "c", events_query(ids[i : i + CHUNK], since_ms)
+            ):
                 out.add((row["entityId"], iso_to_s(row["occurredAt"])))
         return out
 
@@ -494,7 +539,10 @@ class Ryot:
         payload = activity_payload(view, target)
         try:
             result = self.client.operation(
-                MEDIA, "media-activity-log", payload, idempotency_key=payload["submissionId"]
+                MEDIA,
+                "media-activity-log",
+                payload,
+                idempotency_key=payload["submissionId"],
             )
         except RuntimeError as e:
             # The key already wrote this view, under another mapping.
@@ -510,7 +558,11 @@ def activity_payload(view, target):
     at = ms_to_iso(view.at * 1000)
     when = {"kind": "date", "finishedOn": at}
     if view.kind == "anime":
-        entry = {"kind": "progress", "entityId": target["entity"], "position": view.anime_episode}
+        entry = {
+            "kind": "progress",
+            "entityId": target["entity"],
+            "position": view.anime_episode,
+        }
     elif view.kind == "show":
         entry = {
             "kind": "episodes",
@@ -539,7 +591,9 @@ def collect_views(cfg, cursors, start_at, show_cache, opener=None, log=log):
             since = cursors.get(lib, start_at)
             anime = section["title"] in cfg.anime_libraries
             plex_type = PLEX_TYPE["movie" if section["type"] == "movie" else "episode"]
-            items = viewed_since(server, section["key"], plex_type, since, opener=opener)
+            items = viewed_since(
+                server, section["key"], plex_type, since, opener=opener
+            )
             views = []
             for item in items:
                 if int(item.get("lastViewedAt") or 0) <= since or not finished(item):
@@ -547,12 +601,16 @@ def collect_views(cfg, cursors, start_at, show_cache, opener=None, log=log):
                 if section["type"] == "movie":
                     v = movie_view(n, lib, item)
                 else:
-                    show = show_guids(n, server, item["grandparentRatingKey"], show_cache, opener)
+                    show = show_guids(
+                        n, server, item["grandparentRatingKey"], show_cache, opener
+                    )
                     v = episode_view(n, lib, item, show)
                     if anime:
                         v = replace(v, kind="anime")
                 views.append(v)
-            log(f"{lib} {section['title']!r}: {len(views)} new views since {ms_to_iso(since * 1000)}")
+            log(
+                f"{lib} {section['title']!r}: {len(views)} new views since {ms_to_iso(since * 1000)}"
+            )
             out[lib] = sorted(views, key=lambda v: (v.at, v.rating_key))
     return out
 
@@ -602,7 +660,9 @@ def resolve_targets(rq, views, log=log):
             if hit and hit[2] == 1:
                 v = replace(v, kind="anime", anime_episode=hit[3])
             else:
-                log(f"WARN: no AniList mapping for {v.label}; logging it on the TMDB show")
+                log(
+                    f"WARN: no AniList mapping for {v.label}; logging it on the TMDB show"
+                )
                 v = replace(v, anilist="")
         out.append(v)
     rq.resolve("anime", [v.anilist for v in out if v.kind == "anime"])
@@ -613,7 +673,9 @@ def resolve_targets(rq, views, log=log):
                 show_id, ep = episodes[v.submission_id][:2]
                 targets[v.submission_id] = {"show": show_id, "episode": ep}
             continue
-        entity = rq.entity_map.get(f"{v.kind}:{v.tmdb if v.kind == 'movie' else v.anilist}")
+        entity = rq.entity_map.get(
+            f"{v.kind}:{v.tmdb if v.kind == 'movie' else v.anilist}"
+        )
         if entity:
             targets[v.submission_id] = {"entity": entity}
     return out, targets
@@ -633,7 +695,9 @@ def run(rq, views_by_lib, attempts, dry_run=False, log=log):
     counts = {"logged": 0, "present": 0, "unmapped": 0, "failed": 0, "planned": 0}
     done = set()
     for v in views:
-        if (v.kind in ("movie", "show") and not v.tmdb) or (v.kind == "show" and not v.episode):
+        if (v.kind in ("movie", "show") and not v.tmdb) or (
+            v.kind == "show" and not v.episode
+        ):
             log(f"WARN: {v.label}: no TMDB id in Plex, skipped")
             counts["unmapped"] += 1
             done.add(v.submission_id)
@@ -642,7 +706,11 @@ def run(rq, views_by_lib, attempts, dry_run=False, log=log):
         return counts, done
     todo, targets = resolve_targets(rq, todo, log=log)
     entity_ids = [t.get("episode") or t["entity"] for t in targets.values()]
-    present = rq.event_times(entity_ids, min(v.at for v in todo) * 1000) if entity_ids else set()
+    present = (
+        rq.event_times(entity_ids, min(v.at for v in todo) * 1000)
+        if entity_ids
+        else set()
+    )
     for v in todo:
         target = targets.get(v.submission_id)
         if not target:
@@ -650,14 +718,18 @@ def run(rq, views_by_lib, attempts, dry_run=False, log=log):
                 log(f"would import + log {v.kind} {v.label} @ {ms_to_iso(v.at * 1000)}")
                 counts["planned"] += 1
                 continue
-            log(f"WARN: {v.label}: no Ryot {v.kind} entity (attempt {attempts.get(v.submission_id, 0) + 1})")
+            log(
+                f"WARN: {v.label}: no Ryot {v.kind} entity (attempt {attempts.get(v.submission_id, 0) + 1})"
+            )
             counts["failed"] += 1
             continue
         if (target.get("episode") or target["entity"], v.at) in present:
             counts["present"] += 1
             done.add(v.submission_id)
             continue
-        what = f"anime {v.anilist} ep {v.anime_episode}" if v.kind == "anime" else v.kind
+        what = (
+            f"anime {v.anilist} ep {v.anime_episode}" if v.kind == "anime" else v.kind
+        )
         if dry_run:
             log(f"would log {what}: {v.label} @ {ms_to_iso(v.at * 1000)}")
             counts["planned"] += 1
@@ -668,7 +740,9 @@ def run(rq, views_by_lib, attempts, dry_run=False, log=log):
             done.add(v.submission_id)
             log(f"logged {what}: {v.label} @ {ms_to_iso(v.at * 1000)}")
         elif status == "conflict":
-            log(f"WARN: {v.label} @ {ms_to_iso(v.at * 1000)} was already logged with another target")
+            log(
+                f"WARN: {v.label} @ {ms_to_iso(v.at * 1000)} was already logged with another target"
+            )
             counts["present"] += 1
             done.add(v.submission_id)
         else:
@@ -694,17 +768,25 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, now=time.time, log=
     attempts = state.get("attempts", {})
     show_cache = load_json(cfg.path("plex-shows.json"), {})
     entity_map = load_json(cfg.path("plex-entities.json"), {})
-    client = ryot.Client(cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log)
+    client = ryot.Client(
+        cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log
+    )
     rq = Ryot(client, entity_map, import_missing=not dry_run, log=log)
     try:
         start_at = state.get("start_at")
         if start_at is None:
             start_at = rq.latest_plex_view()
-            log(f"no cursor yet: starting after the newest Plex event in Ryot, {ms_to_iso(start_at * 1000)}")
-        views_by_lib = collect_views(cfg, cursors, start_at, show_cache, opener=opener, log=log)
+            log(
+                f"no cursor yet: starting after the newest Plex event in Ryot, {ms_to_iso(start_at * 1000)}"
+            )
+        views_by_lib = collect_views(
+            cfg, cursors, start_at, show_cache, opener=opener, log=log
+        )
         save_json(cfg.path("plex-shows.json"), show_cache, sort_keys=True)
         loader = lambda: load_anime_index(cfg, now(), opener=opener, log=log)  # noqa: E731
-        views_by_lib = {k: map_anime_views(vs, loader, log=log) for k, vs in views_by_lib.items()}
+        views_by_lib = {
+            k: map_anime_views(vs, loader, log=log) for k, vs in views_by_lib.items()
+        }
         counts, done = run(rq, views_by_lib, attempts, dry_run=dry_run, log=log)
     except (urllib.error.URLError, OSError, RuntimeError, KeyError, ValueError) as e:
         log(f"FATAL: {type(e).__name__}: {e}")
@@ -713,7 +795,10 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, now=time.time, log=
         if not dry_run:
             save_json(cfg.path("plex-entities.json"), entity_map, sort_keys=True)
 
-    log("done: " + ", ".join(f"{n} {k}" for k, n in counts.items() if n or k == "logged"))
+    log(
+        "done: "
+        + ", ".join(f"{n} {k}" for k, n in counts.items() if n or k == "logged")
+    )
     if dry_run:
         return 0
     next_attempts = {}
@@ -723,7 +808,9 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, now=time.time, log=
                 continue
             n = attempts.get(v.submission_id, 0) + 1
             if n >= MAX_ATTEMPTS:
-                log(f"WARN: giving up on {v.label} @ {ms_to_iso(v.at * 1000)} after {n} runs")
+                log(
+                    f"WARN: giving up on {v.label} @ {ms_to_iso(v.at * 1000)} after {n} runs"
+                )
                 done.add(v.submission_id)
             else:
                 next_attempts[v.submission_id] = n

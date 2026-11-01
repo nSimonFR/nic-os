@@ -69,6 +69,7 @@ class Config:
 
 # ── journal ──────────────────────────────────────────────────────────────────
 
+
 def read_entries(cfg, cursor, run):
     """earlyoom's journal entries after `cursor` (the last 3 min on a cold start)."""
     cmd = [cfg.journalctl, "-u", "earlyoom", "-o", "json", "--no-pager"]
@@ -95,23 +96,35 @@ def parse_kills(entries):
             continue
         m = KILL_RE.search(msg)
         if m:
-            kills.append({
-                "ts": int(e.get("__REALTIME_TIMESTAMP", 0)) / 1e6,
-                "signal": m[1],
-                "pid": int(m[2]),
-                "uid": int(m[3]),
-                "name": m[4],
-                "adj": int(m[5]),
-                "rss": int(m[6]),
-            })
+            kills.append(
+                {
+                    "ts": int(e.get("__REALTIME_TIMESTAMP", 0)) / 1e6,
+                    "signal": m[1],
+                    "pid": int(m[2]),
+                    "uid": int(m[3]),
+                    "name": m[4],
+                    "adj": int(m[5]),
+                    "rss": int(m[6]),
+                }
+            )
     return kills, mem
 
 
 def unit_of(cfg, kill, run):
     """(unit, uid of its user manager or None) from the victim's last journal line."""
     until = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(kill["ts"] + 1))
-    out = run([cfg.journalctl, f"_PID={kill['pid']}", f"--until={until}",
-               "-n", "1", "-o", "json", "--no-pager"])
+    out = run(
+        [
+            cfg.journalctl,
+            f"_PID={kill['pid']}",
+            f"--until={until}",
+            "-n",
+            "1",
+            "-o",
+            "json",
+            "--no-pager",
+        ]
+    )
     for line in out.splitlines()[-1:]:
         try:
             e = json.loads(line)
@@ -137,6 +150,7 @@ def is_active(cfg, unit, user_uid, run, user_name):
 
 
 # ── memory snapshot ──────────────────────────────────────────────────────────
+
 
 def unit_from_cgroup(text):
     path = text.strip().split("::", 1)[-1] if text else ""
@@ -177,6 +191,7 @@ def top_units(proc, listdir=os.listdir):
 
 # ── episode ──────────────────────────────────────────────────────────────────
 
+
 def add_kills(episode, kills):
     """Append kills, folding a SIGKILL that follows a SIGTERM on the same pid."""
     seen = {k["pid"] for k in episode["kills"]}
@@ -214,13 +229,22 @@ def pings_due(cfg, episode):
     for k in episode["kills"]:
         key = f"down:{k['pid']}"
         if k.get("status") == "down" and key not in sent:
-            out.append((key, f"🔴 <code>{esc(k['unit'])}</code> still down "
-                             f"{cfg.grace_sec // 60} min after earlyoom killed "
-                             f"<code>{esc(k['name'])}</code>"))
+            out.append(
+                (
+                    key,
+                    f"🔴 <code>{esc(k['unit'])}</code> still down "
+                    f"{cfg.grace_sec // 60} min after earlyoom killed "
+                    f"<code>{esc(k['name'])}</code>",
+                )
+            )
     real = [k for k in episode["kills"] if not is_expendable(k)]
     if len(real) >= STORM_KILLS and "storm" not in sent:
-        out.append(("storm", f"🔴 earlyoom storm: {len(real)} kills since "
-                             f"{hhmm(episode['start'])}"))
+        out.append(
+            (
+                "storm",
+                f"🔴 earlyoom storm: {len(real)} kills since {hhmm(episode['start'])}",
+            )
+        )
     return out
 
 
@@ -229,6 +253,7 @@ def is_over(cfg, episode, now):
 
 
 # ── rendering ────────────────────────────────────────────────────────────────
+
 
 def esc(s):
     return html.escape(str(s), quote=False)
@@ -243,8 +268,10 @@ STATUS = {"back": " ↻ back", "pending": " … restarting", "down": " ✗ still
 
 def kill_line(k):
     unit = f" · {esc(k['unit'])}" if k.get("unit") else ""
-    return (f"{hhmm(k['ts'])}  <code>{esc(k['name'])}</code> {k['rss']} MiB"
-            f"{unit}{STATUS.get(k.get('status'), '')}")
+    return (
+        f"{hhmm(k['ts'])}  <code>{esc(k['name'])}</code> {k['rss']} MiB"
+        f"{unit}{STATUS.get(k.get('status'), '')}"
+    )
 
 
 def render(episode, now, over):
@@ -259,15 +286,20 @@ def render(episode, now, over):
             n, rss = spare.get(k["name"], (0, 0))
             spare[k["name"]] = (n + 1, rss + k["rss"])
     for name, (n, rss) in sorted(spare.items()):
-        lines.append(f"<code>{esc(name)}</code> ×{n}, {rss} MiB "
-                     f"(oom_score_adj {EXPENDABLE_ADJ}, killed first)")
+        lines.append(
+            f"<code>{esc(name)}</code> ×{n}, {rss} MiB "
+            f"(oom_score_adj {EXPENDABLE_ADJ}, killed first)"
+        )
     mem = episode.get("mem")
     if mem:
-        lines.append(f"\nmem avail at last kill: {mem['avail']} of {mem['total']} MiB "
-                     f"({mem['pct']:.1f}%)")
+        lines.append(
+            f"\nmem avail at last kill: {mem['avail']} of {mem['total']} MiB "
+            f"({mem['pct']:.1f}%)"
+        )
     if episode.get("top"):
-        top = " · ".join(f"{esc(u.removesuffix('.service'))} {mib}"
-                         for u, mib in episode["top"])
+        top = " · ".join(
+            f"{esc(u.removesuffix('.service'))} {mib}" for u, mib in episode["top"]
+        )
         lines.append(f"top memory (MiB) at {hhmm(episode['top_at'])}: {top}")
     n = len(episode["kills"])
     span = max(1, round((episode["last_kill"] - episode["start"]) / 60))
@@ -281,6 +313,7 @@ def render(episode, now, over):
 
 # ── telegram ─────────────────────────────────────────────────────────────────
 
+
 class Telegram:
     def __init__(self, token, chat_id, opener=None, log=print):
         self.api = f"https://api.telegram.org/bot{token}"
@@ -289,8 +322,12 @@ class Telegram:
         self.log = log
 
     def call(self, method, **fields):
-        fields = {"chat_id": self.chat_id, "parse_mode": "HTML",
-                  "disable_web_page_preview": "true", **fields}
+        fields = {
+            "chat_id": self.chat_id,
+            "parse_mode": "HTML",
+            "disable_web_page_preview": "true",
+            **fields,
+        }
         try:
             return post_form(f"{self.api}/{method}", fields, opener=self.opener)
         except Exception as e:  # noqa: BLE001 — a failed send must not lose state
@@ -303,7 +340,9 @@ class Telegram:
             fields["disable_notification"] = "true"
         if reply_to:
             fields["reply_parameters"] = json.dumps({"message_id": reply_to})
-        return (self.call("sendMessage", **fields).get("result") or {}).get("message_id")
+        return (self.call("sendMessage", **fields).get("result") or {}).get(
+            "message_id"
+        )
 
     def edit(self, mid, text):
         return bool(self.call("editMessageText", message_id=mid, text=text).get("ok"))
@@ -324,6 +363,7 @@ class LogOnly:
 
 # ── main loop ────────────────────────────────────────────────────────────────
 
+
 def tick(cfg, state, now, run, tg, snapshot, user_name, log):
     """One timer run: fold new kills into the episode, update the message."""
     entries = read_entries(cfg, state.get("cursor"), run)
@@ -333,8 +373,12 @@ def tick(cfg, state, now, run, tg, snapshot, user_name, log):
 
     episode = state.get("episode")
     if kills and episode is None:
-        episode = state["episode"] = {"start": kills[0]["ts"], "last_kill": kills[0]["ts"],
-                                      "kills": [], "pinged": []}
+        episode = state["episode"] = {
+            "start": kills[0]["ts"],
+            "last_kill": kills[0]["ts"],
+            "kills": [],
+            "pinged": [],
+        }
     if episode is None:
         return state
 
@@ -347,8 +391,9 @@ def tick(cfg, state, now, run, tg, snapshot, user_name, log):
         episode["top"], episode["top_at"] = snapshot(), now
         log(f"{len(added)} kill(s): " + ", ".join(k["name"] for k in added))
 
-    refresh_status(cfg, episode, now,
-                   lambda unit, uid: is_active(cfg, unit, uid, run, user_name))
+    refresh_status(
+        cfg, episode, now, lambda unit, uid: is_active(cfg, unit, uid, run, user_name)
+    )
     over = is_over(cfg, episode, now)
     text = render(episode, now, over)
 
@@ -377,8 +422,11 @@ def main(argv=None, env=None, run=None, opener=None, now=None, log=None):
     cfg = Config.from_env(env)
     log = log or logger(TAG)
     if run is None:
+
         def run(cmd):
-            return subprocess.run(cmd, capture_output=True, text=True, check=False).stdout
+            return subprocess.run(
+                cmd, capture_output=True, text=True, check=False
+            ).stdout
 
     def user_name(uid):
         try:
@@ -394,8 +442,15 @@ def main(argv=None, env=None, run=None, opener=None, now=None, log=None):
 
     path = os.path.join(cfg.state_dir, "state.json")
     state = load_json(path, {})
-    state = tick(cfg, state, now or time.time(), run, tg,
-                 lambda: top_units(cfg.proc), user_name, log)
+    state = tick(
+        cfg,
+        state,
+        now or time.time(),
+        run,
+        tg,
+        lambda: top_units(cfg.proc),
+        user_name,
+        log,
+    )
     save_json(path, state)
     return 0
-

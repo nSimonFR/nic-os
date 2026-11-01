@@ -79,7 +79,10 @@ let
     vendorHash = "sha256-WPOJe+v/gVJX/Q8Rm7Jtd6EB0rW5Wc0CoCA8dbj0US0=";
     nativeBuildInputs = [ gcc ];
     env.CGO_ENABLED = "1";
-    ldflags = [ "-X" "backend/version.Version=${version}" ];
+    ldflags = [
+      "-X"
+      "backend/version.Version=${version}"
+    ];
 
     # Both edits are required for the import to finish on the rpi5.
     #
@@ -107,11 +110,19 @@ let
   };
 
   # ── Frontend node_modules via fixed-output derivations (npm, see header) ───
-  mkNpmModules = { name, npmArgs, outputHash }:
+  mkNpmModules =
+    {
+      name,
+      npmArgs,
+      outputHash,
+    }:
     stdenvNoCC.mkDerivation {
       name = "showmycards-frontend-${name}-${version}";
       inherit src;
-      nativeBuildInputs = [ nodejs_22 cacert ];
+      nativeBuildInputs = [
+        nodejs_22
+        cacert
+      ];
       dontUnpack = true;
       dontConfigure = true;
       dontFixup = true;
@@ -168,11 +179,12 @@ let
   };
 
   hashes =
-    depsHashes.${stdenv.hostPlatform.system} or (throw
-      "showmycards: no frontend npm dependency hashes recorded for ${stdenv.hostPlatform.system}. "
+    depsHashes.${stdenv.hostPlatform.system} or (
+      throw "showmycards: no frontend npm dependency hashes recorded for ${stdenv.hostPlatform.system}. "
       + "`npm install` resolves arch-specific optional deps, so the hash is per-system: "
       + "set both to lib.fakeHash, build on that platform, and add the reported `got:` "
-      + "hashes as a new depsHashes.${stdenv.hostPlatform.system} entry.");
+      + "hashes as a new depsHashes.${stdenv.hostPlatform.system} entry."
+    );
 
   # Full tree (dev + prod) used to run `vite build`.
   depsBuild = mkNpmModules {
@@ -194,7 +206,10 @@ stdenv.mkDerivation {
   inherit pname version;
   dontUnpack = true;
 
-  nativeBuildInputs = [ nodejs_22 makeWrapper ];
+  nativeBuildInputs = [
+    nodejs_22
+    makeWrapper
+  ];
 
   buildPhase = ''
     runHook preBuild

@@ -1,4 +1,11 @@
-{ config, lib, pkgs, unstablePkgs, username, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  unstablePkgs,
+  username,
+  ...
+}:
 # Hydroxide — third-party ProtonMail bridge exposing IMAP / SMTP / CardDAV.
 #
 # Pulled from nixpkgs-unstable for v0.2.31, which includes the
@@ -23,19 +30,19 @@
 # Mail clients log in with the bridge password (NOT the Proton account
 # password). Plaintext on tailnet is fine — tailnet is encrypted.
 let
-  smtpPort    = 1025;
-  imapPort    = 1143;
-  carddavPort = 8083;  # default 8080 collides with nginx/firefly
+  smtpPort = 1025;
+  imapPort = 1143;
+  carddavPort = 8083; # default 8080 collides with nginx/firefly
 
   hydroxide = unstablePkgs.hydroxide;
 in
 {
-  users.users.hydroxide  = {
+  users.users.hydroxide = {
     isSystemUser = true;
     group = "hydroxide";
-    home  = "/var/lib/hydroxide";
+    home = "/var/lib/hydroxide";
   };
-  users.groups.hydroxide = {};
+  users.groups.hydroxide = { };
 
   # The Hermes agent runs as ${username} and shells out to himalaya, which reads
   # the bridge password at invocation time. Group membership grants read on the
@@ -49,29 +56,35 @@ in
 
   systemd.services.hydroxide = {
     description = "Hydroxide ProtonMail bridge";
-    wantedBy    = [ "multi-user.target" ];
-    after       = [ "network-online.target" ];
-    wants       = [ "network-online.target" ];
+    wantedBy = [ "multi-user.target" ];
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
 
     environment.XDG_CONFIG_HOME = "/var/lib/hydroxide/.config";
 
     serviceConfig = {
       ExecStart = lib.concatStringsSep " " [
         "${hydroxide}/bin/hydroxide"
-        "-smtp-host"    "0.0.0.0"
-        "-smtp-port"    (toString smtpPort)
-        "-imap-host"    "0.0.0.0"
-        "-imap-port"    (toString imapPort)
-        "-carddav-host" "127.0.0.1"
-        "-carddav-port" (toString carddavPort)
+        "-smtp-host"
+        "0.0.0.0"
+        "-smtp-port"
+        (toString smtpPort)
+        "-imap-host"
+        "0.0.0.0"
+        "-imap-port"
+        (toString imapPort)
+        "-carddav-host"
+        "127.0.0.1"
+        "-carddav-port"
+        (toString carddavPort)
         "serve"
       ];
-      User           = "hydroxide";
-      Group          = "hydroxide";
-      Restart        = "on-failure";
-      RestartSec     = "10";
+      User = "hydroxide";
+      Group = "hydroxide";
+      Restart = "on-failure";
+      RestartSec = "10";
       ReadWritePaths = [ "/var/lib/hydroxide" ];
-      LimitNOFILE    = 65536;
+      LimitNOFILE = 65536;
     };
   };
 
@@ -82,7 +95,7 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.hydroxide = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote =
       "the only state is the Proton bridge auth under /var/lib/hydroxide/.config "
       + "(0700), which is re-obtained by re-running `hydroxide auth` — see the "
@@ -93,13 +106,13 @@ in
       # Moved 8443 → 8083 (matching its backend port) to free the 8443 funnel
       # slot; AFFiNE took it, since it needs a root origin. Devices using
       # …:8443/.well-known/carddav must update to :8083.
-      order   = 320;
-      port    = 8083;
+      order = 320;
+      port = 8083;
       backend = "http://127.0.0.1:8083";
       tile = {
-        name        = "Hydroxide";
-        icon        = "mdi-email-outline";
-        category    = "Backend";
+        name = "Hydroxide";
+        icon = "mdi-email-outline";
+        category = "Backend";
         description = "ProtonMail bridge (SMTP + CardDAV)";
       };
     };

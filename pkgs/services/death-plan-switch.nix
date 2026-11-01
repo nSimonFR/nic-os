@@ -8,7 +8,13 @@
 # vault-access.patch adds a {vault_access} placeholder, filled at send time by
 # `vaultHook access <contact-id>` (dps-ea-bridge); without a hook it says the
 # details follow separately.
-{ lib, stdenvNoCC, fetchFromGitHub, dataDir ? "/var/lib/death-plan-switch", vaultHook ? null }:
+{
+  lib,
+  stdenvNoCC,
+  fetchFromGitHub,
+  dataDir ? "/var/lib/death-plan-switch",
+  vaultHook ? null,
+}:
 stdenvNoCC.mkDerivation rec {
   pname = "death-plan-switch";
   version = "1.0.0-unstable-2026-10-20";

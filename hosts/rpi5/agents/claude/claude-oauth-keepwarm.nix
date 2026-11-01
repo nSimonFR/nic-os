@@ -53,9 +53,7 @@ let
     done
 
     if [ -z "$token" ]; then
-      echo "no live accessToken in any candidate store: ${
-        pkgs.lib.concatStringsSep ", " credentialsFiles
-      }" >&2
+      echo "no live accessToken in any candidate store: ${pkgs.lib.concatStringsSep ", " credentialsFiles}" >&2
       exit 1
     fi
     echo "token resolved from $src (expiresAt=$best_exp)" >&2
@@ -90,7 +88,8 @@ in
         Environment = [
           "HOME=/home/${username}"
           "PATH=/etc/profiles/per-user/${username}/bin:/run/current-system/sw/bin:/usr/bin:/bin"
-        ] ++ (if configDir == null then [ ] else [ "CLAUDE_CONFIG_DIR=${configDir}" ]);
+        ]
+        ++ (if configDir == null then [ ] else [ "CLAUDE_CONFIG_DIR=${configDir}" ]);
       };
     };
 

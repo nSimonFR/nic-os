@@ -90,6 +90,7 @@ def new_password(rand=secrets.choice):
 
 # ── Vaultwarden API ──────────────────────────────────────────────────────────
 
+
 class Vault:
     def __init__(self, cfg, opener=None, device=(DEVICE_ID, TAG)):
         self.cfg = cfg
@@ -104,8 +105,9 @@ class Vault:
             data = json.dumps(payload).encode()
         if token:
             headers["Authorization"] = f"Bearer {token}"
-        req = urllib.request.Request(self.cfg.vault_url + path, data=data,
-                                     headers=headers, method=method)
+        req = urllib.request.Request(
+            self.cfg.vault_url + path, data=data, headers=headers, method=method
+        )
         try:
             return http_json(req, timeout=60, opener=self.opener)
         except urllib.error.HTTPError as e:
@@ -113,8 +115,12 @@ class Vault:
 
     def prelogin(self, email):
         r = self._call("POST", "/identity/accounts/prelogin", payload={"email": email})
-        return {"type": r["kdf"], "iterations": r["kdfIterations"],
-                "memory": r.get("kdfMemory"), "parallelism": r.get("kdfParallelism")}
+        return {
+            "type": r["kdf"],
+            "iterations": r["kdfIterations"],
+            "memory": r.get("kdfMemory"),
+            "parallelism": r.get("kdfParallelism"),
+        }
 
     def login(self, email, password):
         """A Session, with the user key already unwrapped (proves the crypto)."""
@@ -122,16 +128,21 @@ class Vault:
         mkey = bwcrypto.master_key(password, email, kdf)
         phash = bwcrypto.password_hash(mkey, password)
         try:
-            r = post_form(self.cfg.vault_url + "/identity/connect/token", {
-                "grant_type": "password",
-                "username": email,
-                "password": phash,
-                "scope": "api offline_access",
-                "client_id": "cli",
-                "device_identifier": self.device[0],
-                "device_name": self.device[1],
-                "device_type": DEVICE_TYPE_LINUX_CLI,
-            }, timeout=60, opener=self.opener)
+            r = post_form(
+                self.cfg.vault_url + "/identity/connect/token",
+                {
+                    "grant_type": "password",
+                    "username": email,
+                    "password": phash,
+                    "scope": "api offline_access",
+                    "client_id": "cli",
+                    "device_identifier": self.device[0],
+                    "device_name": self.device[1],
+                    "device_type": DEVICE_TYPE_LINUX_CLI,
+                },
+                timeout=60,
+                opener=self.opener,
+            )
         except urllib.error.HTTPError as e:
             raise VaultError(f"login as {email}: HTTP {e.code}") from None
         user_key = bwcrypto.decrypt(r["Key"], *bwcrypto.stretch(mkey))
@@ -146,10 +157,14 @@ class Session:
         self.phash, self.token, self.user_key = phash, token, user_key
 
     def granted(self):
-        return self.vault._call("GET", "/api/emergency-access/granted", self.token)["data"]
+        return self.vault._call("GET", "/api/emergency-access/granted", self.token)[
+            "data"
+        ]
 
     def initiate(self, ea_id):
-        return self.vault._call("POST", f"/api/emergency-access/{ea_id}/initiate", self.token)
+        return self.vault._call(
+            "POST", f"/api/emergency-access/{ea_id}/initiate", self.token
+        )
 
     def devices(self):
         return self.vault._call("GET", "/api/devices", self.token)["data"]
@@ -159,12 +174,17 @@ class Session:
 
     def change_password(self, new):
         mkey = bwcrypto.master_key(new, self.email, self.kdf)
-        self.vault._call("POST", "/api/accounts/password", self.token, {
-            "masterPasswordHash": self.phash,
-            "newMasterPasswordHash": bwcrypto.password_hash(mkey, new),
-            "masterPasswordHint": None,
-            "key": bwcrypto.encrypt(self.user_key, *bwcrypto.stretch(mkey)),
-        })
+        self.vault._call(
+            "POST",
+            "/api/accounts/password",
+            self.token,
+            {
+                "masterPasswordHash": self.phash,
+                "newMasterPasswordHash": bwcrypto.password_hash(mkey, new),
+                "masterPasswordHint": None,
+                "key": bwcrypto.encrypt(self.user_key, *bwcrypto.stretch(mkey)),
+            },
+        )
 
 
 def find_grant(session, grantor):
@@ -175,6 +195,7 @@ def find_grant(session, grantor):
 
 
 # ── state ────────────────────────────────────────────────────────────────────
+
 
 def load_state(cfg):
     return load_json(cfg.state_path, {"password": None, "pending": None, "fire": None})
@@ -209,6 +230,7 @@ def rotate(vault, cfg, state, save, gen=new_password):
 
 
 # ── mail ─────────────────────────────────────────────────────────────────────
+
 
 def smtp_sender(smtp):
     """`send(to, subject, body)` over the switch's own SMTP settings."""
@@ -269,13 +291,16 @@ Only share this password with the other people {owner} trusted.
 
 def access_block(cfg, password, opens_at, tz):
     when = datetime.fromtimestamp(opens_at, ZoneInfo(tz)).strftime("%d/%m/%Y %H:%M")
-    return (f"{cfg.public_url}\n"
-            f"Identifiant / Login : {cfg.grantee}\n"
-            f"Mot de passe / Password : {password}\n"
-            f"Ouverture / Opens : {when} ({tz})")
+    return (
+        f"{cfg.public_url}\n"
+        f"Identifiant / Login : {cfg.grantee}\n"
+        f"Mot de passe / Password : {password}\n"
+        f"Ouverture / Opens : {when} ({tz})"
+    )
 
 
 # ── commands ─────────────────────────────────────────────────────────────────
+
 
 def read_cycle(cfg):
     switch = load_json(os.path.join(cfg.switch_dir, "state.json"), None)
@@ -293,20 +318,29 @@ def prepare(cfg, vault, state, cycle, log, save, now=time.time):
     """Request access and rotate, once per firing. None in dry run."""
     fire = state.get("fire")
     if fire is None or fire.get("fired_at") != cycle.get("fired_at"):
-        fire = {"fired_at": cycle.get("fired_at"), "opens_at": None,
-                "rotated": False, "inline": [], "mailed": []}
+        fire = {
+            "fired_at": cycle.get("fired_at"),
+            "opens_at": None,
+            "rotated": False,
+            "inline": [],
+            "mailed": [],
+        }
         state["fire"] = fire
 
     if fire["opens_at"] is None:
         session = login_any(vault, cfg, state, save)
         ea = find_grant(session, cfg.grantor)
         if ea["status"] == EA_CONFIRMED:
-            log(f"switch fired: requesting Emergency Access ({ea['waitTimeDays']}-day wait)")
+            log(
+                f"switch fired: requesting Emergency Access ({ea['waitTimeDays']}-day wait)"
+            )
             if cfg.dry_run:
                 return None
             session.initiate(ea["id"])
         elif ea["status"] not in (EA_INITIATED, EA_APPROVED):
-            raise VaultError(f"Emergency Access is in status {ea['status']}, cannot request it")
+            raise VaultError(
+                f"Emergency Access is in status {ea['status']}, cannot request it"
+            )
         fire["opens_at"] = int(now()) + int(ea["waitTimeDays"]) * 86400
         save(state)
 
@@ -328,7 +362,9 @@ def run(cfg, vault, send, log, save, now=time.time):
     if cycle.get("stage") != "fired":
         if state.get("fire") is None:
             return 0
-        log("the switch was reset after a firing: rotating the password the contacts got")
+        log(
+            "the switch was reset after a firing: rotating the password the contacts got"
+        )
         if not cfg.dry_run:
             rotate(vault, cfg, state, save)
             state["fire"] = None
@@ -341,13 +377,18 @@ def run(cfg, vault, send, log, save, now=time.time):
 
     # Contacts whose switch message carried {vault_access} already have it.
     owner, tz = switch_config(cfg)
-    contacts = load_json(os.path.join(cfg.switch_dir, "contacts.json"), {}).get("contacts", [])
+    contacts = load_json(os.path.join(cfg.switch_dir, "contacts.json"), {}).get(
+        "contacts", []
+    )
     for c in contacts:
         if c.get("id") not in (cycle.get("notified") or {}):
             continue
         if c["id"] in fire["inline"] or c["id"] in fire["mailed"]:
             continue
-        send(c["email"], *access_mail(c, owner, cfg, state["password"], fire["opens_at"], tz))
+        send(
+            c["email"],
+            *access_mail(c, owner, cfg, state["password"], fire["opens_at"], tz),
+        )
         fire["mailed"].append(c["id"])
         save(state)
         log(f"sent the vault access to {c.get('name')}")
@@ -385,10 +426,16 @@ def check(cfg, vault, log, save):
         return []
     problems = []
     if ea["status"] != EA_CONFIRMED:
-        problems.append(f"Emergency Access is in status {ea['status']}, expected {EA_CONFIRMED} (confirmed)")
-    others = [d.get("name") for d in session.devices() if d.get("identifier") != DEVICE_ID]
+        problems.append(
+            f"Emergency Access is in status {ea['status']}, expected {EA_CONFIRMED} (confirmed)"
+        )
+    others = [
+        d.get("name") for d in session.devices() if d.get("identifier") != DEVICE_ID
+    ]
     if others:
-        problems.append(f"{cfg.grantee} was logged in from other devices: {', '.join(map(str, others))}")
+        problems.append(
+            f"{cfg.grantee} was logged in from other devices: {', '.join(map(str, others))}"
+        )
     if session.ciphers():
         problems.append(f"{cfg.grantee} has items in its own vault")
     return problems
@@ -436,7 +483,9 @@ def main(argv=None, env=None, opener=None, send=None, log=None, stdin=None, out=
 def dispatch(cmd, argv, cfg, vault, send, log, save, stdin, out):
     if cmd == "run":
         if send is None:
-            smtp = load_json(os.path.join(cfg.switch_dir, "config.json"), {}).get("smtp")
+            smtp = load_json(os.path.join(cfg.switch_dir, "config.json"), {}).get(
+                "smtp"
+            )
             if not smtp:
                 raise VaultError("no SMTP settings in the switch config")
             send = smtp_sender(smtp)
@@ -452,5 +501,7 @@ def dispatch(cmd, argv, cfg, vault, send, log, save, stdin, out):
         return 1 if problems else 0
     if cmd == "seed":
         return seed(cfg, vault, log, save, (stdin or sys.stdin).readline().strip())
-    log(f"unknown command {' '.join(argv)!r}; expected run, access <contact-id>, check or seed")
+    log(
+        f"unknown command {' '.join(argv)!r}; expected run, access <contact-id>, check or seed"
+    )
     return 2

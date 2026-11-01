@@ -87,12 +87,18 @@ def tag_schema(tagnames):
     return {
         "type": "object",
         "properties": {
-            "existingTags": {"type": "array", "items": {"type": "string", "enum": tagnames}},
-            "newTags": {"type": "array", "items": {
-                "type": "object",
-                "properties": {"name": {"type": "string"}},
-                "required": ["name"],
-            }},
+            "existingTags": {
+                "type": "array",
+                "items": {"type": "string", "enum": tagnames},
+            },
+            "newTags": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {"name": {"type": "string"}},
+                    "required": ["name"],
+                },
+            },
             **DATE_FIELD,
         },
         "required": ["existingTags", "newTags", "documentDate"],
@@ -120,19 +126,26 @@ def system_prompt(tagnames, max_tags=MAX_TAGS):
 
 
 def _chat(cfg, sysp, name, content, schema_name, schema, temperature, opener=None):
-    body = json.dumps({
-        "model": cfg.model,
-        "temperature": temperature,
-        "response_format": {"type": "json_schema", "json_schema": {
-            "name": schema_name, "strict": True, "schema": schema}},
-        "messages": [
-            {"role": "system", "content": sysp},
-            {"role": "user",
-             "content": f"Nom: {name}\n\nContenu:\n{(content or '')[:cfg.cap]}"},
-        ],
-    }).encode()
+    body = json.dumps(
+        {
+            "model": cfg.model,
+            "temperature": temperature,
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": True, "schema": schema},
+            },
+            "messages": [
+                {"role": "system", "content": sysp},
+                {
+                    "role": "user",
+                    "content": f"Nom: {name}\n\nContenu:\n{(content or '')[: cfg.cap]}",
+                },
+            ],
+        }
+    ).encode()
     req = urllib.request.Request(
-        cfg.gate, data=body, headers={"Content-Type": "application/json"})
+        cfg.gate, data=body, headers={"Content-Type": "application/json"}
+    )
     with (opener or urllib.request.urlopen)(req, timeout=cfg.timeout) as r:
         return json.loads(json.load(r)["choices"][0]["message"]["content"])
 
@@ -155,14 +168,17 @@ _S = r"[-_/.]"
 # Most specific first; compact forms before separated ones, which would mis-split
 # them. Digit lookarounds rather than \b: "_" is a word char, so \b never fires
 # against Papra's "__<N>" import suffix ("…LMDE 2018__4.pdf").
-DATE_RES = [re.compile(p) for p in (
-    rf"(?<!\d){_Y}{_M}{_D}(?!\d)",
-    rf"{_Y}{_S}{_M}{_S}{_D}(?!\d)",
-    rf"(?<!\d){_D}{_S}{_M}{_S}{_Y}(?!\d)",
-    rf"(?<!\d){_Y}{_M}(?!\d)",
-    rf"{_Y}{_S}{_M}(?!\d)",
-    rf"(?<!\d){_Y}(?!\d)",
-)]
+DATE_RES = [
+    re.compile(p)
+    for p in (
+        rf"(?<!\d){_Y}{_M}{_D}(?!\d)",
+        rf"{_Y}{_S}{_M}{_S}{_D}(?!\d)",
+        rf"(?<!\d){_D}{_S}{_M}{_S}{_Y}(?!\d)",
+        rf"(?<!\d){_Y}{_M}(?!\d)",
+        rf"{_Y}{_S}{_M}(?!\d)",
+        rf"(?<!\d){_Y}(?!\d)",
+    )
+]
 
 
 def to_epoch_ms(y, m, d, max_year=None):
@@ -180,8 +196,9 @@ def filename_date(name, max_year=None):
         # First VALID match: "Passeport - 2028.08.07" leads with an expiry year.
         for m in rx.finditer(name or ""):
             g = m.groupdict()
-            ts = to_epoch_ms(int(g["y"]), int(g.get("m") or 1), int(g.get("d") or 1),
-                             max_year)
+            ts = to_epoch_ms(
+                int(g["y"]), int(g.get("m") or 1), int(g.get("d") or 1), max_year
+            )
             if ts is not None:
                 return ts
     return None
@@ -195,7 +212,8 @@ def parse_iso(s, max_year=None):
 def set_date(cur, doc_id, ts):
     cur.execute(
         "UPDATE documents SET document_date=? WHERE id=? AND document_date IS NULL",
-        (ts, doc_id))
+        (ts, doc_id),
+    )
 
 
 def backfill_filename_dates(con):
@@ -203,7 +221,8 @@ def backfill_filename_dates(con):
     cur = con.cursor()
     rows = cur.execute(
         "SELECT id, name, original_name FROM documents "
-        "WHERE deleted_at IS NULL AND document_date IS NULL").fetchall()
+        "WHERE deleted_at IS NULL AND document_date IS NULL"
+    ).fetchall()
     n = 0
     for doc_id, name, original in rows:
         ts = filename_date(name) or filename_date(original)
@@ -224,7 +243,8 @@ def backfill_gate_dates(cfg, con, tried, ask_fn=None):
     rows = cur.execute(
         "SELECT id, name, content FROM documents "
         "WHERE deleted_at IS NULL AND document_date IS NULL "
-        "ORDER BY length(content) ASC").fetchall()
+        "ORDER BY length(content) ASC"
+    ).fetchall()
     n = asked = 0
     for doc_id, name, content in rows:
         if doc_id in tried:
@@ -261,7 +281,9 @@ def untagged_docs(cur, org):
     return cur.execute(
         "SELECT id,name,content FROM documents d WHERE d.organization_id=? AND d.deleted_at IS NULL "
         "AND NOT EXISTS(SELECT 1 FROM documents_tags dt WHERE dt.document_id=d.id) "
-        "ORDER BY length(content) ASC", (org,)).fetchall()
+        "ORDER BY length(content) ASC",
+        (org,),
+    ).fetchall()
 
 
 def apply_tags(cur, org, doc_id, data, tagmap, tagnames, now_ms, rand=None):
@@ -286,14 +308,16 @@ def apply_tags(cur, org, doc_id, data, tagmap, tagnames, now_ms, rand=None):
             cur.execute(
                 "INSERT INTO tags(id,created_at,updated_at,organization_id,name,color,description,normalized_name)"
                 " VALUES(?,?,?,?,?,?,?,?)",
-                (t, now_ms, now_ms, org, nm, "#CCCCCC", None, norm))
+                (t, now_ms, now_ms, org, nm, "#CCCCCC", None, norm),
+            )
             tagmap[norm] = t
             tagnames.append(nm)
         ids.append(t)
     for t in dict.fromkeys(ids):
         cur.execute(
             "INSERT OR IGNORE INTO documents_tags(document_id,tag_id) VALUES(?,?)",
-            (doc_id, t))
+            (doc_id, t),
+        )
     return list(dict.fromkeys(ids))
 
 
@@ -308,8 +332,12 @@ def sweep(cfg, con, ask_fn=None, now=None, rand=None, tried=None):
     ask_fn = ask_fn or (lambda *a: ask(cfg, *a))
     now_ms = now if now is not None else int(time.time() * 1000)
     cur = con.cursor()
-    orgs = [r[0] for r in cur.execute(
-        "SELECT DISTINCT organization_id FROM documents WHERE deleted_at IS NULL")]
+    orgs = [
+        r[0]
+        for r in cur.execute(
+            "SELECT DISTINCT organization_id FROM documents WHERE deleted_at IS NULL"
+        )
+    ]
     ok = 0
     for org in orgs:
         tagmap, tagnames = {}, []
@@ -342,7 +370,9 @@ def main(env=None, con=None, ask_fn=None, ask_date_fn=None):
     if con is None:
         con = sqlite3.connect(cfg.db, timeout=30)
         con.execute("PRAGMA busy_timeout=30000")
-    tried_path = os.path.join(cfg.state_dir, "date-asked.json") if cfg.state_dir else None
+    tried_path = (
+        os.path.join(cfg.state_dir, "date-asked.json") if cfg.state_dir else None
+    )
     tried = set(load_json(tried_path, [])) if tried_path else set()
     ok = gate_dated = 0
     try:
@@ -351,15 +381,20 @@ def main(env=None, con=None, ask_fn=None, ask_date_fn=None):
         if undated:
             gate_dated = backfill_gate_dates(cfg, con, tried, ask_fn=ask_date_fn)
     except GateUnreachable as e:
-        print(f"ABORT: gate/beast unreachable ({e}); leaving backlog for next run",
-              flush=True)
+        print(
+            f"ABORT: gate/beast unreachable ({e}); leaving backlog for next run",
+            flush=True,
+        )
         return EX_TEMPFAIL
     finally:
         if tried_path:
             save_json(tried_path, sorted(tried))
         con.close()
-    print(f"DONE swept {ok} untagged doc(s); dated {dated} from filename, "
-          f"{gate_dated} via gate", flush=True)
+    print(
+        f"DONE swept {ok} untagged doc(s); dated {dated} from filename, "
+        f"{gate_dated} via gate",
+        flush=True,
+    )
     return 0
 
 

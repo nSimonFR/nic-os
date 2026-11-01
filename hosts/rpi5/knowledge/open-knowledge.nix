@@ -13,7 +13,14 @@
 # The editor's agent panel runs Claude through ACP (`npx -y @agentclientprotocol/claude-agent-acp`,
 # inheriting this unit's env): it talks to Aperture like Cyrus, the gate injects the OAuth
 # token, and CLAUDE_CODE_EXECUTABLE swaps the SDK's downloaded binary for the Nix one.
-{ config, pkgs, lib, unstablePkgs, apertureUrl, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  unstablePkgs,
+  apertureUrl,
+  ...
+}:
 let
   pkg = pkgs.callPackage ../../../pkgs/services/open-knowledge { };
   internalPort = 13354;
@@ -42,7 +49,11 @@ in
     # /mnt/data/cloud is a bind mount of the Nextcloud files dir (nextcloud.nix).
     unitConfig.RequiresMountsFor = [ notesDir ];
     # npx launches the ACP agent; rg replaces claude's vendored one (4K-page jemalloc aborts here).
-    path = [ pkgs.nodejs_24 pkgs.ripgrep pkgs.git ];
+    path = [
+      pkgs.nodejs_24
+      pkgs.ripgrep
+      pkgs.git
+    ];
 
     environment = {
       HOME = stateDir;
@@ -87,7 +98,11 @@ in
       ReadWritePaths = [ notesDir ];
       PrivateTmp = true;
       NoNewPrivileges = true;
-      RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" ];
+      RestrictAddressFamilies = [
+        "AF_INET"
+        "AF_INET6"
+        "AF_UNIX"
+      ];
     };
   };
 
@@ -130,9 +145,21 @@ in
           url = "http://127.0.0.1:8087/openknowledge";
           refreshInterval = 3600000;
           mappings = [
-            { field = "docs"; label = "Docs"; format = "number"; }
-            { field = "edited_7d"; label = "Edited 7d"; format = "number"; }
-            { field = "storage"; label = "Storage"; format = "bytes"; }
+            {
+              field = "docs";
+              label = "Docs";
+              format = "number";
+            }
+            {
+              field = "edited_7d";
+              label = "Edited 7d";
+              format = "number";
+            }
+            {
+              field = "storage";
+              label = "Storage";
+              format = "bytes";
+            }
           ];
         };
       };

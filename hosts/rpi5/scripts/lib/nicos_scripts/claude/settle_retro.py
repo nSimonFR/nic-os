@@ -76,7 +76,9 @@ class Config:
         home = Path(env_str("HOME", "", env) or Path.home())
         out_dir = Path(env_str("RETRO_DIR", "", env) or home / "retros")
         return cls(
-            db=Path(env_str("RETRO_T3_DB", "", env) or home / ".t3/userdata/statev2.sqlite"),
+            db=Path(
+                env_str("RETRO_T3_DB", "", env) or home / ".t3/userdata/statev2.sqlite"
+            ),
             out_dir=out_dir,
             state_file=Path(env_str("RETRO_STATE", "", env) or out_dir / ".state.json"),
             claude=env_str("RETRO_CLAUDE", "", env) or "claude",
@@ -110,27 +112,37 @@ def settled_threads(db, connect=sqlite3.connect):
     out = []
     for tid, title, thread_json, project, pt_json, ps_json, runs in rows:
         try:
-            thread, pt, ps = (json.loads(j or "{}") for j in (thread_json, pt_json, ps_json))
+            thread, pt, ps = (
+                json.loads(j or "{}") for j in (thread_json, pt_json, ps_json)
+            )
         except ValueError:
             continue
         session = (pt.get("nativeThreadRef") or {}).get("nativeId")
         if not session:
             continue
-        out.append(Thread(
-            thread_id=tid, title=title or "", branch=thread.get("branch") or "",
-            # The fork must run where the session lives: Claude Code finds it by cwd.
-            cwd=ps.get("cwd") or thread.get("worktreePath") or "",
-            settled_at=thread["settledAt"], project=project or "",
-            session_id=session, turns=int(runs or 0),
-        ))
+        out.append(
+            Thread(
+                thread_id=tid,
+                title=title or "",
+                branch=thread.get("branch") or "",
+                # The fork must run where the session lives: Claude Code finds it by cwd.
+                cwd=ps.get("cwd") or thread.get("worktreePath") or "",
+                settled_at=thread["settledAt"],
+                project=project or "",
+                session_id=session,
+                turns=int(runs or 0),
+            )
+        )
     return out
 
 
 def due(threads, ledger, min_turns):
     """Threads to review now: new, or re-settled after more turns."""
     return [
-        t for t in threads
-        if t.turns >= min_turns and t.turns > ledger.get(t.thread_id, {}).get("turns", 0)
+        t
+        for t in threads
+        if t.turns >= min_turns
+        and t.turns > ledger.get(t.thread_id, {}).get("turns", 0)
     ]
 
 
@@ -140,17 +152,28 @@ def slug(text, limit=40):
 
 
 def out_path(cfg, t):
-    return cfg.out_dir / f"{t.settled_at[:10]}-{slug(t.project, 20)}-{slug(t.title)}-{t.thread_id[:8]}.md"
+    return (
+        cfg.out_dir
+        / f"{t.settled_at[:10]}-{slug(t.project, 20)}-{slug(t.title)}-{t.thread_id[:8]}.md"
+    )
 
 
 def argv(cfg, t):
     return [
-        cfg.claude, "-p",
-        "--resume", t.session_id, "--fork-session", "--no-session-persistence",
-        "--model", cfg.model,
-        "--permission-mode", "plan",
-        "--tools", "Read,Grep,Glob,Skill",
-        "--output-format", "json",
+        cfg.claude,
+        "-p",
+        "--resume",
+        t.session_id,
+        "--fork-session",
+        "--no-session-persistence",
+        "--model",
+        cfg.model,
+        "--permission-mode",
+        "plan",
+        "--tools",
+        "Read,Grep,Glob,Skill",
+        "--output-format",
+        "json",
     ]
 
 
@@ -161,7 +184,8 @@ def render(t, cfg, result):
         "",
         f"- project **{t.project}** · branch `{t.branch}` · settled {t.settled_at[:16].replace('T', ' ')}",
         f"- thread `{t.thread_id}` · session `{t.session_id}` · {t.turns} turns",
-        f"- {cfg.model}" + (f" · ${cost:.2f}" if isinstance(cost, (int, float)) else ""),
+        f"- {cfg.model}"
+        + (f" · ${cost:.2f}" if isinstance(cost, (int, float)) else ""),
         "",
     ]
     return "\n".join(head) + "\n" + (result.get("result") or "").strip() + "\n"
@@ -174,8 +198,12 @@ def review(cfg, t, run=None, isdir=os.path.isdir, log=log):
         return None
     try:
         res = (run or subprocess.run)(
-            argv(cfg, t), input=PROMPT, cwd=t.cwd,
-            capture_output=True, text=True, timeout=cfg.timeout,
+            argv(cfg, t),
+            input=PROMPT,
+            cwd=t.cwd,
+            capture_output=True,
+            text=True,
+            timeout=cfg.timeout,
         )
     except Exception as e:  # noqa: BLE001
         log(f"{t.thread_id}: claude failed: {e}")
@@ -185,7 +213,9 @@ def review(cfg, t, run=None, isdir=os.path.isdir, log=log):
     except ValueError:
         result = {}
     if res.returncode != 0 or result.get("is_error") or not result.get("result"):
-        log(f"{t.thread_id}: claude exited {res.returncode}: {(res.stdout + res.stderr).strip()[:300]}")
+        log(
+            f"{t.thread_id}: claude exited {res.returncode}: {(res.stdout + res.stderr).strip()[:300]}"
+        )
         return None
     return render(t, cfg, result)
 
@@ -196,7 +226,9 @@ def main(env=None, connect=sqlite3.connect, run=None, isdir=os.path.isdir, log=l
 
     if not cfg.state_file.exists():
         ledger = {t.thread_id: {"turns": t.turns, "seeded": True} for t in threads}
-        log(f"first run: recorded {len(ledger)} already-settled thread(s) without reviewing")
+        log(
+            f"first run: recorded {len(ledger)} already-settled thread(s) without reviewing"
+        )
         if not cfg.dry_run:
             ensure_dir(str(cfg.out_dir))
             save_json(str(cfg.state_file), ledger, indent=2, sort_keys=True)
@@ -212,7 +244,9 @@ def main(env=None, connect=sqlite3.connect, run=None, isdir=os.path.isdir, log=l
     for t in todo[: cfg.max_per_run]:
         path = out_path(cfg, t)
         if cfg.dry_run:
-            log(f"DRY RUN — would review {t.title!r} into {path}: {' '.join(argv(cfg, t))}")
+            log(
+                f"DRY RUN — would review {t.title!r} into {path}: {' '.join(argv(cfg, t))}"
+            )
             continue
         md = review(cfg, t, run=run, isdir=isdir, log=log)
         # Recorded either way: a failed review must not be retried, and paid for, every tick.

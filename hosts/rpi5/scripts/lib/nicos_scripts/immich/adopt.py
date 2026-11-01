@@ -131,7 +131,9 @@ def _post_json(cfg, path, payload, method="POST", opener=None):
 
 
 def whoami(cfg, opener=None):
-    return get_json(f"{cfg.url}/api/users/me", headers=_headers(cfg), opener=opener)["id"]
+    return get_json(f"{cfg.url}/api/users/me", headers=_headers(cfg), opener=opener)[
+        "id"
+    ]
 
 
 def album(cfg, album_id, opener=None):
@@ -190,13 +192,15 @@ def owner_assets(cfg, owner_id, opener=None):
         )
         ids = cols.get("id") or []
         for i, asset_id in enumerate(ids):
-            out.append({
-                "id": asset_id,
-                "ownerId": _col(cols, "ownerId", i, owner_id),
-                "livePhotoVideoId": _col(cols, "livePhotoVideoId", i),
-                # Deliberately no fileModifiedAt/originalFileName: absence is the
-                # signal to `_detailed` that this stub needs a round trip.
-            })
+            out.append(
+                {
+                    "id": asset_id,
+                    "ownerId": _col(cols, "ownerId", i, owner_id),
+                    "livePhotoVideoId": _col(cols, "livePhotoVideoId", i),
+                    # Deliberately no fileModifiedAt/originalFileName: absence is the
+                    # signal to `_detailed` that this stub needs a round trip.
+                }
+            )
     return out
 
 
@@ -250,7 +254,9 @@ def _multipart(fields, filename, data):
     return bytes(body), f"multipart/form-data; boundary={boundary}"
 
 
-def upload_asset(cfg, src, data, live_photo_video_id=None, visibility=None, opener=None):
+def upload_asset(
+    cfg, src, data, live_photo_video_id=None, visibility=None, opener=None
+):
     """Upload `data` as me, carrying over the source asset's dates and name.
 
     Returns (id, status) where status is `created` or `duplicate` — duplicate
@@ -288,7 +294,11 @@ def remove_from_album(cfg, album_id, asset_ids, opener=None):
     if not asset_ids:
         return []
     return _post_json(
-        cfg, f"/api/albums/{album_id}/assets", {"ids": asset_ids}, "DELETE", opener=opener
+        cfg,
+        f"/api/albums/{album_id}/assets",
+        {"ids": asset_ids},
+        "DELETE",
+        opener=opener,
     )
 
 
@@ -343,7 +353,9 @@ def run(cfg, opener=None, log=log):
     this account does not own.
     """
     if not cfg.key:
-        raise AdoptError(f"no API key (IMMICH_API_KEY_FILE, default {DEFAULT_KEY_FILE})")
+        raise AdoptError(
+            f"no API key (IMMICH_API_KEY_FILE, default {DEFAULT_KEY_FILE})"
+        )
     if not cfg.source and not cfg.owner:
         raise AdoptError("no source: pass --source ALBUM or --from-owner USER")
     if cfg.owner and not cfg.target:
@@ -402,8 +414,9 @@ def run(cfg, opener=None, log=log):
     # A repeat run gets `duplicate` for copies already in the album. That is a
     # success for our purposes and must not be confused with `no_permission`,
     # which means the copy genuinely is not in there.
-    already = {r["id"] for r in added if not r.get("success")
-               and r.get("error") == "duplicate"}
+    already = {
+        r["id"] for r in added if not r.get("success") and r.get("error") == "duplicate"
+    }
     log(
         f"adopted {len(adopted)} new, {len(mine_from_here)} copies asserted into "
         f"{dst.get('albumName')!r} ({len(landed)} newly added, {len(already)} already in)"
@@ -427,8 +440,12 @@ def _parse_args(argv):
     p = argparse.ArgumentParser(prog="immich-adopt", description=__doc__.split("\n")[0])
     src = p.add_mutually_exclusive_group()
     src.add_argument("--source", help="album id to adopt from")
-    src.add_argument("--from-owner", dest="owner", help="user id to adopt everything from")
-    p.add_argument("--target", help="album id for my copies (default: the source album)")
+    src.add_argument(
+        "--from-owner", dest="owner", help="user id to adopt everything from"
+    )
+    p.add_argument(
+        "--target", help="album id for my copies (default: the source album)"
+    )
     p.add_argument("--state", help=f"json cursor path (default {DEFAULT_STATE})")
     p.add_argument(
         "--apply",

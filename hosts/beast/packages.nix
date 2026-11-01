@@ -86,7 +86,7 @@ in
         pkgs.gamemode
       ];
     })
-    
+
     inputs.nix-citizen.packages.${pkgs.stdenv.hostPlatform.system}.rsi-launcher
   ];
 

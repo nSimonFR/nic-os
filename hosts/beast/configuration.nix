@@ -9,16 +9,18 @@
 }:
 let
   # Minimal Hyprland config for greeter session — DPMS off after 5 min idle (WOL power saving)
-  greeterHypridleConfig = pkgs.linkFarm "greeter-hypridle-config" [{
-    name = "hypr/hypridle.conf";
-    path = pkgs.writeText "hypridle.conf" ''
-      listener {
-        timeout = 180
-        on-timeout = hyprctl dispatch dpms off
-        on-resume = hyprctl dispatch dpms on
-      }
-    '';
-  }];
+  greeterHypridleConfig = pkgs.linkFarm "greeter-hypridle-config" [
+    {
+      name = "hypr/hypridle.conf";
+      path = pkgs.writeText "hypridle.conf" ''
+        listener {
+          timeout = 180
+          on-timeout = hyprctl dispatch dpms off
+          on-resume = hyprctl dispatch dpms on
+        }
+      '';
+    }
+  ];
   greeterHyprlandConfig = pkgs.writeText "greetd-hyprland.conf" ''
     monitor = desc:LG Electronics 38GN950 008NTKFBE741, 3840x1600@160, 0x0, 1
     monitor = desc:Acer Technologies GN246HL LW3EE0058532, disable
@@ -49,7 +51,10 @@ in
     ./tobii-native.nix # Tobii Eye Tracker 5 native Linux (experimental)
     ./music-production.nix # Audacity + Graillon voice plugins for alfie
     # Tailscale client configuration
-    (import ../../shared/tailscale.nix { role = "client"; enableSSH = true; })
+    (import ../../shared/tailscale.nix {
+      role = "client";
+      enableSSH = true;
+    })
     ./beszel-agent.nix
     ./immich-ml.nix # native GPU-accelerated Immich machine-learning (CLIP) for the rpi5
   ];
@@ -109,7 +114,7 @@ in
   # Arming it continuously lets the chipset force-reset a hard lockup on its own.
   systemd.watchdog = {
     runtimeTime = "120s"; # pet every 60s; hard lockup resets after 120s
-    rebootTime = "5min";  # stalled reboot force-resets after 5min
+    rebootTime = "5min"; # stalled reboot force-resets after 5min
   };
 
   # Suspend guard: the runtime watchdog above is incompatible with s2idle sleep.
@@ -224,7 +229,13 @@ in
     description = "Ensure alfie's per-game Proton prefix redirects (shared NTFS games drive workaround)";
     before = [ "display-manager.service" ];
     wantedBy = [ "multi-user.target" ];
-    path = with pkgs; [ bash gawk gnugrep procps coreutils ];
+    path = with pkgs; [
+      bash
+      gawk
+      gnugrep
+      procps
+      coreutils
+    ];
     serviceConfig = {
       Type = "oneshot";
       User = "alfie";
@@ -262,11 +273,11 @@ in
 
     # WiFi utilities (available in PATH, no auto-connect)
     wpa_supplicant # wpa_passphrase, wpa_cli, wpa_supplicant
-    iw             # modern wireless config (iw dev, iw scan …)
-    wirelesstools  # iwconfig, iwlist, iwscan
-    dhcpcd         # dhcp client for manual wifi sessions
+    iw # modern wireless config (iw dev, iw scan …)
+    wirelesstools # iwconfig, iwlist, iwscan
+    dhcpcd # dhcp client for manual wifi sessions
 
-    smartmontools  # smartctl for ad-hoc disk inspection
+    smartmontools # smartctl for ad-hoc disk inspection
   ];
 
   programs.kdeconnect.enable = true; # Enables KWallet D-Bus service
@@ -364,8 +375,8 @@ in
   };
 
   # Use Hyprland instead of cage for greeter — enables hypridle DPMS (power saving after WOL)
-  services.greetd.settings.default_session.command = lib.mkForce
-    "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
+  services.greetd.settings.default_session.command =
+    lib.mkForce "${pkgs.dbus}/bin/dbus-run-session ${pkgs.hyprland}/bin/Hyprland --config ${greeterHyprlandConfig}";
 
   users.users.greeter = {
     isSystemUser = true;
@@ -443,16 +454,20 @@ in
         nv_powermizer_mode = 1;
       };
       custom = {
-        start = toString (pkgs.writeShellScript "gamemode-start" ''
-          ${pkgs.libnotify}/bin/notify-send 'GameMode started'
-          # Free VRAM for the game: stop the LLM and Immich ML services. Immich
-          # ML jobs the rpi5 dispatches queue in BullMQ and drain on end.
-          ${pkgs.systemd}/bin/systemctl stop ollama immich-machine-learning || true
-        '');
-        end = toString (pkgs.writeShellScript "gamemode-end" ''
-          ${pkgs.libnotify}/bin/notify-send 'GameMode ended'
-          ${pkgs.systemd}/bin/systemctl start ollama immich-machine-learning
-        '');
+        start = toString (
+          pkgs.writeShellScript "gamemode-start" ''
+            ${pkgs.libnotify}/bin/notify-send 'GameMode started'
+            # Free VRAM for the game: stop the LLM and Immich ML services. Immich
+            # ML jobs the rpi5 dispatches queue in BullMQ and drain on end.
+            ${pkgs.systemd}/bin/systemctl stop ollama immich-machine-learning || true
+          ''
+        );
+        end = toString (
+          pkgs.writeShellScript "gamemode-end" ''
+            ${pkgs.libnotify}/bin/notify-send 'GameMode ended'
+            ${pkgs.systemd}/bin/systemctl start ollama immich-machine-learning
+          ''
+        );
       };
     };
   };
@@ -612,13 +627,18 @@ in
     enable = true;
     # nixpkgs-ollama, not nixpkgs-unstable: qwen3.8:27b needs ollama >= 0.32.12
     # and the shared pin is on 0.32.4. See the input's comment in flake.nix.
-    package = (import inputs.nixpkgs-ollama {
-      system = "x86_64-linux";
-      config.allowUnfree = true;
-      config.cudaSupport = true;
-    }).ollama-cuda;
+    package =
+      (import inputs.nixpkgs-ollama {
+        system = "x86_64-linux";
+        config.allowUnfree = true;
+        config.cudaSupport = true;
+      }).ollama-cuda;
     host = "0.0.0.0"; # Bind all interfaces — firewalled to tailscale0 + localhost
-    loadModels = [ "gemma4:26b" "gemma4:e4b" "qwen3.8:27b" ];
+    loadModels = [
+      "gemma4:26b"
+      "gemma4:e4b"
+      "qwen3.8:27b"
+    ];
     environmentVariables = {
       OLLAMA_GPU_OVERHEAD = "1073741824"; # Reserve 1GB VRAM for Hyprland/Ghostty (prevents VRAM OOM → terminal crash)
       OLLAMA_FLASH_ATTENTION = "1"; # Reduce VRAM usage during inference via flash attention
@@ -686,13 +706,13 @@ in
   # Primary = Tailscale (works everywhere), Fallback = LAN (home network)
   # Last-resort fallback to Cloudflare if RPi5 is completely unreachable
   networking.nameservers = [
-    "100.122.54.2"   # RPi5 – Tailscale
+    "100.122.54.2" # RPi5 – Tailscale
   ];
 
   services.resolved = {
     fallbackDns = [
-      "1.1.1.1"        # Cloudflare – last resort if RPi5 is down
-      "9.9.9.9"        # Quad9 – last resort
+      "1.1.1.1" # Cloudflare – last resort if RPi5 is down
+      "9.9.9.9" # Quad9 – last resort
     ];
     # Don't let DHCP override our DNS settings
     dnsovertls = "opportunistic";

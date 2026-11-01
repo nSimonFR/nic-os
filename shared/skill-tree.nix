@@ -12,7 +12,10 @@
 { lib }:
 let
   lineageEntries =
-    { source, prefix ? "" }:
+    {
+      source,
+      prefix ? "",
+    }:
     map (name: {
       inherit name prefix;
       path = if prefix == "" then name else "${prefix}/${name}";
@@ -37,15 +40,19 @@ in
   homeFiles =
     { targets, lineages }:
     lib.listToAttrs (
-      lib.concatMap (
-        e: map (t: lib.nameValuePair "${t}/${e.path}" { source = e.skill; }) targets
-      ) (entries lineages)
+      lib.concatMap (e: map (t: lib.nameValuePair "${t}/${e.path}" { source = e.skill; }) targets) (
+        entries lineages
+      )
     );
 
   # Merged store dir, for surfaces that copy rather than symlink — Hermes rsyncs
   # it into $HERMES_HOME so every skill's realpath stays inside HOME.
   tree =
-    { pkgs, name ? "skill-tree", lineages }:
+    {
+      pkgs,
+      name ? "skill-tree",
+      lineages,
+    }:
     pkgs.runCommand name { } (
       lib.concatMapStrings (e: ''
         mkdir -p "$out/$(dirname ${lib.escapeShellArg e.path})"

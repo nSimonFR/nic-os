@@ -17,24 +17,29 @@
 # first connection. idleSec = null → no idle-stop, the units stay warm once woken.
 # readyProbe gates the first request on /ready (unauthenticated 200) so a cold
 # gunicorn (slow Gramps GI import) isn't dropped.
-{ redisHost, redisPort, tailnetFqdn, ... }:
+{
+  redisHost,
+  redisPort,
+  tailnetFqdn,
+  ...
+}:
 let
   backendPort = 15051; # gunicorn bind (module's host:port)
-  proxyPort   = 15050; # socket-activate proxy listen; Tailscale Serve 5050 → here
+  proxyPort = 15050; # socket-activate proxy listen; Tailscale Serve 5050 → here
 in
 {
   services.gramps-web = {
-    enable        = true;
-    host          = "127.0.0.1";
-    port          = backendPort;
+    enable = true;
+    host = "127.0.0.1";
+    port = backendPort;
     # Multi-tree: serve several independent family trees (Dolou, Le Dreff, …) from
     # one instance. "*" flips GRAMPSWEB_TREE to TREE_MULTI so the frontend shows a
     # tree switcher; an ADMIN-role (5) user can view/manage all trees. Trees are
     # created offline via the bundled `gramps` CLI (see grampsdb dirs under dataDir).
-    tree          = "*";
-    baseUrl       = "https://${tailnetFqdn}:5050";
+    tree = "*";
+    baseUrl = "https://${tailnetFqdn}:5050";
     # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 5=nextcloud are taken (4 freed by Paperless removal).
-    redisUrl      = "redis://${redisHost}:${toString redisPort}/6";
+    redisUrl = "redis://${redisHost}:${toString redisPort}/6";
     secretKeyFile = "/run/agenix/gramps-web-secret";
     # Multi-tree hardening: prefix media paths by tree id so one tree's media can't
     # be reached from another (gramps-web warns loudly without this in TREE_MULTI).
@@ -57,37 +62,40 @@ in
   systemd.services.gramps-web-celery.environment.GRAMPSWEB_DISABLE_TELEMETRY = "true";
 
   services.socketActivate.gramps-web = {
-    enable   = true;
+    enable = true;
     realUnit = "gramps-web.service";
-    listen   = [ "127.0.0.1:${toString proxyPort}" ];
-    backend  = "127.0.0.1:${toString backendPort}";
-    idleSec  = null;  # ignore idle — lazy-start only, stays up once warm
+    listen = [ "127.0.0.1:${toString proxyPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = null; # ignore idle — lazy-start only, stays up once warm
     readyProbe = {
-      url          = "http://127.0.0.1:${toString backendPort}/ready";
+      url = "http://127.0.0.1:${toString backendPort}/ready";
       expectStatus = 200;
-      timeoutSec   = 120;
+      timeoutSec = 120;
     };
     workers."gramps-web-celery.service".policy = "sleepWith";
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.gramps-web = {
-    backup        = [ "unit" ];
-    backupUnits   = [ "gramps-web-backup.service" ];   # backups.nix — trees + media
-    heavyUnits    = [ "gramps-web.service" "gramps-web-celery.service" ];
+    backup = [ "unit" ];
+    backupUnits = [ "gramps-web-backup.service" ]; # backups.nix — trees + media
+    heavyUnits = [
+      "gramps-web.service"
+      "gramps-web-celery.service"
+    ];
     heavyPriority = 80;
 
     # NOT behind the 443 path-mux: the SPA hardcodes absolute API paths and its
     # service worker needs root scope (gramps-web#531), so it keeps its own
     # Tailscale Serve port — same call as AFFiNE on 8443.
     public = {
-      order   = 220;
-      port    = 5050;
+      order = 220;
+      port = 5050;
       backend = "http://127.0.0.1:15050";
       tile = {
-        name        = "Gramps Web";
-        icon        = "gramps.svg";
-        category    = "Apps";
+        name = "Gramps Web";
+        icon = "gramps.svg";
+        category = "Apps";
         description = "Genealogy";
         # Reads the per-tree SQLite directly, summed across trees, so the daily
         # poll never wakes the service.
@@ -96,9 +104,21 @@ in
           url = "http://127.0.0.1:8087/grampsweb";
           refreshInterval = 3600000;
           mappings = [
-            { field = "people"; label = "People"; format = "number"; }
-            { field = "families"; label = "Families"; format = "number"; }
-            { field = "events"; label = "Events"; format = "number"; }
+            {
+              field = "people";
+              label = "People";
+              format = "number";
+            }
+            {
+              field = "families";
+              label = "Families";
+              format = "number";
+            }
+            {
+              field = "events";
+              label = "Events";
+              format = "number";
+            }
           ];
         };
       };

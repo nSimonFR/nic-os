@@ -19,14 +19,14 @@ export DBUS_SESSION_BUS_ADDRESS='unix:path=/run/user/1000/bus'
 
 state=$1
 case $state in
-	'charging')
-		state=${state^}
-		icon='battery-100-charging'
-		;;
-	'discharging')
-		state=${state^}
-		icon='battery-100'
-		;;
+'charging')
+  state=${state^}
+  icon='battery-100-charging'
+  ;;
+'discharging')
+  state=${state^}
+  icon='battery-100'
+  ;;
 esac
 
 path=$(upower -e | grep BAT | head -n 1)

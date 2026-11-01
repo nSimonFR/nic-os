@@ -38,23 +38,41 @@ def _date(value: str, tz: str) -> str:
 def parse_ics(text: str, source_id: str, default_timezone: str) -> list:
     output, current = [], None
     for line in _unfold(text):
-        if line == "BEGIN:VEVENT": current = {}
+        if line == "BEGIN:VEVENT":
+            current = {}
         elif line == "END:VEVENT" and current is not None:
             tz = current.pop("_timezone", default_timezone)
-            current["start_at"] = _date(current.pop("_start"), tz) if current.get("_start") else None
-            current["end_at"] = _date(current.pop("_end"), tz) if current.get("_end") else None
+            current["start_at"] = (
+                _date(current.pop("_start"), tz) if current.get("_start") else None
+            )
+            current["end_at"] = (
+                _date(current.pop("_end"), tz) if current.get("_end") else None
+            )
             current["timezone"] = tz
-            output.append(normalize(source_id, current, default_timezone)); current = None
+            output.append(normalize(source_id, current, default_timezone))
+            current = None
         elif current is not None and ":" in line:
             key, params, value = _value(line)
-            if key == "UID": current["external_id"] = value
-            elif key == "SUMMARY": current["title"] = value
-            elif key == "DESCRIPTION": current["description"] = value
+            if key == "UID":
+                current["external_id"] = value
+            elif key == "SUMMARY":
+                current["title"] = value
+            elif key == "DESCRIPTION":
+                current["description"] = value
             elif key == "LOCATION":
                 current["venue"] = value
-                if "," in value: current["city"] = value.rsplit(",", 1)[1].strip()
-            elif key == "URL": current["event_url"] = value
-            elif key == "STATUS": current["status"] = "cancelled" if value.upper() == "CANCELLED" else "scheduled"
-            elif key == "DTSTART": current["_start"] = value; current["_timezone"] = params.get("TZID", default_timezone)
-            elif key == "DTEND": current["_end"] = value; current["_timezone"] = params.get("TZID", default_timezone)
+                if "," in value:
+                    current["city"] = value.rsplit(",", 1)[1].strip()
+            elif key == "URL":
+                current["event_url"] = value
+            elif key == "STATUS":
+                current["status"] = (
+                    "cancelled" if value.upper() == "CANCELLED" else "scheduled"
+                )
+            elif key == "DTSTART":
+                current["_start"] = value
+                current["_timezone"] = params.get("TZID", default_timezone)
+            elif key == "DTEND":
+                current["_end"] = value
+                current["_timezone"] = params.get("TZID", default_timezone)
     return output

@@ -20,7 +20,9 @@ def cal(*components, header=None):
         "VERSION:2.0",
         "X-WR-CALNAME:TRUSK",
     ]
-    return "\r\n".join(["BEGIN:VCALENDAR", *head, *components, "END:VCALENDAR"]) + "\r\n"
+    return (
+        "\r\n".join(["BEGIN:VCALENDAR", *head, *components, "END:VCALENDAR"]) + "\r\n"
+    )
 
 
 def vevent(uid, dtstart, dtend=None, rrule=None, recurrence_id=None, extra=()):
@@ -38,9 +40,7 @@ def vevent(uid, dtstart, dtend=None, rrule=None, recurrence_id=None, extra=()):
 
 def kept_uids(ics):
     _, comps = m.parse(ics)
-    return [
-        m.prop_value(c["logical"], "UID") for c in comps if c["name"] == "VEVENT"
-    ]
+    return [m.prop_value(c["logical"], "UID") for c in comps if c["name"] == "VEVENT"]
 
 
 # ── windowing ──────────────────────────────────────────────────────────────────
@@ -114,13 +114,17 @@ def test_unbounded_rrule_survives_however_old_it_is():
 
 
 def test_rrule_with_until_before_the_window_is_dropped():
-    src = cal(vevent("ended", "20190401T090000", rrule="FREQ=WEEKLY;UNTIL=20200101T000000Z"))
+    src = cal(
+        vevent("ended", "20190401T090000", rrule="FREQ=WEEKLY;UNTIL=20200101T000000Z")
+    )
     out, _ = m.window_ics(src, LO, HI)
     assert kept_uids(out) == []
 
 
 def test_rrule_with_until_inside_the_window_is_kept():
-    src = cal(vevent("live", "20190401T090000", rrule="FREQ=WEEKLY;UNTIL=20261201T000000Z"))
+    src = cal(
+        vevent("live", "20190401T090000", rrule="FREQ=WEEKLY;UNTIL=20261201T000000Z")
+    )
     out, _ = m.window_ics(src, LO, HI)
     assert kept_uids(out) == ["live"]
 
@@ -185,7 +189,10 @@ def test_folded_lines_survive_byte_for_byte():
         ]
     )
     out, _ = m.window_ics(cal(folded), LO, HI)
-    assert "SUMMARY:a very long summary that Google folded across\r\n  two physical lines" in out
+    assert (
+        "SUMMARY:a very long summary that Google folded across\r\n  two physical lines"
+        in out
+    )
 
 
 def test_nested_valarm_does_not_confuse_component_boundaries():
@@ -210,7 +217,15 @@ def test_nested_valarm_does_not_confuse_component_boundaries():
 
 
 def test_header_is_carried_over_and_unknown_props_dropped():
-    src = cal(vevent("now", "20260901T090000"), header=["PRODID:-//x//EN", "VERSION:2.0", "X-WR-CALNAME:TRUSK", "X-SECRET-TOKEN:leaky"])
+    src = cal(
+        vevent("now", "20260901T090000"),
+        header=[
+            "PRODID:-//x//EN",
+            "VERSION:2.0",
+            "X-WR-CALNAME:TRUSK",
+            "X-SECRET-TOKEN:leaky",
+        ],
+    )
     out, _ = m.window_ics(src, LO, HI)
     assert "X-WR-CALNAME:TRUSK" in out
     assert "X-SECRET-TOKEN" not in out
@@ -260,7 +275,11 @@ def test_bad_feeds_files_are_rejected(tmp_path, payload):
 
 def test_good_feeds_file_parses(tmp_path):
     p = tmp_path / "feeds.json"
-    p.write_text(json.dumps({"trusk": "https://example/a.ics", "google-perso": "https://example/b.ics"}))
+    p.write_text(
+        json.dumps(
+            {"trusk": "https://example/a.ics", "google-perso": "https://example/b.ics"}
+        )
+    )
     assert m.load_feeds(str(p)) == {
         "trusk": "https://example/a.ics",
         "google-perso": "https://example/b.ics",
@@ -298,7 +317,9 @@ def test_fetch_requests_gzip_and_decompresses():
 
 def test_fetch_handles_an_uncompressed_reply():
     body = cal(vevent("now", "20260901T090000"))
-    got = m.fetch("https://e/a.ics", 5, opener=lambda r, timeout=None: Resp(body.encode()))
+    got = m.fetch(
+        "https://e/a.ics", 5, opener=lambda r, timeout=None: Resp(body.encode())
+    )
     assert got == body
 
 
@@ -500,9 +521,19 @@ def state_of(tmp_path):
 
 def test_changed_upstream_rewrites_and_stamps_last_changed(tmp_path):
     cfg = cfg_for(tmp_path)
-    m.run(cfg, opener=serve(cal(vevent("a", "20260901T090000"))), today=TODAY, now=clock(T1))
+    m.run(
+        cfg,
+        opener=serve(cal(vevent("a", "20260901T090000"))),
+        today=TODAY,
+        now=clock(T1),
+    )
     first = state_of(tmp_path)
-    m.run(cfg, opener=serve(cal(vevent("b", "20260902T090000"))), today=TODAY, now=clock(T2))
+    m.run(
+        cfg,
+        opener=serve(cal(vevent("b", "20260902T090000"))),
+        today=TODAY,
+        now=clock(T2),
+    )
     second = state_of(tmp_path)
     assert first["last_changed_at"] == T1.isoformat(timespec="seconds")
     assert second["last_changed_at"] == T2.isoformat(timespec="seconds")
@@ -524,7 +555,9 @@ def test_a_window_slide_alone_does_not_move_last_changed(tmp_path):
     src = cal(vevent("a", "20260615T090000"), vevent("b", "20260901T090000"))
     m.run(cfg, opener=serve(src), today=TODAY, now=clock(T1))
     # One day on, `a` falls out of the window: the served file changes, upstream did not.
-    m.run(cfg, opener=serve(src), today=TODAY + datetime.timedelta(days=1), now=clock(T2))
+    m.run(
+        cfg, opener=serve(src), today=TODAY + datetime.timedelta(days=1), now=clock(T2)
+    )
     second = state_of(tmp_path)
     assert kept_uids((tmp_path / "out" / "trusk.ics").read_text()) == ["b"]
     assert second["written_at"] == T2.isoformat(timespec="seconds")
@@ -536,7 +569,9 @@ def test_an_upstream_change_outside_the_window_still_moves_last_changed(tmp_path
     cfg = cfg_for(tmp_path)
     m.run(
         cfg,
-        opener=serve(cal(vevent("keep", "20260901T090000"), vevent("old", "20190101T090000"))),
+        opener=serve(
+            cal(vevent("keep", "20260901T090000"), vevent("old", "20190101T090000"))
+        ),
         today=TODAY,
         now=clock(T1),
     )
@@ -544,7 +579,9 @@ def test_an_upstream_change_outside_the_window_still_moves_last_changed(tmp_path
     target.write_text("SENTINEL")
     m.run(
         cfg,
-        opener=serve(cal(vevent("keep", "20260901T090000"), vevent("old", "20190202T090000"))),
+        opener=serve(
+            cal(vevent("keep", "20260901T090000"), vevent("old", "20190202T090000"))
+        ),
         today=TODAY,
         now=clock(T2),
     )

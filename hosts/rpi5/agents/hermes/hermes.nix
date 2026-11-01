@@ -80,10 +80,10 @@ let
   # proven in service here and there is no reason to push it.
   gateModels = {
     "gpt-5.6" = 131072;
-    "gpt-6"   = 131072;
+    "gpt-6" = 131072;
     "openai/gpt-6-luna" = 131072;
     "asale-gpt-6-astra" = 131072;
-    "asale-gpt-6-luna"  = 131072;
+    "asale-gpt-6-luna" = 131072;
     "asale-gpt-6.1-sol" = 131072;
   };
 
@@ -122,7 +122,10 @@ let
   skillLineages = [
     { source = ../../../../shared/skills; }
     { source = ./skills; }
-    { source = ../../../../shared/mtg-skills; prefix = "mtg"; }
+    {
+      source = ../../../../shared/mtg-skills;
+      prefix = "mtg";
+    }
   ];
   skillsSource = skillTree.tree {
     inherit pkgs;
@@ -178,23 +181,23 @@ let
   # `--replace-quiet`, not `--replace-fail`: no single script uses every
   # placeholder. The grep is what keeps a typo'd one a build failure instead of a
   # 10:30 runtime failure.
-  cronScriptsDir = pkgs.runCommand "hermes-cron-scripts"
-    { nativeBuildInputs = [ pkgs.shellcheck ]; }
-    ''
-      install -Dm0755 ${./cron-scripts}/*.sh -t "$out"
-      substituteInPlace "$out"/*.sh \
-        --replace-quiet '@bash@' ${pkgs.bash}/bin/bash \
-        --replace-quiet '@python3@' ${pkgs.python3}/bin/python3 \
-        --replace-quiet '@bin@' ${pkgs.nicos-scripts}/bin \
-        --replace-quiet '@hermesHome@' ${hermesHome} \
-        --replace-quiet '@chatId@' '${toString telegramChatId}' \
-        --replace-quiet '@tgSend@' ${hermesNotify}
-      if grep -Hn '@[A-Za-z0-9_-]\+@' "$out"/*.sh; then
-        echo "hermes-cron-scripts: unsubstituted placeholder(s) above" >&2
-        exit 1
-      fi
-      shellcheck "$out"/*.sh
-    '';
+  cronScriptsDir =
+    pkgs.runCommand "hermes-cron-scripts" { nativeBuildInputs = [ pkgs.shellcheck ]; }
+      ''
+        install -Dm0755 ${./cron-scripts}/*.sh -t "$out"
+        substituteInPlace "$out"/*.sh \
+          --replace-quiet '@bash@' ${pkgs.bash}/bin/bash \
+          --replace-quiet '@python3@' ${pkgs.python3}/bin/python3 \
+          --replace-quiet '@bin@' ${pkgs.nicos-scripts}/bin \
+          --replace-quiet '@hermesHome@' ${hermesHome} \
+          --replace-quiet '@chatId@' '${toString telegramChatId}' \
+          --replace-quiet '@tgSend@' ${hermesNotify}
+        if grep -Hn '@[A-Za-z0-9_-]\+@' "$out"/*.sh; then
+          echo "hermes-cron-scripts: unsubstituted placeholder(s) above" >&2
+          exit 1
+        fi
+        shellcheck "$out"/*.sh
+      '';
 
   # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
   # (Scryfall card search + pricing + rulings + legality, deck validation,

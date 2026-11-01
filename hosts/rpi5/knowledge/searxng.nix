@@ -129,19 +129,50 @@ in
         # without overriding consensus: agreement across engines still scales
         # the score too, so a broad multi-engine hit can outrank a solo Google
         # one.
-        { name = "google cse"; disabled = false; weight = 3; }
-        { name = "duckduckgo"; disabled = true; }
-        { name = "startpage"; disabled = true; }
-        { name = "brave"; disabled = true; }
+        {
+          name = "google cse";
+          disabled = false;
+          weight = 3;
+        }
+        {
+          name = "duckduckgo";
+          disabled = true;
+        }
+        {
+          name = "startpage";
+          disabled = true;
+        }
+        {
+          name = "brave";
+          disabled = true;
+        }
 
-        { name = "bing"; disabled = false; } # carries the result set
-        { name = "fynd"; disabled = false; }
-        { name = "seznam"; disabled = false; }
+        {
+          name = "bing";
+          disabled = false;
+        } # carries the result set
+        {
+          name = "fynd";
+          disabled = false;
+        }
+        {
+          name = "seznam";
+          disabled = false;
+        }
         # The only other real general index here. Queries reach it from this box
         # rather than the browser, which is the point of a metasearch proxy.
-        { name = "yandex"; disabled = false; }
-        { name = "wiby"; disabled = false; } # small-web long tail
-        { name = "searchmysite"; disabled = false; }
+        {
+          name = "yandex";
+          disabled = false;
+        }
+        {
+          name = "wiby";
+          disabled = false;
+        } # small-web long tail
+        {
+          name = "searchmysite";
+          disabled = false;
+        }
       ];
     };
   };

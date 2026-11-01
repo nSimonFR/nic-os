@@ -4,7 +4,14 @@
 # protocols, and speaks the ChatGPT/Codex Responses API natively (native
 # `type: codex` provider, v0.9.1) for proper token counts and tool_calls —
 # no external codex-proxy. Target RSS: < 15 MiB.
-{ config, pkgs, lib, inputs, beastOllamaUrl, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  inputs,
+  beastOllamaUrl,
+  ...
+}:
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
@@ -94,18 +101,30 @@ in
 
       models = {
         # -- Ollama chat models --
-        "gemma4:e4b"         = { provider = "ollama"; upstream_model = "gemma4:e4b"; };
-        "gemma4:26b"         = { provider = "ollama"; upstream_model = "gemma4:26b"; };
+        "gemma4:e4b" = {
+          provider = "ollama";
+          upstream_model = "gemma4:e4b";
+        };
+        "gemma4:26b" = {
+          provider = "ollama";
+          upstream_model = "gemma4:26b";
+        };
         # Qwen3.8-27B, replacing Qwen3.6-35B-A3B (removed from beast): vision +
         # tools + thinking in half the weights. RAM-offloaded, so slower than
         # gemma4 — a deliberate-choice model, not an "auto" candidate.
-        "qwen3.8:27b"        = { provider = "ollama"; upstream_model = "qwen3.8:27b"; };
+        "qwen3.8:27b" = {
+          provider = "ollama";
+          upstream_model = "qwen3.8:27b";
+        };
         # Papra on-prem document tagging. Beast-only, NO fallback: sensitive
         # OCR'd text (bank/tax/ID) must never reach a cloud model, and a
         # beast-down error is what makes the Papra tag-sweeper wait and retry
         # rather than mis-tag via cloud. qwen3-vl:8b respects strict json_schema
         # and does French tags well (num_ctx baked to 16384 on beast).
-        "qwen3-vl:8b"        = { provider = "ollama"; upstream_model = "qwen3-vl:8b"; };
+        "qwen3-vl:8b" = {
+          provider = "ollama";
+          upstream_model = "qwen3-vl:8b";
+        };
         "qwen3-embedding:8b" = {
           provider = "ollama";
           upstream_model = "qwen3-embedding:8b";
@@ -126,9 +145,18 @@ in
           upstream_model = "gpt-5.5-mini";
           fallback = [ "gemma4:e4b" ];
         };
-        "gpt-5.2"            = { provider = "codex"; upstream_model = "gpt-5.2"; };
-        "gpt-5.3-codex"      = { provider = "codex"; upstream_model = "gpt-5.3-codex"; };
-        "codex-auto-review"  = { provider = "codex"; upstream_model = "codex-auto-review"; };
+        "gpt-5.2" = {
+          provider = "codex";
+          upstream_model = "gpt-5.2";
+        };
+        "gpt-5.3-codex" = {
+          provider = "codex";
+          upstream_model = "gpt-5.3-codex";
+        };
+        "codex-auto-review" = {
+          provider = "codex";
+          upstream_model = "codex-auto-review";
+        };
 
         # -- GPT-5.6 tiers (Sol / Terra / Luna), GA 2026-07-09. Client-facing
         #    `gpt-5.6` is the flagship Sol; Terra is the balanced coding tier,
@@ -147,13 +175,27 @@ in
         #    Sure used to be the only 5.6-Luna caller, but that is gone too:
         #    all standing 5.6 use now lands on Sol, and cheaper/larger tiers are
         #    explicit model choices rather than hidden defaults.
-        "gpt-5.6" = { provider = "codex"; upstream_model = "gpt-5.6-sol"; fallback = [ "gemma4:e4b" ]; };
-        "gpt-5.6-terra" = { provider = "codex"; upstream_model = "gpt-5.6-terra"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-5.6" = {
+          provider = "codex";
+          upstream_model = "gpt-5.6-sol";
+          fallback = [ "gemma4:e4b" ];
+        };
+        "gpt-5.6-terra" = {
+          provider = "codex";
+          upstream_model = "gpt-5.6-terra";
+          fallback = [ "gemma4:e4b" ];
+        };
 
         # Manual paid Asale choices. They stay out of automatic fallbacks: a
         # session spends USDT only after selecting one of these ids.
-        "asale-gpt-5.6-sol"   = { provider = "asale"; upstream_model = "gpt-5.6-sol"; };
-        "asale-gpt-5.6-terra" = { provider = "asale"; upstream_model = "gpt-5.6-terra"; };
+        "asale-gpt-5.6-sol" = {
+          provider = "asale";
+          upstream_model = "gpt-5.6-sol";
+        };
+        "asale-gpt-5.6-terra" = {
+          provider = "asale";
+          upstream_model = "gpt-5.6-terra";
+        };
 
         # -- GPT-6 generation. The codex surface offers TWO tiers, not 5.6's
         #    three: `gpt-6-astra` ("our most capable model for complex,
@@ -188,30 +230,64 @@ in
         #    model list. Both are per-conversation opt-ins that fall back to
         #    gpt-5.6 on restart — no path where GPT-6 becomes the standing
         #    model without someone editing Nix.
-        "gpt-6" = { provider = "codex"; upstream_model = "gpt-6-astra"; fallback = [ "gemma4:e4b" ]; };
-        "gpt-reserve" = { provider = "codex"; upstream_model = "gpt-reserve"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-6" = {
+          provider = "codex";
+          upstream_model = "gpt-6-astra";
+          fallback = [ "gemma4:e4b" ];
+        };
+        "gpt-reserve" = {
+          provider = "codex";
+          upstream_model = "gpt-reserve";
+          fallback = [ "gemma4:e4b" ];
+        };
         # Luna/Sol joined the plan's codex listing after the 09-06 probe (seen
         # only with client_version=1.0.0). Luna passed strict json_schema, tools
         # and streaming here on 2026-09-24.
-        "gpt-6-luna" = { provider = "codex"; upstream_model = "gpt-6-luna"; fallback = [ "gemma4:e4b" ]; };
+        "gpt-6-luna" = {
+          provider = "codex";
+          upstream_model = "gpt-6-luna";
+          fallback = [ "gemma4:e4b" ];
+        };
         # Sol is 6.1 only; `gpt-6-sol` is an alias to it below. Codex CLI only
         # lists 6.1 from 0.159.0; the gate's Codex Desktop fingerprint already
         # gets it (probed OK 2026-10-01, Plus).
-        "gpt-6.1-sol" = { provider = "codex"; upstream_model = "gpt-6.1-sol"; fallback = [ "gemma4:e4b" ]; };
-        "asale-gpt-6-astra" = { provider = "asale"; upstream_model = "gpt-6-astra"; };
-        "asale-gpt-6-luna"  = { provider = "asale"; upstream_model = "gpt-6-luna"; };
-        "asale-gpt-6.1-sol" = { provider = "asale"; upstream_model = "gpt-6.1-sol"; };
+        "gpt-6.1-sol" = {
+          provider = "codex";
+          upstream_model = "gpt-6.1-sol";
+          fallback = [ "gemma4:e4b" ];
+        };
+        "asale-gpt-6-astra" = {
+          provider = "asale";
+          upstream_model = "gpt-6-astra";
+        };
+        "asale-gpt-6-luna" = {
+          provider = "asale";
+          upstream_model = "gpt-6-luna";
+        };
+        "asale-gpt-6.1-sol" = {
+          provider = "asale";
+          upstream_model = "gpt-6.1-sol";
+        };
 
         # -- Anthropic (Claude) via the shared OAuth account pool --
         # claude-opus-5 (GA 2026-07-24): flagship Opus, the new default on
         # Claude Max/Pro, so the subscription-OAuth pool serves it natively.
-        "claude" = { provider = "claude"; upstream_model = "claude-opus-5"; };
+        "claude" = {
+          provider = "claude";
+          upstream_model = "claude-opus-5";
+        };
 
         # -- oMLX models (Mac local inference via tailscale serve) --
         # No fallback: Mac-asleep should surface as an error rather than
         # silently consume the codex budget.
-        "Qwen3.6-27B-4bit"         = { provider = "omlx"; upstream_model = "Qwen3.6-27B-4bit"; };
-        "Qwen3.6-35B-A3B-4bit-DWQ" = { provider = "omlx"; upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ"; };
+        "Qwen3.6-27B-4bit" = {
+          provider = "omlx";
+          upstream_model = "Qwen3.6-27B-4bit";
+        };
+        "Qwen3.6-35B-A3B-4bit-DWQ" = {
+          provider = "omlx";
+          upstream_model = "Qwen3.6-35B-A3B-4bit-DWQ";
+        };
 
         # "auto" — local-first model with a resilience cascade: gemma4:e4b on
         # beast → codex gpt-5.6 (beast unreachable/5xx) → Claude (codex also
@@ -221,50 +297,53 @@ in
         # Gemini frontends (chatUpstream dispatches per hop). Fallback triggers
         # on transport errors + 5xx — see internal/server/chat.go.
         "auto" = {
-          provider       = "ollama";
+          provider = "ollama";
           upstream_model = "gemma4:e4b";
-          fallback       = [ "gpt-5.6" "claude" ];
+          fallback = [
+            "gpt-5.6"
+            "claude"
+          ];
         };
       };
 
       aliases = {
         # PicoClaw strips "openai/" prefix, older configs may still carry
         # it — handle both.
-        "openai/gemma4:e4b"          = "gemma4:e4b";
-        "openai/gemma4:26b"          = "gemma4:26b";
-        "openai/qwen3.8:27b"         = "qwen3.8:27b";
-        "openai/qwen3-vl:8b"         = "qwen3-vl:8b";
-        "openai/qwen3-embedding:8b"  = "qwen3-embedding:8b";
-        "openai/gpt-5.5"             = "gpt-5.5";
-        "openai/gpt-5.5-mini"        = "gpt-5.5-mini";
-        "openai/gpt-5.2"             = "gpt-5.2";
-        "openai/gpt-5.3-codex"       = "gpt-5.3-codex";
-        "openai/codex-auto-review"   = "codex-auto-review";
+        "openai/gemma4:e4b" = "gemma4:e4b";
+        "openai/gemma4:26b" = "gemma4:26b";
+        "openai/qwen3.8:27b" = "qwen3.8:27b";
+        "openai/qwen3-vl:8b" = "qwen3-vl:8b";
+        "openai/qwen3-embedding:8b" = "qwen3-embedding:8b";
+        "openai/gpt-5.5" = "gpt-5.5";
+        "openai/gpt-5.5-mini" = "gpt-5.5-mini";
+        "openai/gpt-5.2" = "gpt-5.2";
+        "openai/gpt-5.3-codex" = "gpt-5.3-codex";
+        "openai/codex-auto-review" = "codex-auto-review";
         # GPT-5.6 tiers. `gpt-5.6-sol`/`gpt-5.6` both resolve to the flagship,
         # mirroring OpenAI's own aliasing.
-        "gpt-5.6-sol"                = "gpt-5.6";
-        "openai/gpt-5.6"             = "gpt-5.6";
-        "openai/gpt-5.6-sol"         = "gpt-5.6";
-        "openai/gpt-5.6-terra"       = "gpt-5.6-terra";
+        "gpt-5.6-sol" = "gpt-5.6";
+        "openai/gpt-5.6" = "gpt-5.6";
+        "openai/gpt-5.6-sol" = "gpt-5.6";
+        "openai/gpt-5.6-terra" = "gpt-5.6-terra";
         # GPT-6. `gpt-6-astra` (the upstream slug) resolves to the same
         # client-facing `gpt-6`, mirroring the gpt-5.6-sol → gpt-5.6 aliasing.
-        "gpt-6-astra"                = "gpt-6";
-        "openai/gpt-6"               = "gpt-6";
-        "openai/gpt-6-astra"         = "gpt-6";
-        "openai/gpt-reserve"         = "gpt-reserve";
-        "openai/gpt-6-luna"          = "gpt-6-luna";
-        "gpt-6-sol"                  = "gpt-6.1-sol";
-        "openai/gpt-6-sol"           = "gpt-6.1-sol";
-        "openai/gpt-6.1-sol"         = "gpt-6.1-sol";
-        "openai/asale-gpt-6-astra"   = "asale-gpt-6-astra";
-        "openai/asale-gpt-6-luna"    = "asale-gpt-6-luna";
-        "asale-gpt-6-sol"            = "asale-gpt-6.1-sol";
-        "openai/asale-gpt-6-sol"     = "asale-gpt-6.1-sol";
-        "openai/asale-gpt-6.1-sol"   = "asale-gpt-6.1-sol";
-        "asale/gpt-6-astra"          = "asale-gpt-6-astra";
-        "asale/gpt-6-luna"           = "asale-gpt-6-luna";
-        "asale/gpt-6-sol"            = "asale-gpt-6.1-sol";
-        "asale/gpt-6.1-sol"          = "asale-gpt-6.1-sol";
+        "gpt-6-astra" = "gpt-6";
+        "openai/gpt-6" = "gpt-6";
+        "openai/gpt-6-astra" = "gpt-6";
+        "openai/gpt-reserve" = "gpt-reserve";
+        "openai/gpt-6-luna" = "gpt-6-luna";
+        "gpt-6-sol" = "gpt-6.1-sol";
+        "openai/gpt-6-sol" = "gpt-6.1-sol";
+        "openai/gpt-6.1-sol" = "gpt-6.1-sol";
+        "openai/asale-gpt-6-astra" = "asale-gpt-6-astra";
+        "openai/asale-gpt-6-luna" = "asale-gpt-6-luna";
+        "asale-gpt-6-sol" = "asale-gpt-6.1-sol";
+        "openai/asale-gpt-6-sol" = "asale-gpt-6.1-sol";
+        "openai/asale-gpt-6.1-sol" = "asale-gpt-6.1-sol";
+        "asale/gpt-6-astra" = "asale-gpt-6-astra";
+        "asale/gpt-6-luna" = "asale-gpt-6-luna";
+        "asale/gpt-6-sol" = "asale-gpt-6.1-sol";
+        "asale/gpt-6.1-sol" = "asale-gpt-6.1-sol";
 
         # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
         # THREAD-TITLE model (`titleModelId` in the provider catalog baked into
@@ -279,9 +358,9 @@ in
         # AFFiNE hardcodes OpenAI GPT model names for its OpenAI provider.
         # Route through "auto" so beast-down falls back to codex.
         "gpt-4.1-2025-04-14" = "auto";
-        "gpt-4.1-mini"       = "auto";
-        "gpt-4o"             = "auto";
-        "gpt-4o-mini"        = "auto";
+        "gpt-4.1-mini" = "auto";
+        "gpt-4o" = "auto";
+        "gpt-4o-mini" = "auto";
 
         # AFFiNE hardcodes OpenAI embedding model names.
         "text-embedding-3-small" = "qwen3-embedding:8b";
@@ -289,12 +368,12 @@ in
 
         # AFFiNE Gemini provider model names (served by Gemini frontend).
         # Route through "auto" so beast-down falls back to codex.
-        "gemini-2.5-flash"     = "auto";
-        "gemini-2.5-pro"       = "auto";
-        "gemini-2.0-flash"     = "auto";
+        "gemini-2.5-flash" = "auto";
+        "gemini-2.5-pro" = "auto";
+        "gemini-2.0-flash" = "auto";
         "gemini-2.0-flash-001" = "auto";
         "gemini-embedding-001" = "qwen3-embedding:8b";
-        "text-embedding-004"   = "qwen3-embedding:8b";
+        "text-embedding-004" = "qwen3-embedding:8b";
       };
 
       # MCP transport bridges — replaces the 2-process supergateway chain
@@ -342,15 +421,24 @@ in
         # (zsh/aliases.zsh). Not Haiku: Claude Code forces tool_choice for
         # WebSearch, which Asale answers with a 400.
         # Also claude-token-refresh's ping (asale-luna), so it opens no 5h window.
-        routes = lib.mapAttrs' (tier: model: lib.nameValuePair "asale-${tier}" {
-            upstream = "https://gw.asale.ai";
-            inherit model;
-            auth = {
-              type = "bearer";
-              token_file = "/run/agenix/asale-api-key";
+        routes =
+          lib.mapAttrs'
+            (
+              tier: model:
+              lib.nameValuePair "asale-${tier}" {
+                upstream = "https://gw.asale.ai";
+                inherit model;
+                auth = {
+                  type = "bearer";
+                  token_file = "/run/agenix/asale-api-key";
+                };
+              }
+            )
+            {
+              luna = "gpt-6-luna";
+              sol = "gpt-6.1-sol";
+              astra = "gpt-6-astra";
             };
-          })
-          { luna = "gpt-6-luna"; sol = "gpt-6.1-sol"; astra = "gpt-6-astra"; };
 
         accounts = [
           {
@@ -416,7 +504,10 @@ in
   # static config: tiny-llm-gate registers them at startup and proxies
   # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
-    after = [ "network.target" "claude-oauth-extract.service" ];
+    after = [
+      "network.target"
+      "claude-oauth-extract.service"
+    ];
     wants = [ "claude-oauth-extract.service" ];
 
     # Writable state for the codex provider's OAuth credentials. The native
@@ -445,7 +536,7 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.tiny-llm-gate = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote =
       "the only state is /var/lib/tiny-llm-gate/codex-credentials.json, a "
       + "self-rotating ChatGPT OAuth credential. It cannot be restored from a "
@@ -457,13 +548,13 @@ in
     heavyUnits = [ ];
 
     public = {
-      order   = 300;
-      port    = 4001;
+      order = 300;
+      port = 4001;
       backend = "http://127.0.0.1:4001";
       tile = {
-        name        = "tiny-llm-gate";
-        icon        = "mdi-brain";
-        category    = "Backend";
+        name = "tiny-llm-gate";
+        icon = "mdi-brain";
+        category = "Backend";
         description = "LLM gateway (OpenAI + Gemini + Anthropic + native Codex)";
       };
     };

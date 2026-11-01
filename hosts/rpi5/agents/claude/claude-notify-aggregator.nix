@@ -43,7 +43,7 @@
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.claude-notify = {
-    backup     = [ "none" ];
+    backup = [ "none" ];
     backupNote =
       "no persistent state — the debounce pool is in memory, and a restart at "
       + "worst drops one pending digest";
@@ -51,8 +51,8 @@
 
     # No tile: an ingest endpoint for agent hooks, nothing to visit.
     public = {
-      order   = 370;
-      port    = 8088;
+      order = 370;
+      port = 8088;
       backend = "http://127.0.0.1:8088";
     };
   };

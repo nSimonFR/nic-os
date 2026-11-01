@@ -19,12 +19,21 @@
 # waking on first request and stopping after 10 min idle. Tradeoff: scheduled
 # tasks / ingestion pause while asleep and resume on wake; Better Auth sessions
 # are SQLite-backed so a cold wake is safe.
-{ config, lib, pkgs, tailnetFqdn, pgHost, pgPort, apertureUrl, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  tailnetFqdn,
+  pgHost,
+  pgPort,
+  apertureUrl,
+  ...
+}:
 let
   # Tailscale Serve (HTTPS :3450) → socket-activate proxy (:8220) → papra (:8221).
   externalPort = 3450;
-  proxyPort    = 8220;
-  backendPort  = 8221;
+  proxyPort = 8220;
+  backendPort = 8221;
 
   appUrl = "https://${tailnetFqdn}:${toString externalPort}";
 
@@ -35,7 +44,7 @@ let
   personalOrg = "org_g9brest62431f0c6w3uywbdr";
   # Top-level Nextcloud "PAPRA" folder (drive drop-zone; also the Proton poller's
   # ingestion target). Matches the user's ALL-CAPS top-level folder convention.
-  ncUser  = "nsimon";
+  ncUser = "nsimon";
   ncInbox = "/mnt/data/nextcloud/data/${ncUser}/files/PAPRA";
 
   # Read-only mirror organised <Type>/<Year>/ (papra-nc-sync). Deliberately
@@ -43,7 +52,7 @@ let
   # shared by Tailscale Drive as root, so anything in it is writable regardless
   # of mode. Nextcloud sees it through a files_external mount instead — it does
   # not traverse symlinks (PHOTOS -> immich has 0 oc_filecache rows).
-  archiveDir   = "/mnt/data/papra-archive";
+  archiveDir = "/mnt/data/papra-archive";
   archiveMount = "Papra";
 
   occ = "${config.services.nextcloud.occ}/bin/nextcloud-occ";
@@ -56,7 +65,7 @@ let
 in
 {
   services.papra = {
-    enable  = true;
+    enable = true;
     # pkgs.papra resolves to unstablePkgs.papra via the overlay (overlays.nix) —
     # needs 26.6.0+ for AI auto-tagging.
     package = pkgs.papra;
@@ -66,11 +75,11 @@ in
 
     environment = {
       # ── Networking / reverse-proxy ───────────────────────────────────────
-      PORT            = backendPort;
+      PORT = backendPort;
       SERVER_HOSTNAME = "127.0.0.1";
       # Better Auth is strict about origins behind a reverse proxy. All four must
       # carry the public Tailscale Serve URL or login/cookies break.
-      APP_BASE_URL    = appUrl;
+      APP_BASE_URL = appUrl;
       SERVER_BASE_URL = appUrl;
       CLIENT_BASE_URL = appUrl;
       TRUSTED_ORIGINS = appUrl;
@@ -84,8 +93,8 @@ in
       # Files copied into <ingestionDir>/<organizationId>/ are ingested then
       # deleted (POST_PROCESSING default = delete). Polling watcher: robust for
       # bulk cp/rsync onto the HDD.
-      INGESTION_FOLDER_IS_ENABLED          = true;
-      INGESTION_FOLDER_ROOT_PATH           = ingestionDir;
+      INGESTION_FOLDER_IS_ENABLED = true;
+      INGESTION_FOLDER_ROOT_PATH = ingestionDir;
       INGESTION_FOLDER_WATCHER_USE_POLLING = true;
 
       # ── OCR / content extraction ─────────────────────────────────────────
@@ -107,9 +116,9 @@ in
       # karakeep/affine (embedding-using) must hit :4001 directly.
       # NOTE: native tagging is fire-once with no retry — a doc ingested while
       # beast is asleep/down stays untagged until re-ingested (no wait-for-beast).
-      AI_IS_ENABLED        = true;
-      OPENAI_BASE_URL      = "${apertureUrl}/v1";
-      AI_DEFAULT_MODEL     = "openai://qwen3-vl:8b";
+      AI_IS_ENABLED = true;
+      OPENAI_BASE_URL = "${apertureUrl}/v1";
+      AI_DEFAULT_MODEL = "openai://qwen3-vl:8b";
       AUTO_TAGGING_ENABLED = true;
 
       # First registered user becomes admin (module/app default). Registration is
@@ -141,12 +150,28 @@ in
     # not just papra. Forced to the modes this host already runs — taking
     # upstream's stricter ones is fine (papra owns the dirs; the inbox feeder and
     # restic run as root, papra-backup as papra) but is its own change.
-    "/mnt/data/papra".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
-    "${documentsDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
-    "${ingestionDir}".d   = { user = "papra"; group = "papra"; mode = lib.mkForce "0755"; };
+    "/mnt/data/papra".d = {
+      user = "papra";
+      group = "papra";
+      mode = lib.mkForce "0755";
+    };
+    "${documentsDir}".d = {
+      user = "papra";
+      group = "papra";
+      mode = lib.mkForce "0755";
+    };
+    "${ingestionDir}".d = {
+      user = "papra";
+      group = "papra";
+      mode = lib.mkForce "0755";
+    };
     # This mode IS the read-only guarantee: php-fpm runs as `nextcloud`, and
     # neither it nor nsimon is in group papra.
-    "${archiveDir}".d     = { user = "papra"; group = "papra"; mode = "0755"; };
+    "${archiveDir}".d = {
+      user = "papra";
+      group = "papra";
+      mode = "0755";
+    };
   };
 
   # ── Nextcloud "PAPRA" inbox feeder ────────────────────────────────────────
@@ -156,9 +181,13 @@ in
   # nextcloud-owned source files → papra-owned ingestion dir.
   systemd.services.papra-inbox-watch = {
     description = "Feed the Nextcloud PAPRA folder into Papra ingestion";
-    path = with pkgs; [ coreutils findutils gnugrep ];
+    path = with pkgs; [
+      coreutils
+      findutils
+      gnugrep
+    ];
     environment = {
-      PAPRA_INBOXES    = ncInbox;
+      PAPRA_INBOXES = ncInbox;
       PAPRA_INBOX_DEST = "${ingestionDir}/${personalOrg}";
     };
     serviceConfig = {
@@ -172,9 +201,9 @@ in
     description = "Poll the Nextcloud PAPRA folder";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec       = "3min";
+      OnBootSec = "3min";
       OnUnitActiveSec = "2min";
-      Persistent      = true;
+      Persistent = true;
     };
   };
 
@@ -201,9 +230,9 @@ in
     description = "Periodic Papra untagged-doc reconcile";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec       = "6min";
+      OnBootSec = "6min";
       OnUnitActiveSec = "15min";
-      Persistent      = true;
+      Persistent = true;
     };
   };
 
@@ -216,7 +245,10 @@ in
   # lands in Papra within a few minutes.
   systemd.services.papra-proton-poll = {
     description = "Feed Proton 'Papra' folder attachments into Papra ingestion";
-    after = [ "hydroxide.service" "network-online.target" ];
+    after = [
+      "hydroxide.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     environment.PAPRA_PROTON_DEST = "${ingestionDir}/${personalOrg}";
     serviceConfig = {
@@ -230,9 +262,9 @@ in
     description = "Poll Proton 'Papra' folder";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnBootSec       = "4min";
+      OnBootSec = "4min";
       OnUnitActiveSec = "5min";
-      Persistent      = true;
+      Persistent = true;
     };
   };
 
@@ -242,7 +274,10 @@ in
   systemd.services.papra-nc-archive-mount = {
     description = "Mount the Papra archive into Nextcloud, read-only";
     wantedBy = [ "multi-user.target" ];
-    after = [ "nextcloud-setup.service" "systemd-tmpfiles-setup.service" ];
+    after = [
+      "nextcloud-setup.service"
+      "systemd-tmpfiles-setup.service"
+    ];
     requires = [ "nextcloud-setup.service" ];
     environment = {
       OCC = occ;
@@ -264,7 +299,10 @@ in
   # writes the papra-owned archive, runs occ, reads Nextcloud's config.php.
   systemd.services.papra-nc-sync = {
     description = "Reconcile Papra documents into the read-only Nextcloud archive";
-    after = [ "postgresql.service" "papra-nc-archive-mount.service" ];
+    after = [
+      "postgresql.service"
+      "papra-nc-archive-mount.service"
+    ];
     wants = [ "papra-nc-archive-mount.service" ];
     environment = {
       PAPRA_DB = "/var/lib/papra/db.sqlite";
@@ -293,9 +331,9 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       # Offset from papra-tag-sweep (6min/15min), so a fresh tag lands next pass.
-      OnBootSec       = "9min";
+      OnBootSec = "9min";
       OnUnitActiveSec = "15min";
-      Persistent      = true;
+      Persistent = true;
     };
   };
 
@@ -305,15 +343,15 @@ in
   # /api/ping (always-200 public route) because the Node server binds a little
   # after systemd "active" and ExecStartPre runs migrations on cold start.
   services.socketActivate.papra = {
-    enable   = true;
+    enable = true;
     realUnit = "papra.service";
-    listen   = [ "127.0.0.1:${toString proxyPort}" ];
-    backend  = "127.0.0.1:${toString backendPort}";
-    idleSec  = 600;
+    listen = [ "127.0.0.1:${toString proxyPort}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    idleSec = 600;
     readyProbe = {
-      url          = "http://127.0.0.1:${toString backendPort}/api/ping";
+      url = "http://127.0.0.1:${toString backendPort}/api/ping";
       expectStatus = 200;
-      timeoutSec   = 120;
+      timeoutSec = 120;
     };
   };
 
@@ -321,19 +359,22 @@ in
   # Two mechanisms: the libSQL metadata DB is dumped by papra-backup, the
   # document files already sit on the HDD under /mnt/data/papra/documents.
   nic.services.papra = {
-    backup        = [ "unit" "mnt-data" ];
-    backupUnits   = [ "papra-backup.service" ];   # backups.nix
-    heavyUnits    = [ "papra.service" ];
+    backup = [
+      "unit"
+      "mnt-data"
+    ];
+    backupUnits = [ "papra-backup.service" ]; # backups.nix
+    heavyUnits = [ "papra.service" ];
     heavyPriority = 120;
 
     public = {
-      order   = 80;
-      port    = 3450;
+      order = 80;
+      port = 3450;
       backend = "http://127.0.0.1:8220";
       tile = {
-        name        = "Papra";
-        icon        = "papra.svg";
-        category    = "Apps";
+        name = "Papra";
+        icon = "papra.svg";
+        category = "Apps";
         description = "Document archive (bills, invoices)";
         # Reads Papra's SQLite directly (:8087/papra), not Papra's HTTP API, so the
         # daily poll never wakes the socket-activated service.
@@ -342,9 +383,21 @@ in
           url = "http://127.0.0.1:8087/papra";
           refreshInterval = 3600000;
           mappings = [
-            { field = "documents"; label = "Documents"; format = "number"; }
-            { field = "tags"; label = "Tags"; format = "number"; }
-            { field = "size"; label = "Storage"; format = "bytes"; }
+            {
+              field = "documents";
+              label = "Documents";
+              format = "number";
+            }
+            {
+              field = "tags";
+              label = "Tags";
+              format = "number";
+            }
+            {
+              field = "size";
+              label = "Storage";
+              format = "bytes";
+            }
           ];
         };
       };

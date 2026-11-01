@@ -14,32 +14,39 @@
 # content hash per org. Clear a source folder yourself whenever you like.
 set -uo pipefail
 
-DEST="${PAPRA_INBOX_DEST:?PAPRA_INBOX_DEST unset}"          # /mnt/data/papra/ingestion/<orgId>
-INBOXES="${PAPRA_INBOXES:?PAPRA_INBOXES unset}"             # colon-separated dirs
+DEST="${PAPRA_INBOX_DEST:?PAPRA_INBOX_DEST unset}" # /mnt/data/papra/ingestion/<orgId>
+INBOXES="${PAPRA_INBOXES:?PAPRA_INBOXES unset}"    # colon-separated dirs
 STATE_DIR="${PAPRA_INBOX_STATE_DIR:-/var/lib/papra-inbox-watch}"
 STATE="$STATE_DIR/seen"
-MIN_AGE=10                                                  # secs; skip files still being written
+MIN_AGE=10 # secs; skip files still being written
 
-mkdir -p "$STATE_DIR"; touch "$STATE"
+mkdir -p "$STATE_DIR"
+touch "$STATE"
 mkdir -p "$DEST"
 now=$(date +%s)
 count=0
 
 process_dir() {
   local inbox="$1"
-  [ -d "$inbox" ] || { echo "inbox not present yet: $inbox"; return; }
+  [ -d "$inbox" ] || {
+    echo "inbox not present yet: $inbox"
+    return
+  }
   while IFS= read -r -d '' f; do
-    local mt; mt=$(stat -c %Y "$f" 2>/dev/null) || continue
-    [ $(( now - mt )) -ge "$MIN_AGE" ] || continue         # stability guard
-    local sha; sha=$(sha256sum "$f" | cut -d' ' -f1)
-    grep -q "^$sha " "$STATE" && continue                  # already filed
-    local base; base=$(basename "$f")
+    local mt
+    mt=$(stat -c %Y "$f" 2>/dev/null) || continue
+    [ $((now - mt)) -ge "$MIN_AGE" ] || continue # stability guard
+    local sha
+    sha=$(sha256sum "$f" | cut -d' ' -f1)
+    grep -q "^$sha " "$STATE" && continue # already filed
+    local base
+    base=$(basename "$f")
     local tmp="$DEST/.incoming-$sha"
     if cp -f "$f" "$tmp" && chown papra:papra "$tmp" && mv -f "$tmp" "$DEST/$base"; then
       chown papra:papra "$DEST/$base"
-      echo "$sha $base" >> "$STATE"
+      echo "$sha $base" >>"$STATE"
       echo "filed: $base ($sha) from $inbox"
-      count=$((count+1))
+      count=$((count + 1))
     else
       echo "ERROR filing: $base" >&2
       rm -f "$tmp"
@@ -47,7 +54,7 @@ process_dir() {
   done < <(find "$inbox" -maxdepth 1 -type f ! -name '.*' -print0)
 }
 
-IFS=':' read -ra dirs <<< "$INBOXES"
+IFS=':' read -ra dirs <<<"$INBOXES"
 for d in "${dirs[@]}"; do
   [ -n "$d" ] && process_dir "$d"
 done

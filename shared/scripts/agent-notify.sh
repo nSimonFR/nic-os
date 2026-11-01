@@ -17,18 +17,34 @@ source_name= message= project= immediate=false have_message=0
 
 while [ $# -gt 0 ]; do
   case $1 in
-    -s|--source)  source_name=$2; shift 2 ;;
-    -m|--message) message=$2; have_message=1; shift 2 ;;
-    -p|--project) project=$2;     shift 2 ;;
-    --immediate)  immediate=true; shift ;;
-    *)            echo "agent-notify: unknown option $1" >&2; exit 0 ;;
+  -s | --source)
+    source_name=$2
+    shift 2
+    ;;
+  -m | --message)
+    message=$2
+    have_message=1
+    shift 2
+    ;;
+  -p | --project)
+    project=$2
+    shift 2
+    ;;
+  --immediate)
+    immediate=true
+    shift
+    ;;
+  *)
+    echo "agent-notify: unknown option $1" >&2
+    exit 0
+    ;;
   esac
 done
 
 if [ "$have_message" -eq 0 ] || [ -z "$project" ]; then
   payload=$(cat 2>/dev/null)
-  [ "$have_message" -eq 0 ] && message=$(jq -r '.message // empty' <<< "$payload" 2>/dev/null)
-  [ -z "$project" ] && project=$(basename "$(jq -r '.cwd // ""' <<< "$payload" 2>/dev/null)")
+  [ "$have_message" -eq 0 ] && message=$(jq -r '.message // empty' <<<"$payload" 2>/dev/null)
+  [ -z "$project" ] && project=$(basename "$(jq -r '.cwd // ""' <<<"$payload" 2>/dev/null)")
 fi
 
 body=$(jq -nc --arg host "$(uname -n)" --arg project "${project:-unknown}" \

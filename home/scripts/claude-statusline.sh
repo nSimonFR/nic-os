@@ -42,7 +42,7 @@ IFS= read -r -d '' input
 # A non-whitespace IFS char preserves empty fields positionally.
 IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
   fast effort agent_name pr_num rl5h rl5h_at session_id session_name < <(
-  printf '%s' "$input" | jq -r '
+    printf '%s' "$input" | jq -r '
     [ .cwd // "",
       (.model.display_name // .model.id // ""),
       (.context_window.used_percentage // 0),
@@ -63,7 +63,7 @@ IFS=$'\037' read -r cwd model ctx_used ctx_size cost dur_ms added removed \
       (.session_id // ""),
       (.session_name // "")
     ] | map(tostring) | join("\u001f")' 2>/dev/null
-)
+  )
 [ -z "$cwd" ] && cwd="$PWD"
 
 # ── herdr workspace label ← /rename ────────────────────────────────────────
@@ -95,8 +95,10 @@ else
   # parameter expansion — no `rev`/`cut` fork, and it survives spaces in a path.
   if [[ $dir == */*/*/* ]]; then
     d1="${dir##*/}"
-    d2="${dir%/*}"; d2="${d2##*/}"
-    d3="${dir%/*/*}"; d3="${d3##*/}"
+    d2="${dir%/*}"
+    d2="${d2##*/}"
+    d3="${dir%/*/*}"
+    d3="${d3##*/}"
     dir="…/${d3}/${d2}/${d1}"
   fi
 fi
@@ -149,7 +151,7 @@ if [ -n "$model" ]; then
   out="${out}${sep}${green}✳ ${model}${reset}"
   [ -n "$fast" ] && out="${out}${yellow}⚡${reset}"
   case "$effort" in
-    high|xhigh|max) out="${out}${dim}:${effort}${reset}" ;;
+  high | xhigh | max) out="${out}${dim}:${effort}${reset}" ;;
   esac
 fi
 
@@ -173,9 +175,12 @@ fi
 # ── elapsed ────────────────────────────────────────────────────────────────
 if [ "${dur_ms:-0}" -gt 0 ] 2>/dev/null; then
   s=$((dur_ms / 1000))
-  if   [ "$s" -lt 60 ];   then t="${s}s"
-  elif [ "$s" -lt 3600 ]; then t="$((s / 60))m$((s % 60))s"
-  else                         t="$((s / 3600))h$(((s % 3600) / 60))m"
+  if [ "$s" -lt 60 ]; then
+    t="${s}s"
+  elif [ "$s" -lt 3600 ]; then
+    t="$((s / 60))m$((s % 60))s"
+  else
+    t="$((s / 3600))h$(((s % 3600) / 60))m"
   fi
   out="${out}${sep}${yellow}⏱ ${t}${reset}"
 fi

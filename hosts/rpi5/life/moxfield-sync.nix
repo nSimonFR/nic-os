@@ -40,7 +40,12 @@
 # Reconciliation is diff-based (add/update/delete per item), NOT delete-and-recreate:
 # ShowMyCards' /api/data/import is additive-only with no replace mode, so a
 # recreate-style sync would duplicate the collection on every run.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   stateDir = "/var/lib/moxfield-sync";
 
@@ -49,7 +54,10 @@ let
   # Dust" is owned by Hexaphrodite and reachable via nSimon alone. Listing
   # Hexaphrodite as well widens this to *all* of their decks, co-authored or not.
   # Results are deduped by publicId, so the overlap costs nothing but the search.
-  users = [ "nSimon" "Hexaphrodite" ];
+  users = [
+    "nSimon"
+    "Hexaphrodite"
+  ];
 
   # Whose COLLECTION mirrors into ShowMyCards. Deliberately one user, not `users`:
   # the inventory represents the cards physically in this house, and merging a second
@@ -78,7 +86,10 @@ in
   # A run on every activation would hammer Moxfield on each rebuild.
   systemd.services.moxfield-sync = {
     description = "Mirror Moxfield collection + decks into ShowMyCards";
-    after = [ "showmycards-proxy.socket" "network-online.target" ];
+    after = [
+      "showmycards-proxy.socket"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     environment = {
       MOXFIELD_USERS = lib.concatStringsSep "," users;
@@ -119,8 +130,8 @@ in
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 05:20:00"; # after the backup window, before the morning
-      Persistent = true;             # catch up a missed run if the Pi was off
-      RandomizedDelaySec = "10m";    # don't hit Moxfield at a predictable instant
+      Persistent = true; # catch up a missed run if the Pi was off
+      RandomizedDelaySec = "10m"; # don't hit Moxfield at a predictable instant
     };
   };
 }

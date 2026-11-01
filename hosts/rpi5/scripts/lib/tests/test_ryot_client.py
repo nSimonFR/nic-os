@@ -16,7 +16,9 @@ STARTUP_FAILED = (
 
 def http_error(code, body):
     return lambda: (_ for _ in ()).throw(
-        urllib.error.HTTPError("http://ryot", code, "err", {}, io.BytesIO(body.encode()))
+        urllib.error.HTTPError(
+            "http://ryot", code, "err", {}, io.BytesIO(body.encode())
+        )
     )
 
 
@@ -25,10 +27,12 @@ def client(op):
 
 
 def test_a_startup_failure_retries_once_under_a_new_key():
-    op = FakeOpener([http_error(502, STARTUP_FAILED), json_reply({"result": {"status": "saved"}})])
-    assert client(op).operation("ryot/media", "media-activity-log", {"a": 1}, "sub1") == {
-        "status": "saved"
-    }
+    op = FakeOpener(
+        [http_error(502, STARTUP_FAILED), json_reply({"result": {"status": "saved"}})]
+    )
+    assert client(op).operation(
+        "ryot/media", "media-activity-log", {"a": 1}, "sub1"
+    ) == {"status": "saved"}
     first, second = op.body_of(0), op.body_of(1)
     assert first["idempotencyKey"] == "sub1"
     assert second["idempotencyKey"].startswith("sub1~")

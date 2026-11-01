@@ -60,7 +60,10 @@ def test_get_json_passes_headers():
 def test_post_form_urlencodes_and_keeps_extra_headers():
     op = FakeOpener([json_reply({"access_token": "tok"})])
     out = post_form(
-        "http://x", {"grant_type": "refresh_token"}, headers={"Authorization": "Basic z"}, opener=op
+        "http://x",
+        {"grant_type": "refresh_token"},
+        headers={"Authorization": "Basic z"},
+        opener=op,
     )
     assert out["access_token"] == "tok"
     assert op.last.data == b"grant_type=refresh_token"
@@ -163,7 +166,8 @@ def test_post_export_wraps_metadata_in_a_complete_export_body():
 
 
 @pytest.mark.parametrize(
-    ("status", "ok"), [(200, True), (201, True), (202, True), (204, False), (500, False)]
+    ("status", "ok"),
+    [(200, True), (201, True), (202, True), (204, False), (500, False)],
 )
 def test_is_ok_accepts_the_three_statuses_ryot_uses(status, ok):
     assert ryot.is_ok(status) is ok

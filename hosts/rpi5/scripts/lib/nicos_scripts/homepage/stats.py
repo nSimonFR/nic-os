@@ -194,7 +194,8 @@ class Config:
     # Nextcloud (hosts/rpi5/knowledge/nextcloud.nix) is the one tile left that genuinely needs
     # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
-        "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json")
+        "http://127.0.0.1:8091/ocs/v2.php/apps/serverinfo/api/v1/info?format=json"
+    )
     # serverinfo reports num_files and num_shares but nothing per-window and no
     # contact count, so the two figures that replaced `users`/`shares` come from
     # Nextcloud's Postgres instead (same superuser-over-peer route as forgejo).
@@ -234,8 +235,7 @@ class Config:
     # 1.5 GB-capped Node process to read three numbers. The files belong to nsimon
     # and this service runs as root, so the 0700 sessions dir is reachable.
     zstd: str = "zstd"
-    dsh_sessions_glob: str = (
-        "/home/nsimon/.dsh/sessions/*/session-*/session.jsonl.zstd")
+    dsh_sessions_glob: str = "/home/nsimon/.dsh/sessions/*/session-*/session.jsonl.zstd"
 
     # Aperture's Prometheus endpoint (hosts/rpi5/agents/aperture-sync.nix grants
     # `read_metrics` to nSimonFR@github; without it this 403s, and `admin` does
@@ -303,12 +303,32 @@ class Stats:
     """The published payload. Was a module-level dict plus a bare lock."""
 
     KEYS = (
-        "sure", "wealthfolio", "immich", "karakeep", "homeassistant",
-        "papra", "reactiveresume", "grampsweb",
-        "vaultwarden", "wakapi", "dawarich", "airtrail", "forgejo",
-        "beaverhabits", "ryot", "memos", "showmycards",
-        "nextcloud", "calino", "affine", "openknowledge", "beszel",
-        "freereps", "aperture", "dsh", "switch",
+        "sure",
+        "wealthfolio",
+        "immich",
+        "karakeep",
+        "homeassistant",
+        "papra",
+        "reactiveresume",
+        "grampsweb",
+        "vaultwarden",
+        "wakapi",
+        "dawarich",
+        "airtrail",
+        "forgejo",
+        "beaverhabits",
+        "ryot",
+        "memos",
+        "showmycards",
+        "nextcloud",
+        "calino",
+        "affine",
+        "openknowledge",
+        "beszel",
+        "freereps",
+        "aperture",
+        "dsh",
+        "switch",
     )
 
     def __init__(self):
@@ -348,8 +368,7 @@ class Stats:
         tick was the next attempt. Three times that needed clearing by hand.
         """
         with self._lock:
-            return [k for k, v in self._data.items()
-                    if not v or set(v) == {"error"}]
+            return [k for k, v in self._data.items() if not v or set(v) == {"error"}]
 
     def __contains__(self, key):
         return key in self._data
@@ -370,6 +389,7 @@ def env_var(cfg, name):
 
 # ── helpers shared by the fetchers ────────────────────────────────────────────
 
+
 def sqlite_scalar(cfg, run, db, sql):
     """One read-only scalar out of a SQLite database."""
     return run([cfg.sqlite, "-readonly", db, sql]).strip()
@@ -383,7 +403,9 @@ def pg_superuser(cfg, run, db, sql):
     # postgres superuser via peer auth on the local Unix socket — works for
     # any DB regardless of the app's own auth (password role or, like
     # forgejo, peer-only with no password role at all). Read-only SELECTs.
-    return run([cfg.runuser, "-u", "postgres", "--", cfg.psql, "-d", db, "-tAc", sql]).strip()
+    return run(
+        [cfg.runuser, "-u", "postgres", "--", cfg.psql, "-d", db, "-tAc", sql]
+    ).strip()
 
 
 def curl_json(cfg, run, *args):
@@ -421,6 +443,7 @@ def compact(n):
 
 # ── fetchers ─────────────────────────────────────────────────────────────────
 
+
 def fetch_sure(cfg, run):
     """This month against its budget, spendable cash, and activity.
 
@@ -435,19 +458,29 @@ def fetch_sure(cfg, run):
     is the thing that models the flat and the mortgage and is therefore the
     only place the number is complete.
     """
-    spend = pg_superuser(cfg, run, "sure_production", """
+    spend = pg_superuser(
+        cfg,
+        run,
+        "sure_production",
+        """
         SELECT COALESCE(round(sum(e.amount)::numeric, 2), 0)
         FROM entries e
         JOIN transactions t ON t.id = e.entryable_id AND e.entryable_type = 'Transaction'
         JOIN accounts a ON a.id = e.account_id
         WHERE e.date >= date_trunc('month', CURRENT_DATE)
           AND e.amount > 0 AND t.kind = 'standard' AND a.status <> 'draft'
-    """)
-    budget = pg_superuser(cfg, run, "sure_production", """
+    """,
+    )
+    budget = pg_superuser(
+        cfg,
+        run,
+        "sure_production",
+        """
         SELECT COALESCE(budgeted_spending, 0) FROM budgets
         WHERE start_date <= CURRENT_DATE AND end_date >= CURRENT_DATE
         ORDER BY start_date DESC LIMIT 1
-    """)
+    """,
+    )
     # Spendable cash: depositories only. Credit cards are liabilities and
     # investment/crypto accounts are not cash, so neither belongs in "what is
     # left to spend".
@@ -457,16 +490,25 @@ def fetch_sure(cfg, run):
     # spend this month — so the headline figure flatters what is actually
     # available. Matched on name because Sure has no "savings" flag on a
     # depository.
-    cash = pg_superuser(cfg, run, "sure_production", """
+    cash = pg_superuser(
+        cfg,
+        run,
+        "sure_production",
+        """
         SELECT COALESCE(round(sum(balance)::numeric, 2), 0) || '|' ||
                COALESCE(round(sum(balance) FILTER (
                  WHERE name NOT ILIKE '%livret%')::numeric, 2), 0)
         FROM accounts
         WHERE accountable_type = 'Depository' AND status <> 'draft'
-    """)
+    """,
+    )
     # The food envelope, and what has gone from it. Sure budgets on the parent
     # category and books spend against its children, so both levels count.
-    food = pg_superuser(cfg, run, "sure_production", """
+    food = pg_superuser(
+        cfg,
+        run,
+        "sure_production",
+        """
         WITH food AS (
           SELECT id FROM categories WHERE name = '0 - Food'
           UNION SELECT id FROM categories
@@ -488,7 +530,8 @@ def fetch_sure(cfg, run):
                            AND e.amount > 0 AND t.kind = 'standard'
                            AND a.status <> 'draft'
                            AND t.category_id IN (SELECT id FROM food)), 0)
-    """)
+    """,
+    )
     spend_eur = round(float(spend or 0))
     budget_eur = round(float(budget or 0))
     cash_total, cash_spendable = (float(x) for x in (cash or "0|0").split("|"))
@@ -580,22 +623,60 @@ def fetch_wealthfolio(cfg, run):
     password = env_var(cfg, "WEALTHFOLIO_PASSWORD")
     jar = os.path.join(cfg.state_dir, "wealthfolio-cookies.txt")
     # Session lives in an HttpOnly cookie; there is no bearer-token option.
-    run([cfg.curl, "-sf", "-c", jar, "-X", "POST", f"{cfg.wealthfolio_url}/api/v1/auth/login",
-         "-H", "Content-Type: application/json",
-         "-d", json.dumps({"password": password})])
+    run(
+        [
+            cfg.curl,
+            "-sf",
+            "-c",
+            jar,
+            "-X",
+            "POST",
+            f"{cfg.wealthfolio_url}/api/v1/auth/login",
+            "-H",
+            "Content-Type: application/json",
+            "-d",
+            json.dumps({"password": password}),
+        ]
+    )
 
-    net = json.loads(run([cfg.curl, "-sf", "-b", jar,
-                          f"{cfg.wealthfolio_url}/api/v1/net-worth",
-                          "-H", "Accept: application/json"]))
-    perf = json.loads(run([
-        cfg.curl, "-sf", "-b", jar, "-X", "POST",
-        f"{cfg.wealthfolio_url}/api/v1/performance/summary",
-        "-H", "Content-Type: application/json",
-        "-d", json.dumps({
-            "itemType": "account", "itemId": "TOTAL", "filter": {"type": "all"},
-            "startDate": days_ago(30), "endDate": today(),
-        }),
-    ]))
+    net = json.loads(
+        run(
+            [
+                cfg.curl,
+                "-sf",
+                "-b",
+                jar,
+                f"{cfg.wealthfolio_url}/api/v1/net-worth",
+                "-H",
+                "Accept: application/json",
+            ]
+        )
+    )
+    perf = json.loads(
+        run(
+            [
+                cfg.curl,
+                "-sf",
+                "-b",
+                jar,
+                "-X",
+                "POST",
+                f"{cfg.wealthfolio_url}/api/v1/performance/summary",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                json.dumps(
+                    {
+                        "itemType": "account",
+                        "itemId": "TOTAL",
+                        "filter": {"type": "all"},
+                        "startDate": days_ago(30),
+                        "endDate": today(),
+                    }
+                ),
+            ]
+        )
+    )
 
     assets = float(net.get("assets", {}).get("total") or 0)
     liabilities = float(net.get("liabilities", {}).get("total") or 0)
@@ -616,7 +697,11 @@ def fetch_wealthfolio(cfg, run):
     # EUR 23,626 of phantom investment value to every historical date. The app's
     # own queries scope to live accounts and were unaffected; a bare sum over
     # this table is not, and read 57,850 where the truth was 34,224.
-    basis_row = sqlite_scalar(cfg, run, cfg.wealthfolio_db, """
+    basis_row = sqlite_scalar(
+        cfg,
+        run,
+        cfg.wealthfolio_db,
+        """
         SELECT COALESCE(round(sum(CAST(v.cost_basis_base AS REAL)), 2), 0) || '|' ||
                COALESCE(round(sum(CAST(v.investment_market_value_base AS REAL)), 2), 0) || '|' ||
                COALESCE((SELECT round(sum(CAST(v2.total_value_base AS REAL)), 2)
@@ -629,9 +714,11 @@ def fetch_wealthfolio(cfg, run):
         FROM daily_account_valuation v
         WHERE EXISTS (SELECT 1 FROM accounts a WHERE a.id = v.account_id)
           AND v.valuation_date = (SELECT max(valuation_date) FROM daily_account_valuation)
-    """)
+    """,
+    )
     invested, market_value, start_value = (
-        float(x) for x in (basis_row or "0|0|0").split("|"))
+        float(x) for x in (basis_row or "0|0|0").split("|")
+    )
     # Returned as a PRE-FORMATTED STRING in percentage points ("2.24"), which
     # is not fussiness. homepage's `percent` format is
     # `Intl.NumberFormat({style:"percent"}).format(value / 100)` — it divides by
@@ -671,8 +758,15 @@ def fetch_immich(cfg, run):
     # Hit the externally-facing port (2283) so the daily fetch goes
     # through the socket-activate proxy, wakes immich-server briefly,
     # then lets it sleep again (same pattern as fetch_sure on :13334).
-    data = curl_json(cfg, run, f"{cfg.immich_url}/api/server/statistics",
-                     "-H", f"x-api-key: {key}", "-H", "Accept: application/json")
+    data = curl_json(
+        cfg,
+        run,
+        f"{cfg.immich_url}/api/server/statistics",
+        "-H",
+        f"x-api-key: {key}",
+        "-H",
+        "Accept: application/json",
+    )
     return {
         "photos": data.get("photos", 0),
         "videos": data.get("videos", 0),
@@ -693,17 +787,25 @@ def fetch_nextcloud(cfg, run):
     # anybody — num_shares has been 0 since the day it was installed. What this
     # instance actually is, is the DAV hub behind Calino and the phone's contact
     # sync, so the two replacements are the contact count and the bytes stored.
-    data = curl_json(cfg, run, cfg.nextcloud_info_url,
-                     "-H", f"NC-Token: {env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
-                     "-H", "OCS-APIRequest: true")["ocs"]["data"]
+    data = curl_json(
+        cfg,
+        run,
+        cfg.nextcloud_info_url,
+        "-H",
+        f"NC-Token: {env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
+        "-H",
+        "OCS-APIRequest: true",
+    )["ocs"]["data"]
     return {
         "files": data["nextcloud"]["storage"]["num_files"],
         # oc_cards is CardDAV's row-per-vCard table, so this is contacts across
         # every address book. Calendars are deliberately NOT counted here — the
         # Calino tile already answers the calendar question, and with recurrence
         # expansion rather than a raw oc_calendarobjects count.
-        "contacts": int(pg_superuser(cfg, run, cfg.nextcloud_db,
-                                     "SELECT COUNT(*) FROM oc_cards;") or 0),
+        "contacts": int(
+            pg_superuser(cfg, run, cfg.nextcloud_db, "SELECT COUNT(*) FROM oc_cards;")
+            or 0
+        ),
         # The filecache row with an empty path IS the storage root, so its `size`
         # is that storage's total. There are three storages here (the user's home,
         # plus the local appdata ones), and only `home::` is the user's data —
@@ -712,11 +814,19 @@ def fetch_nextcloud(cfg, run):
         # serverinfo has no equivalent: it reports `freespace`, which is a fact
         # about the disk (already in the header's resources widget), not about
         # what Nextcloud is holding.
-        "storage": int(pg_superuser(cfg, run, cfg.nextcloud_db, """
+        "storage": int(
+            pg_superuser(
+                cfg,
+                run,
+                cfg.nextcloud_db,
+                """
             SELECT COALESCE(f.size, 0) FROM oc_filecache f
               JOIN oc_storages s ON s.numeric_id = f.storage
              WHERE f.path = '' AND s.id LIKE 'home::%';
-        """) or 0),
+        """,
+            )
+            or 0
+        ),
     }
 
 
@@ -780,7 +890,6 @@ _TODO_PENDING_BODY = (
 )
 
 
-
 def _todo_filter_body(inner):
     return (
         '<c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">'
@@ -821,14 +930,23 @@ def dav_xml(cfg, run, method, url, body, depth="1"):
     `PasswordLoginForbidden`, because the token lookup misses and it then treats the
     value as a login password.)
     """
-    out = run([
-        cfg.curl, "-sf",
-        "-u", f"{cfg.nextcloud_user}:{env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
-        "-X", method,
-        "-H", f"Depth: {depth}",
-        "-H", "Content-Type: application/xml",
-        "--data", body, url,
-    ])
+    out = run(
+        [
+            cfg.curl,
+            "-sf",
+            "-u",
+            f"{cfg.nextcloud_user}:{env_var(cfg, 'NEXTCLOUD_PASSWORD')}",
+            "-X",
+            method,
+            "-H",
+            f"Depth: {depth}",
+            "-H",
+            "Content-Type: application/xml",
+            "--data",
+            body,
+            url,
+        ]
+    )
     return ET.fromstring(out)
 
 
@@ -948,17 +1066,22 @@ def fetch_calino(cfg, run, now=None):
         pending = dav_hrefs(cfg, run, url, _TODO_PENDING_BODY)
         if not pending:
             return 0
-        dated = pending & (dav_hrefs(cfg, run, url, _TODO_DUE_BODY)
-                           | dav_hrefs(cfg, run, url, _TODO_DTSTART_BODY))
+        dated = pending & (
+            dav_hrefs(cfg, run, url, _TODO_DUE_BODY)
+            | dav_hrefs(cfg, run, url, _TODO_DTSTART_BODY)
+        )
         if not dated:
             return 0
         return len(dated & dav_hrefs(cfg, run, url, _todo_current_body(stamp(now))))
 
     return {
-        "today": sum(dav_count(cfg, run, url, _event_body(start, end_today))
-                     for url in event_cals),
-        "week": sum(dav_count(cfg, run, url, _event_body(start, end_week))
-                    for url in event_cals),
+        "today": sum(
+            dav_count(cfg, run, url, _event_body(start, end_today))
+            for url in event_cals
+        ),
+        "week": sum(
+            dav_count(cfg, run, url, _event_body(start, end_week)) for url in event_cals
+        ),
         "tasks": sum(tasks(url) for url in task_cals),
     }
 
@@ -1003,7 +1126,8 @@ def fetch_affine(cfg, run):
         # deleted_at IS NULL reproduced GraphQL's blobsSize to the byte
         # (558516275); summing every row instead over-reports by the tombstones.
         "storage": count(
-            "SELECT COALESCE(SUM(size), 0) FROM blobs WHERE deleted_at IS NULL;"),
+            "SELECT COALESCE(SUM(size), 0) FROM blobs WHERE deleted_at IS NULL;"
+        ),
     }
 
 
@@ -1039,12 +1163,15 @@ def fetch_beszel(cfg, run):
     # simply never showed it. `up` still carries the fleet size implicitly: it reads
     # 1 when beast is suspended, which is most of the time and is normal.
     return {
-        "up": sqlite_count(cfg, run, cfg.beszel_db,
-                           "SELECT COUNT(*) FROM systems WHERE status = 'up';"),
-        "alerts": sqlite_count(cfg, run, cfg.beszel_db,
-                               "SELECT COUNT(*) FROM alerts WHERE triggered = 1;"),
-        "peak_temp": float(sqlite_scalar(cfg, run, cfg.beszel_db,
-                                         BESZEL_PEAK_TEMP_SQL) or 0),
+        "up": sqlite_count(
+            cfg, run, cfg.beszel_db, "SELECT COUNT(*) FROM systems WHERE status = 'up';"
+        ),
+        "alerts": sqlite_count(
+            cfg, run, cfg.beszel_db, "SELECT COUNT(*) FROM alerts WHERE triggered = 1;"
+        ),
+        "peak_temp": float(
+            sqlite_scalar(cfg, run, cfg.beszel_db, BESZEL_PEAK_TEMP_SQL) or 0
+        ),
     }
 
 
@@ -1055,7 +1182,9 @@ def fetch_openknowledge(cfg, run, now=None):
     docs = edited = size = 0
     for dirpath, dirnames, filenames in os.walk(cfg.notes_dir):
         dirnames[:] = [d for d in dirnames if not d.startswith(".")]
-        in_assets = os.path.relpath(dirpath, cfg.notes_dir).split(os.sep)[0] == "_assets"
+        in_assets = (
+            os.path.relpath(dirpath, cfg.notes_dir).split(os.sep)[0] == "_assets"
+        )
         for name in filenames:
             st = os.stat(os.path.join(dirpath, name))
             size += st.st_size
@@ -1075,24 +1204,40 @@ def fetch_karakeep(cfg, run):
     # over-tagged, not under-tagged, so the count of items the AI tagger has not
     # reached is the one number here that is both non-zero and actionable.
     return {
-        "bookmarks": sqlite_count(cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarks;"),
-        "untagged": sqlite_count(cfg, run, cfg.karakeep_db, """
+        "bookmarks": sqlite_count(
+            cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarks;"
+        ),
+        "untagged": sqlite_count(
+            cfg,
+            run,
+            cfg.karakeep_db,
+            """
             SELECT COUNT(*) FROM bookmarks b
              WHERE NOT EXISTS (SELECT 1 FROM tagsOnBookmarks t WHERE t.bookmarkId = b.id);
-        """),
-        "tags": sqlite_count(cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarkTags;"),
+        """,
+        ),
+        "tags": sqlite_count(
+            cfg, run, cfg.karakeep_db, "SELECT COUNT(*) FROM bookmarkTags;"
+        ),
     }
 
 
 def fetch_papra(cfg, run):
     # Read-only direct SQLite query — same trick as fetch_karakeep, never wakes papra.
     return {
-        "documents": sqlite_count(cfg, run, cfg.papra_db,
-                                  "SELECT COUNT(*) FROM documents WHERE is_deleted = 0;"),
+        "documents": sqlite_count(
+            cfg,
+            run,
+            cfg.papra_db,
+            "SELECT COUNT(*) FROM documents WHERE is_deleted = 0;",
+        ),
         "tags": sqlite_count(cfg, run, cfg.papra_db, "SELECT COUNT(*) FROM tags;"),
         "size": sqlite_count(
-            cfg, run, cfg.papra_db,
-            "SELECT COALESCE(SUM(original_size),0) FROM documents WHERE is_deleted = 0;"),
+            cfg,
+            run,
+            cfg.papra_db,
+            "SELECT COALESCE(SUM(original_size),0) FROM documents WHERE is_deleted = 0;",
+        ),
     }
 
 
@@ -1101,15 +1246,20 @@ def fetch_beaverhabits(cfg, run, today=None):
     # socket-activated beaverhabits service. The habit list is a compact JSON blob
     # per user in habit_list.data: {"habits":[{name,status,records:[{day,done}]}]}.
     # "archive" status = habit the user retired, so it's excluded from the counts.
-    raw = run([cfg.sqlite, "-readonly", cfg.beaverhabits_db, "SELECT data FROM habit_list;"])
+    raw = run(
+        [cfg.sqlite, "-readonly", cfg.beaverhabits_db, "SELECT data FROM habit_list;"]
+    )
     today = today or time.strftime("%Y-%m-%d")
     habits = done_today = checkins = 0
     for line in raw.splitlines():
         line = line.strip()
         if not line:
             continue
-        active = [h for h in json.loads(line).get("habits", [])
-                  if h.get("status") != "archive"]
+        active = [
+            h
+            for h in json.loads(line).get("habits", [])
+            if h.get("status") != "archive"
+        ]
         habits += len(active)
         for h in active:
             recs = h.get("records", [])
@@ -1156,9 +1306,13 @@ def fetch_showmycards(cfg, run):
     # daily to populate a number nothing rendered.
     db = cfg.showmycards_db
     return {
-        "cards": sqlite_count(cfg, run, db, "SELECT COALESCE(SUM(quantity),0) FROM inventories;"),
+        "cards": sqlite_count(
+            cfg, run, db, "SELECT COALESCE(SUM(quantity),0) FROM inventories;"
+        ),
         "decks": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM lists;"),
-        "value": round(float(sqlite_scalar(cfg, run, db, SHOWMYCARDS_VALUE_SQL) or 0), 2),
+        "value": round(
+            float(sqlite_scalar(cfg, run, db, SHOWMYCARDS_VALUE_SQL) or 0), 2
+        ),
     }
 
 
@@ -1167,10 +1321,22 @@ def fetch_reactive_resume(cfg, run):
         with open(cfg.rxresume_pw_file) as fh:
             password = fh.read().strip()
         env = dict(os.environ, PGPASSWORD=password)
-        return run([
-            cfg.psql, "-h", "127.0.0.1", "-p", "5432",
-            "-U", cfg.rxresume_role, "-d", cfg.rxresume_db, "-tAc", sql,
-        ], env=env).strip()
+        return run(
+            [
+                cfg.psql,
+                "-h",
+                "127.0.0.1",
+                "-p",
+                "5432",
+                "-U",
+                cfg.rxresume_role,
+                "-d",
+                cfg.rxresume_db,
+                "-tAc",
+                sql,
+            ],
+            env=env,
+        ).strip()
 
     # `users` was 2 and `views` was 0 — a self-hosted resume builder nobody has
     # published a public link from cannot register a view, so two of three fields
@@ -1182,10 +1348,15 @@ def fetch_reactive_resume(cfg, run):
         # reads 14 — both are the disease this change is curing, because editing a
         # CV is an every-few-months act and no fixed window fits it. Days since the
         # last edit is never 0-by-construction and answers the real question.
-        "updated": int(float(q("""
+        "updated": int(
+            float(
+                q("""
             SELECT COALESCE(EXTRACT(EPOCH FROM now() - MAX(updated_at)) / 86400, 0)
               FROM resume;
-        """) or 0)),
+        """)
+                or 0
+            )
+        ),
         # is_public stays even though it is 0, and for the same reason beszel's
         # `alerts` stays: it is an ALARM, not a statistic. Nothing here is meant to
         # be on the public internet, so 0 is the reassuring reading and a 1 is
@@ -1201,7 +1372,9 @@ def fetch_gramps_web(cfg, run, find=None):
     dbs = (find or glob.glob)(cfg.gramps_trees_glob)
 
     def sum_count(table):
-        return sum(sqlite_count(cfg, run, db, f"SELECT COUNT(*) FROM {table};") for db in dbs)
+        return sum(
+            sqlite_count(cfg, run, db, f"SELECT COUNT(*) FROM {table};") for db in dbs
+        )
 
     return {
         "people": sum_count("person"),
@@ -1219,14 +1392,20 @@ def fetch_vaultwarden(cfg, run):
     # being noise.
     db = cfg.vaultwarden_db
     return {
-        "items": sqlite_count(cfg, run, db,
-                              "SELECT COUNT(*) FROM ciphers WHERE deleted_at IS NULL;"),
+        "items": sqlite_count(
+            cfg, run, db, "SELECT COUNT(*) FROM ciphers WHERE deleted_at IS NULL;"
+        ),
         # updated_at is bumped on any edit including a password rotation; created_at
         # rows also satisfy it, which is correct — a new credential is a change too.
-        "changed_30d": sqlite_count(cfg, run, db, """
+        "changed_30d": sqlite_count(
+            cfg,
+            run,
+            db,
+            """
             SELECT COUNT(*) FROM ciphers
              WHERE deleted_at IS NULL AND updated_at > datetime('now', '-30 day');
-        """),
+        """,
+        ),
         "devices": sqlite_count(cfg, run, db, "SELECT COUNT(*) FROM devices;"),
     }
 
@@ -1241,8 +1420,11 @@ def fetch_wakapi(cfg, run):
     # mean the local day rather than shifting by two hours after midnight.
     def hours(where=""):
         ns = sqlite_count(
-            cfg, run, cfg.wakapi_db,
-            f"SELECT COALESCE(SUM(duration), 0) FROM durations {where};")
+            cfg,
+            run,
+            cfg.wakapi_db,
+            f"SELECT COALESCE(SUM(duration), 0) FROM durations {where};",
+        )
         return round(ns / 3.6e12, 1)
 
     return {
@@ -1267,6 +1449,7 @@ def fetch_dawarich(cfg, run):
     starvation it is; the 7-day point count is the field that carries the signal,
     and the two sit next to each other on the tile.
     """
+
     def count(sql):
         return int(pg_superuser(cfg, run, "dawarich", sql) or 0)
 
@@ -1308,14 +1491,22 @@ def _freereps_yesterday_total(cfg, run, metric):
     today, so the filter is a no-op now and a guard against a silently doubled
     step count once something backfills the same days twice.
     """
-    return float(pg_superuser(cfg, run, "freereps", f"""
+    return float(
+        pg_superuser(
+            cfg,
+            run,
+            "freereps",
+            f"""
         SELECT COALESCE(SUM(qty), 0)
           FROM health_metrics
          WHERE metric_name = '{metric}'
            AND source = ''
            AND time >= current_date - INTERVAL '1 day'
            AND time <  current_date;
-    """) or 0)
+    """,
+        )
+        or 0
+    )
 
 
 def _freereps_month_total(cfg, run, metric):
@@ -1330,13 +1521,21 @@ def _freereps_month_total(cfg, run, metric):
     Same `source = ''` pin and same `qty` column as the day totals — see
     _freereps_yesterday_total for why both matter.
     """
-    return float(pg_superuser(cfg, run, "freereps", f"""
+    return float(
+        pg_superuser(
+            cfg,
+            run,
+            "freereps",
+            f"""
         SELECT COALESCE(SUM(qty), 0)
           FROM health_metrics
          WHERE metric_name = '{metric}'
            AND source = ''
            AND time >= date_trunc('month', current_date);
-    """) or 0)
+    """,
+        )
+        or 0
+    )
 
 
 def fetch_freereps(cfg, run):
@@ -1365,13 +1564,18 @@ def fetch_freereps(cfg, run):
     # and a bound would render that as 0 rather than "last known"), and
     # health_metrics is small enough here that the missing-chunk-exclusion cost
     # TimescaleDB warns about is irrelevant at once a day.
-    weight = pg_superuser(cfg, run, "freereps", """
+    weight = pg_superuser(
+        cfg,
+        run,
+        "freereps",
+        """
         SELECT COALESCE(ROUND(qty::numeric, 1), 0)
           FROM health_metrics
          WHERE metric_name = 'weight_body_mass'
          ORDER BY time DESC
          LIMIT 1;
-    """)
+    """,
+    )
     # distance_walking_running is stored in METRES (the units column says "m"),
     # not kilometres: a day's 13960 alongside 18545 steps is ~0.75 m a step,
     # which is a walk, not a marathon. Reporting qty as-is would have put "13960
@@ -1388,13 +1592,20 @@ def fetch_airtrail(cfg, run):
     # flight.duration is SECONDS, not minutes: the longest flight on record is
     # 42872, i.e. 11h54m. Dividing by 60 reported 7922 "hours" for 29 flights;
     # the real total is 132.
-    seconds = int(pg_superuser(
-        cfg, run, "airtrail", "SELECT COALESCE(SUM(duration),0) FROM flight;") or 0)
+    seconds = int(
+        pg_superuser(
+            cfg, run, "airtrail", "SELECT COALESCE(SUM(duration),0) FROM flight;"
+        )
+        or 0
+    )
     return {
-        "flights": int(pg_superuser(cfg, run, "airtrail",
-                                    "SELECT COUNT(*) FROM flight;") or 0),
-        "countries": int(pg_superuser(cfg, run, "airtrail",
-                                      "SELECT COUNT(*) FROM visited_country;") or 0),
+        "flights": int(
+            pg_superuser(cfg, run, "airtrail", "SELECT COUNT(*) FROM flight;") or 0
+        ),
+        "countries": int(
+            pg_superuser(cfg, run, "airtrail", "SELECT COUNT(*) FROM visited_country;")
+            or 0
+        ),
         "hours": round(seconds / 3600),
     }
 
@@ -1418,13 +1629,27 @@ def fetch_ryot(cfg, run):
     # Read as the postgres superuser, so the tile holds no API key. "seen" counts
     # completion events (one per episode), not the provider catalogue in `entity`.
     return {
-        "seen": int(pg_superuser(
-            cfg, run, "ryotv2",
-            "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'complete';") or 0),
-        "hours": round(int(pg_superuser(cfg, run, "ryotv2", RYOT_MEDIA_HOURS_SQL) or 0) / 60),
-        "workouts": int(pg_superuser(
-            cfg, run, "ryotv2",
-            "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'workout-completed';") or 0),
+        "seen": int(
+            pg_superuser(
+                cfg,
+                run,
+                "ryotv2",
+                "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'complete';",
+            )
+            or 0
+        ),
+        "hours": round(
+            int(pg_superuser(cfg, run, "ryotv2", RYOT_MEDIA_HOURS_SQL) or 0) / 60
+        ),
+        "workouts": int(
+            pg_superuser(
+                cfg,
+                run,
+                "ryotv2",
+                "SELECT COUNT(*) FROM event WHERE event_schema_slug = 'workout-completed';",
+            )
+            or 0
+        ),
     }
 
 
@@ -1459,9 +1684,14 @@ def fetch_memos(cfg, run):
     # so Memos is never asked.
     with open(cfg.journal_state) as f:
         state = json.load(f)
-    days = sorted(k for k, v in state.items()
-                  if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo"))
-    agenda, activity = _day_stats(state[days[-1]].get("text") or "") if days else (0, "-")
+    days = sorted(
+        k
+        for k, v in state.items()
+        if re.fullmatch(r"\d{4}-\d\d-\d\d", k) and isinstance(v, dict) and v.get("memo")
+    )
+    agenda, activity = (
+        _day_stats(state[days[-1]].get("text") or "") if days else (0, "-")
+    )
     return {"days": len(days), "agenda": agenda, "activity": activity}
 
 
@@ -1537,7 +1767,9 @@ def fetch_dsh(cfg, run, find=None, stat=None, now=None):
 
 # Prometheus exposition format: `name{label="v",...} 1.23e+08`. Values may be in
 # scientific notation, which is why the value is parsed as float and not int.
-_PROM_LINE = re.compile(r'^(?P<name>[a-z_]+)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>\S+)$')
+_PROM_LINE = re.compile(
+    r"^(?P<name>[a-z_]+)(?:\{(?P<labels>[^}]*)\})?\s+(?P<value>\S+)$"
+)
 
 # The four token kinds Aperture persists. Its own /metrics HELP text says to add
 # them for a total, so that is what this does rather than reading
@@ -1630,16 +1862,23 @@ def fetch_aperture(cfg, run, now=None, state_path=None):
     state_path = state_path or os.path.join(cfg.state_dir, "aperture-counters.json")
 
     metrics = parse_prometheus(curl_text(cfg, run, cfg.aperture_metrics_url))
-    tokens = _prom_sum(metrics, "aperture_generations_tokens_total",
-                       label="type", values=_TOKEN_TYPES)
+    tokens = _prom_sum(
+        metrics, "aperture_generations_tokens_total", label="type", values=_TOKEN_TYPES
+    )
     requests = _prom_sum(metrics, "aperture_captured_requests_total")
-    cache_read = _prom_sum(metrics, "aperture_generations_tokens_total",
-                           label="type", values=("cache_read",))
+    cache_read = _prom_sum(
+        metrics,
+        "aperture_generations_tokens_total",
+        label="type",
+        values=("cache_read",),
+    )
     # llm_tokens_total{input} is input INCLUDING cache reads, which is exactly the
     # denominator wanted here: 817M/863M = 95%. Falling back to the summed total
     # keeps the field from dividing by zero on an instance that has served nothing.
-    billed_input = _prom_sum(metrics, "aperture_llm_tokens_total",
-                             label="type", values=("input",)) or tokens
+    billed_input = (
+        _prom_sum(metrics, "aperture_llm_tokens_total", label="type", values=("input",))
+        or tokens
+    )
 
     prev = state.load_json(state_path, {})
     elapsed = now - prev.get("at", 0)
@@ -1654,8 +1893,9 @@ def fetch_aperture(cfg, run, now=None, state_path=None):
             "tokens_per_day": (tokens - prev["tokens"]) / days,
             "requests_per_day": (requests - prev["requests"]) / days,
         }
-        state.save_json(state_path, {"at": now, "tokens": tokens,
-                                    "requests": requests, **rates})
+        state.save_json(
+            state_path, {"at": now, "tokens": tokens, "requests": requests, **rates}
+        )
     elif prev and not reset:
         # Too soon to re-measure: keep both the baseline and the last known rate.
         rates = {k: prev.get(k) for k in ("tokens_per_day", "requests_per_day")}
@@ -1695,6 +1935,7 @@ def fetch_forgejo(cfg, run):
     2026-08-11, and nothing on the dashboard said so. Same shape as beszel's
     `alerts`: 0 when healthy, non-zero exactly when you want to know.
     """
+
     def count(sql):
         return int(pg_superuser(cfg, run, "forgejo", sql) or 0)
 
@@ -1734,7 +1975,7 @@ _LINKY_DAYS = """
 
 # Last reported day, and the mean of the seven before it.
 LINKY_DAY_SQL = f"""
-WITH d AS ({_LINKY_DAYS.format(unit='Wh')} ORDER BY day DESC LIMIT 8)
+WITH d AS ({_LINKY_DAYS.format(unit="Wh")} ORDER BY day DESC LIMIT 8)
 SELECT COALESCE((SELECT v FROM d ORDER BY day DESC LIMIT 1), 0) || '|' ||
        COALESCE((SELECT AVG(v) FROM (SELECT v FROM d ORDER BY day DESC LIMIT 7 OFFSET 1)), 0);
 """
@@ -1744,7 +1985,7 @@ SELECT COALESCE((SELECT v FROM d ORDER BY day DESC LIMIT 1), 0) || '|' ||
 # the first days of a month report nothing at all, and "0 EUR" is a worse lie than
 # a window that straddles the boundary.
 LINKY_COST_SQL = f"""
-WITH c AS ({_LINKY_DAYS.format(unit='€')})
+WITH c AS ({_LINKY_DAYS.format(unit="€")})
 SELECT COALESCE(SUM(CASE WHEN day > date('now','localtime','-30 day') THEN v END), 0) || '|' ||
        COALESCE(AVG(CASE WHEN day > date('now','localtime','-30 day') THEN v END), 0) || '|' ||
        COALESCE(AVG(CASE WHEN day > date('now','localtime','-60 day')
@@ -1781,12 +2022,19 @@ def fetch_homeassistant(cfg, run):
     """
     day_wh, day_mean = _floats(sqlite_scalar(cfg, run, cfg.hass_db, LINKY_DAY_SQL), 2)
     cost, cost_mean, prev_mean = _floats(
-        sqlite_scalar(cfg, run, cfg.hass_db, LINKY_COST_SQL), 3)
+        sqlite_scalar(cfg, run, cfg.hass_db, LINKY_COST_SQL), 3
+    )
 
     token = env_var(cfg, "HA_TOKEN")
-    states = curl_json(cfg, run, f"{cfg.hass_url}/api/states",
-                       "-H", f"Authorization: Bearer {token}",
-                       "-H", "Content-Type: application/json")
+    states = curl_json(
+        cfg,
+        run,
+        f"{cfg.hass_url}/api/states",
+        "-H",
+        f"Authorization: Bearer {token}",
+        "-H",
+        "Content-Type: application/json",
+    )
 
     def entities(suffix):
         return [e for e in states if e.get("entity_id", "").endswith(suffix)]
@@ -1800,8 +2048,7 @@ def fetch_homeassistant(cfg, run):
         except (TypeError, ValueError):
             return 0.0
 
-    heater_wh = sum(numeric(e.get("state"))
-                    for e in entities("_daily_consumption"))
+    heater_wh = sum(numeric(e.get("state")) for e in entities("_daily_consumption"))
     rooms_on = sum(1 for e in entities("_device_switch") if e.get("state") == "on")
 
     return {
@@ -1848,8 +2095,11 @@ def fetch_switch(cfg, run, now=None):
         next_due = "-"
 
     confirmed = sum(1 for c in contacts if c.get("status") == "confirmed")
-    return {"status": status, "next_due": next_due,
-            "contacts": f"{confirmed}/{len(contacts)}"}
+    return {
+        "status": status,
+        "next_due": next_due,
+        "contacts": f"{confirmed}/{len(contacts)}",
+    }
 
 
 # Fetched on every request instead of daily: a cheap local read whose value
@@ -1916,6 +2166,7 @@ def run_fetcher(cfg, run, stats, key, log=None):
 
 # ── cache ────────────────────────────────────────────────────────────────────
 
+
 def load_cache(cfg, stats, log=None):
     log = log or (lambda m: print(m, file=sys.stderr))
     try:
@@ -1923,7 +2174,9 @@ def load_cache(cfg, stats, log=None):
             payload = json.load(f)
         if payload.get("_schema") != STATS_SCHEMA:
             # Leave every key empty so backfill_missing does a full fetch, dated now.
-            log(f"cache schema {payload.get('_schema')} != {STATS_SCHEMA}, refetching all")
+            log(
+                f"cache schema {payload.get('_schema')} != {STATS_SCHEMA}, refetching all"
+            )
             return 0
         stats.replace_all(payload)
         return payload.get("_fetched_at", 0)
@@ -1976,7 +2229,9 @@ def backfill_missing(cfg, run, stats, fetched_at, log=None):
     return ts
 
 
-def refresh(cfg, run, stats, initial_fetched_at, sleep=time.sleep, once=False, log=None):
+def refresh(
+    cfg, run, stats, initial_fetched_at, sleep=time.sleep, once=False, log=None
+):
     # Runs in the refresh thread, not at startup, so the HTTP listener comes up
     # immediately serving cached data rather than blocking on a cold-cache fetch.
     log = log or (lambda m: print(m, file=sys.stderr))
@@ -2036,8 +2291,9 @@ def main(env=None, run=None, server_class=http.server.HTTPServer):
     # Load cache synchronously before serving so a restart never returns
     # an empty payload while waiting on the daily refresh.
     initial_fetched_at = load_cache(cfg, stats)
-    threading.Thread(target=refresh, args=(cfg, run, stats, initial_fetched_at),
-                     daemon=True).start()
+    threading.Thread(
+        target=refresh, args=(cfg, run, stats, initial_fetched_at), daemon=True
+    ).start()
     server_class(("127.0.0.1", cfg.port), make_handler(stats, cfg, run)).serve_forever()
     return 0
 

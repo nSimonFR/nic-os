@@ -1,4 +1,10 @@
-{ pkgs, lib, username, telegramChatId, ... }:
+{
+  pkgs,
+  lib,
+  username,
+  telegramChatId,
+  ...
+}:
 let
   sessionName = "claude-rc";
 
@@ -132,14 +138,16 @@ let
   # gate. This hook drops a project-level settings.json (base URL = gate) into
   # each bridge-created worktree; workers don't run the guard, so they're free
   # to use the gate. Guarded by CLAUDE_CONFIG_DIR → no-op for normal checkouts.
-  worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate"
-    (builtins.readFile ./claude-rc-worktree-gate.sh);
+  worktreeGateHook = pkgs.writeShellScript "claude-rc-worktree-gate" (
+    builtins.readFile ./claude-rc-worktree-gate.sh
+  );
 
   # Builds $dst/plugins as a real dir: shared clones, bridge-local path
   # bookkeeping. The script's header has the measurement of why a plain symlink
   # of plugins/ cannot work.
-  pluginDirScript = pkgs.writeShellScript "claude-rc-plugin-dir"
-    (builtins.readFile ./claude-rc-plugin-dir.sh);
+  pluginDirScript = pkgs.writeShellScript "claude-rc-plugin-dir" (
+    builtins.readFile ./claude-rc-plugin-dir.sh
+  );
 
   # Build the isolated bridge config dir (see configDir note above) before each
   # start, refreshing symlinks and regenerating settings.json so it tracks any
@@ -311,7 +319,13 @@ let
   # swallowed every error and reported success anyway.
   cleanupScript = pkgs.writeShellApplication {
     name = "claude-rc-session-cleanup";
-    runtimeInputs = with pkgs; [ jq git procps findutils coreutils ];
+    runtimeInputs = with pkgs; [
+      jq
+      git
+      procps
+      findutils
+      coreutils
+    ];
     text = builtins.readFile ./claude-rc-session-cleanup.sh;
   };
 
@@ -341,7 +355,10 @@ lib.recursiveUpdate keepWarm.nixosConfig {
       ExecStartPre = prepConfigScript;
       ExecStart = startScript;
       # Snapshot the live session set before tearing the bridge down, then stop.
-      ExecStop = [ "${bootResume} snapshot" "${stopScript}" ];
+      ExecStop = [
+        "${bootResume} snapshot"
+        "${stopScript}"
+      ];
       TimeoutStopSec = "15s";
       Environment = [
         "HOME=/home/${username}"
@@ -439,7 +456,10 @@ lib.recursiveUpdate keepWarm.nixosConfig {
   # dry-run default covered by tests/test_claude.py.
   systemd.services.claude-rc-boot-resume = {
     description = "Re-host previously-live claude-rc sessions on bridge (re)start";
-    after = [ "claude-remote-control.service" "network-online.target" ];
+    after = [
+      "claude-remote-control.service"
+      "network-online.target"
+    ];
     wants = [ "network-online.target" ];
     wantedBy = [ "claude-remote-control.service" ];
     partOf = [ "claude-remote-control.service" ];

@@ -23,10 +23,11 @@
   # from nixpkgs-unstable (6.0.1+) so masApps entries can actually install.
   nixpkgs.overlays = [
     (final: prev: {
-      mas = (import inputs.nixpkgs-unstable {
-        inherit (prev.stdenv.hostPlatform) system;
-        config.allowUnfree = true;
-      }).mas;
+      mas =
+        (import inputs.nixpkgs-unstable {
+          inherit (prev.stdenv.hostPlatform) system;
+          config.allowUnfree = true;
+        }).mas;
     })
   ];
 
@@ -39,7 +40,13 @@
   # 461 GB disk shared with everything else; GC freed 8.6 GB on 2026-10-28 at 4 GB free.
   nix.gc = {
     automatic = true;
-    interval = [{ Weekday = 0; Hour = 12; Minute = 0; }];
+    interval = [
+      {
+        Weekday = 0;
+        Hour = 12;
+        Minute = 0;
+      }
+    ];
     options = "--delete-older-than 14d";
   };
   nix.optimise.automatic = true;
@@ -59,9 +66,9 @@
     # Tailscale IP first (works everywhere), LAN second (home network),
     # Cloudflare/Quad9 last resort if RPi5 is unreachable
     dns = [
-      "100.122.54.2"   # RPi5 – Tailscale
-      "1.1.1.1"        # Cloudflare – fallback
-      "9.9.9.9"        # Quad9 – fallback
+      "100.122.54.2" # RPi5 – Tailscale
+      "1.1.1.1" # Cloudflare – fallback
+      "9.9.9.9" # Quad9 – fallback
     ];
   };
 
@@ -69,7 +76,10 @@
 
   users.users.${username}.home = "/Users/${username}";
 
-  environment.systemPackages = [ pkgs.gcc pkgs.gnupg ];
+  environment.systemPackages = [
+    pkgs.gcc
+    pkgs.gnupg
+  ];
 
   security.pam.services.sudo_local.touchIdAuth = true;
   # pam_reattach: without it pam_tid falls back to a password inside herdr/tmux.
@@ -115,7 +125,10 @@
   # Manual refresh: sudo launchctl kickstart -k system/org.nixos.tun2proxy-work
   launchd.daemons."tun2proxy-work" = {
     serviceConfig = {
-      ProgramArguments = [ "/bin/bash" "${./scripts/tun2proxy-work.sh}" ];
+      ProgramArguments = [
+        "/bin/bash"
+        "${./scripts/tun2proxy-work.sh}"
+      ];
       RunAtLoad = true;
       KeepAlive = true;
       StandardErrorPath = "/var/log/tun2proxy-work.log";
@@ -126,8 +139,18 @@
   # Daily restart of tun2proxy to re-discover peers/subnets
   launchd.daemons."tun2proxy-work-refresh" = {
     serviceConfig = {
-      ProgramArguments = [ "/bin/launchctl" "kickstart" "-k" "system/org.nixos.tun2proxy-work" ];
-      StartCalendarInterval = [{ Hour = 6; Minute = 0; }];
+      ProgramArguments = [
+        "/bin/launchctl"
+        "kickstart"
+        "-k"
+        "system/org.nixos.tun2proxy-work"
+      ];
+      StartCalendarInterval = [
+        {
+          Hour = 6;
+          Minute = 0;
+        }
+      ];
     };
   };
 

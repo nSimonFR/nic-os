@@ -21,8 +21,14 @@ from ..secrets import env_str, read_secret
 log = logger("agent-vault-bootstrap")
 
 VAULT = "default"  # the owner gets admin on it at registration
-CA_VARS = ("SSL_CERT_FILE", "REQUESTS_CA_BUNDLE", "CURL_CA_BUNDLE",
-           "NODE_EXTRA_CA_CERTS", "GIT_SSL_CAINFO", "DENO_CERT")
+CA_VARS = (
+    "SSL_CERT_FILE",
+    "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE",
+    "NODE_EXTRA_CA_CERTS",
+    "GIT_SSL_CAINFO",
+    "DENO_CERT",
+)
 
 
 @dataclass(frozen=True)
@@ -103,7 +109,9 @@ def call(cfg, method, path, body=None, token=None, headers=None, opener=None):
     if token:
         hdrs["Authorization"] = f"Bearer {token}"
     data = json.dumps(body).encode() if body is not None else None
-    req = urllib.request.Request(cfg.addr + path, data=data, headers=hdrs, method=method)
+    req = urllib.request.Request(
+        cfg.addr + path, data=data, headers=hdrs, method=method
+    )
     try:
         with (opener or urllib.request.urlopen)(req, timeout=30) as resp:
             return resp.status, resp.read().decode()
@@ -131,7 +139,9 @@ def write_owned(path, text, mode):
 def run(cfg, opener=None, sleep=time.sleep):
     declared = json.loads(Path(cfg.services_file).read_text())
     keys = sorted({k for s in declared for k in s.get("keys", [])})
-    attached = sorted({k for s in declared if "auth" in s for k in auth_keys(s["auth"])})
+    attached = sorted(
+        {k for s in declared if "auth" in s for k in auth_keys(s["auth"])}
+    )
     creds = load_creds(cfg)
     missing = [k for k in keys + attached if not creds.get(k)]
     if missing:
@@ -159,26 +169,56 @@ def run(cfg, opener=None, sleep=time.sleep):
     if not session:
         raise RuntimeError(f"owner login/register: {status} {text[:200]}")
 
-    ok(api("PUT", "/v1/admin/settings", {"invite_only": True}, token=session), "settings")
-    ok(api("POST", "/v1/credentials",
-           {"vault": VAULT, "credentials": {k: creds[k] for k in keys + attached}}, token=session),
-       "credentials")
+    ok(
+        api("PUT", "/v1/admin/settings", {"invite_only": True}, token=session),
+        "settings",
+    )
+    ok(
+        api(
+            "POST",
+            "/v1/credentials",
+            {"vault": VAULT, "credentials": {k: creds[k] for k in keys + attached}},
+            token=session,
+        ),
+        "credentials",
+    )
     services = [
-        {"name": s["name"], "host": s["host"], "auth": s["auth"]} if "auth" in s else
-        {"name": s["name"], "host": s["host"], "auth": {"type": "passthrough"},
-         "substitutions": [{"key": k, "placeholder": placeholder(k), "in": s["in"]}
-                           for k in s["keys"]]}
+        {"name": s["name"], "host": s["host"], "auth": s["auth"]}
+        if "auth" in s
+        else {
+            "name": s["name"],
+            "host": s["host"],
+            "auth": {"type": "passthrough"},
+            "substitutions": [
+                {"key": k, "placeholder": placeholder(k), "in": s["in"]}
+                for k in s["keys"]
+            ],
+        }
         for s in declared
     ]
-    ok(api("PUT", f"/v1/vaults/{VAULT}/services", {"services": services}, token=session),
-       "services")
+    ok(
+        api(
+            "PUT", f"/v1/vaults/{VAULT}/services", {"services": services}, token=session
+        ),
+        "services",
+    )
 
     out = Path(cfg.out_dir)
     token_file = out / "agent-token"
     token = token_file.read_text().strip() if token_file.exists() else ""
-    if not token or api("GET", "/discover", token=token, headers={"X-Vault": VAULT})[0] != 200:
-        status, text = api("POST", "/v1/agents", token=session, body={
-            "name": "hermes", "vaults": [{"vault_name": VAULT, "vault_role": "proxy"}]})
+    if (
+        not token
+        or api("GET", "/discover", token=token, headers={"X-Vault": VAULT})[0] != 200
+    ):
+        status, text = api(
+            "POST",
+            "/v1/agents",
+            token=session,
+            body={
+                "name": "hermes",
+                "vaults": [{"vault_name": VAULT, "vault_role": "proxy"}],
+            },
+        )
         if status == 409:
             status, text = api("POST", "/v1/agents/hermes/rotate", {}, token=session)
         token = ok((status, text), "agent token")["av_agent_token"]
@@ -187,11 +227,18 @@ def run(cfg, opener=None, sleep=time.sleep):
 
     bundle = out / "ca-bundle.pem"
     ca = ok(api("GET", "/v1/mitm/ca.pem"), "CA")
-    write_owned(bundle, Path(cfg.system_ca_bundle).read_text().rstrip("\n") + "\n" + ca, 0o444)
+    write_owned(
+        bundle, Path(cfg.system_ca_bundle).read_text().rstrip("\n") + "\n" + ca, 0o444
+    )
 
     proxy_url = f"http://{token}:{VAULT}@{cfg.proxy}"
-    no_proxy = ",".join(["localhost", "127.0.0.1", "::1", *filter(None, cfg.no_proxy.split(","))])
-    lines = [f"{v}={proxy_url}" for v in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")]
+    no_proxy = ",".join(
+        ["localhost", "127.0.0.1", "::1", *filter(None, cfg.no_proxy.split(","))]
+    )
+    lines = [
+        f"{v}={proxy_url}"
+        for v in ("HTTPS_PROXY", "HTTP_PROXY", "https_proxy", "http_proxy")
+    ]
     lines += [f"NO_PROXY={no_proxy}", f"no_proxy={no_proxy}", "NODE_USE_ENV_PROXY=1"]
     lines += [f"{v}={bundle}" for v in CA_VARS]
     lines += [f"{k}={placeholder(k)}" for k in keys]
@@ -202,8 +249,11 @@ def run(cfg, opener=None, sleep=time.sleep):
         write_owned(env_file, text, 0o400)
     # Included by ~/.config/git: every git routes the attaching hosts here,
     # whether or not it runs with proxy.env.
-    git = "".join(f'[http "https://{s["host"]}/"]\n\tproxy = {proxy_url}\n\tsslCAInfo = {bundle}\n'
-                  for s in declared if "auth" in s)
+    git = "".join(
+        f'[http "https://{s["host"]}/"]\n\tproxy = {proxy_url}\n\tsslCAInfo = {bundle}\n'
+        for s in declared
+        if "auth" in s
+    )
     write_owned(out / "gitconfig", git, 0o400)
     log(f"{len(keys + attached)} credentials, {len(declared)} services applied")
 

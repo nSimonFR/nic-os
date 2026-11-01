@@ -6,7 +6,13 @@
 # `beast-idle-alert` pages every 4h for whatever bypassed it. The rpi5 owns both
 # — WOL is layer-2 only and this is the only box on beast's LAN, and a watcher
 # has to outlive what it watches.
-{ config, pkgs, lib, telegramChatId, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  telegramChatId,
+  ...
+}:
 let
   # Send-once / edit-in-place / auto-resolve: "beast is idling" is a condition
   # that clears, not a one-shot event.
@@ -20,7 +26,11 @@ let
   # closure, so it always matches the beast-wake that armed it.
   beastWake = pkgs.writeShellApplication {
     name = "beast-wake";
-    runtimeInputs = [ pkgs.wakeonlan pkgs.openssh pkgs.coreutils ];
+    runtimeInputs = [
+      pkgs.wakeonlan
+      pkgs.openssh
+      pkgs.coreutils
+    ];
     text = ''
       BEAST_AUTOPOWEROFF_SCRIPT=${../scripts/beast-auto-poweroff.sh}
     ''

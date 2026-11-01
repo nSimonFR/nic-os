@@ -60,7 +60,7 @@ stdenv.mkDerivation rec {
     nspr
     nss
     pango
-    systemd        # libudev
+    systemd # libudev
     xorg.libX11
     xorg.libXcomposite
     xorg.libXdamage
@@ -71,7 +71,7 @@ stdenv.mkDerivation rec {
   ];
 
   runtimeDependencies = [
-    systemd   # libudev at runtime
+    systemd # libudev at runtime
   ];
 
   unpackPhase = ''

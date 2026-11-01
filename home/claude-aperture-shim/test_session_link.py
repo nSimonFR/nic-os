@@ -20,14 +20,19 @@ def continuation(parent: str) -> str:
 
 
 def body(sid: str, parent: str | None = None, as_string: bool = False) -> dict:
-    blocks = [{"type": "text", "text": "<system-reminder>CLAUDE.md …</system-reminder>"}]
+    blocks = [
+        {"type": "text", "text": "<system-reminder>CLAUDE.md …</system-reminder>"}
+    ]
     if parent:
         blocks.append({"type": "text", "text": continuation(parent)})
     content = continuation(parent) if (as_string and parent) else blocks
     user_id = {"device_id": "d", "account_uuid": "a", "session_id": sid}
     return {
         "model": "claude-opus-5-5",
-        "messages": [{"role": "user", "content": content}, {"role": "assistant", "content": "ok"}],
+        "messages": [
+            {"role": "user", "content": content},
+            {"role": "assistant", "content": "ok"},
+        ],
         "metadata": {"user_id": json.dumps(user_id)},
     }
 

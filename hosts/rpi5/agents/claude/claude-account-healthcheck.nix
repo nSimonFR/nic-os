@@ -16,7 +16,13 @@
 #
 # On-demand "test the sessions" is: sudo systemctl start
 # anthropic-account-healthcheck  (then journalctl -u it -n 20).
-{ config, pkgs, lib, telegramChatId, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  telegramChatId,
+  ...
+}:
 let
   # Same self-updating alerter monitoring.nix uses (send-once / edit-in-place /
   # resolve), from the shared seam in shared/notify.nix.
@@ -28,7 +34,12 @@ let
 
   healthcheck = pkgs.writeShellScript "anthropic-account-healthcheck" ''
     set -u
-    export PATH=${lib.makeBinPath [ pkgs.curl pkgs.coreutils ]}''${PATH:+:$PATH}
+    export PATH=${
+      lib.makeBinPath [
+        pkgs.curl
+        pkgs.coreutils
+      ]
+    }''${PATH:+:$PATH}
 
     TOK1=/run/claude-oauth/token
     TOK2=/run/claude-oauth-2/token

@@ -59,6 +59,7 @@ MAX_STALE = 6 * 3600
 # for over fifteen minutes. Retrying every render would just extend that.
 BACKOFF = 1800
 
+
 def mark(pct: float) -> str:
     return " 🔴" if pct >= HOT_PCT else (" 🟡" if pct >= WARN_PCT else "")
 
@@ -136,7 +137,11 @@ def cached(cache: dict, key: str, ttl: int, fetch) -> tuple[list | None, bool]:
     if entry.get("windows") and age < ttl:
         return entry["windows"], False
     if now < entry.get("retry_at", 0):
-        return (entry["windows"], True) if entry.get("windows") and age < MAX_STALE else (None, False)
+        return (
+            (entry["windows"], True)
+            if entry.get("windows") and age < MAX_STALE
+            else (None, False)
+        )
 
     fresh = fetch()
     if fresh:
@@ -156,8 +161,16 @@ def claude_token() -> str | None:
     there is no Keychain on rpi5, and the Mac keeps no credentials file."""
     try:
         raw = subprocess.run(
-            ["security", "find-generic-password", "-s", "Claude Code-credentials", "-w"],
-            capture_output=True, text=True, timeout=5,
+            [
+                "security",
+                "find-generic-password",
+                "-s",
+                "Claude Code-credentials",
+                "-w",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if raw.returncode == 0:
             return json.loads(raw.stdout)["claudeAiOauth"]["accessToken"]
@@ -178,7 +191,10 @@ def claude_windows() -> list[tuple[str, float]] | None:
 
     req = urllib.request.Request(
         "https://api.anthropic.com/api/oauth/usage",
-        headers={"Authorization": f"Bearer {token}", "anthropic-beta": "oauth-2025-04-20"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "anthropic-beta": "oauth-2025-04-20",
+        },
     )
     # The Aperture shim MITMs api.anthropic.com when it is active; trust its CA
     # then. The herdr server normally runs without it and uses the system store.
@@ -186,6 +202,7 @@ def claude_windows() -> list[tuple[str, float]] | None:
     ca = os.environ.get("NODE_EXTRA_CA_CERTS")
     if ca and os.path.isfile(ca):
         import ssl
+
         ctx = ssl.create_default_context(cafile=ca)
     try:
         with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
@@ -202,9 +219,15 @@ def claude_windows() -> list[tuple[str, float]] | None:
         ("W", float(seven), iso_epoch((data.get("seven_day") or {}).get("resets_at"))),
     ]
     fable = next(
-        (l.get("percent") for l in data.get("limits") or []
-         if l.get("kind") == "weekly_scoped"
-         and (((l.get("scope") or {}).get("model") or {}).get("display_name") == "Fable")),
+        (
+            l.get("percent")
+            for l in data.get("limits") or []
+            if l.get("kind") == "weekly_scoped"
+            and (
+                ((l.get("scope") or {}).get("model") or {}).get("display_name")
+                == "Fable"
+            )
+        ),
         None,
     )
     if fable is not None:
@@ -217,8 +240,10 @@ def codex_windows() -> list[tuple[str, float]] | None:
     try:
         proc = subprocess.Popen(
             ["codex", "-s", "read-only", "-a", "never", "app-server"],
-            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, text=True,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
         )
     except Exception:
         return None
@@ -227,13 +252,31 @@ def codex_windows() -> list[tuple[str, float]] | None:
 
     def pump() -> None:
         def send(mid, method):
-            proc.stdin.write(json.dumps({"jsonrpc": "2.0", "id": mid, "method": method, "params": {}}) + "\n")
+            proc.stdin.write(
+                json.dumps(
+                    {"jsonrpc": "2.0", "id": mid, "method": method, "params": {}}
+                )
+                + "\n"
+            )
             proc.stdin.flush()
 
-        proc.stdin.write(json.dumps({
-            "jsonrpc": "2.0", "id": 1, "method": "initialize",
-            "params": {"clientInfo": {"name": "herdr-usage-bar", "title": "herdr", "version": "1"}},
-        }) + "\n")
+        proc.stdin.write(
+            json.dumps(
+                {
+                    "jsonrpc": "2.0",
+                    "id": 1,
+                    "method": "initialize",
+                    "params": {
+                        "clientInfo": {
+                            "name": "herdr-usage-bar",
+                            "title": "herdr",
+                            "version": "1",
+                        }
+                    },
+                }
+            )
+            + "\n"
+        )
         proc.stdin.flush()
         for line in proc.stdout:
             try:
@@ -241,7 +284,12 @@ def codex_windows() -> list[tuple[str, float]] | None:
             except Exception:
                 continue
             if msg.get("id") == 1:
-                proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": "initialized", "params": {}}) + "\n")
+                proc.stdin.write(
+                    json.dumps(
+                        {"jsonrpc": "2.0", "method": "initialized", "params": {}}
+                    )
+                    + "\n"
+                )
                 proc.stdin.flush()
                 send(2, "account/rateLimits/read")
             elif msg.get("id") == 2:
@@ -264,7 +312,13 @@ def codex_windows() -> list[tuple[str, float]] | None:
         if pct is None:
             continue
         # codex reports resetsAt as epoch seconds; claude sends ISO.
-        windows.append((window_label(block.get("windowDurationMins")), float(pct), block.get("resetsAt")))
+        windows.append(
+            (
+                window_label(block.get("windowDurationMins")),
+                float(pct),
+                block.get("resetsAt"),
+            )
+        )
     return windows or None
 
 

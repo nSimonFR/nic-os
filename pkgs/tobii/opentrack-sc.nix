@@ -61,32 +61,32 @@ stdenv.mkDerivation rec {
   # (harmless) shell command — keep it exactly as-is so the derivation hash is
   # unchanged by the move out of hosts/beast/tobii-native.nix.
   postPatch = ''
-      cat > tracker-tobii/CMakeLists.txt <<'EOF'
-if(WIN32)
-    set(SDK_TOBII "" CACHE PATH "Tobii Stream Engine path")
-    if(SDK_TOBII)
-        otr_module(tracker-tobii)
-        if("''${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
-            set(arch "x86")
-        else()
-            set(arch "x64")
+          cat > tracker-tobii/CMakeLists.txt <<'EOF'
+    if(WIN32)
+        set(SDK_TOBII "" CACHE PATH "Tobii Stream Engine path")
+        if(SDK_TOBII)
+            otr_module(tracker-tobii)
+            if("''${CMAKE_SIZEOF_VOID_P}" STREQUAL "4")
+                set(arch "x86")
+            else()
+                set(arch "x64")
+            endif()
+            target_include_directories(''${self} SYSTEM PRIVATE "''${SDK_TOBII}/include")
+            target_link_directories(''${self} PRIVATE "''${SDK_TOBII}/lib/''${arch}")
+            set(dll "''${SDK_TOBII}/lib/''${arch}/tobii_stream_engine.dll")
+            target_link_libraries(''${self} tobii_stream_engine.lib)
+            install(FILES ''${dll} DESTINATION ''${opentrack-libexec})
         endif()
-        target_include_directories(''${self} SYSTEM PRIVATE "''${SDK_TOBII}/include")
-        target_link_directories(''${self} PRIVATE "''${SDK_TOBII}/lib/''${arch}")
-        set(dll "''${SDK_TOBII}/lib/''${arch}/tobii_stream_engine.dll")
-        target_link_libraries(''${self} tobii_stream_engine.lib)
-        install(FILES ''${dll} DESTINATION ''${opentrack-libexec})
+    else()
+        find_library(TOBII_SE_LIB tobii_stream_engine)
+        find_path(TOBII_SE_INCLUDE tobii/tobii.h)
+        if(TOBII_SE_LIB AND TOBII_SE_INCLUDE)
+            otr_module(tracker-tobii)
+            target_include_directories(''${self} SYSTEM PRIVATE "''${TOBII_SE_INCLUDE}")
+            target_link_libraries(''${self} "''${TOBII_SE_LIB}")
+        endif()
     endif()
-else()
-    find_library(TOBII_SE_LIB tobii_stream_engine)
-    find_path(TOBII_SE_INCLUDE tobii/tobii.h)
-    if(TOBII_SE_LIB AND TOBII_SE_INCLUDE)
-        otr_module(tracker-tobii)
-        target_include_directories(''${self} SYSTEM PRIVATE "''${TOBII_SE_INCLUDE}")
-        target_link_libraries(''${self} "''${TOBII_SE_LIB}")
-    endif()
-endif()
-EOF
+    EOF
   '';
 
   nativeBuildInputs = [

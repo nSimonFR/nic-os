@@ -52,9 +52,18 @@
   ];
 
   services.flatpak.packages = [
-    { appId = "io.github.mactan_sc.RSILauncher"; origin = "RSILauncher"; }
-    { appId = "org.freedesktop.Platform.VulkanLayer.MangoHud"; origin = "flathub"; }
-    { appId = "tv.plex.PlexHTPC"; origin = "flathub"; }
+    {
+      appId = "io.github.mactan_sc.RSILauncher";
+      origin = "RSILauncher";
+    }
+    {
+      appId = "org.freedesktop.Platform.VulkanLayer.MangoHud";
+      origin = "flathub";
+    }
+    {
+      appId = "tv.plex.PlexHTPC";
+      origin = "flathub";
+    }
   ];
 
   programs.zsh.zplug.plugins = [
@@ -173,8 +182,9 @@
   # Ghostty config is managed in shared home/default.nix via xdg.configFile
 
   # MangoHud config for RSILauncher Flatpak (reads from Flatpak-specific XDG_CONFIG_HOME)
-  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source = ./dotfiles/MangoHud.conf;
-    # Override the flatpak-exported desktop entry to launch with gamemode.
+  home.file.".var/app/io.github.mactan_sc.RSILauncher/config/MangoHud/MangoHud.conf".source =
+    ./dotfiles/MangoHud.conf;
+  # Override the flatpak-exported desktop entry to launch with gamemode.
   # Must use xdg.dataFile (→ $XDG_DATA_HOME/applications/) rather than
   # xdg.desktopEntries (→ home-manager profile in $XDG_DATA_DIRS) because the
   # Flatpak-exported entry appears earlier in $XDG_DATA_DIRS and would otherwise

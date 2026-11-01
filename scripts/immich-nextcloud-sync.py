@@ -16,6 +16,7 @@ Auth:
   Immich API key  -> /run/agenix/immich-api-key (or --immich-key)
   NC app password -> $NC_PASSWORD               (or --nc-password)
 """
+
 import argparse
 import base64
 import json
@@ -77,13 +78,17 @@ def list_contacts(base, user, addressbook, auth):
     body = (
         b'<?xml version="1.0" encoding="utf-8"?>'
         b'<C:addressbook-query xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:carddav">'
-        b'<D:prop><D:getetag/><C:address-data/></D:prop>'
-        b'</C:addressbook-query>'
+        b"<D:prop><D:getetag/><C:address-data/></D:prop>"
+        b"</C:addressbook-query>"
     )
     status, _, xml_body = http(
         f"{base}/remote.php/dav/addressbooks/users/{user}/{addressbook}/",
         method="REPORT",
-        headers={"Authorization": auth, "Depth": "1", "Content-Type": "application/xml; charset=utf-8"},
+        headers={
+            "Authorization": auth,
+            "Depth": "1",
+            "Content-Type": "application/xml; charset=utf-8",
+        },
         data=body,
     )
     if status not in (207, 200):
@@ -136,8 +141,11 @@ def unfold(vcard):
 def build_new(name, photo_b64, photo_subtype, bday, immich_id):
     uid = str(uuid.uuid4())
     lines = [
-        "BEGIN:VCARD", "VERSION:3.0",
-        f"UID:{uid}", f"FN:{name}", f"N:{name};;;;",
+        "BEGIN:VCARD",
+        "VERSION:3.0",
+        f"UID:{uid}",
+        f"FN:{name}",
+        f"N:{name};;;;",
     ]
     if bday:
         lines.append(f"BDAY:{bday}")
@@ -165,31 +173,47 @@ def update_existing(existing, photo_b64, photo_subtype, bday, immich_id):
     else:
         lines.insert(-1, f"X-IMMICH-ID:{immich_id}")
     # Replace PHOTO
-    lines = [ln for ln in lines if not (ln.startswith("PHOTO:") or ln.startswith("PHOTO;"))]
+    lines = [
+        ln for ln in lines if not (ln.startswith("PHOTO:") or ln.startswith("PHOTO;"))
+    ]
     end_idx = next(i for i, ln in enumerate(lines) if ln.startswith("END:VCARD"))
     lines.insert(end_idx, f"PHOTO;ENCODING=b;TYPE={photo_subtype}:{photo_b64}")
     return fold("\r\n".join(lines)) + "\r\n"
 
 
 def put(url, auth, body):
-    s, _, b = http(url, method="PUT",
-                   headers={"Authorization": auth, "Content-Type": "text/vcard; charset=utf-8"},
-                   data=body.encode("utf-8"))
+    s, _, b = http(
+        url,
+        method="PUT",
+        headers={"Authorization": auth, "Content-Type": "text/vcard; charset=utf-8"},
+        data=body.encode("utf-8"),
+    )
     if s not in (201, 204):
         raise RuntimeError(f"PUT {url} -> HTTP {s}: {b[:200]!r}")
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--apply", action="store_true", help="Actually write changes (default: dry-run)")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument(
+        "--apply", action="store_true", help="Actually write changes (default: dry-run)"
+    )
     ap.add_argument("--immich-base", default="http://127.0.0.1:2283")
     ap.add_argument("--immich-key-file", default="/run/agenix/immich-api-key")
-    ap.add_argument("--immich-key", default=None, help="Immich API key (overrides --immich-key-file)")
+    ap.add_argument(
+        "--immich-key",
+        default=None,
+        help="Immich API key (overrides --immich-key-file)",
+    )
     ap.add_argument("--nc-base", default="http://127.0.0.1:8091")
     ap.add_argument("--nc-user", default="nsimon")
     ap.add_argument("--nc-addressbook", default="contacts")
-    ap.add_argument("--nc-password", default=os.environ.get("NC_PASSWORD"),
-                    help="Nextcloud app password (env: NC_PASSWORD)")
+    ap.add_argument(
+        "--nc-password",
+        default=os.environ.get("NC_PASSWORD"),
+        help="Nextcloud app password (env: NC_PASSWORD)",
+    )
     ap.add_argument("--limit", type=int, default=None)
     args = ap.parse_args()
     if not args.nc_password:
@@ -199,7 +223,10 @@ def main():
     if not immich_key:
         with open(args.immich_key_file) as f:
             immich_key = f.read().strip()
-    auth = "Basic " + base64.b64encode(f"{args.nc_user}:{args.nc_password}".encode()).decode()
+    auth = (
+        "Basic "
+        + base64.b64encode(f"{args.nc_user}:{args.nc_password}".encode()).decode()
+    )
 
     print("Fetching Immich named people...")
     people = fetch_immich_named(args.immich_base, immich_key)
@@ -231,13 +258,17 @@ def main():
     n_create = sum(1 for a, *_ in plan if a == "create")
     n_update = sum(1 for a, *_ in plan if a == "update")
     n_dups = sum(len(t) for _, _, t, _ in plan if len(t) > 1)
-    print(f"\nPlan: {n_create} create, {n_update} update ({n_dups} extra writes for FN duplicates)\n")
+    print(
+        f"\nPlan: {n_create} create, {n_update} update ({n_dups} extra writes for FN duplicates)\n"
+    )
 
     for action, p, targets, fn in plan:
         bday = (p.get("birthDate") or "").split("T")[0]
         suffix = f" -> {len(targets)} cards" if len(targets) > 1 else ""
-        print(f"  [{action:6}] {p['name']!r:30} immich:{p['id'][:8]}"
-              f"{' bday=' + bday if bday else ''}{suffix}")
+        print(
+            f"  [{action:6}] {p['name']!r:30} immich:{p['id'][:8]}"
+            f"{' bday=' + bday if bday else ''}{suffix}"
+        )
 
     if not args.apply:
         print("\nDry-run. Pass --apply to write.")
