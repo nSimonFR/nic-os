@@ -6,7 +6,7 @@
   ...
 }:
 let
-  # gh through Agent Vault (hosts/rpi5/agent-vault.nix), which attaches
+  # gh through Agent Vault (hosts/rpi5/security/agent-vault.nix), which attaches
   # nSimonFR-ai's token; gh only needs some token to think it is logged in.
   ghBrokered = pkgs.writeShellApplication {
     name = "gh";
@@ -26,9 +26,9 @@ let
 in
 {
   imports = [
-    ./entire-brain.nix
+    ./agents/entire-brain.nix
     ./hermes/hermes.nix
-    ./mail.nix
+    ./knowledge/mail.nix
   ];
 
   # No ~/.ssh/age here: that master key decrypts every secret in the repo,

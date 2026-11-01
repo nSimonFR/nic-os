@@ -13,7 +13,7 @@
 # forever (nothing ever calls back with an empty body); routing a pre-reboot
 # ping through `agent` debounces it for up to 15 min. Hence three, not one.
 #
-# Usage:  notify = import ../shared/notify.nix { inherit pkgs; };
+# Usage:  notify = import ./notify.nix { inherit pkgs; };
 #         printf '%s' "$body" | ${notify.alert { inherit tokenFile chatId; }} <key> "<title>"
 { pkgs }:
 let

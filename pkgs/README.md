@@ -6,7 +6,7 @@ Every derivation this repo builds itself lives here. A file in `pkgs/` answers
 *how is it run* (users, units, ports, secrets, Serve entries).
 
 `showmycards` is the reference split: `pkgs/services/showmycards.nix` builds the Go
-backend + SvelteKit frontend, `hosts/rpi5/showmycards.nix` is purely the service
+backend + SvelteKit frontend, `hosts/rpi5/life/showmycards.nix` is purely the service
 module.
 
 ## Layout
@@ -107,7 +107,7 @@ A source that comes from a `flake = false` input (`rtk`, `gogcli`, `goplaces`,
 is no fetcher call and no hash for a bump to leave behind.
 
 An upstream that genuinely has no versions (a file tracked off `master`, like the
-Forgejo theme in `hosts/rpi5/forgejo.nix`) cannot satisfy the rule. Say so in a
+Forgejo theme in `hosts/rpi5/platform/forgejo.nix`) cannot satisfy the rule. Say so in a
 comment on the fetcher rather than leaving it looking like an oversight.
 
 ## Verifying a move

@@ -28,7 +28,7 @@ let
 
   # AFFiNE MCP — write-capable. tiny-llm-gate exposes an SSE bridge at
   # tailnet :7020 that proxies to affine-mcp.service (DAWNCR0W) on the rpi5.
-  # See hosts/rpi5/affine-mcp.nix and hosts/rpi5/tiny-llm-gate.nix.
+  # See hosts/rpi5/knowledge/affine-mcp.nix and hosts/rpi5/agents/tiny-llm-gate.nix.
   #
   # `tailnetFqdn` is the rpi5's MagicDNS name and is passed to all three
   # home-manager configs (it was previously passed and never read here, with the
@@ -41,7 +41,7 @@ let
   # its own commit, not a side effect of this one.
   affineMcpUrl = "https://${tailnetFqdn}:7020/sse";
 
-  # Notes (hosts/rpi5/open-knowledge.nix): OpenKnowledge's own streamable-HTTP MCP over the
+  # Notes (hosts/rpi5/knowledge/open-knowledge.nix): OpenKnowledge's own streamable-HTTP MCP over the
   # markdown notes folder. Unauthenticated; reachable on the tailnet only.
   notesMcpUrl = "https://${tailnetFqdn}:3980/mcp";
 

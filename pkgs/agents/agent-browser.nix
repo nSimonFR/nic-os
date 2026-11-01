@@ -2,7 +2,7 @@
 # (vercel-labs/agent-browser, Apache-2.0). A single native Rust binary: it drives
 # a Chromium over CDP and exposes `navigate` / `snapshot` / `click` / `screenshot`
 # subcommands, which is exactly the interface Cyrus's browser-use prompt addendum
-# tells the agent to call (hosts/rpi5/cyrus.nix, `enableBrowserUse`).
+# tells the agent to call (hosts/rpi5/agents/cyrus.nix, `enableBrowserUse`).
 #
 # Why the npm tarball and not buildNpmPackage: the package has ZERO runtime
 # dependencies — the registry tarball is just a bag of prebuilt per-platform

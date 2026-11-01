@@ -103,7 +103,7 @@ let
   # only the payload's content matters, and only trivial Claude-Code-shaped
   # requests pass on plan limits alone.
   #
-  # Cyrus (hosts/rpi5/cyrus.nix) shares this Anthropic path and is unaffected — it
+  # Cyrus (hosts/rpi5/agents/cyrus.nix) shares this Anthropic path and is unaffected — it
   # drives the real Claude Code SDK, so it is not a third-party client.
 
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
@@ -310,11 +310,11 @@ let
       keepalive_interval = 86400;
     };
 
-    # Notes (hosts/rpi5/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
+    # Notes (hosts/rpi5/knowledge/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
     # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 
-    # T3 Code (hosts/rpi5/t3code.nix): launch and follow coding threads.
+    # T3 Code (hosts/rpi5/agents/t3code.nix): launch and follow coding threads.
     # OAuth with no refresh token: the login lasts 30 days, watched by the
     # mcp-token-check cron job. `untrusted` puts every write call (thread launch,
     # send) behind a Telegram approval, whatever approvals.mode says; the access level
@@ -483,7 +483,7 @@ let
   execWrapper = pkgs.writeShellScript "hermes-exec" ''
     set -a
     . /run/agenix/agent-env
-    # Agent Vault (hosts/rpi5/agent-vault.nix): proxy env + __placeholder__ values
+    # Agent Vault (hosts/rpi5/security/agent-vault.nix): proxy env + __placeholder__ values
     # for the API keys, which are not in agent-env. Absent until the first bootstrap.
     if [ -r /var/lib/agent-vault-hermes/proxy.env ]; then
       . /var/lib/agent-vault-hermes/proxy.env

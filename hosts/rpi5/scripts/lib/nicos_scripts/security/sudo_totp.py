@@ -1,4 +1,4 @@
-"""sudo-totp-enroll: create the TOTP secret behind nsimon's sudo (hosts/rpi5/sudo-totp.nix).
+"""sudo-totp-enroll: create the TOTP secret behind nsimon's sudo (hosts/rpi5/security/sudo-totp.nix).
 
 Agents run as nsimon, so the secret lives where only root reads it, in
 pam_google_authenticator's format, and reaches the user's phone once through

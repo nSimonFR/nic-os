@@ -1,6 +1,6 @@
 """Alert on security state the Nix config cannot see.
 
-hosts/rpi5/security-policy.nix refuses a bad config at eval time; this covers
+hosts/rpi5/security/security-policy.nix refuses a bad config at eval time; this covers
 what lives outside it:
 
 - SSH keys in ~/.ssh/authorized_keys. sshd reads that file as well as the

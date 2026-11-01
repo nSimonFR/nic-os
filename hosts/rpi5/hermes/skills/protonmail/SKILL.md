@@ -244,7 +244,7 @@ RUST_LOG=trace RUST_BACKTRACE=1 himalaya envelope list
   the agent (`systemctl --user restart hermes`) if it has stale env.
 - **Bridge offline** → `systemctl status hydroxide` and `journalctl -u hydroxide -e`.
   Hydroxide can crashloop after a rotation of `~/.config/hydroxide/auth.json`; re-auth
-  via the FIRST-TIME SETUP block at the top of `hosts/rpi5/hydroxide.nix`.
+  via the FIRST-TIME SETUP block at the top of `hosts/rpi5/knowledge/hydroxide.nix`.
 - **Connection refused** on `127.0.0.1:1143` / `:1025` → check `ss -tlnp | grep -E '1143|1025'`;
   hydroxide binds `0.0.0.0` on those ports.
 - **TLS errors** → encryption is intentionally `none` on the loopback hop; if himalaya
