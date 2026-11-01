@@ -2,8 +2,9 @@
 
 Kills less than QUIET_SEC apart share an episode. Its message lists every kill,
 whether the victim's unit came back, the memory left at the last kill and the
-units holding the most memory. It is sent silently, and pings (a reply) only when
-a victim's unit is still down after GRACE_SEC, or on a storm of real kills.
+units holding the most memory. It is sent silently, and only once a
+non-expendable process dies; it pings (a reply) only when a victim's unit is
+still down after GRACE_SEC, or on a storm of real kills.
 
 A kill's unit comes from the victim's last journal line, so a process that never
 logged (a Claude session, a Ryot sandbox) has none and is not tracked.
@@ -351,9 +352,12 @@ def tick(cfg, state, now, run, tg, snapshot, user_name, log):
     over = is_over(cfg, episode, now)
     text = render(episode, now, over)
 
+    # An episode of expendable kills only (ryot-sandboxd) posts nothing; a real
+    # kill joining it later posts the whole episode.
     if not episode.get("mid"):
-        episode["mid"] = tg.send(text, silent=True)
-        episode["text"] = text
+        if not all(is_expendable(k) for k in episode["kills"]):
+            episode["mid"] = tg.send(text, silent=True)
+            episode["text"] = text
     elif text != episode.get("text") and tg.edit(episode["mid"], text):
         episode["text"] = text
 
