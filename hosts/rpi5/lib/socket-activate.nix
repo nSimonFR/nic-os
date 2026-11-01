@@ -218,7 +218,7 @@ in
       # 2. Real-unit patches: clear boot-time wantedBy; add StopWhenUnneeded
       #    when idle-stop is enabled.
       (lib.mkMerge (
-        lib.mapAttrsToList (name: c: {
+        lib.mapAttrsToList (_name: c: {
           ${unitKey c.realUnit} = lib.mkMerge [
             { wantedBy = lib.mkForce [ ]; }
             (lib.mkIf (c.idleSec != null) {

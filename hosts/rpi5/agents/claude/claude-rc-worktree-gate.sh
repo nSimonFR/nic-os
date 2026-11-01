@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # post-checkout hook (managed by claude-remote-control.nix, symlinked into
 # .git/hooks/post-checkout at bridge start; also re-run over existing worktrees
 # by prepConfigScript on every bridge start).

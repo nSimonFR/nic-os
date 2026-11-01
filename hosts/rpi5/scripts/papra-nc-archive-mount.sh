@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Mount the Papra archive into Nextcloud as a read-only Local external storage.
 # Idempotent. Env: OCC, ARCHIVE_DIR, ARCHIVE_MOUNT, NC_USER.
 

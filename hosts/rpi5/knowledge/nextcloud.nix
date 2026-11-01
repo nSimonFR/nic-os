@@ -262,7 +262,7 @@ in
   services.nginx.virtualHosts.${tailnetFqdn}.listen = lib.mkForce [
     {
       addr = "127.0.0.1";
-      port = port;
+      inherit port;
       ssl = false;
     }
   ];

@@ -32,7 +32,7 @@ if pgrep -u alfie -x steam >/dev/null 2>&1; then
 fi
 
 # Appids installed on the NTFS library (these are the ones whose prefixes live on ntfs3).
-mapfile -t APPS < <(ls "$LIB"/appmanifest_*.acf 2>/dev/null |
+mapfile -t APPS < <(printf '%s\n' "$LIB"/appmanifest_*.acf |
   sed 's#.*appmanifest_##; s#\.acf$##' | grep -E '^[0-9]+$' | sort -un)
 if [ "${#APPS[@]}" -eq 0 ]; then
   echo "no appmanifests under $LIB; nothing to do"

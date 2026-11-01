@@ -18,7 +18,7 @@
 inputs: final: _prev: {
   # RTK (Rust Token Killer) — built from the rtk-src flake input.
   # Consumers: hosts/rpi5/agents/cyrus.nix, home/, and `nix build .#rtk`.
-  rtk = final.callPackage ./agents/rtk.nix { rtk-src = inputs.rtk-src; };
+  rtk = final.callPackage ./agents/rtk.nix { inherit (inputs) rtk-src; };
 
   # T3 Code CLI/server. Consumers: hosts/rpi5/agents/t3code.nix (server) and
   # hosts/nbookpro/linear-t3-relay.nix (pairing codes on the Mac).
@@ -29,7 +29,7 @@ inputs: final: _prev: {
   # input; the prebuilt upstream image is amd64-only.
   # Consumers: hosts/rpi5/life/showmycards.nix and `nix build .#showmycards`.
   showmycards = final.callPackage ./services/showmycards.nix {
-    showmycards-src = inputs.showmycards-src;
+    inherit (inputs) showmycards-src;
     # backend/go.mod requires `go 1.26.3` and a pure build can't fetch a
     # toolchain (no network in the sandbox), so pass one that already
     # satisfies it: the default `go` is 1.25.10, too old. go_1_26 is
@@ -48,7 +48,7 @@ inputs: final: _prev: {
   # hermes-agent input follows. Consumers: hosts/rpi5/agents/hermes/hermes.nix and
   # `nix build .#hermes-messaging`.
   hermes-messaging = final.callPackage ./agents/hermes-messaging.nix {
-    hermes-agent = inputs.hermes-agent;
+    inherit (inputs) hermes-agent;
     hermesPkgs = inputs.nixpkgs-unstable.legacyPackages.${final.stdenv.hostPlatform.system};
   };
 

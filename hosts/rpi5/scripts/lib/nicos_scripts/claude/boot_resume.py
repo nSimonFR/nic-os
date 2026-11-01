@@ -72,7 +72,6 @@ CRC_DRY_RUN=1 (the default) logs the planned reconnects instead of performing th
 """
 
 import json
-import os
 import re
 import subprocess
 import sys
@@ -83,7 +82,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from ..logs import logger
-from ..secrets import env_int, env_str, read_secret
+from ..secrets import env_int, env_str
 
 log = logger("claude-rc-boot-resume")
 

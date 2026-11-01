@@ -6,7 +6,6 @@ from pathlib import Path
 
 from weekly_events.changes import ChangeDetector
 from weekly_events.ics import parse_ics
-from weekly_events.model import Event
 from weekly_events.normalize import normalize, stable_id
 from weekly_events.notify import render_digest
 from weekly_events.store import EventStore

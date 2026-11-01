@@ -4,7 +4,11 @@
   projectRootFile = "flake.nix";
 
   programs.nixfmt.enable = true;
-  programs.statix.enable = true;
+  programs.statix = {
+    enable = true;
+    # `{ ... }:` is the readable module header; `_:` says nothing.
+    disabled-lints = [ "empty_pattern" ];
+  };
   programs.deadnix = {
     enable = true;
     # Module args like `{ config, ... }` are an interface, and a function without

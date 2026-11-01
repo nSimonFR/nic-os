@@ -87,7 +87,7 @@ let
     // lib.optionalAttrs (job ? source) { IMMICH_ADOPT_SOURCE = job.source; };
   };
 
-  timer = name: job: {
+  timer = _name: job: {
     description = "Nightly adopt of ${job.description}";
     wantedBy = [ "timers.target" ];
     timerConfig = {

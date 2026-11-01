@@ -1,5 +1,8 @@
 from __future__ import annotations
-import argparse, json, logging, os
+import argparse
+import json
+import logging
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 from .changes import ChangeDetector
