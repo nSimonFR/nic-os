@@ -170,8 +170,8 @@ def work_summary(events, lo_dt, hi_dt, me):
 
 
 def dedupe(events):
-    """One event per time slot when calendars mirror each other (PERSO and
-    Google both carry "Heure de conduite", one with " — En Voiture Simone"):
+    """One event per time slot when it is stored twice ("Heure de conduite"
+    and "Heure de conduite — En Voiture Simone"):
     same start and end, and one title equal to or a prefix of the other; the
     fuller title wins."""
     kept = []

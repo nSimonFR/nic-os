@@ -935,7 +935,7 @@ def test_calino_does_not_count_its_own_settings_calendar(tmp_path):
 
 
 def test_calino_skips_webcal_subscriptions(tmp_path):
-    # `{calendarserver}subscribed` collections (TRUSK, Google, Airbnb here) advertise
+    # `{calendarserver}subscribed` collections (TRUSK, Airbnb here) advertise
     # VEVENT and answer 207, but Nextcloud never exposes a subscription's contents over
     # DAV — every query returns zero objects, so they can only cost requests.
     cfg = calino_cfg(tmp_path)

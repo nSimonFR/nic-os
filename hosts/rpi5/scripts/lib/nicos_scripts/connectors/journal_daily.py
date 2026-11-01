@@ -119,7 +119,7 @@ class Config:
     state_path: str = ""
     place_radius_m: int = 300
     photos_max: int = 9
-    personal_calendars: tuple = ("PERSO", "Google")
+    personal_calendars: tuple = ("PERSO",)
     work_calendars: tuple = ("TRUSK",)
     nextcloud_db: str = "nextcloud_production"
     ryot_db: str = "ryotv2"
@@ -164,7 +164,7 @@ class Config:
             state_path=env_str("JOURNAL_STATE", "", env),
             place_radius_m=env_int("JOURNAL_PLACE_RADIUS_M", 300, env),
             photos_max=env_int("JOURNAL_PHOTOS_MAX", 9, env),
-            personal_calendars=_names(env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO,Google", env)),
+            personal_calendars=_names(env_str("JOURNAL_PERSONAL_CALENDARS", "PERSO", env)),
             work_calendars=_names(env_str("JOURNAL_WORK_CALENDARS", "TRUSK", env)),
             nextcloud_db=env_str("NEXTCLOUD_DB", "nextcloud_production", env),
             arkose_sessions=env_str("ARKOSE_SESSIONS", "/var/lib/arkose-sync/sessions.json", env),
