@@ -105,8 +105,7 @@ in {
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/wakapi/wakapi.db \
         ".backup '/mnt/data/backups/wakapi/wakapi-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/wakapi/wakapi-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/wakapi -name "wakapi-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/wakapi -name "wakapi-*.db*" -mtime +7 -delete
     '';
   };
 

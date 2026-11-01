@@ -107,8 +107,7 @@ in
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       OUT=/mnt/data/backups/memos
       ${pkgs.sqlite}/bin/sqlite3 ${dataDir}/memos_prod.db ".timeout 60000" ".backup '$OUT/memos-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "$OUT/memos-$STAMP.db"
-      ${pkgs.findutils}/bin/find "$OUT" -name "memos-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find "$OUT" -name "memos-*.db*" -mtime +7 -delete
     '';
   };
 

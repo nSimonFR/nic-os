@@ -18,7 +18,8 @@
   services.postgresqlBackup = {
     enable = true;
     location = "/mnt/data/backups/postgresql";
-    compression = "gzip";
+    # Uncompressed so restic can dedup night to night; it compresses on upload.
+    compression = "none";
     startAt = "*-*-* 03:00:00";
   };
 
@@ -36,15 +37,23 @@
     "d /mnt/data/backups/hermes 0750 nsimon users -"
   ];
 
+  # The recorder DB is only history; .storage/ (integrations, devices, entity
+  # registry, auth, UI dashboards) and the YAML are what a restore needs.
   systemd.services.hass-backup = {
-    description = "Home Assistant database backup";
+    description = "Home Assistant database + config backup";
     serviceConfig = { Type = "oneshot"; User = "hass"; };
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
-      ${pkgs.sqlite}/bin/sqlite3 /var/lib/hass/home-assistant_v2.db ".backup '/mnt/data/backups/hass/hass-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/hass/hass-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/hass -name "hass-*.db.gz" -mtime +7 -delete
+      OUT=/mnt/data/backups/hass
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/hass/home-assistant_v2.db ".backup '$OUT/hass-$STAMP.db'"
+      # Exit 1 = a file changed while read (HA rewrites .storage live); 2+ is fatal.
+      rc=0
+      ${pkgs.gnutar}/bin/tar -cf "$OUT/hass-config-$STAMP.tar" -C /var/lib/hass \
+        --exclude='./home-assistant_v2.db*' --exclude=./backups --exclude=./deps \
+        --exclude=./tts --exclude=./.cache . || rc=$?
+      [ "$rc" -le 1 ]
+      ${pkgs.findutils}/bin/find "$OUT" -name "hass-*" -mtime +7 -delete
     '';
   };
 
@@ -66,8 +75,7 @@
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/papra/db.sqlite ".backup '/mnt/data/backups/papra/papra-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/papra/papra-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/papra -name "papra-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/papra -name "papra-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -89,8 +97,7 @@
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/beaverhabits/habits.db ".backup '/mnt/data/backups/beaverhabits/beaverhabits-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/beaverhabits/beaverhabits-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/beaverhabits -name "beaverhabits-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/beaverhabits -name "beaverhabits-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -117,8 +124,7 @@
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/wealthfolio/wealthfolio.db ".backup '/mnt/data/backups/wealthfolio/wealthfolio-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/wealthfolio/wealthfolio-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/wealthfolio -name "wealthfolio-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/wealthfolio -name "wealthfolio-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -149,10 +155,7 @@
       OUT=/mnt/data/backups/karakeep
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/karakeep/db.db ".backup '$OUT/karakeep-$STAMP.db'"
       ${pkgs.sqlite}/bin/sqlite3 /var/lib/karakeep/queue.db ".backup '$OUT/karakeep-queue-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "$OUT/karakeep-$STAMP.db" "$OUT/karakeep-queue-$STAMP.db"
-      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks.
-      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
-        -cf "$OUT/karakeep-assets-$STAMP.tar.gz" -C /var/lib/karakeep assets
+      ${pkgs.gnutar}/bin/tar -cf "$OUT/karakeep-assets-$STAMP.tar" -C /var/lib/karakeep assets
       ${pkgs.findutils}/bin/find "$OUT" -type f -mtime +7 -delete
     '';
   };
@@ -208,8 +211,7 @@
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /home/nsimon/.mail-digest/mail.db ".backup '/mnt/data/backups/mail-digest/mail-digest-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/mail-digest/mail-digest-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/mail-digest -name "mail-digest-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/mail-digest -name "mail-digest-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -240,8 +242,7 @@
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
       ${pkgs.sqlite}/bin/sqlite3 /home/nsimon/.blogwatcher/blogwatcher.db ".backup '/mnt/data/backups/blogwatcher/blogwatcher-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "/mnt/data/backups/blogwatcher/blogwatcher-$STAMP.db"
-      ${pkgs.findutils}/bin/find /mnt/data/backups/blogwatcher -name "blogwatcher-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/blogwatcher -name "blogwatcher-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -275,7 +276,7 @@
   # store), documents (likewise), lsp/, cache/, audio_cache/, image_cache/,
   # logs/, and sessions/ (3.6 MB of request_dump_*.json debug artefacts — the
   # conversations themselves are in state.db). .env is agenix-derived. That is
-  # 211 MB on disk reduced to ~40 MB dumped.
+  # 211 MB on disk reduced to ~100 MB dumped.
   #
   # `.timeout 60000` before `.backup`, which the other units here do without:
   # they dump databases that are idle at 04:00, whereas Hermes writes
@@ -292,10 +293,7 @@
         ${pkgs.sqlite}/bin/sqlite3 "$H/$db.db" ".timeout 60000" ".backup '$OUT/$db-$STAMP.db'"
       done
       ${pkgs.sqlite}/bin/sqlite3 "$H/cron/executions.db" ".timeout 60000" ".backup '$OUT/executions-$STAMP.db'"
-      ${pkgs.gzip}/bin/gzip -f "$OUT"/*-"$STAMP".db
-      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks.
-      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
-        -cf "$OUT/files-$STAMP.tar.gz" -C "$H" memories memory cron/jobs.json
+      ${pkgs.gnutar}/bin/tar -cf "$OUT/files-$STAMP.tar" -C "$H" memories memory cron/jobs.json
       ${pkgs.findutils}/bin/find "$OUT" -type f -mtime +7 -delete
     '';
   };
@@ -313,9 +311,9 @@
     script = ''
       set -euo pipefail
       STAMP=$(${pkgs.coreutils}/bin/date +%F)
-      ${pkgs.gzip}/bin/gzip -c /var/backup/vaultwarden/db.sqlite3 > "/mnt/data/backups/vaultwarden/vaultwarden-$STAMP.db.gz"
+      ${pkgs.coreutils}/bin/cp /var/backup/vaultwarden/db.sqlite3 "/mnt/data/backups/vaultwarden/vaultwarden-$STAMP.db"
       ${pkgs.coreutils}/bin/cp /var/backup/vaultwarden/rsa_key.pem /mnt/data/backups/vaultwarden/
-      ${pkgs.findutils}/bin/find /mnt/data/backups/vaultwarden -name "vaultwarden-*.db.gz" -mtime +7 -delete
+      ${pkgs.findutils}/bin/find /mnt/data/backups/vaultwarden -name "vaultwarden-*.db*" -mtime +7 -delete
     '';
   };
 
@@ -338,11 +336,7 @@
         id=$(${pkgs.coreutils}/bin/basename "$tree")
         ${pkgs.sqlite}/bin/sqlite3 "$tree/sqlite.db" ".backup '$OUT/tree-$id-$STAMP.db'"
       done
-      # tar -z shells out to `gzip` from PATH, which the unit's minimal PATH lacks
-      # → use the absolute gzip like the sqlite dumps below.
-      ${pkgs.gnutar}/bin/tar --use-compress-program=${pkgs.gzip}/bin/gzip \
-        -cf "$OUT/media-$STAMP.tar.gz" -C /var/lib/gramps-web media
-      ${pkgs.gzip}/bin/gzip -f "$OUT"/*-"$STAMP".sqlite "$OUT"/*-"$STAMP".db
+      ${pkgs.gnutar}/bin/tar -cf "$OUT/media-$STAMP.tar" -C /var/lib/gramps-web media
       ${pkgs.findutils}/bin/find "$OUT" -mtime +7 -delete
     '';
   };
