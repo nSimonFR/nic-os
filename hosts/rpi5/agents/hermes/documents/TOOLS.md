@@ -24,7 +24,7 @@ Hermes is the sole agent on this host (it succeeded PicoClaw, retired 2026-07).
 It runs as an `nsimon` **user** systemd unit polling the Telegram bot; there is
 no HTTP gateway to curl.
 
-- **Config source:** `~/nic-os/hosts/rpi5/hermes/hermes.nix` — a home-manager module.
+- **Config source:** `~/nic-os/hosts/rpi5/agents/hermes/hermes.nix` — a home-manager module.
   Everything below (model, skills, documents, cron workspace, MCP servers) is
   generated from it.
 - **Runtime home (`$HERMES_HOME`):** `~/.hermes/`
@@ -37,7 +37,7 @@ no HTTP gateway to curl.
   - `cron/jobs.json` — cron jobs; **runtime state, not Nix-managed**
 - **Skills** deploy into `~/.hermes/skills/` from three sources:
   - `~/nic-os/shared/skills/<name>/SKILL.md` — shared across every agent
-  - `~/nic-os/hosts/rpi5/hermes/skills/<name>/SKILL.md` — Hermes-local
+  - `~/nic-os/hosts/rpi5/agents/hermes/skills/<name>/SKILL.md` — Hermes-local
   - `~/nic-os/shared/mtg-skills/` → `~/.hermes/skills/mtg/` (Hermes MTG skills)
 - **Models / routing:** configured inline in `hermes.nix`. Hermes points at
   **Aperture** (`http://ai.gate-mintaka.ts.net/v1`), which forwards to
@@ -50,11 +50,11 @@ no HTTP gateway to curl.
 
 | Change | Edit | Then |
 |--------|------|------|
-| Model, routing, MCP servers, memory | `~/nic-os/hosts/rpi5/hermes/hermes.nix` | Rebuild |
+| Model, routing, MCP servers, memory | `~/nic-os/hosts/rpi5/agents/hermes/hermes.nix` | Rebuild |
 | Shared skill content | `~/nic-os/shared/skills/<name>/SKILL.md` | Rebuild |
-| Hermes-only skill content | `~/nic-os/hosts/rpi5/hermes/skills/<name>/SKILL.md` | Rebuild |
-| Persona / these docs | `~/nic-os/hosts/rpi5/hermes/documents/` | Rebuild |
-| Cron helper scripts | `~/nic-os/hosts/rpi5/hermes/workspace/` | Rebuild |
+| Hermes-only skill content | `~/nic-os/hosts/rpi5/agents/hermes/skills/<name>/SKILL.md` | Rebuild |
+| Persona / these docs | `~/nic-os/hosts/rpi5/agents/hermes/documents/` | Rebuild |
+| Cron helper scripts | `~/nic-os/hosts/rpi5/agents/hermes/workspace/` | Rebuild |
 | API keys, tokens | Re-encrypt `hosts/rpi5/secrets/agent-brokered-env.age` + a service in `agent-vault.nix` | Rebuild |
 | Cron jobs themselves | `~/.hermes/cron/jobs.json` (runtime) | No rebuild |
 

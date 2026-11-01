@@ -20,7 +20,7 @@ Each module lives in a domain directory whose `default.nix` imports it;
 | `platform/` | databases, backups, deploys, alerting, beast's power |
 | `network/` | Tailscale Serve, the 443 mux, DNS, homepage, tailnet MITM |
 | `security/` | the eval-time policy, root access, agent credentials, Vaultwarden |
-| `agents/` | Claude Code (`claude/`), Cyrus, T3, the LLM gate, Entire |
+| `agents/` | Hermes (`hermes/`), Claude Code (`claude/`), Cyrus, T3, the LLM gate, Entire |
 | `finance/` | Sure, Wealthfolio, the Sumeria capture |
 | `media/` | Immich, Ryot |
 | `knowledge/` | documents, notes, mail, calendars, search |
@@ -29,10 +29,11 @@ Each module lives in a domain directory whose `default.nix` imports it;
 
 Unchanged at the top: `configuration.nix`, `home.nix`, `overlays.nix`,
 `secrets.nix` + `secrets/`, `lib/` (module helpers), `scripts/` (shell +
-`nicos-scripts`), and `hermes/` (an open PR touches it; it joins `agents/` later).
+`nicos-scripts`).
 
-Home-manager modules (`agents/entire-brain.nix`, `knowledge/mail.nix`) sit in
-their domain too but are imported from `home.nix`, never from a `default.nix`.
+Home-manager modules (`agents/hermes/hermes.nix`, `agents/entire-brain.nix`,
+`knowledge/mail.nix`) sit in their domain too but are imported from `home.nix`,
+never from a `default.nix`.
 
 ## Consequences
 

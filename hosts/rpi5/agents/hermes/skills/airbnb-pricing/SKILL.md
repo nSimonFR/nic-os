@@ -69,7 +69,7 @@ that the cron job can be removed: `hermes cron remove <id>`.
 
 When asked in the group (e.g. "passe novembre à 145"), edit `rules.json`, then
 confirm the new value. Base prices are per `YYYY-MM`. The file is versioned in
-nic-os (`hosts/rpi5/hermes/skills/airbnb-pricing/rules.json`) and the next
+nic-os (`hosts/rpi5/agents/hermes/skills/airbnb-pricing/rules.json`) and the next
 deploy overwrites a live edit — say so, and ask nSimon to commit it.
 
 ## Hand run

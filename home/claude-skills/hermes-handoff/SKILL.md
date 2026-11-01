@@ -29,7 +29,7 @@ and pipe the answer into `telegram-send` if Nico has left the keyboard.
   handoff.
 - **Cron**: Hermes owns its jobs (`hermes cron list|create|edit`) in
   Hermes-managed `cron/jobs.json`, so a job it invents is NOT reproducible. One
-  meant to last belongs in `hosts/rpi5/hermes/cron-scripts/` (seeded into
+  meant to last belongs in `hosts/rpi5/agents/hermes/cron-scripts/` (seeded into
   `~/.hermes/scripts/`, bound `--script <name>.sh --no-agent`, which also spends
   no tokens per tick).
 - Interactive instead: `ssh -t rpi5 'cd ~ && hermes chat'`. Never run

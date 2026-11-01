@@ -48,7 +48,7 @@ let
 
   # Seeded into ~/.hermes/plugins/; it reads the same ~/.hermes/memory_store.db.
   # numpy (HRR) is absent from `messaging`, so it runs keyword-only, as before.
-  holographicPlugin = pkgs.callPackage ../../../pkgs/agents/hermes-holographic.nix { };
+  holographicPlugin = pkgs.callPackage ../../../../pkgs/agents/hermes-holographic.nix { };
 
   hermesHome = "/home/nsimon/.hermes";
 
@@ -109,7 +109,7 @@ let
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
   # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
   # cron jobs depend on. These local skills moved here from the retired PicoClaw
-  # module (hosts/rpi5/hermes/skills). All descend from OpenClaw's SKILL.md format.
+  # module (hosts/rpi5/agents/hermes/skills). All descend from OpenClaw's SKILL.md format.
   #
   # The MTG Commander pair lives in shared/mtg-skills and stays OUT of
   # shared/skills, which home/claude.nix auto-wires into every general-purpose
@@ -118,11 +118,11 @@ let
   # This list is the single declaration of what the repo seeds into
   # ~/.hermes/skills; hermes-skill-promote below derives its exclusion set from
   # it, so the two cannot drift.
-  skillTree = import ../../../shared/skill-tree.nix { inherit lib; };
+  skillTree = import ../../../../shared/skill-tree.nix { inherit lib; };
   skillLineages = [
-    { source = ../../../shared/skills; }
+    { source = ../../../../shared/skills; }
     { source = ./skills; }
-    { source = ../../../shared/mtg-skills; prefix = "mtg"; }
+    { source = ../../../../shared/mtg-skills; prefix = "mtg"; }
   ];
   skillsSource = skillTree.tree {
     inherit pkgs;
@@ -142,7 +142,7 @@ let
 
   # The `send` seam (shared/notify.nix): one-shot events with no resolved state.
   # Shared by the dawarich recap and the start-time binding check below.
-  hermesNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
+  hermesNotify = (import ../../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = "/run/agenix/telegram-bot-token";
     chatId = telegramChatId;
     name = "hermes-telegram-send";
@@ -203,7 +203,7 @@ let
   # (mcp_servers, below) launches it over stdio and registers its tools as
   # mcp__mtg__* in every conversation. The package definition moved to
   # pkgs/agents/mtg-mcp.nix.
-  mtgMcp = pkgs.callPackage ../../../pkgs/agents/mtg-mcp.nix { };
+  mtgMcp = pkgs.callPackage ../../../../pkgs/agents/mtg-mcp.nix { };
 
   # FreeReps MCP — 20 read-only Apple Health query tools, as mcp__freereps__*.
   #
@@ -510,7 +510,7 @@ let
   # the one in $HERMES_HOME/.env that Hermes itself runs on: this nudge is
   # nic-os telling a human to review a promoted skill, not Hermes talking.
   # Hardcoded path because this is a home-manager module — no age.secrets here.
-  promoteNotify = (import ../../../shared/notify.nix { inherit pkgs; }).send {
+  promoteNotify = (import ../../../../shared/notify.nix { inherit pkgs; }).send {
     tokenFile = "/run/agenix/telegram-bot-token";
     chatId = telegramChatId;
     name = "hermes-skill-promote-notify";

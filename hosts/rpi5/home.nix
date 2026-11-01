@@ -27,7 +27,7 @@ in
 {
   imports = [
     ./agents/entire-brain.nix
-    ./hermes/hermes.nix
+    ./agents/hermes/hermes.nix
     ./knowledge/mail.nix
   ];
 

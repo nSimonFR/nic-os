@@ -16,7 +16,7 @@ ProtonMail bridge running as a system service that exposes IMAP on `127.0.0.1:11
 on `127.0.0.1:1025`. Both authenticate with the bridge password at
 `/run/agenix/protonmail-bridge-password` (group-readable by `hydroxide`, which `nsimon` is a
 member of). The himalaya config at `~/.config/himalaya/config.toml` is Nix-managed in
-`hosts/rpi5/hermes/hermes.nix` — do **not** hand-edit. Edit the Nix module instead.
+`hosts/rpi5/agents/hermes/hermes.nix` — do **not** hand-edit. Edit the Nix module instead.
 
 ## References
 
