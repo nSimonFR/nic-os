@@ -4,7 +4,7 @@
 # approved by nSimonFR.
 #
 # rpi5: Agent Vault attaches nSimonFR-ai's token to every github.com request
-# (hosts/rpi5/agent-vault.nix), so a plain push already is one.
+# (hosts/rpi5/security/agent-vault.nix), so a plain push already is one.
 # Elsewhere: send nSimonFR-ai's gh token as a header, since the credential
 # helper uses gh's *active* account. The remote may look like SSH, but
 # gitconfig-shared rewrites git@github.com: to HTTPS.

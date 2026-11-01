@@ -27,7 +27,7 @@
   };
 
   # SessionStart hook (dotfiles/claude-settings.json): Claude Code's Bash commands go
-  # through the rpi5's Agent Vault (hosts/rpi5/agent-vault.nix) over the tailnet, with
+  # through the rpi5's Agent Vault (hosts/rpi5/security/agent-vault.nix) over the tailnet, with
   # Hermes' proxy env, so they hold placeholders (`__linear_key__`), never the keys.
   # Kept direct: GitHub (the vault would attach nSimonFR-ai, blind to trusk-official),
   # and only the personal tailnet, not `.ts.net`: the work kube API has its own proxy.

@@ -54,7 +54,7 @@ AFFiNE, Immich).
 
 **front proxy** / **path-mux** — the single nginx vhost behind the one public 443
 funnel, which routes by path prefix so several services can be public without a
-fourth funnel port (`hosts/rpi5/front-proxy.nix`).
+fourth funnel port (`hosts/rpi5/network/front-proxy.nix`).
 
 **proxied** — fronted by the path-mux rather than holding a port of its own. No
 serve/funnel command is emitted for a proxied service; a second bind on 443

@@ -3,7 +3,7 @@
 agent-vault-bootstrap: push the repo's declared state into Agent Vault, whose only
 config is its own DB — owner account, credentials (CREDS_FILE + CRED_FILES), services,
 and the agent token. Then write OUT_DIR/{agent-token,ca-bundle.pem,proxy.env,gitconfig}.
-Idempotent; a lost DB is a re-run. Env: see hosts/rpi5/agent-vault.nix.
+Idempotent; a lost DB is a re-run. Env: see hosts/rpi5/security/agent-vault.nix.
 """
 
 import json

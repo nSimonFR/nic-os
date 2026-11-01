@@ -6,7 +6,7 @@
 #
 # The iPhone side is NOT built here — it is the free App Store app
 # (apps.apple.com/app/id6760661354), which takes an arbitrary host+port, so it
-# talks to whatever origin hosts/rpi5/freereps.nix declares.
+# talks to whatever origin hosts/rpi5/life/freereps.nix declares.
 #
 # ── Two-stage build ──────────────────────────────────────────────────────────
 # `server/web.go` is `//go:embed all:web/dist`, and `.gitignore` excludes
@@ -150,7 +150,7 @@ in
 
   # `RunMigrations(dsn, "migrations")` (internal/storage/db.go) resolves a
   # RELATIVE path, so the migrations have to sit next to a WorkingDirectory the
-  # unit can point at. hosts/rpi5/freereps.nix sets
+  # unit can point at. hosts/rpi5/life/freereps.nix sets
   # WorkingDirectory=${freereps}/share/freereps for exactly this.
   postInstall = ''
     mkdir -p $out/share/freereps

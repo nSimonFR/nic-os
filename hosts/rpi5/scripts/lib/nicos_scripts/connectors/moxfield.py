@@ -44,7 +44,7 @@ guarded, and every guard has a test in tests/test_moxfield.py — the prune ceil
 the truncated-collection check, the private-collection check, the failed-discovery
 abort. Read those before changing this file.
 
-Env contract (all set by hosts/rpi5/moxfield-sync.nix):
+Env contract (all set by hosts/rpi5/life/moxfield-sync.nix):
   MOXFIELD_USERS            comma-separated Moxfield usernames whose decks to sync
   MOXFIELD_COLLECTION_USER  single username whose collection mirrors to inventory
   MOXFIELD_USER_AGENT       honest UA naming the project + a contact URL

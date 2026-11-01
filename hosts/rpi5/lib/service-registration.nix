@@ -705,7 +705,7 @@ in
           e.muxPath == null || lib.any (loc: lib.hasPrefix e.muxPath loc) proxyLocationNames;
         message =
           "nic.services.${e.name}.public.muxPath is \"${e.muxPath}\" but no "
-          + "front-proxy location proxies it (see hosts/rpi5/front-proxy.nix). "
+          + "front-proxy location proxies it (see hosts/rpi5/network/front-proxy.nix). "
           + "No serve command is emitted for a proxied service, so its tile "
           + "would link straight to a 404.";
       })

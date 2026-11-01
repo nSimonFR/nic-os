@@ -18,7 +18,7 @@ an approval from the last pusher, so pushing as nSimonFR deadlocks the PR. nSimo
 owns/merges; nSimonFR-ai can't self-merge.
 
 On rpi5, git and gh reach GitHub through Agent Vault, which attaches nSimonFR-ai's
-token (`hosts/rpi5/agent-vault.nix`): plain `git push` / `gh pr create` already act as
+token (`hosts/rpi5/security/agent-vault.nix`): plain `git push` / `gh pr create` already act as
 nSimonFR-ai, and `gh auth token` prints a placeholder. Elsewhere:
 
 - commit — `git -c user.name="nSimonFR-ai" commit …`
@@ -35,6 +35,12 @@ Hence the case-insensitive lookup; `push-ai` does the same.
 retitled, commented on, merged. `#638` is not a link, and the number alone is a search.
 Before opening a PR, check whether the branch already has one (`gh pr list --head
 <branch>`) and update that instead of opening a second.
+
+## rpi5 layout
+
+A new rpi5 service goes in `hosts/rpi5/<domain>/<name>.nix` plus one line in that
+domain's `default.nix` — never at the top of `hosts/rpi5/`. Domains and the rule:
+`docs/adr/0009-rpi5-modules-grouped-by-domain.md`.
 
 ## Agent skills
 

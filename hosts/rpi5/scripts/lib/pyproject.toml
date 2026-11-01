@@ -95,7 +95,7 @@ hermes-mcp-token-check = "nicos_scripts.hermes.mcp_token_check:main"
 hermes-mail-digest = "nicos_scripts.mail.digest:main"
 # Same classifier, hand-runnable over envelopes on stdin (the skill's ad-hoc path).
 mail-jev-classify = "nicos_scripts.mail.jev:main"
-# Death Plan Switch → Vaultwarden Emergency Access (hosts/rpi5/death-plan-switch.nix).
+# Death Plan Switch → Vaultwarden Emergency Access (hosts/rpi5/security/death-plan-switch.nix).
 dps-ea-bridge = "nicos_scripts.vaultwarden.ea_bridge:main"
 # Agents write logins into the shared "Agents" org (shared/skills/vaultwarden).
 vault-agent = "nicos_scripts.vaultwarden.agents:main"

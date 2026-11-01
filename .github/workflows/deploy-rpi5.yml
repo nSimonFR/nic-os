@@ -1,5 +1,5 @@
 # Build rpi5's system here, push it to nsimon-nicos, and have the Cachix Deploy
-# agent on the Pi (hosts/rpi5/cachix-agent.nix) download and activate it.
+# agent on the Pi (hosts/rpi5/platform/cachix-agent.nix) download and activate it.
 #
 # The Pi cannot evaluate its own config: the eval peaks at ~2.1 GiB RSS and
 # earlyoom SIGTERMs it, heavy-shed or not (2026-10-01). Its closure is ~25 GiB,

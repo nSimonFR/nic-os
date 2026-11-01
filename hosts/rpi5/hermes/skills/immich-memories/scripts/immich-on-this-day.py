@@ -345,7 +345,7 @@ def main():
     args = ap.parse_args()
 
     # Hermes' terminal scrubs *KEY* env names, so default to the placeholder:
-    # Agent Vault (hosts/rpi5/agent-vault.nix) holds the real key.
+    # Agent Vault (hosts/rpi5/security/agent-vault.nix) holds the real key.
     api_key = os.environ.get("IMMICH_API_KEY") or "__immich_api_key__"
 
     internal = os.environ.get("IMMICH_INTERNAL_URL", "http://immich.home.arpa:2283").rstrip("/")

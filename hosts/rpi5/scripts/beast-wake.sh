@@ -10,7 +10,7 @@
 #
 # Usage: beast-wake [--after <systemd span>] [--no-poweroff] [--cancel]
 # Env: BEAST_MAC / BEAST_HOST / BEAST_LAN_BROADCAST / BEAST_WAIT_SECS;
-# BEAST_AUTOPOWEROFF_SCRIPT is injected by hosts/rpi5/beast-power.nix.
+# BEAST_AUTOPOWEROFF_SCRIPT is injected by hosts/rpi5/platform/beast-power.nix.
 
 # Link-local id, not a credential — until now it lived only in shell history.
 : "${BEAST_MAC:=c8:7f:54:0a:40:ec}"

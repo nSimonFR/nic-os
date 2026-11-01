@@ -3,7 +3,7 @@
 # exits; the upstream Docker entrypoint's internal cron is deliberately unused.
 #
 # Service module (timer, state dir, config.json, captcha portal, Telegram):
-# hosts/rpi5/epicgames-freegames.nix.
+# hosts/rpi5/life/epicgames-freegames.nix.
 {
   lib,
   buildNpmPackage,

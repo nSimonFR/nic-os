@@ -58,7 +58,7 @@ do have an asset kind. They go in via `/alternative-assets`, and the loan is
 LINKED to the property, so net worth shows equity instead of two unrelated
 numbers.
 
-Env contract (all set by hosts/rpi5/wealthfolio-sync.nix):
+Env contract (all set by hosts/rpi5/finance/wealthfolio-sync.nix):
   WF_URL          Wealthfolio API base. Defaults to the loopback bind, which
                   deliberately bypasses the read-only nginx allowlist on :3700.
   WF_PASSWORD     login password (agenix)
