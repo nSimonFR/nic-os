@@ -462,22 +462,57 @@
       # Prefer that explicit form over bare `nix flake check`, which also forces
       # every other output (the heavy ryot/showmycards/hermes derivations) —
       # expensive on a 3.9 GB Pi.
-      checks = nixpkgs.lib.genAttrs checkSystems (system: {
-        inherit (self.packages.${system}) nicos-scripts;
-        formatting = (treefmtFor system).config.build.check self;
-        # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
-        claude-aperture-shim =
-          let
-            pkgs = nixpkgs.legacyPackages.${system};
-          in
-          pkgs.runCommand "claude-aperture-shim-tests"
-            { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ]; }
-            ''
-              cp ${./home/claude-aperture-shim}/session_link.py ${./home/claude-aperture-shim}/test_session_link.py .
-              pytest -q -p no:cacheprovider
-              touch $out
-            '';
-      });
+      checks = nixpkgs.lib.genAttrs checkSystems (
+        system:
+        let
+          pkgs = nixpkgs.legacyPackages.${system};
+          inherit (nixpkgs) lib;
+        in
+        {
+          inherit (self.packages.${system}) nicos-scripts;
+          formatting = (treefmtFor system).config.build.check self;
+          # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
+          claude-aperture-shim =
+            pkgs.runCommand "claude-aperture-shim-tests"
+              { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.pytest ])) ]; }
+              ''
+                cp ${./home/claude-aperture-shim}/session_link.py ${./home/claude-aperture-shim}/test_session_link.py .
+                pytest -q -p no:cacheprovider
+                touch $out
+              '';
+          # Hermes cron workspaces that ship a unittest suite.
+          hermes-workspaces =
+            pkgs.runCommand "hermes-workspace-tests" { nativeBuildInputs = [ pkgs.python3 ]; }
+              ''
+                for d in weekly-events price-watch; do
+                  cp -r ${./hosts/rpi5/agents/hermes/workspace}/$d $d
+                  chmod -R u+w $d
+                  (cd $d && python3 -m unittest discover -s tests -q)
+                done
+                touch $out
+              '';
+          # telegram-alert.sh / telegram-send.sh, against a stub curl.
+          notify-scripts =
+            pkgs.runCommand "notify-script-tests"
+              {
+                nativeBuildInputs = [ pkgs.jq ];
+                src = lib.fileset.toSource {
+                  root = ./.;
+                  fileset = lib.fileset.unions [
+                    ./shared/scripts
+                    ./hosts/rpi5/scripts/telegram-alert.sh
+                  ];
+                };
+              }
+              ''
+                cp -r $src src
+                chmod -R u+w src
+                patchShebangs src
+                bash src/shared/scripts/tests/notify.test.sh
+                touch $out
+              '';
+        }
+      );
 
       formatter = nixpkgs.lib.genAttrs devSystems (system: (treefmtFor system).config.build.wrapper);
 

@@ -153,12 +153,17 @@ jobs:
         run: cachix push nsimon-nicos < /tmp/outs.txt
 
   scripts:
+    # Still named `scripts`: that is the required context in .github/settings.yml.
     name: scripts
-    # x86_64 on purpose: nicos-scripts is pure Python and its checks are meant to
-    # be runnable off the Pi. This is the exact command CLAUDE.md documents.
+    # x86_64 on purpose: every check is meant to be runnable off the Pi.
+    # Builds all of checks.x86_64-linux, so a new check needs no edit here:
+    # formatting (treefmt.nix), nicos-scripts' pytest, and the other suites.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v22
-      - name: Run the nicos-scripts test suite
-        run: nix build --accept-flake-config --print-build-logs .#checks.x86_64-linux.nicos-scripts
+      - name: Build every flake check
+        run: |
+          nix eval --accept-flake-config --json .#checks.x86_64-linux --apply builtins.attrNames \
+            | jq -r '.[] | ".#checks.x86_64-linux.\(.)"' \
+            | xargs nix build --accept-flake-config --print-build-logs --keep-going
