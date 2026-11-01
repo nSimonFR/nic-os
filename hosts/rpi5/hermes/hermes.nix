@@ -375,6 +375,10 @@ let
     # No "gateway shutting down" ping to the home DM on every restart: ~12/day
     # (deploys + earlyoom kills). Interrupted-task pings to the active chat still go out.
     platforms.telegram.gateway_restart_notification = false;
+    # Telegram is a plugin since v0.22. Its import + register() took ~36s on the
+    # Pi after a deploy (cold store paths, memory pressure); past the 10s default
+    # the gateway drops the adapter and never connects Telegram.
+    plugins.load_timeout_seconds = 120;
 
     # External memory provider. `holographic` is the local, zero-API-key store
     # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real
