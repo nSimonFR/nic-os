@@ -40,12 +40,12 @@ inputs: final: _prev: {
   # FreeReps (self-hosted Apple Health server) — built from source; upstream
   # publishes only a docker-compose stack.
   # Consumers: hosts/rpi5/life/freereps.nix (the service) and
-  # hosts/rpi5/hermes/hermes.nix (the `-mcp` stdio server), plus
+  # hosts/rpi5/agents/hermes/hermes.nix (the `-mcp` stdio server), plus
   # `nix build .#freereps`.
   freereps = final.callPackage ./services/freereps.nix { };
 
   # Hermes Agent, `messaging` variant. hermesPkgs is the nixpkgs-unstable set the
-  # hermes-agent input follows. Consumers: hosts/rpi5/hermes/hermes.nix and
+  # hermes-agent input follows. Consumers: hosts/rpi5/agents/hermes/hermes.nix and
   # `nix build .#hermes-messaging`.
   hermes-messaging = final.callPackage ./agents/hermes-messaging.nix {
     hermes-agent = inputs.hermes-agent;

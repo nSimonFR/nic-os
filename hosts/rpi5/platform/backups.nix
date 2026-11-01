@@ -169,7 +169,7 @@
   # ── Registration for the two $HOME dumps below ─────────────────────────
   # Both of these live here rather than in an owning module, which is unusual
   # enough to say why: blogwatcher is a bare CLI with no module at all, and
-  # Hermes' module (hosts/rpi5/hermes/hermes.nix) is a *home-manager* module,
+  # Hermes' module (hosts/rpi5/agents/hermes/hermes.nix) is a *home-manager* module,
   # where `nic.services` — a NixOS option — does not exist.
   #
   # Registering is not paperwork. `nic.backupUnits` is what storj-backup.nix

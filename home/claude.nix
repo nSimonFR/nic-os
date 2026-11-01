@@ -10,7 +10,7 @@
 let
   # Which skills reach which surface (shared/skill-tree.nix defines skill /
   # lineage / surface). shared/skills is auto-discovered, so adding one is still
-  # just a directory; Hermes selects the same lineage in hosts/rpi5/hermes/hermes.nix.
+  # just a directory; Hermes selects the same lineage in hosts/rpi5/agents/hermes/hermes.nix.
   # claude-skills is Claude-Code-only — the Hermes agent already IS the Telegram
   # bot. shared/mtg-skills is in neither, deliberately: MTG surfaces only.
   skillTree = import ../shared/skill-tree.nix { inherit lib; };
@@ -174,7 +174,7 @@ in
   # All home-managed files are merged into one set: the skill lineages selected
   # above (shared + Claude-only), Claude slash commands (curated subset), and
   # Claude Code's own settings/hooks. The Hermes agent picks up the same shared
-  # lineage via hosts/rpi5/hermes/hermes.nix.
+  # lineage via hosts/rpi5/agents/hermes/hermes.nix.
   home.file = sharedSkillFiles // claudeCommandFiles // truskFiles // {
     # Writable settings.json — symlinked to the repo checkout so /voice etc.
     # can update it at runtime.

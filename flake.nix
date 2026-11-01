@@ -81,7 +81,7 @@
     # Hermes Agent (NousResearch/hermes-agent) — Python+Node AI agent, a full
     # flake carrying its own uv2nix stack (like beaverhabits-nix, we only pin
     # nixpkgs; forcing the pyproject/uv2nix inputs to follow breaks the build).
-    # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/hermes/hermes.nix.
+    # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/agents/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
     #
     # ⚠ HELD AT A TAG, on nixpkgs-UNSTABLE. Since v2026.8.3 upstream's
@@ -538,7 +538,7 @@
           # Hermes Agent — lean `messaging` variant. Exposed as a standalone
           # target (`nix build .#hermes-messaging`) so its heavy uv2nix Python +
           # npm compile can be validated/isolated on the Pi BEFORE wiring the
-          # user service (OOM-prone; no prebuild cache). See hosts/rpi5/hermes/hermes.nix.
+          # user service (OOM-prone; no prebuild cache). See hosts/rpi5/agents/hermes/hermes.nix.
           aarch64-linux.hermes-messaging =
             self.nixosConfigurations.${rpiconfig}.pkgs.hermes-messaging;
         };
@@ -587,7 +587,7 @@
               backupFileExtension = "hm-backup";
               extraSpecialArgs = baseArgs rpiconfig // {
                 # tailnetFqdn: home/mcp.nix. apertureUrl + tinyLlmGateUrl:
-                # hosts/rpi5/hermes/hermes.nix, which is a home-manager module even
+                # hosts/rpi5/agents/hermes/hermes.nix, which is a home-manager module even
                 # though it lives under the host dir (imported via
                 # hosts/rpi5/home.nix). beastOllamaUrl has no home-manager consumer
                 # and is passed to the system config only.

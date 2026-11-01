@@ -6,7 +6,7 @@ run, a non-zero exit is delivered as an error alert. So these log to **stderr**,
 and one that sends its own richer message prints nothing on success.
 
 Hermes also scrubs secret-shaped variables before spawning us, so credentials are
-re-exported by the `*.sh` shim in hosts/rpi5/hermes/hermes.nix, not inherited.
+re-exported by the `*.sh` shim in hosts/rpi5/agents/hermes/hermes.nix, not inherited.
 """
 
 __all__ = ["burgie_photo", "calendar_digest", "mcp_token_check", "whatsapp_audit", "zen_watch"]

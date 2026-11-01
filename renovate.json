@@ -53,7 +53,7 @@
       "matchPackageNames": ["hermes-agent"],
       "allowedVersions": "/^v0\\.\\d+\\.\\d+$/",
       "prBodyNotes": [
-        "Read the release notes before approving. Checks catch eval and build breaks, not a bundled plugin that moved: v0.22 moved the `holographic` memory provider (`memory.provider` in hosts/rpi5/hermes/hermes.nix) to the plugin catalog, and Hermes would have started without its fact store."
+        "Read the release notes before approving. Checks catch eval and build breaks, not a bundled plugin that moved: v0.22 moved the `holographic` memory provider (`memory.provider` in hosts/rpi5/agents/hermes/hermes.nix) to the plugin catalog, and Hermes would have started without its fact store."
       ]
     },
     {

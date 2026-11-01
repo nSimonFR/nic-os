@@ -39,7 +39,7 @@ in
 
   # The Hermes agent runs as ${username} and shells out to himalaya, which reads
   # the bridge password at invocation time. Group membership grants read on the
-  # 0440 agenix file without changing its owner. See hosts/rpi5/hermes/skills/protonmail/.
+  # 0440 agenix file without changing its owner. See hosts/rpi5/agents/hermes/skills/protonmail/.
   users.users.${username}.extraGroups = [ "hydroxide" ];
 
   systemd.tmpfiles.rules = [

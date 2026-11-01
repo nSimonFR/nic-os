@@ -31,7 +31,7 @@ pkgs.writeShellApplication {
   name = "populartimes-query";
   runtimeInputs = [ pythonEnv ];
   text = ''
-    exec ${pythonEnv}/bin/python ${../../hosts/rpi5/hermes/skills/populartimes/scripts/query.py} "$@"
+    exec ${pythonEnv}/bin/python ${../../hosts/rpi5/agents/hermes/skills/populartimes/scripts/query.py} "$@"
   '';
   meta = {
     description = "Query Google Maps popular-times data by Place ID";
