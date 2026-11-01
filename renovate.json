@@ -48,10 +48,13 @@
       "enabled": false
     },
     {
-      "description": "hermes-agent is held at a tag and follows nixpkgs-unstable: its nix/lib.nix names a nodejs major (nodejs_26 since v2026.8.3), and if our nixpkgs-unstable pin lacks it, the WHOLE rpi5 config stops evaluating — hermes-messaging sits in home.packages, so `nixos-rebuild` cannot start. Whether a bump is safe depends on the two locks together, which Renovate cannot check, so the bot is off here. See the comment on the input in flake.nix; bump by hand after checking nix/lib.nix's nodejs_* names against nixpkgs-unstable.",
+      "description": "hermes-agent is pinned to a release tag in flake.nix and follows nixpkgs-unstable. Only plain vX.Y.Z tags: upstream also cuts daily `vX.Y.Z+canary.<date>` snapshots of main, and its old date tags (v2026.9.24) sort above v0.x as semver. A bump whose nix/lib.nix names a nodejs_* our nixpkgs-unstable lacks fails `eval rpi5` on the PR. A green PR can still drop something the config names, so read the release notes before approving.",
       "matchManagers": ["nix"],
       "matchPackageNames": ["hermes-agent"],
-      "enabled": false
+      "allowedVersions": "/^v0\\.\\d+\\.\\d+$/",
+      "prBodyNotes": [
+        "Read the release notes before approving. Checks catch eval and build breaks, not a bundled plugin that moved: v0.22 moved the `holographic` memory provider (`memory.provider` in hosts/rpi5/hermes/hermes.nix) to the plugin catalog, and Hermes would have started without its fact store."
+      ]
     },
     {
       "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",

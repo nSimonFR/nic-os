@@ -92,9 +92,8 @@
     #   Upstream itself builds against nixos-unstable, so Hermes gets its own
     #   unstable package set rather than an alias of an older node major.
     #
-    #   Advance the tag by hand: before a bump, check that our
-    #   nixpkgs-unstable carries every nodejs_* its nix/lib.nix names.
-    #   renovate.json keeps the bot off this input.
+    #   Renovate bumps the tag (renovate.json, stable tags only); a nodejs_*
+    #   missing from nixpkgs-unstable fails `eval rpi5` on its PR, not main.
     hermes-agent = {
       url = "github:NousResearch/hermes-agent/v0.21.6";
       inputs.nixpkgs.follows = "nixpkgs-unstable";
@@ -541,7 +540,7 @@
           # npm compile can be validated/isolated on the Pi BEFORE wiring the
           # user service (OOM-prone; no prebuild cache). See hosts/rpi5/hermes/hermes.nix.
           aarch64-linux.hermes-messaging =
-            inputs.hermes-agent.packages.aarch64-linux.messaging;
+            self.nixosConfigurations.${rpiconfig}.pkgs.hermes-messaging;
         };
 
       nixosConfigurations.${nixconfig} = nixpkgs.lib.nixosSystem rec {

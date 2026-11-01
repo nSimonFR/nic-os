@@ -44,6 +44,14 @@ inputs: final: _prev: {
   # `nix build .#freereps`.
   freereps = final.callPackage ./services/freereps.nix { };
 
+  # Hermes Agent, `messaging` variant. hermesPkgs is the nixpkgs-unstable set the
+  # hermes-agent input follows. Consumers: hosts/rpi5/hermes/hermes.nix and
+  # `nix build .#hermes-messaging`.
+  hermes-messaging = final.callPackage ./agents/hermes-messaging.nix {
+    hermes-agent = inputs.hermes-agent;
+    hermesPkgs = inputs.nixpkgs-unstable.legacyPackages.${final.stdenv.hostPlatform.system};
+  };
+
   # nicos-scripts — this repo's own Python: one package holding the shared
   # library plus a console script per unit (bin/homepage-stats, bin/scale-to-ryot,
   # …), with its pytest suite in checkPhase.

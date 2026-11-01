@@ -44,7 +44,7 @@
 #   ~/.hermes/*.md          — SOUL.md / IDENTITY.md / USER.md (from ./documents)
 #   ~/.hermes/…             — SQLite memory + agent state (Hermes-managed)
 let
-  hermes = inputs.hermes-agent.packages.${pkgs.system}.messaging;
+  hermes = pkgs.hermes-messaging;
 
   hermesHome = "/home/nsimon/.hermes";
 
