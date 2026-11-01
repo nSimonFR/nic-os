@@ -16,6 +16,9 @@ name: Auto-merge
 
 on:
   pull_request:
+    # main only: other bases have no branch protection, so an armed PR stacked
+    # on another PR's branch merges into it the moment it opens (#910).
+    branches: [main]
     types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
