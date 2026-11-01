@@ -36,6 +36,12 @@ retitled, commented on, merged. `#638` is not a link, and the number alone is a 
 Before opening a PR, check whether the branch already has one (`gh pr list --head
 <branch>`) and update that instead of opening a second.
 
+## Format & lint
+
+Run `nix fmt` before committing: nixfmt, statix, deadnix, ruff and shellcheck/shfmt
+(`treefmt.nix`). CI's `scripts` job builds every `checks.x86_64-linux`, `formatting`
+included, so an unformatted file or a new finding fails the PR.
+
 ## rpi5 layout
 
 A new rpi5 service goes in `hosts/rpi5/<domain>/<name>.nix` plus one line in that

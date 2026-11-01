@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Fails (→ systemd-failed-alert → Telegram) when a nightly dump is missing,
 # stale or empty, or when Storj's newest snapshot is older than MAX_AGE_H.
 # A dump unit that exits 0 having written nothing is invisible otherwise.
