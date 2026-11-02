@@ -35,6 +35,9 @@ DEFAULT_IMMICH = "http://immich.home.arpa:2283"
 PLACEHOLDER_KEY = "__immich_api_key__"
 WORKFLOW = "ef9b3c99-b034-42ed-a98b-484926266385"
 WHATSAPP_ALBUM = "e5a36785-5742-43f5-81ab-28f4ffd18c4e"
+# Immich is socket-activated (idleSec=1800): the first call blocks until the
+# proxy's 60s ready probe passes, so it outlasts it. A 30s timeout failed 2026-11-02.
+WAKE_TIMEOUT = 90
 PUBLIC = "https://rpi5.gate-mintaka.ts.net:10000/photos/"
 UUID_REGEX = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\."
 STEPS = ["immich-plugin-core#assetFileFilter", "immich-plugin-core#assetArchive"]
@@ -183,7 +186,10 @@ def run(cfg, now=None, opener=None):
     """The message to print — "" means stay silent."""
     now = now or datetime.now(timezone.utc)
     wf = get_json(
-        f"{cfg.immich_url}/api/workflows/{WORKFLOW}", _headers(cfg), opener=opener
+        f"{cfg.immich_url}/api/workflows/{WORKFLOW}",
+        _headers(cfg),
+        timeout=WAKE_TIMEOUT,
+        opener=opener,
     )
     if is_incident(wf):
         error = disable_workflow(cfg, opener=opener)
