@@ -104,61 +104,38 @@
     StandardOutPath = "/var/log/start-programs.log";
   };
 
-  # Work Tailscale: runs alongside the macOS app (personal) in userspace mode
-  # tun2proxy creates a TUN interface that transparently routes work subnets
-  # through the SOCKS5 proxy, so MCP clients and other apps need no proxy config
-  launchd.daemons."tailscale-work" = {
+  # Work tailnet via tailmux (TUN mode), alongside the macOS app (personal tailnet).
+  # It writes /etc/resolver files for the tailnet's names and split-DNS domains
+  # and routes its peers and subnets into its own utun, so apps need no proxy.
+  # Status: `tailmux status`; re-apply routes and DNS: `tailmux repair`.
+  # State (node key): /opt/homebrew/var/lib/tailmux/<tailnet name>.
+  environment.etc."tailmux/config.json".text = builtins.toJSON {
+    hostname = "nbookpro";
+    # Same ports as the old tailscaled, for anything still set to use a proxy.
+    socks5 = "127.0.0.1:1055";
+    http = "127.0.0.1:1056";
+    direct = true;
+    tailnets = [ { name = "work"; } ];
+    tun.enabled = true;
+    # Upgrades go through `brew upgrade`, not a root daemon pulling releases.
+    updates.auto = false;
+  };
+  launchd.daemons."tailmux" = {
     serviceConfig = {
       ProgramArguments = [
-        "/opt/homebrew/opt/tailscale/bin/tailscaled"
-        "--tun=userspace-networking"
-        "--socks5-server=localhost:1055"
-        "--outbound-http-proxy-listen=localhost:1056"
-        "--statedir=/var/lib/tailscale-work"
-        "--socket=/var/run/tailscale-work/tailscaled.sock"
-        "--port=41642"
+        "/opt/homebrew/opt/tailmux/bin/tailmux"
+        "up"
+        "-config"
+        "/etc/tailmux/config.json"
       ];
       RunAtLoad = true;
       KeepAlive = true;
-      StandardErrorPath = "/var/log/tailscale-work.log";
-      StandardOutPath = "/var/log/tailscale-work.log";
+      StandardErrorPath = "/var/log/tailmux.log";
+      StandardOutPath = "/var/log/tailmux.log";
     };
   };
 
-  # tun2proxy: starts TUN, sets up routes and /etc/hosts from work tailscaled
-  # Manual refresh: sudo launchctl kickstart -k system/org.nixos.tun2proxy-work
-  launchd.daemons."tun2proxy-work" = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/bin/bash"
-        "${./scripts/tun2proxy-work.sh}"
-      ];
-      RunAtLoad = true;
-      KeepAlive = true;
-      StandardErrorPath = "/var/log/tun2proxy-work.log";
-      StandardOutPath = "/var/log/tun2proxy-work.log";
-    };
-  };
-
-  # Daily restart of tun2proxy to re-discover peers/subnets
-  launchd.daemons."tun2proxy-work-refresh" = {
-    serviceConfig = {
-      ProgramArguments = [
-        "/bin/launchctl"
-        "kickstart"
-        "-k"
-        "system/org.nixos.tun2proxy-work"
-      ];
-      StartCalendarInterval = [
-        {
-          Hour = 6;
-          Minute = 0;
-        }
-      ];
-    };
-  };
-
-  # DNS resolver for cluster.local -> work K8s CoreDNS (routed via tun2proxy)
+  # cluster.local -> work K8s CoreDNS, reached through a tailmux subnet route
   environment.etc."resolver/cluster.local".text = "nameserver 192.168.64.10\n";
 
   system = import ./components/system.nix { inherit pkgs username; };
