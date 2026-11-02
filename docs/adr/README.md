@@ -46,3 +46,5 @@ superseded.
 | [0007](0007-claude-credentials-owner.md) | The bridge config dir owns account 1's Claude credentials | 2026-08-06 | Accepted |
 | [0008](0008-host-capabilities-over-hostnames.md) | Host capabilities over host names; dirs named per host | 2026-08-06 | Accepted |
 | [0009](0009-rpi5-modules-grouped-by-domain.md) | rpi5 modules grouped by domain | 2026-11-01 | Accepted |
+| [0010](0010-beast-frozen-until-2027-01.md) | BeAsT frozen until January 2027 | 2026-11-02 | Accepted |
+| [0011](0011-freereps-tailnet-only-no-auth.md) | FreeReps stays unauthenticated, tailnet-only | 2026-11-02 | Accepted |

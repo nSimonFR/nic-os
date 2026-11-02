@@ -1,3 +1,5 @@
+> Frozen until 2027-01 — see `docs/adr/0010-beast-frozen-until-2027-01.md`.
+
 - Primary display is incorrect for Games (SC/The Alter)
   - Trying Gamescope (Steam)
     - as a session manager;
