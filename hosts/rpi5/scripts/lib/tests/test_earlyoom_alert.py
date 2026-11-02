@@ -185,8 +185,11 @@ def test_a_real_kill_after_expendable_ones_posts_the_whole_episode():
 
 def test_a_second_episode_the_same_day_edits_the_first_message():
     later = T0 + 2 * ea.QUIET_SEC
-    host = Host([[entry(HERMES, T0, "c1")], [], [entry(IMMICH, later, "c2")]],
-                units=UNITS, active={"hermes.service", "immich-server.service"})
+    host = Host(
+        [[entry(HERMES, T0, "c1")], [], [entry(IMMICH, later, "c2")]],
+        units=UNITS,
+        active={"hermes.service", "immich-server.service"},
+    )
     state, tg = run_ticks(host, [T0 + 60, T0 + 1 + ea.QUIET_SEC, later + 60])
     assert len(tg.sent) == 1
     mid, text = tg.edits[-1]
@@ -198,8 +201,11 @@ def test_a_second_episode_the_same_day_edits_the_first_message():
 
 def test_the_next_day_starts_a_new_message():
     next_day = T0 + 86400
-    host = Host([[entry(HERMES, T0, "c1")], [], [entry(IMMICH, next_day, "c2")]],
-                units=UNITS, active={"hermes.service", "immich-server.service"})
+    host = Host(
+        [[entry(HERMES, T0, "c1")], [], [entry(IMMICH, next_day, "c2")]],
+        units=UNITS,
+        active={"hermes.service", "immich-server.service"},
+    )
     _, tg = run_ticks(host, [T0 + 60, T0 + 1 + ea.QUIET_SEC, next_day + 60])
     assert len(tg.sent) == 2
     assert "earlier today" not in tg.sent[1]["text"]
