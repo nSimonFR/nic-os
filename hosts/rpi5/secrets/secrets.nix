@@ -175,6 +175,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "for-sure-dvf-property.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "dawarich-geoapify.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

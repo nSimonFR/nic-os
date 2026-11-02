@@ -81,7 +81,7 @@ let
   };
 in
 {
-  # ── for-sure: combined Swile + Sumeria Lunchflow connector ────────────────
+  # ── for-sure: Swile + Sumeria + DVF property value, Lunchflow API
   # Single service on port 8340; Sure connects to http://127.0.0.1:8340/api/v1
   services.sumeria-mitm = {
     enable = true;
@@ -94,6 +94,7 @@ in
     apiKeyFile = "/run/agenix/for-sure-api-key";
     swile.accountName = "Swile";
     sumeria.tokenFile = config.services.sumeria-mitm.tokenFile;
+    dvf.propertyFile = config.age.secrets.for-sure-dvf-property.path;
 
     # for-sure's only Telegram alerts: Sumeria tokens expired (401) or token
     # file missing — i.e. the MITM needs a fresh capture from the phone.
