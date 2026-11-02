@@ -313,23 +313,12 @@ let
       keepalive_interval = 86400;
     };
 
-    # Sure's built-in MCP (finance/sure.nix), read tools only; writes go through the
-    # sure skill's REST calls. Agent Vault swaps the placeholder for MCP_API_TOKEN.
-    # Stateless JSON-RPC behind the socket proxy, so ping daily, as for AirTrail.
+    # Sure's built-in MCP (finance/sure.nix). Agent Vault swaps the placeholder for
+    # MCP_API_TOKEN. Stateless JSON-RPC behind the socket proxy, so ping daily, as for AirTrail.
     mcp_servers.sure = {
       url = "http://sure.home.arpa:13334/sure/mcp";
       headers.Authorization = "Bearer __sure_mcp_token__";
       keepalive_interval = 86400;
-      tools.include = [
-        "get_transactions"
-        "get_accounts"
-        "get_holdings"
-        "get_balance_sheet"
-        "get_income_statement"
-        "get_budget"
-        "get_categories"
-        "get_tags"
-      ];
     };
 
     # Notes (hosts/rpi5/knowledge/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
