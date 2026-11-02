@@ -31,6 +31,7 @@ in
       "Sikarugir-App/sikarugir"
       "RhetTbull/osxphotos"
       "manaflow-ai/cmux"
+      "growlyx/tap"
       "stablyai/orca"
       {
         name = "jundot/omlx";
@@ -46,8 +47,7 @@ in
       "omlx"
       "pinentry-touchid"
       "RhetTbull/osxphotos/osxphotos"
-      "tailscale"
-      "tun2proxy"
+      "growlyx/tap/tailmux"
       "wakeonlan"
     ];
 
