@@ -3,8 +3,9 @@
 Kills less than QUIET_SEC apart share an episode. Its message lists every kill,
 whether the victim's unit came back, the memory left at the last kill and the
 units holding the most memory. It is sent silently, and only once a
-non-expendable process dies; it pings (a reply) only when a victim's unit is
-still down after GRACE_SEC, or on a storm of real kills.
+non-expendable process dies. Later episodes the same day fold into that message
+(edited, so silent) instead of posting a new one. It pings (a reply) only when
+a victim's unit is still down after GRACE_SEC, or on a storm of real kills.
 
 A kill's unit comes from the victim's last journal line, so a process that never
 logged (a Claude session, a Ryot sandbox) has none and is not tracked.
@@ -311,6 +312,23 @@ def render(episode, now, over):
     return "\n".join(lines)
 
 
+def summary(episode):
+    """One line for an ended episode, kept above the next one in the day's message."""
+    real = [k for k in episode["kills"] if not is_expendable(k)]
+    names = ", ".join(dict.fromkeys(esc(k["name"]) for k in real))
+    n = len(episode["kills"])
+    return f"{hhmm(episode['start'])}  {n} kill{'s' * (n != 1)}: {names}"
+
+
+def with_earlier(text, past):
+    if not past:
+        return text
+    title, _, rest = text.partition("\n")
+    shown = past[-MAX_LINES:]
+    more = [f"… and {len(past) - len(shown)} earlier"] if len(past) > len(shown) else []
+    return "\n".join([title, "<i>earlier today</i>", *more, *shown, "", rest])
+
+
 # ── telegram ─────────────────────────────────────────────────────────────────
 
 
@@ -395,13 +413,20 @@ def tick(cfg, state, now, run, tg, snapshot, user_name, log):
         cfg, episode, now, lambda unit, uid: is_active(cfg, unit, uid, run, user_name)
     )
     over = is_over(cfg, episode, now)
-    text = render(episode, now, over)
+    day = state.get("day") or {}
+    today = time.strftime("%Y-%m-%d", time.localtime(now))
+    if day.get("date") != today:
+        day = state["day"] = {"date": today, "mid": None, "past": []}
+    text = with_earlier(render(episode, now, over), day["past"])
 
     # An episode of expendable kills only (ryot-sandboxd) posts nothing; a real
     # kill joining it later posts the whole episode.
     if not episode.get("mid"):
         if not all(is_expendable(k) for k in episode["kills"]):
-            episode["mid"] = tg.send(text, silent=True)
+            if day["mid"] and tg.edit(day["mid"], text):
+                episode["mid"] = day["mid"]
+            else:
+                episode["mid"] = day["mid"] = tg.send(text, silent=True)
             episode["text"] = text
     elif text != episode.get("text") and tg.edit(episode["mid"], text):
         episode["text"] = text
@@ -411,6 +436,8 @@ def tick(cfg, state, now, run, tg, snapshot, user_name, log):
             episode["pinged"].append(key)
 
     if over:
+        if episode.get("mid") == day["mid"] and day["mid"]:
+            day["past"].append(summary(episode))
         state["episode"] = None
     return state
 

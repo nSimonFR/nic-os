@@ -158,7 +158,7 @@ def test_no_send_without_a_token_or_a_chat_id(tmp_path):
             "x",
             opener=lambda *a, **k: calls.append(a),
         )
-        is False
+        is None
     )
     # No token file -> likewise.
     assert (
@@ -167,7 +167,7 @@ def test_no_send_without_a_token_or_a_chat_id(tmp_path):
             "x",
             opener=lambda *a, **k: calls.append(a),
         )
-        is False
+        is None
     )
     assert calls == []
 
@@ -183,7 +183,7 @@ def test_a_telegram_failure_is_swallowed(tmp_path):
         na.telegram_send(
             na.Config(chat_id="1", token_path=str(token)), "x", opener=boom
         )
-        is False
+        is None
     )
 
 
@@ -192,6 +192,90 @@ def test_the_flusher_tick_can_run_a_single_pass():
     agg.add("rpi5", "a", "x")
     na.flusher(agg, sleep=lambda _s: None, forever=False)
     assert len(sent) == 1
+
+
+class Poster:
+    """send/edit recorders: message ids from 100, edits can be made to fail."""
+
+    def __init__(self):
+        self.sent, self.edits, self.edit_ok = [], [], True
+
+    def send(self, text):
+        self.sent.append(text)
+        return 100 + len(self.sent)
+
+    def edit(self, mid, text):
+        self.edits.append((mid, text))
+        return self.edit_ok
+
+
+def rolling_agg(roll=3600):
+    cfg = na.Config(quiet_seconds=1, max_seconds=900, self_host="rpi5",
+                    chat_id="1", roll_seconds=roll)
+    tg, clock = Poster(), Clock()
+    return na.Aggregator(cfg, send=tg.send, edit=tg.edit, now=clock), tg, clock
+
+
+def test_a_digest_within_the_roll_window_edits_the_previous_message():
+    agg, tg, clock = rolling_agg()
+    agg.add("rpi5", "a", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    clock.advance(600)
+    agg.add("rpi5", "a", "done")
+    agg.add("rpi5", "b", "waiting")
+    clock.advance(1)
+    agg.flush_if_due()
+    assert len(tg.sent) == 1
+    mid, text = tg.edits[-1]
+    assert mid == 101
+    assert "📁 a: done ×2" in text and "📁 b: waiting" in text and "↻ updated" in text
+
+
+def test_after_the_roll_window_a_new_message_is_sent():
+    agg, tg, clock = rolling_agg(roll=3600)
+    agg.add("rpi5", "a", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    clock.advance(3600)
+    agg.add("rpi5", "b", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    assert len(tg.sent) == 2 and tg.edits == []
+    assert "📁 a" not in tg.sent[1]
+
+
+def test_an_immediate_event_always_sends_a_new_message():
+    agg, tg, clock = rolling_agg()
+    agg.add("rpi5", "a", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    agg.add("rpi5", "b", "look at this", immediate=True)
+    assert len(tg.sent) == 2 and tg.edits == []
+
+
+def test_a_failed_edit_falls_back_to_a_new_message():
+    agg, tg, clock = rolling_agg()
+    agg.add("rpi5", "a", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    tg.edit_ok = False
+    agg.add("rpi5", "b", "done")
+    clock.advance(1)
+    agg.flush_if_due()
+    assert len(tg.sent) == 2 and "📁 b: done" in tg.sent[1]
+
+
+def test_send_returns_the_message_id(tmp_path):
+    token = tmp_path / "tok"
+    token.write_text("t\n")
+
+    class Resp:
+        def read(self):
+            return b'{"ok": true, "result": {"message_id": 42}}'
+
+    cfg = na.Config(chat_id="1", token_path=str(token))
+    assert na.telegram_send(cfg, "x", opener=lambda *a, **k: Resp()) == 42
 
 
 # ── boot_resume ───────────────────────────────────────────────────────────────

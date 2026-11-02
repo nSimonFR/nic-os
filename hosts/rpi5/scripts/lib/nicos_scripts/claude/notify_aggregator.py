@@ -24,6 +24,8 @@ Config via environment:
   NOTIFY_CHAT_ID         Telegram chat id (no sends if unset)
   NOTIFY_TOKEN_PATH      bot token file  (default /run/agenix/telegram-bot-token)
   NOTIFY_MAX_LINES       lines per digest                  (default 40)
+  NOTIFY_ROLL_SECONDS    a digest edits the previous one, silently, while that
+                         one is younger than this          (default 3600, 0 = off)
 """
 
 import json
@@ -51,6 +53,7 @@ class Config:
     chat_id: str = ""
     token_path: str = DEFAULT_TOKEN_PATH
     max_lines: int = 40
+    roll_seconds: int = 3600
     # Short hostname of this box; used to decide whether to prefix a line with the
     # originating host (local events stay terse, remote events are disambiguated).
     self_host: str = ""
@@ -64,39 +67,55 @@ class Config:
             chat_id=env_str("NOTIFY_CHAT_ID", "", env),
             token_path=env_str("NOTIFY_TOKEN_PATH", DEFAULT_TOKEN_PATH, env),
             max_lines=env_int("NOTIFY_MAX_LINES", 40, env),
+            roll_seconds=env_int("NOTIFY_ROLL_SECONDS", 3600, env),
             self_host=socket.gethostname().split(".")[0].lower(),
         )
 
 
-def telegram_send(cfg, text, opener=None):
-    # Token read fresh on every flush so OAuth/token rotation is picked up
-    # without a restart.
+def telegram_call(cfg, method, opener=None, **fields):
+    """-> the API `result`, or None. Best effort: drop on failure, never retry."""
+    # Token read fresh on every call so token rotation is picked up without a restart.
     try:
         token = read_secret(cfg.token_path)
     except OSError:
         token = ""
     if not token or not cfg.chat_id:
-        return False
-    data = urllib.parse.urlencode({"chat_id": cfg.chat_id, "text": text}).encode()
-    url = f"https://api.telegram.org/bot{token}/sendMessage"
+        return None
+    data = urllib.parse.urlencode({"chat_id": cfg.chat_id, **fields}).encode()
+    url = f"https://api.telegram.org/bot{token}/{method}"
     try:
-        (opener or urllib.request.urlopen)(url, data=data, timeout=10).read()
-        return True
+        body = (opener or urllib.request.urlopen)(url, data=data, timeout=10).read()
+        return json.loads(body or b"{}").get("result")
     except Exception:  # noqa: BLE001
-        return False  # best effort — drop on failure rather than retry/spam
+        return None
+
+
+def telegram_send(cfg, text, opener=None):
+    """-> the new message id, or None."""
+    result = telegram_call(cfg, "sendMessage", opener, text=text)
+    return result.get("message_id") if isinstance(result, dict) else None
+
+
+def telegram_edit(cfg, mid, text, opener=None):
+    return telegram_call(cfg, "editMessageText", opener, message_id=mid, text=text) is not None
 
 
 class Aggregator:
     """The debounce buffer. Previously four module-level globals and a lock.
 
-    `send(text)` and `now()` are the seams: tests pass a recorder and a clock they
-    control, so the entire quiet/cap/dedup behaviour is exercised in milliseconds.
+    `send(text) -> message id`, `edit(mid, text) -> bool` and `now()` are the
+    seams: tests pass recorders and a clock they control. Without `edit`, every
+    digest is a new message.
     """
 
-    def __init__(self, cfg, send=None, now=time.time):
+    def __init__(self, cfg, send=None, now=time.time, edit=None, log=None):
         self.cfg = cfg
         self.send = send or (lambda text: telegram_send(cfg, text))
+        self.edit = edit
+        self.log = log or (lambda _msg: None)
         self.now = now
+        # The message later digests fold into: {"mid", "at", "lines"}.
+        self._roll = None
         self._lock = threading.Lock()
         # Insertion-ordered mapping: formatted-line -> occurrence count (dedup ×N).
         self._pending = {}
@@ -125,7 +144,7 @@ class Aggregator:
             if immediate:
                 snapshot = self._take()
         if snapshot is not None:
-            self.send(self.build_text(snapshot))
+            self.post(snapshot, immediate=True)
 
     def _take(self):
         snapshot = dict(self._pending)
@@ -147,17 +166,41 @@ class Aggregator:
             if not self.due():
                 return None
             snapshot = self._take()
+        return self.post(snapshot)
+
+    def post(self, snapshot, immediate=False):
+        """Edit the rolling message, or send a new one; -> the text posted.
+
+        An immediate event always sends (an edit never notifies), and starts a
+        new rolling message like any send.
+        """
+        now = self.now()
+        roll = self._roll
+        if (not immediate and roll and self.edit
+                and now - roll["at"] < self.cfg.roll_seconds):
+            lines = dict(roll["lines"])
+            for line, count in snapshot.items():
+                lines[line] = lines.get(line, 0) + count
+            text = self.build_text(lines, updated=now)
+            if self.edit(roll["mid"], text):
+                roll["lines"] = lines
+                self.log(f"edited {roll['mid']}: +{len(snapshot)} line(s)")
+                return text
         text = self.build_text(snapshot)
-        self.send(text)
+        mid = self.send(text)
+        self._roll = {"mid": mid, "at": now, "lines": snapshot} if mid else None
+        self.log(f"sent {mid}: {len(snapshot)} line(s)" + (" (immediate)" * immediate))
         return text
 
-    def build_text(self, pending):
+    def build_text(self, pending, updated=None):
         lines = ["🤖 Claude Code"]
         items = list(pending.items())
         for line, count in items[: self.cfg.max_lines]:
             lines.append(line + (f" ×{count}" if count > 1 else ""))
         if len(items) > self.cfg.max_lines:
             lines.append(f"… +{len(items) - self.cfg.max_lines} more")
+        if updated is not None:
+            lines.append(time.strftime("↻ updated %H:%M", time.localtime(updated)))
         text = "\n".join(lines)
         if len(text) > TELEGRAM_LIMIT:
             text = text[:TELEGRAM_LIMIT] + "\n… (truncated)"
@@ -214,7 +257,11 @@ def make_handler(agg):
 
 def main(env=None, server_class=ThreadingHTTPServer):
     cfg = Config.from_env(env)
-    agg = Aggregator(cfg)
+    agg = Aggregator(
+        cfg,
+        edit=(lambda mid, text: telegram_edit(cfg, mid, text)) if cfg.roll_seconds else None,
+        log=lambda msg: print(f"[claude-notify-aggregator] {msg}", flush=True),
+    )
     threading.Thread(target=flusher, args=(agg,), daemon=True).start()
     server_class(("127.0.0.1", cfg.port), make_handler(agg)).serve_forever()
     return 0
