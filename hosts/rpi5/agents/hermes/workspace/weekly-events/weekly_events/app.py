@@ -40,8 +40,9 @@ def run(config_path, state_path, send=False):
             )
     changes = ChangeDetector().compare(old, current)
     text = render_digest(changes, now)
+    # Only new events are sent; other changes update the snapshot silently.
     # Commit the snapshot only once the digest is delivered: a failed send must stay reportable next run.
-    if send and any((changes.new, changes.updated, changes.cancelled, changes.removed)):
+    if send and changes.new:
         token = (
             os.environ.get("TELEGRAM_BOT_TOKEN")
             or Path(
@@ -69,7 +70,7 @@ def main():
         level=a.log_level, format="%(asctime)s %(levelname)s %(name)s %(message)s"
     )
     text, _ = run(a.config, a.state, a.send)
-    if not a.send or text != "🎲 Weekly Events\n\nNo new or updated events.":
+    if text:
         print(text)
 
 

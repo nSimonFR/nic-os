@@ -13,7 +13,7 @@ PYTHONPATH=. python3 -m weekly_events.app --config sources.json --state data/eve
 PYTHONPATH=. python3 -m weekly_events.app --send
 ```
 
-The first run establishes the baseline. Run it once without `--send`; subsequent runs report only changes. Failed sources retain their previous snapshot so they never generate false removals; a source that fetches successfully but has no upcoming events does clear its stale entries. With `--send`, the snapshot is committed only after Telegram accepts the digest, so a failed delivery is retried on the next run instead of being silently swallowed.
+The first run establishes the baseline. Run it once without `--send`; subsequent runs track every change but send only newly listed events (in French); updates, cancellations and removals are recorded silently. Failed sources retain their previous snapshot so they never generate false removals; a source that fetches successfully but has no upcoming events does clear its stale entries. With `--send`, the snapshot is committed only after Telegram accepts the digest, so a failed delivery is retried on the next run instead of being silently swallowed.
 
 ## Components
 

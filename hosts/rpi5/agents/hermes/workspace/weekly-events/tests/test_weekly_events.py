@@ -230,9 +230,9 @@ class DigestTests(unittest.TestCase):
         )
         result = ChangeDetector().compare({}, {event.key: event})
         text = render_digest(result, now=datetime(2026, 8, 1, tzinfo=timezone.utc))
-        self.assertIn("🎲 Weekly Events", text)
-        self.assertIn("🆕 New", text)
-        self.assertIn("6 seats left", text)
+        self.assertIn("✨ *Nouveaux événements cette semaine*", text)
+        self.assertIn("🎲 *Modern Tournament*", text)
+        self.assertIn("👥 6 places", text)
 
 
 if __name__ == "__main__":
