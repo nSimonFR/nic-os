@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Wait for a PR to merge and for its rpi5 deploy to be live, then exit:
+# 0 = this PR's system is active, 1 = closed unmerged / deploy failed / timed out.
+#
+# A T3 PR watch wakes on checks, reviews and conflicts but never on the merge or
+# on Deploy rpi5 (a workflow on main), so an agent runs this in the background
+# and is woken when it exits.
+#
+# Usage: ./scripts/wait-deploy <pr-number> [timeout-minutes, default 120]
+set -euo pipefail
+
+pr=${1:?usage: wait-deploy <pr-number> [timeout-minutes]}
+deadline=$(($(date +%s) + ${2:-120} * 60))
+repo=nSimonFR/nic-os
+
+say() { echo "[$(date +%H:%M:%S)] $*"; }
+tick() {
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    say "timed out: $1"
+    exit 1
+  fi
+  sleep 30
+}
+
+while :; do
+  state=$(gh pr view "$pr" -R "$repo" --json state --jq .state)
+  case $state in
+    MERGED) break ;;
+    CLOSED)
+      say "PR #$pr was closed without merging"
+      exit 1
+      ;;
+  esac
+  tick "PR #$pr still $state"
+done
+sha=$(gh pr view "$pr" -R "$repo" --json mergeCommit --jq .mergeCommit.oid)
+say "merged as $sha"
+
+while :; do
+  run=$(gh run list -R "$repo" --workflow deploy-rpi5.yml --commit "$sha" -L 1 \
+    --json databaseId,status,conclusion,url --jq '.[0] // empty')
+  if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ]; then break; fi
+  tick "Deploy rpi5 for $sha ${run:+is $(jq -r .status <<<"$run")}${run:-has not started}"
+done
+url=$(jq -r .url <<<"$run")
+if [ "$(jq -r .conclusion <<<"$run")" != success ]; then
+  say "Deploy rpi5 $(jq -r .conclusion <<<"$run"): $url"
+  exit 1
+fi
+want=$(gh run view "$(jq -r .databaseId <<<"$run")" -R "$repo" --log 2>/dev/null |
+  grep -o '/nix/store/[a-z0-9]*-nixos-system-rpi5-[^ "`]*' | head -n1 || true)
+say "Deploy rpi5 succeeded: $url"
+
+if [ ! -e /run/current-system ] || [ -z "$want" ]; then
+  say "not on rpi5, or no system path in the run log: check /run/current-system by hand"
+  exit 0
+fi
+# A later merge may already have replaced it; any system generation counts.
+activated() {
+  for g in /nix/var/nix/profiles/system-*-link; do
+    [ "$(readlink -f "$g")" = "$want" ] && return 0
+  done
+  return 1
+}
+until activated; do
+  tick "rpi5 still on $(readlink /run/current-system), waiting for $want"
+done
+if [ "$(readlink /run/current-system)" = "$want" ]; then
+  say "live: /run/current-system = $want"
+else
+  say "activated $want, since replaced by $(readlink /run/current-system)"
+fi

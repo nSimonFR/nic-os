@@ -36,6 +36,10 @@ retitled, commented on, merged. `#638` is not a link, and the number alone is a 
 Before opening a PR, check whether the branch already has one (`gh pr list --head
 <branch>`) and update that instead of opening a second.
 
+**A merge is not the end: babysit the deploy.** A T3 PR watch never wakes on the merge
+nor on Deploy rpi5, so once checks pass, run `./scripts/wait-deploy <pr>` in the
+background and wait on it; when it exits, check the change live, then report.
+
 ## Format & lint
 
 Run `nix fmt` before committing: nixfmt, statix, deadnix, ruff and shellcheck/shfmt
