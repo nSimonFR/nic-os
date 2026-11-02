@@ -14,9 +14,14 @@ alias prs="gh pr list --web"
 alias cpr="createpr"
 
 # Tailscale exit node quick toggles (--accept-routes required to preserve non-default setting)
-alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit node enabled (via RPi5)"'
-alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
-alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
+# Only where the tailscale CLI exists: nbookpro runs tailmux, whose
+# `exit-node use` saves into its nix-managed config and breaks activation, so
+# an exit node there is set in its tailmux config (exit_node) instead.
+if (( $+commands[tailscale] )); then
+  alias vpn-on='tailscale up --exit-node=rpi5 --accept-routes && echo "✅ Exit node enabled (via RPi5)"'
+  alias vpn-off='tailscale up --exit-node= --accept-routes && echo "❌ Exit node disabled (direct internet)"'
+  alias vpn-status='tailscale status | grep -E "(rpi5|exit node)" || echo "Exit node: disabled"'
+fi
 
 # Claude Code: routed through `claude-gated` (home/claude-aperture-shim.nix) so
 # interactive sessions get Aperture capture AND working Remote Control — the two
