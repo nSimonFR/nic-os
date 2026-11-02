@@ -271,9 +271,10 @@
     # v0.10.4 forwards /v1/responses on codex hops unchanged (#15). Test bumps
     # with a prompt that needs shell calls; "say hi" passes with zero tools.
     # v0.10.5 adds the /v0/management usage-hub API (#16); v0.10.6 reports
-    # Claude account emails from Anthropic's profile (#17).
+    # Claude account emails from Anthropic's profile (#17). #18 lifts the
+    # /v1/messages body cap to 32 MiB (memoryMax in tiny-llm-gate.nix follows).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.10.6";
+      url = "github:nSimonFR/tiny-llm-gate/9debca493e9ce8f3ad4b67fe6b4569c19bd28582";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

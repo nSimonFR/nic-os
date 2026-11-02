@@ -24,8 +24,10 @@ in
     enable = true;
     package = inputs.tiny-llm-gate.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
-    memoryMax = "60M";
-    goMemLimit = "40MiB";
+    # A /v1/messages body may be 32 MiB, held whole plus a copy when the
+    # model id is rewritten.
+    memoryMax = "128M";
+    goMemLimit = "96MiB";
     secretPaths = [
       "/run/agenix/affine-mcp-http-token"
       "/run/agenix/asale-api-key"
