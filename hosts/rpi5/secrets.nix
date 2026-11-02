@@ -257,6 +257,11 @@
       file = ./secrets/sure-journal-api-key.age;
       mode = "0400";
     };
+    sure-mcp-env = {
+      # MCP_API_TOKEN + MCP_USER_EMAIL: sure-web's MCP, brokered to Hermes by Agent Vault.
+      file = ./secrets/sure-mcp-env.age;
+      mode = "0400";
+    };
     papra-env = {
       file = ./secrets/papra-env.age;
       owner = "papra"; # EnvironmentFile for papra.service (AUTH_SECRET + OPENAI_API_KEY)

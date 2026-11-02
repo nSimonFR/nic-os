@@ -91,15 +91,19 @@ def load_creds(cfg):
     """CREDS_FILE (KEY=VAL), plus `KEY=path` pairs whose file holds just the value.
 
     `KEY=-path` is optional: a missing file keeps CREDS_FILE's value, if any.
+    `KEY=path:VAR` reads VAR from an env file shared with a service's EnvironmentFile.
     """
     creds = parse_env_file(Path(cfg.creds_file).read_text())
     for pair in filter(None, cfg.cred_files.split(",")):
         key, path = pair.split("=", 1)
         optional = path.startswith("-")
         path = path.removeprefix("-")
+        path, _, var = path.partition(":")
         if optional and not Path(path).exists():
             continue
-        creds[key] = read_secret(path)
+        creds[key] = (
+            parse_env_file(Path(path).read_text())[var] if var else read_secret(path)
+        )
     return creds
 
 

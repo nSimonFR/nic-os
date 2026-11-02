@@ -153,3 +153,11 @@ def test_an_optional_cred_file_overrides_when_present_and_is_skipped_when_absent
     assert mod.load_creds(present)["HA_TOKEN"] == "ha-from-file"
     absent = mod.Config(**{**cfg.__dict__, "cred_files": f"HA_TOKEN=-{tmp_path}/nope"})
     assert mod.load_creds(absent)["HA_TOKEN"] == "x"
+
+
+def test_a_cred_file_can_name_one_variable_of_an_env_file(cfg, tmp_path):
+    (tmp_path / "env").write_text("MCP_API_TOKEN=tok\nMCP_USER_EMAIL=a@b\n")
+    c = mod.Config(
+        **{**cfg.__dict__, "cred_files": f"SURE_MCP_TOKEN={tmp_path}/env:MCP_API_TOKEN"}
+    )
+    assert mod.load_creds(c)["SURE_MCP_TOKEN"] == "tok"
