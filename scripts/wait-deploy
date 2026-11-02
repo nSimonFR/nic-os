@@ -48,12 +48,17 @@ if [ "$(jq -r .conclusion <<<"$run")" != success ]; then
   exit 1
 fi
 want=$(gh run view "$(jq -r .databaseId <<<"$run")" -R "$repo" --log 2>/dev/null |
-  grep -o '/nix/store/[a-z0-9]*-nixos-system-rpi5-[^ "`]*' | head -n1 || true)
+  grep -o 'System: /nix/store/[a-z0-9]*-nixos-system-rpi5-[^ "`]*' | head -n1 || true)
+want=${want#System: }
 say "Deploy rpi5 succeeded: $url"
 
-if [ ! -e /run/current-system ] || [ -z "$want" ]; then
-  say "not on rpi5, or no system path in the run log: check /run/current-system by hand"
+if [ ! -e /run/current-system ]; then
+  say "not on rpi5: check /run/current-system there"
   exit 0
+fi
+if [ -z "$want" ]; then
+  say "no 'System:' line in the run log: check /run/current-system by hand"
+  exit 1
 fi
 # A later merge may already have replaced it; any system generation counts.
 activated() {

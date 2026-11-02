@@ -53,6 +53,7 @@ jobs:
           hash=${out#/nix/store/}
           hash=${hash%%-*}
           echo "out=$out" >> "$GITHUB_OUTPUT"
+          echo "System: $out" # read by scripts/wait-deploy
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
           echo "System: \`$out\`" >> "$GITHUB_STEP_SUMMARY"
           if curl -sfI -o /dev/null "https://nsimon-nicos.cachix.org/$hash.narinfo"; then
