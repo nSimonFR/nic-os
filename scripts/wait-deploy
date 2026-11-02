@@ -52,7 +52,9 @@ want=$(gh run view "$(jq -r .databaseId <<<"$run")" -R "$repo" --log 2>/dev/null
 want=${want#System: }
 say "Deploy rpi5 succeeded: $url"
 
-if [ ! -e /run/current-system ]; then
+# Not /run/current-system: nix-darwin has one too, and the Mac would wait for an
+# rpi5 generation that never lands there.
+if [ "$(hostname -s)" != rpi5 ]; then
   say "not on rpi5: check /run/current-system there"
   exit 0
 fi
