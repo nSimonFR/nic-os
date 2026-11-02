@@ -1,0 +1,7 @@
+# Formatting-only commits. GitHub reads this file; locally:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: format the tree with nixfmt, ruff format and shfmt (#911)
+5b00854ce4297aec4d38214ec9e850d3a6b1561a
+# style: format sure.nix's openapi block from main (#911)
+c4c3e765dec6551c70e32019ff90ba7a610437de
