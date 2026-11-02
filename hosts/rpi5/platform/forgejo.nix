@@ -148,7 +148,7 @@ in
 
   # ── GitHub mirror sync (discover + create new mirrors) ────────────────
   systemd.services.forgejo-mirror-sync = {
-    description = "Discover and mirror new GitHub repos into Forgejo";
+    description = "Discover new GitHub repos and sync every Forgejo mirror";
     after = [
       "forgejo.service"
       "network-online.target"
@@ -192,9 +192,18 @@ in
       fi
       FORGEJO_TOKEN=$(cat "$FORGEJO_TOKEN_FILE")
 
-      # List existing Forgejo repos to skip already-mirrored ones
-      existing=$(curl -sf -H "Authorization: token $FORGEJO_TOKEN" \
-        "$FORGEJO_API/repos/search?limit=200" | jq -r '.data[].name // empty' 2>/dev/null || echo "")
+      # The API caps a page at 50 whatever `limit` asks for.
+      repos=$(
+        page=1
+        while :; do
+          batch=$(curl -sf -H "Authorization: token $FORGEJO_TOKEN" \
+            "$FORGEJO_API/repos/search?limit=50&page=$page" | jq -c '.data')
+          case "$batch" in "" | "[]" | null) break ;; esac
+          echo "$batch"
+          page=$((page + 1))
+        done | jq -cs 'add // []'
+      )
+      existing=$(echo "$repos" | jq -r '.[].name')
 
       # List all GitHub repos (owner only, paginated via gh)
       ${pkgs.gh}/bin/gh api --paginate "/users/$GITHUB_USER/repos?type=owner&per_page=100" \
@@ -242,12 +251,42 @@ in
             }')" || echo "  WARN: failed to mirror $name"
       done
 
+      # Forgejo idles out after idleSec, so its own update_mirrors cron never
+      # fires (68 mirrors were frozen from 2026-08-11). Queue every mirror and
+      # poll — the polling also keeps the proxy awake until the queue drains.
+      started=$(date +%s)
+      mirrors=$(echo "$repos" | jq -r '.[] | select(.mirror) | .full_name')
+      for repo in $mirrors; do
+        curl -sf -X POST -H "Authorization: token $FORGEJO_TOKEN" \
+          "$FORGEJO_API/repos/$repo/mirror-sync" >/dev/null || echo "  WARN: failed to queue $repo"
+      done
+      pending=""
+      for _ in $(seq 60); do
+        sleep 30
+        pending=""
+        for repo in $mirrors; do
+          ts=$(curl -sf -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/repos/$repo" \
+            | jq -r '.mirror_updated') || ts=""
+          updated=$(date -d "$ts" +%s 2>/dev/null) || updated=0
+          if [ "$updated" -lt "$started" ]; then
+            pending="$pending $repo"
+          fi
+        done
+        if [ -z "$pending" ]; then
+          break
+        fi
+      done
+      if [ -n "$pending" ]; then
+        echo "Mirrors not updated after 30 min:$pending"
+        exit 1
+      fi
+
       echo "Mirror sync complete."
     '';
   };
 
   systemd.timers.forgejo-mirror-sync = {
-    description = "Daily GitHub mirror discovery for Forgejo";
+    description = "Daily GitHub mirror discovery and sync for Forgejo";
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 03:30:00";
