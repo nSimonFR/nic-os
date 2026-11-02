@@ -188,6 +188,11 @@
       file = ./secrets/for-sure-api-key.age;
       owner = "for-sure";
     };
+    # The flat valued by for-sure's DVF account; JSON with a home address.
+    for-sure-dvf-property = {
+      file = ./secrets/for-sure-dvf-property.age;
+      owner = "for-sure";
+    };
     vaultwarden-admin-token = {
       file = ./secrets/vaultwarden-admin-token.age;
       owner = "vaultwarden";
