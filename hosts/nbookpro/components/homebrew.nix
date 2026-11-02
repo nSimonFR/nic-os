@@ -90,7 +90,6 @@ in
       "slack"
       "steam"
       "t3-code"
-      "tailscale-app"
       "stolendata-mpv"
       "spotify"
       "telegram"
