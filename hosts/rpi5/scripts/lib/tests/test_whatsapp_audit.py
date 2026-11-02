@@ -26,10 +26,11 @@ class Immich:
     def __init__(self, wf=GOOD_WF, assets=(), albums=None, volumes=None, put=200):
         self.wf, self.assets, self.albums = wf, list(assets), albums or {}
         self.volumes = list(volumes or [0] * 9)
-        self.put, self.requests = put, []
+        self.put, self.requests, self.timeouts = put, [], []
 
     def __call__(self, req, timeout=None):
         self.requests.append(req)
+        self.timeouts.append(timeout)
         url = req.full_url
         if req.get_method() == "PUT":
             if isinstance(self.put, Exception):
@@ -177,6 +178,13 @@ def test_spike_threshold(volumes, expected):
 def test_spike_alone_is_reported():
     msg = wa.run(wa.Config(), now=NOW, opener=Immich(volumes=[25] + [1] * 8))
     assert "Archive volume spike: 25 this week; trailing 8-week median 1." in msg
+
+
+def test_first_call_outlasts_a_cold_socket_activated_start():
+    imm = Immich()
+    wa.run(wa.Config(), now=NOW, opener=imm)
+    assert "/workflows/" in imm.requests[0].full_url
+    assert imm.timeouts[0] == wa.WAKE_TIMEOUT > 60
 
 
 def test_main_exits_nonzero_when_immich_is_unreachable(capsys):
