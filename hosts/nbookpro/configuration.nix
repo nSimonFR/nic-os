@@ -115,7 +115,40 @@
     socks5 = "127.0.0.1:1055";
     http = "127.0.0.1:1056";
     direct = true;
-    tailnets = [ { name = "work"; } ];
+    tailnets = [
+      # Listed first: bare hostnames (`ssh rpi5`) try tailnets in this order.
+      {
+        name = "personal";
+        # Kept from the old Tailscale-app node: rpi5 reaches this Mac by this
+        # name and by its IP (100.78.185.89, pinned in the admin console).
+        hostname = "macbook-pro-appleosx-15";
+        # tailmux nodes only accept what is forwarded here (TCP and HTTP(S); no
+        # UDP, so no mosh, and no Funnel).
+        serve = [
+          {
+            port = 22;
+            tcp = "22";
+          } # ssh, pbpaste from rpi5
+          {
+            port = 8787;
+            tcp = "8787";
+          } # linear-t3-relay nsimon, via rpi5's path-mux
+          {
+            port = 8788;
+            tcp = "8788";
+          } # linear-t3-relay work
+          {
+            port = 8443;
+            https = "8000";
+          } # rpi5 tiny-llm-gate
+          {
+            port = 8910;
+            https = "3773";
+          } # T3 Code
+        ];
+      }
+      { name = "work"; }
+    ];
     tun.enabled = true;
     # Upgrades go through `brew upgrade`, not a root daemon pulling releases.
     updates.auto = false;
