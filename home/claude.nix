@@ -126,6 +126,13 @@ let
     ++ [
       ''--run 'if [ "$1" = --mcp-config ]; then f=$2; shift 2; set -- "--mcp-config=$f" "$@"; fi' ''
     ]
+    # On macOS, 2.1.310's default "system" store fails Aperture's Let's Encrypt
+    # chain (UNABLE_TO_GET_ISSUER_CERT_LOCALLY) though curl/openssl/node verify it;
+    # hits every direct-to-Aperture caller (T3 Code, desktop app). The shim path
+    # is unaffected: NODE_EXTRA_CA_CERTS still adds its CA on top.
+    ++ lib.optionals pkgs.stdenv.isDarwin [
+      "--set-default CLAUDE_CODE_CERT_STORE bundled"
+    ]
     # The Trusk MCP servers come from the private checkout's mcp.json.
     ++ lib.optionals pkgs.stdenv.isDarwin [
       ''--run 'p=${truskDir}/mcp.json; if [ -r "$p" ]; then set -- "--mcp-config=$p" "$@"; fi' ''
