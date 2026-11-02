@@ -226,6 +226,10 @@ in
     RAILS_RELATIVE_URL_ROOT = "/sure"; # match sure-web so job/mailer URLs prefix /sure
   }
   // sureLlmEnv;
+  systemd.services.sure-web.serviceConfig.EnvironmentFile = lib.mkForce [
+    config.services.sure.environmentFile
+    config.age.secrets.sure-mcp-env.path
+  ];
   systemd.services.sure-web.environment = {
     WEB_CONCURRENCY = "0"; # single-process Puma (no forked workers) — saves ~80 MB on RPi5
     RAILS_MAX_THREADS = "3"; # default 5; 3 is plenty for single-user

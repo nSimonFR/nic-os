@@ -117,11 +117,15 @@ let
       keys = [ "IMMICH_API_KEY" ];
       "in" = [ "header" ];
     }
-    # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`.
+    # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`;
+    # its MCP at /sure/mcp takes `Authorization: Bearer` (SURE_MCP_TOKEN).
     {
       name = "sure";
       host = "sure.home.arpa:13334";
-      keys = [ "SURE_API_KEY" ];
+      keys = [
+        "SURE_API_KEY"
+        "SURE_MCP_TOKEN"
+      ];
       "in" = [ "header" ];
     }
     # Attached, not substituted: whatever the client sends is replaced.
@@ -163,6 +167,7 @@ let
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
     SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
+    SURE_MCP_TOKEN = "${config.age.secrets.sure-mcp-env.path}:MCP_API_TOKEN";
     # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
@@ -236,6 +241,7 @@ in
       config.age.secrets.github-ai-token.file
       config.age.secrets.immich-api-key.file
       config.age.secrets.sure-journal-api-key.file
+      config.age.secrets.sure-mcp-env.file
       servicesFile
     ];
     environment = {

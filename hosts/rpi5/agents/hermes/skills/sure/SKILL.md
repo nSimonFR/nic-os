@@ -7,6 +7,9 @@ metadata: {"openclaw":{"emoji":"💶","requires":{"bins":["curl","jq"]}}}
 
 # Sure
 
+For reads, prefer your `sure` MCP tools (`get_income_statement` gives spending by category,
+already summed). Use the REST API below for the filters they lack and for every write.
+
 ```bash
 SURE=http://sure.home.arpa:13334/sure/api/v1   # via Agent Vault; 127.0.0.1 bypasses it → 401
 H=(-H "X-Api-Key: __sure_api_key__" -H "Accept: application/json")

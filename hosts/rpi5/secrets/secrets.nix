@@ -55,6 +55,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "sure-mcp-env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "sure-app-env.age".publicKeys = [
     nsimon-age
     nsimon-ed25519
