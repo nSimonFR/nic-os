@@ -252,34 +252,13 @@ in
       done
 
       # Forgejo idles out after idleSec, so its own update_mirrors cron never
-      # fires (68 mirrors were frozen from 2026-08-11). Queue every mirror and
-      # poll — the polling also keeps the proxy awake until the queue drains.
-      started=$(date +%s)
-      mirrors=$(echo "$repos" | jq -r '.[] | select(.mirror) | .full_name')
-      for repo in $mirrors; do
-        curl -sf -X POST -H "Authorization: token $FORGEJO_TOKEN" \
-          "$FORGEJO_API/repos/$repo/mirror-sync" >/dev/null || echo "  WARN: failed to queue $repo"
+      # fires (mirrors were frozen from 2026-08-11). Run it now, and keep the
+      # proxy awake while the queue drains (70 mirrors took under 10 min).
+      curl -sf -X POST -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/admin/cron/update_mirrors"
+      for _ in $(seq 10); do
+        sleep 60
+        curl -sf "$FORGEJO_API/version" >/dev/null
       done
-      pending=""
-      for _ in $(seq 60); do
-        sleep 30
-        pending=""
-        for repo in $mirrors; do
-          ts=$(curl -sf -H "Authorization: token $FORGEJO_TOKEN" "$FORGEJO_API/repos/$repo" \
-            | jq -r '.mirror_updated') || ts=""
-          updated=$(date -d "$ts" +%s 2>/dev/null) || updated=0
-          if [ "$updated" -lt "$started" ]; then
-            pending="$pending $repo"
-          fi
-        done
-        if [ -z "$pending" ]; then
-          break
-        fi
-      done
-      if [ -n "$pending" ]; then
-        echo "Mirrors not updated after 30 min:$pending"
-        exit 1
-      fi
 
       echo "Mirror sync complete."
     '';
