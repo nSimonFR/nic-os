@@ -109,8 +109,9 @@
   # and routes its peers and subnets into its own utun, so apps need no proxy.
   # Status: `tailmux status`; re-apply routes and DNS: `tailmux repair`.
   # State (node key): /opt/homebrew/var/lib/tailmux/<state>.
-  # Settings changed from the menu bar are written back to this file, replacing
-  # nix's symlink and failing the next activation: change them here instead.
+  # Settings or an exit node changed from the menu bar or `tailmux exit-node`
+  # are written back to this file, replacing nix's symlink and failing the next
+  # activation: change them here instead.
   environment.etc."tailmux/config.json".text = builtins.toJSON {
     hostname = "nbookpro";
     # Same ports as the old tailscaled, for anything still set to use a proxy.
