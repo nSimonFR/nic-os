@@ -296,12 +296,10 @@ let
     # source of truth, so anything written here is overwritten by the next
     # mirror run — an agent that could write would be writing to a mirror.
     #
-    # @WEALTHFOLIO_MCP_TOKEN@ is substituted at start time by setupScript. It
-    # cannot be interpolated here: this attrset becomes a file in the
-    # world-readable Nix store.
+    # Agent Vault swaps the placeholder for the PAT (wealthfolio.home.arpa = loopback).
     mcp_servers.wealthfolio = {
-      url = "http://127.0.0.1:13345/mcp";
-      headers.Authorization = "Bearer @WEALTHFOLIO_MCP_TOKEN@";
+      url = "http://wealthfolio.home.arpa:13345/mcp";
+      headers.Authorization = "Bearer __wealthfolio_mcp_token__";
     };
 
     # AirTrail's stateless Streamable HTTP MCP, via the socket-activate proxy so
@@ -410,11 +408,9 @@ let
   setupScript = pkgs.writeShellScript "hermes-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome} ${hermesHome}/workspace ${hermesHome}/skills
-    # 0600, not 0644: the Wealthfolio PAT is substituted into this file below,
+    # 0600, not 0644: the AirTrail token is substituted into this file below,
     # so it stops being a public document.
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
-    wf_tok="$(${pkgs.gnused}/bin/sed -n 's/^WEALTHFOLIO_MCP_TOKEN=//p' /run/agenix/wealthfolio-mcp-token)"
-    ${pkgs.gnused}/bin/sed -i "s|@WEALTHFOLIO_MCP_TOKEN@|$wf_tok|" ${hermesHome}/config.yaml
     at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
     ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
 

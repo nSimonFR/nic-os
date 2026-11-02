@@ -93,9 +93,8 @@
     };
     wealthfolio-mcp-token = {
       file = ./secrets/wealthfolio-mcp-token.age;
-      # Read-only agent PAT (wfp_…) for Hermes' Wealthfolio MCP server. Owned by
-      # nsimon because hermes.service runs as that user.
-      owner = "nsimon";
+      # Read-only agent PAT (wfp_…) for Hermes' Wealthfolio MCP server, brokered
+      # by Agent Vault: root-only, Hermes holds a placeholder.
       mode = "0400";
     };
     etherscan-api-key = {

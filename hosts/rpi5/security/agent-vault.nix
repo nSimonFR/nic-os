@@ -128,6 +128,13 @@ let
       ];
       "in" = [ "header" ];
     }
+    # Wealthfolio (wealthfolio.nix): its /mcp, read-only PAT as `Authorization: Bearer`.
+    {
+      name = "wealthfolio";
+      host = "wealthfolio.home.arpa:13345";
+      keys = [ "WEALTHFOLIO_MCP_TOKEN" ];
+      "in" = [ "header" ];
+    }
     # Attached, not substituted: whatever the client sends is replaced.
     {
       name = "github-api";
@@ -168,6 +175,7 @@ let
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
     SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
     SURE_MCP_TOKEN = "${config.age.secrets.sure-mcp-env.path}:MCP_API_TOKEN";
+    WEALTHFOLIO_MCP_TOKEN = "${config.age.secrets.wealthfolio-mcp-token.path}:WEALTHFOLIO_MCP_TOKEN";
     # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
@@ -242,6 +250,7 @@ in
       config.age.secrets.immich-api-key.file
       config.age.secrets.sure-journal-api-key.file
       config.age.secrets.sure-mcp-env.file
+      config.age.secrets.wealthfolio-mcp-token.file
       servicesFile
     ];
     environment = {
