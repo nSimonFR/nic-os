@@ -295,8 +295,18 @@ class Config:
 
 
 def shell_runner(argv, env=None):
-    """The production `run`: execute a command, return its stdout as text."""
-    return subprocess.check_output(argv, env=env).decode()
+    """The production `run`: execute a command, return its stdout as text.
+
+    A failure names the program and exit code only. CalledProcessError's message
+    carries the whole argv, and several fetchers pass a credential there (`-u`,
+    `-H x-api-key`, a login body) — logged and served in stats.json as the error.
+    """
+    try:
+        return subprocess.check_output(argv, env=env).decode()
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"{os.path.basename(argv[0])} exited {e.returncode}"
+        ) from None
 
 
 class Stats:

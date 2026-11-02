@@ -154,6 +154,13 @@ def test_a_failed_fetcher_is_logged_not_only_recorded():
     assert stats.get("affine") == {"docs": 7867, "error": "You must sign in first"}
 
 
+def test_a_failed_command_does_not_echo_its_arguments():
+    with pytest.raises(RuntimeError) as err:
+        hs.shell_runner(["false", "-u", "nsimon:s3cret"])
+    assert str(err.value) == "false exited 1"
+    assert err.value.__cause__ is None and err.value.__suppress_context__
+
+
 def test_snapshot_is_a_copy():
     stats = hs.Stats()
     stats.set("papra", {"documents": 1})
