@@ -210,8 +210,13 @@ class Poster:
 
 
 def rolling_agg(roll=3600):
-    cfg = na.Config(quiet_seconds=1, max_seconds=900, self_host="rpi5",
-                    chat_id="1", roll_seconds=roll)
+    cfg = na.Config(
+        quiet_seconds=1,
+        max_seconds=900,
+        self_host="rpi5",
+        chat_id="1",
+        roll_seconds=roll,
+    )
     tg, clock = Poster(), Clock()
     return na.Aggregator(cfg, send=tg.send, edit=tg.edit, now=clock), tg, clock
 

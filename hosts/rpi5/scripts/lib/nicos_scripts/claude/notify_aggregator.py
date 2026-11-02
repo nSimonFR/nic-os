@@ -97,7 +97,10 @@ def telegram_send(cfg, text, opener=None):
 
 
 def telegram_edit(cfg, mid, text, opener=None):
-    return telegram_call(cfg, "editMessageText", opener, message_id=mid, text=text) is not None
+    return (
+        telegram_call(cfg, "editMessageText", opener, message_id=mid, text=text)
+        is not None
+    )
 
 
 class Aggregator:
@@ -176,8 +179,12 @@ class Aggregator:
         """
         now = self.now()
         roll = self._roll
-        if (not immediate and roll and self.edit
-                and now - roll["at"] < self.cfg.roll_seconds):
+        if (
+            not immediate
+            and roll
+            and self.edit
+            and now - roll["at"] < self.cfg.roll_seconds
+        ):
             lines = dict(roll["lines"])
             for line, count in snapshot.items():
                 lines[line] = lines.get(line, 0) + count
@@ -259,7 +266,9 @@ def main(env=None, server_class=ThreadingHTTPServer):
     cfg = Config.from_env(env)
     agg = Aggregator(
         cfg,
-        edit=(lambda mid, text: telegram_edit(cfg, mid, text)) if cfg.roll_seconds else None,
+        edit=(lambda mid, text: telegram_edit(cfg, mid, text))
+        if cfg.roll_seconds
+        else None,
         log=lambda msg: print(f"[claude-notify-aggregator] {msg}", flush=True),
     )
     threading.Thread(target=flusher, args=(agg,), daemon=True).start()
