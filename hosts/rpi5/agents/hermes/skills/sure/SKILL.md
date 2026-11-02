@@ -8,7 +8,7 @@ metadata: {"openclaw":{"emoji":"💶","requires":{"bins":["curl","jq"]}}}
 # Sure
 
 For reads, prefer your `sure` MCP tools (`get_income_statement` gives spending by category,
-already summed). Use the REST API below for the filters they lack and for every write.
+already summed). Use the REST API below for the filters they lack and to edit a transaction.
 
 ```bash
 SURE=http://sure.home.arpa:13334/sure/api/v1   # via Agent Vault; 127.0.0.1 bypasses it → 401
@@ -28,4 +28,4 @@ jq '.paths["/api/v1/transactions"].get.parameters | map({name, description})' /e
 - `per_page` max 100; loop `page` up to `pagination.total_pages`.
 - Links for the user: `https://rpi5.gate-mintaka.ts.net/sure/…`, never the API URL.
 - Writes only when asked. `tag_ids` replaces the whole list.
-- Never: `POST /sync` or `imports` (can kill a running import), `DELETE` unless explicitly asked, `chats` (paid AI).
+- Never: `POST /sync` or `imports` (can kill a running import), `DELETE` unless explicitly asked, `chats` or the MCP's `import_bank_statement` (paid AI).
