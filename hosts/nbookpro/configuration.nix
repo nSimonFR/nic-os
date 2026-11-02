@@ -104,7 +104,7 @@
     StandardOutPath = "/var/log/start-programs.log";
   };
 
-  # Work tailnet via tailmux (TUN mode), alongside the macOS app (personal tailnet).
+  # Both tailnets (personal, work) via tailmux in TUN mode; no Tailscale app.
   # It writes /etc/resolver files for the tailnet's names and split-DNS domains
   # and routes its peers and subnets into its own utun, so apps need no proxy.
   # Status: `tailmux status`; re-apply routes and DNS: `tailmux repair`.
@@ -123,7 +123,7 @@
         name = "personal";
         # Explicit: tailmux writes a missing `state` back into the config at start.
         state = "personal";
-        # Kept from the old Tailscale-app node: rpi5 reaches this Mac by this
+        # Kept from the former Tailscale-app node: rpi5 reaches this Mac by this
         # name and by its IP (100.78.185.89, pinned in the admin console).
         hostname = "macbook-pro-appleosx-15";
         # tailmux nodes only accept what is forwarded here (TCP and HTTP(S); no
