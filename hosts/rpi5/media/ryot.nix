@@ -149,7 +149,9 @@ in
     bind = "127.0.0.1";
     port = redisPort;
     settings = {
-      maxmemory = "64mb";
+      # 64mb filled up on 2026-11-02 (~5k Spotify imports: 31k sandbox recovery
+      # keys) and noeviction then failed every API-key check → 401s.
+      maxmemory = "256mb";
       maxmemory-policy = "noeviction";
     };
   };
