@@ -108,7 +108,9 @@
   # It writes /etc/resolver files for the tailnet's names and split-DNS domains
   # and routes its peers and subnets into its own utun, so apps need no proxy.
   # Status: `tailmux status`; re-apply routes and DNS: `tailmux repair`.
-  # State (node key): /opt/homebrew/var/lib/tailmux/<tailnet name>.
+  # State (node key): /opt/homebrew/var/lib/tailmux/<state>.
+  # Settings changed from the menu bar are written back to this file, replacing
+  # nix's symlink and failing the next activation: change them here instead.
   environment.etc."tailmux/config.json".text = builtins.toJSON {
     hostname = "nbookpro";
     # Same ports as the old tailscaled, for anything still set to use a proxy.
@@ -119,6 +121,8 @@
       # Listed first: bare hostnames (`ssh rpi5`) try tailnets in this order.
       {
         name = "personal";
+        # Explicit: tailmux writes a missing `state` back into the config at start.
+        state = "personal";
         # Kept from the old Tailscale-app node: rpi5 reaches this Mac by this
         # name and by its IP (100.78.185.89, pinned in the admin console).
         hostname = "macbook-pro-appleosx-15";
@@ -147,7 +151,10 @@
           } # T3 Code
         ];
       }
-      { name = "work"; }
+      {
+        name = "work";
+        state = "work";
+      }
     ];
     tun.enabled = true;
     # Upgrades go through `brew upgrade`, not a root daemon pulling releases.
@@ -161,6 +168,11 @@
         "-config"
         "/etc/tailmux/config.json"
       ];
+      # tailmux reads its config at start only; a new hash changes the plist,
+      # so activation reloads the daemon.
+      EnvironmentVariables.TAILMUX_CONFIG_SHA256 =
+        builtins.hashString "sha256"
+          config.environment.etc."tailmux/config.json".text;
       RunAtLoad = true;
       KeepAlive = true;
       StandardErrorPath = "/var/log/tailmux.log";
