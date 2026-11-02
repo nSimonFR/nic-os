@@ -14,6 +14,7 @@
 #                                            /github-webhook) at root and only knows its
 #                                            public base via CYRUS_BASE_URL=…/cyrus, so
 #                                            stripping /cyrus lands each at the right route)
+#     /linear-t3/<name>/ → <mac>:8787|8788/ (linear-t3-relay on the Mac — prefix STRIPPED)
 #     /.well-known/{caldav,carddav} → 301 → /nextcloud/remote.php/dav/  (DAV auto-discovery
 #                                            lands at the domain root; redirect to Nextcloud)
 #
@@ -42,6 +43,7 @@
 # serve/funnel command for them — this vhost fronts them instead.
 { ... }:
 let
+  macIp = "100.78.185.89"; # nbookpro on the personal tailnet; also in tailnet-mitm clients
   # Headers every proxied location forwards. X-Forwarded-Proto=https is required so
   # Nextcloud (overwritecondaddr=^127\.0\.0\.1$, overwriteprotocol=https) generates
   # https links behind the TLS-terminating Tailscale Funnel.
@@ -155,6 +157,21 @@ in
         '';
       };
 
+      # linear-t3-relay runs on the Mac (it drives the local T3 server), one
+      # instance per Linear workspace; the Mac's tailmux serves its ports on the
+      # tailnet. Prefix STRIPPED: the relay mounts /linear/* at its root and
+      # knows its public base only via BASE_URL=…/linear-t3/<name>. IP, not
+      # MagicDNS name: nginx resolves names at start, so a sleeping Mac would
+      # stop it from starting; this way only these paths 502.
+      "/linear-t3/nsimon/" = {
+        proxyPass = "http://${macIp}:8787/";
+        extraConfig = fwdHeaders;
+      };
+      "/linear-t3/work/" = {
+        proxyPass = "http://${macIp}:8788/";
+        extraConfig = fwdHeaders;
+      };
+
       # Death Plan Switch (PHP-FPM). Prefix KEPT: its vhost serves /switch/* from
       # the package's share/ root, and the app builds its links from SCRIPT_NAME.
       "= /switch" = {
@@ -203,7 +220,11 @@ in
   # Every location above that proxies is claimed by a service's public.muxPath,
   # and lib/service-registration.nix asserts the pairing both ways. The pure
   # `return 301` redirects carry no proxyPass and need no entry.
-  nic.frontProxy.unclaimed = [ ];
+  nic.frontProxy.unclaimed = [
+    # Backend is the Mac, not a service on this host (see the locations above).
+    "/linear-t3/nsimon/"
+    "/linear-t3/work/"
+  ];
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.front-proxy = {

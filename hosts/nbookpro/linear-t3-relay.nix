@@ -5,9 +5,10 @@
 # allowlist…) is one agenix file. The relay mints and renews its own T3 bearer
 # with `t3 auth pairing create`, so no T3 token is stored outside its state.
 #
-# Public HTTPS is Tailscale Funnel, set once by hand (tailscaled persists it):
-#   tailscale funnel --bg --https=443   http://127.0.0.1:8787   # nsimon
-#   tailscale funnel --bg --https=10000 http://127.0.0.1:8788   # work
+# Public HTTPS is rpi5's 443 path-mux (hosts/rpi5/network/front-proxy.nix):
+#   https://rpi5.gate-mintaka.ts.net/linear-t3/<name>/ → <this Mac>:<port>/
+# which reaches these ports over the personal tailnet. BASE_URL in each env
+# file carries that prefix.
 {
   config,
   lib,
