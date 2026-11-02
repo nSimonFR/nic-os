@@ -317,6 +317,8 @@ let
       url = "http://sure.home.arpa:13334/sure/mcp";
       headers.Authorization = "Bearer __sure_mcp_token__";
       keepalive_interval = 86400;
+      # A cold wake measured 14s to >30s; the default 60s leaves no margin.
+      connect_timeout = 120;
     };
 
     # Notes (hosts/rpi5/knowledge/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
