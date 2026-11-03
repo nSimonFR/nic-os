@@ -41,7 +41,9 @@
   # through the rpi5's Agent Vault (hosts/rpi5/security/agent-vault.nix) over the tailnet, with
   # Hermes' proxy env, so they hold placeholders (`__linear_key__`), never the keys.
   # Kept direct: GitHub (the vault would attach nSimonFR-ai, blind to trusk-official),
-  # and only the personal tailnet, not `.ts.net`: the work kube API has its own proxy.
+  # and every tailnet tailmux routes here (one /etc/resolver/<tailnet>.ts.net each): the Pi
+  # is only on the personal one, so through the vault a work-tailnet host gets the vault's
+  # cert, which Go rejects as "certificate is not trusted".
   # The last fetch is reused when the Pi is unreachable.
   home.file.".claude/hooks/agent-vault-env" = {
     executable = true;
@@ -51,6 +53,10 @@
       umask 077
       mkdir -p "$d"
       ssh=(/usr/bin/ssh -o IdentityAgent=none -o BatchMode=yes -o ConnectTimeout=5 nsimon@rpi5)
+      tailnets=${lib.removePrefix "rpi5" tailnetFqdn}
+      for f in /etc/resolver/*.ts.net; do
+        [ -e "$f" ] && [ ".''${f##*/}" != "${lib.removePrefix "rpi5" tailnetFqdn}" ] && tailnets+=",.''${f##*/}"
+      done
       if "''${ssh[@]}" cat /var/lib/agent-vault-hermes/ca-bundle.pem > "$d/ca.pem.tmp" \
         && "''${ssh[@]}" cat /var/lib/agent-vault-hermes/proxy.env > "$d/proxy.env.tmp" \
         && [ -s "$d/ca.pem.tmp" ] && [ -s "$d/proxy.env.tmp" ]; then
@@ -58,7 +64,7 @@
         ${pkgs.gnused}/bin/sed \
           -e 's/@127\.0\.0\.1:/@${tailnetFqdn}:/' \
           -e "s#/var/lib/agent-vault-hermes/ca-bundle.pem#$d/ca.pem#" \
-          -e '/^no_proxy=/I s/,\.ts\.net/,${lib.removePrefix "rpi5" tailnetFqdn}/' \
+          -e "/^no_proxy=/I s/,\.ts\.net/,$tailnets/" \
           -e '/^no_proxy=/I s/$/,github.com,api.github.com,uploads.github.com/' \
           -e 's/^/export /' "$d/proxy.env.tmp" > "$d/proxy.env"
         echo "export NIX_SSL_CERT_FILE=$d/ca.pem" >> "$d/proxy.env"
