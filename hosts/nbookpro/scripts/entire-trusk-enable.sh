@@ -1,18 +1,18 @@
 # shellcheck shell=bash
-# entire-trusk-enable [--apply] — turn Entire on, privately, in every
+# entire-trusk-enable [--apply] — turn Entire on in every
 # trusk-official clone or submodule under $TRUSK_DIR (default ~/MyDocuments/TRUSK),
 # up to four levels deep (trusk-infra nests its services as submodules).
 #
-# Per clone: git hooks, a gitignored .entire/settings.local.json routing
-# checkpoints to nSimonFR/trusk-checkpoints, and a post-checkout hook that copies
-# those settings into new worktrees. Agent hooks are machine-wide
-# (hosts/nbookpro/entire.nix), so the repo-level Claude hooks that `entire enable`
-# writes are put back. Re-run after cloning a new repo. Dry run by default.
+# Per clone: git hooks, a gitignored .entire/settings.local.json, and a
+# post-checkout hook that copies those settings into new worktrees. Checkpoints
+# stay in the clone's own repo (hidden refs/entire/checkpoints/*): entire.com did
+# not read them from nSimonFR/trusk-checkpoints. Agent hooks are
+# machine-wide (hosts/nbookpro/entire.nix), so the repo-level Claude hooks that
+# `entire enable` writes are put back. Re-run after cloning a new repo. Dry run by default.
 
 apply=0
 [ "${1:-}" = "--apply" ] && apply=1
 root=${TRUSK_DIR:-$HOME/MyDocuments/TRUSK}
-remote=github:nSimonFR/trusk-checkpoints
 marker="# entire-trusk-enable: worktree settings"
 
 post_checkout_hook() {
@@ -42,8 +42,7 @@ enable_clone() {
   fi
   [ -e "$claude" ] && existed=1
 
-  entire enable --local --yes --agent claude-code \
-    --checkpoint-remote "$remote" --telemetry=false >/dev/null
+  entire enable --local --yes --agent claude-code --telemetry=false >/dev/null
 
   if [ "$tracked" = 1 ]; then
     git checkout -- "$claude"
@@ -53,7 +52,8 @@ enable_clone() {
   fi
 
   local s=.entire/settings.local.json
-  jq '.commit_linking = "always" | .sign_checkpoint_commits = false' "$s" >"$s.tmp" && mv "$s.tmp" "$s"
+  jq '.commit_linking = "always" | .sign_checkpoint_commits = false
+    | del(.strategy_options.checkpoint_remote)' "$s" >"$s.tmp" && mv "$s.tmp" "$s"
 
   local hook
   hook="$(git rev-parse --path-format=absolute --git-common-dir)/hooks/post-checkout"
