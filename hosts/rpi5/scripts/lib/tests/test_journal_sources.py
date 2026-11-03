@@ -342,6 +342,15 @@ def test_clean_dispatch_keeps_intro_and_bullets_only():
     assert js.clean_dispatch(IDLE) == []
 
 
+def test_notes_summary_keeps_one_intro_per_repo():
+    notes = js.clean_dispatch(DISPATCH)
+    assert js.notes_summary(notes + [""] + notes) == [notes[0], notes[0]]
+    assert js.notes_summary(["**r**", "", "*CI*", "", "- x", "*Docs*"]) == [
+        "**r** : CI, Docs"
+    ]
+    assert js.notes_summary([]) == []
+
+
 def test_dispatch_notes_skips_repos_without_commits():
     calls = []
 

@@ -764,6 +764,31 @@ def clean_dispatch(md):
     return [l for i, l in enumerate(out) if l.strip() or (i and out[i - 1].strip())]
 
 
+def notes_summary(notes):
+    """dispatch_notes lines cut to each repo's intro paragraph (topics and bullets
+    dropped); a repo with no intro is summed up by its topics."""
+    blocks = []  # [intro lines, repo, topics]
+    for l in notes:
+        s = l.strip()
+        if not s or s.startswith("- "):
+            continue
+        if s.startswith("**") and s.endswith("**"):
+            if not blocks or blocks[-1][1]:
+                blocks.append([[], None, []])
+            blocks[-1][1] = s
+        elif s.startswith("*") and s.endswith("*") and blocks:
+            blocks[-1][2].append(s.strip("*"))
+        else:
+            if not blocks or blocks[-1][1]:
+                blocks.append([[], None, []])
+            blocks[-1][0].append(s)
+    return [
+        " ".join(intro) if intro else f"{repo} : {', '.join(topics)}"
+        for intro, repo, topics in blocks
+        if intro or (repo and topics)
+    ]
+
+
 def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="git"):
     """Side-project notes for [lo, hi) from `entire dispatch --local` in each repo, run
     as `user` (the agent CLI's credentials are theirs). A repo with no commit
