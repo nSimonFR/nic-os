@@ -22,10 +22,10 @@ Two Linear workspaces are available:
 
 Keys are format `lin_api_…`. All API calls go to `https://api.linear.app/graphql` with header `Authorization: $LINEAR_KEY` (no `Bearer` prefix — Linear personal keys are sent raw).
 
-**The keys are placeholders** (`__linear_key__`): the rpi5's Agent Vault swaps in the real one on the way to `api.linear.app`. On rpi5, source its proxy env in the same command as the call; in Claude Code on the Mac, a SessionStart hook already put the proxy and the placeholders in every Bash command (hosts/nbookpro/home.nix).
+**The keys are placeholders** (`__linear_key__`): the rpi5's Agent Vault swaps in the real one on the way to `api.linear.app`. Source its proxy env in the same command as the call: `/var/lib/agent-vault-hermes/proxy.env` on rpi5, `$AGENT_VAULT_ENV` in Claude Code on the Mac (set by hosts/nbookpro/agent-vault.nix). It sets the proxy, its CA and the placeholders for that command only.
 
 ```bash
-[ -r /var/lib/agent-vault-hermes/proxy.env ] && { set -a; . /var/lib/agent-vault-hermes/proxy.env; set +a; }
+v=${AGENT_VAULT_ENV:-/var/lib/agent-vault-hermes/proxy.env}; [ -r "$v" ] && { set -a; . "$v"; set +a; }
 ```
 
 If `$LINEAR_KEY` is still empty, stop and tell the user.
@@ -59,8 +59,8 @@ All examples use the default nsimon workspace (`$LINEAR_KEY`). For trusk, swap `
 
 ```bash
 linear_q() {
-  # rpi5: placeholder key + Agent Vault proxy (see above).
-  [ -r /var/lib/agent-vault-hermes/proxy.env ] && { set -a; . /var/lib/agent-vault-hermes/proxy.env; set +a; }
+  # Placeholder key + Agent Vault proxy (see above).
+  v=${AGENT_VAULT_ENV:-/var/lib/agent-vault-hermes/proxy.env}; [ -r "$v" ] && { set -a; . "$v"; set +a; }
   curl -sS -X POST https://api.linear.app/graphql \
     -H "Authorization: $LINEAR_KEY" \
     -H "Content-Type: application/json" \
