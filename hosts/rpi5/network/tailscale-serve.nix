@@ -57,7 +57,7 @@ in
       ${ts} serve reset || true
       ${serveUp}
       ${funnelUp}
-      # Agent Vault's proxy, for the Mac's agents (hosts/nbookpro/home.nix).
+      # Agent Vault's proxy, for the Mac's agents (hosts/nbookpro/agent-vault.nix).
       # Plain HTTP proxy, so TCP; its agent token is the only gate.
       ${ts} serve   --bg --tcp=14322 tcp://127.0.0.1:14322
       # /mnt/data/cloud is a bind-mount of Nextcloud's user-files dir
