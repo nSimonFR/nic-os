@@ -1,7 +1,7 @@
-# Entire for Trusk work: checkpoints from every trusk-official clone go to the
-# private nSimonFR/trusk-checkpoints, and nothing is committed to those shared
-# repos. So the agent hooks are machine-wide here, and per-clone settings come
-# from `entire-trusk-enable` (home.nix).
+# Entire for Trusk work: every trusk-official clone keeps its checkpoints in its
+# own repo, and no Entire file is committed to those shared repos. So the agent
+# hooks are machine-wide here, and per-clone settings come from
+# `entire-trusk-enable` (home.nix).
 { pkgs, lib, ... }:
 let
   claudeManaged = "/Library/Application Support/ClaudeCode/managed-settings.d";
