@@ -9,3 +9,8 @@ Mac. If it fails or is refused, ask for a 6-digit TOTP code and run
 
 
 Version everything you build: commit per iteration (`git init` if outside a repo), then offer a private `nSimonFR` remote pushed as `nSimonFR-ai`.
+
+## Job hunting
+
+CV, job applications or my work record (incl. "help me apply to <URL>"):
+work in `~/MyDocuments/PERSO/career` and read its `AGENTS.md` first.
