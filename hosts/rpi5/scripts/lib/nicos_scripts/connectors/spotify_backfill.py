@@ -44,7 +44,8 @@ MIN_MS_PLAYED = 30000
 EARLY_SLACK_MS = 5 * 60 * 1000
 # Ryot's own cap on one event-mutation batch.
 EVENT_BATCH = 100
-OPERATION_POLLS = 30
+# × 2 s. A batch has taken over 60 s while the Pi swaps.
+OPERATION_POLLS = 150
 
 
 def parse_export(records):
@@ -140,13 +141,15 @@ def correction(p):
 def create_events(client, events, sleep=time.sleep, log=log):
     """POST one batch; the number written. Waits out a 202 (writes past ~35 s)."""
     res = client.request("POST", "/events", events)
-    for _ in range(OPERATION_POLLS):
+    for poll in range(OPERATION_POLLS + 1):
         if "count" in res:
             if res.get("failure"):
                 log(f"batch stopped early: {json.dumps(res['failure'])[:300]}")
             return res["count"]
         if "result" in res:
             return res["result"].get("count", 0)
+        if res.get("status") == "failed" or poll == OPERATION_POLLS:
+            break
         sleep(2)
         res = client.request("GET", "/events/operations/" + res["operationId"])
     raise RuntimeError(f"event batch still pending: {res}")
