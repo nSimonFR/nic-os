@@ -1,11 +1,12 @@
 # hosts/rpi5/security/sudo-ssh-agent.nix
 #
 # sudo on a Bitwarden SSH-agent signature, for when the user is at the Mac:
-# the Mac reverse-forwards its Bitwarden agent to `agentSock`
-# (hosts/nbookpro/sudo-agent-forward.nix) and `mac-sudo cmd` points pam_rssh
-# at it. Plain `sudo` never asks the Mac, so the phone's TOTP path
-# (sudo-totp.nix) can't stall on a prompt nobody is there to answer; a refused
-# or missing signature falls through to TOTP.
+# the Mac reverse-forwards its Bitwarden agent to a per-connection
+# `sudo-agent.<epoch>.sock` (hosts/nbookpro/sudo-agent-forward.nix) and
+# `mac-sudo cmd` points pam_rssh at the newest one. Plain `sudo` never asks
+# the Mac, so the phone's TOTP path (sudo-totp.nix) can't stall on a prompt
+# nobody is there to answer; a refused or missing signature falls through to
+# TOTP.
 #
 # The tunnel comes in over Tailscale SSH, so tailscaled (root) owns the socket:
 # only root, i.e. pam_rssh, can reach the agent. Bitwarden must still ask on
@@ -16,7 +17,6 @@ let
   sudoKeys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBneog7+eqJyvLrDJoqjdtvlCz7dn4qp7VsXo7P1HeK1 rpi5 sudo"
   ];
-  agentSock = "/home/nsimon/.ssh/sudo-agent.sock";
 in
 lib.mkIf (sudoKeys != [ ]) {
   security.pam.rssh = {
@@ -30,7 +30,11 @@ lib.mkIf (sudoKeys != [ ]) {
   environment.systemPackages = [
     (pkgs.writeShellApplication {
       name = "mac-sudo";
-      text = ''SSH_AUTH_SOCK=${agentSock} exec /run/wrappers/bin/sudo "$@"'';
+      # Glob order = epoch order; the Mac deletes older sockets on reconnect.
+      text = ''
+        socks=(/home/nsimon/.ssh/sudo-agent*.sock)
+        SSH_AUTH_SOCK=''${socks[-1]} exec /run/wrappers/bin/sudo "$@"
+      '';
     })
   ];
 }
