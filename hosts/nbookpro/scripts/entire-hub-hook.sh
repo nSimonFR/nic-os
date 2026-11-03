@@ -1,27 +1,31 @@
 # shellcheck shell=bash
-# entire-hub-hook <hook> — Entire's Claude hooks, also for sessions started in a
-# folder of clones (~/MyDocuments/TRUSK) instead of a repo. Started in a repo: plain
-# `entire hooks claude-code <hook>`. Started in the folder: a clone joins the
-# session when a tool call (`route`) runs in it, writes in it or names it in a Bash
-# command, before that call runs, so its commits get the Entire-Checkpoint
-# trailer; every later hook goes to each joined clone.
+# entire-hub-hook <hook> — Entire's Claude hooks for sessions that work in more
+# than one clone: started in a folder of clones (~/MyDocuments/TRUSK), or in one
+# clone and committing in a sibling. The clone the session starts in joins it; any
+# other clone joins when a tool call (`route`) runs in it, writes in it or names
+# it in a Bash command, before that call runs, so its commits get the
+# Entire-Checkpoint trailer. Every later hook goes to each joined clone.
 command -v entire >/dev/null || exit 0
 name=$1
 input=$(cat)
 cwd=$(jq -r '.cwd // empty' <<<"$input")
 cwd=${cwd:-$PWD}
 sid=$(jq -r '.session_id // empty' <<<"$input")
+if [ -z "$sid" ]; then
+  [ "$name" = route ] && exit 0
+  exec entire hooks claude-code "$name" <<<"$input"
+fi
 
 dir=${XDG_STATE_HOME:-$HOME/.local/state}/entire-hub
 state=$dir/$sid
-# A folder session stays one after its shell cd's into a clone.
-if [ -z "$sid" ] || [ ! -f "$state" ]; then
-  if [ "$name" != session-start ] || [ -z "$sid" ] ||
-    git -C "$cwd" rev-parse --show-toplevel >/dev/null 2>&1; then
-    [ "$name" = route ] && exit 0
-    exec entire hooks claude-code "$name" <<<"$input"
-  fi
+if [ ! -f "$state" ]; then
+  # First hook seen for this session (its start, or a session already running
+  # when this hook was installed): Entire already tracks it in its own clone.
   mkdir -p "$dir"
+  : >"$state"
+  if start=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) && [ -d "$start/.entire" ]; then
+    echo "$start" >>"$state"
+  fi
 fi
 touch "$state"
 
