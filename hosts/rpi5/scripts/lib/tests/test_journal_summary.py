@@ -94,6 +94,13 @@ def test_birthdays_are_not_shown_to_the_model():
     assert "Anniversaire de Léa" in v and "Paul" not in v
 
 
+def test_project_notes_are_not_shown_to_the_model():
+    v = js.visible(
+        "### 🎵 Musique - 1 titre\n\n### 🛠 Projets perso\n\nJournée sur nic-os.\n"
+    )
+    assert "Musique" in v and "nic-os" not in v
+
+
 def test_summarize_sends_the_collage_with_the_text():
     op = FakeOpener(
         [json_reply({"choices": [{"message": {"content": "Pique-nique au parc."}}]})]
