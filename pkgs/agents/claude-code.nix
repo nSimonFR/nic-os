@@ -22,22 +22,22 @@
 claude-code.override {
   manifest = {
     # renovate: datasource=npm depName=@anthropic-ai/claude-code
-    version = "2.1.310";
+    version = "2.1.317";
     platforms = {
       # aarch64-darwin — nBookPro
       "darwin-arm64" = {
         binary = "claude.zst";
-        checksum = "0252ecc7c918fccc5a68d6f25a80c4579c4cf99fad8b315228236c2ee9c3f4af";
+        checksum = "f2e220b0994b475e86d96b44a649252d75e083e505a228f2ff0c0fc266481595";
       };
       # aarch64-linux — rpi5
       "linux-arm64" = {
         binary = "claude.zst";
-        checksum = "ad34932dfad2bd67c328b9358acaac7c998e8113dc065dd328958b984a73fe27";
+        checksum = "f6279f0c17270c20f47bdd71ef2d5408a53c4dba978c9e805aadac4232f3ea51";
       };
       # x86_64-linux — BeAsT
       "linux-x64" = {
         binary = "claude.zst";
-        checksum = "9314f28f679546a97813f2914c4fb60a190801ef782805f47bf197317cc4ffd2";
+        checksum = "cd557f900744b6aa1a554f7fd3f64788680d93f396eb760590414db4c6d53ccb";
       };
     };
   };
