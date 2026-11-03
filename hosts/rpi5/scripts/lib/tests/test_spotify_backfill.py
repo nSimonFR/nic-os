@@ -162,6 +162,24 @@ def test_create_events_waits_out_a_pending_batch():
     assert op.last.full_url.endswith("/api/events/operations/op1")
 
 
+def test_create_events_reads_the_reply_to_its_last_poll(monkeypatch):
+    from nicos_scripts import ryot
+
+    monkeypatch.setattr(bf, "OPERATION_POLLS", 2)
+    pending = {"operationId": "op1", "status": "accepted", "writtenCount": 0}
+    op = FakeOpener(
+        [
+            json_reply(pending, 202),
+            json_reply(pending),
+            json_reply({"operationId": "op1", "result": {"count": 2}}),
+        ]
+    )
+    c = ryot.Client("http://ryot", "key", opener=op, sleep=lambda _s: None)
+    assert (
+        bf.create_events(c, [{}, {}], sleep=lambda _s: None, log=lambda _m: None) == 2
+    )
+
+
 # ── main ──────────────────────────────────────────────────────────────────────
 
 
