@@ -37,8 +37,9 @@ Before opening a PR, check whether the branch already has one (`gh pr list --hea
 <branch>`) and update that instead of opening a second.
 
 **A merge is not the end: babysit the deploy.** A T3 PR watch never wakes on the merge
-nor on Deploy rpi5, so once checks pass, run `./scripts/wait-deploy <pr>` in the
-background and wait on it; when it exits, check the change live, then report.
+nor on the deploy workflows, so once checks pass, run `./scripts/wait-deploy <pr>` in the
+background and wait on it. It covers rpi5 and nBookPro, and re-runs a deploy no runner
+picked up. When it exits, check the change live, then report.
 
 ## Format & lint
 

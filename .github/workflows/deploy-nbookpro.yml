@@ -50,6 +50,7 @@ jobs:
           hash=${hash%%-*}
           echo "out=$out" >> "$GITHUB_OUTPUT"
           echo "hash=$hash" >> "$GITHUB_OUTPUT"
+          echo "System: $out" # read by scripts/wait-deploy
           echo "System: \`$out\`" >> "$GITHUB_STEP_SUMMARY"
           if curl -sfI -o /dev/null "https://nsimon-nicos.cachix.org/$hash.narinfo"; then
             echo "cached=true" >> "$GITHUB_OUTPUT"

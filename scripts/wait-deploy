@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Wait for a PR to merge and for its rpi5 deploy to be live, then exit:
-# 0 = this PR's system is active, 1 = closed unmerged / deploy failed / timed out.
+# Wait for a PR to merge and for its rpi5 and nBookPro deploys to be live, then exit:
+# 0 = this PR's systems are active (or the Mac's is queued while it sleeps),
+# 1 = closed unmerged / deploy failed / timed out.
 #
 # A T3 PR watch wakes on checks, reviews and conflicts but never on the merge or
-# on Deploy rpi5 (a workflow on main), so an agent runs this in the background
-# and is woken when it exits.
+# on the deploy workflows on main, so an agent runs this in the background and
+# is woken when it exits.
 #
 # Usage: ./scripts/wait-deploy <pr-number> [timeout-minutes, default 120]
 set -euo pipefail
@@ -12,6 +13,7 @@ set -euo pipefail
 pr=${1:?usage: wait-deploy <pr-number> [timeout-minutes]}
 deadline=$(($(date +%s) + ${2:-120} * 60))
 repo=nSimonFR/nic-os
+mac=${NBOOKPRO_SSH:-macbook-pro-appleosx-15}
 
 say() { echo "[$(date +%H:%M:%S)] $*"; }
 tick() {
@@ -36,30 +38,47 @@ done
 sha=$(gh pr view "$pr" -R "$repo" --json mergeCommit --jq .mergeCommit.oid)
 say "merged as $sha"
 
-while :; do
-  run=$(gh run list -R "$repo" --workflow deploy-rpi5.yml --commit "$sha" -L 1 \
-    --json databaseId,status,conclusion,url --jq '.[0] // empty')
-  if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ]; then break; fi
-  tick "Deploy rpi5 for $sha ${run:+is $(jq -r .status <<<"$run")}${run:-has not started}"
-done
-url=$(jq -r .url <<<"$run")
-if [ "$(jq -r .conclusion <<<"$run")" != success ]; then
-  say "Deploy rpi5 $(jq -r .conclusion <<<"$run"): $url"
-  exit 1
-fi
-want=$(gh run view "$(jq -r .databaseId <<<"$run")" -R "$repo" --log 2>/dev/null |
-  grep -o 'System: /nix/store/[a-z0-9]*-nixos-system-rpi5-[^ "`]*' | head -n1 || true)
-want=${want#System: }
-say "Deploy rpi5 succeeded: $url"
+# wait_run <workflow file> <label>: wait for the workflow's run on $sha; print
+# the store path from its "System:" log line. A job no runner ever picked up
+# (macOS runners run out: "not acquired by Runner") is re-run once.
+wait_run() {
+  local wf=$1 label=$2 run id rerun=0 sys
+  while :; do
+    run=$(gh run list -R "$repo" --workflow "$wf" --commit "$sha" -L 1 \
+      --json databaseId,status,conclusion,url --jq '.[0] // empty')
+    if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ]; then
+      [ "$(jq -r .conclusion <<<"$run")" = success ] && break
+      id=$(jq -r .databaseId <<<"$run")
+      if [ "$rerun" = 0 ] && [ "$(gh run view "$id" -R "$repo" --json jobs \
+        --jq '[.jobs[].steps | length] | add // 0')" = 0 ]; then
+        say "$label never started (no runner): re-running $(jq -r .url <<<"$run")" >&2
+        gh run rerun "$id" -R "$repo" >&2
+        rerun=1
+        sleep 30
+        continue
+      fi
+      say "$label $(jq -r .conclusion <<<"$run"): $(jq -r .url <<<"$run")" >&2
+      return 1
+    fi
+    tick "$label for $sha ${run:+is $(jq -r .status <<<"$run")}${run:-has not started}" >&2
+  done
+  say "$label succeeded: $(jq -r .url <<<"$run")" >&2
+  sys=$(gh run view "$(jq -r .databaseId <<<"$run")" -R "$repo" --log 2>/dev/null |
+    grep -o 'System: /nix/store/[a-z0-9]*-[^ "`]*' | head -n1 || true)
+  echo "${sys#System: }"
+}
+
+want=$(wait_run deploy-rpi5.yml "Deploy rpi5")
+want_mac=$(wait_run deploy-nbookpro.yml "Deploy nBookPro")
 
 # Not /run/current-system: nix-darwin has one too, and the Mac would wait for an
 # rpi5 generation that never lands there.
 if [ "$(hostname -s)" != rpi5 ]; then
-  say "not on rpi5: check /run/current-system there"
+  say "not on rpi5: check /run/current-system on rpi5 and the Mac by hand"
   exit 0
 fi
 if [ -z "$want" ]; then
-  say "no 'System:' line in the run log: check /run/current-system by hand"
+  say "no 'System:' line in the rpi5 run log: check /run/current-system by hand"
   exit 1
 fi
 # A later merge may already have replaced it; any system generation counts.
@@ -73,7 +92,25 @@ until activated; do
   tick "rpi5 still on $(readlink /run/current-system), waiting for $want"
 done
 if [ "$(readlink /run/current-system)" = "$want" ]; then
-  say "live: /run/current-system = $want"
+  say "rpi5 live: /run/current-system = $want"
 else
-  say "activated $want, since replaced by $(readlink /run/current-system)"
+  say "rpi5 activated $want, since replaced by $(readlink /run/current-system)"
 fi
+
+# The Mac's Cachix agent activates when the laptop is awake; asleep is not a failure.
+if [ -z "$want_mac" ]; then
+  say "no 'System:' line in the nBookPro run log: check the Mac by hand"
+  exit 1
+fi
+mac_has() {
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" \
+    "for g in /nix/var/nix/profiles/system-*-link; do [ \"\$(readlink \"\$g\")\" = $want_mac ] && exit 0; done; exit 1" 2>/dev/null
+}
+until mac_has; do
+  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" true 2>/dev/null; then
+    say "Mac unreachable (asleep?): $want_mac is queued for its Cachix agent"
+    exit 0
+  fi
+  tick "Mac still on $(ssh -o BatchMode=yes "$mac" readlink /run/current-system 2>/dev/null), waiting for $want_mac"
+done
+say "Mac activated $want_mac"
