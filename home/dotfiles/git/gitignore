@@ -5,3 +5,5 @@ DECRYPTED-
 # Entire, enabled clone-locally (entire-trusk-enable)
 .entire/.gitignore
 .entire/settings.local.json
+# Claude Code's per-user settings; `entire graph setup` writes one into each clone
+.claude/settings.local.json
