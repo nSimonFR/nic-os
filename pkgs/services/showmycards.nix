@@ -173,7 +173,7 @@ let
   # breakage. Same shape, and the same fix, as airtrail-nix's `depsHashes`.
   depsHashes = {
     aarch64-linux = {
-      depsBuild = "sha256-3EAKsQTkU300GRJ3U0gE8FObCQncAfXN6Nt9QO3Ezzw=";
+      depsBuild = "sha256-qt9aK3a71tucnbjiu4ttLXBtzZUNxhaZE5Ma3icxxs8=";
       depsProd = "sha256-2WFX1ZFPHayOhczzod3YOgSai0v33Ocz+UHRfIRmESo=";
     };
   };
