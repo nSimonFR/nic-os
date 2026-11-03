@@ -32,7 +32,8 @@
 #   - No failover is configured (see the gateModel note below): a plan-cap 429
 #     on the primary takes Hermes offline until the quota resets.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
-#     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS is the sender allowlist.
+#     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS gates DMs + senders,
+#     TELEGRAM_GROUP_ALLOWED_CHATS the one allowed group.
 #   - Neither Aperture nor the gate behind it needs a real credential, so
 #     api_key="unused" is a non-secret placeholder; the only real secret (bot
 #     token) is written into .env at start (0600), never into the Nix store.
@@ -338,7 +339,7 @@ let
 
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
-    # single-chat-ID Telegram allowlist, not workspace isolation).
+    # Telegram allowlist — nSimon's DM + one group — not workspace isolation).
     terminal = {
       backend = "local";
       cwd = "${hermesHome}/workspace";
@@ -416,8 +417,10 @@ let
     at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
     ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
 
-    # .env — bot token (secret) + sender allowlist. TELEGRAM_BOT_TOKEN presence
-    # auto-enables the Telegram platform. Allowlist = nSimon + Alfie.
+    # .env — bot token (secret) + allowlists. TELEGRAM_BOT_TOKEN presence
+    # auto-enables the Telegram platform. DMs: nSimon only (ALLOWED_USERS is
+    # platform-wide). Alfie reaches Hermes only through the shared group, which is
+    # allowed by chat id (any member of that one group).
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
     # TELEGRAM_HOME_CHANNEL pins where Hermes delivers cron results + proactive
@@ -426,7 +429,8 @@ let
     # wiped when this setup script regenerates config.yaml on the next restart.
     ${pkgs.coreutils}/bin/cat > ${hermesHome}/.env <<EOF
     TELEGRAM_BOT_TOKEN=$tg_tok
-    TELEGRAM_ALLOWED_USERS=${toString telegramChatId},8627259779
+    TELEGRAM_ALLOWED_USERS=${toString telegramChatId}
+    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841
     TELEGRAM_HOME_CHANNEL=${toString telegramChatId}
     TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
