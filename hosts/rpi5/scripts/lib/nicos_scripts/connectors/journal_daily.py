@@ -33,7 +33,7 @@ climbing session still gets an entry; weather, activity, music or games alone
 do not.
 
 Side-project notes: `entire dispatch --local` over the day, per repo in
-JOURNAL_DISPATCH_REPOS, in a collapsed "Projets perso" section (the repos on
+JOURNAL_DISPATCH_REPOS, cut to its intro in a "Projets perso" section (the repos on
 the Pi are side projects, not work). Generated once per
 finished day and cached in the state's `_dispatch` (an agent call each).
 
@@ -613,7 +613,7 @@ def content(
     (heading suffix, lines) from journal_sources.music_section, or None;
     `climbing` and `games` = the same from climbing_section / game_section;
     `activity` = the heading suffix from activity_section; `notes` = side-project
-    notes (journal_sources.dispatch_notes), collapsed in their own section;
+    notes (journal_sources.dispatch_notes), cut to notes_summary;
     `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
     two lists from journal_family.family_sections; `flights` = (heading
     suffix, lines) from journal_flights.flight_section, linking `flights_url`;
@@ -689,19 +689,8 @@ def content(
         head, lines = spending
         sections.append([f"### 💸 Dépenses - {head}", "", *lines])
         tags.append("spending")
-    if notes:  # Memos keeps <details>/<summary> (GitHub's sanitize schema)
-        sections.append(
-            [
-                "### 🛠 Projets perso",
-                "",
-                "<details>",
-                "<summary>Notes</summary>",
-                "",
-                *notes,
-                "",
-                "</details>",
-            ]
-        )
+    if notes and (summary := src.notes_summary(notes)):
+        sections.append(["### 🛠 Projets perso", "", *summary])
         tags.append("projects")
     if work:
         n, minutes, people, *rest = work

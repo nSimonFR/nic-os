@@ -1237,7 +1237,7 @@ def test_a_day_with_only_steps_still_gets_an_entry(tmp_path):
     )
 
 
-def test_project_notes_collapse_in_their_own_section_and_are_cached(tmp_path):
+def test_project_notes_are_summed_up_in_their_own_section_and_cached(tmp_path):
     from test_journal_sources import DISPATCH
 
     pg, agent = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")]), []
@@ -1266,10 +1266,9 @@ def test_project_notes_collapse_in_their_own_section_and_are_cached(tmp_path):
     )
     text = state["2026-10-19"]["text"]
     assert (
-        "\n\n### 🛠 Projets perso\n\n<details>\n<summary>Notes</summary>\n\n"
-        "Un seul correctif"
+        "\n\n### 🛠 Projets perso\n\nUn seul correctif ce jour-là, côté CI : les merges "
+        "automatiques déclenchent enfin le déploiement.\n\n___________\n\n#bike #projects\n"
     ) in text
-    assert "déploiement.\n\n</details>\n\n___________\n\n#bike #projects\n" in text
     assert "Travail" not in text
     assert state["_dispatch"]["2026-10-19"][2] == "**nic-os**" and len(agent) == 1
     state["2026-10-19"]["sig"] = "stale"
