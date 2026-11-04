@@ -1,7 +1,7 @@
 """candidatures-relay — hook ``pre_gateway_dispatch`` (avant auth et avant tout LLM).
 
-- Une seule conversation est détournée : celle liée par « /lier_candidatures »
-  (envoyé par un membre autorisé dans un groupe où se trouve le bot).
+- Une seule conversation est détournée : la dernière liée par « /lier_candidatures »
+  (envoyé par un membre autorisé dans un groupe où se trouve le bot ; relier ailleurs déplace la liaison).
 - Chaque message de cette conversation est ajouté à ``inbox.jsonl`` puis avalé
   (``{"action": "skip"}``) : Hermes ne le voit pas, ne le stocke pas, n'y répond pas.
 - Le pont du Mac lit la file par SSH et répond lui-même via l'API Bot.
@@ -75,8 +75,7 @@ def _on_dispatch(event=None, **_kw):
         and user in MEMBERS
         and chat.startswith("-")
     ):
-        if bound and bound != chat:
-            return None  # déjà lié ailleurs : on laisse Hermes répondre normalement
+        # Re-binding moves the conversation (e.g. a group upgraded to a supergroup gets a new id).
         HOME.mkdir(parents=True, exist_ok=True)
         CHAT_FILE.write_text(chat)
         _append(
