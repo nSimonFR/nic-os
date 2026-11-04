@@ -103,6 +103,7 @@ def _on_dispatch(event=None, **_kw):
                 "message_id": getattr(event, "message_id", None),
                 "text": text,
                 "reply_to_own": bool(getattr(event, "reply_to_is_own_message", False)),
+                "reply_to_text": (getattr(event, "reply_to_text", None) or "")[:2000],
                 "document": _document(event),
                 "media_urls": list(getattr(event, "media_urls", []) or []),
             }
