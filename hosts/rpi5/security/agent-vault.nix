@@ -117,6 +117,14 @@ let
       keys = [ "IMMICH_API_KEY" ];
       "in" = [ "header" ];
     }
+    # Reactive Resume (knowledge/reactive-resume.nix): REST under /api/openapi, key
+    # sent as `x-api-key`. Port 13336 is the socket-activated proxy that wakes it.
+    {
+      name = "reactive-resume";
+      host = "rxresume.home.arpa:13336";
+      keys = [ "RXRESUME_API_KEY" ];
+      "in" = [ "header" ];
+    }
     # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`;
     # its MCP at /sure/mcp takes `Authorization: Bearer` (SURE_MCP_TOKEN).
     {
@@ -173,6 +181,7 @@ let
   ];
   credFiles = {
     IMMICH_API_KEY = config.age.secrets.immich-api-key.path;
+    RXRESUME_API_KEY = config.age.secrets.rxresume-api-key.path;
     SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
     SURE_MCP_TOKEN = "${config.age.secrets.sure-mcp-env.path}:MCP_API_TOKEN";
     WEALTHFOLIO_MCP_TOKEN = "${config.age.secrets.wealthfolio-mcp-token.path}:WEALTHFOLIO_MCP_TOKEN";
@@ -248,6 +257,7 @@ in
       config.age.secrets.agent-brokered-env.file
       config.age.secrets.github-ai-token.file
       config.age.secrets.immich-api-key.file
+      config.age.secrets.rxresume-api-key.file
       config.age.secrets.sure-journal-api-key.file
       config.age.secrets.sure-mcp-env.file
       config.age.secrets.wealthfolio-mcp-token.file
