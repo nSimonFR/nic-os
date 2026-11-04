@@ -194,6 +194,11 @@ in
   # /chosen/bootargs). Use earlyoom instead: it only needs /proc/meminfo and
   # proactively sends SIGTERM to the highest-RSS process before free memory
   # hits zero and the system freezes waiting for the hardware watchdog.
+  # earlyoom misses thrash: MemAvailable read ~35% at 130 MB/s zram swap-in and
+  # load 19, and 8 watchdog resets (2026-11-01..04) had no earlyoom trigger.
+  # min_ttl_ms makes the kernel OOM-kill once it can't keep 1s of working set.
+  systemd.tmpfiles.settings.mglru-min-ttl."/sys/kernel/mm/lru_gen/min_ttl_ms".w.argument = "1000";
+
   services.earlyoom = {
     enable = true;
     # Gate on memory alone (swap = 100 is always met): the 7.9G zram swap never
