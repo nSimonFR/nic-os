@@ -294,6 +294,21 @@ def test_a_partial_batch_fails_the_run(tmp_path):
     assert rc == 1
 
 
+def test_a_failed_import_is_not_retried(tmp_path):
+    path = export(tmp_path, [rec("t3", "2024-01-01T12:00:00Z")])
+    failed = [
+        lookup({}),
+        json_reply({"jobId": "j3"}),
+        json_reply({"status": "failed", "reason": {"code": "import-failed"}}),
+    ]
+    rc, _, _ = run(tmp_path, ["--apply", path], failed)
+    assert rc == 0
+    rc, op, lines = run(tmp_path, ["--apply", path], [])
+    assert rc == 0, lines
+    assert op.requests == []
+    assert "1 on unresolved tracks" in next(x for x in lines if x.startswith("plan:"))
+
+
 def test_missing_api_key_is_fatal(tmp_path):
     lines = []
     assert bf.main([export(tmp_path, RECORDS)], env={}, log=lines.append) == 1
