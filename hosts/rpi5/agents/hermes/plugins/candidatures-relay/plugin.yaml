@@ -1,0 +1,3 @@
+name: candidatures-relay
+version: 0.1.0
+description: "Détourne une seule conversation Telegram (candidatures d'Alfie) vers une file JSONL lue par le pont du Mac. Déterministe, sans LLM : Hermes ne voit jamais ces messages."
