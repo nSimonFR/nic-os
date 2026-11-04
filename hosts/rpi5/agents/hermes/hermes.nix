@@ -391,6 +391,11 @@ let
     # Pi after a deploy (cold store paths, memory pressure); past the 10s default
     # the gateway drops the adapter and never connects Telegram.
     plugins.load_timeout_seconds = 120;
+    # Opt-in allow-list for directory plugins (holographic is `exclusive`, activated
+    # by memory.provider, so it is unaffected). candidatures-relay diverts ONE
+    # Telegram group (Alfie's job applications) to a JSONL inbox read by the Mac
+    # bridge, before auth and before any LLM — see plugins/candidatures-relay.
+    plugins.enabled = [ "candidatures-relay" ];
 
     # External memory provider. `holographic` is the local, zero-API-key store
     # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real
@@ -461,6 +466,12 @@ let
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/holographic
     ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${holographicPlugin}/" "${hermesHome}/plugins/holographic/"
+
+    # candidatures-relay plugin: owned wholly by Nix (its state lives in
+    # ~/.hermes/candidatures/, outside the plugin dir), so --delete is safe.
+    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/candidatures-relay ${hermesHome}/candidatures
+    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+      "${./plugins/candidatures-relay}/" "${hermesHome}/plugins/candidatures-relay/"
 
     # Cron workspace scripts (executable). Same NO --delete rule: the workspace
     # also holds live runtime state (kanban.db, sandboxes, job-alerts/.seen_jobs.json)
