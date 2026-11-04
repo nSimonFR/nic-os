@@ -44,7 +44,11 @@
     linky-prm = {
       file = ./secrets/linky-prm.age;
     };
-    # root-only: agents get a placeholder, Agent Vault attaches the key.
+    # root-only: agents get a placeholder, Agent Vault swaps in the key.
+    # Reactive Resume API key (x-api-key) used by the career repo's job-board sync.
+    rxresume-api-key = {
+      file = ./secrets/rxresume-api-key.age;
+    };
     immich-api-key = {
       file = ./secrets/immich-api-key.age;
     };
