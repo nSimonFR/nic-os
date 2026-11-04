@@ -28,6 +28,7 @@ the poller's spotify-entities.json cache).
 
 import argparse
 import json
+import os
 import sys
 import time
 import urllib.error
@@ -200,10 +201,14 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
         cfg.ryot_url, cfg.ryot_api_key, opener=opener, sleep=sleep, log=log
     )
     entity_map = load_json(cfg.entity_map_file, {})
+    # Re-importing a track whose import already failed can leave Ryot's import
+    # queue stuck "running" (0Cb4…, 2026-11-03/04), so each is tried once.
+    failed_file = os.path.join(cfg.state_dir, "spotify-backfill-failed-imports.json")
+    failed = set(load_json(failed_file, []))
     try:
-        spotify.resolve_entities(
+        unresolved = spotify.resolve_entities(
             client,
-            [p["track_id"] for p in plays],
+            [p["track_id"] for p in plays if p["track_id"] not in failed],
             entity_map,
             import_missing=not dry_run,
             log=log,
@@ -211,6 +216,7 @@ def main(argv=None, env=None, opener=None, sleep=time.sleep, log=log):
         if not dry_run:
             ensure_dir(cfg.state_dir)
             save_json(cfg.entity_map_file, entity_map, sort_keys=True)
+            save_json(failed_file, sorted(failed | set(unresolved)))
         ids = {entity_map[p["track_id"]] for p in plays if p["track_id"] in entity_map}
         completes = spotify.existing_completes(
             client, ids, plays[0]["ms"] - EARLY_SLACK_MS
