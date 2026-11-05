@@ -33,7 +33,7 @@
 #     on the primary takes Hermes offline until the quota resets.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
 #     (gateway/config.py:1721); TELEGRAM_ALLOWED_USERS gates DMs + senders,
-#     TELEGRAM_GROUP_ALLOWED_CHATS the one allowed group.
+#     TELEGRAM_GROUP_ALLOWED_CHATS the allowed groups (comma-separated).
 #   - Neither Aperture nor the gate behind it needs a real credential, so
 #     api_key="unused" is a non-secret placeholder; the only real secret (bot
 #     token) is written into .env at start (0600), never into the Nix store.
@@ -424,8 +424,11 @@ let
 
     # .env — bot token (secret) + allowlists. TELEGRAM_BOT_TOKEN presence
     # auto-enables the Telegram platform. DMs: nSimon only (ALLOWED_USERS is
-    # platform-wide). Alfie reaches Hermes only through the shared group, which is
-    # allowed by chat id (any member of that one group).
+    # platform-wide). Alfie reaches Hermes only through the allowed groups, by
+    # chat id (any member of those groups): the shared group, and the
+    # « Alfie Postule ! » group that the candidatures-relay plugin diverts to the
+    # Mac bridge. Without that second entry the adapter drops her messages as
+    # "unauthorized user" before pre_gateway_dispatch, so the relay never sees them.
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
     # TELEGRAM_HOME_CHANNEL pins where Hermes delivers cron results + proactive
@@ -435,7 +438,7 @@ let
     ${pkgs.coreutils}/bin/cat > ${hermesHome}/.env <<EOF
     TELEGRAM_BOT_TOKEN=$tg_tok
     TELEGRAM_ALLOWED_USERS=${toString telegramChatId}
-    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841
+    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841,-1003331502255
     TELEGRAM_HOME_CHANNEL=${toString telegramChatId}
     TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
