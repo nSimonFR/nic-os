@@ -13,7 +13,7 @@ def test_config_defaults_to_dry_run():
 
 def test_trigger_is_in_microseconds():
     cfg = Config.from_env({"PSI_OOM_STALL_MS": "3000", "PSI_OOM_WINDOW_MS": "8000"})
-    assert cfg.trigger == "full 3000000 8000000"
+    assert cfg.trigger == "full 3000000 8000000\0"
 
 
 def test_full_avg10():

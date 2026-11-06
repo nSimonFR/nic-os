@@ -54,7 +54,9 @@ class Config:
 
     @property
     def trigger(self):
-        return f"full {self.stall_ms * 1000} {self.window_ms * 1000}"
+        # The kernel overwrites the last byte written with NUL; without our own
+        # NUL it truncates the window (10000000 -> 1000000 < stall) and EINVALs.
+        return f"full {self.stall_ms * 1000} {self.window_ms * 1000}\0"
 
 
 def full_avg10(text):
@@ -91,7 +93,7 @@ def main(argv=None, env=None, log=None):
     os.write(fd, cfg.trigger.encode())
     poller = select.poll()
     poller.register(fd, select.POLLPRI)
-    log(f"armed: {cfg.trigger} on {cfg.pressure}, dry_run={cfg.dry_run}")
+    log(f"armed: {cfg.trigger.rstrip(chr(0))} on {cfg.pressure}, dry_run={cfg.dry_run}")
 
     def read():
         with open(cfg.pressure) as f:
