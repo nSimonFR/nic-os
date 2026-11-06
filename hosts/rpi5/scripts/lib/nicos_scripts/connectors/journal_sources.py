@@ -736,7 +736,10 @@ def activity_section(totals):
 
 DISPATCH_VOICE = "concis, en français"
 # The cloud dispatch reports every repo it is given, idle ones included.
-WORK_DISPATCH_VOICE = "concis, en français ; omets les dépôts sans changement"
+WORK_DISPATCH_VOICE = (
+    "concis, en français ; ne parle que des dépôts qui ont changé, sans jamais"
+    " mentionner les autres ni leur nombre"
+)
 WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
 # 429 "dispatch rate limit" within about a minute of the previous one (measured).
 WORK_DISPATCH_PAUSE_S = 65
@@ -777,28 +780,31 @@ def clean_dispatch(md):
 
 
 def notes_summary(notes):
-    """dispatch_notes lines cut to each repo's intro paragraph (topics and bullets
-    dropped); a repo with no intro is summed up by its topics."""
-    blocks = []  # [intro lines, repo, topics]
+    """Notes cut to each dispatch's intro paragraph, which covers all its repos
+    (topics and bullets dropped); a dispatch with no intro is summed up by its
+    repos' topics."""
+    blocks = []  # per dispatch: [intro lines, [[repo, topics]]]
     for l in notes:
         s = l.strip()
         if not s or s.startswith("- "):
             continue
         if s.startswith("**") and s.endswith("**"):
-            if not blocks or blocks[-1][1]:
-                blocks.append([[], None, []])
-            blocks[-1][1] = s
-        elif s.startswith("*") and s.endswith("*") and blocks:
-            blocks[-1][2].append(s.strip("*"))
+            if not blocks:
+                blocks.append([[], []])
+            blocks[-1][1].append([s, []])
+        elif s.startswith("*") and s.endswith("*") and blocks and blocks[-1][1]:
+            blocks[-1][1][-1][1].append(s.strip("*"))
         else:
             if not blocks or blocks[-1][1]:
-                blocks.append([[], None, []])
+                blocks.append([[], []])
             blocks[-1][0].append(s)
-    return [
-        " ".join(intro) if intro else f"{repo} : {', '.join(topics)}"
-        for intro, repo, topics in blocks
-        if intro or (repo and topics)
-    ]
+    out = []
+    for intro, repos in blocks:
+        if intro:
+            out.append(" ".join(intro))
+        else:
+            out += [f"{r} : {', '.join(t)}" for r, t in repos if t]
+    return out
 
 
 def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="git"):

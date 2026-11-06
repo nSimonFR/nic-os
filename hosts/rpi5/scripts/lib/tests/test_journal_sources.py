@@ -349,6 +349,9 @@ def test_notes_summary_keeps_one_intro_per_repo():
     assert js.notes_summary(["**r**", "", "*CI*", "", "- x", "*Docs*"]) == [
         "**r** : CI, Docs"
     ]
+    two = ["Intro.", "", "**a**", "*CI*", "- x", "", "**b**", "*Docs*", "- y"]
+    assert js.notes_summary(two) == ["Intro."]
+    assert js.notes_summary(two[2:]) == ["**a** : CI", "**b** : Docs"]
     assert js.notes_summary([]) == []
 
 
@@ -488,7 +491,7 @@ def test_work_dispatch_notes_batch_the_repos_five_by_five():
         "--repos gh/acme/r0,gh/acme/r1,gh/acme/r2,gh/acme/r3,gh/acme/r4 "
         in dispatches[0]
     )
-    assert "omets les dépôts sans changement" in dispatches[0]
+    assert "ne parle que des dépôts qui ont changé" in dispatches[0]
     assert notes.count("**api**") == 2 and notes[0].startswith("Une journée")
     assert js.work_dispatch_notes(run, (), lo, lo + 86400) == []
 
