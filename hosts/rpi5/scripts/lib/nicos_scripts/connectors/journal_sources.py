@@ -736,8 +736,11 @@ def activity_section(totals):
 
 DISPATCH_VOICE = "concis, en français"
 # The cloud dispatch reports every repo it is given, idle ones included.
+# Without the opening rule, intros came out as "voici l'essentiel" filler.
 WORK_DISPATCH_VOICE = (
-    "concis, en français ; ne parle que des dépôts qui ont changé, sans jamais"
+    "concis, en français ; ouvre par une seule phrase qui nomme concrètement ce qui"
+    " a changé, sans formule creuse (« voici l'essentiel », « sans détour »,"
+    " « rien de plus ») ; ne parle que des dépôts qui ont changé, sans jamais"
     " mentionner les autres ni leur nombre"
 )
 WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
