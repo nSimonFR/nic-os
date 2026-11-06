@@ -65,6 +65,11 @@ in
     };
   };
 
+  # Crash recovery after the 2026-11-05 12:41 reset was still replaying WAL at
+  # 100 s when nixpkgs' 120 s TimeoutSec killed it; each retry restarted the
+  # redo from scratch until start-limit-hit. Sorted after TimeoutSec, so it wins.
+  systemd.services.postgresql.serviceConfig.TimeoutStartSec = "15min";
+
   services.redis.servers.${redisName} = {
     enable = true;
     bind = redisHost;
