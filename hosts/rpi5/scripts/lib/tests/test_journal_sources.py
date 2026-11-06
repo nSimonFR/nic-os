@@ -520,3 +520,25 @@ def test_work_dispatch_retries_a_rate_limited_batch():
 
     with pytest.raises(subprocess.CalledProcessError):
         js.work_dispatch_notes(limited, ("acme",), lo, lo + 86400, sleep=pauses.append)
+
+
+def test_work_dispatch_skips_a_batch_where_nothing_landed():
+    import subprocess
+
+    lo = datetime.fromisoformat("2026-11-05T04:00:00+01:00").timestamp()
+
+    def run(cmd):
+        if " api " in cmd[-1]:
+            return json.dumps(
+                {"sessions": [session("acme/api", "2026-11-05T10:00:00Z", None)]}
+            )
+        raise subprocess.CalledProcessError(
+            1, cmd, stderr="status_code=404 no checkpoints for gh/acme/api"
+        )
+
+    pauses = []
+    assert (
+        js.work_dispatch_notes(run, ("acme",), lo, lo + 86400, sleep=pauses.append)
+        == []
+    )
+    assert pauses == []

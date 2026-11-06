@@ -867,7 +867,8 @@ def work_dispatch_notes(
 ):
     """Work notes for [lo, hi): a cloud `entire dispatch` of the day's work repos
     (from the user's Entire sessions), WORK_DISPATCH_BATCH repos per call. The
-    cloud only sees what reached a repo's default branch, on the day it landed."""
+    cloud only sees what reached a repo's default branch, on the day it landed;
+    a batch where nothing did is skipped."""
     import shlex
     import subprocess
     import time
@@ -904,8 +905,12 @@ def work_dispatch_notes(
                     + ["--voice", WORK_DISPATCH_VOICE]
                 )
                 break
-            except subprocess.CalledProcessError:
-                if attempt == WORK_DISPATCH_TRIES - 1:
+            except subprocess.CalledProcessError as e:
+                err = e.stderr or ""
+                if "no checkpoints" in err:  # 404: nothing landed in the batch
+                    md = ""
+                    break
+                if "429" not in err or attempt == WORK_DISPATCH_TRIES - 1:
                     raise
         lines = clean_dispatch(md)
         if lines:
