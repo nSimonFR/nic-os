@@ -53,6 +53,8 @@ let
         "GIT_BIN=${pkgs.git}/bin/git"
         # Side-project notes: `entire dispatch --local` as nsimon, one agent call per active day.
         "JOURNAL_DISPATCH_REPOS=/home/nsimon/nic-os"
+        # Work notes: cloud `entire dispatch` of the day's repos owned by these.
+        "JOURNAL_WORK_OWNERS_FILE=${config.age.secrets.journal-work-owners.path}"
         # The single "Nico's Family" tree (multi-tree mode keys it by id); I0009 = me.
         "GRAMPS_DB=/var/lib/gramps-web/data/grampsdb/6a51098a/sqlite.db"
         "GRAMPS_HOME_PERSON=I0009"

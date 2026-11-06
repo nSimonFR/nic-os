@@ -1,3 +1,4 @@
+import dataclasses
 import json
 from datetime import date
 
@@ -1300,6 +1301,59 @@ def test_project_notes_wait_for_the_day_to_end(tmp_path):
             date(2026, 10, 19),
             print,
             now=wm.day_bounds(date(2026, 10, 19))[1] - 1,
+        )
+        == []
+    )
+
+
+def test_work_notes_get_their_own_section_and_one_work_tag():
+    from test_journal_sources import CLOUD_DISPATCH
+
+    notes = wm.src.clean_dispatch(CLOUD_DISPATCH)
+    text = wm.content(
+        "2026-11-05", [], [], "http://d", work=(1, 15, 3), work_notes=notes
+    )
+    assert (
+        "### 💻 Dev pro\n\nUne journée sur l'API : la pagination des commandes arrive."
+        "\n\n<details>\n<summary>Détail</summary>\n\n**api**"
+    ) in text
+    assert text.index("### 💼 Travail") < text.index("### 💻 Dev pro")
+    assert text.rstrip().endswith("#work")
+
+
+def test_work_notes_read_the_owners_file_and_are_cached(tmp_path):
+    from test_journal_sources import CLOUD_DISPATCH
+
+    owners = tmp_path / "owners"
+    owners.write_text("acme\n")
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd[-1])
+        if " api " in cmd[-1]:
+            return json.dumps(
+                {
+                    "sessions": [
+                        {
+                            "repo_full_name": "acme/api",
+                            "startedAt": "2026-10-19T10:00:00Z",
+                            "lastActivityAt": "2026-10-19T11:00:00Z",
+                        }
+                    ]
+                }
+            )
+        return CLOUD_DISPATCH
+
+    c = dataclasses.replace(cfg(tmp_path), work_owners_file=str(owners), dry_run=False)
+    state, day = {}, date(2026, 10, 19)
+    after = wm.day_bounds(day)[1] + 60
+    notes = wm.day_work_notes(c, run, state, day, print, now=after)
+    assert "**api**" in notes and state["_work_dispatch"]["2026-10-19"] == notes
+    assert wm.day_work_notes(c, run, state, day, print, now=after) == notes
+    assert len(calls) == 2  # one sessions call, one dispatch, then the cache
+    assert (
+        wm.day_work_notes(
+            dataclasses.replace(c, work_owners_file=""), run, {}, day, print, now=after
         )
         == []
     )

@@ -55,6 +55,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "journal-work-owners.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "sure-journal-api-key.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

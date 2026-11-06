@@ -136,6 +136,7 @@ class Config:
     freereps_db: str = "freereps"
     dispatch_repos: tuple = ()
     dispatch_user: str = "nsimon"
+    work_owners_file: str = ""  # GitHub owners whose repos are work, one per line
     git: str = "git"
     arkose_sessions: str = "/var/lib/arkose-sync/sessions.json"
     birthday_calendars: tuple = ("Contact birthdays",)
@@ -209,6 +210,7 @@ class Config:
             summary_model=env_str("JOURNAL_SUMMARY_MODEL", "gpt-6-luna", env),
             dispatch_repos=_names(env_str("JOURNAL_DISPATCH_REPOS", "", env)),
             dispatch_user=env_str("JOURNAL_DISPATCH_USER", "nsimon", env),
+            work_owners_file=env_str("JOURNAL_WORK_OWNERS_FILE", "", env),
             git=env_str("GIT_BIN", "git", env),
             dry_run=env_str("JOURNAL_DRY_RUN", "1", env) != "0",
             runuser=env_str("RUNUSER_BIN", "runuser", env),
@@ -574,6 +576,31 @@ def photo_lines(shots):
     return lines
 
 
+def notes_section(head, notes):
+    """`head`, notes_summary, then the rest of the notes in a fold; [] when the
+    notes sum up to nothing."""
+    summary = src.notes_summary(notes)
+    if not summary:
+        return []
+    rest = [l for l in notes if l.strip() not in summary]
+    while rest and not rest[0].strip():
+        rest.pop(0)
+    if not any(l.lstrip().startswith("- ") for l in rest):
+        return [head, "", *summary]
+    return [
+        head,
+        "",
+        *summary,
+        "",
+        "<details>",
+        "<summary>Détail</summary>",
+        "",
+        *rest,
+        "",
+        "</details>",
+    ]
+
+
 def content(
     day,
     ws,
@@ -601,6 +628,7 @@ def content(
     screens=None,
     badges=None,
     spending=None,
+    work_notes=(),
 ):
     """Memo markdown, in French (journal_day may prefix a one-line summary):
     the weather line, agenda, photos, then one
@@ -614,6 +642,7 @@ def content(
     `climbing` and `games` = the same from climbing_section / game_section;
     `activity` = the heading suffix from activity_section; `notes` = side-project
     notes (journal_sources.dispatch_notes): notes_summary, the rest collapsed;
+    `work_notes` = the same from journal_sources.work_dispatch_notes;
     `memories` = lines from memory_lines; `birthdays` and `genealogy` = the
     two lists from journal_family.family_sections; `flights` = (heading
     suffix, lines) from journal_flights.flight_section, linking `flights_url`;
@@ -689,30 +718,8 @@ def content(
         head, lines = spending
         sections.append([f"### 💸 Dépenses - {head}", "", *lines])
         tags.append("spending")
-    if notes and (summary := src.notes_summary(notes)):
-        rest = [l for l in notes if l.strip() not in summary]
-        while rest and not rest[0].strip():
-            rest.pop(0)
-        sections.append(
-            [
-                "### 🛠 Projets perso",
-                "",
-                *summary,
-                *(
-                    [
-                        "",
-                        "<details>",
-                        "<summary>Détail</summary>",
-                        "",
-                        *rest,
-                        "",
-                        "</details>",
-                    ]
-                    if any(l.lstrip().startswith("- ") for l in rest)
-                    else []
-                ),
-            ]
-        )
+    if notes and (lines := notes_section("### 🛠 Projets perso", notes)):
+        sections.append(lines)
         tags.append("projects")
     if work:
         n, minutes, people, *rest = work
@@ -732,6 +739,9 @@ def content(
             ]
         sections.append(lines)
         tags.append("work")
+    if work_notes and (lines := notes_section("### 💻 Dev pro", work_notes)):
+        sections.append(lines)
+        tags += [] if "work" in tags else ["work"]
     if memories:
         sections.append(["### 🕰 Souvenirs", "", *memories])
         tags.append("memories")
@@ -1581,6 +1591,28 @@ def day_notes(cfg, run, state, day, log, now=None):
     return notes
 
 
+def day_work_notes(cfg, run, state, day, log, now=None):
+    """The day's work notes, cached in state["_work_dispatch"] like day_notes."""
+    key = day.isoformat()
+    cache = state.get("_work_dispatch", {})
+    if key in cache:
+        return cache[key]
+    lo, hi = day_bounds(day)
+    if not cfg.work_owners_file or hi > (now or datetime.now(timezone.utc).timestamp()):
+        return []
+    try:
+        owners = _names(read_secret(cfg.work_owners_file).replace("\n", ","))
+        notes = src.work_dispatch_notes(
+            run, owners, lo, hi, cfg.dispatch_user, cfg.runuser
+        )
+    except (OSError, ValueError, subprocess.CalledProcessError) as e:
+        log(f"{key}: work notes unavailable ({e})")
+        return []
+    if not cfg.dry_run:
+        state.setdefault("_work_dispatch", {})[key] = notes
+    return notes
+
+
 def day_activity(cfg, run, day, log):
     """journal_sources.activity_section of the day, or None (no steps, or FreeReps unreadable)."""
     try:
@@ -1789,6 +1821,7 @@ def journal_day(
     day_trips = trips(cfg, run, uid, day)
     climbs = day_climbing(cfg, day, log)
     notes = day_notes(cfg, run, state, day, log, now)
+    work_notes = day_work_notes(cfg, run, state, day, log, now)
     flights, every_flight = day_flights(cfg, run, day, log)
     photos = pick_photos(day_photos, cfg.photos_max)
     memories = []
@@ -1813,6 +1846,7 @@ def journal_day(
         or agenda
         or work
         or notes
+        or work_notes
         or flights
         or music
         or games
@@ -1849,6 +1883,7 @@ def journal_day(
             games,
             activity,
             notes,
+            work_notes,
             [
                 [c["_id"], c.get("tops"), c.get("tried"), c.get("retops")]
                 for c in climbs
@@ -1925,6 +1960,7 @@ def journal_day(
         screens,
         badges,
         spending,
+        work_notes,
     )
     collage = None
     if photos:
