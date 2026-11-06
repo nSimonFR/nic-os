@@ -260,6 +260,11 @@
       file = ./secrets/memos-token.age;
       mode = "0400";
     };
+    journal-work-owners = {
+      # GitHub owners whose repos count as work in the journal, one per line.
+      file = ./secrets/journal-work-owners.age;
+      mode = "0400";
+    };
     sure-journal-api-key = {
       # Sure API key, read-write: journal-daily (reads only) and Agent Vault.
       file = ./secrets/sure-journal-api-key.age;

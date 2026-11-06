@@ -3,7 +3,7 @@ One-sentence summary on top of a journal-daily memo, through tiny-llm-gate.
 
 The model sees the memo's visible text and the day's photo collage: links,
 collapsed <details> blocks (meeting titles, family history), the past-facing
-sections, birthdays and project notes are stripped first, since the default
+sections, birthdays, project and work notes are stripped first, since the default
 model runs in the cloud.
 """
 
@@ -41,7 +41,8 @@ SKIP = (
     "### 🌳",
     "### 🎂",
     "### 🛠",
-)  # the past, birthdays the calendar may not hold, side-project notes
+    "### 💻",
+)  # the past, birthdays the calendar may not hold, project and work notes
 
 
 def visible(text):

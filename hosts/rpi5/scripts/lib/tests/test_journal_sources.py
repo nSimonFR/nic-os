@@ -1,3 +1,4 @@
+import json
 import base64
 from datetime import date, datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -423,3 +424,69 @@ def test_weather_falls_back_when_the_api_has_no_values():
             FakeOpener([json_reply(empty)]),
             today=date(2026, 10, 27),
         )
+
+
+CLOUD_DISPATCH = """# Dispatch : api
+
+Une journée sur l'API : la pagination des commandes arrive.
+
+## acme/api
+
+### Commandes
+
+- Pagination de la liste des commandes.
+
+Court et ciblé.
+"""
+
+
+def test_clean_dispatch_reads_the_cloud_repo_heading():
+    assert js.clean_dispatch(CLOUD_DISPATCH)[2:] == [
+        "**api**",
+        "",
+        "*Commandes*",
+        "",
+        "- Pagination de la liste des commandes.",
+    ]
+
+
+def session(repo, start, last):
+    return {"repo_full_name": repo, "startedAt": start, "lastActivityAt": last}
+
+
+def test_work_repos_keep_the_owners_sessions_that_overlap_the_day():
+    lo = datetime.fromisoformat("2026-11-05T04:00:00+01:00").timestamp()
+    hi = lo + 86400
+    sessions = [
+        session("acme/api", "2026-11-04T10:00:00Z", "2026-11-05T09:00:00Z"),
+        session("acme/web", "2026-11-05T10:00:00.000Z", "2026-11-05T11:00:00.000Z"),
+        session("acme/old", "2026-11-01T10:00:00Z", "2026-11-04T10:00:00Z"),
+        session("acme/next", "2026-11-06T10:00:00Z", "2026-11-06T11:00:00Z"),
+        session("me/side", "2026-11-05T10:00:00Z", "2026-11-05T11:00:00Z"),
+    ]
+    assert js.work_repos(sessions, ("acme",), lo, hi) == ["acme/api", "acme/web"]
+
+
+def test_work_dispatch_notes_batch_the_repos_five_by_five():
+    lo = datetime.fromisoformat("2026-11-05T04:00:00+01:00").timestamp()
+    repos = [f"acme/r{i}" for i in range(7)]
+    calls = []
+
+    def run(cmd):
+        calls.append(cmd[-1])
+        if " api " in cmd[-1]:
+            return json.dumps(
+                {"sessions": [session(r, "2026-11-05T10:00:00Z", None) for r in repos]}
+            )
+        return CLOUD_DISPATCH
+
+    notes = js.work_dispatch_notes(run, ("acme",), lo, lo + 86400)
+    dispatches = [c for c in calls if " dispatch " in c]
+    assert len(dispatches) == 2
+    assert (
+        "--repos gh/acme/r0,gh/acme/r1,gh/acme/r2,gh/acme/r3,gh/acme/r4 "
+        in dispatches[0]
+    )
+    assert "omets les dépôts sans changement" in dispatches[0]
+    assert notes.count("**api**") == 2 and notes[0].startswith("Une journée")
+    assert js.work_dispatch_notes(run, (), lo, lo + 86400) == []

@@ -11,9 +11,13 @@ that the calendar owner did not decline. The owner is the attendee on most of
 the calendar's recent events, so their address is never configured.
 
 Weather: Open-Meteo's daily summary (free, keyless) for where the day happened.
+
+Notes: `entire dispatch`, local over side-project checkouts (dispatch_notes),
+cloud over the day's work repos (work_dispatch_notes).
 """
 
 import base64
+import json
 import re
 import string
 from collections import Counter
@@ -731,23 +735,28 @@ def activity_section(totals):
 
 
 DISPATCH_VOICE = "concis, en français"
+# The cloud dispatch reports every repo it is given, idle ones included.
+WORK_DISPATCH_VOICE = "concis, en français ; omets les dépôts sans changement"
+WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
 
 
 def clean_dispatch(md):
     """Markdown lines of an `entire dispatch`, fit for a collapsed block: no
-    title, `## [owner/repo](url)` -> `**repo**`, `### Topic` -> `*Topic*`, and
+    title, `## [owner/repo](url)` (or a cloud dispatch's bare `## owner/repo`)
+    -> `**repo**`, `### Topic` -> `*Topic*`, and
     the closing paragraph after the last bullet dropped. [] when it covers no
     repo (an idle window still gets an "Aucune activité" edition)."""
     import re
 
     lines = md.splitlines()
-    if not any(l.startswith("## [") for l in lines):
+    repo = re.compile(r"## \[?([\w.-]+/[\w.-]+)\]?")
+    if not any(repo.match(l) for l in lines):
         return []
     out = []
     for l in lines:
         if l.startswith("# "):
             continue
-        m = re.match(r"## \[([^\]]+)\]", l)
+        m = repo.match(l)
         if m:
             out.append(f"**{m.group(1).rsplit('/', 1)[-1]}**")
         elif l.startswith("### "):
@@ -826,6 +835,52 @@ def dispatch_notes(run, repos, lo, hi, user="nsimon", runuser="runuser", git="gi
                 f"cd {shlex.quote(repo)} && entire dispatch --local --all-branches "
                 f"--since {iso(lo)} --until {iso(hi)} --voice {shlex.quote(DISPATCH_VOICE)}",
             ]
+        )
+        lines = clean_dispatch(md)
+        if lines:
+            notes += ([""] if notes else []) + lines
+    return notes
+
+
+def work_repos(sessions, owners, lo, hi):
+    """Repos of `owners` that one of the user's Entire sessions touched in [lo, hi)."""
+
+    def ts(v):
+        return datetime.fromisoformat(v.replace("Z", "+00:00")).timestamp()
+
+    return sorted(
+        {
+            s["repo_full_name"]
+            for s in sessions
+            if s.get("repo_full_name", "").split("/")[0] in owners
+            and ts(s["startedAt"]) < hi
+            and ts(s.get("lastActivityAt") or s["startedAt"]) >= lo
+        }
+    )
+
+
+def work_dispatch_notes(run, owners, lo, hi, user="nsimon", runuser="runuser"):
+    """Work notes for [lo, hi): a cloud `entire dispatch` of the day's work repos
+    (from the user's Entire sessions), WORK_DISPATCH_BATCH repos per call. The
+    cloud only sees what reached a repo's default branch, on the day it landed."""
+    import shlex
+
+    def entire(args):
+        return run([runuser, "-l", user, "-c", "entire " + shlex.join(args)])
+
+    if not owners:
+        return []
+    sessions = json.loads(
+        entire(["api", "--to", "cell", "/api/v1/me/sessions?timezone=Europe/Paris"])
+    ).get("sessions", [])
+    repos = work_repos(sessions, owners, lo, hi)
+    iso = lambda t: datetime.fromtimestamp(t).astimezone().isoformat(timespec="seconds")
+    notes = []
+    for i in range(0, len(repos), WORK_DISPATCH_BATCH):
+        batch = ",".join(f"gh/{r}" for r in repos[i : i + WORK_DISPATCH_BATCH])
+        md = entire(
+            ["dispatch", "--repos", batch, "--since", iso(lo), "--until", iso(hi)]
+            + ["--voice", WORK_DISPATCH_VOICE]
         )
         lines = clean_dispatch(md)
         if lines:
