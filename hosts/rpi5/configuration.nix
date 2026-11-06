@@ -196,7 +196,8 @@ in
   # hits zero and the system freezes waiting for the hardware watchdog.
   # earlyoom misses thrash: MemAvailable read ~35% at 130 MB/s zram swap-in and
   # load 19, and 8 watchdog resets (2026-11-01..04) had no earlyoom trigger.
-  # min_ttl_ms makes the kernel OOM-kill once it can't keep 1s of working set.
+  # min_ttl_ms=1000 never fired (oldest generation ~28 s old at load 12, 5 more
+  # resets 2026-11-05/06); platform/psi-oom.nix acts on the stall instead.
   systemd.tmpfiles.settings.mglru-min-ttl."/sys/kernel/mm/lru_gen/min_ttl_ms".w.argument = "1000";
 
   services.earlyoom = {

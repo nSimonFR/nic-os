@@ -8,6 +8,7 @@
     ./cachix-agent.nix
     ./backups.nix
     ./auto-reboot.nix
+    ./psi-oom.nix # kernel OOM kill on a PSI memory stall, before the watchdog resets
     ./storj-backup.nix
   ];
 }
