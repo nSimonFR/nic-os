@@ -480,9 +480,10 @@ def test_work_dispatch_notes_batch_the_repos_five_by_five():
             )
         return CLOUD_DISPATCH
 
-    notes = js.work_dispatch_notes(run, ("acme",), lo, lo + 86400)
+    pauses = []
+    notes = js.work_dispatch_notes(run, ("acme",), lo, lo + 86400, sleep=pauses.append)
     dispatches = [c for c in calls if " dispatch " in c]
-    assert len(dispatches) == 2
+    assert len(dispatches) == 2 and pauses == [js.WORK_DISPATCH_PAUSE_S]
     assert (
         "--repos gh/acme/r0,gh/acme/r1,gh/acme/r2,gh/acme/r3,gh/acme/r4 "
         in dispatches[0]
@@ -490,3 +491,32 @@ def test_work_dispatch_notes_batch_the_repos_five_by_five():
     assert "omets les dépôts sans changement" in dispatches[0]
     assert notes.count("**api**") == 2 and notes[0].startswith("Une journée")
     assert js.work_dispatch_notes(run, (), lo, lo + 86400) == []
+
+
+def test_work_dispatch_retries_a_rate_limited_batch():
+    import subprocess
+
+    lo = datetime.fromisoformat("2026-11-05T04:00:00+01:00").timestamp()
+    tries = []
+
+    def run(cmd):
+        if " api " in cmd[-1]:
+            return json.dumps(
+                {"sessions": [session("acme/api", "2026-11-05T10:00:00Z", None)]}
+            )
+        tries.append(1)
+        if len(tries) < 3:
+            raise subprocess.CalledProcessError(1, cmd, stderr="status 429")
+        return CLOUD_DISPATCH
+
+    pauses = []
+    notes = js.work_dispatch_notes(run, ("acme",), lo, lo + 86400, sleep=pauses.append)
+    assert "**api**" in notes and len(tries) == 3 and len(pauses) == 2
+
+    def limited(cmd):
+        if " api " in cmd[-1]:
+            return run(cmd)
+        raise subprocess.CalledProcessError(1, cmd, stderr="status 429")
+
+    with pytest.raises(subprocess.CalledProcessError):
+        js.work_dispatch_notes(limited, ("acme",), lo, lo + 86400, sleep=pauses.append)

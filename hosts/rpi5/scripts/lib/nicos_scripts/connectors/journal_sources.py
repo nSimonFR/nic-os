@@ -738,6 +738,9 @@ DISPATCH_VOICE = "concis, en français"
 # The cloud dispatch reports every repo it is given, idle ones included.
 WORK_DISPATCH_VOICE = "concis, en français ; omets les dépôts sans changement"
 WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
+# 429 "dispatch rate limit" within about a minute of the previous one (measured).
+WORK_DISPATCH_PAUSE_S = 65
+WORK_DISPATCH_TRIES = 4
 
 
 def clean_dispatch(md):
@@ -859,11 +862,17 @@ def work_repos(sessions, owners, lo, hi):
     )
 
 
-def work_dispatch_notes(run, owners, lo, hi, user="nsimon", runuser="runuser"):
+def work_dispatch_notes(
+    run, owners, lo, hi, user="nsimon", runuser="runuser", sleep=None
+):
     """Work notes for [lo, hi): a cloud `entire dispatch` of the day's work repos
     (from the user's Entire sessions), WORK_DISPATCH_BATCH repos per call. The
     cloud only sees what reached a repo's default branch, on the day it landed."""
     import shlex
+    import subprocess
+    import time
+
+    sleep = sleep or time.sleep
 
     def entire(args):
         return run([runuser, "-l", user, "-c", "entire " + shlex.join(args)])
@@ -878,10 +887,26 @@ def work_dispatch_notes(run, owners, lo, hi, user="nsimon", runuser="runuser"):
     notes = []
     for i in range(0, len(repos), WORK_DISPATCH_BATCH):
         batch = ",".join(f"gh/{r}" for r in repos[i : i + WORK_DISPATCH_BATCH])
-        md = entire(
-            ["dispatch", "--repos", batch, "--since", iso(lo), "--until", iso(hi)]
-            + ["--voice", WORK_DISPATCH_VOICE]
-        )
+        for attempt in range(WORK_DISPATCH_TRIES):
+            if i or attempt:
+                sleep(WORK_DISPATCH_PAUSE_S)
+            try:
+                md = entire(
+                    [
+                        "dispatch",
+                        "--repos",
+                        batch,
+                        "--since",
+                        iso(lo),
+                        "--until",
+                        iso(hi),
+                    ]
+                    + ["--voice", WORK_DISPATCH_VOICE]
+                )
+                break
+            except subprocess.CalledProcessError:
+                if attempt == WORK_DISPATCH_TRIES - 1:
+                    raise
         lines = clean_dispatch(md)
         if lines:
             notes += ([""] if notes else []) + lines
