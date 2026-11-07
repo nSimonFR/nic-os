@@ -187,8 +187,13 @@ jobs:
         with:
           ref: ${{ github.head_ref }}
           token: ${{ secrets.RENOVATE_TOKEN }}
+      # The PR branch may predate the scripts; the merge ref has them.
+      - uses: actions/checkout@v7
+        with:
+          path: nicos
+          sparse-checkout: scripts/t3code-fork
       - name: Pin the release assets
-        run: scripts/t3code-fork/pin.sh
+        run: nicos/scripts/t3code-fork/pin.sh
 
   report:
     name: report failure
