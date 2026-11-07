@@ -3,7 +3,8 @@
 Writes the window's end to ``sensor.door_auto_open_until`` in Home Assistant; the HA
 automation ``door_auto_open`` unlocks the Intratone door on a ring while it is in the
 future. A REST-set state does not survive an HA restart, so a restart closes the window.
-Nico's DM only: the allowed groups must not be able to open the building.
+Nico's DM and the group with Alfie only; « Alfie Postule ! » stays out (and is diverted
+by candidatures-relay before any command anyway).
 """
 
 from __future__ import annotations
@@ -17,7 +18,10 @@ from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger("hermes_plugins.door")
 
-OWNER = "82389391"  # Nico (a DM's chat_id == user id)
+ALLOWED_CHATS = {
+    "82389391",  # Nico's DM (a DM's chat_id == user id)
+    "-1003356011841",  # group "nSimon, ServaTilis and Alfie"
+}
 SENSOR = "sensor.door_auto_open_until"
 # Agent Vault (HTTP_PROXY) swaps the placeholder for the real token.
 TOKEN = "__ha_token__"
@@ -83,8 +87,8 @@ def _hhmm(t: datetime) -> str:
 
 
 def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) -> str:
-    if source is None or str(getattr(source, "chat_id", "")) != OWNER:
-        return "🚫 /door only works in Nico's DM."
+    if source is None or str(getattr(source, "chat_id", "")) not in ALLOWED_CHATS:
+        return "🚫 /door only works in Nico's DM and the group with Alfie."
     now = now or datetime.now(timezone.utc)
     arg = (raw_args or "").strip().lower()
     try:
