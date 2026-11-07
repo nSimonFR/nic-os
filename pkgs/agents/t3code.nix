@@ -21,6 +21,7 @@
   stdenv,
   fetchurl,
   autoPatchelfHook,
+  vulkan-loader,
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
@@ -47,8 +48,12 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
-  # libstdc++ and libatomic, for t3 itself and node-pty's pty.node.
-  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ stdenv.cc.cc.lib ];
+  # libstdc++ and libatomic, for t3 itself and node-pty's pty.node; libvulkan for
+  # the transcribe-cpp ggml-vulkan backend.
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
+    stdenv.cc.cc.lib
+    vulkan-loader
+  ];
 
   dontStrip = true;
 
@@ -58,7 +63,7 @@ stdenv.mkDerivation {
     runHook preInstall
 
     # Alpine variant of a lib the gnu one already covers; it would fail autoPatchelf.
-    rm -rf node_modules/@ff-labs/fff-bin-linux-arm64-musl
+    rm -rf node_modules/@ff-labs/fff-bin-linux-arm64-musl node_modules/@koromix/koffi-linux-arm64/musl_arm64
 
     mkdir -p $out/libexec $out/bin
     cp -r . $out/libexec/t3code
