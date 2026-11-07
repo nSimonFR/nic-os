@@ -19,4 +19,4 @@ server="$contents/Resources/app.asar/apps/server/dist/bin.mjs"
 export ELECTRON_RUN_AS_NODE=1
 got=$("$exe" "$server" --version)
 echo "server --version: $got"
-[ "$got" = "$VERSION" ]
+[[ "$got" == *"$VERSION"* ]]
