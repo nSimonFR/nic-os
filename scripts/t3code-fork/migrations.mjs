@@ -74,6 +74,21 @@ if (process.argv[2] === "detach") {
     }
   }
 
+  // The block's own tests migrate "up to" one of its ids.
+  const delta = next - firstId;
+  for (const [i, name] of names.entries()) {
+    const test = path.join(migrationsDir, `${pad(next + i)}_${name}.test.ts`);
+    if (!fs.existsSync(test)) continue;
+    fs.writeFileSync(
+      test,
+      read(test).replace(/toMigrationInclusive: (\d+)/g, (m, n) =>
+        Number(n) >= firstId && Number(n) < firstId + names.length
+          ? `toMigrationInclusive: ${Number(n) + delta}`
+          : m,
+      ),
+    );
+  }
+
   let out = source;
   const imports = names.map(
     (name, i) => `import Migration${pad4(next + i)} from "./Migrations/${pad(next + i)}_${name}.ts";\n`,
