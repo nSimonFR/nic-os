@@ -21,19 +21,20 @@
   stdenv,
   fetchurl,
   autoPatchelfHook,
+  vulkan-loader,
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.1.7-nightly.20261102.4080";
+  version = "0.1.8-nightly.20261107.4301";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-JgagKYnJrvpQ34eTCYXuXo2J7S7R7R4SAqL5sqy2E8c=";
+      hash = "sha256-O/fNqhlxmeAj8J4Tauau4YnHkEzgxRIbvTk+Bne0esQ=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
-      hash = "sha256-GzLOs9wGq9b5wMFq/iqya8zOuY1hwM0O2tgKm8e91nM=";
+      hash = "sha256-40FSRgu0vKTTXN4KLBqcg09gT10Kk7D1Nh1XRsbr5p4=";
     };
   };
 in
@@ -47,8 +48,12 @@ stdenv.mkDerivation {
   };
 
   nativeBuildInputs = lib.optionals stdenv.hostPlatform.isLinux [ autoPatchelfHook ];
-  # libstdc++ and libatomic, for t3 itself and node-pty's pty.node.
-  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [ stdenv.cc.cc.lib ];
+  # libstdc++ and libatomic, for t3 itself and node-pty's pty.node; libvulkan for
+  # the transcribe-cpp ggml-vulkan backend.
+  buildInputs = lib.optionals stdenv.hostPlatform.isLinux [
+    stdenv.cc.cc.lib
+    vulkan-loader
+  ];
 
   dontStrip = true;
 
@@ -58,7 +63,7 @@ stdenv.mkDerivation {
     runHook preInstall
 
     # Alpine variant of a lib the gnu one already covers; it would fail autoPatchelf.
-    rm -rf node_modules/@ff-labs/fff-bin-linux-arm64-musl
+    rm -rf node_modules/@ff-labs/fff-bin-linux-arm64-musl node_modules/@koromix/koffi-linux-arm64/musl_arm64
 
     mkdir -p $out/libexec $out/bin
     cp -r . $out/libexec/t3code
