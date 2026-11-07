@@ -1294,17 +1294,17 @@
     },
     "nixpkgs-ollama": {
       "locked": {
-        "lastModified": 1787364730,
-        "narHash": "sha256-NcYt9QJfpJiF1lAyN8BDPB4EeScbPU+EwQqPiBElrpU=",
+        "lastModified": 1794041458,
+        "narHash": "sha256-yPZSypqbPS25tmgnF5GlLuzfmXzeYQszxuTB5/Ic0fM=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a831408e6378bc02ebf8cc09b52c96ca86f6bab4",
+        "rev": "432465c1ea13c62ad2fa3fe522af6f7b2d33bd87",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a831408e6378bc02ebf8cc09b52c96ca86f6bab4",
+        "rev": "432465c1ea13c62ad2fa3fe522af6f7b2d33bd87",
         "type": "github"
       }
     },
