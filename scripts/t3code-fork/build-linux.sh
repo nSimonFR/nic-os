@@ -23,7 +23,7 @@ tar -xzf "out/t3-$VERSION-issues-linux-arm64.tar.gz" -C smoke
 t3=(smoke/*/t3)
 got=$("${t3[0]}" --version)
 echo "t3 --version: $got"
-[[ "$got" == *"$VERSION"* ]]
+[[ $got == *"$VERSION"* ]]
 
 # The macOS job needs the server build too.
 tar -C t3code/apps/server/dist -czf out/server-dist.tar.gz .
