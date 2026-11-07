@@ -24,7 +24,7 @@
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.1.7-nightly.20261102.4080";
+  version = "0.1.8-nightly.20261107.4314";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
