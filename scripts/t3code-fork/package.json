@@ -1,0 +1,6 @@
+{
+  "name": "t3code-fork-scripts",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@electron/asar": "3.4.1" }
+}

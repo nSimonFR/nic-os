@@ -1,0 +1,308 @@
+# Builds the nSimonFR-ai/t3code `-issues.1` release for a t3code nightly bump.
+#
+# Renovate bumps `version` in pkgs/agents/t3code.nix, but both t3code packages
+# install the fork's build of that nightly (upstream's nightly + the Issues
+# stack, spec.md in the fork), which exists only once someone builds it. This
+# does: merge the nightly into the fork branch, gate it, build the linux-arm64
+# archive and the macOS app, publish the release, and pin the new hashes on the
+# PR. A PR whose release already exists only gets its hashes pinned.
+#
+# A merge that conflicts beyond the lockfile, or a failing gate, stops here with
+# a PR comment: that needs a person, with the fork's spec.md.
+#
+# Lives here, not in the fork: nSimonFR-ai's bot token cannot push workflows
+# there, and the fork's .github/workflows must stay identical to its main.
+name: T3 Code fork release
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - pkgs/agents/t3code.nix
+      - pkgs/agents/t3code-desktop.nix
+      - .github/workflows/t3code-fork-release.yml
+      - scripts/t3code-fork/**
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Nightly to build (default, the version in pkgs/agents/t3code.nix)
+        required: false
+
+concurrency:
+  group: t3code-fork-${{ github.head_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  FORK: nSimonFR-ai/t3code
+  GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+  # Public T3 Connect config; a build without it silently has Connect off.
+  T3CODE_RELAY_URL: https://relay.t3.codes
+  T3CODE_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmsudDMuY29kZXMk
+  T3CODE_CLERK_JWT_TEMPLATE: t3-relay
+  T3CODE_CLERK_CLI_OAUTH_CLIENT_ID: hzxSgY2cH10sDU2r
+
+jobs:
+  plan:
+    name: plan
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      built: ${{ steps.plan.outputs.built }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref }}
+          token: ${{ secrets.RENOVATE_TOKEN }}
+      - id: plan
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          version=${INPUT_VERSION:-$(sed -nE 's/^ *version = "([^"]+)";.*/\1/p' pkgs/agents/t3code.nix | head -1)}
+          tag=v$version-issues.1
+          if gh release view "$tag" --repo "$FORK" >/dev/null 2>&1; then built=true; else built=false; fi
+          {
+            echo "version=$version"
+            echo "tag=$tag"
+            echo "built=$built"
+          } >>"$GITHUB_OUTPUT"
+          echo "$tag: release exists=$built" >>"$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: fork + linux-arm64
+    needs: plan
+    if: needs.plan.outputs.built == 'false'
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 90
+    outputs:
+      sha: ${{ steps.push.outputs.sha }}
+      branch: ${{ steps.push.outputs.branch }}
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: nicos
+          sparse-checkout: scripts/t3code-fork
+      - name: Check out the fork
+        run: |
+          set -euo pipefail
+          git clone --quiet "https://x-access-token:${GH_TOKEN}@github.com/${FORK}.git" t3code
+          git -C t3code remote add up https://github.com/pingdotgg/t3code.git
+          git -C t3code config user.name nSimonFR-ai
+          git -C t3code config user.email 265587706+nSimonFR-ai@users.noreply.github.com
+
+      - name: Merge the nightly
+        working-directory: t3code
+        run: ../nicos/scripts/t3code-fork/merge-upstream.sh "$VERSION" 2>&1 | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - uses: voidzero-dev/setup-vp@v1
+        with:
+          node-version-file: t3code/package.json
+          run-install: false
+
+      - name: Install, stamp the version
+        working-directory: t3code
+        env:
+          pnpm_config_frozen_lockfile: "false"
+        run: |
+          set -euo pipefail
+          vp install
+          node scripts/update-release-package-versions.ts "$VERSION"
+          vp install
+          if [ -n "$(git status --porcelain)" ]; then
+            git add -A
+            git commit -q -m "chore: stamp $VERSION and refresh the lockfile"
+          fi
+
+      - name: Gate, typecheck and migrations
+        working-directory: t3code
+        run: |
+          set -euo pipefail
+          vp run typecheck
+          (cd apps/server && vp test run src/persistence)
+
+      - name: Push the fork branch
+        id: push
+        working-directory: t3code
+        run: |
+          set -euo pipefail
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          git push origin "HEAD:refs/heads/$branch"
+          echo "branch=$branch" >>"$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
+
+      - name: Build web, server and the single executable
+        working-directory: t3code
+        run: |
+          set -euo pipefail
+          (cd apps/web && vp build)
+          (cd apps/server && node scripts/cli.ts build)
+          node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client
+          node apps/server/scripts/cli.ts build-exe --verbose
+
+      - name: Assemble the linux-arm64 archive
+        run: |
+          set -euo pipefail
+          mkdir out
+          gh release download "v$VERSION" --repo pingdotgg/t3code \
+            --pattern "t3-$VERSION-linux-arm64.tar.gz" --dir out
+          nicos/scripts/t3code-fork/assemble-linux.sh \
+            "out/t3-$VERSION-linux-arm64.tar.gz" t3code/apps/server/dist-exe/t3 \
+            t3code/apps/server/dist/client "out/t3-$VERSION-issues-linux-arm64.tar.gz"
+          rm "out/t3-$VERSION-linux-arm64.tar.gz"
+
+      - name: Smoke-test the archive
+        run: |
+          set -euo pipefail
+          mkdir smoke
+          tar -xzf "out/t3-$VERSION-issues-linux-arm64.tar.gz" -C smoke
+          t3=(smoke/*/t3)
+          got=$("${t3[0]}" --version)
+          echo "t3 --version: $got"
+          [ "$got" = "$VERSION" ]
+
+      - name: Hand the server build to the macOS job
+        run: |
+          tar -C t3code/apps/server/dist -czf out/server-dist.tar.gz .
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux
+          path: out/*
+          if-no-files-found: error
+
+  mac:
+    name: macOS app
+    needs: [plan, build]
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: scripts/t3code-fork
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v8
+        with:
+          name: linux
+          path: dl
+      - name: Repack upstream's app with the fork's server
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --repo pingdotgg/t3code \
+            --pattern "T3-Code-$VERSION-arm64.zip" --dir dl
+          mkdir app dist out
+          ditto -x -k "dl/T3-Code-$VERSION-arm64.zip" app
+          tar -xzf dl/server-dist.tar.gz -C dist
+          (cd scripts/t3code-fork && npm install --no-audit --no-fund --no-package-lock)
+          node scripts/t3code-fork/repack-mac.mjs app dist \
+            "out/T3-Code-$VERSION-issues-darwin-arm64.zip"
+      - name: Smoke-test the app's server
+        run: |
+          set -euo pipefail
+          contents="app/T3 Code (Nightly).app/Contents"
+          exe="$contents/MacOS/T3 Code (Nightly)"
+          server="$contents/Resources/app.asar/apps/server/dist/bin.mjs"
+          export ELECTRON_RUN_AS_NODE=1
+          got=$("$exe" "$server" --version)
+          echo "server --version: $got"
+          [ "$got" = "$VERSION" ]
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mac
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    name: publish release
+    needs: [plan, build, mac]
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      SHA: ${{ needs.build.outputs.sha }}
+      BRANCH: ${{ needs.build.outputs.branch }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: "{linux,mac}"
+          path: dl
+          merge-multiple: true
+      - name: Publish
+        run: |
+          set -euo pipefail
+          rm dl/server-dist.tar.gz
+          (cd dl && sha256sum ./* | sed 's| \./| |' >SHA256SUMS)
+          cat >notes.md <<EOF
+          Personal build for nic-os. Not an official release.
+
+          Built on \`$BRANCH\` (\`${SHA:0:10}\`): upstream \`$VERSION\` + the Issues stack and the other fork changes in \`spec.md\`, by .github/workflows/t3code-fork-release.yml in nSimonFR/nic-os.
+          The Mac app is upstream's with the fork's server swapped in and an ad hoc signature.
+          Issue migrations follow upstream's highest id; back up \`statev2.sqlite\` before running a new migration, it can't be rolled back.
+          EOF
+          gh release create "$TAG" dl/* --repo "$FORK" --target "$SHA" --prerelease \
+            --title "$TAG" --notes-file notes.md
+
+  pin:
+    name: pin hashes
+    needs: [plan, release]
+    if: always() && github.event_name == 'pull_request' && needs.plan.result == 'success' && (needs.plan.outputs.built == 'true' || needs.release.result == 'success')
+    runs-on: ubuntu-latest
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: ${{ needs.plan.outputs.tag }}
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.RENOVATE_TOKEN }}
+      - name: Pin the release assets
+        run: |
+          set -euo pipefail
+          mkdir dl
+          gh release download "$TAG" --repo "$FORK" --dir dl \
+            --pattern '*-linux-arm64.tar.gz' --pattern '*-darwin-arm64.zip'
+          gh release download "v$VERSION" --repo pingdotgg/t3code --dir dl \
+            --pattern "t3-$VERSION-darwin-arm64.tar.gz"
+          python3 scripts/t3code-fork/pin-hashes.py \
+            "dl/t3-$VERSION-issues-linux-arm64.tar.gz" \
+            "dl/t3-$VERSION-darwin-arm64.tar.gz" \
+            "dl/T3-Code-$VERSION-issues-darwin-arm64.zip"
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name nSimonFR-ai
+            git config user.email 265587706+nSimonFR-ai@users.noreply.github.com
+            git commit -qam "chore(t3code): pin the $TAG hashes"
+            git push origin "HEAD:$HEAD_REF"
+          fi
+
+  report:
+    name: report failure
+    needs: [plan, build, mac, release, pin]
+    if: failure() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          BUILD: ${{ needs.build.result }}
+          MAC: ${{ needs.mac.result }}
+          RELEASE: ${{ needs.release.result }}
+          PIN: ${{ needs.pin.result }}
+        run: |
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY" --body \
+            "The fork release for \`${{ needs.plan.outputs.tag }}\` was not built: [run]($RUN) (fork+linux: $BUILD, mac: $MAC, release: $RELEASE, pin: $PIN). A merge conflict or a failing gate needs the fork's \`spec.md\`: resolve it on the fork's \`nicos/issues-nightly-*\` branch, publish the release by hand, then re-run this workflow."
