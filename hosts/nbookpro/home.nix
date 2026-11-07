@@ -7,6 +7,7 @@
 {
   imports = [
     ./applications-patch.nix
+    ./cloud-mount.nix
     ./linear-t3-relay.nix
     ./entire-brain.nix
     ./sudo-agent-forward.nix
