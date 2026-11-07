@@ -7,6 +7,7 @@ LINUX_TGZ and DESKTOP_ZIP are the fork's -issues release; DARWIN_TGZ is
 upstream's CLI archive. scripts/nix-fix-hashes.py cannot do this: the URLs
 interpolate the version and the fork asset does not exist until it is built.
 """
+
 import base64
 import hashlib
 import pathlib
