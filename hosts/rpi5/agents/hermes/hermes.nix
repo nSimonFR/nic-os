@@ -395,7 +395,11 @@ let
     # by memory.provider, so it is unaffected). candidatures-relay diverts ONE
     # Telegram group (Alfie's job applications) to a JSONL inbox read by the Mac
     # bridge, before auth and before any LLM — see plugins/candidatures-relay.
-    plugins.enabled = [ "candidatures-relay" ];
+    # door: `/door` auto-open window for the hall intercom — see plugins/door.
+    plugins.enabled = [
+      "candidatures-relay"
+      "door"
+    ];
 
     # External memory provider. `holographic` is the local, zero-API-key store
     # (SQLite + FTS5 full-text search + fact extraction + consolidation) — a real
@@ -475,6 +479,9 @@ let
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/candidatures-relay ${hermesHome}/candidatures
     ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${./plugins/candidatures-relay}/" "${hermesHome}/plugins/candidatures-relay/"
+    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/door
+    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+      "${./plugins/door}/" "${hermesHome}/plugins/door/"
 
     # Cron workspace scripts (executable). Same NO --delete rule: the workspace
     # also holds live runtime state (kanban.db, sandboxes, job-alerts/.seen_jobs.json)
