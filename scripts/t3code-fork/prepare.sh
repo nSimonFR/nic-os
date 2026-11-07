@@ -14,7 +14,13 @@ if [ -n "$(git status --porcelain)" ]; then
   git commit -q --no-verify -m "chore: stamp $VERSION and refresh the lockfile"
 fi
 
-vp run typecheck
+# The effect language service prints a suggestion for most classes; keep the log
+# quiet enough to find the task that actually failed.
+if ! vp run typecheck >typecheck.log 2>&1; then
+  grep -vE 'suggestion|TaggedError|^[0-9]+ +|^ *~+$|^$' typecheck.log | tail -80
+  vp run --last-details || true
+  exit 1
+fi
 (cd apps/server && vp test run src/persistence)
 
 branch=$(git rev-parse --abbrev-ref HEAD)
