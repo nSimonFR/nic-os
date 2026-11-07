@@ -24,16 +24,16 @@
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.1.8-nightly.20261107.4314";
+  version = "0.1.7-nightly.20261102.4080";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-16PplQu8zEiV0GWKcHlSbwpqwK0Fw1Rlzsc1ETpK1Og=";
+      hash = "sha256-JgagKYnJrvpQ34eTCYXuXo2J7S7R7R4SAqL5sqy2E8c=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
-      hash = "sha256-Jp3q0p2/BUObw3gA3mpBZgK1CQI0PXQEb+NCb5ggHPA=";
+      hash = "sha256-GzLOs9wGq9b5wMFq/iqya8zOuY1hwM0O2tgKm8e91nM=";
     };
   };
 in
