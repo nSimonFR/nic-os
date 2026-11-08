@@ -71,6 +71,10 @@ in
         autocomplete = "google";
       };
 
+      # Upstream 3.0. Caps how long one slow engine can hold the page; one that
+      # misses it is dropped from that query only. Kept engines answer ≤0.5 s.
+      outgoing.request_timeout = 1.5;
+
       ui = {
         center_alignment = true;
         results_on_new_tab = true;
@@ -155,9 +159,12 @@ in
           name = "fynd";
           disabled = false;
         }
+        # Disabled for speed: 0.9-1.5 s alone vs ≤0.5 s for the rest, and a page
+        # waits for its slowest engine — 1.3-2.0 s with it, ~0.6 s without
+        # (measured 2026-11-08).
         {
           name = "seznam";
-          disabled = false;
+          disabled = true;
         }
         # The only other real general index here. Queries reach it from this box
         # rather than the browser, which is the point of a metasearch proxy.
@@ -169,10 +176,8 @@ in
           name = "wiby";
           disabled = false;
         } # small-web long tail
-        {
-          name = "searchmysite";
-          disabled = false;
-        }
+        # searchmysite left at upstream's disabled: Cloudflare 403s /search/?q=
+        # from this IP whatever the user-agent (2026-11-08).
       ];
     };
   };
