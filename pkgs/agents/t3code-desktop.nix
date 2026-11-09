@@ -23,7 +23,7 @@ stdenvNoCC.mkDerivation {
 
   src = fetchurl {
     url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.1/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
-    hash = "sha256-TQDt6WmlwdczLVNnzjP2x06qVndLZ9/Cpeimf2lFLvo=";
+    hash = "sha256-fFM1lQ25AGg765wbmPReGeAtvDiMGxohaGCjxfKEzfI=";
   };
 
   nativeBuildInputs = [ unzip ];

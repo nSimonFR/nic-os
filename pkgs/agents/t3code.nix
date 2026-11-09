@@ -30,11 +30,11 @@ let
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-JgagKYnJrvpQ34eTCYXuXo2J7S7R7R4SAqL5sqy2E8c=";
+      hash = "sha256-4vYaWwsLE1g+q8/n0309p1U2JJQIuYIILDzHh8LRiLY=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
-      hash = "sha256-GzLOs9wGq9b5wMFq/iqya8zOuY1hwM0O2tgKm8e91nM=";
+      hash = "sha256-Q+ybVymVmg36HkTad0/f5xcWiS7FQJGA2hcPnNTZGpE=";
     };
   };
 in
