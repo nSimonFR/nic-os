@@ -456,6 +456,8 @@
         in
         {
           inherit (self.packages.${system}) nicos-scripts;
+          # TEMPORARY (rxresume-v6 PR): makes CI compute the x86_64 pnpmDeps hash. Drop before merge.
+          reactive-resume-pnpm-deps = inputs.reactive-resume-nix.packages.${system}.reactive-resume.pnpmDeps;
           formatting = (treefmtFor system).config.build.check self;
           # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
           claude-aperture-shim =
