@@ -72,6 +72,11 @@ let
       type = "http";
       url = notesMcpUrl;
     };
+    # OAuth sign-in happens in the client (/mcp); no token in config.
+    calcom = {
+      type = "http";
+      url = "https://mcp.cal.com/mcp";
+    };
   };
 
   # Pre-built JSON for Cursor (Nix-generated, no secrets in the file)
