@@ -345,8 +345,9 @@ in
   # Tailscale Drive shares /mnt/data/cloud (see tailscale-serve.nix). Bind-
   # mounting the user-files dir there gives Drive clients a clean view of
   # just the user's files — no config/, data/, appdata_* leaking out.
-  # Same shape as the SSD overlay in immich.nix: tmpfiles pre-creates the
-  # mountpoint, systemd.mounts wires the bind into local-fs.target.
+  # No tmpfiles rule for /mnt/data/cloud: systemd creates the mountpoint, and a
+  # `d … 0755 root root` rule re-ran on every switch *through* the bind, leaving
+  # the files dir root:root with ACL mask r-x (web uploads + ~/Cloud writes failed).
   systemd.tmpfiles.rules = [
     # The datadir parent must be root-owned. The Nextcloud module's tmpfiles
     # only manage <datadir>/config and <datadir>/data — when the parent is
@@ -355,7 +356,6 @@ in
     # silently leaves the symlink stale and breaks `occ` boot ("data dir
     # invalid"). Owning the parent root:root removes the escalation.
     "d /mnt/data/nextcloud 0755 root root -"
-    "d /mnt/data/cloud 0755 root root -"
   ];
 
   # Defensive: keep the user-files dir owned by the php-fpm user. If it ever ends
