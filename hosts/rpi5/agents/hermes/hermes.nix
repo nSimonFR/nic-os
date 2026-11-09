@@ -390,6 +390,22 @@ let
     # No "gateway shutting down" ping to the home DM on every restart: ~12/day
     # (deploys + earlyoom kills). Interrupted-task pings to the active chat still go out.
     platforms.telegram.gateway_restart_notification = false;
+    # One gateway serves every profile (multiplexing). The "candidatures" profile
+    # (Alfie's job search, ~/.hermes/profiles/candidatures, deployed from the private
+    # job-scout repo) has no bot of its own: routes below send it messages from the
+    # shared bot. Trial: only Nico's messages in Alfie's group; Alfie's still go to
+    # the Mac bridge through candidatures-relay (its passthrough_users file lets
+    # Nico's through). Cutover: drop user_id here and empty the relay binding.
+    gateway.multiplex_profiles = true;
+    gateway.profile_routes = [
+      {
+        name = "candidatures-trial";
+        platform = "telegram";
+        chat_id = "-1003331502255";
+        user_id = "82389391";
+        profile = "candidatures";
+      }
+    ];
     # Telegram is a plugin since v0.22. Its import + register() took ~36s on the
     # Pi after a deploy (cold store paths, memory pressure); past the 10s default
     # the gateway drops the adapter and never connects Telegram.

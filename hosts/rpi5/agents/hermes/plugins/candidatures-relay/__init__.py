@@ -5,6 +5,8 @@
 - Chaque message de cette conversation est ajouté à ``inbox.jsonl`` puis avalé
   (``{"action": "skip"}``) : Hermes ne le voit pas, ne le stocke pas, n'y répond pas.
 - Le pont du Mac lit la file par SSH et répond lui-même via l'API Bot.
+- Sauf les expéditeurs listés dans ``passthrough_users`` : leurs messages vont à Hermes, qui les
+  route vers le profil « candidatures » (essai avant la bascule).
 Tout le reste passe inchangé. En cas d'erreur, le message est quand même avalé s'il vient
 de la conversation liée (fail-closed : on ne veut pas qu'Hermes réponde à sa place).
 """
@@ -22,6 +24,9 @@ logger = logging.getLogger("hermes_plugins.candidatures_relay")
 HOME = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes")) / "candidatures"
 CHAT_FILE = HOME / "chat_id"
 INBOX = HOME / "inbox.jsonl"
+# One user id per line: their messages in the bound chat are NOT diverted, so Hermes routes
+# them (gateway.profile_routes -> the "candidatures" profile). Read on every message.
+PASSTHROUGH = HOME / "passthrough_users"
 # Nico et Alfie (chat_id d'un DM == user id)
 MEMBERS = {"82389391", "8627259779"}
 BIND_CMD = "/lier_candidatures"
@@ -32,6 +37,13 @@ def _bound_chat() -> str | None:
         return CHAT_FILE.read_text().strip() or None
     except OSError:
         return None
+
+
+def _passthrough() -> set[str]:
+    try:
+        return {l.strip() for l in PASSTHROUGH.read_text().splitlines() if l.strip()}
+    except OSError:
+        return set()
 
 
 def _document(event) -> dict | None:
@@ -91,6 +103,8 @@ def _on_dispatch(event=None, **_kw):
         return {"action": "skip", "reason": "candidatures-relay: liaison"}
 
     if not bound or chat != bound:
+        return None
+    if user in _passthrough():
         return None
     try:
         _append(
