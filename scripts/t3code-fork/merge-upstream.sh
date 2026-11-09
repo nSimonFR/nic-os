@@ -51,7 +51,7 @@ if ! git merge --no-ff --no-commit "$tag" >/dev/null; then
 fi
 
 # The fork keeps its own .github/workflows: its token cannot push upstream's.
-git rm -rq --ignore-unmatch .github/workflows
+git rm -rqf --ignore-unmatch .github/workflows
 git checkout "origin/main" -- .github/workflows
 node "$here/migrations.mjs" attach
 
