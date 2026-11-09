@@ -49,6 +49,10 @@
     rxresume-api-key = {
       file = ./secrets/rxresume-api-key.age;
     };
+    # Alfie's own Reactive Resume account (her CVs and application tracker), same broker.
+    rxresume-alfie-api-key = {
+      file = ./secrets/rxresume-alfie-api-key.age;
+    };
     immich-api-key = {
       file = ./secrets/immich-api-key.age;
     };
