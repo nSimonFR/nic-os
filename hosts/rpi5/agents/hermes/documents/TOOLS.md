@@ -42,9 +42,9 @@ no HTTP gateway to curl.
 - **Models / routing:** configured inline in `hermes.nix`. Hermes points at
   **Aperture** (`http://ai.gate-mintaka.ts.net/v1`), which forwards to
   tiny-llm-gate so usage and cost land on the observability dashboard. Current
-  model: `openai/gpt-6.1-sol` (GPT-6.1 Sol, plan quota) by default; `/model` also
-  offers `openai/gpt-6-luna` (lighter) and `gpt-6` (GPT-6 Astra) for a hard task,
-  session-scoped. `asale-*` ids spend paid credits: only on purpose. **No Anthropic fallback** — deliberately; see the long
+  model: `openai/gpt-6-luna` (GPT-6 Luna) by default; `/model` also offers
+  `openai/gpt-6.1-sol` (GPT-6.1 Sol) and `gpt-6` (GPT-6 Astra) for a harder task,
+  session-scoped, all on the plan quota. `asale-*` ids spend paid credits: only on purpose. **No Anthropic fallback** — deliberately; see the long
   note in `hermes.nix`, do not re-add one.
 
 ## Config Changes
