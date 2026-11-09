@@ -11,14 +11,20 @@
 #     binds 127.0.0.1:13337 and a proxy on 127.0.0.1:13336 (what the 443 nginx
 #     path-mux front-proxy /rxresume/ → here) wakes it on first request and stops
 #     it after 10 min idle — reclaiming its ~367 MB RSS on this 4 GB Pi. The AI
-#     agent workspace IS enabled (REDIS_URL → shared Redis DB 7 + ENCRYPTION_SECRET),
-#     which adds long-lived SSE while an agent chat is open; socket-activation stays
+#     assistant IS enabled (REDIS_URL → shared Redis DB 7 + ENCRYPTION_SECRET),
+#     which adds long-lived SSE while a chat is open; socket-activation stays
 #     safe because that activity resets the idle timer and idle-stop only fires once
 #     the chat closes. JWT auth (stable AUTH_SECRET) survives a cold wake.
 #     Public exposure means internet scanners can wake it more often than tailnet.
 #
-# Migrations self-apply on boot inside the app (apps/server/src/startup/checks.ts),
-# so there is no migrate oneshot — the app just needs a reachable DB.
+# v6 (6.1.x): migrations still self-apply on boot, so there is no migrate oneshot.
+# The v6 migrations drop columns v5 reads: a v5 binary cannot run against a migrated
+# DB, so rolling back means restoring the pre-upgrade dump (PR runbook).
+# MCP: v6 serves a stateless streamable-HTTP MCP at /mcp (x-api-key or OAuth), so it
+# is https://<tailnet>/rxresume/mcp publicly and http://rxresume.home.arpa:13336/mcp
+# through Agent Vault (agent-vault.nix already injects x-api-key for that host).
+# OAuth sign-in for MCP clients is NOT supported under the /rxresume sub-path (its
+# well-known metadata lives at the domain root): use an API key.
 {
   config,
   lib,
@@ -109,6 +115,10 @@ in
     settings = {
       # Recommended on constrained hardware (upstream .env.example): skip sharp.
       FLAG_DISABLE_IMAGE_PROCESSING = "true";
+      # nginx (front-proxy) appends the client to X-Forwarded-For and the
+      # socket-activate proxy relays it over loopback: trust only that hop, so
+      # v6's per-visitor auth/API rate limits key on the real client, not 127.0.0.1.
+      TRUSTED_PROXIES = "127.0.0.1";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
       # AI providers (Settings → AI): allow a provider baseURL on the Aperture
@@ -121,12 +131,12 @@ in
       # through Aperture (no embeddings → no /v1/embeddings 404). ENCRYPTION_SECRET
       # (from the env file) enables the AI-providers feature.
       FLAG_ALLOW_UNSAFE_AI_BASE_URL = "true";
-      # AI agent workspace (chat assistant that applies edits): needs REDIS_URL +
-      # ENCRYPTION_SECRET. Point at the shared Redis (databases.nix) on a spare DB
-      # index (0-6 are used by immich/dawarich/affine/nextcloud/etc.). Enabling
-      # this adds long-lived SSE while a chat is open — fine under socket-activation
-      # (activity resets the idle timer; it still stops after idleSec once the chat
-      # closes), but agent jobs only run while the service is awake (HTTP-woken).
+      # AI assistant: ENCRYPTION_SECRET is required; Redis is optional in v6 but
+      # lets a reply stream resume after a reload and shares rate limits. Shared
+      # Redis (databases.nix) on a spare DB index (0-6 are used by
+      # immich/dawarich/affine/nextcloud/etc.). Long-lived SSE while a chat is open
+      # is fine under socket-activation (activity resets the idle timer), but
+      # assistant/career jobs only run while the service is awake (HTTP-woken).
       REDIS_URL = "redis://${redisHost}:${toString redisPort}/7";
       # 4 GiB RPi5 memory hygiene (mirrors affine.nix / sure.nix).
       NODE_OPTIONS = "--max-old-space-size=384";

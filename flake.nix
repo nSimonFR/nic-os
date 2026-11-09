@@ -127,31 +127,16 @@
     };
 
     # Reactive Resume — self-hosted resume builder (rxresu.me), packaged like
-    # sure-nix / airtrail-nix.
+    # sure-nix / airtrail-nix. v6 since 6.1.0.
     #
-    # Unpinned as of 5.2.3. It was held at 67720c89 on the theory that upstream's
-    # Renovate-recomputed pnpm-deps hash was x86_64-only — the defect airtrail-nix
-    # really did have. What the pin was ACTUALLY holding back was
-    # patches/base-path-support.patch: 5.2.3 deleted the
-    # `Access-Control-Allow-Origin` line its uploads.ts hunk targets, so the patch
-    # stopped applying. Fixed upstream in reactive-resume-nix#8 (the hunk is
-    # obsolete, not misplaced — it is dropped, not re-anchored).
-    #
-    # The arch theory was, however, only WRONG AT THE TIME. This comment used to
-    # record a measurement that both arches landed on one
-    # /nix/store/xck2n5ir…-reactive-resume-pnpm-deps, because fetchPnpmDeps runs
-    # `pnpm install --force`, which nixpkgs documents as fetching "all dependencies
-    # including ones that aren't meant for our host platform". True through pnpm
-    # 11.10.0. 5.2.5 moved package.json's `packageManager` to pnpm@11.18.0, which
-    # prunes the store it materialises to the host platform — the two arches now
-    # ship different native bindings (@rolldown/binding-linux-x64-gnu vs
-    # -arm64-gnu) and hash differently. So the airtrail defect DID eventually
-    # arrive here; reactive-resume-nix#10 handles it by selecting the pnpmDeps hash
-    # on stdenv.hostPlatform.system. Renovate only ever computes the x86_64 one, so
-    # a version bump still needs the aarch64 hash added BY HAND, on aarch64 — a
-    # bump that does not is a bump that cannot build on the Pi.
+    # pnpmDeps is per-arch and Renovate only fills the x86_64 slot: a version bump
+    # needs the aarch64 hash computed BY HAND on aarch64, or it cannot build on the
+    # Pi. Since v6 the fetcher comes from reactive-resume-nix's own `nixpkgs-pnpm`
+    # input (deliberately not followed here), so the hash no longer depends on
+    # this flake's nixpkgs pin.
     reactive-resume-nix = {
-      url = "github:nSimonFR/reactive-resume-nix";
+      # TODO before merge: back to the default branch once reactive-resume-nix's v6 PR merges.
+      url = "github:nSimonFR/reactive-resume-nix/v6";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.

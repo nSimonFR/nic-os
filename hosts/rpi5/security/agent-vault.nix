@@ -117,8 +117,9 @@ let
       keys = [ "IMMICH_API_KEY" ];
       "in" = [ "header" ];
     }
-    # Reactive Resume (knowledge/reactive-resume.nix): REST under /api/openapi, key
-    # sent as `x-api-key`. Port 13336 is the socket-activated proxy that wakes it.
+    # Reactive Resume (knowledge/reactive-resume.nix): REST under /api/openapi and
+    # (v6) MCP at /mcp, both keyed by `x-api-key`. Port 13336 is the
+    # socket-activated proxy that wakes it.
     {
       name = "reactive-resume";
       host = "rxresume.home.arpa:13336";
