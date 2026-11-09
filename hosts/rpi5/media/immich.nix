@@ -103,6 +103,47 @@ in
     "d /var/lib/immich/backups 0750 immich immich -"
   ];
 
+  # Read-only ACL for nsimon on the admin library, so ~/Cloud/PHOTOS (a symlink in
+  # Nextcloud's files dir, mounted on the Mac) lists. Hourly, and only on inodes
+  # whose ctime moved since the last run: files moved in from upload/ don't inherit
+  # the default ACL, and a full -R pass would bump every ctime and make restic
+  # re-read all 37 GB.
+  systemd.services.immich-library-acl = {
+    description = "Grant nsimon read access to the Immich admin library";
+    after = [ "mnt-data.mount" ];
+    serviceConfig.Type = "oneshot";
+    script =
+      let
+        acl = pkgs.writeShellApplication {
+          name = "immich-library-acl";
+          runtimeInputs = [
+            pkgs.acl
+            pkgs.findutils
+            pkgs.coreutils
+          ];
+          text = ''
+            lib=/mnt/data/immich/library/admin
+            stamp=/var/lib/immich/.nsimon-acl-stamp
+            setfacl -m u:nsimon:--x /mnt/data/immich /mnt/data/immich/library
+            newer=()
+            [ -e "$stamp" ] && newer=(-cnewer "$stamp")
+            find "$lib" "''${newer[@]}" -type d -exec setfacl -m u:nsimon:r-x,d:u:nsimon:r-x {} +
+            find "$lib" "''${newer[@]}" -type f -exec setfacl -m u:nsimon:r-- {} +
+            # Stamped after: setfacl itself bumps ctime.
+            touch "$stamp"
+          '';
+        };
+      in
+      "${acl}/bin/immich-library-acl";
+  };
+  systemd.timers.immich-library-acl = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "1h";
+    };
+  };
+
   # Bind SSD dirs into the HDD mediaLocation so immich finds them there.
   # library + upload stay on HDD; thumbs, encoded-video, profile, backups on SSD.
   systemd.mounts =
