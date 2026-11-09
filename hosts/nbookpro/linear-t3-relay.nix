@@ -46,7 +46,8 @@ in
     instances = lib.mapAttrs (name: port: {
       inherit port;
       environmentFile = config.age.secrets."linear-t3-relay-${name}".path;
-      renewCommand = "${lib.getExe pkgs.t3code} auth pairing create --json --ttl 5m --label linear-t3-relay-${name} --scope orchestration:read --scope orchestration:operate";
+      # Default scopes: the relay asks for full-access, and T3 nightly 0.1.8 refuses a narrower code (HTTP 400).
+      renewCommand = "${lib.getExe pkgs.t3code} auth pairing create --json --ttl 5m --label linear-t3-relay-${name}";
     }) ports;
   };
 }
