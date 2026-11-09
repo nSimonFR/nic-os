@@ -135,8 +135,7 @@
     # input (deliberately not followed here), so the hash no longer depends on
     # this flake's nixpkgs pin.
     reactive-resume-nix = {
-      # TODO before merge: back to the default branch once reactive-resume-nix's v6 PR merges.
-      url = "github:nSimonFR/reactive-resume-nix/v6";
+      url = "github:nSimonFR/reactive-resume-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
@@ -456,10 +455,6 @@
         in
         {
           inherit (self.packages.${system}) nicos-scripts;
-          # TEMPORARY (rxresume-v6 PR): build the /rxresume/ package on x86_64 too. Drop before merge.
-          reactive-resume-subpath = inputs.reactive-resume-nix.packages.${system}.reactive-resume.override {
-            appBasePath = "/rxresume/";
-          };
           formatting = (treefmtFor system).config.build.check self;
           # The Claude Code → Aperture shim's session linking (home/claude-aperture-shim/).
           claude-aperture-shim =
