@@ -41,6 +41,7 @@ python3Packages.buildPythonPackage {
     python3Packages.pillow
     python3Packages.icalendar
     python3Packages.recurring-ical-events
+    python3Packages.beautifulsoup4
   ];
 
   nativeCheckInputs = [ python3Packages.pytestCheckHook ];
@@ -75,6 +76,8 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.calendar_digest"
     "nicos_scripts.hermes.zen_watch"
     "nicos_scripts.hermes.mcp_token_check"
+    "nicos_scripts.trains.watch"
+    "nicos_scripts.trains.mcp"
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"
     "nicos_scripts.vaultwarden.ea_bridge"

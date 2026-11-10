@@ -290,6 +290,10 @@ let
     # and not a `url`. No `env`: the wrapper sources its own secret.
     mcp_servers.freereps.command = "${freerepsMcp}/bin/freereps-mcp";
 
+    # Live train prices (nicos_scripts.trains). Stdio, so it is idle at rest.
+    # Alerts are the train-watch cron job, not tools.
+    mcp_servers.trains.command = "${pkgs.nicos-scripts}/bin/train-prices-mcp";
+
     # Wealthfolio over HTTP rather than stdio — it is a running service, not a
     # subprocess. Talks to the app's own bind, NOT the :3700 read-only vhost:
     # /mcp is a POST and that vhost refuses every write method, so it would 403

@@ -18,7 +18,8 @@ requires-python = ">=3.11"
 # staticmap + pillow: journal-daily draws the map and the photo collage (lazy imports).
 # icalendar + recurring-ical-events: journal-daily reads Nextcloud calendars (lazy).
 # cryptography: dps-ea-bridge rewraps a Bitwarden user key (AES-CBC, Argon2id).
-dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap", "pillow", "icalendar", "recurring-ical-events" ]
+# beautifulsoup4: trains.sources parses 12train.com's HTML results (lazy import).
+dependencies = [ "psycopg2", "websocket-client", "cryptography", "staticmap", "pillow", "icalendar", "recurring-ical-events", "beautifulsoup4" ]
 
 # One console script per connector. This is the interface the systemd units use
 # (`${pkgs.nicos-scripts}/bin/steam-to-ryot`), replacing
@@ -82,6 +83,10 @@ hermes-burgie-photo = "nicos_scripts.hermes.burgie_photo:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
 hermes-whatsapp-audit = "nicos_scripts.hermes.whatsapp_audit:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
+# Re-prices the train watches; prints an alert only when a rule fires.
+hermes-train-watch = "nicos_scripts.trains.watch:main"
+# Hermes launches this over stdio (mcp_servers.train_watch) to manage the watches.
+train-prices-mcp = "nicos_scripts.trains.mcp:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
 hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
