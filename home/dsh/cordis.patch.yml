@@ -67,8 +67,8 @@
           supportsDeveloperRole: false
           maxTokensField: max_tokens
         # Hand-maintained subset of `curl .../v1/models`, filtered the way
-        # pi's extension filtered: no embeddings, no `openai/*` aliases, no
-        # `claude-*` (Anthropic has its own route), no codex-auto-review.
+        # pi's extension filtered: no embeddings and no `claude-*` (Anthropic
+        # has its own route).
         # Unset fields fall back to the route defaults (262144 context /
         # 32768 max tokens); correct one only when a real request proves it
         # wrong.
@@ -80,10 +80,9 @@
           # agent when a task needs it; don't make it a default again without a
           # usage budget to spend.
           - id: gpt-6            # GPT-6 Astra, flagship
-          - id: gpt-reserve      # fast/affordable GPT-6 tier
           - id: asale-gpt-6-astra # paid Asale market, manual opt-in
           - id: asale-gpt-6-luna
-          - id: asale-gpt-6-sol
+          - id: asale-gpt-6.1-sol
           - id: gemma4:e4b       # beast Ollama, free local
           - id: gemma4:26b
           - id: auto             # tlg's beast-first, codex-fallback route

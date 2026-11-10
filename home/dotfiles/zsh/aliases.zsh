@@ -125,7 +125,7 @@ claude-pane-menu() {
 alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=omlx-local ANTHROPIC_MODEL=Qwen3.6-27B-4bit command claude --dangerously-skip-permissions --remote-control'
 
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
-alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=openai/gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
+alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
 
 # claude-direct: CC → api.anthropic.com (no Aperture), which is also the ONLY way
 # Remote Control runs — it refuses any custom endpoint. A plain env prefix is
