@@ -66,26 +66,11 @@
         compat:
           supportsDeveloperRole: false
           maxTokensField: max_tokens
-        # Hand-maintained subset of `curl .../v1/models`, filtered the way
-        # pi's extension filtered: no embeddings and no `claude-*` (Anthropic
-        # has its own route).
-        # Unset fields fall back to the route defaults (262144 context /
-        # 32768 max tokens); correct one only when a real request proves it
-        # wrong.
+        # dsh's default, then the picker in shared/llm-models.nix; default.nix
+        # replaces the marker line. Unset fields fall back to the route
+        # defaults (262144 context / 32768 max tokens).
         models:
-          - id: gpt-5.6          # ChatGPT subscription via tlg's codex provider — the default
-          # GPT-6 stays SELECTABLE but is deliberately not the default anywhere
-          # except Hermes' /model picker: it burned the ChatGPT plan quota far
-          # faster than the 5.6 tiers did (rolled back 2026-09-09). Pick it per
-          # agent when a task needs it; don't make it a default again without a
-          # usage budget to spend.
-          - id: gpt-6            # GPT-6 Astra, flagship
-          - id: asale-gpt-6-astra # paid Asale market, manual opt-in
-          - id: asale-gpt-6-luna
-          - id: asale-gpt-6.1-sol
-          - id: gemma4:e4b       # beast Ollama, free local
-          - id: gemma4:26b
-          - id: auto             # tlg's beast-first, codex-fallback route
+          # @MODELS@
 
 # Without this, new agents default to deepseek-official/deepseek-v4-flash and
 # ask for a DEEPSEEK_API_KEY we do not have.

@@ -74,10 +74,10 @@ let
   # hermes_cli/model_switch.py `_declared_model_ids` takes this mapping's KEYS
   # as the picker's list. The switch is session-scoped, so a /new or restart
   # returns to gateModel. Cron jobs pin their own model and are unaffected.
-  # The list is shared with T3 Code (../llm-models.nix).
+  # The list is shared with T3 Code (shared/llm-models.nix).
   #
   # 131072 is below every listed model's real window; proven in service here.
-  gateModels = lib.genAttrs (import ../llm-models.nix).picker (_: 131072);
+  gateModels = lib.genAttrs (import ../../../../shared/llm-models.nix).picker (_: 131072);
 
   # NO Anthropic fallback here, deliberately — do not re-add one without
   # funding Extra Usage first (claude.ai/settings/usage).
