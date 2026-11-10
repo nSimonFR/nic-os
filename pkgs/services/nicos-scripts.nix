@@ -76,7 +76,6 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.calendar_digest"
     "nicos_scripts.hermes.zen_watch"
     "nicos_scripts.hermes.mcp_token_check"
-    "nicos_scripts.trains.watch"
     "nicos_scripts.trains.mcp"
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"

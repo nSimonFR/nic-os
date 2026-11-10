@@ -1,8 +1,7 @@
-"""Train price watches for Hermes: live prices, history, alerts.
+"""Live train prices for Hermes.
 
-`sources` fetches (OUIGO JSON API, TGV INOUI via 12train.com), `watch` owns the
-SQLite state and the alert rules, `mcp` exposes both to Hermes over stdio, and
-`hermes-train-watch` is the no_agent cron body that prints the alerts.
+`sources` fetches (OUIGO JSON API, TGV INOUI via 12train.com); `mcp` exposes them
+to Hermes over stdio.
 """
 
-__all__ = ["mcp", "sources", "watch"]
+__all__ = ["mcp", "sources"]

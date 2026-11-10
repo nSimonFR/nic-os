@@ -1,4 +1,4 @@
-"""Tests for the train watches: sources, alert rules, cron body + CLI, MCP server.
+"""Tests for the train price sources and MCP server.
 
 Nothing here touches the network: sources take an `opener`, the watch logic takes
 fake sources, and the DB lives in tmp_path.
@@ -7,14 +7,11 @@ fake sources, and the DB lives in tmp_path.
 import io
 import json
 import urllib.error
-from datetime import datetime
 
 import pytest
 
 from conftest import FakeResponse, json_reply
-from nicos_scripts.trains import mcp, sources as src, watch as w
-
-NOW = datetime(2026, 11, 10, 9, 0)
+from nicos_scripts.trains import mcp, sources as src
 
 
 # ===================================================================
@@ -204,11 +201,6 @@ def test_inoui_surfaces_the_sites_own_error(opener):
         )
 
 
-# ===================================================================
-# watch: store + rules
-# ===================================================================
-
-
 class FakeSource:
     def __init__(self, name, *days):
         self.name, self.days, self.calls = name, list(days), 0
@@ -223,228 +215,6 @@ class FakeSource:
 
 def J(price, source="ouigo", hhmm="06:46", changes=0):
     return src.Journey(source, f"2026-12-20T{hhmm}", "2026-12-20T10:34", price, changes)
-
-
-@pytest.fixture
-def conn(tmp_path):
-    c = w.connect(w.Config(db=str(tmp_path / "watch.sqlite3")))
-    yield c
-    c.close()
-
-
-def _add(conn, **kw):
-    kw.setdefault("now", NOW)
-    return w.add_watch(conn, "Paris", "Brest", "2026-12-20", **kw)
-
-
-def test_add_watch_defaults_to_a_ten_percent_drop_and_slugs_the_id(conn):
-    row = _add(conn)
-    assert row["id"] == "paris-brest-2026-12-20"
-    assert (row["drop_pct"], row["max_price"], row["sources"]) == (
-        10.0,
-        None,
-        "ouigo,inoui",
-    )
-
-
-def test_add_watch_with_a_threshold_adds_no_implicit_drop(conn):
-    assert _add(conn, max_price=60)["drop_pct"] is None
-
-
-@pytest.mark.parametrize(
-    "kw, msg",
-    [
-        ({"max_price": -1}, "positif"),
-        ({"drop_pct": 150}, "entre 0 et 100"),
-        ({"sources": ["sncf"]}, "source inconnue"),
-        ({"depart_after": "6h"}, "HH:MM"),
-    ],
-)
-def test_add_watch_rejects_bad_input(conn, kw, msg):
-    with pytest.raises(ValueError, match=msg):
-        _add(conn, **kw)
-
-
-def test_add_watch_rejects_a_past_date_and_a_malformed_one(conn):
-    with pytest.raises(ValueError, match="passé"):
-        w.add_watch(conn, "Paris", "Brest", "2026-11-01", now=NOW)
-    with pytest.raises(ValueError, match="YYYY-MM-DD"):
-        w.add_watch(conn, "Paris", "Brest", "20/12/2026", now=NOW)
-
-
-def test_matches_filters_changes_window_and_unpriced(conn):
-    row = _add(conn, depart_after="08:00", depart_before="18:00")
-    assert not w.matches(row, J(None, hhmm="10:00"))
-    assert not w.matches(row, J(50, hhmm="07:59"))
-    assert not w.matches(row, J(50, hhmm="18:01"))
-    assert not w.matches(row, J(50, hhmm="10:00", changes=1))
-    assert w.matches(row, J(50, hhmm="10:00"))
-
-
-def test_reasons_threshold_drop_and_silence_after_an_alert(conn):
-    row = _add(conn, max_price=80, drop_pct=20)
-    assert w.reasons(row, J(79), None) == ["sous votre seuil de 80 €"]
-    both = w.reasons(row, J(60), 100)
-    assert both == [
-        "sous votre seuil de 80 €",
-        "-40 % depuis le dernier relevé (100 €)",
-    ]
-    assert w.reasons(row, J(85), 100) == []  # above the threshold, -15 % < 20 %
-    assert w.reasons({**row, "last_alert_price": 60.0}, J(60), 100) == []
-    assert w.reasons({**row, "last_alert_price": 60.0}, J(55), 100) != []
-    assert w.reasons(row, None, 100) == []
-
-
-def test_check_alerts_on_a_drop_then_only_on_a_lower_price(conn):
-    row = _add(conn)  # drop 10 %
-    ouigo = FakeSource("ouigo", [J(100)], [J(80)], [J(80)], [J(70)])
-    srcs = {"ouigo": ouigo, "inoui": FakeSource("inoui", [])}
-
-    texts = [
-        w.check(conn, w.get_watch(conn, row["id"]), srcs, NOW)[0] for _ in range(4)
-    ]
-
-    assert texts[0] == ""  # first check: no baseline
-    assert "-20 %" in texts[1] and "OUIGO 06:46 → 10:34 : 80 €" in texts[1]
-    assert texts[2] == ""  # same price again
-    assert "70 €" in texts[3]  # lower than the last alert
-
-
-def test_check_rearms_after_the_price_climbs_back(conn):
-    row = _add(conn, max_price=80, drop_pct=None)
-    ouigo = FakeSource("ouigo", [J(75)], [J(120)], [J(75)])
-    srcs = {"ouigo": ouigo, "inoui": FakeSource("inoui", [])}
-
-    texts = [
-        w.check(conn, w.get_watch(conn, row["id"]), srcs, NOW)[0] for _ in range(3)
-    ]
-
-    assert [bool(t) for t in texts] == [True, False, True]
-
-
-def test_check_records_history_and_survives_one_dead_source(conn):
-    row = _add(conn, max_price=80, drop_pct=None)
-    srcs = {
-        "ouigo": FakeSource("ouigo", [J(75)]),
-        "inoui": FakeSource("inoui", urllib.error.URLError("down")),
-    }
-    text, errors = w.check(conn, row, srcs, NOW)
-
-    assert "inoui" in errors and "Source indisponible : inoui" in text
-    (h,) = w.history(conn, row["id"])
-    assert (h["best_price"], h["best_source"], h["n_trains"]) == (75.0, "ouigo", 1)
-    assert conn.execute("SELECT count(*) FROM observations").fetchone()[0] == 1
-
-
-def test_remove_watch_cascades_history(conn):
-    row = _add(conn)
-    w.check(
-        conn,
-        row,
-        {"ouigo": FakeSource("ouigo", [J(75)]), "inoui": FakeSource("inoui", [])},
-        NOW,
-    )
-    w.remove_watch(conn, row["id"])
-    assert conn.execute("SELECT count(*) FROM checks").fetchone()[0] == 0
-    with pytest.raises(KeyError):
-        w.get_watch(conn, row["id"])
-
-
-# ===================================================================
-# watch: cron body
-# ===================================================================
-
-
-def _cfg(tmp_path):
-    return w.Config(db=str(tmp_path / "watch.sqlite3"))
-
-
-def test_run_is_silent_without_news_and_prints_alerts_otherwise(tmp_path):
-    cfg = _cfg(tmp_path)
-    conn = w.connect(cfg)
-    _add(conn, max_price=80, drop_pct=None)
-    conn.close()
-    srcs = {
-        "ouigo": FakeSource("ouigo", [J(120)], [J(75)]),
-        "inoui": FakeSource("inoui", []),
-    }
-
-    assert w.run(cfg, srcs, NOW) == ""
-    assert "Paris → Brest · 20/12" in w.run(cfg, srcs, NOW)
-
-
-def test_run_deactivates_watches_whose_date_has_passed(tmp_path):
-    cfg = _cfg(tmp_path)
-    conn = w.connect(cfg)
-    _add(conn)
-    conn.close()
-    w.run(cfg, {"ouigo": FakeSource("ouigo", [])}, datetime(2026, 12, 21, 9, 0))
-    conn = w.connect(cfg)
-    assert w.list_watches(conn) == []
-    assert len(w.list_watches(conn, active_only=False)) == 1
-    conn.close()
-
-
-def test_run_fails_loudly_only_when_every_source_failed_everywhere(tmp_path):
-    cfg = _cfg(tmp_path)
-    conn = w.connect(cfg)
-    _add(conn)
-    conn.close()
-    dead = {n: FakeSource(n, OSError("boom")) for n in ("ouigo", "inoui")}
-    with pytest.raises(RuntimeError, match="toutes les sources"):
-        w.run(cfg, dead, NOW)
-
-
-def test_main_exits_1_on_total_failure_and_0_with_nothing_to_watch(
-    tmp_path, capsys, monkeypatch
-):
-    env = {
-        "TRAIN_WATCH_DB": str(tmp_path / "w.sqlite3"),
-        "TRAIN_WATCH_SOURCES": "ouigo",
-    }
-    assert w.main([], env=env) == 0 and capsys.readouterr().out == ""
-
-    conn = w.connect(w.Config(db=env["TRAIN_WATCH_DB"]))
-    _add(conn, sources=["ouigo"])
-    conn.close()
-    monkeypatch.setattr(
-        w, "datetime", type("D", (), {"now": staticmethod(lambda: NOW)})
-    )
-    monkeypatch.setattr(
-        src.Ouigo, "search", lambda self, *a: (_ for _ in ()).throw(OSError("x"))
-    )
-    assert w.main([], env=env) == 1
-
-
-# ===================================================================
-# MCP server
-# ===================================================================
-
-
-def _cli(tmp_path, capsys, *argv):
-    env = {"TRAIN_WATCH_DB": str(tmp_path / "w.sqlite3")}
-    code = w.main(list(argv), env=env)
-    out = capsys.readouterr()
-    return code, out.out, out.err
-
-
-def test_cli_manages_watches_and_prints_json(tmp_path, capsys):
-    code, out, _ = _cli(
-        tmp_path, capsys, "add", "Paris", "Brest", "2099-12-20", "--max-price", "80"
-    )
-    wid = json.loads(out)["id"]
-    assert code == 0 and wid == "paris-brest-2099-12-20"
-    assert json.loads(_cli(tmp_path, capsys, "list")[1])[0]["max_price"] == 80
-    assert json.loads(_cli(tmp_path, capsys, "history", wid)[1]) == []
-    assert json.loads(_cli(tmp_path, capsys, "remove", wid)[1]) == {"removed": wid}
-    assert json.loads(_cli(tmp_path, capsys, "list")[1]) == []
-
-
-def test_cli_reports_bad_input_on_stderr_with_exit_2(tmp_path, capsys):
-    code, out, err = _cli(tmp_path, capsys, "remove", "nope")
-    assert (code, out) == (2, "") and "watch inconnue" in err
-    code, _, err = _cli(tmp_path, capsys, "add", "Paris", "Brest", "2000-01-01")
-    assert code == 2 and "passé" in err
 
 
 # ===================================================================
@@ -501,6 +271,20 @@ def test_train_prices_hides_trains_with_changes_by_default(handlers):
     assert [t["price"] for t in got["trains"]] == [75.0]
     got = _data(_call(handlers, "train_prices", max_changes=1, **args))
     assert len(got["trains"]) == 2
+
+
+def test_a_dead_source_is_reported_without_hiding_the_other():
+    h = mcp.Handlers(
+        {
+            "ouigo": FakeSource("ouigo", [J(75)]),
+            "inoui": FakeSource("inoui", urllib.error.URLError("down")),
+        }
+    )
+    got = _data(
+        _call(h, "train_prices", origin="Paris", destination="Brest", date="2026-12-20")
+    )
+    assert [t["price"] for t in got["trains"]] == [75.0]
+    assert "inoui" in got["errors"]
 
 
 def test_a_failing_tool_is_an_error_result_not_a_dead_server(handlers):
