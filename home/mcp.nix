@@ -83,8 +83,13 @@ let
   cursorMcpBase = pkgs.writeText "cursor-mcp-base.json" (builtins.toJSON { inherit mcpServers; });
 in
 {
-  # Claude Code: declarative MCP via home-manager plugin mechanism
-  programs.claude-code.mcpServers = mcpServers;
+  # Claude Code: declarative MCP via home-manager plugin mechanism. Linear, Miro and
+  # GitHub come from the claude.ai connectors instead; Cursor has none, so it keeps them.
+  programs.claude-code.mcpServers = removeAttrs mcpServers [
+    "Linear"
+    "Miro"
+    "GitHub"
+  ];
 
   home.file.".local/libexec/mcp-env".source = mcpEnv;
 
