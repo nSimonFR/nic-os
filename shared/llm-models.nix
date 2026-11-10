@@ -1,7 +1,7 @@
 # Every model tiny-llm-gate serves, defined once. Everything else derives:
 # the gate's `models`/`aliases`, Aperture's route list, and — for entries with
 # `picker = true`, in this order — T3 Code's Codex harness (/codex/models),
-# Hermes' /model and dsh.
+# Hermes' /model.
 #
 # Entry: id, provider (a gate provider), upstream (default: id), fallback,
 # picker, plus any other gate model field (e.g. default_embed_dimensions).
@@ -79,7 +79,7 @@ let
     }
 
     # ── Pinned by services, not offered ─────────────────────────────────────
-    # pi, Wealthfolio, dsh's default and "auto"'s codex hop.
+    # pi, Wealthfolio and "auto"'s codex hop.
     {
       id = "gpt-5.6";
       provider = "codex";

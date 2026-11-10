@@ -329,10 +329,7 @@ let
               ADDING A TILE means deciding which row it joins and renumbering that
               row's neighbours, not appending after 260.
 
-              300–380  Backend tiles and the untiled routed services. Backend is
-                       three tiles now that dsh moved into Apps (an interactive
-                       agent belongs with what it is used to build, not with the
-                       never-visited plumbing).
+              300–380  Backend tiles and the untiled routed services.
           '';
           example = 120;
         };

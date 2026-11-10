@@ -52,7 +52,7 @@ in
     restartIfChanged = false;
 
     serviceConfig = {
-      # A system unit as the human (see dsh.nix): user units here can stop
+      # A system unit as the human: user units here can stop
       # despite Linger=yes, out of systemd-failed-alert's sight.
       User = username;
       Group = config.users.users.${username}.group;

@@ -58,7 +58,7 @@ let
   internalPort = 13348; # freereps HTTP bind (real backend, localhost only)
   proxyPort = 8370; # socket-activate proxy listen; Tailscale Serve → here
   # External tailnet HTTPS port: declared once in nic.services.freereps.public
-  # below. 3950 was taken by dsh, hence 3960.
+  # below.
 
   # config.yaml is REQUIRED even though almost every key has an env override:
   # config.Load does a bare os.ReadFile and returns the error, so a missing file
