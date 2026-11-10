@@ -122,8 +122,9 @@ in
   # declared + discovered models, `@provider`, and `!glob` to drop matches.
   picker = [
     "gpt-6-luna"
-    "gpt-6*"
-    "asale-gpt-6*"
+    "gpt-*"
+    "!gpt-5*"
+    "asale-gpt-*"
     "@ollama"
     "@omlx"
     "!*embed*"

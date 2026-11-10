@@ -90,10 +90,16 @@ in
             type = "bearer";
             token_file = "/run/agenix/asale-api-key";
           };
-          # Its /models lists ~390 paid models; only these become routable.
+          # Its /models lists ~390 paid models (images, audio, old gens);
+          # only current and future GPT generations become routable.
           discover = true;
           discover_prefix = "asale-";
-          discover_only = [ "gpt-6*" ];
+          discover_only = [
+            "gpt-6*"
+            "gpt-7*"
+            "gpt-8*"
+            "gpt-9*"
+          ];
         };
 
         # oMLX on the Mac (M3 Pro, MLX backend). Reached via the Mac's
