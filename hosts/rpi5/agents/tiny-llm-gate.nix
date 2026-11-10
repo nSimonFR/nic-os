@@ -244,7 +244,6 @@ in
         "gpt-6.1-terra" = {
           provider = "codex";
           upstream_model = "gpt-6.1-terra";
-          fallback = [ "gemma4:e4b" ];
         };
         "asale-gpt-6-astra" = {
           provider = "asale";
