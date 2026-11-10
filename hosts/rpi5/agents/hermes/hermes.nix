@@ -28,7 +28,7 @@
 #   - `api_mode = "chat"` forces /v1/chat/completions, dodging the Ollama-native
 #     probe hang (upstream #26489).
 #   - context_length ≥64k is required or hermes rejects the model at startup;
-#     every model in `gateModels` (via the gate) is declared at 131072.
+#     every model in the /model list is declared at 131072.
 #   - No failover is configured (see the gateModel note below): a plan-cap 429
 #     on the primary takes Hermes offline until the quota resets.
 #   - Telegram auto-enables from TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env
@@ -74,10 +74,9 @@ let
   # hermes_cli/model_switch.py `_declared_model_ids` takes this mapping's KEYS
   # as the picker's list. The switch is session-scoped, so a /new or restart
   # returns to gateModel. Cron jobs pin their own model and are unaffected.
-  # The list is shared with T3 Code (shared/llm-models.nix).
-  #
-  # 131072 is below every listed model's real window; proven in service here.
-  gateModels = lib.genAttrs (import ../../../../shared/llm-models.nix).picker (_: 131072);
+  # Only the fallback: hermes-gate-models fills it at start from the gate's
+  # catalog (the picker in shared/llm-models.nix, shared with T3 Code).
+  gateModels.${gateModel} = 131072;
 
   # NO Anthropic fallback here, deliberately — do not re-add one without
   # funding Extra Usage first (claude.ai/settings/usage).
@@ -432,6 +431,8 @@ let
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
     at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
     ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
+    # /model list from the gate's catalog; keeps the baked one if the gate is down.
+    HERMES_CONFIG=${hermesHome}/config.yaml ${pkgs.nicos-scripts}/bin/hermes-gate-models || true
 
     # .env — bot token (secret) + allowlists. TELEGRAM_BOT_TOKEN presence
     # auto-enables the Telegram platform. DMs: nSimon only (ALLOWED_USERS is

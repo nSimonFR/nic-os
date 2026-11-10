@@ -257,9 +257,10 @@
     # v0.10.5 adds the /v0/management usage-hub API (#16); v0.10.6 reports
     # Claude account emails from Anthropic's profile (#17). v0.10.7 lifts the
     # /v1/messages body cap to 32 MiB (#18; memoryMax in tiny-llm-gate.nix follows).
-    # v0.10.8 serves the Codex CLI catalog at /codex/models (#19).
+    # v0.10.8 serves the Codex CLI catalog at /codex/models (#19); v0.10.9
+    # discovers upstream models at runtime (#20).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.10.8";
+      url = "github:nSimonFR/tiny-llm-gate/b0047eaf402bc37f705c55189ae52081f3ff5d49";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
