@@ -31,14 +31,20 @@ GATE = {
 class Aperture:
     """Fake gate + Aperture API, recording PUTs."""
 
-    def __init__(self, held=None, gate=GATE, put_result=None):
+    def __init__(self, held=None, gate=GATE, put_result=None, claude=None):
         self.held = held
+        self.claude = claude or {"data": [{"id": "claude-opus-6"}]}
         self.gate = gate
         self.puts = []
         self.put_result = put_result or {"success": True, "hash": "h2"}
 
     def __call__(self, req, timeout=None):
         url = req.full_url
+        if "api.anthropic.com" in url:
+            self.anthropic_auth = req.get_header("Authorization")
+            if isinstance(self.claude, Exception):
+                raise self.claude
+            return Resp(json.dumps(self.claude).encode())
         if url.endswith("/v1/models"):
             if isinstance(self.gate, Exception):
                 raise self.gate
@@ -120,5 +126,28 @@ def test_aperture_rewritten_apikey_still_counts_as_unchanged(tmp_path):
     held["providers"]["rpi5-gate"]["models"].reverse()
     held["exporters"]["s3"]["access_secret"] = "keyid:s3:access_secret"
     fake = Aperture(held=held)
+    assert ap.run(cfg, opener=fake) == 0
+    assert fake.puts == []
+
+
+def test_merges_anthropic_ids_read_with_the_oauth_token(tmp_path):
+    tok = tmp_path / "token"
+    tok.write_text("oauth-tok\n")
+    cfg = ap.Config(**{**cfg_for(tmp_path).__dict__, "anthropic_token_file": str(tok)})
+    fake = Aperture(held={"old": True})
+    assert ap.run(cfg, opener=fake) == 0
+    sent = json.loads(fake.puts[0]["config"])
+    assert sent["providers"]["rpi5-gate-anthropic"]["models"] == [
+        "claude-opus-5-5",
+        "claude-opus-6",
+    ]
+    assert fake.anthropic_auth == "Bearer oauth-tok"
+
+
+def test_anthropic_down_leaves_aperture_alone(tmp_path):
+    tok = tmp_path / "token"
+    tok.write_text("t")
+    cfg = ap.Config(**{**cfg_for(tmp_path).__dict__, "anthropic_token_file": str(tok)})
+    fake = Aperture(held={"old": True}, claude=OSError("401"))
     assert ap.run(cfg, opener=fake) == 0
     assert fake.puts == []

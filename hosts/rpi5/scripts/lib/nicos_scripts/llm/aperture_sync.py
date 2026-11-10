@@ -3,15 +3,18 @@
 aperture-config-sync: push Aperture's config, with the gate's live model list.
 
 Aperture only routes model ids its provider config names, while tiny-llm-gate
-discovers upstream models at runtime. On a timer, this merges the gate's
-/v1/models into the `rpi5-gate` provider of the Nix-built base config and
-PUTs the result, only when it differs from what Aperture holds.
+discovers upstream models at runtime and Anthropic ships new Claude ids. On a
+timer, this merges the gate's /v1/models into `rpi5-gate` and Anthropic's
+/v1/models into `rpi5-gate-anthropic` of the Nix-built base config, and PUTs
+the result only when it differs from what Aperture holds.
 
-Aperture's PUT takes the current `hash` (optimistic concurrency). A gate that
-does not answer leaves Aperture untouched. Writes only with APERTURE_APPLY=1.
+Aperture's PUT takes the current `hash` (optimistic concurrency). If either
+list cannot be read, Aperture is left untouched rather than shrunk. Writes
+only with APERTURE_APPLY=1.
 
 Env: APERTURE_URL, APERTURE_BASE_CONFIG, GATE_MODELS_URL, APERTURE_PROVIDER,
-STORJ_S3_ACCESS_KEY, STORJ_S3_ACCESS_SECRET, APERTURE_APPLY.
+ANTHROPIC_TOKEN_FILE, ANTHROPIC_PROVIDER, STORJ_S3_ACCESS_KEY,
+STORJ_S3_ACCESS_SECRET, APERTURE_APPLY.
 """
 
 import json
@@ -23,7 +26,7 @@ from pathlib import Path
 
 from ..httpjson import get_json, http_json
 from ..logs import logger
-from ..secrets import env_str
+from ..secrets import env_str, read_secret
 
 log = logger("aperture-config-sync", lambda: sys.stderr)
 
@@ -34,6 +37,9 @@ class Config:
     base_config: str = ""
     gate_models_url: str = "http://127.0.0.1:4001/v1/models"
     provider: str = "rpi5-gate"
+    anthropic_token_file: str = ""
+    anthropic_provider: str = "rpi5-gate-anthropic"
+    anthropic_models_url: str = "https://api.anthropic.com/v1/models?limit=1000"
     s3_key: str = ""
     s3_secret: str = ""
     apply: bool = False
@@ -45,6 +51,10 @@ class Config:
             base_config=env_str("APERTURE_BASE_CONFIG", "", env),
             gate_models_url=env_str("GATE_MODELS_URL", cls.gate_models_url, env),
             provider=env_str("APERTURE_PROVIDER", cls.provider, env),
+            anthropic_token_file=env_str("ANTHROPIC_TOKEN_FILE", "", env),
+            anthropic_provider=env_str(
+                "ANTHROPIC_PROVIDER", cls.anthropic_provider, env
+            ),
             s3_key=env_str("STORJ_S3_ACCESS_KEY", "", env),
             s3_secret=env_str("STORJ_S3_ACCESS_SECRET", "", env),
             apply=env_str("APERTURE_APPLY", "", env) == "1",
@@ -60,10 +70,27 @@ def gate_ids(body):
     return {m["id"] for m in body.get("data", []) if m.get("id") and "/" not in m["id"]}
 
 
-def desired(base, ids, cfg):
+def claude_ids(cfg, opener=None):
+    """Anthropic's model ids, read with the Claude Code OAuth token. Empty set
+    when no token file is configured."""
+    if not cfg.anthropic_token_file:
+        return set()
+    token = read_secret(cfg.anthropic_token_file)
+    body = get_json(
+        cfg.anthropic_models_url,
+        headers={"Authorization": f"Bearer {token}", "anthropic-version": "2023-06-01"},
+        timeout=15,
+        opener=opener,
+    )
+    return {m["id"] for m in body.get("data", []) if m.get("id")}
+
+
+def desired(base, ids, cfg, claude=frozenset()):
     config = json.loads(json.dumps(base))
-    prov = config["providers"][cfg.provider]
-    prov["models"] = sorted(set(prov.get("models", [])) | ids)
+    for name, extra in ((cfg.provider, ids), (cfg.anthropic_provider, claude)):
+        prov = config["providers"].get(name)
+        if prov is not None and extra:
+            prov["models"] = sorted(set(prov.get("models", [])) | set(extra))
     s3 = config.get("exporters", {}).get("s3")
     if s3 is not None:
         s3["access_key_id"] = cfg.s3_key
@@ -110,10 +137,11 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
     base = json.loads(Path(cfg.base_config).read_text())
     try:
         ids = gate_ids(get_json(cfg.gate_models_url, timeout=15, opener=opener))
+        claude = claude_ids(cfg, opener=opener)
     except (OSError, ValueError) as e:
-        log(f"gate unreachable ({e}); Aperture left as is")
+        log(f"model list unreadable ({e}); Aperture left as is")
         return 0
-    want = desired(base, ids, cfg)
+    want = desired(base, ids, cfg, claude)
     count = len(want["providers"][cfg.provider]["models"])
 
     for attempt in range(1, attempts + 1):

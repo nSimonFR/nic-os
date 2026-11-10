@@ -24,35 +24,15 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
-  # Claude models for the Anthropic passthrough — extracted from claude-code's
-  # bundled binary at build time (Anthropic's /v1/models rejects OAuth tokens).
-  # See pkgs/agents/claude-anthropic-models.nix.
+  # Claude ids for the Anthropic passthrough. The base is what the claude-code
+  # binary knows, which covers the short aliases it sends (`claude-haiku-4-5`)
+  # that Anthropic's /v1/models omits; aperture-config-sync adds that live list
+  # on top, so a new Claude model routes without a rebuild.
   anthropicModelsFile = pkgs.callPackage ../../../pkgs/agents/claude-anthropic-models.nix {
     inherit (unstablePkgs) claude-code;
   };
-
-  # Always include the newest Claude models that ship faster than the
-  # claude-code binary pinned via nixpkgs-unstable can track:
-  #   claude-fable-5   (public 2026-06-09) — most capable widely-released model
-  #   claude-opus-5    (public 2026-07-24) — flagship Opus, new Max/Pro default
-  #   claude-opus-5-5  (first seen in claude-code 2.1.280)
-  #   claude-fable-5-1 / 5-2, claude-sonnet-5-5, claude-haiku-5-5
-  #     (2026-09-01 … 2026-11-09; fable-5-2's id is from a third-party listing)
-  # They are newer than the pinned claude-code, so the regex extraction above
-  # can't see them yet — list them explicitly so the Anthropic passthrough
-  # provider routes them now. Once a newer claude-code lands in nixpkgs the
-  # regex captures them too (deduped here).
   anthropicModels = lib.unique (
     builtins.fromJSON (builtins.readFile anthropicModelsFile)
-    ++ [
-      "claude-fable-5"
-      "claude-opus-5"
-      "claude-opus-5-5"
-      "claude-fable-5-1"
-      "claude-fable-5-2"
-      "claude-sonnet-5-5"
-      "claude-haiku-5-5"
-    ]
     # Asale routes have to be listed here too, or Aperture refuses them on /v1/messages.
     ++ builtins.attrNames (gateCfg.anthropic.routes or { })
   );
@@ -159,6 +139,7 @@ in
     after = [
       "network-online.target"
       "tiny-llm-gate.service"
+      "claude-oauth-extract.service"
     ];
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];
@@ -167,6 +148,8 @@ in
       APERTURE_URL = apertureUrl;
       APERTURE_BASE_CONFIG = "${configFile}";
       APERTURE_APPLY = "1";
+      # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
+      ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
     };
     serviceConfig = {
       Type = "oneshot";
