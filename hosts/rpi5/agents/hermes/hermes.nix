@@ -292,7 +292,7 @@ let
     mcp_servers.freereps.command = "${freerepsMcp}/bin/freereps-mcp";
 
     # Live train prices (nicos_scripts.trains). Stdio, so it is idle at rest.
-    # Alerts are the train-watch cron job, not tools.
+    # Alerts are native Hermes cron jobs that call it (skill trains).
     mcp_servers.trains.command = "${pkgs.nicos-scripts}/bin/train-prices-mcp";
 
     # Wealthfolio over HTTP rather than stdio — it is a running service, not a

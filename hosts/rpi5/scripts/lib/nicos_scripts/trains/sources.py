@@ -321,10 +321,10 @@ class Inoui:
 
 
 def make_sources(env=None, opener=None):
-    """{name: source}. TRAIN_WATCH_SOURCES narrows it (comma list)."""
+    """{name: source}. TRAIN_SOURCES narrows it (comma list)."""
     wanted = [
         s.strip()
-        for s in env_str("TRAIN_WATCH_SOURCES", ",".join(SOURCES), env).split(",")
+        for s in env_str("TRAIN_SOURCES", ",".join(SOURCES), env).split(",")
         if s.strip()
     ]
     built = {"ouigo": lambda: Ouigo(opener), "inoui": lambda: Inoui(opener)}

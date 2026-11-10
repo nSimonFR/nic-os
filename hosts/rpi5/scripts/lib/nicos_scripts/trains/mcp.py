@@ -4,21 +4,29 @@ train-prices-mcp: stdio MCP server for live train prices.
 
 Hand-rolled JSON-RPC (initialize / tools/list / tools/call over newline-delimited
 stdio) so nicos-scripts stays free of the `mcp` SDK. Hermes launches it as a
-subprocess, so it costs nothing at rest. Alerts are `hermes-train-watch`, on cron.
-
-Env: TRAIN_WATCH_SOURCES.
+subprocess, so it costs nothing at rest.
+Env: TRAIN_SOURCES.
 """
 
 import json
 import sys
+import urllib.error
 from datetime import date
 
 from ..logs import logger
 from . import sources as src
-from . import watch as w
 
 # stderr: stdout is the protocol stream.
 log = logger("train-prices-mcp", lambda: sys.stderr)
+
+_SOURCE_ERRORS = (
+    urllib.error.URLError,
+    OSError,
+    ValueError,
+    KeyError,
+    LookupError,
+    RuntimeError,
+)
 
 PROTOCOL = "2025-06-18"
 SERVER = {"name": "train-prices", "version": "0.1.0"}
@@ -77,13 +85,12 @@ class Handlers:
         return {n: self.sources[n] for n in names}
 
     def train_prices(self, origin, destination, date, sources=None, max_changes=0):
-        watch = {
-            "sources": ",".join(self._chosen(sources)),
-            "origin": origin,
-            "destination": destination,
-            "date": date,
-        }
-        journeys, errors = w.search(watch, self.sources)
+        journeys, errors = [], {}
+        for name, client in self._chosen(sources).items():
+            try:
+                journeys += client.search(origin, destination, date)
+            except _SOURCE_ERRORS as e:  # one dead source must not hide the other
+                errors[name] = f"{type(e).__name__}: {e}"
         keep = [j for j in journeys if j.changes <= max_changes]
         return {
             "trains": [j.to_dict() for j in sorted(keep, key=lambda j: j.departs)],
