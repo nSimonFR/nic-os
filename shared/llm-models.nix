@@ -122,6 +122,8 @@ in
   # declared + discovered models, `@provider`, and `!glob` to drop matches.
   picker = [
     "gpt-6-luna"
+    # tiny-llm-gate router: Jev picks Luna or Sol per user turn.
+    "smart"
     "gpt-*"
     "!gpt-5*"
     "asale-gpt-*"
