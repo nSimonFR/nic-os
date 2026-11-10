@@ -393,16 +393,15 @@ let
     # One gateway serves every profile (multiplexing). The "candidatures" profile
     # (Alfie's job search, ~/.hermes/profiles/candidatures, deployed from the private
     # job-scout repo) has no bot of its own: routes below send it messages from the
-    # shared bot. Trial: only Nico's messages in Alfie's group; Alfie's still go to
-    # the Mac bridge through candidatures-relay (its passthrough_users file lets
-    # Nico's through). Cutover: drop user_id here and empty the relay binding.
+    # shared bot. The route is location-only (no user_id): every message in Alfie's
+    # « Alfie Postule ! » group goes to that profile, and its cron jobs (morning
+    # digest) may deliver there through the shared bot.
     gateway.multiplex_profiles = true;
     gateway.profile_routes = [
       {
-        name = "candidatures-trial";
+        name = "candidatures";
         platform = "telegram";
         chat_id = "-1003331502255";
-        user_id = "82389391";
         profile = "candidatures";
       }
     ];
@@ -411,12 +410,9 @@ let
     # the gateway drops the adapter and never connects Telegram.
     plugins.load_timeout_seconds = 120;
     # Opt-in allow-list for directory plugins (holographic is `exclusive`, activated
-    # by memory.provider, so it is unaffected). candidatures-relay diverts ONE
-    # Telegram group (Alfie's job applications) to a JSONL inbox read by the Mac
-    # bridge, before auth and before any LLM — see plugins/candidatures-relay.
+    # by memory.provider, so it is unaffected).
     # door: `/door` auto-open window for the hall intercom — see plugins/door.
     plugins.enabled = [
-      "candidatures-relay"
       "door"
     ];
 
@@ -449,9 +445,8 @@ let
     # auto-enables the Telegram platform. DMs: nSimon only (ALLOWED_USERS is
     # platform-wide). Alfie reaches Hermes only through the allowed groups, by
     # chat id (any member of those groups): the shared group, and the
-    # « Alfie Postule ! » group that the candidatures-relay plugin diverts to the
-    # Mac bridge. Without that second entry the adapter drops her messages as
-    # "unauthorized user" before pre_gateway_dispatch, so the relay never sees them.
+    # « Alfie Postule ! » group served by the "candidatures" profile (route above).
+    # Without that second entry the adapter drops her messages as "unauthorized user".
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
     # TELEGRAM_HOME_CHANNEL pins where Hermes delivers cron results + proactive
@@ -493,11 +488,8 @@ let
     ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${holographicPlugin}/" "${hermesHome}/plugins/holographic/"
 
-    # candidatures-relay plugin: owned wholly by Nix (its state lives in
-    # ~/.hermes/candidatures/, outside the plugin dir), so --delete is safe.
-    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/candidatures-relay ${hermesHome}/candidatures
-    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
-      "${./plugins/candidatures-relay}/" "${hermesHome}/plugins/candidatures-relay/"
+    # The retired candidatures-relay plugin (Alfie's group now has its own profile).
+    ${pkgs.coreutils}/bin/rm -rf ${hermesHome}/plugins/candidatures-relay
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/door
     ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${./plugins/door}/" "${hermesHome}/plugins/door/"

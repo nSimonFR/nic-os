@@ -3,8 +3,7 @@
 Writes the window's end to ``sensor.door_auto_open_until`` in Home Assistant; the HA
 automation ``door_auto_open`` unlocks the Intratone door on a ring while it is in the
 future. A REST-set state does not survive an HA restart, so a restart closes the window.
-Nico's DM and the group with Alfie only; « Alfie Postule ! » stays out (and is diverted
-by candidatures-relay before any command anyway).
+Nico's DM and the group with Alfie only; « Alfie Postule ! » (her job-search group) stays out.
 """
 
 from __future__ import annotations
