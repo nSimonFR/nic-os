@@ -92,3 +92,20 @@ def test_missing_provider_is_a_no_op(tmp_path):
 def test_config_from_env_reads_overrides():
     cfg = gm.Config.from_env({"HERMES_CONFIG": "/x/c.yaml", "WAIT_SECONDS": "5"})
     assert cfg.hermes_config == "/x/c.yaml" and cfg.wait_seconds == 5
+
+
+def test_unchanged_list_does_not_rewrite(tmp_path):
+    path = hermes_config(tmp_path)
+    gm.run(cfg_for(path), opener=opener_for(CATALOG))
+    before = path.stat().st_mtime_ns, path.stat().st_ino
+    gm.run(cfg_for(path), opener=opener_for(CATALOG))
+    assert (path.stat().st_mtime_ns, path.stat().st_ino) == before
+
+
+def test_reordered_catalog_is_a_change(tmp_path):
+    path = hermes_config(tmp_path)
+    gm.run(cfg_for(path), opener=opener_for(CATALOG))
+    flipped = {"models": list(reversed(CATALOG["models"]))}
+    gm.run(cfg_for(path), opener=opener_for(flipped))
+    models = json.loads(path.read_text())["custom_providers"][0]["models"]
+    assert list(models)[:2] == ["asale-gpt-6-luna", "gpt-6.1-sol"]

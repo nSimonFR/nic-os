@@ -2,9 +2,11 @@
 """
 hermes-gate-models: fill Hermes' /model list from tiny-llm-gate's catalog.
 
-Runs at hermes start, after config.yaml is written. The picker lives in the
-gate (`codex_catalog`, patterns over discovered models), so a model the gate
-starts serving shows up here on the next restart, without a rebuild.
+Runs at hermes start, after config.yaml is written, and on a 10 min timer.
+The picker lives in the gate (`codex_catalog`, patterns over discovered
+models). Hermes re-reads config.yaml on every /model (load_config is cached on
+mtime), so a rewrite here reaches the picker with no restart. It writes only
+when the list changed.
 
 Never fails: when the gate is unreachable the Nix-baked list stays. The gate
 discovers upstreams a few seconds after it starts, so an empty catalog is
@@ -68,15 +70,21 @@ def fetch_ids(cfg, opener=None, sleep=time.sleep, clock=time.monotonic):
 
 
 def apply(config, ids, provider, context_length):
-    """Replace that custom provider's models with `ids`; the default stays listed."""
+    """Replace that custom provider's models with `ids`; the default stays listed.
+
+    Returns None when there is no such provider, else whether anything changed.
+    """
     for p in config.get("custom_providers", []):
         if p.get("name") != provider:
             continue
         default = p.get("model")
         names = ids + ([default] if default and default not in ids else [])
-        p["models"] = {n: {"context_length": context_length} for n in names}
+        models = {n: {"context_length": context_length} for n in names}
+        if p.get("models") == models and list(p["models"]) == names:
+            return False
+        p["models"] = models
         return True
-    return False
+    return None
 
 
 def run(cfg, opener=None, sleep=time.sleep, clock=time.monotonic):
@@ -85,8 +93,12 @@ def run(cfg, opener=None, sleep=time.sleep, clock=time.monotonic):
         return 0
     path = Path(cfg.hermes_config)
     config = json.loads(path.read_text())
-    if not apply(config, ids, cfg.provider, cfg.context_length):
+    changed = apply(config, ids, cfg.provider, cfg.context_length)
+    if changed is None:
         log(f"no custom provider {cfg.provider!r} in {path}; nothing to do")
+        return 0
+    if not changed:
+        log(f"unchanged ({len(ids)} models)")
         return 0
     tmp = path.with_suffix(".tmp")
     tmp.write_text(json.dumps(config, indent=2))

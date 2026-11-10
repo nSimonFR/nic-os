@@ -611,6 +611,29 @@ in
     Install.WantedBy = [ "default.target" ];
   };
 
+  # Keeps /model in step with the gate's catalog between restarts: Hermes
+  # re-reads config.yaml on every /model, so no restart is needed. Also covers
+  # a start that raced a gate restart (deploys).
+  systemd.user.services.hermes-gate-models = {
+    Unit.Description = "Refresh Hermes /model from tiny-llm-gate's catalog";
+    Service = {
+      Type = "oneshot";
+      Environment = [
+        "HERMES_CONFIG=${hermesHome}/config.yaml"
+        "WAIT_SECONDS=0"
+      ];
+      ExecStart = "${pkgs.nicos-scripts}/bin/hermes-gate-models";
+    };
+  };
+  systemd.user.timers.hermes-gate-models = {
+    Unit.Description = "Refresh Hermes /model from tiny-llm-gate's catalog";
+    Timer = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "10min";
+    };
+    Install.WantedBy = [ "timers.target" ];
+  };
+
   # Promote Hermes self-authored skills into the repo (untracked) for manual
   # versioning. Oneshot driven by an hourly timer; the script no-ops when Hermes
   # is inactive, so it's safe to leave the timer enabled regardless of backend.
