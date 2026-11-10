@@ -85,6 +85,7 @@ let
     # GPT-6.1 Sol on the plan route, for a session that needs more than Luna
     # (`/model openai/gpt-6.1-sol`); `asale-gpt-6.1-sol` is the paid one.
     "openai/gpt-6.1-sol" = 131072;
+    "openai/gpt-6.1-terra" = 131072;
     "openai/gpt-6-luna" = 131072;
     "asale-gpt-6-astra" = 131072;
     "asale-gpt-6-luna" = 131072;

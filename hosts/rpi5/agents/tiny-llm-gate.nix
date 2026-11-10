@@ -258,6 +258,12 @@ in
           upstream_model = "gpt-6.1-sol";
           fallback = [ "gemma4:e4b" ];
         };
+        # Terra is back as a 6.1 tier; the 5.6 `gpt-5.6-terra` above is the old one.
+        "gpt-6.1-terra" = {
+          provider = "codex";
+          upstream_model = "gpt-6.1-terra";
+          fallback = [ "gemma4:e4b" ];
+        };
         "asale-gpt-6-astra" = {
           provider = "asale";
           upstream_model = "gpt-6-astra";
@@ -337,6 +343,7 @@ in
         "gpt-6-sol" = "gpt-6.1-sol";
         "openai/gpt-6-sol" = "gpt-6.1-sol";
         "openai/gpt-6.1-sol" = "gpt-6.1-sol";
+        "openai/gpt-6.1-terra" = "gpt-6.1-terra";
         "openai/asale-gpt-6-astra" = "asale-gpt-6-astra";
         "openai/asale-gpt-6-luna" = "asale-gpt-6-luna";
         "asale-gpt-6-sol" = "asale-gpt-6.1-sol";
