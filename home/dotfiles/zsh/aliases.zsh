@@ -152,9 +152,9 @@ claude-asale() {
 # pi: pi-coding-agent via Aperture → tiny-llm-gate → codex-proxy / beast Ollama.
 # All routes go through https://ai.gate-mintaka.ts.net for observability.
 # Pass any tlg model id as $1 to override the default, e.g.
-#   pi                  → default (Qwen3.6-27B-4bit on Mac, gpt-5.5 elsewhere)
+#   pi                  → default (Qwen3.6-27B-4bit on Mac, gpt-5.6 elsewhere)
 #   pi gemma4:e4b       → beast Ollama
-#   pi gpt-5.5          → Codex subscription
+#   pi gpt-5.6          → Codex subscription
 # Defaults to local MLX on Mac, codex elsewhere. Override with --model:
 #   pi "prompt"               → default model
 #   pi --model gemma4:e4b "prompt"  → override model
@@ -162,7 +162,7 @@ claude-asale() {
 if [[ "$OSTYPE" == darwin* ]]; then
   pi() { command pi --provider aperture --model Qwen3.6-27B-4bit "$@"; }
 else
-  pi() { command pi --provider aperture --model gpt-5.5 "$@"; }
+  pi() { command pi --provider aperture --model gpt-5.6 "$@"; }
 fi
 
 # dsh: DeepSeek Harness, same Aperture route as pi (the provider lives in
