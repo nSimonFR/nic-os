@@ -74,6 +74,10 @@ sure-drain-keepalive = "nicos_scripts.sure.drain_keepalive:main"
 # new merchants have accumulated to be worth a pass.
 sure-derive-rules = "nicos_scripts.sure.derive_rules:main"
 papra-tag-sweep = "nicos_scripts.papra.tag_sweep:main"
+# Timer: Aperture routes only the ids its config names; the gate discovers more.
+aperture-config-sync = "nicos_scripts.llm.aperture_sync:main"
+# At hermes start: /model picker from the gate's catalog.
+hermes-gate-models = "nicos_scripts.hermes.gate_models:main"
 papra-proton-poll = "nicos_scripts.papra.proton_poll:main"
 papra-nc-sync = "nicos_scripts.papra.nc_sync:main"
 # hermes-*: Hermes cron jobs that used to drive an LLM to reach a deterministic

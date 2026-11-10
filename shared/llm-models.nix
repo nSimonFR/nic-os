@@ -1,81 +1,27 @@
-# Every model tiny-llm-gate serves, defined once. Everything else derives:
-# the gate's `models`/`aliases`, Aperture's route list, and — for entries with
-# `picker = true`, in this order — T3 Code's Codex harness (/codex/models),
-# Hermes' /model.
+# Models tiny-llm-gate declares, and the picker. Everything else is discovered
+# at runtime from each provider's model list (`discover` in
+# hosts/rpi5/agents/tiny-llm-gate.nix), so a new upstream model needs no edit here.
 #
-# Entry: id, provider (a gate provider), upstream (default: id), fallback,
-# picker, plus any other gate model field (e.g. default_embed_dimensions).
+# Declare a model only when something pins it, an alias targets it, or it needs
+# a fallback, a rename or a field like default_embed_dimensions.
+# Entry: id, provider, upstream (default: id), fallback, other gate model fields.
 let
   models = [
-    # ── Picker ──────────────────────────────────────────────────────────────
-    # ChatGPT plan (codex). The codex surface wants the tier-suffixed upstream
-    # id: a bare `gpt-6` is rejected for a ChatGPT account.
+    # ── Picker default and alias targets ────────────────────────────────────
+    # Hermes' default; Sure, the journal and travel-cal pin it.
     {
       id = "gpt-6-luna";
       provider = "codex";
       fallback = [ "gemma4:e4b" ];
-      picker = true;
     }
     {
       id = "gpt-6.1-sol";
       provider = "codex";
       fallback = [ "gemma4:e4b" ];
-      picker = true;
     }
     {
       id = "gpt-6.1-terra";
       provider = "codex";
-      picker = true;
-    }
-    # Astra burned the plan quota far faster than 5.6 (default rolled back
-    # 2026-09-09): picker-only, never a standing default.
-    {
-      id = "gpt-6";
-      provider = "codex";
-      upstream = "gpt-6-astra";
-      fallback = [ "gemma4:e4b" ];
-      picker = true;
-    }
-    # Asale: paid in USDT, so never in an automatic fallback.
-    {
-      id = "asale-gpt-6-luna";
-      provider = "asale";
-      upstream = "gpt-6-luna";
-      picker = true;
-    }
-    {
-      id = "asale-gpt-6.1-sol";
-      provider = "asale";
-      upstream = "gpt-6.1-sol";
-      picker = true;
-    }
-    {
-      id = "asale-gpt-6-astra";
-      provider = "asale";
-      upstream = "gpt-6-astra";
-      picker = true;
-    }
-    # Local: beast Ollama, then the Mac's oMLX (no fallback: a sleeping Mac
-    # should error, not spend codex quota).
-    {
-      id = "gemma4:26b";
-      provider = "ollama";
-      picker = true;
-    }
-    {
-      id = "qwen3.8:27b";
-      provider = "ollama";
-      picker = true;
-    }
-    {
-      id = "Qwen3.6-27B-4bit";
-      provider = "omlx";
-      picker = true;
-    }
-    {
-      id = "Qwen3.6-35B-A3B-4bit-DWQ";
-      provider = "omlx";
-      picker = true;
     }
 
     # ── Pinned by services, not offered ─────────────────────────────────────
@@ -159,7 +105,6 @@ let
     removeAttrs m [
       "id"
       "upstream"
-      "picker"
     ]
     // {
       upstream_model = m.upstream or m.id;
@@ -173,5 +118,17 @@ in
       value = gateModel m;
     }) models
   );
-  picker = map (m: m.id) (builtins.filter (m: m.picker or false) models);
+  # T3's Codex harness and Hermes' /model, in order: ids, `*` globs over
+  # declared + discovered models, `@provider`, and `!glob` to drop matches.
+  picker = [
+    "gpt-6-luna"
+    "gpt-6*"
+    "asale-gpt-6*"
+    "@ollama"
+    "@omlx"
+    "!*embed*"
+    "!auto"
+    "!gemma4:e4b"
+    "!qwen3-vl*"
+  ];
 }

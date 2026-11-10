@@ -42,7 +42,8 @@ in
       # quota of acct1 and the codex provider. Tokens stay in the gate.
       management.key_file = "/run/agenix/tiny-llm-gate-management-key";
 
-      # GET /codex/models: the picker list in Codex CLI's catalog format. rpi5's
+      # GET /codex/models: the picker (patterns over declared + discovered
+      # models) in Codex CLI's catalog format. rpi5's
       # ~/.codex/config.toml points codexproxy's model_catalog_url here, so T3
       # Code's Codex harness lists exactly these.
       codex_catalog = {
@@ -57,6 +58,7 @@ in
           type = "openai";
           base_url = beastApi;
           api_key = "ollama";
+          discover = true;
         };
 
         # Codex: native ChatGPT/Codex Responses API. The gate POSTs directly
@@ -76,6 +78,7 @@ in
             type = "oauth_chatgpt";
             file = "/var/lib/tiny-llm-gate/codex-credentials.json";
           };
+          discover = true;
         };
 
         # Asale's shared-capacity market, explicitly selected by model id.
@@ -87,6 +90,10 @@ in
             type = "bearer";
             token_file = "/run/agenix/asale-api-key";
           };
+          # Its /models lists ~390 paid models; only these become routable.
+          discover = true;
+          discover_prefix = "asale-";
+          discover_only = [ "gpt-6*" ];
         };
 
         # oMLX on the Mac (M3 Pro, MLX backend). Reached via the Mac's
@@ -97,6 +104,7 @@ in
           type = "openai";
           base_url = "https://macbook-pro-appleosx-15.gate-mintaka.ts.net:8443/v1";
           api_key = "unused";
+          discover = true;
         };
 
         # Claude, spoken natively (v0.9.4): the gate translates OpenAI chat ↔
@@ -111,7 +119,7 @@ in
         };
       };
 
-      # Defined in shared/llm-models.nix.
+      # Declared models only; the rest is discovered. See shared/llm-models.nix.
       models = llmModels.gate;
       inherit (llmModels) aliases;
 
