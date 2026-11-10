@@ -263,7 +263,19 @@ let
         model = gateModel;
         api_mode = "chat";
         models = lib.mapAttrs (_: len: { context_length = len; }) gateModels;
+        # A dict `models` is only metadata to Hermes: without this it live-probes
+        # Aperture's /v1/models and lists all ~100 ids, not the gate's picker.
+        discover_models = false;
       }
+    ];
+    # /model offers only the gate. These are detected from stray credentials
+    # (Nous login, CLAUDE_CODE_OAUTH_TOKEN, a Gemini key, GH_TOKEN).
+    model_catalog.excluded_providers = [
+      "nous"
+      "anthropic"
+      "gemini"
+      "copilot"
+      "openai-codex"
     ];
 
     # Native MCP client: launch mtg-mcp over stdio at startup and auto-register
