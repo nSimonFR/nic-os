@@ -260,7 +260,7 @@
     # v0.10.8 serves the Codex CLI catalog at /codex/models (#19); v0.10.9
     # discovers upstream models at runtime (#20).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/b0047eaf402bc37f705c55189ae52081f3ff5d49";
+      url = "github:nSimonFR/tiny-llm-gate/v0.10.9";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
