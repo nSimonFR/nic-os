@@ -156,6 +156,11 @@ in
           proxy_request_buffering off;
         '';
       };
+      # RR v6's public résumé page links "Download PDF" to /api/resumes/<user>/<slug>/pdf
+      # without the /rxresume base path (404 at the root). Send it back under the prefix.
+      "/api/resumes/" = {
+        return = "302 /rxresume$request_uri";
+      };
 
       # linear-t3-relay runs on the Mac (it drives the local T3 server), one
       # instance per Linear workspace; the Mac's tailmux serves its ports on the
