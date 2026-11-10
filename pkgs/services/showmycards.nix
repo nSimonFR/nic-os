@@ -174,7 +174,7 @@ let
   depsHashes = {
     aarch64-linux = {
       depsBuild = "sha256-qt9aK3a71tucnbjiu4ttLXBtzZUNxhaZE5Ma3icxxs8=";
-      depsProd = "sha256-2WFX1ZFPHayOhczzod3YOgSai0v33Ocz+UHRfIRmESo=";
+      depsProd = "sha256-w+jqOBsH/+X6yUFgkYxOlX9nflbKnMqXwYIkLakjiYU=";
     };
   };
 
