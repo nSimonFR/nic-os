@@ -259,7 +259,7 @@
     # /v1/messages body cap to 32 MiB (#18; memoryMax in tiny-llm-gate.nix follows).
     # v0.10.8 serves the Codex CLI catalog at /codex/models (#19).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/13547c821c0a7c109222117305f508b5c15f8d0e";
+      url = "github:nSimonFR/tiny-llm-gate/v0.10.8";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
