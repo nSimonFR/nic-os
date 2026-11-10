@@ -18,7 +18,10 @@ let
   home = config.home.homeDirectory;
   mountPoint = "${home}/Cloud";
   logs = "${home}/Library/Logs/cloud-mount.log";
-  sshCmd = "/usr/bin/ssh -o IdentityAgent=none -o ForwardAgent=no -o BatchMode=yes -o ConnectTimeout=15 nsimon@rpi5";
+  # ServerAlive*: ConnectTimeout only covers the handshake. A link that dies after
+  # sleep or a network change otherwise stalls the sftp session, and with it every
+  # process that touches the hard NFS mount (the Dock froze on 2026-11-10).
+  sshCmd = "/usr/bin/ssh -o IdentityAgent=none -o ForwardAgent=no -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 nsimon@rpi5";
   mount = pkgs.writeShellApplication {
     name = "cloud-mount";
     runtimeInputs = [ pkgs.rclone ];
