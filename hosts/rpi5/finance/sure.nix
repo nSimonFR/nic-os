@@ -68,7 +68,7 @@ let
     # NB the tier suffix is load-bearing on the codex surface — see the gate's
     # `models` block. `gpt-5.5-mini` is NOT a fallback to reach for: the
     # upstream rejects it outright with "not supported when using Codex with a
-    # ChatGPT account" (probed 2026-09-21), despite being declared there.
+    # ChatGPT account" (probed 2026-09-21); it is no longer declared in the gate.
     # `openai/` prefix is load-bearing too: Aperture resolves a bare
     # `gpt-6-luna` to the gate's `asale/gpt-6-luna` alias, which 402'd every
     # call from 2026-10-18 (1638 failures, nothing categorized).

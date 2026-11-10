@@ -137,24 +137,6 @@ in
         };
 
         # -- Codex models (OpenAI subscription via native ChatGPT OAuth) --
-        "gpt-5.5" = {
-          provider = "codex";
-          upstream_model = "gpt-5.5";
-          fallback = [ "gemma4:e4b" ];
-        };
-        "gpt-5.5-mini" = {
-          provider = "codex";
-          upstream_model = "gpt-5.5-mini";
-          fallback = [ "gemma4:e4b" ];
-        };
-        "gpt-5.2" = {
-          provider = "codex";
-          upstream_model = "gpt-5.2";
-        };
-        "gpt-5.3-codex" = {
-          provider = "codex";
-          upstream_model = "gpt-5.3-codex";
-        };
         "codex-auto-review" = {
           provider = "codex";
           upstream_model = "codex-auto-review";
@@ -322,10 +304,6 @@ in
         "openai/qwen3.8:27b" = "qwen3.8:27b";
         "openai/qwen3-vl:8b" = "qwen3-vl:8b";
         "openai/qwen3-embedding:8b" = "qwen3-embedding:8b";
-        "openai/gpt-5.5" = "gpt-5.5";
-        "openai/gpt-5.5-mini" = "gpt-5.5-mini";
-        "openai/gpt-5.2" = "gpt-5.2";
-        "openai/gpt-5.3-codex" = "gpt-5.3-codex";
         "openai/codex-auto-review" = "codex-auto-review";
         # GPT-5.6 tiers. `gpt-5.6-sol`/`gpt-5.6` both resolve to the flagship,
         # mirroring OpenAI's own aliasing.

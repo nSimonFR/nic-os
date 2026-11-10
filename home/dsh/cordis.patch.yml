@@ -74,7 +74,6 @@
         # wrong.
         models:
           - id: gpt-5.6          # ChatGPT subscription via tlg's codex provider — the default
-          - id: gpt-5.5          # previous generation, still served by the gate
           # GPT-6 stays SELECTABLE but is deliberately not the default anywhere
           # except Hermes' /model picker: it burned the ChatGPT plan quota far
           # faster than the 5.6 tiers did (rolled back 2026-09-09). Pick it per
@@ -85,11 +84,6 @@
           - id: asale-gpt-6-astra # paid Asale market, manual opt-in
           - id: asale-gpt-6-luna
           - id: asale-gpt-6-sol
-          # gpt-5.5-mini is deliberately absent. A hand-declared model takes
-          # the route's 262144 fallback, and the mini answered dsh's system
-          # prompt + tool schemas with a hard 400 CONTEXT_WINDOW_EXCEEDED.
-          # Re-add it with a `contextWindow:` someone has actually verified,
-          # not a guessed number.
           - id: gemma4:e4b       # beast Ollama, free local
           - id: gemma4:26b
           - id: auto             # tlg's beast-first, codex-fallback route

@@ -40,6 +40,8 @@ let
   #   claude-fable-5   (public 2026-06-09) — most capable widely-released model
   #   claude-opus-5    (public 2026-07-24) — flagship Opus, new Max/Pro default
   #   claude-opus-5-5  (first seen in claude-code 2.1.280)
+  #   claude-fable-5-1 / 5-2, claude-sonnet-5-5, claude-haiku-5-5
+  #     (2026-09-01 … 2026-11-09; fable-5-2's id is from a third-party listing)
   # They are newer than the pinned claude-code, so the regex extraction above
   # can't see them yet — list them explicitly so the Anthropic passthrough
   # provider routes them now. Once a newer claude-code lands in nixpkgs the
@@ -50,6 +52,10 @@ let
       "claude-fable-5"
       "claude-opus-5"
       "claude-opus-5-5"
+      "claude-fable-5-1"
+      "claude-fable-5-2"
+      "claude-sonnet-5-5"
+      "claude-haiku-5-5"
     ]
     # Asale routes have to be listed here too, or Aperture refuses them on /v1/messages.
     ++ builtins.attrNames (gateCfg.anthropic.routes or { })
