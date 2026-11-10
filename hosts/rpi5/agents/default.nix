@@ -3,7 +3,6 @@
   imports = [
     ./entire.nix
     ./cyrus.nix
-    ./dsh.nix
     ./t3code.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix

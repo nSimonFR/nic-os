@@ -20,7 +20,6 @@
     ./wakatime.nix
     ./editors.nix
     ./pi-coding-agent
-    ./dsh
     ./rtk
   ];
 

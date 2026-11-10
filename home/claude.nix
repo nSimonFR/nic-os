@@ -28,7 +28,6 @@ let
     ".claude/skills"
     ".codex/skills"
     ".pi/agent/skills"
-    ".dsh/skills"
   ];
 
   # Trusk lives in the private nSimonFR/trusk checkout (Mac only), never in this
