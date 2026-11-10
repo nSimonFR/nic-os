@@ -13,21 +13,19 @@
 #   * $out/bin/showmycards-backend   — Go/Fiber API (SQLite, cgo); GODEBUG pinned
 #   * $out/bin/showmycards-frontend  — SvelteKit adapter-node server (`node build`)
 #
-# node_modules are materialised by fixed-output derivations that run
-# `npm install` (network is allowed in FODs). We use npm --legacy-peer-deps
-# rather than upstream's `bun install` because bun 1.3.x mis-extracts daisyui's
-# root files (index.js / daisyui.css from its package `files` field) →
-# "@tailwindcss/vite: Failed to resolve entry for package daisyui". npm honours
-# `files` correctly. The repo ships bun.lock (no package-lock.json), so the FOD
-# outputHash — not a lockfile — is what pins determinism here.
+# node_modules are built offline from ./showmycards-package-lock.json with
+# importNpmLock, so no output hash can drift with the npm registry. Upstream ships
+# bun.lock only, and bun 1.3.x mis-extracts daisyui's root files ("@tailwindcss/vite:
+# Failed to resolve entry for package daisyui"), hence npm + --legacy-peer-deps.
 #
-# ⚠ HASHES. vendorHash + the two FOD outputHashes below are content hashes of
-#   fetched dependencies, so they change whenever the pinned source's go.sum or
-#   frontend deps move. After bumping showmycards-src, set the changed one back
-#   to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
-#   The two frontend FOD hashes are PER-SYSTEM (see `depsHashes` below) — recompute
-#   them on the platform you are building for, and never copy one arch's value
-#   into another arch's slot.
+# ⚠ LOCKFILE. It must match showmycards-src's frontend/package.json; a stale one
+#   fails the build offline. After bumping the source, regenerate it:
+#     cp <src>/frontend/package.json /tmp/fe && cd /tmp/fe &&
+#     npm install --package-lock-only --legacy-peer-deps
+#   and copy the package-lock.json over the vendored one.
+#
+# ⚠ HASH. Only the Go `vendorHash` below is a content hash; after a go.sum change
+#   set it to lib.fakeHash, build once, and paste the `got: sha256-…` Nix reports.
 #
 # ⚠ SOURCE PATCHES. `postPatch` rewrites the bulk-import timeout, adds an en+fr
 #   language filter (see the call site), and lowers go.mod's toolchain floor (see
@@ -53,13 +51,12 @@
 {
   lib,
   stdenv,
-  stdenvNoCC,
   showmycards-src,
   buildGoModule,
   go,
   gcc,
   nodejs_22,
-  cacert,
+  importNpmLock,
   makeWrapper,
 }:
 
@@ -109,96 +106,47 @@ let
     doCheck = false;
   };
 
-  # ── Frontend node_modules via fixed-output derivations (npm, see header) ───
+  # ── Frontend node_modules, offline from the vendored lockfile ──────────────
   mkNpmModules =
-    {
-      name,
-      npmArgs,
-      outputHash,
-    }:
-    stdenvNoCC.mkDerivation {
-      name = "showmycards-frontend-${name}-${version}";
-      inherit src;
-      nativeBuildInputs = [
-        nodejs_22
-        cacert
-      ];
-      dontUnpack = true;
-      dontConfigure = true;
-      dontFixup = true;
-      buildPhase = ''
-        runHook preBuild
-        export HOME=$TMPDIR
-        export SSL_CERT_FILE=${cacert}/etc/ssl/certs/ca-bundle.crt
-        export npm_config_cache=$TMPDIR/npm-cache
-        # Skip browser/binary downloads pulled by some devDeps (playwright).
-        export PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-        # Copy the frontend subtree out of the read-only source and install there.
-        cp -R ${src}/frontend/. .
-        chmod -R u+w .
-        npm install ${npmArgs} --legacy-peer-deps --no-audit --no-fund --no-progress
-        runHook postBuild
-      '';
-      installPhase = ''
-        runHook preInstall
-        rm -rf node_modules/.cache
-        mkdir -p $out
-        cp -R node_modules $out/node_modules
-        runHook postInstall
-      '';
-      outputHashMode = "recursive";
-      outputHashAlgo = "sha256";
-      inherit outputHash;
+    { name, npmFlags }:
+    importNpmLock.buildNodeModules {
+      nodejs = nodejs_22;
+      package =
+        let
+          pkg = lib.importJSON "${src}/frontend/package.json";
+        in
+        # importNpmLock rewrites direct deps to store paths, so an override that
+        # repeats a direct dependency's range (vite) must refer to it instead.
+        pkg
+        // {
+          overrides = pkg.overrides // {
+            vite = "$vite";
+          };
+        };
+      packageLock = lib.importJSON ./showmycards-package-lock.json;
+      derivationArgs = {
+        pname = "showmycards-frontend-${name}";
+        inherit version;
+        npmFlagsArray = npmFlags;
+        # Skip browser binary downloads pulled by some devDeps (playwright).
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD = "1";
+      };
     };
-
-  # The two hashes above are PER-SYSTEM, hence this attrset rather than two bare
-  # literals. `npm install` materialises only the optional deps whose package.json
-  # `os`/`cpu` match the host (@rollup/rollup-linux-{arm64,x64}-gnu,
-  # @esbuild/linux-*, lightningcss-*), so the recursive hash of the node_modules
-  # tree differs between aarch64 and x86_64 and a hash recorded on one arch can
-  # never validate on the other.
-  #
-  # This is NOT the case for the npmDepsHash packages elsewhere in pkgs/ (ha-linky,
-  # ble-scale-sync, affine-mcp-server, epicgames-freegames-node): buildNpmPackage's
-  # fetchNpmDeps walks package-lock.json with prefetch-npm-deps, whose Package
-  # struct carries only name/resolved/integrity — it downloads every entry
-  # regardless of os/cpu, so that FOD is arch-independent. The difference is that
-  # this package has no package-lock.json to walk (upstream ships bun.lock only),
-  # so we hash a real installed tree instead.
-  #
-  # Only aarch64-linux is recorded: the rpi5 is the only host that builds this
-  # (see the header — the published image is amd64, which is why we build from
-  # source at all). Adding x86_64-linux means BUILDING it there and pasting the
-  # `got:` hash — do not copy the aarch64 value across, that just moves the
-  # breakage. Same shape, and the same fix, as airtrail-nix's `depsHashes`.
-  depsHashes = {
-    aarch64-linux = {
-      depsBuild = "sha256-xH+hhtmtGjMRzuXRQmibLGMMnZ8QpZR0oRUzj3qBYQA=";
-      depsProd = "sha256-w+jqOBsH/+X6yUFgkYxOlX9nflbKnMqXwYIkLakjiYU=";
-    };
-  };
-
-  hashes =
-    depsHashes.${stdenv.hostPlatform.system} or (
-      throw "showmycards: no frontend npm dependency hashes recorded for ${stdenv.hostPlatform.system}. "
-      + "`npm install` resolves arch-specific optional deps, so the hash is per-system: "
-      + "set both to lib.fakeHash, build on that platform, and add the reported `got:` "
-      + "hashes as a new depsHashes.${stdenv.hostPlatform.system} entry."
-    );
 
   # Full tree (dev + prod) used to run `vite build`.
   depsBuild = mkNpmModules {
     name = "deps-build";
-    npmArgs = "";
-    outputHash = hashes.depsBuild;
+    npmFlags = [ "--legacy-peer-deps" ];
   };
 
   # Production-only tree shipped at runtime. adapter-node keeps `dependencies`
   # external (see frontend package.json), so `node build` needs them present.
   depsProd = mkNpmModules {
     name = "deps-prod";
-    npmArgs = "--omit=dev";
-    outputHash = hashes.depsProd;
+    npmFlags = [
+      "--legacy-peer-deps"
+      "--omit=dev"
+    ];
   };
 
 in
