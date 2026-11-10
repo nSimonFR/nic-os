@@ -18,7 +18,17 @@
 
   # The Aperture provider + default model. See the file's own header for the
   # patch grammar and why settings.yaml is not managed here.
-  home.file.".dsh/cordis.patch.yml".source = ./cordis.patch.yml;
+  home.file.".dsh/cordis.patch.yml".text =
+    let
+      inherit ((import ../../shared/llm-models.nix)) picker;
+      ids = lib.unique ([ "gpt-5.6" ] ++ picker);
+    in
+    builtins.replaceStrings
+      [ "          # @MODELS@\n" ]
+      [
+        (lib.concatMapStrings (id: "          - id: ${id}\n") ids)
+      ]
+      (builtins.readFile ./cordis.patch.yml);
 
   # Skills reach ~/.dsh/skills through home/claude.nix's shared skill lineage —
   # dsh-skill-filesystem scans <dshHome>/skills for <name>/SKILL.md bundles,

@@ -43,7 +43,7 @@ no HTTP gateway to curl.
   **Aperture** (`http://ai.gate-mintaka.ts.net/v1`), which forwards to
   tiny-llm-gate so usage and cost land on the observability dashboard. Current
   model: `gpt-6-luna` (GPT-6 Luna) by default; `/model` offers the shared picker
-  list in `hosts/rpi5/agents/llm-models.nix` (e.g. `gpt-6.1-sol`, `gpt-6`),
+  list in `shared/llm-models.nix` (e.g. `gpt-6.1-sol`, `gpt-6`),
   session-scoped. Plan quota except `asale-*` and the local models. `asale-*` ids spend paid credits: only on purpose. **No Anthropic fallback** — deliberately; see the long
   note in `hermes.nix`, do not re-add one.
 
