@@ -17,6 +17,23 @@ let
   beastApi = "${beastOllamaUrl}/v1";
   llmModels = import ../../../shared/llm-models.nix;
 
+  # The TypeSafe key lives in Agent Vault's root-only KEY=VAL file; the gate's
+  # DynamicUser gets just that one key, in its runtime dir.
+  typesafeKeyFile = "/run/tiny-llm-gate/typesafe-api-key";
+  typesafeKey = pkgs.writeShellApplication {
+    name = "tiny-llm-gate-typesafe-key";
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.gnused
+    ];
+    text = ''
+      umask 077
+      sed -n 's/^\(export \)\{0,1\}TYPESAFE_API_KEY=//p' ${config.age.secrets.agent-brokered-env.path} \
+        | head -n1 | tr -d "'\"" > ${typesafeKeyFile}
+      chown --reference=/run/tiny-llm-gate ${typesafeKeyFile}
+    '';
+  };
+
 in
 {
   imports = [ inputs.tiny-llm-gate.nixosModules.default ];
@@ -167,6 +184,41 @@ in
       # minimum length. With one account there is nothing to switch to, so the
       # gate's sticky-until-429 failover is inert (naive round-robin was
       # rejected as ToS-adjacent, and is not what this ever did).
+      # `smart`: Jev reads each user turn and serves it on Luna, or on Sol when
+      # a question fires. Thresholds are a first guess; tune from the
+      # `route_signals` log field. Astra stays a manual /model pick.
+      routers.smart = {
+        classifier = {
+          model = "jev-1.13.0";
+          auth = {
+            type = "bearer";
+            token_file = typesafeKeyFile;
+          };
+        };
+        tiers = [
+          "gpt-6-luna"
+          "gpt-6.1-sol"
+        ];
+        on_error = "gpt-6.1-sol";
+        questions = {
+          multi_step_tools = {
+            instructions = "Will answering need several actions or tool calls (searching, reading files, running commands, querying services) rather than one direct reply?";
+            escalate_to = "gpt-6.1-sol";
+            threshold = 0.5;
+          };
+          deep_reasoning = {
+            instructions = "Does it ask for debugging, root-cause analysis, planning, a design or a non-trivial calculation, rather than a lookup, a short fact or small talk?";
+            escalate_to = "gpt-6.1-sol";
+            threshold = 0.4;
+          };
+          high_stakes = {
+            instructions = "Would a wrong or careless answer risk money, security, health, legal trouble, data loss or a production system?";
+            escalate_to = "gpt-6.1-sol";
+            threshold = 0.4;
+          };
+        };
+      };
+
       anthropic = {
         upstream = "https://api.anthropic.com";
 
@@ -281,8 +333,12 @@ in
     serviceConfig = {
       StateDirectory = "tiny-llm-gate";
       StateDirectoryMode = "0700";
+      RuntimeDirectory = "tiny-llm-gate";
+      RuntimeDirectoryMode = "0700";
       ExecStartPre = [
         "-+${pkgs.coreutils}/bin/chown --reference=/var/lib/tiny-llm-gate /var/lib/tiny-llm-gate/codex-credentials.json"
+        # "-": a missing key only disables the router's classifier (turns go to on_error).
+        "-+${lib.getExe typesafeKey}"
       ];
     };
   };
