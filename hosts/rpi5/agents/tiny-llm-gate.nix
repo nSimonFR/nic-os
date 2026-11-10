@@ -15,6 +15,7 @@
 let
   port = 4001;
   beastApi = "${beastOllamaUrl}/v1";
+  llmModels = import ./llm-models.nix;
 
 in
 {
@@ -40,6 +41,15 @@ in
       # CLIProxyAPI-compatible /v0/management: T3 Code's usage hub reads the
       # quota of acct1 and the codex provider. Tokens stay in the gate.
       management.key_file = "/run/agenix/tiny-llm-gate-management-key";
+
+      # GET /codex/models: the picker list in Codex CLI's catalog format. rpi5's
+      # ~/.codex/config.toml points codexproxy's model_catalog_url here, so T3
+      # Code's Codex harness lists exactly these.
+      codex_catalog = {
+        provider = "codex";
+        models = llmModels.picker;
+        template = "gpt-6-luna";
+      };
 
       providers = {
         # Ollama on beast — no auth, plain OpenAI-compat.
@@ -136,115 +146,45 @@ in
           default_embed_dimensions = 1024;
         };
 
-        # -- Codex models (OpenAI subscription via native ChatGPT OAuth) --
-        "codex-auto-review" = {
-          provider = "codex";
-          upstream_model = "codex-auto-review";
-        };
-
-        # -- GPT-5.6 tiers (Sol / Terra / Luna), GA 2026-07-09. Client-facing
-        #    `gpt-5.6` is the flagship Sol; Terra is the balanced coding tier,
-        #    Luna the high-volume/extraction tier. Same gemma4:e4b fallback as
-        #    5.5 so the bot keeps answering when codex/OAuth is down.
-        #    NB: the codex surface requires the tier-SUFFIXED upstream id — the
-        #    bare `gpt-5.6` alias is rejected ("not supported when using Codex
-        #    with a ChatGPT account"), so Sol maps upstream to `gpt-5.6-sol`.
-        #    All three verified live via /v1/chat/completions on 2026-07-20.
+        # -- Codex (ChatGPT plan via native OAuth). The codex surface needs the
+        #    tier-suffixed upstream id: a bare `gpt-5.6` / `gpt-6` is rejected
+        #    ("not supported when using Codex with a ChatGPT account").
         #
-        #    `gpt-5.6` (Sol) is THE fleet default — dsh, pi-coding-agent,
-        #    wealthfolio, hermes and "auto"'s codex hop all name this one id, so
-        #    there is a single model to reason about. The GPT-6 switch of
-        #    2026-09-07 was rolled back here on 2026-09-09 (see below).
-        #
-        #    Sure used to be the only 5.6-Luna caller, but that is gone too:
-        #    all standing 5.6 use now lands on Sol, and cheaper/larger tiers are
-        #    explicit model choices rather than hidden defaults.
+        # gpt-5.6 (Sol) is no longer offered in pickers; pi, Wealthfolio, dsh
+        # and "auto"'s codex hop still pin it.
         "gpt-5.6" = {
           provider = "codex";
           upstream_model = "gpt-5.6-sol";
           fallback = [ "gemma4:e4b" ];
         };
+        # Pinned by four Hermes cron jobs (~/.hermes/cron/jobs.json).
         "gpt-5.6-terra" = {
           provider = "codex";
           upstream_model = "gpt-5.6-terra";
           fallback = [ "gemma4:e4b" ];
         };
-
-        # Manual paid Asale choices. They stay out of automatic fallbacks: a
-        # session spends USDT only after selecting one of these ids.
-        "asale-gpt-5.6-sol" = {
-          provider = "asale";
-          upstream_model = "gpt-5.6-sol";
-        };
-        "asale-gpt-5.6-terra" = {
-          provider = "asale";
-          upstream_model = "gpt-5.6-terra";
-        };
-
-        # -- GPT-6 generation. The codex surface offers TWO tiers, not 5.6's
-        #    three: `gpt-6-astra` ("our most capable model for complex,
-        #    demanding work", default reasoning low) and `gpt-reserve` ("fast
-        #    and affordable agentic coding model", default medium). 5.6's
-        #    balanced middle tier (Terra) has NO GPT-6 successor — Astra is the
-        #    replacement for both Sol and Terra here, Reserve for Luna.
-        #    Client-facing `gpt-6` is Astra, mirroring how `gpt-5.6` is Sol.
-        #    Same bare-alias trap as 5.6, re-verified 2026-09-06: upstream
-        #    rejects a bare `gpt-6` with 400 "The 'gpt-6' model is not
-        #    supported when using Codex with a ChatGPT account", so the
-        #    upstream id must carry the tier (`gpt-6-astra`). `gpt-reserve`
-        #    carries no generation prefix upstream — that IS its slug.
-        #    Both tiers verified live end-to-end through this gate's codex
-        #    provider on 2026-09-06 (chat, streaming, tool_calls, strict
-        #    json_schema, token counts), enumerated from
-        #    /backend-api/codex/models?client_version=1.0.0 — note the gate's
-        #    own 0.9.x client_version returns an EMPTY model list there, which
-        #    is a listing quirk only: /responses serves both tiers fine.
-        #    Context window is 272k (872k max), same as the 5.6 tiers.
-        #
-        #    ⚠ DECLARED, BUT THE DEFAULT NOWHERE. Every agent ran Astra from
-        #    2026-09-07 and it burned the ChatGPT plan quota far faster than
-        #    the 5.6 tiers did, so the fleet was normalized onto `gpt-5.6` on
-        #    2026-09-09. Don't make it a default again without a usage budget
-        #    to spend.
-        #
-        #    ON-DEMAND ACCESS, deliberately, in two places: Hermes declares
-        #    `gpt-6` alongside `gpt-5.6` so its Telegram `/model` picker can
-        #    switch a single SESSION to Astra (hosts/rpi5/agents/hermes/hermes.nix
-        #    `gateModels`), and dsh keeps both GPT-6 tiers in its selectable
-        #    model list. Both are per-conversation opt-ins that fall back to
-        #    gpt-5.6 on restart — no path where GPT-6 becomes the standing
-        #    model without someone editing Nix.
+        # GPT-6 Astra burned the plan quota far faster than 5.6 (rolled back
+        # as a default 2026-09-09): picker-only, never a standing default.
         "gpt-6" = {
           provider = "codex";
           upstream_model = "gpt-6-astra";
           fallback = [ "gemma4:e4b" ];
         };
-        "gpt-reserve" = {
-          provider = "codex";
-          upstream_model = "gpt-reserve";
-          fallback = [ "gemma4:e4b" ];
-        };
-        # Luna/Sol joined the plan's codex listing after the 09-06 probe (seen
-        # only with client_version=1.0.0). Luna passed strict json_schema, tools
-        # and streaming here on 2026-09-24.
         "gpt-6-luna" = {
           provider = "codex";
           upstream_model = "gpt-6-luna";
           fallback = [ "gemma4:e4b" ];
         };
-        # Sol is 6.1 only; `gpt-6-sol` is an alias to it below. Codex CLI only
-        # lists 6.1 from 0.159.0; the gate's Codex Desktop fingerprint already
-        # gets it (probed OK 2026-10-01, Plus).
         "gpt-6.1-sol" = {
           provider = "codex";
           upstream_model = "gpt-6.1-sol";
           fallback = [ "gemma4:e4b" ];
         };
-        # Terra is back as a 6.1 tier; the 5.6 `gpt-5.6-terra` above is the old one.
         "gpt-6.1-terra" = {
           provider = "codex";
           upstream_model = "gpt-6.1-terra";
         };
+        # Asale: paid in USDT, so never in an automatic fallback.
         "asale-gpt-6-astra" = {
           provider = "asale";
           upstream_model = "gpt-6-astra";
@@ -296,40 +236,12 @@ in
       };
 
       aliases = {
-        # PicoClaw strips "openai/" prefix, older configs may still carry
-        # it — handle both.
-        "openai/gemma4:e4b" = "gemma4:e4b";
-        "openai/gemma4:26b" = "gemma4:26b";
-        "openai/qwen3.8:27b" = "qwen3.8:27b";
-        "openai/qwen3-vl:8b" = "qwen3-vl:8b";
-        "openai/qwen3-embedding:8b" = "qwen3-embedding:8b";
-        "openai/codex-auto-review" = "codex-auto-review";
-        # GPT-5.6 tiers. `gpt-5.6-sol`/`gpt-5.6` both resolve to the flagship,
-        # mirroring OpenAI's own aliasing.
-        "gpt-5.6-sol" = "gpt-5.6";
-        "openai/gpt-5.6" = "gpt-5.6";
-        "openai/gpt-5.6-sol" = "gpt-5.6";
-        "openai/gpt-5.6-terra" = "gpt-5.6-terra";
-        # GPT-6. `gpt-6-astra` (the upstream slug) resolves to the same
-        # client-facing `gpt-6`, mirroring the gpt-5.6-sol → gpt-5.6 aliasing.
-        "gpt-6-astra" = "gpt-6";
-        "openai/gpt-6" = "gpt-6";
-        "openai/gpt-6-astra" = "gpt-6";
-        "openai/gpt-reserve" = "gpt-reserve";
+        # Kept for Sure, Alfie's Hermes "candidatures" profile (private repo) and
+        # Hermes /model overrides persisted per chat. Same models, so Aperture's
+        # suffix match can't misroute them the way `asale/gpt-6-luna` once did.
         "openai/gpt-6-luna" = "gpt-6-luna";
-        "gpt-6-sol" = "gpt-6.1-sol";
-        "openai/gpt-6-sol" = "gpt-6.1-sol";
         "openai/gpt-6.1-sol" = "gpt-6.1-sol";
         "openai/gpt-6.1-terra" = "gpt-6.1-terra";
-        "openai/asale-gpt-6-astra" = "asale-gpt-6-astra";
-        "openai/asale-gpt-6-luna" = "asale-gpt-6-luna";
-        "asale-gpt-6-sol" = "asale-gpt-6.1-sol";
-        "openai/asale-gpt-6-sol" = "asale-gpt-6.1-sol";
-        "openai/asale-gpt-6.1-sol" = "asale-gpt-6.1-sol";
-        "asale/gpt-6-astra" = "asale-gpt-6-astra";
-        "asale/gpt-6-luna" = "asale-gpt-6-luna";
-        "asale/gpt-6-sol" = "asale-gpt-6.1-sol";
-        "asale/gpt-6.1-sol" = "asale-gpt-6.1-sol";
 
         # Wealthfolio's OpenAI provider hardcodes `gpt-5.4-nano` as its
         # THREAD-TITLE model (`titleModelId` in the provider catalog baked into

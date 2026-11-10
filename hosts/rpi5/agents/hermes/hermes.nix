@@ -67,30 +67,17 @@ let
   # Aperture rejects /v1/embeddings — harmless here because memory.provider is
   # `holographic`, which runs on local SQLite/FTS5 and needs no embeddings.
   gateBase = "${apertureUrl}/v1";
-  # Hermes defaults to GPT-6 Luna through tiny-llm-gate's Codex route. Other
-  # agents keep their own defaults; this only changes Hermes. The `openai/`
-  # prefix keeps Aperture from resolving it to the `asale/gpt-6-luna` alias.
-  gateModel = "openai/gpt-6-luna";
+  # Hermes defaults to GPT-6 Luna through tiny-llm-gate's Codex route.
+  gateModel = "gpt-6-luna";
 
   # `/model` in Telegram switches the session to any id declared here —
   # hermes_cli/model_switch.py `_declared_model_ids` takes this mapping's KEYS
   # as the picker's list. The switch is session-scoped, so a /new or restart
   # returns to gateModel. Cron jobs pin their own model and are unaffected.
+  # The list is shared with T3 Code (../llm-models.nix).
   #
-  # Context lengths are declared below these models' real windows — 131072 was
-  # proven in service here and there is no reason to push it.
-  gateModels = {
-    "gpt-5.6" = 131072;
-    "gpt-6" = 131072;
-    # GPT-6.1 Sol on the plan route, for a session that needs more than Luna
-    # (`/model openai/gpt-6.1-sol`); `asale-gpt-6.1-sol` is the paid one.
-    "openai/gpt-6.1-sol" = 131072;
-    "openai/gpt-6.1-terra" = 131072;
-    "openai/gpt-6-luna" = 131072;
-    "asale-gpt-6-astra" = 131072;
-    "asale-gpt-6-luna" = 131072;
-    "asale-gpt-6.1-sol" = 131072;
-  };
+  # 131072 is below every listed model's real window; proven in service here.
+  gateModels = lib.genAttrs (import ../llm-models.nix).picker (_: 131072);
 
   # NO Anthropic fallback here, deliberately — do not re-add one without
   # funding Extra Usage first (claude.ai/settings/usage).
