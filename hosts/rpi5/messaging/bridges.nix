@@ -22,18 +22,10 @@ let
   serverRe = lib.escapeRegex serverName;
 
   goolm = p: p.override { withGoolm = true; };
-  # Not in nixpkgs (Telegram there is the retired Python bridge).
-  mkBridge =
-    repo: tag: hash: vendorHash:
-    pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix {
-      buildGoModule = pkgs.buildGoModule.override { go = pkgs.go_1_26; };
-      inherit
-        repo
-        tag
-        hash
-        vendorHash
-        ;
-    };
+  # Upstream release binaries (pkgs/services/mautrix-bridge.nix).
+  release =
+    repo: tag: hash:
+    pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo tag hash; };
 
   # port: the bridge's appservice listener, loopback.
   bridges = {
@@ -57,9 +49,7 @@ let
       port = 29335;
     };
     telegram = {
-      package =
-        mkBridge "telegram" "v0.2610.0" "sha256-2oHtqtpFhNr+v49nMSe33RGDj+MQV2D/+8JX+YYWi+0="
-          "sha256-JbnlJnCtIKC3rpO2mBa7DvEFeWuq9tpvN9H+MoQ5VV0=";
+      package = release "telegram" "v0.2610.0" "sha256-JfBXwresH4kiX1Ltp1YV/wMMM8v+RSJsWYpjYu9lFvU=";
       port = 29317;
       # TELEGRAM_API_ID / TELEGRAM_API_HASH, from https://my.telegram.org/apps.
       environmentFile = "/run/agenix/mautrix-telegram-env";
@@ -69,16 +59,19 @@ let
       };
     };
     linkedin = {
-      package =
-        mkBridge "linkedin" "v0.2609.0" "sha256-tGgxlcDq5BfGOmabukfDqZ88lcCLx4/WXHOYHuSxO04="
-          "sha256-6WaikDU5tIMdZdBiAqMPOaiG+mmptTi7GFgPMxB/04E=";
+      package = release "linkedin" "v0.2609.0" "sha256-0IAvhwycxjCFBdIILMjn6kOmUdbWtYL30UsFuCDDmo8=";
       port = 29341;
     };
     twitter = {
-      package =
-        mkBridge "twitter" "v0.2609.0" "sha256-reUzyhigVZM9IqYGHMOTdTT0UTD9oAEJkeqUFvGmGvM="
-          "sha256-tePfW71Rd1krac2+UQK7JhyyKqkyAGyMkXh1knvtZUM=";
+      package = release "twitter" "v0.2609.0" "sha256-gNa9v3cSHAbZB+khnVJ75S6ViYO+YFXVYr4d6k4aHTM=";
       port = 29327;
+    };
+    # Pre-bridgev2 (bridgev2 is only on an unreleased branch): older config
+    # layout. nixpkgs' build needs the insecure-flagged libolm; upstream's is static.
+    discord = {
+      package = release "discord" "v0.7.7" "sha256-AzwRW35c0xsVWiQuw3KwqGKWK6pUAWkNsuD6lnaJuck=";
+      port = 29334;
+      legacy = true;
     };
   };
 
@@ -161,22 +154,34 @@ let
         };
       };
     in
-    lib.recursiveUpdate common {
-      appservice.username_template = "${name}_{{.}}";
-      database = database name;
-      bridge = {
-        permissions.${owner} = "admin";
-        personal_filtering_spaces = true;
-      };
-      double_puppet.secrets.${serverName} = doublePuppetSecret;
-      encryption.allow = false;
-      provisioning.shared_secret = "disable";
-      backfill = {
-        enabled = true;
-        max_initial_messages = 50;
-      };
-      network = b.network or { };
-    };
+    lib.recursiveUpdate common (
+      if b.legacy or false then
+        {
+          appservice.database = database name;
+          bridge = {
+            username_template = "${name}_{{.}}";
+            permissions.${owner} = "admin";
+            login_shared_secret_map.${serverName} = doublePuppetSecret;
+          };
+        }
+      else
+        {
+          appservice.username_template = "${name}_{{.}}";
+          database = database name;
+          bridge = {
+            permissions.${owner} = "admin";
+            personal_filtering_spaces = true;
+          };
+          double_puppet.secrets.${serverName} = doublePuppetSecret;
+          encryption.allow = false;
+          provisioning.shared_secret = "disable";
+          backfill = {
+            enabled = true;
+            max_initial_messages = 50;
+          };
+          network = b.network or { };
+        }
+    );
 
   yaml = (pkgs.formats.yaml { }).generate;
   registrationFiles = lib.mapAttrs (name: r: yaml "${name}-registration.yaml" r) registrations;

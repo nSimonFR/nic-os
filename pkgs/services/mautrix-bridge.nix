@@ -1,39 +1,32 @@
-# A mautrix bridgev2 bridge nixpkgs does not ship (or ships as the retired
-# Python one). Every bridgev2 repo has the same layout: cmd/mautrix-<repo>.
-# goolm, not libolm: nixpkgs marks olm insecure, and the bridged rooms here are
-# unencrypted anyway (hosts/rpi5/messaging/bridges.nix).
+# A mautrix bridge from upstream's own release binary (static, aarch64): the ones
+# nixpkgs lacks (Telegram's Go rewrite, LinkedIn, X) or ships only linked against
+# the insecure-flagged libolm (Discord). Same recipe as mtg-mcp: no Go toolchain,
+# no vendorHash; a bump is the tag plus the hash from the release's sha256sums.txt.
 {
   lib,
-  buildGoModule,
-  fetchFromGitHub,
+  stdenvNoCC,
+  fetchurl,
   repo,
   tag,
   hash,
-  vendorHash,
 }:
-buildGoModule {
+stdenvNoCC.mkDerivation {
   pname = "mautrix-${repo}";
   version = lib.removePrefix "v" tag;
 
-  src = fetchFromGitHub {
-    owner = "mautrix";
-    inherit repo tag hash;
+  src = fetchurl {
+    url = "https://github.com/mautrix/${repo}/releases/download/${tag}/mautrix-${repo}-arm64";
+    inherit hash;
   };
-
-  inherit vendorHash;
-  subPackages = [ "cmd/mautrix-${repo}" ];
-  tags = [ "goolm" ];
-  ldflags = [
-    "-s"
-    "-w"
-    "-X"
-    "main.Tag=${tag}"
-  ];
+  dontUnpack = true;
+  installPhase = "install -Dm755 $src $out/bin/mautrix-${repo}";
 
   meta = {
-    description = "Matrix-${repo} puppeting bridge";
+    description = "Matrix-${repo} puppeting bridge (upstream release binary)";
     homepage = "https://github.com/mautrix/${repo}";
     license = lib.licenses.agpl3Only;
+    platforms = [ "aarch64-linux" ];
+    sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
     mainProgram = "mautrix-${repo}";
   };
 }

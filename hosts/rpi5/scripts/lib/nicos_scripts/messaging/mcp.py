@@ -31,14 +31,14 @@ READ_TOOLS = {
     "list_chats": {
         "description": (
             "Conversations of Nico's on every bridged network (WhatsApp, Signal, Telegram, "
-            "Instagram, Slack, LinkedIn, X), "
+            "Instagram, Slack, Discord, LinkedIn, X), "
             "most recent first, with the last message and the unread count."
         ),
         "inputSchema": _schema(
             {
                 "network": {
                     **_STR,
-                    "description": "whatsapp, signal, telegram, instagram, slack, linkedin, twitter. Default: all.",
+                    "description": "whatsapp, signal, telegram, instagram, slack, discord, linkedin, twitter. Default: all.",
                 },
                 "unread_only": {"type": "boolean"},
                 "limit": {**_INT, "description": "Default 30"},
