@@ -53,6 +53,9 @@ in
         port = [ homeserverPort ];
         allow_federation = false;
         allow_registration = false;
+        # Clients create DMs encrypted by default, and the bridges refuse
+        # encrypted rooms. Off: createRoom silently drops m.room.encryption.
+        allow_encryption = false;
         trusted_servers = [ ];
         appservice_dir = appserviceDir;
         well_known.client = config.nic.services.matrix.public.publicUrl;
