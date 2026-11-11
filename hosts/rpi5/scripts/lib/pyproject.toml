@@ -89,6 +89,8 @@ hermes-whatsapp-audit = "nicos_scripts.hermes.whatsapp_audit:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # Hermes launches this over stdio (mcp_servers.trains).
 train-prices-mcp = "nicos_scripts.trains.mcp:main"
+# Hermes launches this over stdio (mcp_servers.messaging / messaging-send, --send).
+messaging-mcp = "nicos_scripts.messaging.mcp:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
 hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in

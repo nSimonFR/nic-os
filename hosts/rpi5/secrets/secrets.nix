@@ -336,6 +336,12 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  # TELEGRAM_API_ID / TELEGRAM_API_HASH for the mautrix-telegram bridge.
+  "mautrix-telegram-env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "searxng-env.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

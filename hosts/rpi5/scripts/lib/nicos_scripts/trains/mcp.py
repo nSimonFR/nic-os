@@ -2,17 +2,16 @@
 """
 train-prices-mcp: stdio MCP server for live train prices.
 
-Hand-rolled JSON-RPC (initialize / tools/list / tools/call over newline-delimited
-stdio) so nicos-scripts stays free of the `mcp` SDK. Hermes launches it as a
-subprocess, so it costs nothing at rest.
+Stdio JSON-RPC via nicos_scripts.mcpstdio. Hermes launches it as a subprocess,
+so it costs nothing at rest.
 Env: TRAIN_SOURCES.
 """
 
-import json
 import sys
 import urllib.error
 from datetime import date
 
+from .. import mcpstdio
 from ..logs import logger
 from . import sources as src
 
@@ -28,7 +27,6 @@ _SOURCE_ERRORS = (
     RuntimeError,
 )
 
-PROTOCOL = "2025-06-18"
 SERVER = {"name": "train-prices", "version": "0.1.0"}
 
 _STR = {"type": "string"}
@@ -111,74 +109,12 @@ class Handlers:
         }
 
 
-def _result(rid, payload):
-    return {"jsonrpc": "2.0", "id": rid, "result": payload}
-
-
-def _error(rid, code, message):
-    return {"jsonrpc": "2.0", "id": rid, "error": {"code": code, "message": message}}
-
-
 def handle(msg, handlers):
-    """One JSON-RPC message -> reply dict, or None for a notification."""
-    method, rid = msg.get("method"), msg.get("id")
-    if rid is None:  # notifications/initialized and friends
-        return None
-    if method == "initialize":
-        asked = (msg.get("params") or {}).get("protocolVersion") or PROTOCOL
-        return _result(
-            rid,
-            {
-                "protocolVersion": asked,
-                "capabilities": {"tools": {}},
-                "serverInfo": SERVER,
-            },
-        )
-    if method == "ping":
-        return _result(rid, {})
-    if method == "tools/list":
-        return _result(
-            rid, {"tools": [{"name": n, **spec} for n, spec in TOOLS.items()]}
-        )
-    if method == "tools/call":
-        params = msg.get("params") or {}
-        name = params.get("name")
-        if name not in TOOLS:
-            return _error(rid, -32602, f"outil inconnu : {name}")
-        try:
-            data = getattr(handlers, name)(**(params.get("arguments") or {}))
-            return _result(
-                rid,
-                {
-                    "content": [
-                        {"type": "text", "text": json.dumps(data, ensure_ascii=False)}
-                    ]
-                },
-            )
-        except Exception as e:  # a tool failure is an isError result, not a dead server
-            log(f"{name} failed: {type(e).__name__}: {e}")
-            return _result(
-                rid,
-                {
-                    "isError": True,
-                    "content": [{"type": "text", "text": f"{type(e).__name__}: {e}"}],
-                },
-            )
-    return _error(rid, -32601, f"méthode inconnue : {method}")
+    return mcpstdio.handle(msg, TOOLS, handlers, SERVER, log)
 
 
 def serve(handlers, stdin=None, stdout=None):
-    stdin, stdout = stdin or sys.stdin, stdout or sys.stdout
-    for line in stdin:
-        if not line.strip():
-            continue
-        try:
-            reply = handle(json.loads(line), handlers)
-        except ValueError:
-            reply = _error(None, -32700, "JSON invalide")
-        if reply is not None:
-            stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
-            stdout.flush()
+    mcpstdio.serve(TOOLS, handlers, SERVER, log, stdin, stdout)
 
 
 def main(argv=None, env=None):

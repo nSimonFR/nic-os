@@ -79,6 +79,7 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.hermes.gate_models"
     "nicos_scripts.llm.aperture_sync"
     "nicos_scripts.trains.mcp"
+    "nicos_scripts.messaging.mcp"
     "nicos_scripts.mitm.openrouter"
     "nicos_scripts.mitm.arkose"
     "nicos_scripts.vaultwarden.ea_bridge"

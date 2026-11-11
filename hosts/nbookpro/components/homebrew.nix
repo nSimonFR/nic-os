@@ -57,7 +57,6 @@ in
       "android-studio"
       "arc"
       "beekeeper-studio"
-      "beeper"
       "claude"
       "cmux"
       "cursor"

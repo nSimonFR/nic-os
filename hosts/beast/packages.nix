@@ -30,7 +30,6 @@ in
     pinentry-gnome3
     pinentry-rofi
     rofi-rbw-wayland
-    beeper
     bemoji
     cliphist
     libnotify

@@ -123,6 +123,7 @@ in
     ./media
     ./knowledge
     ./life
+    ./messaging
     # Tailscale with server features (subnet routing, SSH, exit node)
     # Subnet routes advertised through RPi5:
     #   - 10.7.0.1/32: SideStore's fixed "virtual computer" address. Advertising
