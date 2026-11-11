@@ -1,4 +1,4 @@
-# Kernel OOM kill on a sustained memory stall (nicos_scripts/monitoring/psi_oom.py).
+# Kill the largest process on a sustained memory stall (nicos_scripts/monitoring/psi_oom.py).
 # 5 watchdog resets 2026-11-05/06 (RSTS 0x20, 5.07 V, no kernel line before
 # any of them): earlyoom read 27-48% MemAvailable in the last hour and MGLRU
 # min_ttl_ms never fired. PSI `full` is the stall itself.
@@ -9,7 +9,7 @@
   boot.kernelParams = [ "psi=1" ];
 
   systemd.services.psi-oom = {
-    description = "Kernel OOM kill on a sustained memory stall";
+    description = "Kill the largest process on a sustained memory stall";
     wantedBy = [ "multi-user.target" ];
     # Absent until the first boot with psi=1.
     unitConfig.ConditionPathExists = "/proc/pressure/memory";

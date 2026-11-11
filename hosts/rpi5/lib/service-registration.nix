@@ -104,7 +104,10 @@ let
   # the restore left nine always-on services stopped for 9h on 2026-08-30.
   heavyShed = pkgs.writeShellApplication {
     name = "heavy-shed";
-    runtimeInputs = [ pkgs.systemd ];
+    runtimeInputs = [
+      pkgs.coreutils
+      pkgs.systemd
+    ];
     text = ''
       # Guard: with no command, "$@" is a no-op that exits 0 — which would stop
       # everything and take the success path straight past the restore.
@@ -128,6 +131,18 @@ let
         restore+=("$unit")
       done
 
+      # Up to 60 s for memory PSI `some avg10` to drop under 10%. Starting all
+      # ten at once on 2026-11-11 stalled the Pi into a watchdog reset 85 s later.
+      settle() {
+        [ -r /proc/pressure/memory ] || return 0
+        for _ in $(seq 60); do
+          read -r _ avg10 _ </proc/pressure/memory
+          avg10=''${avg10#avg10=}
+          if [ "''${avg10%.*}" -lt 10 ]; then return 0; fi
+          sleep 1
+        done
+      }
+
       # A trap, not a branch after the command: callers run `set -e`, and an
       # aborting script never reaches the next line but does run its trap. On
       # success the new generation's activation restarts them instead, unless
@@ -138,7 +153,10 @@ let
         if { [ "$status" -ne 0 ] || [ "''${HEAVY_SHED_RESTORE:-}" = always ]; } \
           && [ "''${#restore[@]}" -gt 0 ]; then
           echo "heavy-shed: exit $status — restarting ''${#restore[@]} service(s)" >&2
-          "''${as_root[@]}" systemctl start "''${restore[@]}" || true
+          for unit in "''${restore[@]}"; do
+            settle
+            "''${as_root[@]}" systemctl start "$unit" || true
+          done
         fi
         exit "$status"
       }
