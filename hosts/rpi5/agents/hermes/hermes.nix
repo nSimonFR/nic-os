@@ -401,7 +401,8 @@ let
     # job-scout repo) has no bot of its own: routes below send it messages from the
     # shared bot. The route is location-only (no user_id): every message in Alfie's
     # « Alfie Postule ! » group goes to that profile, and its cron jobs (morning
-    # digest) may deliver there through the shared bot.
+    # digest) may deliver there through the shared bot. "candidatures-nico" is the
+    # same setup for nSimon's own job search, in his « Nicolas Postule ! » group.
     gateway.multiplex_profiles = true;
     gateway.profile_routes = [
       {
@@ -409,6 +410,12 @@ let
         platform = "telegram";
         chat_id = "-1003331502255";
         profile = "candidatures";
+      }
+      {
+        name = "candidatures-nico";
+        platform = "telegram";
+        chat_id = "-1004397019196";
+        profile = "candidatures-nico";
       }
     ];
     # Telegram is a plugin since v0.22. Its import + register() took ~36s on the
@@ -453,7 +460,8 @@ let
     # auto-enables the Telegram platform. DMs: nSimon only (ALLOWED_USERS is
     # platform-wide). Alfie reaches Hermes only through the allowed groups, by
     # chat id (any member of those groups): the shared group, and the
-    # « Alfie Postule ! » group served by the "candidatures" profile (route above).
+    # « Alfie Postule ! » group served by the "candidatures" profile, and
+    # « Nicolas Postule ! » served by "candidatures-nico" (routes above).
     # Without that second entry the adapter drops her messages as "unauthorized user".
     tg_tok="$(${pkgs.coreutils}/bin/cat /run/agenix/telegram-bot-token)"
     umask 077
@@ -464,7 +472,7 @@ let
     ${pkgs.coreutils}/bin/cat > ${hermesHome}/.env <<EOF
     TELEGRAM_BOT_TOKEN=$tg_tok
     TELEGRAM_ALLOWED_USERS=${toString telegramChatId}
-    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841,-1003331502255
+    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841,-1003331502255,-1004397019196
     TELEGRAM_HOME_CHANNEL=${toString telegramChatId}
     TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
