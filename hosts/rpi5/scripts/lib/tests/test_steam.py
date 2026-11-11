@@ -74,6 +74,7 @@ def test_first_run_logs_the_whole_playtime():
             "delta": 120,
             "submitted_at": NOW,
             "played_at": "",
+            "untimed": False,
         }
     ]
 
@@ -105,26 +106,57 @@ def test_growth_below_min_delta_is_ignored_and_accumulates():
     assert steam.playtime_deltas([game(1, "P", 124)], {"1": "77"}, {"1": 120}, 5) == []
 
 
-def test_an_inflight_play_is_resent_exactly_as_first_sent():
-    # Steam has grown past it since; the extra 30 min wait for the next run.
-    inflight = {"1": {"total": 150, "submittedAt": "earlier", "playedAt": "quit"}}
-    (play,) = steam.playtime_deltas(
-        [game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
+def test_the_game_being_played_waits_for_its_session_to_end():
+    games = [game(1, "Portal", 150), game(2, "Hades", 90)]
+    plays = steam.playtime_deltas(
+        games, {"1": "77", "2": "78"}, {}, playing="1", timed={"2"}
     )
-    assert (play["total"], play["delta"], play["submitted_at"], play["played_at"]) == (
-        150,
-        30,
-        "earlier",
-        "quit",
+    assert [(p["appid"], p["untimed"]) for p in plays] == [("2", False)]
+
+
+def test_growth_without_a_seen_session_is_untimed():
+    (play,) = steam.playtime_deltas(
+        [game(1, "Portal", 150, QUIT)], {"1": "77"}, {"1": 100}, timed=set()
+    )
+    assert play["untimed"]
+    assert (
+        steam.activity_payload("e", play)["entry"]["consumedOn"] == "Steam (non daté)"
     )
 
 
-def test_an_inflight_play_from_before_played_at_still_occurs_now():
-    inflight = {"1": {"total": 150, "submittedAt": "earlier"}}
-    (play,) = steam.playtime_deltas(
-        [game(1, "Portal", 180, QUIT)], {"1": "77"}, {"1": 120}, 1, inflight, NOW
-    )
+def test_an_old_inflight_play_becomes_pending_unchanged():
+    state = {"games": {"1": 40}, "inflight": {"1": {"total": 60, "submittedAt": "t0"}}}
+    steam.migrate_inflight(state, {"1": "71"})
+    (play,) = state["pending"]
+    assert state["games"] == {"1": 60} and "inflight" not in state
+    assert (play["total"], play["delta"], play["submitted_at"]) == (60, 20, "t0")
     assert steam.activity_payload("e", play)["entry"]["when"] == {"kind": "now"}
+
+
+# ── sessions ──────────────────────────────────────────────────────────────────
+
+
+def test_a_session_starts_continues_and_ends():
+    state = {}
+    steam.track_session(state, "1", 100)
+    steam.track_session(state, "1", 400)
+    assert state["session"] == {"appid": "1", "start": 100, "seen": 400}
+    steam.track_session(state, "", 700)
+    assert "session" not in state
+    assert state["ended"] == [{"appid": "1", "start": 100, "end": 400}]
+
+
+def test_switching_games_ends_the_first_session():
+    state = {}
+    steam.track_session(state, "1", 100)
+    steam.track_session(state, "2", 400)
+    assert state["ended"][0]["appid"] == "1" and state["session"]["appid"] == "2"
+
+
+def test_unknown_presence_changes_nothing():
+    state = {"session": {"appid": "1", "start": 100, "seen": 100}}
+    steam.track_session(state, None, 400)
+    assert state == {"session": {"appid": "1", "start": 100, "seen": 100}}
 
 
 def test_unmapped_unknown_and_unplayed_games_are_skipped():
@@ -274,23 +306,49 @@ def test_main_skips_cleanly_without_twitch_creds(capsys):
     assert "skipping" in capsys.readouterr().out
 
 
+T = 1786017600  # NOW as epoch
+
+
+def presence(gameid=""):
+    player = {"steamid": "x"}
+    if gameid:
+        player["gameid"] = gameid
+    return json_reply({"response": {"players": [player]}})
+
+
+def owned(*games):
+    return json_reply({"response": {"games": list(games)}})
+
+
 def steam_replies(*games):
-    # main() calls out in this order: Steam, Twitch, IGDB.
+    # main() calls out in this order: presence, owned games, Twitch, IGDB.
     return [
-        json_reply({"response": {"games": list(games)}}),
+        presence(),
+        owned(*games),
         json_reply({"access_token": "tok"}),
         json_reply([{"uid": str(g["appid"]), "game": 70 + g["appid"]} for g in games]),
     ]
 
 
-def run(tmp_path, replies, **kw):
+def run(tmp_path, replies, t=T, **kw):
     op = FakeOpener(replies)
     env = {**ENV, "STATE_DIR": str(tmp_path)}
-    return steam.main(env=env, opener=op, sleep=no_sleep, now=NOW, **kw), op
+    rc = steam.main(env=env, opener=op, sleep=no_sleep, now=NOW, clock=lambda: t, **kw)
+    return rc, op
 
 
 def read(tmp_path, name):
     return json.loads((tmp_path / name).read_text())
+
+
+def write(tmp_path, name, value):
+    (tmp_path / name).write_text(json.dumps(value))
+
+
+def cached(tmp_path, state):
+    write(tmp_path, "steam-igdb-map.json", {"1": "71", "2": "72"})
+    write(tmp_path, "steam-ryot-entities.json", {"1": "met_a", "2": "met_b"})
+    write(tmp_path, "steam-state.json", state)
 
 
 def test_main_end_to_end_resolves_logs_and_advances_state(tmp_path):
@@ -306,7 +364,7 @@ def test_main_end_to_end_resolves_logs_and_advances_state(tmp_path):
         ],
     )
     assert rc == 0
-    assert read(tmp_path, "steam-state.json") == {"games": {"1": 60}}
+    assert read(tmp_path, "steam-state.json") == {"games": {"1": 60}, "checked": T}
     assert read(tmp_path, "steam-igdb-map.json") == {"1": "71"}
     assert read(tmp_path, "steam-ryot-entities.json") == {"1": "met_a"}
     assert (
@@ -335,64 +393,94 @@ def test_main_imports_a_game_ryot_does_not_know(tmp_path):
     assert op.body_of()["payload"]["entry"]["entityId"] == "met_new"
 
 
-def test_main_uses_cached_entities_without_querying_ryot(tmp_path):
-    (tmp_path / "steam-igdb-map.json").write_text('{"1": "71"}')
-    (tmp_path / "steam-ryot-entities.json").write_text('{"1": "met_a"}')
-    (tmp_path / "steam-state.json").write_text('{"games": {"1": 40}}')
-    replies = [
-        json_reply({"response": {"games": [game(1, "Portal", 60)]}}),
-        json_reply({"access_token": "tok"}),
-        SAVED,
-    ]
-    rc, op = run(tmp_path, replies)
+def test_between_checks_a_run_only_reads_presence(tmp_path):
+    cached(tmp_path, {"games": {"1": 60}, "checked": T - 600})
+    rc, op = run(tmp_path, [presence("1")])
+    assert rc == 0 and len(op.requests) == 1
+    assert read(tmp_path, "steam-state.json")["session"] == {
+        "appid": "1",
+        "start": T,
+        "seen": T,
+    }
+
+
+def test_an_ended_session_is_logged_as_one_timed_play(tmp_path):
+    cached(
+        tmp_path,
+        {
+            "games": {"1": 40},
+            "checked": T - 600,
+            "session": {"appid": "1", "start": T - 3600, "seen": T - 300},
+        },
+    )
+    rc, op = run(tmp_path, [presence(), owned(game(1, "Portal", 95, QUIT)), SAVED])
     assert rc == 0
-    assert len(op.requests) == 3
-    assert op.body_of()["payload"]["entry"]["timeSpent"] == 20
-    assert op.body_of()["payload"]["submissionId"] == "steam-1-60"
+    entry = op.body_of()["payload"]["entry"]
+    assert (entry["timeSpent"], entry["consumedOn"]) == (55, "Steam")
+    assert read(tmp_path, "steam-state.json") == {"games": {"1": 95}, "checked": T}
 
 
-def test_a_failed_play_keeps_its_old_total_and_fails_the_run(tmp_path):
-    (tmp_path / "steam-igdb-map.json").write_text('{"1": "71", "2": "72"}')
-    (tmp_path / "steam-ryot-entities.json").write_text('{"1": "met_a", "2": "met_b"}')
+def test_a_ryot_outage_queues_plays_and_never_merges_them(tmp_path):
+    cached(tmp_path, {"games": {"1": 40}, "checked": T - 600})
+    state = read(tmp_path, "steam-state.json")
+    state["session"] = {"appid": "1", "start": T - 3600, "seen": T - 300}
+    write(tmp_path, "steam-state.json", state)
 
     def down():
         raise urllib.error.HTTPError("u", 500, "boom", {}, None)
 
-    replies = [
-        json_reply({"response": {"games": [game(1, "A", 60), game(2, "B", 30)]}}),
-        json_reply({"access_token": "tok"}),
-        down,
-        SAVED,
-    ]
-    rc, _ = run(tmp_path, replies)
-    assert rc == 1
-    # A stays inflight with its stamp, so the next run resends it unchanged; B advanced.
-    assert read(tmp_path, "steam-state.json") == {
-        "games": {"2": 30},
-        "inflight": {"1": {"total": 60, "submittedAt": NOW, "playedAt": ""}},
-    }
-
-
-def test_the_next_run_resends_the_inflight_play_unchanged(tmp_path):
-    (tmp_path / "steam-igdb-map.json").write_text('{"1": "71"}')
-    (tmp_path / "steam-ryot-entities.json").write_text('{"1": "met_a"}')
-    (tmp_path / "steam-state.json").write_text(
-        json.dumps(
-            {"games": {"1": 40}, "inflight": {"1": {"total": 60, "submittedAt": "t0"}}}
-        )
+    rc, _ = run(tmp_path, [presence(), owned(game(1, "Portal", 60)), down])
+    assert rc == 0  # young: retried quietly
+    # Played again; Ryot is still down when that session ends too.
+    state = read(tmp_path, "steam-state.json")
+    state["session"] = {"appid": "1", "start": T, "seen": T + 1800}
+    write(tmp_path, "steam-state.json", state)
+    rc, _ = run(
+        tmp_path, [presence(), owned(game(1, "Portal", 90)), down, down], t=T + 7200
     )
-    replies = [
-        json_reply({"response": {"games": [game(1, "Portal", 90)]}}),
-        json_reply({"access_token": "tok"}),
-        SAVED,
-    ]
-    rc, op = run(tmp_path, replies)
+    assert rc == 1  # the first play is now stale
+    pending = read(tmp_path, "steam-state.json")["pending"]
+    assert [(p["delta"], p["total"]) for p in pending] == [(20, 60), (30, 90)]
+    rc, op = run(tmp_path, [presence(), SAVED, SAVED], t=T + 7500)
     assert rc == 0
-    payload = op.body_of()["payload"]
-    assert payload["submittedAt"] == "t0" and payload["submissionId"] == "steam-1-60"
-    assert payload["entry"]["timeSpent"] == 20
-    # The inflight key is dropped once empty: the file keeps V1's shape.
-    assert read(tmp_path, "steam-state.json") == {"games": {"1": 60}}
+    assert [json.loads(r.data)["payload"]["submissionId"] for r in op.requests[1:]] == [
+        "steam-1-60",
+        "steam-1-90",
+    ]
+    assert "pending" not in read(tmp_path, "steam-state.json")
+
+
+def test_the_periodic_check_logs_unseen_growth_as_untimed(tmp_path):
+    cached(tmp_path, {"games": {"2": 10}, "checked": T - steam.CHECK_EVERY_S})
+    rc, op = run(tmp_path, [presence(), owned(game(2, "Hades", 40, QUIT)), SAVED])
+    assert rc == 0
+    assert op.body_of()["payload"]["entry"]["consumedOn"] == "Steam (non daté)"
+
+
+def test_an_ended_session_steam_never_counted_expires(tmp_path):
+    cached(
+        tmp_path,
+        {
+            "games": {"1": 60},
+            "checked": T - 600,
+            "ended": [
+                {"appid": "1", "start": T - 9000, "end": T - steam.ENDED_GRACE_S}
+            ],
+        },
+    )
+    rc, _ = run(tmp_path, [presence(), owned(game(1, "Portal", 60))])
+    assert rc == 0
+    assert "ended" not in read(tmp_path, "steam-state.json")
+
+
+def test_presence_down_still_runs_the_periodic_check(tmp_path):
+    cached(tmp_path, {"games": {"1": 40}})
+
+    def down():
+        raise urllib.error.URLError("dns")
+
+    rc, op = run(tmp_path, [down, owned(game(1, "Portal", 60)), SAVED])
+    assert rc == 0 and op.body_of()["payload"]["entry"]["timeSpent"] == 20
 
 
 def test_a_failed_import_is_not_cached_and_is_retried(tmp_path):
@@ -406,18 +494,13 @@ def test_a_failed_import_is_not_cached_and_is_retried(tmp_path):
             json_reply({"status": "failed"}),
         ],
     )
-    assert rc == 1
+    assert rc == 0
     assert read(tmp_path, "steam-ryot-entities.json") == {}
-    assert not (tmp_path / "steam-state.json").exists()
+    assert len(read(tmp_path, "steam-state.json")["pending"]) == 1
 
 
 def test_main_with_no_new_playtime_makes_no_ryot_call(tmp_path):
-    (tmp_path / "steam-igdb-map.json").write_text('{"1": "71"}')
-    (tmp_path / "steam-state.json").write_text('{"games": {"1": 60}}')
-    replies = [
-        json_reply({"response": {"games": [game(1, "Portal", 60)]}}),
-        json_reply({"access_token": "tok"}),
-    ]
-    rc, op = run(tmp_path, replies)
+    cached(tmp_path, {"games": {"1": 60}})
+    rc, op = run(tmp_path, [presence(), owned(game(1, "Portal", 60))])
     assert rc == 0
     assert not any("ryot" in p for p in paths(op))

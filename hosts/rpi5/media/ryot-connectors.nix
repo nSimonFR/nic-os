@@ -3,7 +3,7 @@
 # Pull connectors feeding Ryot V2 (hosts/rpi5/media/ryot.nix) through its REST API:
 #
 #   * spotify-to-ryot — recently-played → music completes at Spotify's played_at. Hourly.
-#   * steam-to-ryot   — lifetime playtime growth → game completes with timeSpent. Daily.
+#   * steam-to-ryot   — one game complete per play session (presence + playtime growth). Every 5 min.
 #   * plex-to-ryot    — Plex views since the last run → movie / episode / anime completes. Hourly.
 #
 # V2's own Spotify and Plex yanks are deliberately unused: Spotify's polls with an
@@ -90,6 +90,7 @@ in
 
   # Spotify exposes only the last 50 plays, so hourly keeps well inside the window.
   systemd.timers.spotify-to-ryot = timer "Hourly Spotify → Ryot" "*-*-* *:17:00";
-  systemd.timers.steam-to-ryot = timer "Daily Steam → Ryot" "*-*-* 04:50:00";
+  # A session is seen through presence, so its end is known to within 5 min.
+  systemd.timers.steam-to-ryot = timer "Steam sessions → Ryot" "*:0/5";
   systemd.timers.plex-to-ryot = timer "Hourly Plex → Ryot" "*-*-* *:37:00";
 }

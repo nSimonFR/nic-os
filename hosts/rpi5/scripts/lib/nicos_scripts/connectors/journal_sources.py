@@ -494,6 +494,7 @@ def climbing_pictures(sessions):
 # From the first steam-to-ryot run stamping plays when quit (10-30 04:50). Pushes
 # land 0-2 min after their run time: the write time alone can't tell them apart.
 STEAM_TIMED_FROM = 1793325600  # 2026-10-30 03:00 Europe/Paris
+STEAM_UNTIMED_ON = "Steam (non daté)"  # steam.UNTIMED_ON
 
 
 def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="psql"):
@@ -501,7 +502,8 @@ def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="
     steam-to-ryot pushes the playtime grown since its last run at 04:50. A push
     written from STEAM_TIMED_FROM occurs when the game was quit (`timed`, epoch
     = the end of the play); the older ones occurred at the run and stand for the
-    journal day before it. V11 holds the pushes since the switch (timeSpent
+    journal day before it. A play logged `consumedOn` STEAM_UNTIMED_ON (growth
+    no session explains) keeps its day but not its hours. V11 holds the pushes since the switch (timeSpent
     in minutes); the V1 migration folded each game's earlier sessions into one
     event (marked by its startedOn), so the days before come from V1's seens."""
     lo, hi = int(lo), int(hi)
@@ -509,7 +511,8 @@ def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="
         run,
         f"""
         SELECT extract(epoch FROM ev.occurred_at), e.name, ((ev.properties->>'timeSpent')::numeric * 60)::bigint,
-               ev.created_at >= to_timestamp({STEAM_TIMED_FROM})
+               ev.created_at >= to_timestamp({STEAM_TIMED_FROM}),
+               coalesce(ev.properties->>'consumedOn', '') = {_sql_list([STEAM_UNTIMED_ON])}
         FROM event ev JOIN entity e ON e.id = ev.entity_id
         WHERE e.entity_schema_slug = 'video-game' AND ev.event_schema_slug = 'complete'
           AND NOT ev.properties ? 'startedOn' AND (ev.properties->>'timeSpent')::numeric > 0
@@ -520,7 +523,12 @@ def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="
         psql,
     )
     plays = [
-        (float(r[0]) - (0 if r[3] == "t" else 86400), r[1], int(r[2]), r[3] == "t")
+        (
+            float(r[0]) - (0 if r[3] == "t" else 86400),
+            r[1],
+            int(r[2]),
+            r[3] == "t" and r[4] != "t",
+        )
         for r in rows
     ]
     if v1_db:
@@ -546,21 +554,20 @@ def game_plays(run, lo, hi, db="ryotv2", v1_db="ryot", runuser="runuser", psql="
 
 
 def game_sessions(plays):
-    """[(title, seconds, (start, end) or None)] per game, most played first; the
-    span runs from the first start to the last end when every play is timed."""
+    """[(title, seconds, spans or None)] per game, most played first; `spans`,
+    each play's (start, end), only when every play is timed."""
     total, spans = {}, {}
     for end, title, sec, timed in plays:
         total[title] = total.get(title, 0) + sec
         spans.setdefault(title, []).append((end - sec, end) if timed else None)
-    span = lambda t: (
-        None
-        if None in spans[t]
-        else (min(a for a, _ in spans[t]), max(b for _, b in spans[t]))
-    )
+    span = lambda t: None if None in spans[t] else tuple(sorted(spans[t]))
     return [
         (t, sec, span(t))
         for t, sec in sorted(total.items(), key=lambda kv: (-kv[1], kv[0]))
     ]
+
+
+SESSIONS_SHOWN = 3
 
 
 def _hm(seconds):
@@ -570,14 +577,23 @@ def _hm(seconds):
 
 def game_section(games, streaks=None, tz=None):
     """(heading suffix, lines): `2 h 15`, then `- **Stardew Valley** · 13:05-13:54
-    · 49 min` (the hours when known), plus that game's `streaks` text if any."""
+    · 49 min` (each session's hours when known, a count past SESSIONS_SHOWN),
+    plus that game's `streaks` text if any."""
     hm = lambda t: f"{datetime.fromtimestamp(t, tz):%H:%M}"
+
+    def hours(spans):
+        if not spans:
+            return ""
+        if len(spans) > SESSIONS_SHOWN:
+            return f"{len(spans)} sessions · "
+        return ", ".join(f"{hm(a)}-{hm(b)}" for a, b in spans) + " · "
+
     return _hm(sum(s for _, s, _ in games)), [
         f"- **{t}** · "
-        + (f"{hm(span[0])}-{hm(span[1])} · " if span else "")
+        + hours(spans)
         + _hm(s)
         + (f" · {streaks[t]}" if (streaks or {}).get(t) else "")
-        for t, s, span in games
+        for t, s, spans in games
     ]
 
 

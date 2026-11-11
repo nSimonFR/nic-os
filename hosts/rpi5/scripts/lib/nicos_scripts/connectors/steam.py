@@ -6,28 +6,27 @@ Ryot has no Steam integration, so each Steam appid is resolved to an IGDB game i
 (Twitch/IGDB API), then to a Ryot `video-game` entity: an existing one by its IGDB
 external id (RyotQL), else imported through the `video-game.igdb` provider.
 
-Playtime model (Steam exposes only cumulative `playtime_forever`, no sessions):
-each time it grows by >= MIN_DELTA_MIN minutes we log ONE `complete` event via
-the media plugin's `media-activity-log`, with `timeSpent` = the delta in minutes
-and `consumedOn: "Steam"` — the shape the V1 -> V2 migration gave the V1 seens
-(V1 `manual_time_spent` seconds / 60). It occurs at the game's
-`rtime_last_played`, which Steam sets when the game is quit (checked 2026-10-29
-against the profile's lastlogoff); several sessions in a day collapse onto the
-last one. Pushes before that occurred at the run time.
+Sessions: the timer runs every 5 min and reads the profile's presence
+(GetPlayerSummaries `gameid`). When a game stops being played, the growth of its
+cumulative `playtime_forever` is that session: ONE `complete` event via the
+media plugin's `media-activity-log`, `timeSpent` = the growth in minutes,
+occurring at `rtime_last_played` (set when the game is quit). Growth with no
+session seen (offline play, a session under 5 min, the Pi down) is found by a
+check every CHECK_EVERY_S and logged with `consumedOn: UNTIMED_ON`: its total
+is right, its hours are not.
 
 State, all in $STATE_DIR:
-  * steam-state.json = {games:{appid:last_logged_playtime_min}} — unchanged from
-    V1, so the first V2 run logs exactly the growth since V1's last run. A game
-    advances only once its event is saved; until then its play sits in
-    `inflight` ({appid:{total, submittedAt, playedAt}}, omitted when empty).
+  * steam-state.json = {games:{appid:last_queued_total_min}, pending:[play],
+    session:{appid,start,seen}, ended:[{appid,start,end}], checked:epoch}. A play
+    is queued (and `games` advanced) before it is sent, so a Ryot outage delays
+    plays but never merges them.
   * steam-igdb-map.json = appid -> IGDB id ("" = known-unmapped).
   * steam-ryot-entities.json = appid -> Ryot entity id.
 
 Idempotency: the submissionId is `steam-<appid>-<new total>`, and Ryot keys the
 event write on it. Resending it with the same payload replays the first write;
-with a different one (a new occurredAt) Ryot refuses with mutation-conflict. So an
-inflight play is resent byte-identical, never re-stamped with a new run time or
-a newer last play.
+with a different one (a new occurredAt) Ryot refuses with mutation-conflict. So a
+pending play is resent byte-identical.
 
 Stdlib only. Config via environment:
   STEAM_API_KEY           Steam Web API key (steamcommunity.com/dev/apikey)   [required]
@@ -81,6 +80,14 @@ RATE_LIMIT_BACKOFF_SEC = 61
 RATE_LIMIT_RETRIES = 2
 # The import result endpoint long-polls ~20 s per request.
 IMPORT_POLLS = 6
+
+CONSUMED_ON = "Steam"
+UNTIMED_ON = "Steam (non daté)"
+CHECK_EVERY_S = 6 * 3600
+# Steam may count a quit session a few minutes late; past this it never will.
+ENDED_GRACE_S = 3600
+# A play still unsaved after this fails the unit (systemd-failed-alert pages).
+STALE_S = 3600
 
 
 @dataclass(frozen=True)
@@ -138,6 +145,36 @@ def get_owned_games(cfg, opener=None):
     games = data.get("response", {}).get("games", [])
     log(f"Steam reports {len(games)} owned games")
     return games
+
+
+def get_presence(cfg, opener=None):
+    """The appid being played now, "" when none (or hidden by privacy)."""
+    params = urllib.parse.urlencode(
+        {"key": cfg.steam_api_key, "steamids": cfg.steam_id64, "format": "json"}
+    )
+    url = "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?" + params
+    players = get_json(url, opener=opener).get("response", {}).get("players", [])
+    return str(players[0].get("gameid") or "") if players else ""
+
+
+def track_session(state, playing, t):
+    """Fold one presence reading into state["session"]; a session that stops is
+    appended to state["ended"]. `playing` None (presence unknown) changes nothing."""
+    if playing is None:
+        return
+    cur = state.get("session")
+    if cur and cur["appid"] == playing:
+        cur["seen"] = t
+        return
+    if cur:
+        state.setdefault("ended", []).append(
+            {"appid": cur["appid"], "start": cur["start"], "end": cur["seen"]}
+        )
+        log(f"session of {cur['appid']} ended")
+    if playing:
+        state["session"] = {"appid": playing, "start": t, "seen": t}
+    else:
+        state.pop("session", None)
 
 
 def get_twitch_token(cfg, opener=None):
@@ -199,26 +236,23 @@ def resolve_igdb_ids(appids, token, igdb_map, cfg, opener=None, sleep=time.sleep
 
 
 def playtime_deltas(
-    games, igdb_map, prev_games, min_delta_min=1, inflight=None, now=""
+    games, igdb_map, prev_games, min_delta_min=1, now="", playing="", timed=None
 ):
-    """Plays to log: games whose playtime grew by >= min_delta_min since the last
-    logged total, each stamped with the `submitted_at` to send.
-
-    `prev_games` maps appid -> last logged playtime_forever (minutes); a smaller
-    growth is left out so it accumulates. An `inflight` play (sent, outcome
-    unknown) is resent exactly as first sent; later growth waits for the next run.
+    """Plays to queue: games whose playtime grew by >= min_delta_min since the
+    last queued total (`prev_games`, appid -> minutes); a smaller growth is left
+    to accumulate, as is the game being `playing` now (logged once it stops).
+    A play is `untimed` unless its appid is in `timed` (a session was seen end);
+    `timed` None (no presence) leaves every play timed, as before sessions.
     """
-    inflight = inflight or {}
     plays = []
     for g in games:
         appid = str(g.get("appid"))
         igdb_id = igdb_map.get(appid)
-        if not igdb_id:
-            continue  # unmapped in IGDB
-        sent = inflight.get(appid)
-        total = int(sent["total"] if sent else g.get("playtime_forever", 0))
+        if not igdb_id or appid == playing:
+            continue  # unmapped in IGDB, or still being played
+        total = int(g.get("playtime_forever", 0))
         delta = total - int(prev_games.get(appid, 0))
-        if not sent and delta < min_delta_min:
+        if delta < min_delta_min:
             continue
         plays.append(
             {
@@ -227,14 +261,32 @@ def playtime_deltas(
                 "name": g.get("name", appid),
                 "total": total,
                 "delta": delta,
-                "submitted_at": sent["submittedAt"] if sent else now,
-                # "" = occurs now: an inflight play from before playedAt existed.
-                "played_at": sent.get("playedAt", "")
-                if sent
-                else epoch_iso(g.get("rtime_last_played")),
+                "submitted_at": now,
+                "played_at": epoch_iso(g.get("rtime_last_played")),
+                "untimed": timed is not None and appid not in timed,
             }
         )
     return plays
+
+
+def migrate_inflight(state, igdb_map):
+    """The pre-session `inflight` {appid: {total, submittedAt, playedAt}} as
+    pending plays, resent byte-identical."""
+    games = state.setdefault("games", {})
+    for appid, sent in state.pop("inflight", {}).items():
+        state.setdefault("pending", []).append(
+            {
+                "appid": appid,
+                "igdb_id": igdb_map.get(appid, ""),
+                "name": appid,
+                "total": int(sent["total"]),
+                "delta": int(sent["total"]) - int(games.get(appid, 0)),
+                "submitted_at": sent["submittedAt"],
+                "played_at": sent.get("playedAt", ""),
+                "untimed": False,
+            }
+        )
+        games[appid] = int(sent["total"])
 
 
 # ── Ryot V2 ───────────────────────────────────────────────────────────────────
@@ -324,7 +376,7 @@ def activity_payload(entity_id, play):
             if play.get("played_at")
             else {"kind": "now"},
             "timeSpent": play["delta"],
-            "consumedOn": "Steam",
+            "consumedOn": UNTIMED_ON if play.get("untimed") else CONSUMED_ON,
         },
     }
 
@@ -457,7 +509,64 @@ def now_iso():
     )
 
 
-def main(env=None, opener=None, sleep=time.sleep, now=None):
+def iso_epoch(iso):
+    """Epoch seconds of an ISO instant; 0 for anything else (an old stamp)."""
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except (AttributeError, ValueError):
+        return 0
+
+
+def queue_plays(cfg, state, games, igdb_map, playing, t, now):
+    """Queue the growth since the last queued totals; consumes the ended sessions
+    it times and drops those Steam never counted."""
+    ended = state.get("ended", [])
+    plays = playtime_deltas(
+        games,
+        igdb_map,
+        state.setdefault("games", {}),
+        cfg.min_delta_min,
+        now,
+        playing or "",
+        {e["appid"] for e in ended},
+    )
+    for p in plays:
+        state.setdefault("pending", []).append(p)
+        state["games"][p["appid"]] = p["total"]
+        log(
+            f"{p['name']}: queued {p['delta']} min"
+            + (" (no session seen)" if p["untimed"] else "")
+        )
+    queued = {p["appid"] for p in plays}
+    state["ended"] = [
+        e for e in ended if e["appid"] not in queued and t - e["end"] < ENDED_GRACE_S
+    ]
+    state["checked"] = t
+
+
+def send_pending(client, state, entity_map, save):
+    """Send every pending play; a failed one stays for the next run. The count
+    of failures."""
+    failed = 0
+    for p in list(state.get("pending", [])):
+        entity = entity_map.get(p["appid"])
+        if not entity:
+            log(f"{p['name']}: no Ryot entity for IGDB {p['igdb_id']}; retrying")
+            failed += 1
+            continue
+        try:
+            client.log_play(entity, p)
+        except (urllib.error.URLError, RuntimeError, KeyError) as e:
+            log(f"{p['name']}: logging {p['delta']} min failed: {e}")
+            failed += 1
+            continue
+        log(f"{p['name']}: logged {p['delta']} min (total {p['total']})")
+        state["pending"].remove(p)
+        save()
+    return failed
+
+
+def main(env=None, opener=None, sleep=time.sleep, now=None, clock=time.time):
     cfg = Config.from_env(env)
     missing = missing_env(REQUIRED_ENV, env)
     if missing:
@@ -468,86 +577,63 @@ def main(env=None, opener=None, sleep=time.sleep, now=None):
         log("Twitch/IGDB creds not set — Steam metadata can't resolve yet; skipping")
         return 0
     ensure_dir(cfg.state_dir)
+    t = clock()
+    now = now or now_iso()
 
     state = load_json(cfg.state_file, {})
-    prev_games = state.get("games", {})
-    inflight = state.get("inflight", {})
     igdb_map = load_json(cfg.igdb_map_file, {})
     entity_map = load_json(cfg.entity_map_file, {})
-
-    games = get_owned_games(cfg, opener=opener)
-    if not games:
-        log("no games returned (private profile or empty library?) — nothing to do")
-        return 0
-
-    appids = [g.get("appid") for g in games if g.get("appid") is not None]
-    resolve_igdb_ids(
-        appids,
-        get_twitch_token(cfg, opener=opener),
-        igdb_map,
-        cfg,
-        opener=opener,
-        sleep=sleep,
-    )
-    save_json(cfg.igdb_map_file, igdb_map)
-
-    plays = playtime_deltas(
-        games, igdb_map, prev_games, cfg.min_delta_min, inflight, now or now_iso()
-    )
-    if not plays:
-        log("no new playtime — nothing to log")
-        return 0
-
-    client = RyotClient(cfg, opener=opener, sleep=sleep)
-    try:
-        resolve_entities(client, plays, entity_map)
-    except (urllib.error.URLError, RuntimeError, KeyError) as e:
-        log(f"FATAL: resolving Ryot entities failed: {e}")
-        return 1
-    finally:
-        save_json(cfg.entity_map_file, entity_map)
-
-    new_games = dict(prev_games)
-    failed = 0
+    migrate_inflight(state, igdb_map)
 
     def save():
-        state = {"games": new_games}
-        if inflight:
-            state["inflight"] = inflight
+        for key in ("pending", "ended"):
+            if not state.get(key):
+                state.pop(key, None)
         save_json(cfg.state_file, state)
 
-    for p in plays:
-        entity = entity_map.get(p["appid"])
-        if not entity:
-            # Not cached: an import failure may be the provider, not the id.
-            log(
-                f"{p['name']}: no Ryot entity for IGDB {p['igdb_id']}; retrying next run"
-            )
-            failed += 1
-            continue
-        # Recorded before sending: a retry must resend the same occurredAt, or Ryot
-        # answers mutation-conflict for the reused submissionId.
-        inflight[p["appid"]] = {
-            "total": p["total"],
-            "submittedAt": p["submitted_at"],
-            "playedAt": p["played_at"],
-        }
-        save()
-        try:
-            client.log_play(entity, p)
-        except (urllib.error.URLError, RuntimeError, KeyError) as e:
-            log(f"{p['name']}: logging {p['delta']} min failed: {e}")
-            failed += 1
-            continue
-        log(f"{p['name']}: logged {p['delta']} min (total {p['total']})")
-        new_games[p["appid"]] = p["total"]
-        del inflight[p["appid"]]
-        save()
+    try:
+        playing = get_presence(cfg, opener=opener)
+    except (OSError, ValueError, KeyError) as e:
+        log(f"presence unavailable ({e}); sessions paused this run")
+        playing = None
+    track_session(state, playing, t)
 
-    log(
-        f"done; {len(plays) - failed} logged, {failed} failed, {len(new_games)} tracked"
-    )
-    return 1 if failed else 0
+    if state.get("ended") or t - state.get("checked", 0) >= CHECK_EVERY_S:
+        games = get_owned_games(cfg, opener=opener)
+        appids = [g.get("appid") for g in games if g.get("appid") is not None]
+        if any(str(a) not in igdb_map for a in appids):
+            resolve_igdb_ids(
+                appids,
+                get_twitch_token(cfg, opener=opener),
+                igdb_map,
+                cfg,
+                opener=opener,
+                sleep=sleep,
+            )
+            save_json(cfg.igdb_map_file, igdb_map)
+        if games:
+            queue_plays(cfg, state, games, igdb_map, playing, t, now)
+    save()
+
+    pending = state.get("pending", [])
+    if not pending:
+        return 0
+    client = RyotClient(cfg, opener=opener, sleep=sleep)
+    try:
+        resolve_entities(client, pending, entity_map)
+    except (urllib.error.URLError, RuntimeError, KeyError) as e:
+        log(f"resolving Ryot entities failed: {e}")
+    finally:
+        save_json(cfg.entity_map_file, entity_map)
+    failed = send_pending(client, state, entity_map, save)
+    save()
+    stale = [
+        p
+        for p in state.get("pending", [])
+        if t - iso_epoch(p["submitted_at"]) >= STALE_S
+    ]
+    log(f"done; {failed} pending, {len(stale)} older than {STALE_S // 60} min")
+    return 1 if stale else 0
 
 
 if __name__ == "__main__":
