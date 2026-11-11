@@ -50,6 +50,8 @@ let
         models = allModels;
         compatibility = {
           openai_chat = true;
+          # Codex (wire_api = "responses") on the Mac comes through Aperture.
+          openai_responses = true;
           gemini_generate_content = true;
         };
         name = "tiny-llm-gate (RPi5)";
