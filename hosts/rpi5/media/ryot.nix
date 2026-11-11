@@ -229,6 +229,9 @@ in
         inner
       ];
       KillMode = "mixed";
+      # nspawn exits 1 when stopped, so every idle stop left the unit failed and
+      # tripped systemd-failed-alert. Restart=always still restarts a real crash.
+      SuccessExitStatus = [ 1 ];
       Restart = "always";
       RestartSec = 15;
       # First start runs the V1→V2 conversion (~70 s here) before listening.
