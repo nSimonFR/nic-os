@@ -158,6 +158,12 @@
       owner = "nsimon";
       mode = "0400";
     };
+    # From https://my.telegram.org/apps; shipped as a placeholder (api_id 0).
+    mautrix-telegram-env = {
+      file = ./secrets/mautrix-telegram-env.age;
+      owner = "mautrix-telegram";
+      mode = "0400";
+    };
     # AGENT_VAULT_MASTER_PASSWORD — wraps the key that encrypts the vault DB.
     # Changing it needs `agent-vault master-password change` with the server stopped.
     agent-vault-env = {

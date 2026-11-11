@@ -26,6 +26,7 @@ Each module lives in a domain directory whose `default.nix` imports it;
 | `knowledge/` | documents, notes, mail, calendars, search |
 | `life/` | personal trackers and small automations |
 | `home-assistant/` | Home Assistant and its dashboards |
+| `messaging/` | the Matrix homeserver, its chat-network bridges and web client |
 
 Unchanged at the top: `configuration.nix`, `home.nix`, `overlays.nix`,
 `secrets.nix` + `secrets/`, `lib/` (module helpers), `scripts/` (shell +
