@@ -19,6 +19,9 @@
 let
   gateCfg = config.services.tiny-llm-gate.settings;
 
+  # Set by tiny-llm-gate only on a router model's responses: the tier it served.
+  servedModelHeader = "x-litellm-model-id";
+
   # Collect every model name a client might send: canonical models + aliases.
   modelNames = builtins.attrNames (gateCfg.models or { });
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
@@ -99,6 +102,8 @@ let
             # Code's own OTLP telemetry. Floating capability object: it carries
             # no `models`, so it is not tied to model access.
             { read_metrics = true; }
+            # Admins need it too, to filter by the header indexed below.
+            { filterable_headers = [ servedModelHeader ]; }
           ];
         };
       }
@@ -114,6 +119,11 @@ let
         };
       }
     ];
+    # Aperture attributes usage to the model the client asked for (`smart`), not
+    # the tier a gate router served. Indexing the gate's served-model response
+    # header makes Logs / Model Activity filterable by it; indexed values outlive
+    # capture retention.
+    database.headers.filterable = [ { name = servedModelHeader; } ];
     # Periodic export of usage logs to Storj's S3-compatible gateway.
     # access_key_id / access_secret are placeholders here; the sync script
     # rewrites them from /run/agenix/aperture-s3-export before PUTing so the
