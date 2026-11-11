@@ -53,7 +53,7 @@ let
       port = 29317;
       # TELEGRAM_API_ID / TELEGRAM_API_HASH, from https://my.telegram.org/apps.
       environmentFile = "/run/agenix/mautrix-telegram-env";
-      # The secret ships as a placeholder (api_id 0): skip, don't fail the deploy.
+      # Skipped (not failed) while the secret holds no api_id.
       skipUnlessSet = "TELEGRAM_API_ID";
       network = {
         api_id = "$TELEGRAM_API_ID";
