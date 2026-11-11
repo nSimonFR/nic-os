@@ -80,16 +80,6 @@ let
           "sha256-tePfW71Rd1krac2+UQK7JhyyKqkyAGyMkXh1knvtZUM=";
       port = 29327;
     };
-    # Pre-bridgev2 (no bridgev2 release yet): older config layout, and its
-    # nixpkgs package has no withGoolm knob.
-    discord = {
-      package = pkgs.mautrix-discord.overrideAttrs (old: {
-        buildInputs = [ ]; # olm only
-        tags = (old.tags or [ ]) ++ [ "goolm" ];
-      });
-      port = 29334;
-      legacy = true;
-    };
   };
 
   stateDir = name: "/var/lib/mautrix-${name}";
@@ -171,34 +161,22 @@ let
         };
       };
     in
-    lib.recursiveUpdate common (
-      if b.legacy or false then
-        {
-          appservice.database = database name;
-          bridge = {
-            username_template = "${name}_{{.}}";
-            permissions.${owner} = "admin";
-            login_shared_secret_map.${serverName} = doublePuppetSecret;
-          };
-        }
-      else
-        {
-          appservice.username_template = "${name}_{{.}}";
-          database = database name;
-          bridge = {
-            permissions.${owner} = "admin";
-            personal_filtering_spaces = true;
-          };
-          double_puppet.secrets.${serverName} = doublePuppetSecret;
-          encryption.allow = false;
-          provisioning.shared_secret = "disable";
-          backfill = {
-            enabled = true;
-            max_initial_messages = 50;
-          };
-          network = b.network or { };
-        }
-    );
+    lib.recursiveUpdate common {
+      appservice.username_template = "${name}_{{.}}";
+      database = database name;
+      bridge = {
+        permissions.${owner} = "admin";
+        personal_filtering_spaces = true;
+      };
+      double_puppet.secrets.${serverName} = doublePuppetSecret;
+      encryption.allow = false;
+      provisioning.shared_secret = "disable";
+      backfill = {
+        enabled = true;
+        max_initial_messages = 50;
+      };
+      network = b.network or { };
+    };
 
   yaml = (pkgs.formats.yaml { }).generate;
   registrationFiles = lib.mapAttrs (name: r: yaml "${name}-registration.yaml" r) registrations;
