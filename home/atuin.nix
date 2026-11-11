@@ -46,42 +46,20 @@ let
   '';
 in
 {
-  # Keep atuin's sync daemon (`daemon.enabled = true` in dotfiles/atuin.toml)
-  # alive headlessly so background hooks (e.g. the Claude Code Bash PostToolUse
-  # hook in home/scripts/claude-bash-history.sh) and history written outside an
-  # interactive shell still sync to api.atuin.sh. `atuin init zsh` does NOT
-  # start the daemon on its own, so without a real process supervisor the daemon
-  # dies — or, worse, lingers on a stale binary after an atuin version bump —
-  # and sync quietly stops. Each platform gets its native supervisor; the
-  # supervisor restarts the daemon on the new binary whenever atuinBin changes,
-  # which closes the version-skew gap.
-  #
-  # 2026-06-15: the macOS box had been running an orphaned 18.15.2 daemon since
-  # April because only the Linux (systemd) path existed — darwin had no
-  # equivalent and home-manager silently ignored the systemd block here. Hence
-  # the launchd agent below.
-
-  systemd.user.services = lib.mkIf pkgs.stdenv.isLinux {
-    atuin-daemon = {
-      Unit = {
-        Description = "Atuin sync daemon";
-        After = [ "network-online.target" ];
-        Wants = [ "network-online.target" ];
-      };
-      Install = {
-        WantedBy = [ "default.target" ];
-      };
-      Service = {
-        Type = "simple";
-        # An unclean exit leaves the socket behind, and a plain start then fails
-        # "Address already in use" forever (17k restarts, 2026-09-23→26).
-        ExecStart = "${atuinBin} daemon start --force";
-        # Exits 0 on SIGTERM, so on-failure left it dead after an earlyoom kill.
-        Restart = "always";
-        RestartSec = "5s";
-      };
-    };
-  };
+  # Linux runs daemonless: the daemon held ~165 MB RSS on rpi5 (2026-11-11)
+  # for no feature used there, while `history end` already writes the record
+  # store and syncs every sync_frequency (5m), at ~90 MB for ~3 s.
+  # macOS keeps the daemon under launchd below.
+  xdg.configFile."atuin/config.toml".text =
+    let
+      toml = builtins.readFile ./dotfiles/atuin.toml;
+      on = "daemon.enabled = true";
+    in
+    assert lib.hasInfix on toml;
+    if pkgs.stdenv.isLinux then
+      builtins.replaceStrings [ on ] [ "daemon.enabled = false" ] toml
+    else
+      toml;
 
   # launchd opens StandardOutPath/StandardErrorPath before exec'ing the program
   # and will NOT create a missing parent directory, so on a fresh profile (or
