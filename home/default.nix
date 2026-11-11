@@ -54,7 +54,6 @@
   xdg.configFile."git/ignore".source = ./dotfiles/git/gitignore;
   xdg.configFile."jj/config.toml".source = ./dotfiles/jj/config.toml;
   xdg.configFile."tmux/tmux.conf".source = ./dotfiles/tmux.conf;
-  xdg.configFile."atuin/config.toml".source = ./dotfiles/atuin.toml;
   xdg.configFile."mpv/mpv.conf".source = ./dotfiles/mpv.conf;
   xdg.configFile."btop/btop.conf".source = ./dotfiles/btop.conf;
   xdg.configFile."ghostty/config".source = ./dotfiles/ghostty;
