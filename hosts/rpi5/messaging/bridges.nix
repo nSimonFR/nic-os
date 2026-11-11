@@ -94,7 +94,11 @@ let
       port = 29340;
     };
     discord = {
-      package = goolm pkgs.mautrix-discord;
+      # No withGoolm knob in its nixpkgs package.
+      package = pkgs.mautrix-discord.overrideAttrs (old: {
+        buildInputs = [ ]; # olm only
+        tags = (old.tags or [ ]) ++ [ "goolm" ];
+      });
       port = 29334;
       legacy = true;
     };
