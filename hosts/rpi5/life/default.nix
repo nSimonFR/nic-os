@@ -9,7 +9,6 @@
     ./arkose-sync.nix
     ./dawarich.nix
     ./epicgames-freegames.nix
-    ./scale-bridge.nix
     ./wakapi.nix
   ];
 }

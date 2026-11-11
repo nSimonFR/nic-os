@@ -298,11 +298,6 @@ in
     nsimon-ed25519
     rpi5-host
   ];
-  "scale-bridge-env.age".publicKeys = [
-    nsimon-age
-    nsimon-ed25519
-    rpi5-host
-  ];
   "wealthfolio-env.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

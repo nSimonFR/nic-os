@@ -53,11 +53,11 @@ inputs: final: _prev: {
   };
 
   # nicos-scripts — this repo's own Python: one package holding the shared
-  # library plus a console script per unit (bin/homepage-stats, bin/scale-to-ryot,
+  # library plus a console script per unit (bin/homepage-stats, bin/spotify-to-ryot,
   # …), with its pytest suite in checkPhase.
   # Consumers: rpi5 units (papra, moxfield-sync,
   # travel-cal-sync, homepage, claude-remote-control, claude-notify-aggregator,
-  # scale-bridge), and
+  # ryot connectors), and
   # `nix build .#nicos-scripts` — which is also the flake check.
   nicos-scripts = final.callPackage ./services/nicos-scripts.nix { };
 

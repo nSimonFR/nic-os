@@ -305,8 +305,8 @@ Default collections: **Watchlist** (wishlist), **In Progress**, **Completed**,
 ### Bonus: log a body measurement
 
 Metrics are `measurement-metric` entities (`Weight`, `Body Fat`, `Bmi`, `Muscle
-Mass`, …; ids per install). A Loftilla scale already auto-logs weigh-ins
-(`project_scale_bridge`), so only add manual entries on request.
+Mass`, …; ids per install). Nothing logs weigh-ins automatically any more (the
+Loftilla scale bridge was removed 2026-11), so these are manual entries.
 
 ```bash
 # Metric ids

@@ -316,7 +316,8 @@ in
   # Headless box: gpg-agent doubles as the SSH agent (BeAsT uses Bitwarden's).
   programs.gnupg.agent.enableSSHSupport = true;
 
-  # Onboard Bluetooth: enabled for the BLE scale bridge (see scale-bridge.nix).
+  # Onboard Bluetooth: no local consumer since the BLE scale bridge went
+  # (2026-11); Home Assistant's default_config still loads its integration.
   # The raspberry-pi-5.bluetooth module enables it without mkDefault, so keep an
   # explicit mkForce to control the final value from here.
   hardware.bluetooth.enable = lib.mkForce true;
