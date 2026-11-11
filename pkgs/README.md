@@ -50,8 +50,8 @@ appears — that, not "is it important", is the rule.
 The domain folders say nothing about which host builds a package, and there is
 no per-system split: entries are lazy, so a package no host references costs
 nothing. Several are single-platform in practice — `tobii/*`, `rgb/*` and
-`desktop/graillon-free` are BeAsT (x86) only; `services/showmycards` and
-`services/ble-scale-sync` are built on the rpi5 (aarch64). Where upstream
+`desktop/graillon-free` are BeAsT (x86) only; `services/showmycards` is
+built on the rpi5 (aarch64). Where upstream
 declares it, that constraint is in the derivation's `meta.platforms`.
 
 ## Fixed-output names

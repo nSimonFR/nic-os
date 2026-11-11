@@ -54,7 +54,6 @@ python3Packages.buildPythonPackage {
     "nicos_scripts"
     "nicos_scripts.connectors.steam"
     "nicos_scripts.connectors.spotify"
-    "nicos_scripts.connectors.scale"
     "nicos_scripts.connectors.moxfield"
     "nicos_scripts.connectors.travel_cal"
     "nicos_scripts.connectors.ics_mirror"

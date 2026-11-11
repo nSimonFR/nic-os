@@ -233,7 +233,7 @@ in
 
   # V2 mints API keys only for a signed-in user and V1 keys don't migrate, so
   # this gives the account a password and writes a key for the local services
-  # (connectors, scale shim, Agent Vault). The password lands in
+  # (connectors, Agent Vault). The password lands in
   # ${stateDir}/secrets/password for the user's own sign-in.
   users.groups.ryot-api = { };
   systemd.tmpfiles.rules = [ "d ${stateDir}/secrets 0750 root ryot-api -" ];
@@ -260,8 +260,7 @@ in
     };
   };
 
-  # Consumers that read the key only at start: the broker's bootstrap (optional
-  # credFile) and the long-running scale shim.
+  # The broker's bootstrap reads the key only at start (optional credFile).
   systemd.paths.ryot-api-key = {
     wantedBy = [ "paths.target" ];
     pathConfig.PathChanged = "${stateDir}/secrets/api-key";
@@ -270,7 +269,7 @@ in
     description = "Reload Ryot key consumers after a new key";
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = "${config.systemd.package}/bin/systemctl try-restart agent-vault-bootstrap.service scale-to-ryot.service";
+      ExecStart = "${config.systemd.package}/bin/systemctl try-restart agent-vault-bootstrap.service";
     };
   };
 
