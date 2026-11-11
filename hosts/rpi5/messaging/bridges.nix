@@ -53,6 +53,8 @@ let
       port = 29317;
       # TELEGRAM_API_ID / TELEGRAM_API_HASH, from https://my.telegram.org/apps.
       environmentFile = "/run/agenix/mautrix-telegram-env";
+      # The secret ships as a placeholder (api_id 0): skip, don't fail the deploy.
+      skipUnlessSet = "TELEGRAM_API_ID";
       network = {
         api_id = "$TELEGRAM_API_ID";
         api_hash = "$TELEGRAM_API_HASH";
@@ -214,6 +216,10 @@ let
         EnvironmentFile = [ "${dir}/env" ] ++ lib.optional (b ? environmentFile) b.environmentFile;
         WorkingDirectory = dir;
         UMask = "0077";
+        # $$: a single $ would be expanded by systemd itself.
+        ExecCondition = lib.optional (
+          b ? skipUnlessSet
+        ) "${pkgs.bash}/bin/sh -c '[ -n \"$$${b.skipUnlessSet}\" ] && [ \"$$${b.skipUnlessSet}\" != 0 ]'";
         ExecStartPre = "${render} -i ${cfgFile} -o ${dir}/config.yaml";
         ExecStart = "${lib.getExe b.package} -c ${dir}/config.yaml -r ${dir}/registration.yaml";
         Restart = "always";
