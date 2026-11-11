@@ -72,6 +72,9 @@ in
       KillMode = "mixed";
       Restart = "always";
       RestartSec = 5;
+      # Killing the server takes every session in this cgroup with it. Sessions
+      # still go first: T3 raises each agent to 800 at launch.
+      OOMScoreAdjust = -500;
       # SIGTERM exits 130, which would mark every clean stop as failed.
       SuccessExitStatus = 130;
 

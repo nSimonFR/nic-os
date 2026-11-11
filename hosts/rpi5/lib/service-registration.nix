@@ -99,6 +99,11 @@ let
 
   allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
 
+  # Present while heavy-shed runs. Always-on heavy units carry
+  # ConditionPathExists=!it, so a deploy's activation cannot start them all at
+  # once: it did at 18:27:09 on 2026-11-11, ahead of the staggered restore.
+  shedFlag = "/run/heavy-shed";
+
   # `heavy-shed <command…>`: free the RAM, do the thing, put it back. Shared by
   # cachix-agent.nix. A copy without
   # the restore left nine always-on services stopped for 9h on 2026-08-30.
@@ -144,14 +149,13 @@ let
       }
 
       # A trap, not a branch after the command: callers run `set -e`, and an
-      # aborting script never reaches the next line but does run its trap. On
-      # success the new generation's activation restarts them instead, unless
-      # HEAVY_SHED_RESTORE=always (a deploy that leaves those units unchanged).
+      # aborting script never reaches the next line but does run its trap.
+      # Always restores: the flag keeps activation from starting them itself.
       restore_heavy() {
         status=$?
         trap - EXIT
-        if { [ "$status" -ne 0 ] || [ "''${HEAVY_SHED_RESTORE:-}" = always ]; } \
-          && [ "''${#restore[@]}" -gt 0 ]; then
+        "''${as_root[@]}" rm -f ${shedFlag}
+        if [ "''${#restore[@]}" -gt 0 ]; then
           echo "heavy-shed: exit $status — restarting ''${#restore[@]} service(s)" >&2
           for unit in "''${restore[@]}"; do
             settle
@@ -161,7 +165,9 @@ let
         exit "$status"
       }
       trap restore_heavy EXIT
+      trap 'exit 143' TERM INT
 
+      "''${as_root[@]}" touch ${shedFlag}
       "''${as_root[@]}" systemctl stop "''${heavy[@]}" || true
       echo "heavy-shed: running $*" >&2
       "$@"
@@ -597,8 +603,8 @@ in
     default = heavyShed;
     description = ''
       Derived: `heavy-shed <command…>` stops every `nic.heavyServices` unit, runs
-      the command, and restarts the always-on ones if it fails. The single
-      implementation behind the cachix-agent deploy and the weekly auto-upgrade.
+      the command, then restarts the always-on ones one at a time. The single
+      implementation behind the cachix-agent deploy.
     '';
   };
 
@@ -656,6 +662,17 @@ in
   };
 
   config = {
+    # Only units a target pulls in: socket-activated ones and their workers
+    # must still wake on a request.
+    systemd.services =
+      lib.genAttrs
+        (map (lib.removeSuffix ".service") (lib.filter (lib.hasSuffix ".service") allHeavyUnits))
+        (name: {
+          unitConfig.ConditionPathExists = lib.mkIf (lib.any (lib.hasSuffix ".target")
+            config.systemd.services.${name}.wantedBy
+          ) [ "!${shedFlag}" ];
+        });
+
     services.postgresqlBackup.databases = lib.concatMap (s: s.postgresDatabases) (lib.attrValues cfg);
 
     assertions =

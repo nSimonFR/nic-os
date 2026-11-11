@@ -18,7 +18,7 @@ let
     name = "cachix-deployment-shed";
     runtimeInputs = [ config.nic.heavyShed ];
     text = ''
-      HEAVY_SHED_RESTORE=always exec heavy-shed ${cfg.package}/bin/.cachix-deployment "$@"
+      exec heavy-shed ${cfg.package}/bin/.cachix-deployment "$@"
     '';
   };
   bindir = pkgs.runCommand "cachix-deployment-bindir" { } ''
