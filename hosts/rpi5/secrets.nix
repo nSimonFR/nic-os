@@ -158,7 +158,7 @@
       owner = "nsimon";
       mode = "0400";
     };
-    # From https://my.telegram.org/apps; shipped as a placeholder (api_id 0).
+    # App « ServaTilis » on https://my.telegram.org/apps.
     mautrix-telegram-env = {
       file = ./secrets/mautrix-telegram-env.age;
       owner = "mautrix-telegram";
