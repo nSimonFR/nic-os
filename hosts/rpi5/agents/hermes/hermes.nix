@@ -367,6 +367,7 @@ let
         "GOG_KEYRING_PASSWORD"
         "GOG_ACCOUNT"
         "GOOGLE_PLACES_API_KEY"
+        "SERPAPI_API_KEY"
       ];
     };
 
