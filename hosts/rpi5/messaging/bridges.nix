@@ -1,17 +1,15 @@
-# mautrix bridges: one puppeting bridge per network, all driven by Tuwunel
-# (tuwunel.nix). One generic unit pair per bridge instead of the nixpkgs
-# modules, which differ per bridge and assume Synapse:
+# mautrix bridges, one per network, all on Tuwunel (tuwunel.nix). Not the nixpkgs
+# modules: they cover 4 of these 7, each with its own token handling, and assume
+# Synapse.
 #
-#   mautrix-<name>-setup  root oneshot, before Tuwunel: mints the appservice
-#                         tokens once, renders the registration into
-#                         appserviceDir and the bridge's own state dir.
-#   mautrix-<name>        the bridge, config rendered from Nix at every start.
+#   matrix-appservices-setup  root oneshot before Tuwunel: mints each bridge's
+#                             appservice tokens once, writes the registrations.
+#   mautrix-<name>            the bridge; config rendered at every start, tokens
+#                             envsubst'd in so they stay out of the store.
 #
-# Each bridge is always on (it holds the network's connection) and capped with
-# GOMEMLIMIT: MemoryMax is a no-op on this kernel (cgroup memory disabled).
-# State lives in Postgres (peer auth over the socket), dumped by postgresqlBackup.
-#
-# Login is per network, from the bridge bot's DM in the client: `login`.
+# Always on (each holds its network's connection), capped with GOMEMLIMIT:
+# MemoryMax is a no-op on this kernel (cgroup memory disabled). State in Postgres
+# over peer auth, dumped by postgresqlBackup. Login: `login` in the bot's DM.
 {
   config,
   lib,
@@ -20,11 +18,11 @@
 }:
 let
   inherit (config.nic.messaging) serverName homeserverPort appserviceDir;
-  hsUrl = "http://127.0.0.1:${toString homeserverPort}";
   owner = "@nico:${serverName}";
   serverRe = lib.escapeRegex serverName;
 
   goolm = p: p.override { withGoolm = true; };
+  # Not in nixpkgs (Telegram there is the retired Python bridge).
   mkBridge =
     repo: tag: hash: vendorHash:
     pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix {
@@ -37,8 +35,7 @@ let
         ;
     };
 
-  # port: the bridge's appservice listener (loopback). legacy: pre-bridgev2
-  # config layout (Discord has no bridgev2 release yet).
+  # port: the bridge's appservice listener, loopback.
   bridges = {
     whatsapp = {
       package = goolm pkgs.mautrix-whatsapp;
@@ -50,14 +47,10 @@ let
       package = goolm pkgs.mautrix-signal;
       port = 29328;
     };
-    # Instagram, Messenger and Facebook: the network is picked at `login`.
+    # Instagram only: picked at `login` (the same bridge also does Messenger).
     meta = {
       package = goolm pkgs.mautrix-meta;
       port = 29319;
-    };
-    gmessages = {
-      package = goolm pkgs.mautrix-gmessages;
-      port = 29336;
     };
     slack = {
       package = goolm pkgs.mautrix-slack;
@@ -87,14 +80,9 @@ let
           "sha256-tePfW71Rd1krac2+UQK7JhyyKqkyAGyMkXh1knvtZUM=";
       port = 29327;
     };
-    bluesky = {
-      package =
-        mkBridge "bluesky" "v0.2510.0" "sha256-tADkD2WSATOubXiLX76qoqFp5aOst62qx40TjhLN2os="
-          "sha256-4vX9KV2+TMxKkO7OGTazhDF9jx5/HNbenSUIN8qajLs=";
-      port = 29340;
-    };
+    # Pre-bridgev2 (no bridgev2 release yet): older config layout, and its
+    # nixpkgs package has no withGoolm knob.
     discord = {
-      # No withGoolm knob in its nixpkgs package.
       package = pkgs.mautrix-discord.overrideAttrs (old: {
         buildInputs = [ ]; # olm only
         tags = (old.tags or [ ]) ++ [ "goolm" ];
@@ -106,30 +94,36 @@ let
 
   stateDir = name: "/var/lib/mautrix-${name}";
   dbName = name: "mautrix-${name}";
-  dbUri = name: "postgres:///${dbName name}?host=/run/postgresql";
-
-  # Double puppeting: one url-less appservice owning only @nico, so every bridge
-  # (and the MCP) can act as Nico without his password. The new-style
-  # "as_token:" secret, read by bridgev2 and the legacy bridges alike.
-  doublePuppet = {
-    id = "doublepuppet";
-    url = null;
-    as_token = "$DOUBLEPUPPET_TOKEN";
-    hs_token = "$DOUBLEPUPPET_HS_TOKEN";
-    sender_localpart = "doublepuppet";
-    rate_limited = false;
-    namespaces.users = [
-      {
-        regex = "^${lib.escapeRegex owner}$";
-        exclusive = false;
-      }
-    ];
+  database = name: {
+    type = "postgres";
+    uri = "postgres:///${dbName name}?host=/run/postgresql";
+    max_open_conns = 2;
+    max_idle_conns = 1;
   };
-  # Own dir: appserviceDir is closed to the MCP's group.
-  doublePuppetDir = "/var/lib/matrix-doublepuppet";
-  doublePuppetEnv = "${doublePuppetDir}/doublepuppet.env";
 
-  registration = name: b: {
+  # Double puppeting: a url-less appservice owning only @nico, so the bridges
+  # (and the messaging MCP) act as Nico without his password.
+  doublePuppetDir = "/var/lib/matrix-doublepuppet"; # appserviceDir is closed to the MCP
+  doublePuppetEnv = "${doublePuppetDir}/doublepuppet.env";
+  doublePuppetSecret = "as_token:$DOUBLEPUPPET_TOKEN";
+
+  registrations = {
+    doublepuppet = {
+      id = "doublepuppet";
+      url = null;
+      as_token = "$DOUBLEPUPPET_TOKEN";
+      hs_token = "$DOUBLEPUPPET_HS_TOKEN";
+      sender_localpart = "doublepuppet";
+      rate_limited = false;
+      namespaces.users = [
+        {
+          regex = "^${lib.escapeRegex owner}$";
+          exclusive = false;
+        }
+      ];
+    };
+  }
+  // lib.mapAttrs (name: b: {
     id = name;
     url = "http://127.0.0.1:${toString b.port}";
     as_token = "$AS_TOKEN";
@@ -147,122 +141,74 @@ let
       }
     ];
     receive_ephemeral = true;
-    "de.sorunome.msc2409.push_ephemeral" = true;
-  };
+  }) bridges;
 
-  common = name: b: {
-    homeserver = {
-      address = hsUrl;
-      domain = serverName;
-      software = "standard";
-    };
-    appservice = {
-      address = "http://127.0.0.1:${toString b.port}";
-      hostname = "127.0.0.1";
-      inherit (b) port;
-      id = name;
-      bot = {
-        username = "${name}bot";
-        displayname = "${name} bridge";
+  bridgeConfig =
+    name: b:
+    let
+      common = {
+        homeserver = {
+          address = "http://127.0.0.1:${toString homeserverPort}";
+          domain = serverName;
+        };
+        appservice = {
+          address = "http://127.0.0.1:${toString b.port}";
+          hostname = "127.0.0.1";
+          inherit (b) port;
+          id = name;
+          bot.username = "${name}bot";
+          as_token = "$AS_TOKEN";
+          hs_token = "$HS_TOKEN";
+        };
+        logging = {
+          min_level = "info";
+          writers = [
+            {
+              type = "stdout";
+              format = "pretty";
+            }
+          ];
+        };
       };
-      as_token = "$AS_TOKEN";
-      hs_token = "$HS_TOKEN";
-      ephemeral_events = true;
-    };
-    logging = {
-      min_level = "info";
-      writers = [
+    in
+    lib.recursiveUpdate common (
+      if b.legacy or false then
         {
-          type = "stdout";
-          format = "pretty";
+          appservice.database = database name;
+          bridge = {
+            username_template = "${name}_{{.}}";
+            permissions.${owner} = "admin";
+            login_shared_secret_map.${serverName} = doublePuppetSecret;
+          };
         }
-      ];
-    };
-  };
+      else
+        {
+          appservice.username_template = "${name}_{{.}}";
+          database = database name;
+          bridge = {
+            permissions.${owner} = "admin";
+            personal_filtering_spaces = true;
+          };
+          double_puppet.secrets.${serverName} = doublePuppetSecret;
+          encryption.allow = false;
+          provisioning.shared_secret = "disable";
+          backfill = {
+            enabled = true;
+            max_initial_messages = 50;
+          };
+          network = b.network or { };
+        }
+    );
 
-  bridgev2Config =
-    name: b:
-    lib.recursiveUpdate (common name b) {
-      appservice.username_template = "${name}_{{.}}";
-      database = {
-        type = "postgres";
-        uri = dbUri name;
-        max_open_conns = 2;
-        max_idle_conns = 1;
-      };
-      bridge = {
-        permissions.${owner} = "admin";
-        personal_filtering_spaces = true;
-      };
-      double_puppet.secrets.${serverName} = "as_token:$DOUBLEPUPPET_TOKEN";
-      encryption.allow = false;
-      provisioning.shared_secret = "disable";
-      backfill = {
-        enabled = true;
-        max_initial_messages = 50;
-        max_catchup_messages = 500;
-      };
-      network = b.network or { };
-    };
-
-  legacyConfig =
-    name: b:
-    lib.recursiveUpdate (common name b) {
-      appservice.database = {
-        type = "postgres";
-        uri = dbUri name;
-        max_open_conns = 2;
-        max_idle_conns = 1;
-      };
-      bridge = {
-        username_template = "${name}_{{.}}";
-        permissions.${owner} = "admin";
-        login_shared_secret_map.${serverName} = "as_token:$DOUBLEPUPPET_TOKEN";
-        encryption.allow = false;
-      };
-    };
-
-  json = name: value: pkgs.writeText name (builtins.toJSON value);
+  yaml = (pkgs.formats.yaml { }).generate;
+  registrationFiles = lib.mapAttrs (name: r: yaml "${name}-registration.yaml" r) registrations;
   render = "${pkgs.envsubst}/bin/envsubst";
-
-  setupUnit = name: b: {
-    description = "mautrix-${name}: appservice tokens and registration";
-    wantedBy = [ "multi-user.target" ];
-    before = [ "tuwunel.service" ];
-    requiredBy = [ "tuwunel.service" ];
-    after = [ "matrix-doublepuppet-setup.service" ];
-    requires = [ "matrix-doublepuppet-setup.service" ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      UMask = "0077";
-    };
-    script = ''
-      dir=${stateDir name}
-      install -d -m 0750 -o mautrix-${name} -g mautrix-${name} "$dir"
-      tokens="$dir/tokens.env"
-      if [ ! -s "$tokens" ]; then
-        printf 'AS_TOKEN=%s\nHS_TOKEN=%s\n' "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > "$tokens"
-      fi
-      # The bridge reads its own tokens plus the double-puppet one.
-      cat "$tokens" ${doublePuppetEnv} > "$dir/env"
-      chown mautrix-${name}:mautrix-${name} "$tokens" "$dir/env"
-      chmod 0400 "$tokens" "$dir/env"
-      set -a; . "$tokens"; set +a
-      ${render} -i ${json "${name}-registration.json" (registration name b)} -o ${appserviceDir}/${name}.yaml
-      chgrp matrix-appservices ${appserviceDir}/${name}.yaml
-      chmod 0640 ${appserviceDir}/${name}.yaml
-      install -m 0400 -o mautrix-${name} ${appserviceDir}/${name}.yaml "$dir/registration.yaml"
-    '';
-    path = [ pkgs.openssl ];
-  };
 
   bridgeUnit =
     name: b:
     let
-      cfgFile = json "mautrix-${name}-config.json" (
-        if b.legacy or false then legacyConfig name b else bridgev2Config name b
-      );
+      cfgFile = yaml "mautrix-${name}.yaml" (bridgeConfig name b);
+      dir = stateDir name;
     in
     {
       description = "mautrix-${name} bridge";
@@ -270,9 +216,9 @@ let
       after = [
         "tuwunel.service"
         "postgresql-setup.service"
-        "mautrix-${name}-setup.service"
+        "matrix-appservices-setup.service"
       ];
-      requires = [ "mautrix-${name}-setup.service" ];
+      requires = [ "matrix-appservices-setup.service" ];
       wants = [ "tuwunel.service" ];
       path = [ pkgs.ffmpeg-headless ]; # voice notes and stickers
       environment.GOMEMLIMIT = "40MiB";
@@ -280,16 +226,13 @@ let
       serviceConfig = {
         User = "mautrix-${name}";
         Group = "mautrix-${name}";
-        EnvironmentFile = [
-          "${stateDir name}/env"
-        ]
-        ++ lib.optional (b ? environmentFile) b.environmentFile;
-        WorkingDirectory = stateDir name;
+        StateDirectory = "mautrix-${name}";
+        StateDirectoryMode = "0750";
+        EnvironmentFile = [ "${dir}/env" ] ++ lib.optional (b ? environmentFile) b.environmentFile;
+        WorkingDirectory = dir;
         UMask = "0077";
-        ExecStartPre = "${pkgs.writeShellScript "mautrix-${name}-config" ''
-          ${render} -i ${cfgFile} -o ${stateDir name}/config.yaml
-        ''}";
-        ExecStart = "${lib.getExe b.package} -c ${stateDir name}/config.yaml -r ${stateDir name}/registration.yaml";
+        ExecStartPre = "${render} -i ${cfgFile} -o ${dir}/config.yaml";
+        ExecStart = "${lib.getExe b.package} -c ${dir}/config.yaml -r ${dir}/registration.yaml";
         Restart = "always";
         RestartSec = "30s";
         NoNewPrivileges = true;
@@ -297,7 +240,6 @@ let
         PrivateDevices = true;
         ProtectSystem = "strict";
         ProtectHome = true;
-        ReadWritePaths = [ (stateDir name) ];
         ProtectKernelTunables = true;
         ProtectKernelModules = true;
         ProtectControlGroups = true;
@@ -305,6 +247,18 @@ let
         LockPersonality = true;
       };
     };
+
+  # Per bridge: tokens minted once, then its registration in appserviceDir (for
+  # Tuwunel) and in its own dir, plus an env file with its and the DP token.
+  setupBridge = name: _: ''
+    dir=${stateDir name}
+    install -d -m 0750 -o mautrix-${name} -g mautrix-${name} "$dir"
+    [ -s "$dir/tokens.env" ] || printf 'AS_TOKEN=%s\nHS_TOKEN=%s\n' "$(rand)" "$(rand)" > "$dir/tokens.env"
+    cat "$dir/tokens.env" ${doublePuppetEnv} > "$dir/env"
+    (set -a; . "$dir/tokens.env"; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml)
+    install -m 0400 -o mautrix-${name} ${appserviceDir}/${name}.yaml "$dir/registration.yaml"
+    chown mautrix-${name} "$dir/tokens.env" "$dir/env"
+  '';
 in
 {
   users.users = lib.mapAttrs' (
@@ -316,7 +270,7 @@ in
     }
   ) bridges;
   users.groups = lib.mapAttrs' (name: _: lib.nameValuePair "mautrix-${name}" { }) bridges // {
-    # Read access to the double-puppet token: the messaging MCP runs in hermes, as nsimon.
+    # The messaging MCP reads the double-puppet token; it runs in hermes, as nsimon.
     matrix-mcp.members = [ "nsimon" ];
   };
 
@@ -328,39 +282,36 @@ in
     }) (lib.attrNames bridges);
   };
 
-  systemd.services = {
-    matrix-doublepuppet-setup = {
-      description = "Matrix double-puppet appservice registration";
-      serviceConfig = {
-        Type = "oneshot";
-        RemainAfterExit = true;
-        UMask = "0077";
+  systemd.services =
+    lib.mapAttrs' (name: b: lib.nameValuePair "mautrix-${name}" (bridgeUnit name b)) bridges
+    // {
+      matrix-appservices-setup = {
+        description = "Matrix appservice tokens and registrations";
+        wantedBy = [ "multi-user.target" ];
+        before = [ "tuwunel.service" ];
+        requiredBy = [ "tuwunel.service" ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          UMask = "0077";
+        };
+        path = [ pkgs.openssl ];
+        script = ''
+          set -eu
+          rand() { openssl rand -hex 32; }
+          install -d -m 0750 -g matrix-mcp ${doublePuppetDir}
+          [ -s ${doublePuppetEnv} ] || printf 'DOUBLEPUPPET_TOKEN=%s\nDOUBLEPUPPET_HS_TOKEN=%s\n' "$(rand)" "$(rand)" > ${doublePuppetEnv}
+          chgrp matrix-mcp ${doublePuppetEnv}
+          chmod 0440 ${doublePuppetEnv}
+          (set -a; . ${doublePuppetEnv}; ${render} -i ${registrationFiles.doublepuppet} -o ${appserviceDir}/doublepuppet.yaml)
+          ${lib.concatStrings (lib.mapAttrsToList setupBridge bridges)}
+          chgrp matrix-appservices ${appserviceDir}/*.yaml
+          chmod 0640 ${appserviceDir}/*.yaml
+        '';
       };
-      path = [ pkgs.openssl ];
-      script = ''
-        install -d -m 0750 -g matrix-mcp ${doublePuppetDir}
-        if [ ! -s ${doublePuppetEnv} ]; then
-          printf 'DOUBLEPUPPET_TOKEN=%s\nDOUBLEPUPPET_HS_TOKEN=%s\n' \
-            "$(openssl rand -hex 32)" "$(openssl rand -hex 32)" > ${doublePuppetEnv}
-        fi
-        chgrp matrix-mcp ${doublePuppetEnv}
-        chmod 0440 ${doublePuppetEnv}
-        set -a; . ${doublePuppetEnv}; set +a
-        ${render} -i ${json "doublepuppet-registration.json" doublePuppet} -o ${appserviceDir}/doublepuppet.yaml
-        chgrp matrix-appservices ${appserviceDir}/doublepuppet.yaml
-        chmod 0640 ${appserviceDir}/doublepuppet.yaml
-      '';
+      # A registration is only read at start.
+      tuwunel.restartTriggers = lib.attrValues registrationFiles;
     };
-  }
-  // lib.mapAttrs' (name: b: lib.nameValuePair "mautrix-${name}-setup" (setupUnit name b)) bridges
-  // lib.mapAttrs' (name: b: lib.nameValuePair "mautrix-${name}" (bridgeUnit name b)) bridges
-  // {
-    # A registration is only read at start.
-    tuwunel.restartTriggers = [
-      (json "doublepuppet-registration.json" doublePuppet)
-    ]
-    ++ lib.mapAttrsToList (name: b: json "${name}-registration.json" (registration name b)) bridges;
-  };
 
   nic.services.matrix-bridges = {
     backup = [ "postgres" ];
