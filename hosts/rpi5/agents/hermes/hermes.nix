@@ -199,6 +199,9 @@ let
   # pkgs/agents/mtg-mcp.nix.
   mtgMcp = pkgs.callPackage ../../../../pkgs/agents/mtg-mcp.nix { };
 
+  # Interpreter for the job-offer collector scripts of the digest cron jobs.
+  jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
+
   # FreeReps MCP — 20 read-only Apple Health query tools, as mcp__freereps__*.
   #
   # stdio, NOT the Streamable HTTP server freereps also mounts at /mcp. That
@@ -590,7 +593,10 @@ let
   '';
 in
 {
-  home.packages = [ hermes ];
+  home.packages = [
+    hermes
+    jobScoutPython
+  ];
 
   systemd.user.services.hermes = {
     Unit = {
