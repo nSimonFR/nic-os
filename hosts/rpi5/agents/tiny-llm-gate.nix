@@ -10,6 +10,7 @@
   lib,
   inputs,
   beastOllamaUrl,
+  username,
   ...
 }:
 let
@@ -20,6 +21,8 @@ let
   # The TypeSafe key lives in Agent Vault's root-only KEY=VAL file; the gate's
   # DynamicUser gets just that one key, in its runtime dir.
   typesafeKeyFile = "/run/tiny-llm-gate/typesafe-api-key";
+  logNamespace = "tinyllmgate";
+  logDir = "/var/log/journal/%m.${logNamespace}";
   typesafeKey = pkgs.writeShellApplication {
     name = "tiny-llm-gate-typesafe-key";
     runtimeInputs = [
@@ -340,8 +343,21 @@ in
         # "-": a missing key only disables the router's classifier (turns go to on_error).
         "-+${lib.getExe typesafeKey}"
       ];
+      # Own journal, readable by ${username} (ACL below) without systemd-journal,
+      # which would expose every unit's logs: `journalctl --namespace=${logNamespace}`.
+      LogNamespace = logNamespace;
     };
   };
+
+  systemd.tmpfiles.rules = [
+    "d ${logDir} 2755 root systemd-journal - -"
+    "A+ ${logDir} - - - - u:${username}:r-x,d:u:${username}:r-x"
+  ];
+  # A namespace defaults to 10% of the disk; the main journal has 500M.
+  environment.etc."systemd/journald@${logNamespace}.conf".text = ''
+    [Journal]
+    SystemMaxUse=100M
+  '';
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.tiny-llm-gate = {
