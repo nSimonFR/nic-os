@@ -105,6 +105,12 @@
       # by Agent Vault: root-only, Hermes holds a placeholder.
       mode = "0400";
     };
+    serpapi-api-key = {
+      file = ./secrets/serpapi-api-key.age;
+      # SerpApi free plan (250 searches/month), for Hermes' populartimes skill.
+      # Brokered by Agent Vault: root-only, Hermes holds a placeholder.
+      mode = "0400";
+    };
     etherscan-api-key = {
       file = ./secrets/etherscan-api-key.age;
       # Read-only chain queries — used to trace where crypto moved between the

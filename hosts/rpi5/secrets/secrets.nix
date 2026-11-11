@@ -313,6 +313,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "serpapi-api-key.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "etherscan-api-key.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

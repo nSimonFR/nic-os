@@ -73,6 +73,13 @@ let
         "query"
       ];
     }
+    # SerpApi takes its key only as the `api_key` query parameter.
+    {
+      name = "serpapi";
+      host = "serpapi.com";
+      keys = [ "SERPAPI_API_KEY" ];
+      "in" = [ "query" ];
+    }
     {
       name = "linear";
       host = "api.linear.app";
@@ -191,6 +198,7 @@ let
     SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
     SURE_MCP_TOKEN = "${config.age.secrets.sure-mcp-env.path}:MCP_API_TOKEN";
     WEALTHFOLIO_MCP_TOKEN = "${config.age.secrets.wealthfolio-mcp-token.path}:WEALTHFOLIO_MCP_TOKEN";
+    SERPAPI_API_KEY = config.age.secrets.serpapi-api-key.path;
     # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
     GITHUB_AI_TOKEN = config.age.secrets.github-ai-token.path;
@@ -268,6 +276,7 @@ in
       config.age.secrets.sure-journal-api-key.file
       config.age.secrets.sure-mcp-env.file
       config.age.secrets.wealthfolio-mcp-token.file
+      config.age.secrets.serpapi-api-key.file
       servicesFile
     ];
     environment = {

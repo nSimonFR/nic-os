@@ -1,53 +1,38 @@
 ---
 name: populartimes
-description: Check Google Maps popular-times busyness for a specific place by Place ID.
-version: 1.0.0
+description: Live and weekly Google popular times (busyness, "fréquentation", "affluence") for a place, e.g. is the climbing gym crowded right now.
+version: 2.0.0
 metadata:
   hermes:
-    tags: [google-maps, places, popularity, busy-times]
+    tags: [google-maps, places, popularity, busy-times, affluence]
     category: productivity
     requires_toolsets: [terminal]
     requires:
-      bins: [populartimes-query, goplaces]
-      env: [GOOGLE_PLACES_API_KEY]
+      bins: [populartimes-query]
+      env: [SERPAPI_API_KEY]
 ---
 
 # Popular Times
 
-Use the `populartimes-query` CLI to retrieve weekly popular-times data and
-current popularity for a Google Place ID.
-
-## Find a place
-
-Resolve a user-provided name/address with Google Places, then use the returned
-`id`/Place ID:
+`populartimes-query` reads the "Horaires d'affluence" block of Google Search's
+place panel through SerpApi. Values are relative busyness, 0–100, not head counts.
 
 ```bash
-goplaces resolve "Cafe de Flore, Paris" --json
+populartimes-query "Arkose Chevaleret Paris"            # live + today
+populartimes-query --day saturday "Arkose Chevaleret Paris"
+populartimes-query --day all "Arkose Chevaleret Paris"  # whole week
+populartimes-query --quota                              # searches left, free
 ```
 
-If the result is ambiguous, show the candidate names and addresses and ask the
-user which one they mean. Do not guess a place ID.
+Output: `Live: <Google's text> (<score>/100)`, then `<day>: 07h=9 08h=12 …`.
+Compare the live score to the same hour's usual value to say busier/quieter than usual.
 
-## Query
-
-```bash
-populartimes-query ChIJ...
-```
-
-Use `--json` when you need to inspect or transform the full response. Summarize
-the current popularity and the busiest hours for the requested day; if no day is
-specified, give a short weekly overview. The hourly values are relative
-popularity estimates (0–100), not visitor counts. Missing data means Google did
-not provide popularity for that place.
-
-## Requirements and limitations
-
-- `GOOGLE_PLACES_API_KEY` is Agent Vault's placeholder, swapped for the real key
-  on the way to Google; it must be present in Hermes' environment. If it is
-  missing, tell Nico; never ask them to paste a key into chat or commit it.
-- Google Maps behavior can change and this unofficial library may stop working.
-- Follow Google Maps Platform terms and current billing/quota rules. Do not
-  batch-scrape areas or repeatedly poll; query only the place the user asked for.
-- Popular-times values are estimates. State that clearly when making
-  recommendations based on them.
+Traps:
+- The query is a Google search: name + city (or street) so the panel is the right
+  place. If it says "No Google knowledge panel", retry once with the address
+  (`goplaces resolve "<name>" --json` gives it); don't loop.
+- No `Live:` score means closed or no live data right now; fall back to the
+  usual value for the current hour and say so.
+- Free plan: 250 searches/month, each call spends one. Don't poll or batch; one
+  call per question. If `--quota` is low, tell Nico.
+- Never ask for the key in chat: `SERPAPI_API_KEY` is Agent Vault's placeholder.
