@@ -340,7 +340,7 @@ lib.recursiveUpdate keepWarm.nixosConfig {
     # here kills the caller mid-activation: nixos-rebuild hands
     # switch-to-configuration its own stdout via `systemd-run --pipe`, that pipe
     # dies with the caller, and the next write panics it with exit 101 — leaving
-    # everything nixos-rebuild-safe had stopped stopped. Twice on 2026-07-29,
+    # the units stopped for the rebuild down. Twice on 2026-07-29,
     # once for 1d15h (Home Assistant, AFFiNE, Ryot, Dawarich, homepage).
     # Config changes here need a manual `systemctl restart
     # claude-remote-control`; ExecStop snapshots the live sessions and

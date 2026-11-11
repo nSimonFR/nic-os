@@ -368,9 +368,6 @@ in
       + "backup usefully — a stale copy is already invalid — so recovery is "
       + "re-seeding it from a fresh ChatGPT refresh token. Everything else the "
       + "gate serves is config from the store.";
-    # Deliberately NOT heavy: the gate is what every agent on this box reaches
-    # inference through, including whatever is driving the rebuild.
-    heavyUnits = [ ];
 
     public = {
       order = 300;

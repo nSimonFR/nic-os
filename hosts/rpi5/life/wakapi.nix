@@ -131,8 +131,7 @@ in
   nic.services.wakapi = {
     backup = [ "unit" ];
     backupUnits = [ "wakapi-backup.service" ]; # declared just above
-    heavyUnits = [ "wakapi.service" ];
-    heavyPriority = 140;
+    appUnits = [ "wakapi.service" ];
 
     public = {
       order = 190;

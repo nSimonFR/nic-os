@@ -132,11 +132,10 @@ in
   nic.services.dawarich = {
     backup = [ "postgres" ];
     postgresDatabases = [ "dawarich" ];
-    heavyUnits = [
+    appUnits = [
       "dawarich-sidekiq-all.service"
       "dawarich-web.service"
     ];
-    heavyPriority = 40;
 
     public = {
       order = 30;

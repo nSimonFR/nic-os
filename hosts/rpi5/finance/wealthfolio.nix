@@ -216,8 +216,7 @@ in
   nic.services.wealthfolio = {
     backup = [ "unit" ];
     backupUnits = [ "wealthfolio-backup.service" ]; # backups.nix
-    heavyUnits = [ "wealthfolio.service" ];
-    heavyPriority = 90;
+    appUnits = [ "wealthfolio.service" ];
 
     public = {
       order = 20; # the other money tile; row 1 then runs on into the two map ones

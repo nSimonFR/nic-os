@@ -302,8 +302,7 @@ in
       "ryotv2"
       "ryot"
     ];
-    heavyUnits = [ "ryot.service" ];
-    heavyPriority = 90;
+    appUnits = [ "ryot.service" ];
 
     public = {
       order = 120;

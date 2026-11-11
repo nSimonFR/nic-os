@@ -127,8 +127,7 @@ in
 
   nic.services.open-knowledge = {
     backup = [ "mnt-data" ];
-    heavyUnits = [ "open-knowledge.service" ];
-    heavyPriority = 70;
+    appUnits = [ "open-knowledge.service" ];
 
     # Completes the "rest" row while AFFiNE still holds order 70.
     public = {

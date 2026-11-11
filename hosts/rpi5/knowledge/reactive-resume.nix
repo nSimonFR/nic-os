@@ -185,8 +185,7 @@ in
   nic.services.reactive-resume = {
     backup = [ "postgres" ];
     postgresDatabases = [ "reactive_resume" ];
-    heavyUnits = [ "reactive-resume.service" ];
-    heavyPriority = 30;
+    appUnits = [ "reactive-resume.service" ];
 
     # Prefix STRIPPED by front-proxy.nix — the server is root-native; the SPA is
     # built with Vite base=/rxresume/ so the browser requests everything under

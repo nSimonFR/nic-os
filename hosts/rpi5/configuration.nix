@@ -364,6 +364,12 @@ in
 
   # stateVersion, experimental-features (the base two), auto-optimise-store, and
   # the nix.gc schedule come from ../../common/nixos.nix.
+  #
+  # The daemon only substitutes deploys and runs GC here (CI builds the system),
+  # so it yields CPU and disk to the services. It does not bound its memory:
+  # psi-oom freezes it during a stall instead.
+  nix.daemonCPUSchedPolicy = "idle";
+  nix.daemonIOSchedClass = "idle";
   nix.settings = {
     # rpi5 kernel/firmware are prebuilt on nixos-raspberrypi's Cachix; the rest
     # of the system is built by deploy-rpi5.yml and pushed to nsimon-nicos, which

@@ -1,7 +1,8 @@
 from nicos_scripts.monitoring.psi_oom import (
+    Cgroup,
     Config,
+    Guard,
     full_avg10,
-    on_stall,
     parse_status,
     pick_victim,
     scan_procs,
@@ -68,48 +69,115 @@ def test_scan_procs(tmp_path):
     assert list(scan_procs(str(tmp_path))) == [(7, "bun", 800, 105)]
 
 
-def run(cfg, last, now, logged, procs=PROCS):
+class FakeCgroup:
+    def __init__(self, busy=False):
+        self.is_busy, self.writes = busy, []
+
+    def busy(self):
+        return self.is_busy
+
+    def freeze(self, on):
+        self.writes.append(on)
+
+
+def guard(logged, procs=PROCS, busy=False, **cfg):
     kills = []
-    out = on_stall(
-        cfg,
-        last,
-        now,
+    cg = FakeCgroup(busy)
+    g = Guard(
+        Config(**{"dry_run": False, "cooldown_sec": 10, **cfg}),
         read=lambda: PRESSURE,
         procs=lambda: procs,
         kill=kills.append,
+        deferrable=cg,
         log=logged,
     )
-    return out, kills
+    return g, kills, cg
 
 
 def test_stall_kills_largest(logged):
     lines, log = logged
-    cfg = Config(dry_run=False, cooldown_sec=10)
-    last, kills = run(cfg, float("-inf"), 100.0, log)
-    assert (last, kills) == (100.0, [30])
+    g, kills, _ = guard(log)
+    g.on_stall(100.0)
+    assert kills == [30]
     assert "full avg10=45.5" in lines[0]
     assert "immich (pid 30, 400 MiB" in lines[0]
 
 
 def test_no_large_victim_kills_nothing(logged):
     lines, log = logged
-    cfg = Config(dry_run=False, cooldown_sec=10)
-    last, kills = run(cfg, float("-inf"), 100.0, log, procs=PROCS[:1])
-    assert (last, kills) == (100.0, [])
+    g, kills, _ = guard(log, procs=PROCS[:1])
+    g.on_stall(100.0)
+    assert kills == []
     assert "no process" in lines[0]
 
 
 def test_cooldown_skips_second_kill(logged):
     _, log = logged
-    cfg = Config(dry_run=False, cooldown_sec=10)
-    last, kills = run(cfg, 100.0, 105.0, log)
-    assert (last, kills) == (100.0, [])
-    last, kills = run(cfg, 100.0, 110.0, log)
-    assert (last, kills) == (110.0, [30])
+    g, kills, _ = guard(log)
+    g.on_stall(100.0)
+    g.on_stall(105.0)
+    assert kills == [30]
+    g.on_stall(110.0)
+    assert kills == [30, 30]
 
 
-def test_dry_run_never_kills(logged):
+def test_dry_run_never_kills_or_freezes(logged):
     lines, log = logged
-    last, kills = run(Config(), float("-inf"), 1.0, log)
-    assert (last, kills) == (1.0, [])
+    g, kills, cg = guard(log, dry_run=True)
+    g.on_stall(1.0)
+    assert (kills, cg.writes) == ([], [])
     assert "dry run" in lines[0]
+    g, kills, cg = guard(log, dry_run=True, busy=True)
+    g.on_stall(1.0)
+    assert (kills, cg.writes) == ([], [])
+    assert "would freeze" in lines[1]
+
+
+def test_busy_daemon_is_frozen_before_anything_is_killed(logged):
+    lines, log = logged
+    g, kills, cg = guard(log, busy=True)
+    g.on_stall(100.0)
+    assert (kills, cg.writes, g.frozen) == ([], [True], True)
+    assert "froze nix-daemon" in lines[0]
+
+
+def test_stall_that_outlasts_the_freeze_kills(logged):
+    _, log = logged
+    g, kills, cg = guard(log, busy=True)
+    g.on_stall(100.0)
+    g.on_stall(105.0)  # cooldown
+    assert kills == []
+    g.on_stall(110.0)
+    assert (kills, cg.writes) == ([30], [True])
+
+
+def test_thaw_after_two_quiet_windows(logged):
+    lines, log = logged
+    g, _, cg = guard(log, busy=True, window_ms=10000)
+    g.on_stall(100.0)
+    g.on_quiet(119.0)
+    assert cg.writes == [True]
+    g.on_quiet(120.0)
+    assert (cg.writes, g.frozen) == ([True, False], False)
+    assert "thawed" in lines[-1]
+
+
+def test_idle_daemon_is_not_frozen(logged):
+    _, log = logged
+    g, kills, cg = guard(log, busy=False)
+    g.on_stall(100.0)
+    assert (kills, cg.writes) == ([30], [])
+
+
+def test_cgroup_busy_and_freeze(tmp_path):
+    cg = Cgroup(str(tmp_path))
+    assert cg.busy() is False  # no cgroup: socket-activated and idle
+    (tmp_path / "cgroup.procs").write_text("100\n")
+    assert cg.busy() is False  # the daemon alone
+    (tmp_path / "cgroup.procs").write_text("100\n200\n")
+    assert cg.busy() is True
+    cg.freeze(True)
+    assert (tmp_path / "cgroup.freeze").read_text() == "1"
+    cg.freeze(False)
+    assert (tmp_path / "cgroup.freeze").read_text() == "0"
+    Cgroup(str(tmp_path / "missing")).freeze(True)  # no error

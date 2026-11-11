@@ -214,10 +214,7 @@ in
   nic.services.freereps = {
     backup = [ "postgres" ];
     postgresDatabases = [ "freereps" ];
-    heavyUnits = [ "freereps.service" ];
-    # Light and non-critical, so it sheds early: above wakapi (140), below
-    # vaultwarden (150).
-    heavyPriority = 145;
+    appUnits = [ "freereps.service" ];
 
     public = {
       order = 110; # row 3, the day: Calino, BeaverHabits, here, Ryot

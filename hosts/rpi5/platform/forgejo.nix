@@ -285,8 +285,7 @@ in
     ];
     postgresDatabases = [ "forgejo" ];
     backupUnits = [ "forgejo-state-backup.service" ];
-    heavyUnits = [ "forgejo.service" ];
-    heavyPriority = 130;
+    appUnits = [ "forgejo.service" ];
 
     # externalPort is also the socket-activate listen (see below), so the literal
     # stays local; only the URL shape is derived.

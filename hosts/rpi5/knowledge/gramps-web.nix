@@ -79,11 +79,10 @@ in
   nic.services.gramps-web = {
     backup = [ "unit" ];
     backupUnits = [ "gramps-web-backup.service" ]; # backups.nix — trees + media
-    heavyUnits = [
+    appUnits = [
       "gramps-web.service"
       "gramps-web-celery.service"
     ];
-    heavyPriority = 80;
 
     # NOT behind the 443 path-mux: the SPA hardcodes absolute API paths and its
     # service worker needs root scope (gramps-web#531), so it keeps its own

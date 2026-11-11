@@ -2,7 +2,7 @@
 # agent on the Pi (hosts/rpi5/platform/cachix-agent.nix) download and activate it.
 #
 # The Pi cannot evaluate its own config: the eval peaks at ~2.1 GiB RSS and
-# earlyoom SIGTERMs it, heavy-shed or not (2026-10-01). Its closure is ~25 GiB,
+# earlyoom SIGTERMs it (2026-10-01). Its closure is ~25 GiB,
 # hence the disk cleanup before the build.
 name: Deploy rpi5
 

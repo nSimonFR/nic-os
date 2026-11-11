@@ -60,8 +60,7 @@ in
   nic.services.beaverhabits = {
     backup = [ "unit" ];
     backupUnits = [ "beaverhabits-backup.service" ]; # backups.nix
-    heavyUnits = [ "beaverhabits.service" ];
-    heavyPriority = 100;
+    appUnits = [ "beaverhabits.service" ];
 
     # Kept last in Apps so the tile sits at the end of the group.
     public = {

@@ -995,9 +995,6 @@ in
         + "from this module on every rebuild, and ~/.config/gh holds the "
         + "nSimonFR-ai PAT, which is re-obtained by `gh auth login`. Issue state "
         + "lives in Linear.";
-      # Not in the heavy list today, and left that way: cyrus-build is the
-      # expensive part and it is a oneshot keyed on the source rev.
-      heavyUnits = [ ];
 
       # Fronted by the 443 path-mux at /cyrus, prefix STRIPPED: cyrus mounts
       # /callback, /linear-webhook and /github-webhook at its root and knows its

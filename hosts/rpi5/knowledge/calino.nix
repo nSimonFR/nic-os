@@ -316,11 +316,7 @@ in
       and /mnt/data. /var/lib/ics-mirror is a regenerable cache: every file in it
       is rebuilt from the upstream feeds on the next timer tick.
     '';
-    # Calino serves from the nix store, but the mirror timer parses a ~10 MB ICS
-    # (~127 MB peak RSS, measured). Cheap to shed while a build needs the RAM —
-    # heavy-shed only restores units that were active, so the dormant oneshot is
-    # never spuriously started. nginx stays up: it is infra.
-    heavyUnits = [
+    appUnits = [
       "ics-mirror.timer"
       "ics-mirror.service"
     ];

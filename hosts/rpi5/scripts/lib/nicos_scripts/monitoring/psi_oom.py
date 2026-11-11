@@ -1,10 +1,13 @@
-"""Kernel OOM kill on a sustained memory stall, before the 30 s watchdog resets the Pi.
+"""Act on a sustained memory stall before the 30 s watchdog resets the Pi.
 
 earlyoom reads MemAvailable, which stayed at 27-48% in the hour before the
 2026-11-05/06 resets, and MGLRU min_ttl_ms=1000 never fires: the oldest
 generation was ~28 s old at load 12. PSI `full` measures the stall itself.
 When every runnable task waits on memory for STALL_MS out of WINDOW_MS, this
-SIGKILLs the process holding the most anon + swap memory.
+first freezes nix-daemon if it has a worker (a deploy's substitution: the 26.05
+deploy reset the Pi at 16 and at 2 jobs), and thaws it once the trigger stays
+quiet. A stall that outlasts the freeze is not the deploy's: it SIGKILLs the
+process holding the most anon + swap memory.
 
 Not sysrq f: it picks by oom_score, where T3's agents (adj 800) and
 ryot-sandboxd (adj 1000) outrank everything. On 2026-11-11 it killed sleep,
@@ -30,6 +33,7 @@ WINDOW_MS = 10000
 COOLDOWN_SEC = 10
 # Killing anything smaller does not end a stall.
 MIN_VICTIM_MIB = 64
+DEFERRABLE_CGROUP = "/sys/fs/cgroup/system.slice/nix-daemon.service"
 
 FULL_RE = re.compile(r"^full avg10=([\d.]+)", re.M)
 STATUS_RE = re.compile(r"^(Name|RssAnon|VmSwap):\s+(\S+)", re.M)
@@ -43,6 +47,7 @@ class Config:
     window_ms: int = WINDOW_MS
     cooldown_sec: int = COOLDOWN_SEC
     min_victim_mib: int = MIN_VICTIM_MIB
+    cgroup: str = DEFERRABLE_CGROUP
     dry_run: bool = True
 
     def __init__(self, **kw):
@@ -57,6 +62,7 @@ class Config:
             window_ms=env_int("PSI_OOM_WINDOW_MS", WINDOW_MS, env),
             cooldown_sec=env_int("PSI_OOM_COOLDOWN_SEC", COOLDOWN_SEC, env),
             min_victim_mib=env_int("PSI_OOM_MIN_VICTIM_MIB", MIN_VICTIM_MIB, env),
+            cgroup=env_str("PSI_OOM_CGROUP", DEFERRABLE_CGROUP, env),
             dry_run=env_str("PSI_OOM_DRY_RUN", "1", env) != "0",
         )
 
@@ -65,6 +71,12 @@ class Config:
         # The kernel overwrites the last byte written with NUL; without our own
         # NUL it truncates the window (10000000 -> 1000000 < stall) and EINVALs.
         return f"full {self.stall_ms * 1000} {self.window_ms * 1000}\0"
+
+    @property
+    def thaw_sec(self):
+        # The trigger fires at most once per window while a stall lasts, so two
+        # quiet windows mean it is over.
+        return 2 * self.window_ms / 1000
 
 
 def full_avg10(text):
@@ -109,26 +121,90 @@ def pick_victim(procs, min_kib, self_pid):
     return best
 
 
-def on_stall(cfg, last_kill, now, *, read, procs, kill, log):
-    """Handle one PSI event; return the time of the last kill."""
-    if now - last_kill < cfg.cooldown_sec:
-        return last_kill
-    avg = full_avg10(read())
-    victim = pick_victim(procs(), cfg.min_victim_mib * 1024, os.getpid())
-    if victim is None:
-        log(f"memory stall (full avg10={avg}): no process >= {cfg.min_victim_mib} MiB")
-        return now
-    pid, name, kib = victim
-    what = f"{name} (pid {pid}, {kib // 1024} MiB anon+swap)"
-    if cfg.dry_run:
-        log(f"memory stall (full avg10={avg}): would kill {what} (dry run)")
-        return now
-    try:
-        kill(pid)
-    except ProcessLookupError:
-        return last_kill
-    log(f"memory stall (full avg10={avg}): killed {what}")
-    return now
+class Cgroup:
+    """The deferrable work: freezable through cgroup v2, no memory controller needed."""
+
+    def __init__(self, path):
+        self.path = path
+
+    def busy(self):
+        """A worker besides the daemon itself, i.e. a client is being served."""
+        try:
+            with open(f"{self.path}/cgroup.procs") as f:
+                return len(f.read().split()) > 1
+        except OSError:
+            return False  # socket-activated and idle
+
+    def freeze(self, on):
+        try:
+            with open(f"{self.path}/cgroup.freeze", "w") as f:
+                f.write("1" if on else "0")
+        except OSError:
+            pass
+
+
+class Guard:
+    """Freeze the deferrable cgroup first; kill only if the stall outlasts it."""
+
+    def __init__(self, cfg, *, read, procs, kill, deferrable, log):
+        self.cfg, self.read, self.procs, self.kill = cfg, read, procs, kill
+        self.deferrable, self.log = deferrable, log
+        self.last_action = float("-inf")
+        self.last_stall = float("-inf")
+        self.frozen = False
+
+    def on_stall(self, now):
+        self.last_stall = now
+        if now - self.last_action < self.cfg.cooldown_sec:
+            return
+        avg = full_avg10(self.read())
+        if not self.frozen and self.deferrable.busy():
+            self.last_action = now
+            if self.cfg.dry_run:
+                self.log(
+                    f"memory stall (full avg10={avg}): would freeze nix-daemon (dry run)"
+                )
+                return
+            self.deferrable.freeze(True)
+            self.frozen = True
+            self.log(f"memory stall (full avg10={avg}): froze nix-daemon")
+            return
+        self._kill(now, avg)
+
+    def on_quiet(self, now):
+        if self.frozen and now - self.last_stall >= self.cfg.thaw_sec:
+            self.thaw()
+
+    def thaw(self):
+        self.deferrable.freeze(False)
+        if self.frozen:
+            self.log("stall over: thawed nix-daemon")
+        self.frozen = False
+
+    def _kill(self, now, avg):
+        victim = pick_victim(self.procs(), self.cfg.min_victim_mib * 1024, os.getpid())
+        if victim is None:
+            self.log(
+                f"memory stall (full avg10={avg}): no process >= {self.cfg.min_victim_mib} MiB"
+            )
+            self.last_action = now
+            return
+        pid, name, kib = victim
+        what = f"{name} (pid {pid}, {kib // 1024} MiB anon+swap)"
+        if self.cfg.dry_run:
+            self.log(f"memory stall (full avg10={avg}): would kill {what} (dry run)")
+            self.last_action = now
+            return
+        try:
+            self.kill(pid)
+        except ProcessLookupError:
+            return
+        self.log(f"memory stall (full avg10={avg}): killed {what}")
+        self.last_action = now
+
+
+def _exit_on_term(*_):
+    raise SystemExit(0)
 
 
 def lock_memory(log):
@@ -156,20 +232,28 @@ def main(argv=None, env=None, log=None):
     def kill(pid):
         os.kill(pid, signal.SIGKILL)
 
-    last_kill = float("-inf")
-    while True:
-        for _, ev in poller.poll():
-            if ev & select.POLLERR:
-                raise SystemExit("PSI trigger closed")
-            last_kill = on_stall(
-                cfg,
-                last_kill,
-                time.monotonic(),
-                read=read,
-                procs=scan_procs,
-                kill=kill,
-                log=log,
-            )
+    guard = Guard(
+        cfg,
+        read=read,
+        procs=scan_procs,
+        kill=kill,
+        deferrable=Cgroup(cfg.cgroup),
+        log=log,
+    )
+    # A freeze left by a previous run would hold every nix client forever, and
+    # `finally` only runs on SIGTERM once it raises.
+    guard.thaw()
+    signal.signal(signal.SIGTERM, _exit_on_term)
+    try:
+        while True:
+            events = poller.poll(cfg.window_ms)
+            for _, ev in events:
+                if ev & select.POLLERR:
+                    raise SystemExit("PSI trigger closed")
+                guard.on_stall(time.monotonic())
+            guard.on_quiet(time.monotonic())
+    finally:
+        guard.thaw()
 
 
 if __name__ == "__main__":

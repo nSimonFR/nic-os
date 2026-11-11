@@ -161,7 +161,6 @@ in
       + "session refreshes itself every 48h (hence the daily timer) — a restored "
       + "copy would already be expired. Recovery is re-authenticating via the "
       + "captcha portal.";
-    heavyUnits = [ ];
 
     # No tile: the portal only listens during a run, and only when Epic demands
     # an interactive solve. Tailnet-only serve so the Telegram captcha link

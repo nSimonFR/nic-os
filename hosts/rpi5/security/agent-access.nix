@@ -1,6 +1,6 @@
 # What agents (running as nsimon, no sudo — security-policy.nix) may still do
 # as root, none of which hands them a secret:
-#   - start/stop/restart the app units the deploy manages, and journal-daily-redo,
+#   - start/stop/restart the units services register as appUnits, and journal-daily-redo,
 #     via polkit;
 #   - read Postgres through a peer-auth `nsimon` role with pg_read_all_data,
 #     in an allowlist of databases that hold no credentials;
@@ -39,7 +39,7 @@ let
   '';
 
   agentUnits =
-    config.nic.heavyServices
+    config.nic.appUnits
     ++ [ "journal-daily-redo.service" ] # memos.nix: rewrites the days nsimon lists
     ++ lib.concatMap (n: [
       "${n}-proxy.service"
