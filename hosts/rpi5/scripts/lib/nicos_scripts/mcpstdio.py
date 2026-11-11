@@ -1,5 +1,6 @@
-"""Hand-rolled stdio MCP server: initialize / ping / tools/list / tools/call over
-newline-delimited JSON-RPC, so nicos-scripts stays free of the `mcp` SDK.
+"""Minimal stdio MCP server: initialize / ping / tools/list / tools/call over
+newline-delimited JSON-RPC. Not the `mcp` SDK: it pulls pydantic, anyio and
+starlette into processes that live as long as hermes, on a 4 GB box.
 
 `tools` maps a tool name to its {description, inputSchema}; `handlers` has a
 method of the same name per tool. A tool that raises becomes an isError result,
