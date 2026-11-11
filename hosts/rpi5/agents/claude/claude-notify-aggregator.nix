@@ -47,7 +47,6 @@
     backupNote =
       "no persistent state — the debounce pool is in memory, and a restart at "
       + "worst drops one pending digest";
-    heavyUnits = [ ];
 
     # No tile: an ingest endpoint for agent hooks, nothing to visit.
     public = {

@@ -112,10 +112,8 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   # Karakeep keeps everything under /var/lib/karakeep on the SSD, outside
-  # restic's /mnt/data scope — so it went unbacked from the day it landed, and
-  # its units were never in the heavy list either, meaning nixos-rebuild-safe
-  # left the Next.js stack plus Meilisearch resident during builds on a 3.9 GiB
-  # box. Both are fixed by declaring them here.
+  # restic's /mnt/data scope — so it went unbacked from the day it landed.
+  # Fixed by declaring it here.
   #
   # Meilisearch is a karakeep worker (sleepWith above), not a service of its
   # own, so it belongs to this registration. Its index is rebuildable from the
@@ -123,12 +121,11 @@ in
   nic.services.karakeep = {
     backup = [ "unit" ];
     backupUnits = [ "karakeep-backup.service" ]; # backups.nix
-    heavyUnits = [
+    appUnits = [
       "karakeep-web.service"
       "karakeep-workers.service"
       "meilisearch.service"
     ];
-    heavyPriority = 125;
 
     public = {
       order = 150; # row 4, kept and locked: Home Assistant, Beszel, here, Vaultwarden

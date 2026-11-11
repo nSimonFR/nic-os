@@ -155,8 +155,7 @@ in
   nic.services.affine-mcp = {
     backup = [ "none" ];
     backupNote = "stateless bridge — every document it serves lives in AFFiNE's Postgres";
-    heavyUnits = [ "affine-mcp.service" ];
-    heavyPriority = 60;
+    appUnits = [ "affine-mcp.service" ];
 
     # No tile: an internal MCP gateway, not user-facing. Backend is the
     # tiny-llm-gate mount rather than the service's own bind.

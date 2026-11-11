@@ -321,8 +321,6 @@ in
     backupNote =
       "derived — agent-vault-bootstrap rebuilds credentials, services and the "
       + "Hermes token from agenix and this module; only the 72h request log is lost";
-    # ~27 MB idle, and Hermes' outbound HTTPS depends on it.
-    heavyUnits = [ ];
 
     public = {
       order = 305;

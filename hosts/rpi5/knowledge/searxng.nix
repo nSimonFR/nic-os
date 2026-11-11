@@ -242,10 +242,7 @@ in
       "stateless — settings come from the Nix store, /var/cache/searx holds only "
       + "re-fetchable engine data, and preferences live in the visitor's cookie";
 
-    heavyUnits = [ "searx.service" ];
-    # Load-bearing now that it no longer sleeps: ~175 MB is held for as long as
-    # the box is up, and a rebuild has about 250 MB of slack to work with.
-    heavyPriority = 165;
+    appUnits = [ "searx.service" ];
 
     public = {
       order = 195;

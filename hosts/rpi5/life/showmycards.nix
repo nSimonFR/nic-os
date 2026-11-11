@@ -190,16 +190,13 @@ in
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   # database.db and the Scryfall cache both live under /mnt/data/showmycards,
-  # so restic covers them with no dump step. The units were missing from the
-  # heavy list, so a rebuild left the SvelteKit frontend and the Go backend
-  # resident — fixed by declaring them here.
+  # so restic covers them with no dump step.
   nic.services.showmycards = {
     backup = [ "mnt-data" ];
-    heavyUnits = [
+    appUnits = [
       "showmycards-frontend.service"
       "showmycards-backend.service"
     ];
-    heavyPriority = 155;
 
     # backend is :8331 (the nginx read-only guard), NOT :8330 (the socket-activate
     # proxy): Moxfield is the single writer, so an edit made through the tailnet

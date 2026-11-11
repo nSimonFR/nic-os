@@ -414,9 +414,6 @@ in
   nic.services.sure-root = {
     backup = [ "none" ];
     backupNote = "stateless — an nginx vhost; the app's state is registered on nic.services.sure";
-    # nginx is infra that heavy-shed deliberately leaves up, and Sure's
-    # own units are listed on nic.services.sure.
-    heavyUnits = [ ];
 
     public = {
       order = 11; # untiled; sits with sure (10), before wealthfolio (20)
@@ -429,11 +426,10 @@ in
   nic.services.sure = {
     backup = [ "postgres" ];
     postgresDatabases = [ "sure_production" ];
-    heavyUnits = [
+    appUnits = [
       "sure-worker.service"
       "sure-web.service"
     ];
-    heavyPriority = 70;
 
     # Passed through the path-mux UNCHANGED (no prefix strip): config.ru mounts
     # the app under RAILS_RELATIVE_URL_ROOT=/sure via Rack::URLMap, which does the

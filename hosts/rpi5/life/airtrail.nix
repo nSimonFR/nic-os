@@ -86,8 +86,7 @@ in
   nic.services.airtrail = {
     backup = [ "postgres" ];
     postgresDatabases = [ "airtrail" ];
-    heavyUnits = [ "airtrail.service" ];
-    heavyPriority = 110;
+    appUnits = [ "airtrail.service" ];
 
     public = {
       order = 40;

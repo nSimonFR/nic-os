@@ -225,8 +225,7 @@ in
       "postgres"
     ];
     postgresDatabases = [ "immich" ];
-    heavyUnits = [ "immich-server.service" ];
-    heavyPriority = 10;
+    appUnits = [ "immich-server.service" ];
 
     public = {
       order = 60;

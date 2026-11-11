@@ -221,8 +221,7 @@ in
   nic.services.home-assistant = {
     backup = [ "unit" ];
     backupUnits = [ "hass-backup.service" ]; # backups.nix
-    heavyUnits = [ "home-assistant.service" ];
-    heavyPriority = 20;
+    appUnits = [ "home-assistant.service" ];
 
     public = {
       order = 130;

@@ -100,7 +100,6 @@ in
       "the only state is the Proton bridge auth under /var/lib/hydroxide/.config "
       + "(0700), which is re-obtained by re-running `hydroxide auth` — see the "
       + "header. No mail is stored here; it is a bridge, not a mailbox.";
-    heavyUnits = [ ];
 
     public = {
       # Moved 8443 → 8083 (matching its backend port) to free the 8443 funnel

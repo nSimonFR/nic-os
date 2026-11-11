@@ -181,7 +181,6 @@ in
 
   nic.services.${name} = {
     backup = [ "mnt-data" ];
-    heavyUnits = [ ];
 
     public = {
       order = 260;

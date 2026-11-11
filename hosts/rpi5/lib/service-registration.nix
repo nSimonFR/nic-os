@@ -4,12 +4,10 @@
 # to live in central lists elsewhere in the tree.
 #
 # Before this module, adding a service meant remembering to also edit
-# `backups.nix` (its Postgres database) and `lib/heavy-services.nix` (its units,
-# so a deploy frees their RSS on a 3.9 GiB box). Nothing checked
-# either list for completeness, so the gaps stayed invisible until they bit:
-# Karakeep ran unbacked from the day it landed, `backups.nix` dumped a
-# `ghostfolio` database that no module in the repo creates, and five live units
-# were missing from the heavy list.
+# `backups.nix` (its Postgres database) and `lib/heavy-services.nix` (its units).
+# Nothing checked either list for completeness, so the gaps stayed invisible
+# until they bit: Karakeep ran unbacked from the day it landed, and
+# `backups.nix` dumped a `ghostfolio` database that no module in the repo creates.
 #
 # Both lists are now *derived* from the per-service declarations. Registering a
 # service is one block in that service's own module:
@@ -17,8 +15,7 @@
 #   nic.services.airtrail = {
 #     backup            = [ "postgres" ];
 #     postgresDatabases = [ "airtrail" ];
-#     heavyUnits        = [ "airtrail.service" ];
-#     heavyPriority     = 110;
+#     appUnits          = [ "airtrail.service" ];
 #   };
 #
 # This extends the pattern the repo already uses for `services.socketActivate`
@@ -62,7 +59,6 @@
 {
   config,
   lib,
-  pkgs,
   tailnetFqdn,
   ...
 }:
@@ -87,92 +83,8 @@ let
     lib.filterAttrs (_: l: (l.proxyPass or null) != null) frontProxyLocations
   );
 
-  # { name, value } pairs ordered heaviest → lightest for the stop list. Ties
-  # break on name so the derivation is stable across evals.
-  orderedEntries = lib.sort (
-    a: b:
-    if a.value.heavyPriority != b.value.heavyPriority then
-      a.value.heavyPriority < b.value.heavyPriority
-    else
-      a.name < b.name
-  ) (lib.mapAttrsToList (name: value: { inherit name value; }) cfg);
-
-  allHeavyUnits = lib.concatMap (e: e.value.heavyUnits) orderedEntries;
-
-  # Present while heavy-shed runs. Always-on heavy units carry
-  # ConditionPathExists=!it, so a deploy's activation cannot start them all at
-  # once: it did at 18:27:09 on 2026-11-11, ahead of the staggered restore.
-  shedFlag = "/run/heavy-shed";
-
-  # `heavy-shed <command…>`: free the RAM, do the thing, put it back. Shared by
-  # cachix-agent.nix. A copy without
-  # the restore left nine always-on services stopped for 9h on 2026-08-30.
-  heavyShed = pkgs.writeShellApplication {
-    name = "heavy-shed";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.systemd
-    ];
-    text = ''
-      # Guard: with no command, "$@" is a no-op that exits 0 — which would stop
-      # everything and take the success path straight past the restore.
-      : "''${1:?heavy-shed: no command given}"
-
-      # Already root under the cachix-agent deploy, which has no sudo on its PATH
-      # (and the store's sudo is not setuid); nsimon interactively, which does.
-      as_root=()
-      if [ "$(id -u)" -ne 0 ]; then as_root=(/run/wrappers/bin/sudo); fi
-
-      heavy=(
-        ${lib.concatMapStringsSep "\n  " (u: ''"${u}"'') allHeavyUnits}
-      )
-
-      # Only always-on units need putting back; socket-idle ones re-activate on
-      # the next request, which is how the memory stays freed.
-      restore=()
-      for unit in "''${heavy[@]}"; do
-        if ! systemctl is-active --quiet "$unit"; then continue; fi
-        if [ "$(systemctl show "$unit" --property=StopWhenUnneeded --value)" = yes ]; then continue; fi
-        restore+=("$unit")
-      done
-
-      # Up to 60 s for memory PSI `some avg10` to drop under 10%. Starting all
-      # ten at once on 2026-11-11 stalled the Pi into a watchdog reset 85 s later.
-      settle() {
-        [ -r /proc/pressure/memory ] || return 0
-        for _ in $(seq 60); do
-          read -r _ avg10 _ </proc/pressure/memory
-          avg10=''${avg10#avg10=}
-          if [ "''${avg10%.*}" -lt 10 ]; then return 0; fi
-          sleep 1
-        done
-      }
-
-      # A trap, not a branch after the command: callers run `set -e`, and an
-      # aborting script never reaches the next line but does run its trap.
-      # Always restores: the flag keeps activation from starting them itself.
-      restore_heavy() {
-        status=$?
-        trap - EXIT
-        "''${as_root[@]}" rm -f ${shedFlag}
-        if [ "''${#restore[@]}" -gt 0 ]; then
-          echo "heavy-shed: exit $status — restarting ''${#restore[@]} service(s)" >&2
-          for unit in "''${restore[@]}"; do
-            settle
-            "''${as_root[@]}" systemctl start "$unit" || true
-          done
-        fi
-        exit "$status"
-      }
-      trap restore_heavy EXIT
-      trap 'exit 143' TERM INT
-
-      "''${as_root[@]}" touch ${shedFlag}
-      "''${as_root[@]}" systemctl stop "''${heavy[@]}" || true
-      echo "heavy-shed: running $*" >&2
-      "$@"
-    '';
-  };
+  # Sorted so the polkit rule is stable across evals.
+  allAppUnits = lib.sort (a: b: a < b) (lib.concatMap (s: s.appUnits) (lib.attrValues cfg));
 
   # Sorted so the derivation is stable across evals; `unique` because nothing
   # stops two services from naming one shared dump unit.
@@ -310,7 +222,7 @@ let
           description = ''
             Sort key, ascending, for both the dashboard tile row and the order in
             which serve/funnel commands are emitted. Spaced by 10 to leave room
-            to insert without renumbering — same convention as `heavyPriority`.
+            to insert without renumbering.
             Asserted unique: equal keys would make the emit order depend on
             attrset iteration rather than on a decision.
 
@@ -463,7 +375,7 @@ let
           description = ''
             How ${name} is reached from outside, and how it appears on the
             dashboard. null for a service with no public face — it still
-            registers here for backup and heavy-unit accounting.
+            registers here for backup and its unit list.
           '';
         };
 
@@ -534,33 +446,21 @@ let
           example = "stateless — everything it serves comes from the nix store";
         };
 
-        heavyUnits = lib.mkOption {
+        appUnits = lib.mkOption {
           type = lib.types.listOf lib.types.str;
           default = [ ];
           description = ''
-            Units stopped by the cachix-agent deploy (heavy-shed) to
-            free RSS before a build. List every unit the service actually runs
-            (web + workers + its search backend), not just the socket-activated
-            `realUnit` — the workers are where the RSS is.
+            Every unit the service runs (web + workers + its search backend),
+            not just the socket-activated `realUnit`. Agents may start, stop and
+            restart them through polkit (security/agent-access.nix).
 
             Infra (tailscaled, nginx, postgresql, redis, blocky) is deliberately
-            never listed: stopping it breaks the rebuild itself.
+            never listed.
           '';
           example = [
             "karakeep-web.service"
             "karakeep-workers.service"
           ];
-        };
-
-        heavyPriority = lib.mkOption {
-          type = lib.types.int;
-          default = 500;
-          description = ''
-            Sort key for the stop list, ascending — heaviest first, so the largest
-            RSS is freed soonest. Existing services are spaced by 10 to leave room
-            to insert without renumbering.
-          '';
-          example = 110;
         };
       };
     }
@@ -580,31 +480,18 @@ in
     type = lib.types.attrsOf serviceModule;
     default = { };
     description = ''
-      Per-service declarations. The central backup and heavy-service lists are
+      Per-service declarations. The central backup and app-unit lists are
       derived from these — do not maintain either by hand.
     '';
   };
 
-  options.nic.heavyServices = lib.mkOption {
+  options.nic.appUnits = lib.mkOption {
     type = lib.types.listOf lib.types.str;
     readOnly = true;
-    default = allHeavyUnits;
+    default = allAppUnits;
     description = ''
-      Derived, heaviest → lightest: every `nic.services.*.heavyUnits` entry
-      sorted by `heavyPriority`. Read-only — add units to the owning service's
-      module. Stop them via `nic.heavyShed`, never by hand: the one caller that
-      did is why nine services stayed down for 9h on 2026-08-30.
-    '';
-  };
-
-  options.nic.heavyShed = lib.mkOption {
-    type = lib.types.package;
-    readOnly = true;
-    default = heavyShed;
-    description = ''
-      Derived: `heavy-shed <command…>` stops every `nic.heavyServices` unit, runs
-      the command, then restarts the always-on ones one at a time. The single
-      implementation behind the cachix-agent deploy.
+      Derived: every `nic.services.*.appUnits` entry, sorted. Read-only — add
+      units to the owning service's module. Consumed by agent-access.nix.
     '';
   };
 
@@ -662,17 +549,6 @@ in
   };
 
   config = {
-    # Only units a target pulls in: socket-activated ones and their workers
-    # must still wake on a request.
-    systemd.services =
-      lib.genAttrs
-        (map (lib.removeSuffix ".service") (lib.filter (lib.hasSuffix ".service") allHeavyUnits))
-        (name: {
-          unitConfig.ConditionPathExists = lib.mkIf (lib.any (lib.hasSuffix ".target")
-            config.systemd.services.${name}.wantedBy
-          ) [ "!${shedFlag}" ];
-        });
-
     services.postgresqlBackup.databases = lib.concatMap (s: s.postgresDatabases) (lib.attrValues cfg);
 
     assertions =
@@ -732,12 +608,12 @@ in
       ++ [
         (
           let
-            dupes = dupesIn allHeavyUnits;
+            dupes = dupesIn allAppUnits;
           in
           {
             assertion = dupes == [ ];
             message =
-              "nic.services.*.heavyUnits declares these units more than once: "
+              "nic.services.*.appUnits declares these units more than once: "
               + lib.concatStringsSep ", " dupes
               + ". Each unit belongs to exactly one service.";
           }

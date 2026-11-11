@@ -364,8 +364,7 @@ in
       "mnt-data"
     ];
     backupUnits = [ "papra-backup.service" ]; # backups.nix
-    heavyUnits = [ "papra.service" ];
-    heavyPriority = 120;
+    appUnits = [ "papra.service" ];
 
     public = {
       order = 80;

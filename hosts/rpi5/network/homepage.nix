@@ -319,11 +319,10 @@ in
   nic.services.homepage = {
     backup = [ "none" ];
     backupNote = "dashboard config is generated from nic.services.*.public; the stats aggregator only caches";
-    heavyUnits = [
+    appUnits = [
       "homepage-dashboard.service"
       "homepage-stats.service"
     ];
-    heavyPriority = 160;
 
     # No tile: the dashboard does not link to itself.
     public = {

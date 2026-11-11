@@ -20,16 +20,14 @@ than a new string compare in every module. See
 
 **service** — one registered unit of function on the rpi5, keyed by attr name
 under `nic.services.<name>` (`hosts/rpi5/lib/service-registration.nix`). It
-owns *every* fact about itself: how its state reaches Storj, which of its units
-are heavy, and its public face. Central lists are derived from these
+owns *every* fact about itself: how its state reaches Storj, which units it
+runs, and its public face. Central lists are derived from these
 registrations, never maintained by hand.
 
-**heavy unit** — a systemd unit that `nixos-rebuild-safe` stops to free RSS
-before a build, because the Pi has 3.9 GB and a build that thrashes takes the
-box down with a watchdog reset. Declared per service as `heavyUnits`, ordered by
-`heavyPriority` (ascending, heaviest first). Infrastructure — tailscaled, nginx,
-postgresql, redis, blocky — is deliberately never heavy: stopping it breaks the
-rebuild doing the stopping.
+**app unit** — a systemd unit a service runs, declared per service as
+`appUnits`. Agents may start, stop and restart these through polkit, and no
+others. Infrastructure — tailscaled, nginx, postgresql, redis, blocky — is
+deliberately never an app unit.
 
 **socket-activate** — putting a service behind `systemd-socket-proxyd
 --exit-idle-time` so it runs only while traffic flows and returns to ~0 RAM at

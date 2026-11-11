@@ -451,8 +451,7 @@ in
   nic.services.affine = {
     backup = [ "postgres" ];
     postgresDatabases = [ "affine" ];
-    heavyUnits = [ "affine.service" ];
-    heavyPriority = 50;
+    appUnits = [ "affine.service" ];
 
     # NOT behind the 443 path-mux: AFFiNE's SPA router insists on root paths, so
     # it runs at the root of its own 8443 funnel.

@@ -136,8 +136,7 @@ in
   nic.services.vaultwarden = {
     backup = [ "unit" ];
     backupUnits = [ "vaultwarden-backup.service" ]; # backups.nix
-    heavyUnits = [ "vaultwarden.service" ];
-    heavyPriority = 150;
+    appUnits = [ "vaultwarden.service" ];
 
     public = {
       order = 160;

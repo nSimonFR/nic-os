@@ -208,8 +208,8 @@
     #   2. bump `version` in pkgs/agents/rtk.nix to match
     # then `sudo nix flake lock --update-input rtk-src` + rebuild.
     # Cachix Deploy agent ≥ 1.13.0: 1.11.1/1.12.x run a deployment again each
-    # time the server re-sends it (every agent re-register, ~32 s), which looped
-    # the rpi5 through heavy-shed for hours (upstream 37d851cb). Prebuilt on
+    # time the server re-sends it (every agent re-register, ~32 s), which re-ran
+    # the rpi5 deploy for hours (upstream 37d851cb). Prebuilt on
     # cachix.cachix.org; nixpkgs not followed so the hashes stay cache hits.
     cachix.url = "github:cachix/cachix/v1.13.0";
 

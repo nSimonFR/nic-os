@@ -462,8 +462,7 @@ in
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
-  # No heavyUnits: Nextcloud runs as php-fpm behind nginx, and nginx is infra
-  # that heavy-shed deliberately leaves up.
+  # No appUnits: Nextcloud runs as php-fpm behind nginx, which is infra.
   nic.services.nextcloud = {
     backup = [
       "postgres"

@@ -315,10 +315,6 @@ in
       + "/var/lib/private/beszel-hub (DynamicUser + StateDirectory), outside "
       + "restic's /mnt/data scope, and is deliberately not dumped: a fresh hub "
       + "re-registers the agent and starts collecting again.";
-    # Not in the heavy list today, and left that way here so this registration
-    # changes no behaviour. The hub idles small; the agent must keep running to
-    # collect during a rebuild anyway.
-    heavyUnits = [ ];
 
     public = {
       order = 140;
