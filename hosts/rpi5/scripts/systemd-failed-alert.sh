@@ -22,7 +22,9 @@ scan() {
     [ -n "$unit" ] || continue
     case $unit in
     # `systemd-run` probes agents leave behind; nothing will ever restart them.
-    run-*.service | run-*.scope)
+    # session-*.scope: a login that exited before boot let logind create its
+    # scope (session-c1, 2026-11-11: 5s tailscale-ssh command at boot).
+    run-*.service | run-*.scope | session-*.scope)
       echo "reset-failed transient ${tag}${unit}"
       systemctl "$@" reset-failed "$unit" || true
       continue
