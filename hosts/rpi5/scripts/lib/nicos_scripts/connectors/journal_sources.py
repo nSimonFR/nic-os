@@ -741,7 +741,9 @@ WORK_DISPATCH_VOICE = (
     "concis, en français ; ouvre par une seule phrase qui nomme concrètement ce qui"
     " a changé, sans formule creuse (« voici l'essentiel », « sans détour »,"
     " « rien de plus ») ; ne parle que des dépôts qui ont changé, sans jamais"
-    " mentionner les autres ni leur nombre"
+    " mentionner les autres ni leur nombre ; reste générique : aucun numéro de"
+    " version, tag, branche ni PR, et une mise en production se dit « déployé »"
+    " sans détailler les environnements"
 )
 WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
 # 429 "dispatch rate limit" within about a minute of the previous one (measured).
