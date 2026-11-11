@@ -291,7 +291,7 @@ def test_game_sessions_sum_per_game():
 
 def test_a_game_spans_its_timed_plays_and_drops_the_hours_when_one_is_untimed():
     assert js.game_sessions([(1000, "A", 100, True), (5000, "A", 600, True)]) == [
-        ("A", 700, (900, 5000))
+        ("A", 700, ((900, 1000), (4400, 5000)))
     ]
     assert js.game_sessions([(1000, "A", 100, True), (5000, "A", 600, False)]) == [
         ("A", 700, None)
@@ -545,3 +545,17 @@ def test_work_dispatch_skips_a_batch_where_nothing_landed():
         == []
     )
     assert pauses == []
+
+
+def test_each_session_shows_its_hours_up_to_a_count():
+    from zoneinfo import ZoneInfo
+
+    utc = ZoneInfo("UTC")
+    two = ((3600, 7200), (36000, 39600))
+    assert js.game_section([("A", 7200, two)], tz=utc)[1] == [
+        "- **A** · 01:00-02:00, 10:00-11:00 · 2 h 00"
+    ]
+    four = tuple((h * 3600, h * 3600 + 600) for h in range(4))
+    assert js.game_section([("A", 2400, four)], tz=utc)[1] == [
+        "- **A** · 4 sessions · 40 min"
+    ]

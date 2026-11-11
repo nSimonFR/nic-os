@@ -109,7 +109,7 @@ def play(title, artist, seconds, h=1, track="t"):
 
 def game(title, seconds):
     """A Ryot V11 playtime push for Oct 19, stamped with the run (04:50 the next morning)."""
-    return (LO19 + 86400 + 3000, title, seconds, "f")
+    return (LO19 + 86400 + 3000, title, seconds, "f", "f")
 
 
 def cfg(tmp_path, **kw):
@@ -1394,7 +1394,7 @@ def test_games_merge_v11_and_v1_playtime_a_day_late(tmp_path):
     pg = FakePg(
         [],
         [],
-        games=[(push, "Stardew Valley", 3600, "f")],
+        games=[(push, "Stardew Valley", 3600, "f", "f")],
         v1_games=[(push, "Hades", 600)],
     )
     assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
@@ -1410,13 +1410,23 @@ def test_a_play_stamped_when_quit_shows_its_hours_on_its_own_day(tmp_path):
         [],
         [],
         games=[
-            (quit, "Stardew Valley", 49 * 60, "t"),
-            (quit + 86400, "Hades", 600, "t"),
+            (quit, "Stardew Valley", 49 * 60, "t", "f"),
+            (quit + 86400, "Hades", 600, "t", "f"),
         ],
     )
     assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
         "49 min",
         ["- **Stardew Valley** · 13:05-13:54 · 49 min"],
+    )
+
+
+def test_growth_no_session_explains_keeps_its_day_but_not_its_hours(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 10, 19))
+    quit = lo + 19 * 3600  # 23:00
+    pg = FakePg([], [], games=[(quit, "Stardew Valley", 413 * 60, "t", "t")])
+    assert wm.day_games(cfg(tmp_path), pg, date(2026, 10, 19), print) == (
+        "6 h 53",
+        ["- **Stardew Valley** · 6 h 53"],
     )
 
 
