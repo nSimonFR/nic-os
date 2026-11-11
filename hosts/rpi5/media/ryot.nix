@@ -13,6 +13,10 @@
 # migration converts that copy. Rolling back = revert this file (ryot-nix is
 # still imported, just disabled) and V1 resumes on its own database.
 #
+# Sleeps when idle: 127.0.0.1:13350 is a socket-activated proxy that wakes the
+# container (a cold start measured ~95 s on 2026-11-11) and stops it after 10 min
+# without a connection. Clients must outwait that (nicos_scripts.ryot.RYOT_WAKE_TIMEOUT).
+#
 # Tailnet-only on :3710. The client bundle hard-codes root paths (/assets,
 # /api/auth, /oauth/login), so the /ryot/ sub-path V1 used on the 443 mux
 # cannot work with a prebuilt image.
@@ -28,7 +32,8 @@
   ...
 }:
 let
-  port = 13350; # V2 binds 0.0.0.0; reachable on lo + tailscale0 only
+  port = 13350; # socket-activated proxy, 127.0.0.1 only
+  backendPort = 13351; # V2 binds 0.0.0.0; reachable on lo + tailscale0 only
   redisPort = 6380;
   stateDir = "/var/lib/ryot-v2";
   envFile = "/run/ryot-v2/env";
@@ -210,7 +215,7 @@ in
         "--setenv=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         "--setenv=HOME=/home/ryot"
         "--setenv=NODE_ENV=production"
-        "--setenv=PORT=${toString port}"
+        "--setenv=PORT=${toString backendPort}"
         "--setenv=REDIS_URL=redis://127.0.0.1:${toString redisPort}/0"
         "--setenv=FRONTEND_URL=${publicUrl}"
         "--setenv=USERS_ALLOW_REGISTRATION=false"
@@ -231,6 +236,18 @@ in
     };
   };
 
+  services.socketActivate.ryot = {
+    enable = true;
+    realUnit = "ryot.service";
+    listen = [ "127.0.0.1:${toString port}" ];
+    backend = "127.0.0.1:${toString backendPort}";
+    readyProbe = {
+      url = "http://127.0.0.1:${toString backendPort}/api/system/health";
+      # nspawn + bun boot under memory pressure took ~95 s; 60 s is too short.
+      timeoutSec = 180;
+    };
+  };
+
   # V2 mints API keys only for a signed-in user and V1 keys don't migrate, so
   # this gives the account a password and writes a key for the local services
   # (connectors, scale shim, Agent Vault). The password lands in
@@ -244,7 +261,8 @@ in
     after = [ "ryot.service" ];
     bindsTo = [ "ryot.service" ];
     environment = {
-      RYOT_URL = "http://127.0.0.1:${toString port}";
+      # The backend, not the proxy: a proxy connection would keep Ryot awake.
+      RYOT_URL = "http://127.0.0.1:${toString backendPort}";
       RYOT_FRONTEND_URL = publicUrl;
       SECRETS_DIR = "${stateDir}/secrets";
     };
@@ -253,8 +271,9 @@ in
       config.services.postgresql.package
     ];
     serviceConfig = {
+      # No RemainAfterExit: an active unit bound to ryot.service would count as
+      # needing it, and StopWhenUnneeded would never put Ryot to sleep.
       Type = "oneshot";
-      RemainAfterExit = true;
       EnvironmentFile = envFile; # SERVER_ADMIN_ACCESS_TOKEN
       ExecStart = "${pkgs.nicos-scripts}/bin/ryot-bootstrap";
     };
