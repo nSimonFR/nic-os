@@ -16,7 +16,7 @@
 # the A/B ended.
 #
 # Hermes is a Python+Node runtime: expect hundreds of MB resident, hence
-# MemoryMax=1G.
+# MemoryMax=2G (headless Chromium included).
 #
 # Config surface — all VERIFIED against the built hermes 0.19.0 binary:
 #   - Runner is `hermes gateway run` (foreground); config/state live in $HERMES_HOME.
@@ -215,7 +215,7 @@ let
   # It reads the DB directly, so asking never wakes the service.
   #
   # Two consequences: the subprocess counts against hermes.service's
-  # MemoryMax = 1G, and main() runs db.BackfillSleepSessions before the -mcp
+  # MemoryMax, and main() runs db.BackfillSleepSessions before the -mcp
   # branch, so every Hermes start does one idempotent backfill write.
   freerepsMcpConfig = (pkgs.formats.yaml { }).generate "freereps-mcp-config.yaml" {
     # Mirrors freereps.nix + databases.nix. Restated rather than shared because
@@ -549,6 +549,8 @@ let
     # precede the standalone HM profile, which only `home-manager switch` updates
     # and so goes stale — it had the agent on a two-week-old atuin.
     export PATH="${pkgs.rtk}/bin:${pkgs.ripgrep}/bin:/etc/profiles/per-user/nsimon/bin:$HOME/.local/state/nix/profiles/home-manager/home-path/bin:/run/current-system/sw/bin:/run/wrappers/bin:$HOME/.nix-profile/bin:$PATH"
+    # Hermes' own Chromium download is a generic ELF (exit 127 on NixOS).
+    export AGENT_BROWSER_EXECUTABLE_PATH=${pkgs.chromium}/bin/chromium
     exec ${hermes}/bin/hermes gateway run
   '';
 
@@ -610,8 +612,8 @@ in
       # always: an earlyoom SIGTERM exits 0, which on-failure treats as a clean stop.
       Restart = "always";
       RestartSec = 5;
-      # Python runtime — hundreds of MB expected, vs picoclaw's <20MB. 1G cap.
-      MemoryMax = "1G";
+      # Python runtime plus a headless Chromium (~500-700MB) when browsing.
+      MemoryMax = "2G";
     };
     # Hermes is the sole Telegram agent (PicoClaw retired), so always autostart.
     Install.WantedBy = [ "default.target" ];
