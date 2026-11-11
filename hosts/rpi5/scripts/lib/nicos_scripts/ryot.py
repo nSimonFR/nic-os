@@ -28,8 +28,8 @@ from .httpjson import http_json, post_json
 # Ryot answers the sink with any of these on success.
 OK_STATUS = (200, 201, 202)
 
-# V2 is always-on, but a restart (image unpack, migrations) can hold a request for
-# minutes; give up later rather than drop a weigh-in.
+# V2 sleeps behind a socket-activated proxy whose readyProbe allows 180 s for a
+# cold start; give up after that, not before.
 RYOT_WAKE_TIMEOUT = 240
 
 

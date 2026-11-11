@@ -104,7 +104,8 @@ let
         "query"
       ];
     }
-    # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`.
+    # Ryot V2 (ryot.nix): REST under /api, key sent as `X-Api-Key`. Port 13350 is
+    # the socket-activated proxy that wakes it.
     {
       name = "ryot";
       host = "ryot.home.arpa:13350";

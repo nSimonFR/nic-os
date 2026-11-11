@@ -21,6 +21,8 @@ but agents hold only the placeholder `__ryot_api_key__`: Agent Vault swaps in th
 key on the way. Source its proxy env in the same command as the call (it sets the proxy
 and `$RYOT_API_KEY`): `/var/lib/agent-vault-hermes/proxy.env` on rpi5, `$AGENT_VAULT_ENV`
 in Claude Code on the Mac.
+Ryot sleeps when idle: the first call after a quiet spell wakes it and can take up
+to 3 minutes, hence `-m 300` below. Don't retry it as a failure.
 Humans use the web UI at `https://rpi5.gate-mintaka.ts.net:3710` (tailnet only).
 
 Paste these helpers into the same command as each recipe:
@@ -28,7 +30,7 @@ Paste these helpers into the same command as each recipe:
 ```bash
 ryot() {  # ryot <path under /api> [json body] [extra curl args, e.g. -X DELETE]
   ( set -a; . "${AGENT_VAULT_ENV:-/var/lib/agent-vault-hermes/proxy.env}"; set +a
-    curl -sS --fail-with-body -m 90 "http://ryot.home.arpa:13350/api$1" \
+    curl -sS --fail-with-body -m 300 "http://ryot.home.arpa:13350/api$1" \
       -H 'Content-Type: application/json' -H "X-Api-Key: $RYOT_API_KEY" \
       ${2:+-d "$2"} "${@:3}" )
 }
