@@ -107,9 +107,10 @@ in
       RandomizedDelaySec = "10m";
     };
 
-    # The project caps downloads at 10 GB/month, and repacking downloads every
-    # pack it rewrites: at the default 5% this re-downloaded ~300 MB a night and
-    # exhausted the cap on 2026-11-11. `unlimited` only deletes packs that are
+    # The project caps downloads (20 GB/month on 2026-11-12, set in the Storj
+    # console; egress is $7/TB), and repacking downloads every pack it rewrites:
+    # at the default 5% this re-downloaded ~300 MB a night and exhausted the old
+    # 10 GB cap on 2026-11-11. `unlimited` only deletes packs that are
     # wholly unused, so pruning downloads nothing; the leftover garbage costs
     # cents of storage.
     pruneOpts = [
