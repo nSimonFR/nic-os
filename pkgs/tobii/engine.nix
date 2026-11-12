@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # Main Tobii Engine daemon (face tracking, calibration, firmware).
 # Repackaged from the Arch packages at
 # https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer

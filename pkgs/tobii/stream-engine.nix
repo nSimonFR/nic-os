@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # Shared library + headers for the Tobii Stream Engine API.
 # Repackaged from https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer
 {

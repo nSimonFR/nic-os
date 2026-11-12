@@ -56,6 +56,7 @@
       });
     })
 
+    # no-renovate: temporary CVE backport (libraw below).
     # libraw 0.22.1 (26.05) carries CVE-2026-20884/20911/21413/24450; 0.22.2
     # fixes them. Same tree's build recipe, newer tag. Drop once 26.05 ships it.
     (_final: prev: {

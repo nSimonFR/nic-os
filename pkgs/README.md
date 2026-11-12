@@ -85,7 +85,9 @@ version = "1.2.3";
 rev = "<40-hex sha>";
 ```
 
-Same rule under `hosts/`. The hash script must be able to recompute what sits
+Same rule under `hosts/`. A pin Renovate cannot follow says why instead:
+`# no-renovate: <reason>`. The `hashes` check (`--coverage`) fails a file with
+a pinned fetch and neither. The hash script must be able to recompute what sits
 beside it — run `scripts/nix-fix-hashes.py <file>`; `ok` means Renovate PRs will
 land with correct hashes. Shapes it reads: one `hash` per `fetchFromGitHub` /
 `fetchurl` / `fetchPypi` (several fetchers per file are fine), per-platform

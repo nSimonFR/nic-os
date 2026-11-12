@@ -1,3 +1,4 @@
+# no-renovate: pinned to the rc with LG support; fetchFromGitLab is not in nix-fix-hashes.py.
 # OpenRGB built from the 1.0rc2 release candidate, which is the first build
 # with working LG monitor support.
 #

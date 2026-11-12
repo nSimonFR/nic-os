@@ -1,3 +1,4 @@
+# no-renovate: the version is the hermes-agent flake input; fetchpatch pins a fixed commit.
 # Hermes Agent (NousResearch/hermes-agent), its lean `messaging` variant — the
 # rpi5 Telegram agent run by hosts/rpi5/agents/hermes/hermes.nix.
 #

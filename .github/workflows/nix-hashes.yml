@@ -52,6 +52,10 @@ jobs:
           # The three-dot diff below needs the base branch's history.
           fetch-depth: 0
 
+      # Every pinned fetch is either Renovate-tracked or says why not.
+      - name: Renovate coverage
+        run: python3 scripts/nix-fix-hashes.py --coverage
+
       - name: Collect the package files this PR touches
         id: changed
         run: |

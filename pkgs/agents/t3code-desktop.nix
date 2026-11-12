@@ -1,3 +1,4 @@
+# no-renovate: follows t3code.nix's version; .github/workflows/t3code-fork-release.yml pins the hash.
 # The T3 Code desktop app for the Mac, from the nSimonFR-ai/t3code `-issues.N`
 # release: the official nightly app with its server and web client rebuilt from
 # the nightly plus pingdotgg/t3code#19576 (Issues) and the Linear issue trees

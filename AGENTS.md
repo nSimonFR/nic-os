@@ -67,6 +67,12 @@ A skill is a **directory** — `SKILL.md` plus whatever it needs at runtime (`as
   Hermes' `~/.hermes/skills/mtg/`. Enforced — `hermes-skill-promote`'s exclusion set
   comes from `hermes.nix`'s `skillLineages`.
 
+## Pinned dependencies
+
+A new `fetch*`/`pullImage` under `pkgs/` or `hosts/` needs a `# renovate:` marker
+or `# no-renovate: <reason>` — the `hashes` check fails otherwise. Recipe:
+`pkgs/README.md`, "Tracking a pin with Renovate".
+
 ## Python scripts
 
 Never inline logic in a `.nix` string, and never wire a loose

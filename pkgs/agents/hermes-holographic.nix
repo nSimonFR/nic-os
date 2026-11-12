@@ -1,7 +1,7 @@
 # holographic — Hermes' local fact-store memory provider (SQLite + FTS5). Bundled
 # with Hermes until v0.22, which moved it to the plugin catalog.
 #
-# No `# renovate:` line: the pin is the sha Hermes' catalog reviewed
+# no-renovate: the pin is the sha Hermes' catalog reviewed
 # (plugin-catalog/holographic.yaml at the hermes-agent tag), not the plugin's
 # latest. Re-read that file when Renovate bumps hermes-agent.
 { fetchFromGitHub }:

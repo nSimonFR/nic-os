@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # USB communication daemon for Tobii hardware.
 # Repackaged from https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer
 {
