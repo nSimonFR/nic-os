@@ -207,31 +207,82 @@ def test_render_is_a_rich_message_skeleton():
 # ── failure must not look like calm ─────────────────────────────────────────
 
 
-def test_unreadable_mailbox_raises_rather_than_returning_empty(cfg):
-    class Proc:
-        returncode = 1
-        stdout = ""
-        stderr = "keyring locked"
+class FakeGmail:
+    """The slice of imaplib's IMAP4 that the Gmail path drives."""
 
+    def __init__(self, messages=(), fail_search=False):
+        self.messages = list(messages)  # (msgid, thrid, raw bytes)
+        self.fail_search = fail_search
+        self.queries = []
+        self.fetched = []
+
+    def uid(self, command, *args):
+        if command == "SEARCH":
+            self.queries.append(args)
+            if self.fail_search:
+                return "NO", [b"search refused"]
+            return "OK", [
+                b" ".join(str(i + 1).encode() for i in range(len(self.messages)))
+            ]
+        uid, spec = args
+        self.fetched.append(spec)
+        msgid, thrid, raw = self.messages[int(uid) - 1]
+        head = f"{uid.decode()} (X-GM-THRID {thrid} X-GM-MSGID {msgid} BODY[] {{{len(raw)}}}"
+        return "OK", [(head.encode(), raw), b")"]
+
+    def logout(self):
+        self.closed = True
+
+
+RAW = b"From: A <a@b.io>\r\nSubject: Hello\r\nDate: Mon, 9 Nov 2026 10:00:00 +0100\r\n\r\nThe body\r\n"
+
+
+def test_unreadable_mailbox_raises_rather_than_returning_empty(cfg, monkeypatch):
+    monkeypatch.setattr(digest, "read_secret", lambda path: "pw")
     with pytest.raises(fetch.FetchFailed):
-        digest.collect(cfg, "in:inbox", run=lambda *a, **k: Proc())
+        digest.collect(
+            cfg, "in:inbox", gmail_connect=lambda u, p: FakeGmail(fail_search=True)
+        )
 
 
-def test_gog_is_asked_for_bodies(cfg):
-    seen = {}
+def test_gmail_ids_keep_the_hex_form_the_store_already_keys_on(cfg, monkeypatch):
+    monkeypatch.setattr(digest, "read_secret", lambda path: "pw")
+    M = FakeGmail([(1794477546568191, 1794477546568000, RAW)])
+    rows = digest.collect(cfg, "in:inbox is:unread", gmail_connect=lambda u, p: M)
+    assert rows[0]["id"] == format(1794477546568191, "x")
+    assert rows[0]["threadId"] == format(1794477546568000, "x")
+    assert store.key_for(rows[0]) == "gmail:" + format(1794477546568191, "x")
+    assert rows[0]["subject"] == "Hello" and "The body" in rows[0]["body"]
+    assert rows[0]["account"] == "work" and rows[0]["source"] == "gmail:me@x.io"
 
-    class Proc:
-        returncode = 0
-        stdout = "[]"
-        stderr = ""
 
-    def run(cmd, **kwargs):
-        seen["cmd"] = cmd
-        return Proc()
+def test_gmail_is_searched_with_its_own_syntax_and_never_marked_read(cfg, monkeypatch):
+    monkeypatch.setattr(digest, "read_secret", lambda path: "pw")
+    M = FakeGmail([(1, 1, RAW)])
+    digest.collect(cfg, 'in:inbox subject:"a b"', gmail_connect=lambda u, p: M)
+    assert M.queries == [("X-GM-RAW", '"in:inbox subject:\\"a b\\""')]
+    assert all("BODY.PEEK[]" in spec for spec in M.fetched)
 
-    digest.collect(cfg, "in:inbox", run=run)
-    assert "--include-body" in seen["cmd"]
-    assert "--wrap-untrusted" in seen["cmd"]
+
+def test_all_mail_is_found_by_flag_not_by_its_localised_name():
+    listing = [
+        b'(\\HasNoChildren) "/" "INBOX"',
+        b'(\\All \\HasNoChildren) "/" "[Gmail]/Tous les messages"',
+    ]
+    assert fetch.all_mail(listing) == '"[Gmail]/Tous les messages"'
+    with pytest.raises(fetch.FetchFailed):
+        fetch.all_mail(listing[:1])
+
+
+def test_important_count_degrades_to_zero_when_gmail_is_down(cfg, monkeypatch):
+    monkeypatch.setattr(digest, "read_secret", lambda path: "pw")
+
+    def down(user, password):
+        raise fetch.FetchFailed("unreachable")
+
+    assert digest.important_counts(cfg, gmail_connect=down) == {"work": 0}
+    M = FakeGmail([(1, 1, RAW), (2, 2, RAW)])
+    assert digest.important_counts(cfg, gmail_connect=lambda u, p: M) == {"work": 2}
 
 
 # ── the classifier survived the move ────────────────────────────────────────
@@ -292,20 +343,17 @@ def test_one_thread_collapses_after_normalise(conn):
     assert len(jev.dedupe(ranked)) == 1
 
 
-def test_blank_proton_user_skips_imap_entirely(cfg):
+def test_blank_proton_user_skips_imap_entirely(cfg, monkeypatch):
     """Otherwise a test — or a Gmail-only deploy — reads a secret it should not."""
-
-    class Proc:
-        returncode = 0
-        stdout = "[]"
-        stderr = ""
+    monkeypatch.setattr(digest, "read_secret", lambda path: "pw")
 
     def boom(*a, **k):
         raise AssertionError("IMAP must not be touched")
 
-    assert (
-        digest.collect(cfg, "in:inbox", run=lambda *a, **k: Proc(), connect=boom) == []
+    rows = digest.collect(
+        cfg, "in:inbox", connect=boom, gmail_connect=lambda u, p: FakeGmail()
     )
+    assert rows == []
 
 
 # ── a dead or unpaid Jev must not look like a calm morning ──────────────────

@@ -99,7 +99,7 @@ let
   # drives the real Claude Code SDK, so it is not a third-party client.
 
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
-  # (dawarich, immich-memories, caldav-calendar, gog, protonmail, …) that several
+  # (dawarich, immich-memories, caldav-calendar, mail, …) that several
   # cron jobs depend on. These local skills moved here from the retired PicoClaw
   # module (hosts/rpi5/agents/hermes/skills). All descend from OpenClaw's SKILL.md format.
   #
@@ -200,6 +200,10 @@ let
   # pkgs/agents/mtg-mcp.nix.
   mtgMcp = pkgs.callPackage ../../../../pkgs/agents/mtg-mcp.nix { };
 
+  mailMcp = pkgs.callPackage ./mail-mcp.nix {
+    mcp-email-server = pkgs.callPackage ../../../../pkgs/agents/mcp-email-server.nix { };
+  };
+
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
   jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
 
@@ -282,6 +286,14 @@ let
       "openai-codex"
     ];
 
+    # Bundled mail/Google skills drive himalaya and Google OAuth, both gone: the
+    # mail MCP servers below and the `mail` skill replace them.
+    skills.disabled = [
+      "himalaya"
+      "email-inbox-triage"
+      "google-workspace"
+    ];
+
     # Native MCP client: launch mtg-mcp over stdio at startup and auto-register
     # its tools (mcp__mtg__search_cards, __validate_deck, __get_card_price,
     # __get_edhrec_recommendations, …) into every platform toolset. Public MTG
@@ -332,6 +344,34 @@ let
       connect_timeout = 120;
     };
 
+    # Mail (mail-mcp.nix), as two servers over one config because `trust` is
+    # per server: `mail` reads, drafts and files freely; `mail-send` holds only
+    # the sending tools and asks on Telegram before each call. Both start on
+    # first use and exit after 10 idle minutes (~70 MB each while up).
+    # email_command (raw IMAP/SMTP) and delete_emails are on neither.
+    mcp_servers.mail = {
+      command = "${mailMcp}/bin/mail-mcp";
+      lazy = true;
+      idle_timeout_seconds = 600;
+      tools.exclude = [
+        "send_email"
+        "forward_email"
+        "email_command"
+        "delete_emails"
+        "download_attachment"
+      ];
+    };
+    mcp_servers.mail-send = {
+      command = "${mailMcp}/bin/mail-mcp";
+      lazy = true;
+      idle_timeout_seconds = 600;
+      trust = "untrusted";
+      tools.include = [
+        "send_email"
+        "forward_email"
+      ];
+    };
+
     # Notes (hosts/rpi5/knowledge/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
     # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
     mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
@@ -353,20 +393,11 @@ let
     terminal = {
       backend = "local";
       cwd = "${hermesHome}/workspace";
-      # gog (Google Workspace CLI, personal Gmail) unlocks its encrypted file
-      # keyring non-interactively from GOG_KEYRING_PASSWORD. Hermes' execute_code
-      # /terminal sandbox scrubs any env var whose NAME contains a secret
-      # substring (KEY/TOKEN/SECRET/PASSWORD/…) before spawning agent
-      # subprocesses (code_execution_tool.py `_scrub_child_env`), so in the cron
-      # mail-digest the Gmail inbox failed with "no TTY … set GOG_KEYRING_PASSWORD"
-      # while interactive turns (plain terminal path, no substring strip) worked.
-      # `env_passthrough` is the intended opt-in escape hatch, checked BEFORE the
-      # scrub — it lets these non-provider names through so gog can decrypt its
-      # keyring headlessly. GOG_ACCOUNT isn't a secret but is passed too so the
-      # skill needn't repeat --account.
+      # Hermes' execute_code/terminal sandbox scrubs any env var whose NAME
+      # contains a secret substring (KEY/TOKEN/SECRET/PASSWORD/…) before spawning
+      # agent subprocesses (code_execution_tool.py `_scrub_child_env`).
+      # `env_passthrough` is the opt-in escape hatch, checked before the scrub.
       env_passthrough = [
-        "GOG_KEYRING_PASSWORD"
-        "GOG_ACCOUNT"
         "GOOGLE_PLACES_API_KEY"
         "SERPAPI_API_KEY"
       ];

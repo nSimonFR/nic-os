@@ -167,7 +167,14 @@ def make_uid(summary, start):
 
 
 def build_ics(
-    uid, summary, start, end=None, all_day=None, location=None, description=None
+    uid,
+    summary,
+    start,
+    end=None,
+    all_day=None,
+    location=None,
+    description=None,
+    categories=(),
 ):
     if all_day is None:
         all_day = _looks_all_day(start)
@@ -195,6 +202,8 @@ def build_ics(
         lines.append("LOCATION:" + _esc(location))
     if description:
         lines.append("DESCRIPTION:" + _esc(description))
+    if categories:
+        lines.append("CATEGORIES:" + ",".join(_esc(c) for c in categories))
     lines += ["END:VEVENT", "END:VCALENDAR"]
     return "\r\n".join(_fold(ln) for ln in lines) + "\r\n"
 
@@ -209,7 +218,7 @@ def parse_vevent(ics):
     ev = {}
     for line in body.splitlines():
         m = re.match(
-            r"^(UID|SUMMARY|DTSTART|DTEND|LOCATION|DESCRIPTION|RRULE)"
+            r"^(UID|SUMMARY|DTSTART|DTEND|LOCATION|DESCRIPTION|RRULE|CATEGORIES)"
             r"(;[^:]*)?:(.*)$",
             line,
         )
@@ -218,6 +227,11 @@ def parse_vevent(ics):
         key, params, val = m.group(1), m.group(2) or "", m.group(3)
         if key in ("DTSTART", "DTEND"):
             ev[key] = _fmt_display_dt(val, "DATE" in params.upper())
+        elif key == "CATEGORIES":
+            # May repeat, and each line is a list split on unescaped commas.
+            ev.setdefault(key, []).extend(
+                _unesc(v) for v in re.split(r"(?<!\\),", val) if v
+            )
         elif key in ev:
             continue  # first occurrence wins
         else:
@@ -328,6 +342,8 @@ def cmd_list(c, a):
         line = f"{when}  {e.get('SUMMARY', '(no title)')}"
         if e.get("LOCATION"):
             line += f"  @ {e['LOCATION']}"
+        if e.get("CATEGORIES"):
+            line += "  [" + ", ".join(e["CATEGORIES"]) + "]"
         print(line)
         print(f"    uid: {e.get('UID', '?')}")
 
@@ -336,7 +352,14 @@ def cmd_add(c, a):
     cal = a.calendar or c["cal"]
     uid = make_uid(a.summary, a.start)
     ics = build_ics(
-        uid, a.summary, a.start, a.end, a.all_day or None, a.location, a.description
+        uid,
+        a.summary,
+        a.start,
+        a.end,
+        a.all_day or None,
+        a.location,
+        a.description,
+        a.category or (),
     )
     status, _ = _request(
         "PUT",
@@ -361,7 +384,14 @@ def cmd_edit(c, a):
     location = a.location if a.location is not None else cur.get("LOCATION")
     description = a.description if a.description is not None else cur.get("DESCRIPTION")
     all_day = a.all_day or None
-    new = build_ics(a.uid, summary, start, end, all_day, location, description)
+    # The event is rebuilt from scratch, so anything not carried over is lost.
+    if a.clear_categories:
+        categories = a.category or []
+    else:
+        categories = a.category if a.category else cur.get("CATEGORIES", [])
+    new = build_ics(
+        a.uid, summary, start, end, all_day, location, description, categories
+    )
     status, _ = _request(
         "PUT", url, c["user"], new, {"Content-Type": "text/calendar; charset=utf-8"}
     )
@@ -396,6 +426,7 @@ def main():
     pa.add_argument("--all-day", action="store_true")
     pa.add_argument("--location")
     pa.add_argument("--description")
+    pa.add_argument("--category", action="append", help="repeatable, e.g. Work")
     pa.add_argument("--calendar")
 
     pe = sub.add_parser("edit", help="modify an existing event by UID")
@@ -406,6 +437,10 @@ def main():
     pe.add_argument("--all-day", action="store_true")
     pe.add_argument("--location")
     pe.add_argument("--description")
+    pe.add_argument(
+        "--category", action="append", help="repeatable; replaces the current ones"
+    )
+    pe.add_argument("--clear-categories", action="store_true")
     pe.add_argument("--calendar")
 
     pd = sub.add_parser("delete", help="delete an event by UID")

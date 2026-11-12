@@ -4,7 +4,7 @@
 #
 # Built from source via the `rtk-src` flake input (flake.nix, `flake = false`),
 # NOT a prebuilt release binary — keeps the build in-tree and reproducible like
-# the repo's other source inputs (picoclaw-src, cyrus-src, gogcli-src).
+# the repo's other source inputs (picoclaw-src, cyrus-src, goplaces-src).
 #
 # Build notes (verified against v0.51.0):
 #   - Pure-Rust crates.io deps; Cargo.lock has no git sources, so

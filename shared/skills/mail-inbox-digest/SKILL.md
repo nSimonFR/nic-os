@@ -30,7 +30,7 @@ it down. Do not re-implement it by hand; if it is wrong, fix the script.
 
 | module | job |
 |---|---|
-| `fetch.py` | `gog` for Gmail (with bodies), IMAP for Proton (with bodies) |
+| `fetch.py` | IMAP with bodies: Gmail (app password, `X-GM-RAW` search), Proton (hydroxide) |
 | `jev.py` | the classifier: eight narrow questions per message |
 | `store.py` | `~/.mail-digest/mail.db` — every message classified **once, ever** |
 | `digest.py` | buckets, Markdown, `telegram-send -m rich` |
@@ -40,7 +40,7 @@ costs the fetch and nothing else, which is what makes the store worth having:
 verdicts accumulate, and `surfaced_count` lets a bullet say it is the third
 morning you have been shown the same thing.
 
-Rows are keyed by the Gmail message id, or — for IMAP — by
+Rows are keyed by the Gmail message id (hex, as Gmail's web UI spells it), or — for IMAP — by
 `sha1(from|subject|date)`. The UID cannot be used: it is scoped to `UIDVALIDITY`
 and churns when a folder is reshuffled, which would fork the row and reset its
 history.
@@ -62,18 +62,15 @@ Cost is $0.042 per million input tokens with output free — about
 
 ## Ad-hoc triage
 
-For a one-off ranking that does not touch the store, pipe envelopes through the
-same classifier:
+For a one-off ranking that does not touch the store, write envelopes to a JSON
+array (`id`, `from`, `subject`, `date`, `body`) and pipe them through the same
+classifier:
 
 ```bash
-gog gmail messages search 'in:inbox is:unread' --all --max 150 \
-  --account ACCOUNT --include-body --body-format text --wrap-untrusted \
-  --json --results-only --no-input \
-  | mail-jev-classify
+mail-jev-classify < envelopes.json
 ```
 
-Fetch bodies. Without `--include-body` a search returns sender, subject and date
-only, and ranking on subject lines alone is measurably worse.
+Include bodies. Ranking on subject lines alone is measurably worse.
 
 Set `account` (`personal`/`work`) and `source` (`gmail:<address>` or
 `proton:<n>`) on each envelope as you merge accounts — the first splits the

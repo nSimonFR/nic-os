@@ -7,7 +7,7 @@
 }:
 
 # v0.4.3 go.mod requires Go ≥1.25.10; nixpkgs 25.11 default Go (1.25.9)
-# is too old. Use buildGo126Module like the sibling gogcli module.
+# is too old, hence buildGo126Module.
 buildGo126Module {
   pname = "goplaces";
   inherit version vendorHash;

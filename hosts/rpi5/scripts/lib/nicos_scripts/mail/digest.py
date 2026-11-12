@@ -10,7 +10,8 @@ fetch, which is what makes the store worth having: the verdicts accumulate, and
 `surfaced_count` can finally say "you were told about this three days running".
 
 Env: MAIL_DB, MAIL_GMAIL_ACCOUNTS (role=address,…), MAIL_PROTON_ROLE,
-MAIL_PROTON_INDEX, MAIL_QUERY, PROTON_USER, PROTON_PASS_FILE, TYPESAFE_*,
+MAIL_PROTON_INDEX, MAIL_QUERY, GMAIL_PASS_FILE, PROTON_USER, PROTON_PASS_FILE,
+TYPESAFE_*,
 TELEGRAM_SEND, TELEGRAM_CHAT_ID.
 """
 
@@ -29,6 +30,7 @@ log = logger("hermes-mail-digest", lambda: sys.stderr)
 
 DEFAULT_DB = "/home/nsimon/.mail-digest/mail.db"
 DEFAULT_PROTON_USER = "nsimon@protonmail.com"
+DEFAULT_GMAIL_PASS_FILE = "/run/agenix/gmail-app-password"
 DEFAULT_QUERY = "in:inbox is:unread"
 BACKFILL_QUERY = "in:inbox newer_than:90d"
 FOLD_AT = 5  # past this many items a section collapses into <details>
@@ -39,6 +41,7 @@ SUBJECT_MAX = 58
 class Config:
     db: str = DEFAULT_DB
     gmail: tuple = ()  # ((role, address), …)
+    gmail_pass_file: str = DEFAULT_GMAIL_PASS_FILE
     proton_role: str = "personal"
     proton_index: str = "0"
     proton_user: str = DEFAULT_PROTON_USER
@@ -62,6 +65,7 @@ class Config:
         return cls(
             db=env_str("MAIL_DB", DEFAULT_DB, env),
             gmail=tuple(pairs),
+            gmail_pass_file=env_str("GMAIL_PASS_FILE", DEFAULT_GMAIL_PASS_FILE, env),
             proton_role=env_str("MAIL_PROTON_ROLE", "personal", env),
             proton_index=env_str("MAIL_PROTON_INDEX", "0", env),
             proton_user=env_str("PROTON_USER", DEFAULT_PROTON_USER, env),
@@ -80,15 +84,34 @@ class Config:
 # ---------------------------------------------------------------- collection
 
 
-def collect(cfg, query, run=None, connect=None):
+def _each_gmail(cfg, gmail_connect):
+    """(role, address, connection) per Gmail account; one app password covers them."""
+    gmail_connect = gmail_connect or fetch.gmail_connect
+    password = read_secret(cfg.gmail_pass_file) if cfg.gmail else ""
+    for role, address in cfg.gmail:
+        M = gmail_connect(address, password)
+        try:
+            yield role, address, M
+        finally:
+            _logout(M)
+
+
+def _logout(M):
+    try:
+        M.logout()
+    except Exception:  # a failed logout must not lose the fetch
+        pass
+
+
+def collect(cfg, query, connect=None, gmail_connect=None):
     """Every account's envelopes, tagged with role and source.
 
     A mailbox that cannot be read raises rather than returning nothing: an empty
     result and an unreachable server must not produce the same calm digest.
     """
     out = []
-    for role, address in cfg.gmail:
-        for row in fetch.gmail(address, query, limit=cfg.limit, run=run):
+    for role, address, M in _each_gmail(cfg, gmail_connect):
+        for row in fetch.gmail(M, query, address, limit=cfg.limit):
             row["account"] = role
             out.append(row)
     if cfg.proton_user:
@@ -107,10 +130,7 @@ def collect(cfg, query, run=None, connect=None):
                 row["account"] = cfg.proton_role
                 out.append(row)
         finally:
-            try:
-                M.logout()
-            except Exception:  # a failed logout must not lose the fetch
-                pass
+            _logout(M)
     return out
 
 
@@ -144,10 +164,9 @@ def classify_pending(cfg, conn, pending, now, post=None):
 def normalise(env_row):
     """Clean an envelope before it reaches the store.
 
-    gog's --wrap-untrusted wraps every text field, subject included, so an
-    unwrapped subject is stored — and printed — as the marker. `threadId` is
-    also gog's spelling; without mapping it the thread column stays empty and
-    two messages of one thread survive dedupe.
+    Rows stored before the IMAP switch carry gog's --wrap-untrusted markers, so
+    unwrap stays. `threadId` is the fetch spelling; without mapping it the thread
+    column stays empty and two messages of one thread survive dedupe.
     """
     env_row["subject"] = jev.unwrap(env_row.get("subject") or "")
     env_row["from"] = jev.unwrap(env_row.get("from") or "")
@@ -226,16 +245,14 @@ def render(buckets, counts, today, warning=""):
     return "\n".join(lines)
 
 
-def important_counts(cfg, run=None):
+def important_counts(cfg, gmail_connect=None):
     """Gmail's own is:important, per role — the store does not model it."""
-    run = run or subprocess.run
-    out = {}
-    for role, address in cfg.gmail:
-        try:
-            rows = fetch.gmail(address, "in:inbox is:important", limit=500, run=run)
-            out[role] = out.get(role, 0) + len(rows)
-        except fetch.FetchFailed:
-            out.setdefault(role, 0)
+    out = {role: 0 for role, _ in cfg.gmail}
+    try:
+        for role, _, M in _each_gmail(cfg, gmail_connect):
+            out[role] += fetch.gmail_count(M, "in:inbox is:important")
+    except (fetch.FetchFailed, OSError):
+        pass
     return out
 
 

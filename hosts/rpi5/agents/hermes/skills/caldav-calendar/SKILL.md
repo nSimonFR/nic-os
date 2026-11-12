@@ -53,6 +53,9 @@ nc-cal.py add --summary "Holiday" --start 2026-08-20 --all-day
 # with extras
 nc-cal.py add --summary "Call" --start 2026-08-15T14:00 --end 2026-08-15T14:30 \
   --location "Zoom" --description "Sync with X" --calendar personal
+
+# category ("work cat", "catégorie perso"…): repeat --category for several
+nc-cal.py add --summary "Interview" --start 2026-08-15T16:30 --category Work
 ```
 Prints the new `uid`. A missing/invalid `--end` defaults to +1h (timed) or the
 next day (all-day), so the server never rejects a zero-length event.
@@ -62,9 +65,12 @@ next day (all-day), so the server never rejects a zero-length event.
 ```bash
 nc-cal.py edit --uid <uid> --summary "New title"
 nc-cal.py edit --uid <uid> --start 2026-08-15T11:00 --end 2026-08-15T12:00
+nc-cal.py edit --uid <uid> --category Work      # replaces the categories
+nc-cal.py edit --uid <uid> --clear-categories
 ```
 Fetches the event, applies only the flags you pass, and PUTs it back. Get the
-`uid` from `list`.
+`uid` from `list`. Moving a booked appointment = `edit` its start/end; don't add
+a second event.
 
 ## Delete an event
 

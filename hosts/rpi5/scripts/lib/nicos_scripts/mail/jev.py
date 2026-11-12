@@ -30,10 +30,8 @@ Usage:
   <envelopes.json jev_classify.py [--max N] [--top N] [--read N] [--json]
   jev_classify.py --self-test          # offline, no key, no network
 
-Input: a JSON array (or JSONL) of objects. Field names are matched loosely so
-the raw output of `gog gmail messages search --json` and `himalaya envelope
-list --output json` both work unchanged:
-  id / uid, from / sender, subject, snippet / body / preview, date, account
+Input: a JSON array (or JSONL) of objects. Field names are matched loosely:
+  id / uid / message_id, from / sender, subject, snippet / body / preview, date, account
 
 Exit codes: 0 ok · 2 no key configured (caller should fall back to its own
 judgement and say so in the digest) · 1 anything else.
@@ -174,8 +172,8 @@ CLEANUP_MIN_CONFIDENCE = 0.70
 # ---------------------------------------------------------------- input
 
 
-# gog --wrap-untrusted wraps every text field, subject included, so an unwrapped
-# subject reaches the digest as the marker instead of the text.
+# Rows fetched by gog --wrap-untrusted (before the IMAP switch) carry this marker
+# around every text field; unwrapped, it would reach the digest instead of the text.
 UNWRAP_RE = re.compile(
     r'^<<<EXTERNAL_UNTRUSTED_CONTENT id="[0-9a-f]+">>>\n'
     r"(?:Source: [^\n]*\n)?(?:---\n)?"
