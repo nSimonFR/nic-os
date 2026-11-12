@@ -286,14 +286,6 @@ let
       "openai-codex"
     ];
 
-    # Bundled mail/Google skills drive himalaya and Google OAuth, both gone: the
-    # mail MCP servers below and the `mail` skill replace them.
-    skills.disabled = [
-      "himalaya"
-      "email-inbox-triage"
-      "google-workspace"
-    ];
-
     # Native MCP client: launch mtg-mcp over stdio at startup and auto-register
     # its tools (mcp__mtg__search_cards, __validate_deck, __get_card_price,
     # __get_edhrec_recommendations, …) into every platform toolset. Public MTG
@@ -584,6 +576,19 @@ let
       "${skillsSource}/" "${hermesHome}/skills/"
     ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
+
+    # Skills dropped for the mail MCP (no --delete above, so removed by name).
+    # Bundled ones also go in .curator_suppressed, which Hermes' bundled-skill
+    # sync never re-seeds from.
+    for dropped in gog protonmail email/himalaya email/email-inbox-triage \
+      productivity/google-workspace; do
+      ${pkgs.coreutils}/bin/chmod -R u+w "${hermesHome}/skills/$dropped" 2>/dev/null || true
+      ${pkgs.coreutils}/bin/rm -rf "${hermesHome}/skills/$dropped"
+    done
+    for name in himalaya email-inbox-triage google-workspace; do
+      ${pkgs.gnugrep}/bin/grep -qxF "$name" "${hermesHome}/skills/.curator_suppressed" 2>/dev/null \
+        || echo "$name" >>"${hermesHome}/skills/.curator_suppressed"
+    done
 
     # Memory provider plugin: owned wholly by Nix, so --delete is safe here.
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/plugins/holographic
