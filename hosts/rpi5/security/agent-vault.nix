@@ -137,22 +137,11 @@ let
       ];
       "in" = [ "header" ];
     }
-    # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`;
-    # its MCP at /sure/mcp takes `Authorization: Bearer` (SURE_MCP_TOKEN).
+    # Sure (sure.nix): REST under /sure/api/v1, read-write key sent as `X-Api-Key`.
     {
       name = "sure";
       host = "sure.home.arpa:13334";
-      keys = [
-        "SURE_API_KEY"
-        "SURE_MCP_TOKEN"
-      ];
-      "in" = [ "header" ];
-    }
-    # Wealthfolio (wealthfolio.nix): its /mcp, read-only PAT as `Authorization: Bearer`.
-    {
-      name = "wealthfolio";
-      host = "wealthfolio.home.arpa:13345";
-      keys = [ "WEALTHFOLIO_MCP_TOKEN" ];
+      keys = [ "SURE_API_KEY" ];
       "in" = [ "header" ];
     }
     # Attached, not substituted: whatever the client sends is replaced.
@@ -196,8 +185,6 @@ let
     RXRESUME_API_KEY = config.age.secrets.rxresume-api-key.path;
     RXRESUME_ALFIE_API_KEY = config.age.secrets.rxresume-alfie-api-key.path;
     SURE_API_KEY = config.age.secrets.sure-journal-api-key.path;
-    SURE_MCP_TOKEN = "${config.age.secrets.sure-mcp-env.path}:MCP_API_TOKEN";
-    WEALTHFOLIO_MCP_TOKEN = "${config.age.secrets.wealthfolio-mcp-token.path}:WEALTHFOLIO_MCP_TOKEN";
     SERPAPI_API_KEY = config.age.secrets.serpapi-api-key.path;
     # Minted by ryot-bootstrap (ryot.nix), which re-runs this unit on a new key.
     RYOT_API_KEY = "-/var/lib/ryot-v2/secrets/api-key";
@@ -274,8 +261,6 @@ in
       config.age.secrets.rxresume-api-key.file
       config.age.secrets.rxresume-alfie-api-key.file
       config.age.secrets.sure-journal-api-key.file
-      config.age.secrets.sure-mcp-env.file
-      config.age.secrets.wealthfolio-mcp-token.file
       config.age.secrets.serpapi-api-key.file
       servicesFile
     ];

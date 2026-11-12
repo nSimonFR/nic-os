@@ -661,7 +661,7 @@
             overlays = [ nicOsOverlay ];
           };
           extraSpecialArgs = baseArgs nixconfig // {
-            inherit (rpi5Params) tailnetFqdn;
+            inherit (rpi5Params) tailnetFqdn apertureUrl;
             devSetup = false;
             unstablePkgs = import nixpkgs-unstable {
               system = "x86_64-linux";
@@ -700,7 +700,7 @@
             overlays = [ nicOsOverlay ];
           };
           extraSpecialArgs = baseArgs macconfig // {
-            inherit (rpi5Params) tailnetFqdn;
+            inherit (rpi5Params) tailnetFqdn apertureUrl;
             devSetup = true;
             unstablePkgs = unstableFor "aarch64-darwin";
           };

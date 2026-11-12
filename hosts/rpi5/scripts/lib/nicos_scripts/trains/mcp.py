@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-train-prices-mcp: stdio MCP server for live train prices.
+train-prices-mcp: MCP server for live train prices, via nicos_scripts.mcpstdio.
 
-Stdio JSON-RPC via nicos_scripts.mcpstdio. Hermes launches it as a subprocess,
-so it costs nothing at rest.
-Env: TRAIN_SOURCES.
+`train-prices-mcp` speaks stdio; `train-prices-mcp-http` serves Streamable HTTP
+on TRAINS_MCP_HOST:TRAINS_MCP_PORT for Aperture (socket-activated, 0 at rest).
+Env: TRAIN_SOURCES, TRAINS_MCP_HOST, TRAINS_MCP_PORT.
 """
 
 import sys
@@ -13,6 +13,7 @@ from datetime import date
 
 from .. import mcpstdio
 from ..logs import logger
+from ..secrets import env_str
 from . import sources as src
 
 # stderr: stdout is the protocol stream.
@@ -120,6 +121,14 @@ def serve(handlers, stdin=None, stdout=None):
 def main(argv=None, env=None):
     del argv
     serve(Handlers(src.make_sources(env)))
+    return 0
+
+
+def main_http(argv=None, env=None):
+    del argv
+    host = env_str("TRAINS_MCP_HOST", "127.0.0.1", env)
+    port = int(env_str("TRAINS_MCP_PORT", "13358", env))
+    mcpstdio.serve_http(TOOLS, Handlers(src.make_sources(env)), SERVER, log, host, port)
     return 0
 
 

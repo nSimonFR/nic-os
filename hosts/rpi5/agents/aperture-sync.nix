@@ -27,6 +27,63 @@ let
   aliasNames = builtins.attrNames (gateCfg.aliases or { });
   allModels = lib.unique (modelNames ++ aliasNames);
 
+  # MCP connectors, aggregated at `<aperture>/v1/mcp` as `<id>_<tool>`. Aperture reaches
+  # them over the tailnet (never loopback) and only by URL: no stdio servers.
+  # Ids: letters and digits only.
+  #
+  # `env:NAME` secrets are filled from this unit's EnvironmentFiles by
+  # aperture-config-sync, so no token enters the store.
+  #
+  # Aperture polls a shared-credential connector every few seconds, which would keep a
+  # socket-activated backend awake for good; `send_caller_identity` turns that off
+  # (measured: 0 connections in 60 s, against ~10/min for a polled one).
+  publicUrl = name: config.nic.services.${name}.public.publicUrl;
+  sleepy = {
+    send_caller_identity = true;
+  };
+  bearer = var: {
+    auth = {
+      type = "bearer_token";
+      secret = "env:${var}";
+    };
+  };
+  connectors = lib.mapAttrs (_: c: { protocol = "mcp"; } // c) {
+    notes.url = "${publicUrl "open-knowledge"}/mcp";
+    wealthfolio = {
+      url = "${publicUrl "wealthfolio"}/mcp";
+    }
+    // bearer "WEALTHFOLIO_MCP_TOKEN";
+    sure = {
+      url = "${publicUrl "sure-root"}/sure/mcp";
+    }
+    // bearer "MCP_API_TOKEN"
+    // sleepy;
+    airtrail = {
+      url = "${publicUrl "airtrail"}/api/mcp";
+    }
+    // bearer "AIRTRAIL_MCP_TOKEN"
+    // sleepy;
+    trains = {
+      url = "${publicUrl "train-prices-mcp"}/mcp";
+    }
+    // sleepy;
+    freereps = {
+      url = "${publicUrl "freereps-mcp"}/mcp";
+    }
+    // sleepy;
+  };
+  # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
+  connectorGrants = lib.concatMap (id: [
+    "${id}/tools/**"
+    "${id}/resources/**"
+    "${id}/templates/**"
+  ]) (builtins.attrNames connectors);
+  connectorSecretFiles = with config.age.secrets; [
+    wealthfolio-mcp-token.path
+    sure-mcp-env.path
+    airtrail-mcp-token.path
+  ];
+
   # Claude ids for the Anthropic passthrough. The base is what the claude-code
   # binary knows, which covers the short aliases it sends (`claude-haiku-4-5`)
   # that Anthropic's /v1/models omits; aperture-config-sync adds that live list
@@ -106,6 +163,8 @@ let
             { read_metrics = true; }
             # Admins need it too, to filter by the header indexed below.
             { filterable_headers = [ servedModelHeader ]; }
+            # Deny-by-default: a connector is callable only when granted.
+            { connectors = connectorGrants; }
           ];
         };
       }
@@ -121,6 +180,7 @@ let
         };
       }
     ];
+    connectors.servers = connectors;
     # Aperture attributes usage to the model the client asked for (`smart`), not
     # the tier a gate router served. Indexing the gate's served-model response
     # header makes Logs / Model Activity filterable by it; indexed values outlive
@@ -162,11 +222,13 @@ in
       APERTURE_APPLY = "1";
       # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
       ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
+      APERTURE_CONNECTOR_SECRETS = "WEALTHFOLIO_MCP_TOKEN MCP_API_TOKEN AIRTRAIL_MCP_TOKEN";
     };
     serviceConfig = {
       Type = "oneshot";
-      # STORJ_S3_ACCESS_KEY / STORJ_S3_ACCESS_SECRET for exporters.s3.
-      EnvironmentFile = "/run/agenix/aperture-s3-export";
+      # STORJ_S3_ACCESS_KEY / STORJ_S3_ACCESS_SECRET for exporters.s3, then the
+      # connector tokens.
+      EnvironmentFile = [ "/run/agenix/aperture-s3-export" ] ++ connectorSecretFiles;
       ExecStart = "${pkgs.nicos-scripts}/bin/aperture-config-sync";
     };
   };
