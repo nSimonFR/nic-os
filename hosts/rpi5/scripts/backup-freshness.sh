@@ -3,7 +3,8 @@
 # stale, empty or under half the size of the previous one, or when Storj's
 # newest snapshot is older than MAX_AGE_H.
 # A dump unit that exits 0 having written nothing is invisible otherwise.
-# Env: PG_DIR, PG_DBS (space-separated), DUMP_ROOT, MAX_AGE_H.
+# Env: PG_DIR, PG_DBS (space-separated), DUMP_ROOT, MAX_AGE_H, STORJ_REMOTE,
+# STORJ_ALERT, RCLONE_CONFIG.
 
 now=$(date +%s)
 max=$((MAX_AGE_H * 3600))
@@ -56,12 +57,24 @@ for dir in "$DUMP_ROOT"/*/; do
   done < <(find "$dir" -maxdepth 1 -type f -empty -mmin -$((MAX_AGE_H * 60)))
 done
 
-snap=$(restic snapshots --no-lock --latest 1 --json | jq -r '.[-1].time // empty')
+# Listing is free and works while Storj refuses downloads; restic itself
+# cannot even read its key then.
+snap=$(rclone lsjson --files-only "$STORJ_REMOTE/snapshots" | jq -r 'map(.ModTime) | max // empty')
 if [ -z "$snap" ]; then
   problems+=("restic: no snapshot")
 elif [ $((now - $(date -d "$snap" +%s))) -gt "$max" ]; then
   problems+=("restic: newest snapshot $snap older than ${MAX_AGE_H}h")
 fi
+
+# A refused download surfaces in restic as "key does not exist" and in check
+# as "repository is damaged". Name it; an empty body clears the alert.
+blocked=""
+if ! err=$(rclone cat "$STORJ_REMOTE/config" 2>&1 >/dev/null) &&
+  grep -q "bandwidth limit exceeded" <<<"$err"; then
+  blocked="Storj refuses downloads: the project's download limit is reached. Backups and checks fail until it resets on the 1st or the limit is raised (Storj console → project → Download)."
+  problems+=("storj: download limit reached")
+fi
+printf '%s' "$blocked" | "$STORJ_ALERT" storj-download-limit "Storj download limit reached"
 
 if [ ${#problems[@]} -gt 0 ]; then
   printf '%s\n' "${problems[@]}" >&2

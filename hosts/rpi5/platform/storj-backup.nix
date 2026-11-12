@@ -31,10 +31,18 @@
   config,
   lib,
   pkgs,
+  telegramChatId,
   ...
 }:
 let
   restic = config.services.restic.backups.storj-daily;
+  remote = lib.removePrefix "rclone:" restic.repository;
+
+  telegramAlert = (import ../../../shared/notify.nix { inherit pkgs; }).alert {
+    tokenFile = config.age.secrets.telegram-bot-token.path;
+    chatId = telegramChatId;
+    name = "telegram-alert-storj";
+  };
 
   # Same repo/credentials/cache as the backup unit, minus PATH and unset vars.
   resticEnv = lib.filterAttrs (
@@ -44,7 +52,6 @@ let
   resticLimits = {
     Nice = 10;
     IOSchedulingClass = "idle";
-    MemoryMax = "512M";
     CPUQuota = "50%";
   };
 
@@ -53,8 +60,9 @@ let
     runtimeInputs = with pkgs; [
       coreutils
       findutils
+      gnugrep
       jq
-      restic.package
+      rclone
     ];
     text = builtins.readFile ../scripts/backup-freshness.sh;
   };
@@ -74,13 +82,18 @@ in
     passwordFile = "/run/agenix/restic-password";
     rcloneConfigFile = "/run/agenix/rclone-storj";
 
-    initialize = true; # auto-run `restic init` on first backup
+    # The repo exists. With this on, a refused download also ran `restic init`,
+    # whose "config file already exists" buried the real error.
+    initialize = false;
 
     paths = [ "/mnt/data" ];
     exclude = [
       "lost+found"
       "/mnt/data/nix-build" # nix's build-dir (configuration.nix): transient
       "/mnt/data/swapfile"
+      # Scryfall catalogue + a Moxfield mirror, both re-fetchable; ~0.9 GB
+      # rewritten nightly (showmycards.nix).
+      "/mnt/data/showmycards"
     ];
 
     timerConfig = {
@@ -94,10 +107,16 @@ in
       RandomizedDelaySec = "10m";
     };
 
+    # The project caps downloads at 10 GB/month, and repacking downloads every
+    # pack it rewrites: at the default 5% this re-downloaded ~300 MB a night and
+    # exhausted the cap on 2026-11-11. `unlimited` only deletes packs that are
+    # wholly unused, so pruning downloads nothing; the leftover garbage costs
+    # cents of storage.
     pruneOpts = [
       "--keep-daily 7"
       "--keep-weekly 4"
       "--keep-monthly 6"
+      "--max-unused unlimited"
     ];
 
     extraBackupArgs = [
@@ -121,6 +140,8 @@ in
     description = "Check every dump and the Storj snapshot are fresh";
     after = [ "restic-backups-storj-daily.service" ];
     environment = resticEnv // {
+      STORJ_REMOTE = remote;
+      STORJ_ALERT = telegramAlert;
       PG_DIR = config.services.postgresqlBackup.location;
       PG_DBS = toString config.services.postgresqlBackup.databases;
       DUMP_ROOT = "/mnt/data/backups";
@@ -140,21 +161,21 @@ in
     };
   };
 
-  # Reads back a random 5% of pack data each week (~4 GB of Storj egress at
-  # 76 GiB stored), so the whole repo is re-read about every five months.
+  # Reads back ~1 GiB of random packs a month. The weekly 5% (4.6 GB) was half
+  # the 10 GB download cap; Storj already checks its own erasure-coded data.
   systemd.services.restic-check-storj = {
     description = "restic integrity check of the Storj repository";
     environment = resticEnv;
     serviceConfig = resticLimits // {
       Type = "oneshot";
-      ExecStart = "${lib.getExe restic.package} check --read-data-subset=5%";
+      ExecStart = "${lib.getExe restic.package} check --read-data-subset=1G";
     };
   };
 
   systemd.timers.restic-check-storj = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "Wed *-*-* 11:00:00";
+      OnCalendar = "*-*-01 11:00:00";
       Persistent = true;
     };
   };
