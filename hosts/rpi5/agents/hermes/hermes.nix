@@ -406,27 +406,26 @@ let
     # digest) may deliver there through the shared bot. "candidatures-nico" is the
     # same setup for nSimon's own job search, in his « Nicolas Postule ! » group.
     gateway.multiplex_profiles = true;
-    gateway.profile_routes =
-      lib.optional (messagingChatId != null) {
+    gateway.profile_routes = [
+      {
         name = "messagerie";
         platform = "telegram";
-        chat_id = messagingChatId;
+        chat_id = toString telegramChatId;
         profile = "messagerie";
       }
-      ++ [
-        {
-          name = "candidatures";
-          platform = "telegram";
-          chat_id = "-1003331502255";
-          profile = "candidatures";
-        }
-        {
-          name = "candidatures-nico";
-          platform = "telegram";
-          chat_id = "-1004397019196";
-          profile = "candidatures-nico";
-        }
-      ];
+      {
+        name = "candidatures";
+        platform = "telegram";
+        chat_id = "-1003331502255";
+        profile = "candidatures";
+      }
+      {
+        name = "candidatures-nico";
+        platform = "telegram";
+        chat_id = "-1004397019196";
+        profile = "candidatures-nico";
+      }
+    ];
     # Telegram is a plugin since v0.22. Its import + register() took ~36s on the
     # Pi after a deploy (cold store paths, memory pressure); past the 10s default
     # the gateway drops the adapter and never connects Telegram.
@@ -450,11 +449,9 @@ let
 
   configFile = pkgs.writeText "hermes-config.yaml" (builtins.toJSON hermesConfig);
 
-  # « messagerie » profile: Nico's bridged chats (hosts/rpi5/messaging/), only in
-  # his own Telegram group. Hermes cannot scope a tool to one chat, so the MCP
-  # lives in a profile of its own, without terminal; the shared group and the
-  # DM never see it. null until that group exists: no route, no profile.
-  messagingChatId = null;
+  # « messagerie » profile: Nico's bridged chats (hosts/rpi5/messaging/), routed
+  # to his DM. Hermes cannot scope a tool to one chat, so the MCP lives in a
+  # profile of its own, without terminal; the groups never see it.
   messagingMcp = {
     command = "${pkgs.nicos-scripts}/bin/messaging-mcp";
     env.MATRIX_USER_ID = "@nico:${tailnetFqdn}";
@@ -521,17 +518,13 @@ let
     ${pkgs.coreutils}/bin/cat > ${hermesHome}/.env <<EOF
     TELEGRAM_BOT_TOKEN=$tg_tok
     TELEGRAM_ALLOWED_USERS=${toString telegramChatId}
-    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841,-1003331502255,-1004397019196${
-      lib.optionalString (messagingChatId != null) ",${messagingChatId}"
-    }
+    TELEGRAM_GROUP_ALLOWED_CHATS=-1003356011841,-1003331502255,-1004397019196
     TELEGRAM_HOME_CHANNEL=${toString telegramChatId}
     TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
-    ${lib.optionalString (messagingChatId != null) ''
-      ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie
-      ${pkgs.coreutils}/bin/install -m 0600 ${messagingProfileConfig} ${hermesHome}/profiles/messagerie/config.yaml
-    ''}
+    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie
+    ${pkgs.coreutils}/bin/install -m 0600 ${messagingProfileConfig} ${hermesHome}/profiles/messagerie/config.yaml
 
     # `--checksum` on every seed below is load-bearing, not belt-and-braces. Nix
     # normalises store mtimes to epoch 1, and substituting one store path for
