@@ -324,3 +324,40 @@ def test_serve_speaks_newline_delimited_json_rpc(handlers):
     first, second = (json.loads(line) for line in stdout.getvalue().splitlines())
     assert first == {"jsonrpc": "2.0", "id": 1, "result": {}}
     assert second["error"]["code"] == -32700
+
+
+def test_http_transport_answers_json_rpc_and_acks_notifications(handlers):
+    import threading
+    import urllib.request
+    from http.server import ThreadingHTTPServer
+
+    from nicos_scripts import mcpstdio
+
+    httpd = ThreadingHTTPServer(
+        ("127.0.0.1", 0),
+        mcpstdio.http_handler(mcp.TOOLS, handlers, mcp.SERVER, lambda m: None),
+    )
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{httpd.server_address[1]}"
+
+    def post(body):
+        req = urllib.request.Request(
+            f"{base}/mcp",
+            data=json.dumps(body).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, r.read()
+
+    try:
+        status, raw = post({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        assert status == 200
+        assert [t["name"] for t in json.loads(raw)["result"]["tools"]] == list(
+            mcp.TOOLS
+        )
+        assert post({"jsonrpc": "2.0", "method": "notifications/initialized"})[0] == 202
+        with urllib.request.urlopen(f"{base}/health", timeout=5) as r:
+            assert r.status == 200
+    finally:
+        httpd.shutdown()

@@ -6,6 +6,7 @@
     ./t3code.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
+    ./train-prices-mcp.nix
     ./claude/claude-remote-control.nix
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix

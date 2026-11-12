@@ -1,6 +1,7 @@
-"""Minimal stdio MCP server: initialize / ping / tools/list / tools/call over
-newline-delimited JSON-RPC. Not the `mcp` SDK: it pulls pydantic, anyio and
-starlette into processes that live as long as hermes, on a 4 GB box.
+"""Minimal MCP server: initialize / ping / tools/list / tools/call over
+newline-delimited JSON-RPC on stdio, or stateless Streamable HTTP (one JSON
+reply per POST, no session, no SSE). Not the `mcp` SDK: it pulls pydantic,
+anyio and starlette, on a 4 GB box.
 
 `tools` maps a tool name to its {description, inputSchema}; `handlers` has a
 method of the same name per tool. A tool that raises becomes an isError result,
@@ -9,6 +10,7 @@ never a dead server.
 
 import json
 import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PROTOCOL = "2025-06-18"
 
@@ -79,3 +81,52 @@ def serve(tools, handlers, server, log, stdin=None, stdout=None):
         if reply is not None:
             stdout.write(json.dumps(reply, ensure_ascii=False) + "\n")
             stdout.flush()
+
+
+def http_handler(tools, handlers, server, log):
+    """Request handler class: POST /mcp is JSON-RPC, GET /health is readiness."""
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+
+        def _send(self, status, body=None):
+            data = (
+                b"" if body is None else json.dumps(body, ensure_ascii=False).encode()
+            )
+            self.send_response(status)
+            if body is not None:
+                self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+        def do_GET(self):
+            if self.path == "/health":
+                return self._send(200, {})
+            self._send(405)
+
+        def do_DELETE(self):
+            self._send(405)
+
+        def do_POST(self):
+            if self.path != "/mcp":
+                return self._send(404)
+            raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            try:
+                reply = handle(json.loads(raw), tools, handlers, server, log)
+            except ValueError:
+                reply = _error(None, -32700, "JSON invalide")
+            if reply is None:
+                return self._send(202)
+            self._send(200, reply)
+
+    return Handler
+
+
+def serve_http(tools, handlers, server, log, host, port):
+    httpd = ThreadingHTTPServer(
+        (host, port), http_handler(tools, handlers, server, log)
+    )
+    log(f"listening on http://{host}:{port}/mcp")
+    httpd.serve_forever()

@@ -1,7 +1,7 @@
 {
   config,
   pkgs,
-  tailnetFqdn,
+  apertureUrl,
   ...
 }:
 let
@@ -21,11 +21,12 @@ in
 {
   # Linear, Miro and GitHub come from the claude.ai connectors.
   programs.claude-code.mcpServers = {
-    # Notes (hosts/rpi5/knowledge/open-knowledge.nix): OpenKnowledge's own streamable-HTTP
-    # MCP over the markdown notes folder. Unauthenticated; reachable on the tailnet only.
-    notes = {
+    # Self-hosted MCP servers (notes, sure, wealthfolio, airtrail, trains,
+    # freereps), aggregated by Aperture (hosts/rpi5/agents/aperture-sync.nix); access
+    # is by tailnet identity.
+    aperture = {
       type = "http";
-      url = "https://${tailnetFqdn}:3980/mcp";
+      url = "${apertureUrl}/v1/mcp";
     };
     # OAuth sign-in happens in the client (/mcp); no token in config.
     calcom = {

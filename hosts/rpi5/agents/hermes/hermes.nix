@@ -267,53 +267,6 @@ let
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
   jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
 
-  # FreeReps MCP — 20 read-only Apple Health query tools, as mcp__freereps__*.
-  #
-  # stdio, NOT the Streamable HTTP server freereps also mounts at /mcp. That
-  # would be the wealthfolio-shaped wiring, and it silently makes freereps
-  # always-on: freereps.nix puts it behind socket-activate (idleSec = 600) to
-  # cost 0 MB at rest, but Hermes pings HTTP/SSE sessions every 180s
-  # (mcp_tool.py _DEFAULT_KEEPALIVE_INTERVAL) and systemd-socket-proxyd's
-  # --exit-idle-time only counts time with no ACTIVE connection — so the idle
-  # timer would never fire. `-mcp` returns before server.New instead: no
-  # listener, no Oura/Hevy/Withings loops, no migrations, 29 MB RSS measured.
-  # It reads the DB directly, so asking never wakes the service.
-  #
-  # Two consequences: the subprocess counts against hermes.service's
-  # MemoryMax, and main() runs db.BackfillSleepSessions before the -mcp
-  # branch, so every Hermes start does one idempotent backfill write.
-  freerepsMcpConfig = (pkgs.formats.yaml { }).generate "freereps-mcp-config.yaml" {
-    # Mirrors freereps.nix + databases.nix. Restated rather than shared because
-    # this is a home-manager module: it sees neither the NixOS `config` tree
-    # (nic.pgRole.freereps) nor databases.nix's `_module.args` pgHost/pgPort.
-    # Drift here surfaces as a connection error, not an eval error.
-    database = {
-      host = "127.0.0.1";
-      port = 5432;
-      name = "freereps";
-      user = "freereps";
-      sslmode = "disable";
-    };
-    # Never bound (-mcp returns first), but validate() rejects a zero port when
-    # tailscale is off — and the config file itself is mandatory.
-    server.port = 13348;
-    tailscale.enabled = false;
-  };
-
-  freerepsMcp = pkgs.writeShellApplication {
-    name = "freereps-mcp";
-    text = ''
-      # Sourced here rather than substituted into config.yaml as an `env:` entry
-      # (the wealthfolio-token pattern), so the DB password never lands in a
-      # file the agent can read.
-      set -a
-      # shellcheck source=/dev/null
-      . /run/agenix/freereps-env-hermes
-      set +a
-      exec ${pkgs.freereps}/bin/freereps -mcp -config ${freerepsMcpConfig}
-    '';
-  };
-
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a
     # user-defined OpenAI-compatible endpoint (see header note).
@@ -353,46 +306,11 @@ let
     # `mcp` Python package, which the hermes-agent env already bundles.
     mcp_servers.mtg.command = "${mtgMcp}/bin/mtg-mcp";
 
-    # FreeReps over stdio — see freerepsMcp above for why this is a subprocess
-    # and not a `url`. No `env`: the wrapper sources its own secret.
-    mcp_servers.freereps.command = "${freerepsMcp}/bin/freereps-mcp";
-
-    # Live train prices (nicos_scripts.trains). Stdio, so it is idle at rest.
-    # Alerts are native Hermes cron jobs that call it (skill trains).
-    mcp_servers.trains.command = "${pkgs.nicos-scripts}/bin/train-prices-mcp";
-
-    # Wealthfolio over HTTP rather than stdio — it is a running service, not a
-    # subprocess. Talks to the app's own bind, NOT the :3700 read-only vhost:
-    # /mcp is a POST and that vhost refuses every write method, so it would 403
-    # the whole transport. Safe, because the PAT itself is the read-only half.
-    #
-    # The token is scoped read-only (accounts/holdings/performance/activities/
-    # planning/health/classification) and deliberately not writable: Sure is the
-    # source of truth, so anything written here is overwritten by the next
-    # mirror run — an agent that could write would be writing to a mirror.
-    #
-    # Agent Vault swaps the placeholder for the PAT (wealthfolio.home.arpa = loopback).
-    mcp_servers.wealthfolio = {
-      url = "http://wealthfolio.home.arpa:13345/mcp";
-      headers.Authorization = "Bearer __wealthfolio_mcp_token__";
-    };
-
-    # AirTrail's stateless Streamable HTTP MCP, via the socket-activate proxy so
-    # a call wakes it. The 180s default ping would keep that proxy's 600s idle
-    # timer from ever firing; the server holds no session, so ping daily.
-    mcp_servers.airtrail = {
-      url = "http://127.0.0.1:8310/api/mcp";
-      headers.Authorization = "Bearer @AIRTRAIL_MCP_TOKEN@";
-      keepalive_interval = 86400;
-    };
-
-    # Sure's built-in MCP (finance/sure.nix). Agent Vault swaps the placeholder for
-    # MCP_API_TOKEN. Stateless JSON-RPC behind the socket proxy, so ping daily, as for AirTrail.
-    mcp_servers.sure = {
-      url = "http://sure.home.arpa:13334/sure/mcp";
-      headers.Authorization = "Bearer __sure_mcp_token__";
-      keepalive_interval = 86400;
-      # A cold wake measured 14s to >30s; the default 60s leaves no margin.
+    # notes, sure, wealthfolio, airtrail, trains and freereps, aggregated by
+    # Aperture (agents/aperture-sync.nix) as mcp__aperture__<server>_<tool>. Listing
+    # the tools wakes the socket-activated ones, and a cold Sure took 14s to >30s.
+    mcp_servers.aperture = {
+      url = "${apertureUrl}/v1/mcp";
       connect_timeout = 120;
     };
 
@@ -417,10 +335,6 @@ let
         "forward_email"
       ];
     };
-
-    # Notes (hosts/rpi5/knowledge/open-knowledge.nix) — OpenKnowledge's MCP over the markdown notes, used
-    # by the courses skill. Unauthenticated, loopback bind; always-on, so no keepalive tuning.
-    mcp_servers.notes.url = "http://127.0.0.1:13354/mcp";
 
     # T3 Code (hosts/rpi5/agents/t3code.nix): launch and follow coding threads.
     # OAuth with no refresh token: the login lasts 30 days, watched by the
@@ -571,11 +485,7 @@ let
   setupScript = pkgs.writeShellScript "hermes-setup" ''
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome} ${hermesHome}/workspace ${hermesHome}/skills
-    # 0600, not 0644: the AirTrail token is substituted into this file below,
-    # so it stops being a public document.
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
-    at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
-    ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
     # Mail MCP config. A missing secret leaves that account failing its login,
     # not Hermes failing to start.
     ${pkgs.coreutils}/bin/install -d -m 0700 ${mailMcpDir}

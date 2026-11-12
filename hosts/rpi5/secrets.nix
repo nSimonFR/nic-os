@@ -95,14 +95,13 @@
     };
     airtrail-mcp-token = {
       file = ./secrets/airtrail-mcp-token.age;
-      # Scoped AirTrail API key for Hermes' MCP server; nsimon runs hermes.service.
-      owner = "nsimon";
+      # Scoped AirTrail API key for its MCP connector in Aperture (aperture-sync.nix).
       mode = "0400";
     };
     wealthfolio-mcp-token = {
       file = ./secrets/wealthfolio-mcp-token.age;
-      # Read-only agent PAT (wfp_…) for Hermes' Wealthfolio MCP server, brokered
-      # by Agent Vault: root-only, Hermes holds a placeholder.
+      # Read-only agent PAT (wfp_…) for the Wealthfolio MCP connector in Aperture
+      # (aperture-sync.nix): root-only.
       mode = "0400";
     };
     serpapi-api-key = {
@@ -147,15 +146,6 @@
     freereps-env = {
       file = ./secrets/freereps-env.age;
       owner = "freereps"; # EnvironmentFile for freereps.service (FREEREPS_DB_PASSWORD)
-      mode = "0400";
-    };
-    freereps-env-hermes = {
-      # Same ciphertext as freereps-env, decrypted again under a second owner:
-      # Hermes' FreeReps MCP server is a `freereps -mcp` subprocess of
-      # hermes.service, which runs as nsimon. One .age file rather than a second
-      # encryption, so a rotation cannot desync the service and the agent.
-      file = ./secrets/freereps-env.age;
-      owner = "nsimon";
       mode = "0400";
     };
     # App « ServaTilis » on https://my.telegram.org/apps.
@@ -287,7 +277,7 @@
       mode = "0400";
     };
     sure-mcp-env = {
-      # MCP_API_TOKEN + MCP_USER_EMAIL: sure-web's MCP, brokered to Hermes by Agent Vault.
+      # MCP_API_TOKEN + MCP_USER_EMAIL: sure-web's MCP; the token feeds its Aperture connector.
       file = ./secrets/sure-mcp-env.age;
       mode = "0400";
     };

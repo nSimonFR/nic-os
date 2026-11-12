@@ -1,12 +1,12 @@
 ---
 name: trains
-description: French train prices (OUIGO, TGV INOUI) via mcp__trains__*. Use for a train price, the cheapest day, when to book, or a price alert.
+description: French train prices (OUIGO, TGV INOUI) via mcp__aperture__trains_*. Use for a train price, the cheapest day, when to book, or a price alert.
 metadata: {"hermes":{"emoji":"🚆","os":["linux"]}}
 ---
 
 # Trains
 
-Tools: `mcp__trains__train_prices`, `mcp__trains__train_calendar` (start with it when
+Tools: `mcp__aperture__trains_train_prices`, `mcp__aperture__trains_train_calendar` (start with it when
 dates are flexible).
 
 - Sources are unofficial: say so if a price drives a purchase. Never claim to book.

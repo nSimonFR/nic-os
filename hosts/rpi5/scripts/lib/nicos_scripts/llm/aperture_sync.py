@@ -12,16 +12,21 @@ Aperture's PUT takes the current `hash` (optimistic concurrency). If either
 list cannot be read, Aperture is left untouched rather than shrunk. Writes
 only with APERTURE_APPLY=1.
 
+A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
+in APERTURE_CONNECTOR_SECRETS; one whose variable is unset is left out rather
+than pushed with an empty token.
+
 Env: APERTURE_URL, APERTURE_BASE_CONFIG, GATE_MODELS_URL, APERTURE_PROVIDER,
 ANTHROPIC_TOKEN_FILE, ANTHROPIC_PROVIDER, STORJ_S3_ACCESS_KEY,
-STORJ_S3_ACCESS_SECRET, APERTURE_APPLY.
+STORJ_S3_ACCESS_SECRET, APERTURE_CONNECTOR_SECRETS (+ the variables it names),
+APERTURE_APPLY.
 """
 
 import json
 import sys
 import time
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..httpjson import get_json, http_json
@@ -42,6 +47,7 @@ class Config:
     anthropic_models_url: str = "https://api.anthropic.com/v1/models?limit=1000"
     s3_key: str = ""
     s3_secret: str = ""
+    connector_secrets: dict = field(default_factory=dict)
     apply: bool = False
 
     @classmethod
@@ -57,6 +63,10 @@ class Config:
             ),
             s3_key=env_str("STORJ_S3_ACCESS_KEY", "", env),
             s3_secret=env_str("STORJ_S3_ACCESS_SECRET", "", env),
+            connector_secrets={
+                name: env_str(name, "", env)
+                for name in env_str("APERTURE_CONNECTOR_SECRETS", "", env).split()
+            },
             apply=env_str("APERTURE_APPLY", "", env) == "1",
         )
 
@@ -95,13 +105,33 @@ def desired(base, ids, cfg, claude=frozenset()):
     if s3 is not None:
         s3["access_key_id"] = cfg.s3_key
         s3["access_secret"] = cfg.s3_secret
+    servers = config.get("connectors", {}).get("servers", {})
+    for cid in missing_secrets(base, cfg):
+        servers.pop(cid)
+    for server in servers.values():
+        auth = server.get("auth") or {}
+        ref = auth.get("secret", "")
+        if ref.startswith("env:"):
+            auth["secret"] = cfg.connector_secrets[ref[4:]]
     return config
 
 
+def missing_secrets(base, cfg):
+    """Connector ids whose `env:` secret has no value."""
+    servers = base.get("connectors", {}).get("servers", {})
+    return sorted(
+        cid
+        for cid, server in servers.items()
+        if (ref := (server.get("auth") or {}).get("secret", "")).startswith("env:")
+        and not cfg.connector_secrets.get(ref[4:])
+    )
+
+
 def comparable(config):
-    """Drop what Aperture rewrites on store: provider apikeys and the S3 secret
-    become `keyid:…` references. Model order carries no meaning either. So a
-    rotated S3 secret alone does not trigger a push."""
+    """Drop what Aperture rewrites on store: provider apikeys, connector tokens
+    and the S3 secret become `keyid:…` references, and a connector gains
+    `provider: "Custom"`. Model order carries no meaning either. So a rotated
+    secret alone does not trigger a push."""
     if not isinstance(config, dict):
         return config
     out = json.loads(json.dumps(config))
@@ -109,6 +139,10 @@ def comparable(config):
         prov.pop("apikey", None)
         prov["models"] = sorted(prov.get("models", []))
     out.get("exporters", {}).get("s3", {}).pop("access_secret", None)
+    for server in out.get("connectors", {}).get("servers", {}).values():
+        (server.get("auth") or {}).pop("secret", None)
+        if server.get("provider") == "Custom":
+            server.pop("provider")
     return out
 
 
@@ -142,6 +176,8 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
         log(f"model list unreadable ({e}); Aperture left as is")
         return 0
     want = desired(base, ids, cfg, claude)
+    for cid in missing_secrets(base, cfg):
+        log(f"connector {cid}: secret unset, left out")
     count = len(want["providers"][cfg.provider]["models"])
 
     for attempt in range(1, attempts + 1):

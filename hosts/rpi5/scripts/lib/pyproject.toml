@@ -86,8 +86,9 @@ hermes-burgie-photo = "nicos_scripts.hermes.burgie_photo:main"
 hermes-calendar-digest = "nicos_scripts.hermes.calendar_digest:main"
 hermes-whatsapp-audit = "nicos_scripts.hermes.whatsapp_audit:main"
 hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
-# Hermes launches this over stdio (mcp_servers.trains).
+# stdio; the HTTP one serves Aperture (agents/train-prices-mcp.nix).
 train-prices-mcp = "nicos_scripts.trains.mcp:main"
+train-prices-mcp-http = "nicos_scripts.trains.mcp:main_http"
 # Hermes launches this over stdio (mcp_servers.messaging / messaging-send, --send).
 messaging-mcp = "nicos_scripts.messaging.mcp:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.

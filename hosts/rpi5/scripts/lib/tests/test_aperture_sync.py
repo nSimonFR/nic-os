@@ -151,3 +151,58 @@ def test_anthropic_down_leaves_aperture_alone(tmp_path):
     fake = Aperture(held={"old": True}, claude=OSError("401"))
     assert ap.run(cfg, opener=fake) == 0
     assert fake.puts == []
+
+
+CONNECTORS = {
+    "servers": {
+        "notes": {"protocol": "mcp", "url": "https://h:3980/mcp"},
+        "sure": {
+            "protocol": "mcp",
+            "url": "https://h:3850/sure/mcp",
+            "auth": {"type": "bearer_token", "secret": "env:MCP_API_TOKEN"},
+            "send_caller_identity": True,
+        },
+    }
+}
+
+
+def connector_cfg(tmp_path, secrets):
+    cfg = ap.Config(**{**cfg_for(tmp_path).__dict__, "connector_secrets": secrets})
+    base = {**BASE, "connectors": CONNECTORS}
+    (tmp_path / "base.json").write_text(json.dumps(base))
+    return base, cfg
+
+
+def test_connector_secret_filled_from_env(tmp_path):
+    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
+    fake = Aperture(held={"old": True})
+    assert ap.run(cfg, opener=fake) == 0
+    servers = json.loads(fake.puts[0]["config"])["connectors"]["servers"]
+    assert servers["sure"]["auth"]["secret"] == "tok"
+    assert (
+        base["connectors"]["servers"]["sure"]["auth"]["secret"] == "env:MCP_API_TOKEN"
+    )
+
+
+def test_connector_without_its_secret_is_left_out(tmp_path):
+    _, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": ""})
+    fake = Aperture(held={"old": True})
+    assert ap.run(cfg, opener=fake) == 0
+    servers = json.loads(fake.puts[0]["config"])["connectors"]["servers"]
+    assert sorted(servers) == ["notes"]
+
+
+def test_aperture_rewritten_connector_still_counts_as_unchanged(tmp_path):
+    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
+    held = ap.desired(base, ap.gate_ids(GATE), cfg)
+    for server in held["connectors"]["servers"].values():
+        server["provider"] = "Custom"
+    held["connectors"]["servers"]["sure"]["auth"]["secret"] = "keyid:c:sure"
+    fake = Aperture(held=held)
+    assert ap.run(cfg, opener=fake) == 0
+    assert fake.puts == []
+
+
+def test_connector_secrets_read_only_by_name():
+    env = {"APERTURE_CONNECTOR_SECRETS": "A B", "A": "1", "C": "3"}
+    assert ap.Config.from_env(env).connector_secrets == {"A": "1", "B": ""}

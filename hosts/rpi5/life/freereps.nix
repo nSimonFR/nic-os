@@ -57,6 +57,7 @@
 let
   internalPort = 13348; # freereps HTTP bind (real backend, localhost only)
   proxyPort = 8370; # socket-activate proxy listen; Tailscale Serve → here
+  mcpVhostPort = 8096; # nginx Host rewrite in front of /mcp, see the bottom
   # External tailnet HTTPS port: declared once in nic.services.freereps.public
   # below.
 
@@ -267,6 +268,40 @@ in
           ];
         };
       };
+    };
+  };
+
+  # ── MCP for Aperture (agents/aperture-sync.nix) ─────────────────────────────
+  # mcp-go's DNS-rebinding guard 403s any non-loopback Host on a loopback bind,
+  # and Tailscale Serve forwards the tailnet name. This vhost rewrites it and
+  # exposes /mcp only. Through the socket proxy, so a call wakes FreeReps.
+  services.nginx.virtualHosts."freereps-mcp" = {
+    listen = [
+      {
+        addr = "127.0.0.1";
+        port = mcpVhostPort;
+        ssl = false;
+      }
+    ];
+    locations."= /mcp".extraConfig = ''
+      proxy_pass http://127.0.0.1:${toString proxyPort};
+      proxy_set_header Host 127.0.0.1;
+      proxy_http_version 1.1;
+      proxy_buffering off;
+      proxy_read_timeout 300s;
+    '';
+    locations."/".return = "404";
+  };
+
+  nic.services.freereps-mcp = {
+    backup = [ "none" ];
+    backupNote = "stateless — an nginx vhost; the data is registered on nic.services.freereps";
+    public = {
+      order = 111;
+      port = 3920;
+      backend = "http://127.0.0.1:${toString mcpVhostPort}";
+      funnel = false; # NEVER — no authentication, like FreeReps itself
+      authenticated = false;
     };
   };
 }
