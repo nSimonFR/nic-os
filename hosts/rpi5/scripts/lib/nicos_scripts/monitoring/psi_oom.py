@@ -9,6 +9,12 @@ deploy reset the Pi at 16 and at 2 jobs), and thaws it once the trigger stays
 quiet. A stall that outlasts the freeze is not the deploy's: it SIGKILLs the
 process holding the most anon + swap memory.
 
+A process that started after its unit was killed is a respawn: killing it
+again frees nothing for long. On 2026-11-12 Sure, Hermes and Home Assistant
+were killed 50 times between 10:22 and 10:47, each back within a minute,
+until the watchdog reset the Pi. Respawns are skipped while a non-respawn
+remains.
+
 Not sysrq f: it picks by oom_score, where T3's agents (adj 800) and
 ryot-sandboxd (adj 1000) outrank everything. On 2026-11-11 it killed sleep,
 bash and a 1 MiB ryot-sandboxd over and over until the watchdog reset.
@@ -20,6 +26,7 @@ import re
 import select
 import signal
 import time
+from collections import namedtuple
 
 from ..logs import logger
 from ..secrets import env_int, env_str
@@ -33,10 +40,16 @@ WINDOW_MS = 10000
 COOLDOWN_SEC = 10
 # Killing anything smaller does not end a stall.
 MIN_VICTIM_MIB = 64
+# How long a unit's kill marks its later processes as respawns.
+RESPAWN_SEC = 600
 DEFERRABLE_CGROUP = "/sys/fs/cgroup/system.slice/nix-daemon.service"
 
 FULL_RE = re.compile(r"^full avg10=([\d.]+)", re.M)
 STATUS_RE = re.compile(r"^(Name|RssAnon|VmSwap):\s+(\S+)", re.M)
+UNIT_RE = re.compile(r"[^/]+\.(?:service|scope)(?=/|$)")
+
+# started: seconds since boot, the clock Guard runs on (CLOCK_BOOTTIME).
+Proc = namedtuple("Proc", "pid name adj kib unit started")
 
 MCL_CURRENT, MCL_FUTURE = 1, 2
 
@@ -47,6 +60,7 @@ class Config:
     window_ms: int = WINDOW_MS
     cooldown_sec: int = COOLDOWN_SEC
     min_victim_mib: int = MIN_VICTIM_MIB
+    respawn_sec: int = RESPAWN_SEC
     cgroup: str = DEFERRABLE_CGROUP
     dry_run: bool = True
 
@@ -62,6 +76,7 @@ class Config:
             window_ms=env_int("PSI_OOM_WINDOW_MS", WINDOW_MS, env),
             cooldown_sec=env_int("PSI_OOM_COOLDOWN_SEC", COOLDOWN_SEC, env),
             min_victim_mib=env_int("PSI_OOM_MIN_VICTIM_MIB", MIN_VICTIM_MIB, env),
+            respawn_sec=env_int("PSI_OOM_RESPAWN_SEC", RESPAWN_SEC, env),
             cgroup=env_str("PSI_OOM_CGROUP", DEFERRABLE_CGROUP, env),
             dry_run=env_str("PSI_OOM_DRY_RUN", "1", env) != "0",
         )
@@ -94,31 +109,59 @@ def parse_status(text):
     )
 
 
-def scan_procs(root="/proc"):
-    """Yield (pid, name, oom_score_adj, anon + swap KiB) for every user process."""
+def parse_unit(text):
+    """The innermost systemd unit in /proc/<pid>/cgroup, "-" if none."""
+    units = UNIT_RE.findall(text.rsplit("::", 1)[-1])
+    return units[-1] if units else "-"
+
+
+def parse_started(text, ticks):
+    """Seconds since boot at which the process started, from /proc/<pid>/stat."""
+    # comm may hold spaces and parens; starttime is field 22, 20th after it.
+    return int(text.rsplit(")", 1)[1].split()[19]) / ticks
+
+
+def scan_procs(root="/proc", ticks=None):
+    """Yield a Proc for every user process."""
+    ticks = ticks or os.sysconf("SC_CLK_TCK")
     for entry in os.listdir(root):
         if not entry.isdigit():
             continue
         try:
             with open(f"{root}/{entry}/status") as f:
                 parsed = parse_status(f.read())
+            if not parsed:
+                continue
             with open(f"{root}/{entry}/oom_score_adj") as f:
                 adj = int(f.read())
-        except (OSError, ValueError):
+            with open(f"{root}/{entry}/cgroup") as f:
+                unit = parse_unit(f.read())
+            with open(f"{root}/{entry}/stat") as f:
+                started = parse_started(f.read(), ticks)
+        except (OSError, ValueError, IndexError):
             continue  # exited mid-scan
-        if parsed:
-            yield int(entry), parsed[0], adj, parsed[1]
+        yield Proc(int(entry), parsed[0], adj, parsed[1], unit, started)
 
 
-def pick_victim(procs, min_kib, self_pid):
-    """Largest anon + swap process not protected by a negative oom_score_adj."""
-    best = None
-    for pid, name, adj, kib in procs:
-        if pid in (1, self_pid) or adj < 0 or kib < min_kib:
+def pick_victim(procs, min_kib, self_pid, killed=None):
+    """Largest anon + swap process not protected by a negative oom_score_adj.
+
+    killed maps unit -> when it was last killed; a process of that unit started
+    since is a respawn, taken only when nothing else qualifies. Returns
+    (proc, respawn) or None.
+    """
+    killed = killed or {}
+    best = {}
+    for p in procs:
+        if p.pid in (1, self_pid) or p.adj < 0 or p.kib < min_kib:
             continue
-        if best is None or kib > best[2]:
-            best = (pid, name, kib)
-    return best
+        respawn = p.unit in killed and p.started >= killed[p.unit]
+        if respawn not in best or p.kib > best[respawn].kib:
+            best[respawn] = p
+    for respawn in (False, True):
+        if respawn in best:
+            return best[respawn], respawn
+    return None
 
 
 class Cgroup:
@@ -152,6 +195,7 @@ class Guard:
         self.last_action = float("-inf")
         self.last_stall = float("-inf")
         self.frozen = False
+        self.killed = {}  # unit -> time of its last kill
 
     def on_stall(self, now):
         self.last_stall = now
@@ -182,25 +226,34 @@ class Guard:
         self.frozen = False
 
     def _kill(self, now, avg):
-        victim = pick_victim(self.procs(), self.cfg.min_victim_mib * 1024, os.getpid())
+        self.killed = {
+            u: t for u, t in self.killed.items() if now - t < self.cfg.respawn_sec
+        }
+        victim = pick_victim(
+            self.procs(), self.cfg.min_victim_mib * 1024, os.getpid(), self.killed
+        )
         if victim is None:
             self.log(
                 f"memory stall (full avg10={avg}): no process >= {self.cfg.min_victim_mib} MiB"
             )
             self.last_action = now
             return
-        pid, name, kib = victim
-        what = f"{name} (pid {pid}, {kib // 1024} MiB anon+swap)"
+        p, respawn = victim
+        what = f"{p.unit} {p.name} (pid {p.pid}, {p.kib // 1024} MiB anon+swap)"
+        if respawn:
+            what += ", a respawn: nothing else qualifies"
         if self.cfg.dry_run:
             self.log(f"memory stall (full avg10={avg}): would kill {what} (dry run)")
             self.last_action = now
             return
         try:
-            self.kill(pid)
+            self.kill(p.pid)
         except ProcessLookupError:
             return
         self.log(f"memory stall (full avg10={avg}): killed {what}")
         self.last_action = now
+        if p.unit != "-":
+            self.killed[p.unit] = now
 
 
 def _exit_on_term(*_):
@@ -232,6 +285,10 @@ def main(argv=None, env=None, log=None):
     def kill(pid):
         os.kill(pid, signal.SIGKILL)
 
+    # Process start times in /proc count from boot.
+    def now():
+        return time.clock_gettime(time.CLOCK_BOOTTIME)
+
     guard = Guard(
         cfg,
         read=read,
@@ -250,8 +307,8 @@ def main(argv=None, env=None, log=None):
             for _, ev in events:
                 if ev & select.POLLERR:
                     raise SystemExit("PSI trigger closed")
-                guard.on_stall(time.monotonic())
-            guard.on_quiet(time.monotonic())
+                guard.on_stall(now())
+            guard.on_quiet(now())
     finally:
         guard.thaw()
 
