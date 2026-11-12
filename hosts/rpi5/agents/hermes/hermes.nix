@@ -458,6 +458,8 @@ let
         approvals
         memory
         ;
+      # Same holographic store as the default profile: the DM keeps its memory.
+      plugins.hermes-memory-store.db_path = "${hermesHome}/memory_store.db";
       mcp_servers = {
         messaging = messagingMcp;
         # Every send waits for Nico's approval in Telegram.
@@ -520,6 +522,10 @@ let
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie
     ${pkgs.coreutils}/bin/install -m 0600 ${messagingProfileConfig} ${hermesHome}/profiles/messagerie/config.yaml
+    # Profiles load plugins from their own plugins/ only.
+    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie/plugins/holographic
+    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
+      "${holographicPlugin}/" "${hermesHome}/profiles/messagerie/plugins/holographic/"
 
     # `--checksum` on every seed below is load-bearing, not belt-and-braces. Nix
     # normalises store mtimes to epoch 1, and substituting one store path for
