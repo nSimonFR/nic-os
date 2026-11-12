@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # OpenTrack AppImage with the Tobii input plugin — the opentrack binary that
 # actually runs at runtime (Tobii → UDP relay). The source build
 # (pkgs/tobii/opentrack-sc.nix) only exists for its NPClient64.dll.

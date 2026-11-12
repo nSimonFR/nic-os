@@ -1,3 +1,4 @@
+# no-renovate: preview builds have no release feed (buildId from preview.json).
 # herdr, jerryfane's fork — the build the HerdrUp phone app pairs with
 # (`herdr pair`, plus the `api-bridge` entrypoint it runs over SSH). Upstream
 # herdr has neither.

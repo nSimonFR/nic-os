@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # Star Citizen fork of opentrack with UMU/Proton Wine prefix fixes.
 # https://github.com/Priton-CE/opentrack-StarCitizen (wine-extended-proton branch)
 #

@@ -522,6 +522,27 @@ def rewrite(pkg: Package) -> None:
     pkg.path.write_text(text)
 
 
+# Any fetch whose hash a version bump would invalidate.
+PINNED_FETCH = re.compile(r"\b(?:fetch[A-Za-z]*|pullImage)\s*\{")
+OPT_OUT = re.compile(r"#\s*no-renovate:\s*\S")
+
+
+def untracked() -> list[Path]:
+    """Files under pkgs/ and hosts/ that fetch a pinned artifact but neither
+    carry a `# renovate:` marker nor say why not (`# no-renovate: <reason>`)."""
+    out = []
+    for root in ("pkgs", "hosts"):
+        for p in sorted(Path(root).rglob("*.nix")):
+            text = p.read_text()
+            if (
+                PINNED_FETCH.search(text)
+                and "# renovate: datasource=" not in text
+                and not OPT_OUT.search(text)
+            ):
+                out.append(p)
+    return out
+
+
 def candidates(paths: list[str]) -> list[Path]:
     if paths:
         return [Path(p) for p in paths if p.endswith(".nix") and Path(p).is_file()]
@@ -559,7 +580,20 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="also fail on packages that cannot be verified",
     )
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="fail on a pinned fetch with neither `# renovate:` nor `# no-renovate:`",
+    )
     args = parser.parse_args(argv)
+
+    if args.coverage:
+        missing = untracked()
+        for path in missing:
+            print(
+                f"!! {path}: pinned fetch without `# renovate:` or `# no-renovate: <reason>`"
+            )
+        return 1 if missing else 0
 
     report: dict[str, dict[str, object]] = {}
     failed = False

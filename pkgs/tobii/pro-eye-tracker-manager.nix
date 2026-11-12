@@ -1,3 +1,4 @@
+# no-renovate: beast is frozen until 2027-01 (ADR 0010).
 # Tobii Pro Eye Tracker Manager — the Electron calibration/configuration app.
 # Repackaged from https://github.com/megagtrwrath/tobii_eye_tracker_linux_installer
 {
