@@ -29,7 +29,8 @@ done
 for dir in "$DUMP_ROOT"/*/; do
   dir=${dir%/}
   [ "$dir" = "$PG_DIR" ] && continue
-  newest=$(find "$dir" -maxdepth 1 -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
+  # Any depth: Tuwunel's RocksDB backup engine writes only into subdirs.
+  newest=$(find "$dir" -type f -printf '%T@ %p\n' | sort -n | tail -1 | cut -d' ' -f2-)
   if [ -z "$newest" ]; then
     problems+=("$dir: no dump")
   elif ! age_ok "$newest"; then
