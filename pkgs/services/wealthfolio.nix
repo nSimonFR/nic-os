@@ -15,11 +15,8 @@
 # patchelf, no interpreter fixup, no LD_LIBRARY_PATH. We take the binary and
 # the prebuilt dist out of the image and drop the rest of the Alpine rootfs.
 #
-# BUMPING: change `version` AND the matching `imageDigest`/`hash` below, then
-# rebuild. The digest is per-architecture; get a new one with
-#
-#   skopeo inspect --raw docker://docker.io/wealthfolio/wealthfolio:<version> \
-#     | jq -r '.manifests[]|select(.platform.architecture=="arm64")|.digest'
+# BUMPING: Renovate bumps `version`; scripts/nix-fix-hashes.py refreshes the
+# per-arch `imageDigest` and `hash` (nix-prefetch-docker).
 #
 # pullImage is a fixed-output derivation, and an FOD path is keyed on (hash,
 # name) — NOT on what it fetched. `finalImageTag = version` is therefore
@@ -35,6 +32,7 @@
   jq,
 }:
 let
+  # renovate: datasource=docker depName=wealthfolio/wealthfolio
   version = "3.6.3";
 
   # docker.io/wealthfolio/wealthfolio:3.6.3, per-arch manifest digests.
@@ -49,19 +47,17 @@ let
 
   system = stdenvNoCC.hostPlatform.system;
 
-  image =
-    let
-      spec =
-        images.${system}
-          or (throw "wealthfolio: no pinned image digest for ${system}; add one to pkgs/services/wealthfolio.nix");
-    in
-    dockerTools.pullImage {
-      imageName = "wealthfolio/wealthfolio";
-      finalImageName = "wealthfolio";
-      finalImageTag = version;
-      inherit (spec) imageDigest arch hash;
-      os = "linux";
-    };
+  spec =
+    images.${system}
+      or (throw "wealthfolio: no pinned image digest for ${system}; add one to pkgs/services/wealthfolio.nix");
+
+  image = dockerTools.pullImage {
+    imageName = "wealthfolio/wealthfolio";
+    finalImageName = "wealthfolio";
+    finalImageTag = version;
+    inherit (spec) imageDigest arch hash;
+    os = "linux";
+  };
 in
 stdenvNoCC.mkDerivation {
   pname = "wealthfolio";

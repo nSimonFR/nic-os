@@ -8,14 +8,10 @@
 # All public data, no auth. Upstream ships static Go binaries, so we install those
 # rather than buildGoModule (no vendorHash, no Go toolchain).
 #
-# Used by hosts/rpi5/agents/hermes/hermes.nix. Bump `version`, then refresh each
-# platform hash with:
-#   nix store prefetch-file https://github.com/nathanmartins/mtg-mcp/releases/download/v<ver>/mtg-mcp_<asset>.tar.gz
-#
-# Deliberately NOT given a `# renovate:` comment (see renovate.json): four
-# per-platform hashes to refresh by hand makes a version-only bump PR more
-# misleading than useful. This recipe is the supported path.
+# Used by hosts/rpi5/agents/hermes/hermes.nix. Renovate bumps `version`;
+# scripts/nix-fix-hashes.py refreshes every per-platform hash.
 let
+  # renovate: datasource=github-releases depName=nathanmartins/mtg-mcp extractVersion=^v(?<version>.+)$
   version = "2.1.0";
   assets = {
     aarch64-darwin = {

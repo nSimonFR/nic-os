@@ -13,8 +13,11 @@ let
   backendPort = 3101;
   sshPort = 2222;
 
+  # renovate: datasource=git-refs depName=https://github.com/Troplo/earl-grey branch=master
+  earlGreyRev = "9b5769a3f10b14ffc097add553c0712e6c427ba7";
   earl-grey-theme = pkgs.fetchurl {
-    url = "https://raw.githubusercontent.com/Troplo/earl-grey/master/theme-earl-grey.css";
+    name = "theme-earl-grey-${earlGreyRev}.css";
+    url = "https://raw.githubusercontent.com/Troplo/earl-grey/${earlGreyRev}/theme-earl-grey.css";
     hash = "sha256-UNc+idYpmCcNXxf7IRnsTzeWT2nB4HQOStnQxUsC0n8=";
   };
 in

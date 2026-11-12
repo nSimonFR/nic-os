@@ -15,6 +15,7 @@ in
     src = unstablePkgs.fetchFromGitHub {
       owner = "bassepeder";
       repo = "yabai";
+      # renovate: datasource=git-refs depName=https://github.com/bassepeder/yabai branch=macos27
       rev = "79dff965f780efdcfbce26626f2026769407b417";
       hash = "sha256-qg30wimV8NX2Sx6/pOu6DwLCgOAR767gwu91OohHrN4=";
     };

@@ -13,6 +13,7 @@
 
 stdenvNoCC.mkDerivation rec {
   pname = "graillon-free";
+  # No `# renovate:` marker: a vendor zip with no release feed to watch.
   version = "3.2";
 
   src = fetchzip {

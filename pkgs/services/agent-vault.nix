@@ -7,9 +7,9 @@
 # Upstream's release binaries embed the web UI (a source build would need the
 # npm frontend plus go >= 1.26.10; nixpkgs has 1.26.4).
 #
-# Bump `version`, then refresh each hash with:
-#   nix store prefetch-file https://github.com/Infisical/agent-vault/releases/download/v<ver>/agent-vault_<ver>_<asset>.tar.gz
+# Renovate bumps `version`; scripts/nix-fix-hashes.py refreshes every per-platform hash.
 let
+  # renovate: datasource=github-releases depName=Infisical/agent-vault extractVersion=^v(?<version>.+)$
   version = "0.40.2";
   assets = {
     aarch64-linux = {

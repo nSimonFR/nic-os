@@ -45,6 +45,6 @@ jobs:
           # its commits read as hand edits and its PRs are not even listed.
           RENOVATE_GIT_IGNORED_AUTHORS: '["29139614+renovate[bot]@users.noreply.github.com"]'
           RENOVATE_IGNORE_PR_AUTHOR: "true"
-          RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write pkgs/\\S+\\.nix$"]'
+          RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write (pkgs|hosts)/\\S+\\.nix$"]'
           LOG_LEVEL: info
         run: npx --yes "renovate@${RENOVATE_VERSION}"

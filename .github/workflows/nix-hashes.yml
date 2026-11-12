@@ -59,10 +59,15 @@ jobs:
             echo "mode=audit" >>"$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(git diff --name-only \
-            "origin/${{ github.base_ref }}...HEAD" -- 'pkgs/**/*.nix' | tr '\n' ' ')
+          base="origin/${{ github.base_ref }}...HEAD"
+          # hosts/ only where a `# renovate:` marker opts a pin in.
+          files=$({
+            git diff --name-only "$base" -- 'pkgs/**/*.nix'
+            git diff --name-only --diff-filter=d "$base" -- 'hosts/**/*.nix' |
+              xargs -r grep -l '# renovate:' || true
+          } | tr '\n' ' ')
           if [ -z "$files" ]; then
-            echo "No pkgs/**/*.nix changes — nothing to verify."
+            echo "No pkgs/ or Renovate-tracked hosts/ changes — nothing to verify."
             echo "mode=skip" >>"$GITHUB_OUTPUT"
           else
             echo "Checking: $files"
