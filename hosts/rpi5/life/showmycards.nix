@@ -189,10 +189,9 @@ in
   };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
-  # database.db and the Scryfall cache both live under /mnt/data/showmycards,
-  # so restic covers them with no dump step.
   nic.services.showmycards = {
-    backup = [ "mnt-data" ];
+    backup = [ "none" ];
+    backupNote = "Scryfall catalogue + a mirror of Moxfield, the single writer; both re-fetchable. Excluded from restic (storj-backup.nix).";
     appUnits = [
       "showmycards-frontend.service"
       "showmycards-backend.service"
