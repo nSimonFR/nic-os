@@ -200,8 +200,68 @@ let
   # pkgs/agents/mtg-mcp.nix.
   mtgMcp = pkgs.callPackage ../../../../pkgs/agents/mtg-mcp.nix { };
 
-  mailMcp = pkgs.callPackage ./mail-mcp.nix {
-    mcp-email-server = pkgs.callPackage ../../../../pkgs/agents/mcp-email-server.nix { };
+  # Mail: mcp-email-server over Proton (hydroxide, loopback) and Gmail (IMAP +
+  # app password). It only takes passwords inline, so setupScript fills the
+  # @…@ placeholders from agenix into ~/.hermes/mail-mcp/config.toml (0600).
+  mcpEmailServer = pkgs.callPackage ../../../../pkgs/agents/mcp-email-server.nix { };
+  mailMcpDir = "${hermesHome}/mail-mcp";
+  mailMcpConfig =
+    let
+      endpoint = host: port: tls: password: {
+        inherit host port password;
+        use_ssl = tls;
+        start_ssl = false;
+        verify_ssl = tls;
+      };
+      account =
+        name: address: imap: smtp: extra:
+        {
+          account_name = name;
+          email_address = address;
+          full_name = "Nicolas Simon"; # required by the TOML schema
+          # Both providers file sent mail themselves; an IMAP append would duplicate it.
+          save_to_sent = false;
+          incoming = imap // {
+            user_name = address;
+          };
+          outgoing = smtp // {
+            user_name = address;
+          };
+        }
+        // extra;
+    in
+    (pkgs.formats.toml { }).generate "mail-mcp.toml" {
+      credential_storage = "plaintext";
+      # Sending is granted here but gated in Hermes (mcp_servers.mail-send).
+      allowed_recipients = [ "*" ];
+      allowed_mutations = [
+        "draft"
+        "organize"
+        "send"
+      ];
+      emails = [
+        (account "proton" "nsimon@protonmail.com" (endpoint "127.0.0.1" 1143 false "@PROTON_PASSWORD@") (
+          endpoint
+            "127.0.0.1"
+            1025
+            false
+            "@PROTON_PASSWORD@"
+        ) { description = "Personal mail (nsimon@protonmail.com, @pm.me) via the hydroxide bridge"; })
+        (account "gmail" "hemeraude@gmail.com" (endpoint "imap.gmail.com" 993 true "@GMAIL_PASSWORD@") (
+          endpoint
+            "smtp.gmail.com"
+            465
+            true
+            "@GMAIL_PASSWORD@"
+        ) { description = "Personal Gmail (hemeraude@gmail.com)"; })
+      ];
+    };
+  mailMcpServer = {
+    command = "${mcpEmailServer}/bin/mcp-email-server";
+    args = [ "stdio" ];
+    env.MCP_EMAIL_SERVER_CONFIG_PATH = "${mailMcpDir}/config.toml";
+    lazy = true;
+    idle_timeout_seconds = 600;
   };
 
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
@@ -336,15 +396,12 @@ let
       connect_timeout = 120;
     };
 
-    # Mail (mail-mcp.nix), as two servers over one config because `trust` is
+    # Mail (mailMcpConfig above), as two servers over one config because `trust` is
     # per server: `mail` reads, drafts and files freely; `mail-send` holds only
     # the sending tools and asks on Telegram before each call. Both start on
     # first use and exit after 10 idle minutes (~70 MB each while up).
     # email_command (raw IMAP/SMTP) and delete_emails are on neither.
-    mcp_servers.mail = {
-      command = "${mailMcp}/bin/mail-mcp";
-      lazy = true;
-      idle_timeout_seconds = 600;
+    mcp_servers.mail = mailMcpServer // {
       tools.exclude = [
         "send_email"
         "forward_email"
@@ -353,10 +410,7 @@ let
         "download_attachment"
       ];
     };
-    mcp_servers.mail-send = {
-      command = "${mailMcp}/bin/mail-mcp";
-      lazy = true;
-      idle_timeout_seconds = 600;
+    mcp_servers.mail-send = mailMcpServer // {
       trust = "untrusted";
       tools.include = [
         "send_email"
@@ -525,6 +579,14 @@ let
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
     at_tok="$(${pkgs.gnused}/bin/sed -n 's/^AIRTRAIL_MCP_TOKEN=//p' /run/agenix/airtrail-mcp-token)"
     ${pkgs.gnused}/bin/sed -i "s|@AIRTRAIL_MCP_TOKEN@|$at_tok|" ${hermesHome}/config.yaml
+    # Mail MCP config. A missing secret leaves that account failing its login,
+    # not Hermes failing to start.
+    ${pkgs.coreutils}/bin/install -d -m 0700 ${mailMcpDir}
+    ${pkgs.coreutils}/bin/install -m 0600 ${mailMcpConfig} ${mailMcpDir}/config.toml
+    ${pkgs.replace-secret}/bin/replace-secret @PROTON_PASSWORD@ \
+      /run/agenix/protonmail-bridge-password ${mailMcpDir}/config.toml || true
+    ${pkgs.replace-secret}/bin/replace-secret @GMAIL_PASSWORD@ \
+      /run/agenix/gmail-app-password ${mailMcpDir}/config.toml || true
     # /model list from the gate's catalog; keeps the baked one if the gate is down.
     HERMES_CONFIG=${hermesHome}/config.yaml ${pkgs.nicos-scripts}/bin/hermes-gate-models || true
 
