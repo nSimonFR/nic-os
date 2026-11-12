@@ -1,0 +1,61 @@
+# Approve a Renovate bump that changes nothing but pinned versions/checksums, so
+# the auto-merge armed by auto-merge.yml can land once CI is green. Every other
+# PR still waits for a human.
+#
+# `pull_request_target`, not `pull_request`: it runs this file and
+# scripts/renovate-approve-gate.py as they are on main, so a PR cannot edit the
+# gate that judges it. Nothing from the PR is ever checked out or executed — the
+# gate reads the diff through the API. The approval is for the exact head SHA
+# and GitHub drops it on any later push (dismiss_stale_reviews).
+#
+# Needs secret APPROVER_TOKEN: a fine-grained PAT of nSimonFR (not the bot —
+# GitHub rejects self-approval), this repo only, "Pull requests: write" and
+# nothing else. The checks and merge stay GitHub's.
+name: Renovate approve
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: renovate-approve-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  approve:
+    name: approve renovate bump
+    # Cheap pre-filter only; the gate re-checks everything.
+    if: ${{ startsWith(github.event.pull_request.head.ref, 'renovate/') && !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    steps:
+      # No `ref:`: on pull_request_target this is the base branch.
+      - uses: actions/checkout@v7
+
+      - name: Gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: echo "sha=$(python3 scripts/renovate-approve-gate.py "$REPO" "$PR")" >>"$GITHUB_OUTPUT"
+
+      - name: Approve
+        if: ${{ steps.gate.outputs.sha != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.APPROVER_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ steps.gate.outputs.sha }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::APPROVER_TOKEN is not set; leaving the PR for a human."
+            exit 0
+          fi
+          gh api -X POST "repos/$REPO/pulls/$PR/reviews" \
+            -f event=APPROVE -f commit_id="$SHA" \
+            -f body="Pure version/checksum bump of an allowlisted pin (renovate-approve-gate)."
