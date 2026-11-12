@@ -27,6 +27,13 @@ let
   release =
     repo: version: src:
     pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo version src; };
+  # renovate: datasource=github-releases depName=mautrix/discord extractVersion=^v(?<version>.+)$
+  discordVersion = "0.7.7";
+  discordSrc = pkgs.fetchurl {
+    name = "mautrix-discord-${discordVersion}-arm64";
+    url = "https://github.com/mautrix/discord/releases/download/v${discordVersion}/mautrix-discord-arm64";
+    hash = "sha256-AzwRW35c0xsVWiQuw3KwqGKWK6pUAWkNsuD6lnaJuck=";
+  };
   # renovate: datasource=github-releases depName=mautrix/telegram extractVersion=^v(?<version>.+)$
   telegramVersion = "0.2610.0";
   telegramSrc = pkgs.fetchurl {
@@ -93,7 +100,7 @@ let
     # Pre-bridgev2 (bridgev2 is only on an unreleased branch): older config
     # layout. nixpkgs' build needs the insecure-flagged libolm; upstream's is static.
     discord = {
-      package = release "discord" "v0.7.7" "sha256-AzwRW35c0xsVWiQuw3KwqGKWK6pUAWkNsuD6lnaJuck=";
+      package = release "discord" discordVersion discordSrc;
       port = 29334;
       legacy = true;
     };
