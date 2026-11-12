@@ -16,20 +16,33 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Version pins that no built-in manager reads: AFFiNE's container tag in a Nix let-binding (hosts/rpi5/knowledge/affine.nix, installed by affine-sync.service), and the hand-pinned from-source packages under pkgs/. Opt-in per package via a `# renovate:` comment directly above the version, so adding a package here is a deliberate act and the ones left out stay out. Each excluded package says why in its own file.",
+      "description": "Version pins no built-in manager reads, under pkgs/ and hosts/: from-source and release-binary packages, container tags, PyPI overrides. Opt-in per pin via a `# renovate:` comment directly above a `version`-like binding (`version`, `brainVersion`…), so the ones left out stay out; each excluded pin says why in its own file.",
       "managerFilePatterns": [
-        "hosts/rpi5/knowledge/affine.nix",
-        "pkgs/**/*.nix"
+        "pkgs/**/*.nix",
+        "hosts/**/*.nix"
       ],
       "matchStrings": [
-        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+version = \"(?<currentValue>[^\"]+)\";"
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: extractVersion=(?<extractVersion>\\S+))?\\s+\\w*[vV]ersion = \"(?<currentValue>[^\"]+)\";"
       ],
       "versioningTemplate": "semver"
     },
     {
       "customType": "regex",
+      "description": "Commit pins on untagged upstreams: Renovate follows the branch head (git-refs) and rewrites `rev`. No versioningTemplate: git-refs needs its default `git` versioning.",
+      "managerFilePatterns": [
+        "pkgs/**/*.nix",
+        "hosts/**/*.nix"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>git-refs) depName=(?<depName>\\S+) branch=(?<currentValue>\\S+)\\s+\\w*[rR]ev = \"(?<currentDigest>[0-9a-f]{40})\";"
+      ]
+    },
+    {
+      "customType": "regex",
       "description": "The Renovate version the self-hosted workflow runs (.github/workflows/renovate.yml), so Renovate keeps itself current.",
-      "managerFilePatterns": [".github/workflows/renovate.yml"],
+      "managerFilePatterns": [
+        ".github/workflows/renovate.yml"
+      ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+RENOVATE_VERSION: (?<currentValue>\\S+)"
       ]
@@ -38,19 +51,29 @@
   "lockFileMaintenance": {
     "enabled": true,
     "description": "All day Monday, not the default 'before 4am': GitHub drops most of the 2-hourly scheduled runs, and none landed in 00:00–04:00 UTC on a Monday from 2026-09-28 to 2026-10-19, so no lock-file PR was opened for four weeks.",
-    "schedule": ["* * * * 1"]
+    "schedule": [
+      "* * * * 1"
+    ]
   },
   "packageRules": [
     {
       "description": "gramps-web-nix is pinned on purpose: a3f86d5 (gramps-web-api 3.17.0) fails pythonRuntimeDepsCheck against our nixpkgs — needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/gramps-gedcom7/flask-smorest. See the comment on the input in flake.nix. Renovate proposed it as #438, it was merged, and it broke main. Re-enable once gramps-web-nix carries those deps.",
-      "matchManagers": ["nix"],
-      "matchPackageNames": ["gramps-web-nix"],
+      "matchManagers": [
+        "nix"
+      ],
+      "matchPackageNames": [
+        "gramps-web-nix"
+      ],
       "enabled": false
     },
     {
       "description": "hermes-agent is pinned to a release tag in flake.nix and follows nixpkgs-unstable. Only plain vX.Y.Z tags: upstream also cuts daily `vX.Y.Z+canary.<date>` snapshots of main, and its old date tags (v2026.9.24) sort above v0.x as semver. A bump whose nix/lib.nix names a nodejs_* our nixpkgs-unstable lacks fails `eval rpi5` on the PR. A green PR can still drop something the config names, so read the release notes before approving.",
-      "matchManagers": ["nix"],
-      "matchPackageNames": ["hermes-agent"],
+      "matchManagers": [
+        "nix"
+      ],
+      "matchPackageNames": [
+        "hermes-agent"
+      ],
       "allowedVersions": "/^v0\\.\\d+\\.\\d+$/",
       "prBodyNotes": [
         "Read the release notes before approving. Checks catch eval and build breaks, not a bundled plugin that moved: v0.22 moved the `holographic` memory provider (`memory.provider` in hosts/rpi5/agents/hermes/hermes.nix) to the plugin catalog, and Hermes would have started without its fact store."
@@ -58,39 +81,60 @@
     },
     {
       "description": "AFFiNE cuts a -beta tag most days and a canary daily; only follow stable releases. This is the config:recommended default, pinned here because a beta landing on the Pi unattended is the failure this whole path is built to avoid.",
-      "matchDepNames": ["ghcr.io/toeverything/affine"],
+      "matchDepNames": [
+        "ghcr.io/toeverything/affine"
+      ],
       "ignoreUnstable": true
     },
     {
       "description": "claude-code follows the `next` dist-tag, not `latest`. The two diverge by days and the gap is load-bearing: Anthropic gates models on the client version, so `latest` (2.1.278 when this was written) answers --model claude-opus-5-5 with a 400 telling you to upgrade, while `next` (2.1.280) serves it and resolves the bare `opus` alias to it. Following `latest` would mean the newest model is unreachable for as long as the tags disagree. The cost is riding a pre-release channel on purpose — read the release notes on the PR.",
-      "matchDepNames": ["@anthropic-ai/claude-code"],
+      "matchDepNames": [
+        "@anthropic-ai/claude-code"
+      ],
       "followTag": "next"
     },
     {
       "description": "t3code follows nightly pre-releases on purpose: the Mac runs the T3 Code (Nightly) app, and a stable rpi5 server behind it loses access to its sessions over T3 Connect.",
-      "matchDepNames": ["pingdotgg/t3code"],
+      "matchDepNames": [
+        "pingdotgg/t3code"
+      ],
       "ignoreUnstable": false
     },
     {
       "description": "Keep each agent CLI's Nix flake source tag and mirrored package version in one update PR.",
-      "matchDepNames": ["rtk-src", "rtk-ai/rtk"],
+      "matchDepNames": [
+        "rtk-src",
+        "rtk-ai/rtk"
+      ],
       "groupName": "RTK source and package version"
     },
     {
       "description": "Keep each agent CLI's Nix flake source tag and mirrored package version in one update PR.",
-      "matchDepNames": ["zoetrope-src", "furkankly/zoetrope"],
+      "matchDepNames": [
+        "zoetrope-src",
+        "furkankly/zoetrope"
+      ],
       "groupName": "Zoetrope source and package version"
     },
     {
-      "description": "pkgs/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. Dependency-store hashes (pnpmDeps, vendorHash, cargoHash) are recomputed by building that one fixed-output derivation; the `hashes` check stays as the gate for anything the script still cannot speak for. The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
-      "matchFileNames": ["pkgs/**"],
+      "description": "pkgs/ and hosts/ bumps: Renovate rewrites `version` via the regex manager, and postUpgradeTasks recomputes the fixed-output hashes beside it (scripts/nix-fix-hashes.py) before committing, so the bump and its hashes land as one commit. Needs the self-hosted runner (.github/workflows/renovate.yml) — the Mend app ignores postUpgradeTasks. Dependency-store hashes (pnpmDeps, vendorHash, cargoHash) are recomputed by building that one fixed-output derivation; the `hashes` check stays as the gate for anything the script still cannot speak for. The `src` half only holds because every fetcher under pkgs/ passes an explicit version-bearing `name` — see pkgs/README.md, 'Fixed-output names'.",
+      "matchFileNames": [
+        "pkgs/**",
+        "hosts/**",
+        "!hosts/rpi5/knowledge/affine.nix"
+      ],
       "postUpgradeTasks": {
-        "commands": ["python3 scripts/nix-fix-hashes.py --write {{{packageFile}}}"],
-        "fileFilters": ["pkgs/**/*.nix"],
+        "commands": [
+          "python3 scripts/nix-fix-hashes.py --write {{{packageFile}}}"
+        ],
+        "fileFilters": [
+          "pkgs/**/*.nix",
+          "hosts/**/*.nix"
+        ],
         "executionMode": "update"
       },
       "prBodyNotes": [
-        "`hash` / `npmDepsHash` / `pnpmDeps.hash` / `vendorHash` / `cargoHash` were recomputed in this same commit by `scripts/nix-fix-hashes.py` (postUpgradeTasks, self-hosted Renovate in .github/workflows/renovate.yml).",
+        "Pinned hashes (`hash`, per-platform hashes, `imageDigest`, `npmDepsHash`, `pnpmDeps.hash`, `vendorHash`, `cargoHash`) were recomputed in this same commit by `scripts/nix-fix-hashes.py` (postUpgradeTasks, self-hosted Renovate in .github/workflows/renovate.yml).",
         "A package the script cannot `callPackage` with `{ }` (e.g. one fed by a flake input) is reported, not fixed — check the `hashes` log, and fix it with `lib.fakeHash` + a real build.",
         "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
       ]

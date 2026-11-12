@@ -9,11 +9,12 @@
 { python3, writeShellScriptBin }:
 let
   jobspy = python3.pkgs.jobspy.overridePythonAttrs (_: rec {
+    # renovate: datasource=pypi depName=python-jobspy
     version = "1.4.1";
     src = python3.pkgs.fetchPypi {
       pname = "python_jobspy";
       inherit version;
-      sha256 = "1vwq3912mk43jim5cjli2d57mbwyvn376841yrg4hq2g5q8969k0";
+      hash = "sha256-YCaTEC5PYEhe9oEgc4bdnq96ShORSlZqlIPMKkIamO8=";
     };
     pythonRelaxDeps = true;
     dependencies = with python3.pkgs; [

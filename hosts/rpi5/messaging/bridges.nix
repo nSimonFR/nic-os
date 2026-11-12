@@ -22,10 +22,32 @@ let
   serverRe = lib.escapeRegex serverName;
 
   goolm = p: p.override { withGoolm = true; };
-  # Upstream release binaries (pkgs/services/mautrix-bridge.nix).
+  # Upstream release binaries (pkgs/services/mautrix-bridge.nix). One fetchurl per
+  # bridge so Renovate bumps the version and scripts/nix-fix-hashes.py its hash.
   release =
-    repo: tag: hash:
-    pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo tag hash; };
+    repo: version: src:
+    pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo version src; };
+  # renovate: datasource=github-releases depName=mautrix/telegram extractVersion=^v(?<version>.+)$
+  telegramVersion = "0.2610.0";
+  telegramSrc = pkgs.fetchurl {
+    name = "mautrix-telegram-${telegramVersion}-arm64";
+    url = "https://github.com/mautrix/telegram/releases/download/v${telegramVersion}/mautrix-telegram-arm64";
+    hash = "sha256-JfBXwresH4kiX1Ltp1YV/wMMM8v+RSJsWYpjYu9lFvU=";
+  };
+  # renovate: datasource=github-releases depName=mautrix/linkedin extractVersion=^v(?<version>.+)$
+  linkedinVersion = "0.2609.0";
+  linkedinSrc = pkgs.fetchurl {
+    name = "mautrix-linkedin-${linkedinVersion}-arm64";
+    url = "https://github.com/mautrix/linkedin/releases/download/v${linkedinVersion}/mautrix-linkedin-arm64";
+    hash = "sha256-0IAvhwycxjCFBdIILMjn6kOmUdbWtYL30UsFuCDDmo8=";
+  };
+  # renovate: datasource=github-releases depName=mautrix/twitter extractVersion=^v(?<version>.+)$
+  twitterVersion = "0.2609.0";
+  twitterSrc = pkgs.fetchurl {
+    name = "mautrix-twitter-${twitterVersion}-arm64";
+    url = "https://github.com/mautrix/twitter/releases/download/v${twitterVersion}/mautrix-twitter-arm64";
+    hash = "sha256-gNa9v3cSHAbZB+khnVJ75S6ViYO+YFXVYr4d6k4aHTM=";
+  };
 
   # port: the bridge's appservice listener, loopback.
   bridges = {
@@ -49,7 +71,7 @@ let
       port = 29335;
     };
     telegram = {
-      package = release "telegram" "v0.2610.0" "sha256-JfBXwresH4kiX1Ltp1YV/wMMM8v+RSJsWYpjYu9lFvU=";
+      package = release "telegram" telegramVersion telegramSrc;
       port = 29317;
       # TELEGRAM_API_ID / TELEGRAM_API_HASH, from https://my.telegram.org/apps.
       environmentFile = "/run/agenix/mautrix-telegram-env";
@@ -61,11 +83,11 @@ let
       };
     };
     linkedin = {
-      package = release "linkedin" "v0.2609.0" "sha256-0IAvhwycxjCFBdIILMjn6kOmUdbWtYL30UsFuCDDmo8=";
+      package = release "linkedin" linkedinVersion linkedinSrc;
       port = 29341;
     };
     twitter = {
-      package = release "twitter" "v0.2609.0" "sha256-gNa9v3cSHAbZB+khnVJ75S6ViYO+YFXVYr4d6k4aHTM=";
+      package = release "twitter" twitterVersion twitterSrc;
       port = 29327;
     };
     # Pre-bridgev2 (bridgev2 is only on an unreleased branch): older config

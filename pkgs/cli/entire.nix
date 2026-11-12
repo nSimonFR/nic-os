@@ -15,25 +15,43 @@ let
     }
     .${stdenv.hostPlatform.system};
 
-  release =
-    repo: version: file: hashes:
-    fetchurl {
-      url = "https://github.com/entireio/${repo}/releases/download/v${version}/${file}_${platform}.tar.gz";
-      hash = hashes.${platform};
-    };
-
+  # renovate: datasource=github-releases depName=entireio/cli extractVersion=^v(?<version>.+)$
   version = "0.12.2";
-  cli = release "cli" version "entire" {
-    linux_arm64 = "sha256-8IobjGNS0/eAdiaNxnsLJz1/YturlLFa7AKOe0JXrQw=";
-    darwin_arm64 = "sha256-7I+KMl4PjwsMF3gZBic7XiG8ElsLts+8DGHK2N/Muk8=";
+  # renovate: datasource=github-releases depName=entireio/entire-brain extractVersion=^v(?<version>.+)$
+  brainVersion = "0.3.0";
+  # renovate: datasource=github-releases depName=entireio/entire-graph extractVersion=^v(?<version>.+)$
+  graphVersion = "0.6.0";
+
+  # One fetchurl per release, hashes inline: scripts/nix-fix-hashes.py reads this shape.
+  cli = fetchurl {
+    name = "entire-${version}-${platform}.tar.gz";
+    url = "https://github.com/entireio/cli/releases/download/v${version}/entire_${platform}.tar.gz";
+    hash =
+      {
+        linux_arm64 = "sha256-8IobjGNS0/eAdiaNxnsLJz1/YturlLFa7AKOe0JXrQw=";
+        darwin_arm64 = "sha256-7I+KMl4PjwsMF3gZBic7XiG8ElsLts+8DGHK2N/Muk8=";
+      }
+      .${platform};
   };
-  brain = release "entire-brain" "0.3.0" "entire-brain_0.3.0" {
-    linux_arm64 = "sha256-5w9LxUAQo/HUhC6emTpD81KcBbe/ceQ/eBRvtCJ5qVQ=";
-    darwin_arm64 = "sha256-8PjkUNoRZ8Z33xInRvc4voovpAYEnniMx2jaiiJy2SY=";
+  brain = fetchurl {
+    name = "entire-brain-${brainVersion}-${platform}.tar.gz";
+    url = "https://github.com/entireio/entire-brain/releases/download/v${brainVersion}/entire-brain_${brainVersion}_${platform}.tar.gz";
+    hash =
+      {
+        linux_arm64 = "sha256-5w9LxUAQo/HUhC6emTpD81KcBbe/ceQ/eBRvtCJ5qVQ=";
+        darwin_arm64 = "sha256-8PjkUNoRZ8Z33xInRvc4voovpAYEnniMx2jaiiJy2SY=";
+      }
+      .${platform};
   };
-  graph = release "entire-graph" "0.6.0" "entire-graph_0.6.0" {
-    linux_arm64 = "sha256-8R848rhiX4P5EaF352Z2SOAaN+cXS0/Bw2w5JGnBPJc=";
-    darwin_arm64 = "sha256-maBHqtqYEcDLntIJJQedhcpB6KnRcmtzz4V1Yi0N4Q8=";
+  graph = fetchurl {
+    name = "entire-graph-${graphVersion}-${platform}.tar.gz";
+    url = "https://github.com/entireio/entire-graph/releases/download/v${graphVersion}/entire-graph_${graphVersion}_${platform}.tar.gz";
+    hash =
+      {
+        linux_arm64 = "sha256-8R848rhiX4P5EaF352Z2SOAaN+cXS0/Bw2w5JGnBPJc=";
+        darwin_arm64 = "sha256-maBHqtqYEcDLntIJJQedhcpB6KnRcmtzz4V1Yi0N4Q8=";
+      }
+      .${platform};
   };
 in
 stdenv.mkDerivation {

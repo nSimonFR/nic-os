@@ -63,10 +63,23 @@ HASH_LINE = re.compile(r'(?P<key>\bhash|\bnpmDepsHash)\s*=\s*"(?P<val>[^"]*)"')
 # decides whether its `hash` is something we can re-fetch or a build output.
 # Deliberately matches a dotted prefix so `pnpm_10.fetchDeps` is caught.
 FETCHER_CALL = re.compile(
-    r"(?P<attr>[a-zA-Z_][\w-]*)\s*=\s*(?P<fetcher>[\w.]*\bfetch[A-Za-z]*)\s*\{"
+    r"(?P<attr>[a-zA-Z_][\w-]*)\s*=\s*(?P<fetcher>[\w.]*\b(?:fetch[A-Za-z]*|pullImage))\s*\{"
 )
 # The two we can re-fetch cheaply, and what their `hash` covers.
-REFETCHABLE = {"fetchFromGitHub": True, "fetchurl": False}  # name -> unpack?
+REFETCHABLE = {"fetchFromGitHub": True, "fetchurl": False, "fetchPypi": False}
+PYPI_URL = "https://files.pythonhosted.org/packages/source/{p0}/{pname}/{pname}-{version}.tar.gz"
+# `hash = { linux_arm64 = "sha256-…"; … }.${platform};` — one pin per platform.
+INLINE_MAP = re.compile(r"\bhash\s*=\s*\{(?P<map>[^{}]*)\}\s*\.\s*\$\{(?P<var>\w+)\}")
+MAP_ENTRY = re.compile(r'(?P<key>[\w-]+)\s*=\s*"(?P<val>sha256-[^"]+)"')
+# `assets = { <system> = { asset = "…"; hash = "…"; }; … };` read through
+# `inherit (target) hash;` and `${target.asset}` in the url.
+ASSET_ENTRY = re.compile(
+    r'(?P<sys>[\w-]+)\s*=\s*\{\s*asset\s*=\s*"(?P<asset>[^"]+)";\s*hash\s*=\s*"(?P<hash>sha256-[^"]+)";\s*\}'
+)
+# dockerTools.pullImage's per-arch entries: `{ arch; imageDigest; hash; }`.
+IMAGE_ENTRY = re.compile(
+    r'arch\s*=\s*"(?P<arch>[^"]+)";\s*imageDigest\s*=\s*"(?P<digest>sha256:[0-9a-f]+)";\s*hash\s*=\s*"(?P<hash>sha256-[^"]+)";'
+)
 
 # Hashes this script cannot derive from a fetch: they are the output of a build
 # (Go module vendoring, a pnpm store, a Cargo vendor tree). Their presence does
@@ -105,16 +118,28 @@ class Problem(Exception):
 
 
 @dataclass
+class Source:
+    """One fetch whose result a pin in the file must equal."""
+
+    key: str
+    url: str
+    unpack: bool
+    # pullImage: (imageName, tag, arch, finalImageName); `url` is unused.
+    image: tuple[str, str, str, str] | None = None
+
+
+@dataclass
 class Package:
     path: Path
-    tarball: str
+    tarball: str = ""
     # Which hash the `hash` pin actually holds, which is a property of the
     # fetcher rather than of the artifact:
     #   fetchFromGitHub — NAR hash of the *unpacked* tree     (unpack=True)
     #   fetchurl        — flat hash of the downloaded *file*  (unpack=False)
     # Hashing the wrong one produces a plausible-looking value that is simply
     # never what the file pins, so this flag has to follow the fetcher.
-    unpack: bool
+    unpack: bool = False
+    sources: list[Source] = field(default_factory=list)
     # Non-empty for the upstream-manifest shape above: the version whose
     # published manifest the checksums are compared against. Switches `fetch`
     # and `rewrite` onto that path, where the dict keys are platform names and
@@ -257,39 +282,94 @@ def parse(path: Path) -> Package:
             unverifiable.append(f"{attr}.hash ({fetcher})")
     unverifiable = [key for key in unverifiable if key not in derived_attrs]
 
-    if not refetchable:
+    images = [b for b in blocks if b[1].split(".")[-1] == "pullImage"]
+    if not refetchable and not images:
+        if not (HASH_LINE.search(text) or derived_pins or unverifiable):
+            return Package(path=path)  # nothing content-addressed to go stale
         raise Problem(
-            "no fetchFromGitHub or fetchurl — nothing this script knows how to fetch"
-        )
-    if len(refetchable) > 1:
-        names = ", ".join(f"{a} = {f}" for a, f, _ in refetchable)
-        raise Problem(
-            f"more than one re-fetchable fetcher ({names}) — recompute this one by hand"
+            "no fetchFromGitHub, fetchurl, fetchPypi or pullImage — nothing this script knows how to fetch"
         )
 
-    attr, fetcher, body = refetchable[0]
-    unpack = REFETCHABLE[fetcher.split(".")[-1]]
+    sources: list[Source] = []
+    pinned: dict[str, str] = {}
+    many = len(refetchable) + len(images) > 1
 
-    # Only this block's hash is ours to check. `npmDepsHash` stays file-scoped:
-    # it sits on the mkDerivation, not inside the fetcher.
-    pinned = {
-        m["key"]: m["val"] for m in HASH_LINE.finditer(body) if m["key"] == "hash"
-    }
-    if "hash" not in pinned:
-        raise Problem(f"`{attr} = {fetcher}` pins no literal `hash`")
-    top_level = {
+    for attr, fetcher, body in refetchable:
+        kind = fetcher.split(".")[-1]
+        unpack = REFETCHABLE[kind]
+        # Prefer the fetcher's own bindings over file-level ones, so a top-level
+        # `url`/`rev` cannot be mistaken for the fetcher's.
+        local = dict(bindings)
+        local.update({m["key"]: m["val"] for m in BINDING.finditer(body)})
+
+        variants: list[tuple[str, str, dict[str, str]]] = []
+        inline = INLINE_MAP.search(body)
+        own = [m["val"] for m in HASH_LINE.finditer(body) if m["key"] == "hash"]
+        if inline:
+            for m in MAP_ENTRY.finditer(inline["map"]):
+                variants.append((f"[{m['key']}]", m["val"], {inline["var"]: m["key"]}))
+        elif re.search(r"inherit\s*\(\s*\w+\s*\)\s*hash\s*;", body):
+            for m in ASSET_ENTRY.finditer(text):
+                variants.append((f"[{m['sys']}]", m["hash"], {"asset": m["asset"]}))
+        elif own:
+            variants.append(("", own[0], {}))
+        if not variants:
+            raise Problem(f"`{attr} = {fetcher}` pins no literal `hash`")
+
+        for suffix, value, extra in variants:
+            loc = local | extra
+            key = (f"{attr}.hash" if many else "hash") + suffix
+            sources.append(Source(key, fetch_url(kind, loc), unpack))
+            pinned[key] = value
+
+    for attr, _, body in images:
+        local = dict(bindings)
+        local.update({m["key"]: m["val"] for m in BINDING.finditer(body)})
+        tag_ref = re.search(r"finalImageTag\s*=\s*(?P<ref>[\w.]+)\s*;", body)
+        tag = local.get("finalImageTag") or (
+            bindings.get(tag_ref["ref"].rsplit(".", 1)[-1]) if tag_ref else None
+        )
+        if not (tag and "imageName" in local):
+            raise Problem(
+                f"`{attr}` pullImage without a literal imageName/finalImageTag"
+            )
+        entries = list(IMAGE_ENTRY.finditer(text))
+        if not entries:
+            raise Problem(f"`{attr}` pullImage: no arch/imageDigest/hash entry found")
+        for m in entries:
+            key = f"{attr}[{m['arch']}]"
+            final = local.get("finalImageName", local["imageName"])
+            sources.append(
+                Source(key, "", False, (local["imageName"], tag, m["arch"], final))
+            )
+            pinned[f"{key}.imageDigest"] = m["digest"]
+            pinned[f"{key}.hash"] = m["hash"]
+
+    # `npmDepsHash` sits on the mkDerivation, so it belongs to the one source tree.
+    npm = {
         m["key"]: m["val"]
         for m in HASH_LINE.finditer(text)
         if m["key"] == "npmDepsHash"
     }
-    pinned.update(top_level)
+    if npm and [src.unpack for src in sources] != [True]:
+        raise Problem(
+            "pins npmDepsHash without exactly one fetchFromGitHub — recompute by hand"
+        )
+    pinned.update(npm)
 
-    # Prefer the fetcher's own bindings over file-level ones, so a top-level
-    # `url`/`rev` cannot be mistaken for the fetcher's.
-    local = dict(bindings)
-    local.update({m["key"]: m["val"] for m in BINDING.finditer(body)})
+    root = re.search(r'sourceRoot\s*=\s*"\$\{[^}]+\}/(?P<sub>[^"]+)"', text)
+    return Package(
+        path=path,
+        sources=sources,
+        pinned=pinned | derived_pins,
+        unverifiable=unverifiable,
+        derived=derived_attrs,
+        npm_root=root["sub"] if root else "",
+    )
 
-    if unpack:  # fetchFromGitHub
+
+def fetch_url(kind: str, local: dict[str, str]) -> str:
+    if kind == "fetchFromGitHub":
         # `tag` and `rev` are interchangeable here, and calino uses `tag`.
         ref = next((k for k in ("rev", "tag") if k in local), None)
         for key in ("owner", "repo"):
@@ -297,30 +377,19 @@ def parse(path: Path) -> Package:
                 raise Problem(f"no `{key}` binding found")
         if ref is None:
             raise Problem("no `rev` or `tag` binding found")
-        # GitHub's /archive/<ref> resolves tags and commits alike, and is the same
-        # endpoint fetchFromGitHub itself fetches through — so the NAR hash of the
-        # unpacked result is exactly what the `hash` pin holds.
-        owner = resolve(local["owner"], local)
-        repo = resolve(local["repo"], local)
-        rev = resolve(local[ref], local)
-        tarball = f"https://github.com/{owner}/{repo}/archive/{rev}.tar.gz"
-    else:  # fetchurl
-        if "url" not in local:
-            raise Problem(
-                "fetchurl with no literal `url` binding — recompute this one by hand"
-            )
-        tarball = resolve(local["url"], local)
-
-    root = re.search(r'sourceRoot\s*=\s*"\$\{[^}]+\}/(?P<sub>[^"]+)"', text)
-    return Package(
-        path=path,
-        tarball=tarball,
-        unpack=unpack,
-        pinned=pinned | derived_pins,
-        unverifiable=unverifiable,
-        derived=derived_attrs,
-        npm_root=root["sub"] if root else "",
-    )
+        # GitHub's /archive/<ref> is the endpoint fetchFromGitHub itself uses.
+        owner, repo = resolve(local["owner"], local), resolve(local["repo"], local)
+        return f"https://github.com/{owner}/{repo}/archive/{resolve(local[ref], local)}.tar.gz"
+    if kind == "fetchPypi":
+        if "pname" not in local or "version" not in local:
+            raise Problem("fetchPypi without literal `pname` and `version`")
+        pname = resolve(local["pname"], local)
+        return PYPI_URL.format(p0=pname[0], pname=pname, version=local["version"])
+    if "url" not in local:
+        raise Problem(
+            "fetchurl with no literal `url` binding — recompute this one by hand"
+        )
+    return resolve(local["url"], local)
 
 
 def fetch(pkg: Package) -> None:
@@ -341,26 +410,56 @@ def fetch(pkg: Package) -> None:
         pkg.actual = {key: published[key]["checksum"] for key in pkg.pinned}
         return
 
-    # --print-path prints the hash, then the store path of the fetched artifact.
-    cmd = ["nix-prefetch-url", "--print-path", pkg.tarball]
-    if pkg.unpack:
-        cmd.insert(1, "--unpack")
-    out = run(*cmd).splitlines()
-    if len(out) < 2:
-        raise Problem(f"unexpected nix-prefetch-url output for {pkg.tarball}")
-    pkg.actual["hash"] = to_sri(out[-2])
-    src = Path(out[-1])
+    tree: Path | None = None
+    for src in pkg.sources:
+        if src.image:
+            name, tag, arch, final = src.image
+            out = json.loads(
+                run(
+                    "nix",
+                    "run",
+                    "nixpkgs#nix-prefetch-docker",
+                    "--",
+                    "--image-name",
+                    name,
+                    "--image-tag",
+                    tag,
+                    "--arch",
+                    arch,
+                    "--os",
+                    "linux",
+                    "--final-image-name",
+                    final,
+                    "--final-image-tag",
+                    tag,
+                    "--json",
+                    "--quiet",
+                )
+            )
+            # The tool reports the index digest, the file may pin the per-arch
+            # one: both pull the same image, so only a new hash moves the digest.
+            new_hash = to_sri(out.get("hash") or out["sha256"])
+            same = new_hash == pkg.pinned[f"{src.key}.hash"]
+            pkg.actual[f"{src.key}.hash"] = new_hash
+            pkg.actual[f"{src.key}.imageDigest"] = (
+                pkg.pinned[f"{src.key}.imageDigest"] if same else out["imageDigest"]
+            )
+            continue
+        # --print-path prints the hash, then the store path of the fetched artifact.
+        cmd = ["nix-prefetch-url", "--print-path", src.url]
+        if src.unpack:
+            cmd.insert(1, "--unpack")
+        out = run(*cmd).splitlines()
+        if len(out) < 2:
+            raise Problem(f"unexpected nix-prefetch-url output for {src.url}")
+        pkg.actual[src.key] = to_sri(out[-2])
+        if src.unpack:
+            tree = Path(out[-1])
 
     if "npmDepsHash" not in pkg.pinned:
         return
-    if not pkg.unpack:
-        # The store path here is the tarball itself, so there is no tree to read a
-        # lockfile out of. No package needs this yet; fail loudly rather than
-        # silently leaving npmDepsHash unchecked the way a stale `hash` was.
-        raise Problem(
-            "pins npmDepsHash alongside fetchurl — recompute this one by hand"
-        )
-    lock = src / pkg.npm_root / "package-lock.json"
+    assert tree is not None  # parse() guarantees exactly one unpacked source
+    lock = tree / pkg.npm_root / "package-lock.json"
     if not lock.is_file():
         raise Problem(
             f"pins npmDepsHash but the tag has no {pkg.npm_root or '.'}/package-lock.json"
@@ -416,13 +515,10 @@ def derive(pkg: Package) -> None:
 def rewrite(pkg: Package) -> None:
     text = pkg.path.read_text()
     for key, (old, new) in pkg.drift.items():
-        # Manifest pins are all spelled `checksum`; the dict key is the platform.
-        # The old value is unique per file, so it alone anchors the match.
-        attr = "checksum" if pkg.manifest_version else key.rsplit(".", 1)[-1]
-        pattern = re.compile(rf'({attr}\s*=\s*")' + re.escape(old) + r'(")')
-        text, count = pattern.subn(rf"\g<1>{new}\g<2>", text, count=1)
-        if count != 1:
-            raise Problem(f"could not rewrite {key}")
+        # Every pin is a unique quoted literal, so the old value alone anchors it.
+        if text.count(f'"{old}"') != 1:
+            raise Problem(f"could not rewrite {key}: {old} is not unique in the file")
+        text = text.replace(f'"{old}"', f'"{new}"')
     pkg.path.write_text(text)
 
 
@@ -433,7 +529,10 @@ def candidates(paths: list[str]) -> list[Path]:
     # `version` is the repo's opt-in for the regex manager (see renovate.json), so
     # it is exactly the set whose hashes can go stale unattended.
     return sorted(
-        p for p in Path("pkgs").rglob("*.nix") if "# renovate:" in p.read_text()
+        p
+        for root in ("pkgs", "hosts")
+        for p in Path(root).rglob("*.nix")
+        if "# renovate:" in p.read_text()
     )
 
 
@@ -442,7 +541,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "paths",
         nargs="*",
-        help="package files (default: every Renovate-tracked one under pkgs/)",
+        help="package files (default: every Renovate-tracked one under pkgs/ and hosts/)",
     )
     parser.add_argument(
         "--write", action="store_true", help="rewrite drifted hashes in place"

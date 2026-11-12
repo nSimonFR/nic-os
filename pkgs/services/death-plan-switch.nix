@@ -3,7 +3,8 @@
 # share/ root and the app sees SCRIPT_NAME=/switch/… (it derives its base URL and
 # cookie path from that). Data lives outside the store via config.local.php.
 #
-# BUMPING: upstream has no tags yet — change `rev` AND `hash`. Renovate skips pkgs/.
+# Untagged upstream: Renovate follows `main`'s head commit (git-refs); bump the
+# `version` date label by hand.
 #
 # vault-access.patch adds a {vault_access} placeholder, filled at send time by
 # `vaultHook access <contact-id>` (dps-ea-bridge); without a hook it says the
@@ -22,6 +23,7 @@ stdenvNoCC.mkDerivation rec {
   src = fetchFromGitHub {
     owner = "Romeo19361";
     repo = "deathplanswitch";
+    # renovate: datasource=git-refs depName=https://github.com/Romeo19361/deathplanswitch branch=main
     rev = "2007fa2714434f8850b5779b1cd0fbe36f75dbc3";
     # `name` carries the version so a rev bump with a stale hash refetches.
     name = "${pname}-${version}-src";

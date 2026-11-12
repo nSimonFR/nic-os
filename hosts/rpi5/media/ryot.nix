@@ -38,6 +38,7 @@ let
   stateDir = "/var/lib/ryot-v2";
   envFile = "/run/ryot-v2/env";
 
+  # No `# renovate:` marker: the tag is a PR build, not a release.
   image = pkgs.dockerTools.pullImage {
     imageName = "ignisda/ryot";
     imageDigest = "sha256:7e817e1399b53515240de4d124fea401e970481d66f933d666b6ab84b44a392e";

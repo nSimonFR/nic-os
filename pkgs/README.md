@@ -71,8 +71,27 @@ src = fetchFromGitHub {
 };
 ```
 
-Renovate rewrites `version` on `pkgs/` packages but cannot recompute the hash, so
-every such PR arrives with a new `rev` beside a stale `hash`.
+Renovate rewrites `version`, then `scripts/nix-fix-hashes.py --write` recomputes
+the hashes in the same commit; the version in `name` is what makes a missed one fail.
+
+## Tracking a pin with Renovate
+
+Put a marker directly above the binding (any `*version`/`*Version`, or `rev`):
+
+```nix
+# renovate: datasource=github-releases depName=OWNER/REPO extractVersion=^v(?<version>.+)$
+version = "1.2.3";
+# renovate: datasource=git-refs depName=https://github.com/OWNER/REPO branch=main
+rev = "<40-hex sha>";
+```
+
+Same rule under `hosts/`. The hash script must be able to recompute what sits
+beside it — run `scripts/nix-fix-hashes.py <file>`; `ok` means Renovate PRs will
+land with correct hashes. Shapes it reads: one `hash` per `fetchFromGitHub` /
+`fetchurl` / `fetchPypi` (several fetchers per file are fine), per-platform
+`hash = { linux_arm64 = "…"; }.${platform}` or an `assets.<system>.{asset,hash}`
+table, `dockerTools.pullImage` per-arch `{ arch; imageDigest; hash; }`, and the
+dependency stores it builds (`vendorHash`, `cargoHash`, `pnpmDeps`).
 
 ### What counts as version-bearing
 
