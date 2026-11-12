@@ -811,23 +811,6 @@
         "type": "github"
       }
     },
-    "gogcli-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1780350264,
-        "narHash": "sha256-V7kTXdLO2zsf69d4QV+7tGelQUYzaOMhDE17tffokts=",
-        "owner": "steipete",
-        "repo": "gogcli",
-        "rev": "2c84d8981dd59b9206bf975a066a8cf5f659043c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "steipete",
-        "ref": "v0.21.0",
-        "repo": "gogcli",
-        "type": "github"
-      }
-    },
     "goplaces-src": {
       "flake": false,
       "locked": {
@@ -1627,7 +1610,6 @@
         "cyrus-src": "cyrus-src",
         "darwin": "darwin",
         "for-sure": "for-sure",
-        "gogcli-src": "gogcli-src",
         "goplaces-src": "goplaces-src",
         "gramps-web-nix": "gramps-web-nix",
         "hermes-agent": "hermes-agent",

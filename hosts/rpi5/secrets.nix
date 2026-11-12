@@ -6,7 +6,7 @@
   age.identityPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
 
   age.secrets = {
-    # Shared agent env (skill/tool creds: GOG_*, HA_*, SURE/LINEAR/RYOT keys, …)
+    # Shared agent env (skill/tool creds: HA_*, SURE/LINEAR/RYOT keys, …)
     # sourced by the Hermes agent service. Named picoclaw-env historically; kept
     # as agent-env after PicoClaw was retired.
     agent-env = {
@@ -308,6 +308,13 @@
       owner = "hydroxide";
       group = "hydroxide";
       mode = "0440";
+    };
+    # Gmail app password for hemeraude@gmail.com: IMAP/SMTP for Hermes' mail MCP
+    # (agents/hermes/mail-mcp.nix) and the mail digest's Gmail fetch.
+    gmail-app-password = {
+      file = ./secrets/gmail-app-password.age;
+      owner = "nsimon";
+      mode = "0400";
     };
     nextcloud-homepage-password = {
       file = ./secrets/nextcloud-homepage-password.age;

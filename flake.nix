@@ -190,12 +190,8 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # steipete CLI tools: bump with
-    #   sudo nix flake lock --update-input gogcli-src --update-input goplaces-src
-    gogcli-src = {
-      url = "github:steipete/gogcli/v0.21.0";
-      flake = false;
-    };
+    # steipete's goplaces CLI: bump with
+    #   sudo nix flake lock --update-input goplaces-src
     goplaces-src = {
       url = "github:steipete/goplaces/v0.4.3";
       flake = false;

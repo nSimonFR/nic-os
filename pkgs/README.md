@@ -123,7 +123,7 @@ nix store prefetch-file --hash-type sha256 "<url>"
 
 ### Exceptions
 
-A source that comes from a `flake = false` input (`rtk`, `gogcli`, `goplaces`,
+A source that comes from a `flake = false` input (`rtk`, `goplaces`,
 `showmycards`) needs none of this — `flake.lock` pins it by `narHash`, so there
 is no fetcher call and no hash for a bump to leave behind.
 

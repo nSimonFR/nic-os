@@ -220,6 +220,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "gmail-app-password.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "nextcloud-homepage-password.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

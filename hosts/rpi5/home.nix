@@ -28,7 +28,6 @@ in
   imports = [
     ./agents/entire-brain.nix
     ./agents/hermes/hermes.nix
-    ./knowledge/mail.nix
   ];
 
   # No ~/.ssh/age here: that master key decrypts every secret in the repo,
@@ -39,7 +38,6 @@ in
   home.packages = with pkgs; [
     nodejs_22
     pnpm
-    (callPackage ../../pkgs/cli/gogcli.nix { inherit (inputs) gogcli-src; })
     (callPackage ../../pkgs/cli/goplaces.nix { inherit (inputs) goplaces-src; })
     (callPackage ../../pkgs/cli/populartimes.nix { })
     (lib.hiPrio ghBrokered)

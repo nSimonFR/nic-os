@@ -12,7 +12,7 @@
 }:
 let
   # Proton account hydroxide is authenticated as — the only envelope sender the
-  # bridge will accept. Same address mail.nix gives himalaya.
+  # bridge will accept. Same address Hermes' mail-mcp.nix uses.
   protonAddress = "${username}@protonmail.com";
 
   # The pinned upstream image tag, and the only place the version is written.
@@ -62,7 +62,7 @@ let
     # ignoreTLS is therefore left at its default — it only drives `rejectUnauthorized`,
     # and no handshake happens to reject.
     mailer = {
-      # Bridge endpoints are hardcoded in hydroxide.nix's `let`; mail.nix repeats them too.
+      # Bridge endpoints are hardcoded in hydroxide.nix's `let`; Hermes' mail-mcp.nix repeats them too.
       "SMTP.host" = "127.0.0.1";
       "SMTP.port" = 1025;
       "SMTP.username" = protonAddress;
