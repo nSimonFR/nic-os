@@ -7,15 +7,15 @@
   stdenvNoCC,
   repo,
   # The binary, when the repo ships several (mautrix/meta: meta + instagram).
-  binary ? "mautrix-${repo}",
+  releaseBinary ? "mautrix-${repo}",
   version,
   src,
 }:
 stdenvNoCC.mkDerivation {
-  pname = binary;
+  pname = releaseBinary;
   inherit version src;
   dontUnpack = true;
-  installPhase = "install -Dm755 $src $out/bin/${binary}";
+  installPhase = "install -Dm755 $src $out/bin/${releaseBinary}";
 
   meta = {
     description = "Matrix-${repo} puppeting bridge (upstream release binary)";
@@ -23,6 +23,6 @@ stdenvNoCC.mkDerivation {
     license = lib.licenses.agpl3Only;
     platforms = [ "aarch64-linux" ];
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
-    mainProgram = binary;
+    mainProgram = releaseBinary;
   };
 }

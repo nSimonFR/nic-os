@@ -82,7 +82,9 @@ let
     };
     # Built from mautrix/meta, released as its own binary; nixpkgs lacks it.
     instagram = {
-      package = (release "meta" instagramVersion instagramSrc).override { binary = "mautrix-instagram"; };
+      package = (release "meta" instagramVersion instagramSrc).override {
+        releaseBinary = "mautrix-instagram";
+      };
       port = 29342;
     };
     slack = {
