@@ -150,6 +150,22 @@ def test_personal_lines_all_day_first():
     ]
 
 
+def test_all_day_event_of_the_next_date_is_not_on_this_journal_day():
+    # The day runs to 04:00, which overlaps the next date's all-day events.
+    def allday(uid, d0, d1):
+        return ics(
+            f"BEGIN:VEVENT\r\nUID:{uid}\r\nDTSTART;VALUE=DATE:{d0}\r\n"
+            f"DTEND;VALUE=DATE:{d1}\r\nSUMMARY:{uid}\r\nEND:VEVENT\r\n"
+        )
+
+    blobs = [
+        allday("tomorrow", "20261021", "20261024"),
+        allday("today", "20261020", "20261021"),
+        allday("ongoing", "20261018", "20261022"),
+    ]
+    assert [e.title for e in js.expand(blobs, LO, HI, TZ)] == ["ongoing", "today"]
+
+
 def test_calendar_blobs_decodes_and_filters_by_name():
     sent = []
 
