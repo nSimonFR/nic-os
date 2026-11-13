@@ -80,11 +80,14 @@
       ]
     },
     {
-      "description": "claude-code follows the `next` dist-tag, not `latest`. The two diverge by days and the gap is load-bearing: Anthropic gates models on the client version, so `latest` (2.1.278 when this was written) answers --model claude-opus-5-5 with a 400 telling you to upgrade, while `next` (2.1.280) serves it and resolves the bare `opus` alias to it. Following `latest` would mean the newest model is unreachable for as long as the tags disagree. The cost is riding a pre-release channel on purpose — read the release notes on the PR.",
+      "description": "claude-code follows the `next` dist-tag, not `latest`. The two diverge by days and the gap is load-bearing: Anthropic gates models on the client version, so `latest` (2.1.278 when this was written) answers --model claude-opus-5-5 with a 400 telling you to upgrade, while `next` (2.1.280) serves it and resolves the bare `opus` alias to it. Following `latest` would mean the newest model is unreachable for as long as the tags disagree. The cost is riding a pre-release channel on purpose — read the release notes on the PR. Merges itself once CI is green: the Renovate App bypasses the review (.github/settings.yml) and Renovate merges through the API (platformAutomerge off), so no human gate and no armed auto-merge in between. minimumReleaseAge waits out npm's 72h unpublish window before a release can be proposed.",
       "matchDepNames": [
         "@anthropic-ai/claude-code"
       ],
-      "followTag": "next"
+      "followTag": "next",
+      "automerge": true,
+      "platformAutomerge": false,
+      "minimumReleaseAge": "3 days"
     },
     {
       "description": "t3code follows nightly pre-releases on purpose: the Mac runs the T3 Code (Nightly) app, and a stable rpi5 server behind it loses access to its sessions over T3 Connect.",
