@@ -24,7 +24,6 @@ let
 in
 {
   home.packages = with pkgs; [
-    affine
     bitwarden-desktop
     rbw
     pinentry-gnome3

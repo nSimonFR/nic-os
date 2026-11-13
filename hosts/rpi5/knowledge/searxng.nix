@@ -249,7 +249,7 @@ in
       port = 3970;
       backend = "http://127.0.0.1:${toString proxyPort}";
       # NEVER: a public metasearch instance is an open proxy that gets this
-      # box's IP CAPTCHA'd. (All three funnel ports are allocated regardless.)
+      # box's IP CAPTCHA'd.
       funnel = false;
       # Routed but renders nothing: homepage's search bar points straight here,
       # so a tile would just be a card you click to reach a box you type into.

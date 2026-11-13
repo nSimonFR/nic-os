@@ -135,23 +135,26 @@ def test_one_broken_service_does_not_stop_the_others():
 
 def test_a_failed_fetcher_is_logged_not_only_recorded():
     # Recording alone is invisible: the entry keeps its last good numbers, the tile
-    # renders them, and the `error` beside them is read by nobody. The AFFiNE token
-    # died at the 0.27.3 upgrade and the journal had not one line about it.
+    # renders them, and the `error` beside them is read by nobody. A tile's token
+    # once died at an upgrade and the journal had not one line about it.
     stats = hs.Stats()
-    stats.set("affine", {"docs": 7867})
+    stats.set("papra", {"documents": 7867})
     lines = []
 
     def explode(cfg, run):
         raise RuntimeError("You must sign in first")
 
-    original = hs.FETCHERS["affine"]
-    hs.FETCHERS["affine"] = explode
+    original = hs.FETCHERS["papra"]
+    hs.FETCHERS["papra"] = explode
     try:
-        hs.run_fetcher(CFG, FakeRun(), stats, "affine", log=lines.append)
+        hs.run_fetcher(CFG, FakeRun(), stats, "papra", log=lines.append)
     finally:
-        hs.FETCHERS["affine"] = original
-    assert lines == ["affine fetch failed: You must sign in first"]
-    assert stats.get("affine") == {"docs": 7867, "error": "You must sign in first"}
+        hs.FETCHERS["papra"] = original
+    assert lines == ["papra fetch failed: You must sign in first"]
+    assert stats.get("papra") == {
+        "documents": 7867,
+        "error": "You must sign in first",
+    }
 
 
 def test_a_failed_command_does_not_echo_its_arguments():
@@ -835,33 +838,6 @@ def test_wealthfolio_reads_its_database_read_only(tmp_path):
 # pushes. See test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past.
 
 
-def test_affine_counts_docs_and_live_blobs_only():
-    def answer(cmd):
-        if "FROM snapshots" in cmd:
-            return "15"
-        if "workspace_pages" in cmd:
-            return "7503"
-        return "1000"  # blobs
-
-    assert hs.fetch_affine(CFG, FakeRun([("PSQL", answer)])) == {
-        "docs": 7503,
-        "edited_7d": 15,
-        "storage": 1000,
-    }
-
-
-def test_affine_needs_no_token_and_never_calls_the_api():
-    # The regression this replaces: AFFiNE 0.27.3 deleted user access tokens, so the
-    # GraphQL POST 401ed and the tile served two-day-old numbers. A fetcher that
-    # holds no credential cannot break that way — assert it stays that way, and that
-    # `size` is summed only over blobs that are not tombstoned.
-    run = FakeRun([("PSQL", "1")])
-    hs.fetch_affine(CFG, run)
-    assert not any("CURL" in c for c in run.commands)
-    assert not any("Bearer" in c for c in run.commands)
-    assert any("deleted_at IS NULL" in c for c in run.commands)
-
-
 # ── Calino: counts over Nextcloud's CalDAV ────────────────────────────────────
 #
 # The bug class these guard is not arithmetic, it is asking the WRONG QUESTION:
@@ -1473,7 +1449,6 @@ def test_a_key_still_empty_after_backfill_is_retried_not_left_for_a_day(tmp_path
 RETIRED = {
     "nextcloud": {"users", "shares"},
     "vaultwarden": {"users"},
-    "affine": {"workspaces"},
     "beszel": {"systems"},
     "karakeep": {"favorites"},
     "forgejo": {"issues", "pulls"},
@@ -1577,24 +1552,6 @@ def test_dawarich_points_are_a_seven_day_window_not_all_time():
     assert "7 * 86400" in points_sql
     # `timestamp` is an integer epoch column here, not a timestamptz.
     assert "EXTRACT(EPOCH FROM now())" in points_sql
-
-
-def test_affine_edited_count_covers_the_same_docs_as_the_total():
-    # snapshots alone counts 17 because it includes the per-workspace doc-list Yjs
-    # docs that `docs` (workspace_pages) excludes. Joining keeps both fields
-    # counting one universe.
-    run = FakeRun(
-        [
-            ("FROM workspace_pages;", "7915"),
-            ("FROM snapshots", "15"),
-            ("FROM blobs", "558516275"),
-        ]
-    )
-    out = hs.fetch_affine(CFG, run)
-    assert out == {"docs": 7915, "edited_7d": 15, "storage": 558516275}
-    edited_sql = [c for c in run.commands if "FROM snapshots" in c][0]
-    assert "JOIN workspace_pages" in edited_sql
-    assert "interval '7 days'" in edited_sql
 
 
 def test_reactive_resume_reports_an_age_because_no_window_fits_a_cv(tmp_path):

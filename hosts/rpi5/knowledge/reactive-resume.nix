@@ -66,7 +66,7 @@ in
   };
 
   # ── Runtime env file (DATABASE_URL with password + AUTH_SECRET) ───────────
-  # Pattern from affine-mcp-env / homepage-dashboard-env. Written by root; the
+  # Pattern from homepage-dashboard-env. Written by root; the
   # EnvironmentFile is read by systemd (as root) before dropping to ${osUser},
   # so root-only 0400 is sufficient. We mkdir /run/reactive-resume in-script
   # (no RuntimeDirectory=) to avoid the known RuntimeDirectory-wipe crash-loop.
@@ -134,11 +134,11 @@ in
       # AI assistant: ENCRYPTION_SECRET is required; Redis is optional in v6 but
       # lets a reply stream resume after a reload and shares rate limits. Shared
       # Redis (databases.nix) on a spare DB index (0-6 are used by
-      # immich/dawarich/affine/nextcloud/etc.). Long-lived SSE while a chat is open
+      # immich/dawarich/nextcloud/etc.). Long-lived SSE while a chat is open
       # is fine under socket-activation (activity resets the idle timer), but
       # assistant/career jobs only run while the service is awake (HTTP-woken).
       REDIS_URL = "redis://${redisHost}:${toString redisPort}/7";
-      # 4 GiB RPi5 memory hygiene (mirrors affine.nix / sure.nix).
+      # 4 GiB RPi5 memory hygiene (mirrors sure.nix).
       NODE_OPTIONS = "--max-old-space-size=384";
       MALLOC_ARENA_MAX = "2";
     };

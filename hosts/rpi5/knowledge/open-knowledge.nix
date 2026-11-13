@@ -129,9 +129,8 @@ in
     backup = [ "mnt-data" ];
     appUnits = [ "open-knowledge.service" ];
 
-    # Completes the "rest" row while AFFiNE still holds order 70.
     public = {
-      order = 240;
+      order = 70;
       port = 3980;
       backend = "http://127.0.0.1:${toString internalPort}";
       tile = {

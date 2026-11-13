@@ -228,19 +228,6 @@
       file = ./secrets/gramps-web-secret.age;
       owner = "gramps-web";
     };
-    # AFFiNE session cookie for affine-mcp. Replaces affine-token.age, which held a
-    # `ut_…` user access token — a credential type AFFiNE 0.27.3 deleted outright, so
-    # it 401ed everywhere and could not be re-minted. Read only by the root-run
-    # affine-mcp-env oneshot, hence no world-readable mode.
-    affine-mcp-cookie.file = ./secrets/affine-mcp-cookie.age;
-    affine-gcal-oauth = {
-      file = ./secrets/affine-gcal-oauth.age;
-      owner = "affine";
-    };
-    affine-mcp-http-token = {
-      file = ./secrets/affine-mcp-http-token.age;
-      mode = "0444"; # DynamicUser (tiny-llm-gate, affine-mcp) needs to read it
-    };
     cachix-agent-token.file = ./secrets/cachix-agent-token.age; # CACHIX_AGENT_TOKEN=…
     # nsimon-nicos Deploy activate token (bare), attached by Agent Vault. It can
     # read deployments and logs by UUID, and can also start deploys.

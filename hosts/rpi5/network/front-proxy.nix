@@ -1,8 +1,8 @@
 # front-proxy.nix — nginx path-mux on the single public 443 Tailscale Funnel.
 #
-# Tailscale Funnel only permits ports 443/8443/10000, and 8443→AFFiNE / 10000→Immich
-# are taken. To expose Nextcloud and Cyrus publicly without a fourth port, one Funnel
-# on 443 points at this vhost, which routes by path:
+# Tailscale Funnel only permits ports 443/8443/10000. To expose Nextcloud and Cyrus
+# publicly without a port each, one Funnel on 443 points at this vhost, which routes
+# by path:
 #
 #   tailscale funnel --https=443  →  127.0.0.1:8092 (this vhost)
 #     /                 → 301 → /nextcloud/
@@ -35,10 +35,8 @@
 # Cyrus is webhook-only and has no PWA surface. When adding a muxed app, check
 # `curl -H 'Host: …' http://127.0.0.1:8092/<prefix>/` for a manifest link and follow it.
 #
-# AFFiNE is NOT here anymore — its SPA router insists on root paths, so it runs at the
-# root of its own 8443 Funnel (see affine.nix). Reuses the nginx
-# instance the Nextcloud module already runs (no extra process). The funnel entry that
-# targets :8092 is nic.services.front-proxy.public, declared below; Nextcloud +
+# Reuses the nginx instance the Nextcloud module already runs (no extra process).
+# The funnel entry that targets :8092 is nic.services.front-proxy.public, declared below; Nextcloud +
 # Cyrus entries carry `proxied = true` so tailscale-serve.nix emits no direct
 # serve/funnel command for them — this vhost fronts them instead.
 { ... }:

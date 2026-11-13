@@ -243,14 +243,14 @@ let
               Each row is four tiles wide:
 
                 10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
-                50– 80  the file cabinet    — Nextcloud, Immich, AFFiNE, Papra
+                50– 80  the file cabinet    — Nextcloud, Immich, Notes, Papra
                 90–120  the day             — Calino, BeaverHabits, FreeReps, Ryot
                 130–160  kept and locked    — Home Assistant, Beszel, Karakeep,
                                               Vaultwarden
-                170–200  making             — Aperture, DeepSeek Harness, Wakapi,
-                                              Reactive Resume
-                210–240  the rest           — Forgejo, Gramps Web, ShowMyCards, Notes
-                250–260  the journal, then the switch — Memos, Death Plan Switch
+                170–210  making             — Aperture, Wakapi, Reactive Resume,
+                                              Forgejo
+                220–250  the rest           — Gramps Web, ShowMyCards, Memos,
+                                              Death Plan Switch
 
               The rows are the OWNER'S CHOICE and not derivable from anything in
               the tree, which is the whole reason they are written down here. Do not
@@ -260,10 +260,8 @@ let
               walks the file cabinet from the DAV root out through photos and notes
               to scanned paper. A row has to be one thought, not one word.
 
-              The last row is short because 26 does not divide by four.
-
               ADDING A TILE means deciding which row it joins and renumbering that
-              row's neighbours, not appending after 260.
+              row's neighbours, not appending after 250.
 
               300–380  Backend tiles and the untiled routed services.
           '';
@@ -653,9 +651,8 @@ in
           ];
         message =
           "nic.services.${e.name}.public asks to funnel port ${toString e.port}. "
-          + "Tailscale permits funnels on 443, 8443 and 10000 only, and all "
-          + "three are already allocated — so this would fail at runtime, in "
-          + "tailscale-serve.service, not here.";
+          + "Tailscale permits funnels on 443, 8443 and 10000 only — so this "
+          + "would fail at runtime, in tailscale-serve.service, not here.";
       })
       ++ assertForPublic (e: {
         assertion = e.muxPath == null || lib.any (loc: lib.hasPrefix e.muxPath loc) proxyLocationNames;

@@ -33,7 +33,7 @@ let
   # to this user's files dir below — see the systemd.mounts block.
   datadir = "/mnt/data/nextcloud";
 
-  # Shared Redis DB index. 0=AFFiNE, 1=Immich, 2=Sure, 3=Dawarich, 4=free (was Paperless).
+  # Shared Redis DB index. 0=free (was AFFiNE), 1=Immich, 2=Sure, 3=Dawarich, 4=free (was Paperless).
   redisDb = 5;
 
   # Whitelist of apps to keep enabled. Anything currently-enabled and not on

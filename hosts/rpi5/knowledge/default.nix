@@ -9,8 +9,6 @@
     ./nextcloud.nix
     ./calino.nix
     ./hydroxide.nix
-    ./affine.nix
-    ./affine-mcp.nix
     ./reactive-resume.nix
     ./gramps-web.nix
     ./travel-cal-sync.nix

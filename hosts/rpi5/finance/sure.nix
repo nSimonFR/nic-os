@@ -267,9 +267,9 @@ in
   #                  backend_url; drop it and every call lands at the root.
   #
   # So Sure gets an origin whose root IS Sure: /up answers, / lands in the app,
-  # and anything else is forwarded with the /sure prefix prepended. Tailnet-only
-  # — Tailscale funnels 443/8443/10000 and all three are allocated. The 443 /sure
-  # mux is untouched and remains the URL to use from outside the tailnet.
+  # and anything else is forwarded with the /sure prefix prepended. Tailnet-only:
+  # the 443 /sure mux is untouched and remains the URL to use from outside the
+  # tailnet.
   services.nginx.virtualHosts."sure-root" = {
     listen = [
       {

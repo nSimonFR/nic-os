@@ -47,8 +47,8 @@ registers for backup without being reachable.
 
 **serve** vs **funnel** — `tailscale serve` publishes on the tailnet only;
 `tailscale funnel` publishes to the public internet. Tailscale permits funnels
-on ports 443, 8443 and 10000 only, and all three are allocated (the front proxy,
-AFFiNE, Immich).
+on ports 443, 8443 and 10000 only: 443 is the front proxy, 10000 Immich, and 8443
+is free.
 
 **front proxy** / **path-mux** — the single nginx vhost behind the one public 443
 funnel, which routes by path prefix so several services can be public without a

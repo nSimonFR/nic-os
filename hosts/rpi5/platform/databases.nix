@@ -76,7 +76,7 @@ in
     port = redisPort;
 
     # ── Memory tuning for 4 GiB RPi5 ──────────────────────────────────
-    # Shared by AFFiNE (DB 0), Immich (DB 1), Dawarich (DB 3).
+    # Shared by Immich (DB 1), Dawarich (DB 3).
     # Cap memory to prevent unbounded growth; LRU evicts least-recently-used
     # keys across all DBs when the limit is hit.
     settings = {

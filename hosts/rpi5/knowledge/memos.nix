@@ -174,8 +174,7 @@ in
     backupUnits = [ "memos-backup.service" ];
 
     public = {
-      # Alone on a seventh Apps row until it is given a place in one of the six.
-      order = 250;
+      order = 240;
       port = 4020;
       backend = "http://127.0.0.1:${toString internalPort}";
       authenticated = true;

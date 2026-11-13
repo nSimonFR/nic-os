@@ -52,7 +52,6 @@ in
     ];
 
     casks = [
-      "affine"
       "bitwarden"
       "android-studio"
       "arc"
