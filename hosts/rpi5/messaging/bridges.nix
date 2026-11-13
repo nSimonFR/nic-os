@@ -27,6 +27,13 @@ let
   release =
     repo: version: src:
     pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo version src; };
+  # renovate: datasource=github-releases depName=mautrix/meta extractVersion=^v(?<version>.+)$
+  instagramVersion = "0.2610.0";
+  instagramSrc = pkgs.fetchurl {
+    name = "mautrix-instagram-${instagramVersion}-arm64";
+    url = "https://github.com/mautrix/meta/releases/download/v${instagramVersion}/mautrix-instagram-arm64";
+    hash = "sha256-EUh8lTYequZAQGt0qoksk5gi6LKir+fmt+1zwoya5zE=";
+  };
   # renovate: datasource=github-releases depName=mautrix/discord extractVersion=^v(?<version>.+)$
   discordVersion = "0.7.7";
   discordSrc = pkgs.fetchurl {
@@ -68,10 +75,15 @@ let
       package = goolm pkgs.mautrix-signal;
       port = 29328;
     };
-    # Instagram only: picked at `login` (the same bridge also does Messenger).
+    # Messenger only: Instagram left this binary in v26.08.
     meta = {
       package = goolm pkgs.mautrix-meta;
       port = 29319;
+    };
+    # Built from mautrix/meta, released as its own binary; nixpkgs lacks it.
+    instagram = {
+      package = (release "meta" instagramVersion instagramSrc).override { binary = "mautrix-instagram"; };
+      port = 29342;
     };
     slack = {
       package = goolm pkgs.mautrix-slack;
