@@ -47,6 +47,14 @@ Run `nix fmt` before committing: nixfmt, statix, deadnix, ruff and shellcheck/sh
 (`treefmt.nix`). CI's `scripts` job builds every `checks.x86_64-linux`, `formatting`
 included, so an unformatted file or a new finding fails the PR.
 
+## Never evaluate the rpi5 system on rpi5
+
+No `nix eval`/`nix build` of `nixosConfigurations.rpi5`, no `nix flake check`, no
+`nixos-rebuild` on the Pi: one evaluation takes 300–750 MiB on a 3.9 GB box that is
+already full, and it has stalled memory into watchdog resets (2026-11-11, 2026-11-12).
+CI evaluates and builds every PR; push and read its result. `nix fmt` and the
+`nicos-scripts` pytest run are fine.
+
 ## rpi5 layout
 
 A new rpi5 service goes in `hosts/rpi5/<domain>/<name>.nix` plus one line in that
