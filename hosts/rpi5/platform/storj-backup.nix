@@ -53,6 +53,9 @@ let
     Nice = 10;
     IOSchedulingClass = "idle";
     CPUQuota = "50%";
+    # psi-oom spares adj < 0. On 2026-11-13 it killed the backup's rclone
+    # (397 MiB, the largest process at 04:41) and no snapshot was saved.
+    OOMScoreAdjust = -500;
   };
 
   backupFreshness = pkgs.writeShellApplication {
