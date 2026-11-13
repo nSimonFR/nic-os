@@ -138,6 +138,9 @@ def expand(blobs, lo_dt, hi_dt, tz):
             start = ev.decoded("DTSTART")
             end = ev.decoded("DTEND") if ev.get("DTEND") else None
             all_day = not isinstance(start, datetime)
+            # The journal day ends at 04:00: it overlaps the next date's all-day events.
+            if all_day and start >= hi_dt.date():
+                continue
             if all_day:
                 start = datetime(start.year, start.month, start.day, tzinfo=tz)
                 end = (
