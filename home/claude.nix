@@ -282,12 +282,6 @@ in
         '';
       };
 
-      # PostToolUse hook: mirror writes under
-      # ~/.claude/projects/-home-nsimon-nic-os/memory/ into AFFiNE
-      # Wiki/Pages/Claude Memory/ via the affine-mcp HTTP bridge.
-      # Shipped as a console script of the nicos-scripts package rather than a raw
-      # .py: a loose file relies on a `python3` happening to be on the hook's PATH
-      # and declares no dependencies. The wrapper pins its own interpreter.
       # herdr's agent-state hook: reports agent_session_id + agent_session_path on
       # SessionStart, which is what lets `[session] resume_agents_on_restore` bring
       # a pane back as its conversation instead of a bare shell. Registered in

@@ -183,7 +183,7 @@ in
     backup = [ "mnt-data" ];
 
     public = {
-      order = 260;
+      order = 250;
       port = 443;
       backend = "http://127.0.0.1:${toString port}";
       proxied = true;

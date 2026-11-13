@@ -50,7 +50,6 @@ in
     memoryMax = "128M";
     goMemLimit = "96MiB";
     secretPaths = [
-      "/run/agenix/affine-mcp-http-token"
       "/run/agenix/asale-api-key"
       "/run/agenix/tiny-llm-gate-management-key"
     ];
@@ -148,24 +147,6 @@ in
       # Declared models only; the rest is discovered. See shared/llm-models.nix.
       models = llmModels.gate;
       inherit (llmModels) aliases;
-
-      # MCP transport bridges — replaces the 2-process supergateway chain
-      # (~187 MB) with a native Go bridge (~1 MB overhead).
-      #
-      # AFFiNE bridge points at affine-mcp.service (DAWNCR0W) on :7021, NOT
-      # AFFiNE's native MCP — the latter only exposes 3 read tools.
-      mcp_bridges = {
-        affine = {
-          frontend = "sse";
-          backend = "streamable_http";
-          upstream_url = "http://127.0.0.1:7021/mcp";
-          path_prefix = "/mcp/affine";
-          auth = {
-            type = "bearer";
-            token_file = "/run/agenix/affine-mcp-http-token";
-          };
-        };
-      };
 
       # Anthropic passthrough proxy — Aperture sits in front (Claude Code's
       # ANTHROPIC_BASE_URL points at Aperture), and forwards /v1/messages
@@ -303,14 +284,6 @@ in
   # Starts after claude-oauth-extract so /run/claude-oauth/token exists before
   # the Anthropic handler validates the token file at startup. (codex is now
   # native — no external codex-proxy to order after.)
-  #
-  # Do NOT order after affine.service / affine-mcp.service: affine.service is
-  # itself ordered after tiny-llm-gate.service (AFFiNE's copilot calls into
-  # this gateway), and affine-mcp.service is ordered after affine.service —
-  # adding the reverse edges here forms an unbreakable systemd ordering cycle
-  # that leaves all three services dead at boot. The MCP bridge routes are
-  # static config: tiny-llm-gate registers them at startup and proxies
-  # lazily, so upstream readiness is not a startup-time requirement.
   systemd.services.tiny-llm-gate = {
     after = [
       "network.target"

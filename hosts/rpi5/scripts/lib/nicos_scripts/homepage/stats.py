@@ -11,7 +11,6 @@ Endpoints (one per homepage tile, three stats each):
   /immich    — Immich (photos, videos, storage)
   /nextcloud — Nextcloud (files, contacts, storage used) — serverinfo OCS API + Postgres
   /calino    — Calino (events today, events next 7 days, tasks due) — Nextcloud CalDAV
-  /affine    — AFFiNE (docs, docs edited in 7 days, storage) — direct Postgres, summed across workspaces
   /beszel    — Beszel (up, triggered alerts, peak CPU temperature in 24h) — direct read-only SQLite
   /karakeep  — Karakeep (bookmarks, untagged, tags) — direct read-only SQLite
   /homeassistant — Home Assistant (last reported day, 30-day cost, heating today)
@@ -42,10 +41,10 @@ window or a threshold in it. `alerts` is the shape to copy: 0 nearly always, and
 the one day it is not, that is the whole point.
 
 Every homepage tile reads its stats from here rather than from the app itself,
-including the three that have a native homepage widget (Nextcloud, AFFiNE,
-Beszel). Native widgets cannot be rate-limited from homepage's config, and
-homepage's `customapi` widget defaults to refreshInterval = 10s — so the AFFiNE
-tile used to POST a GraphQL query at AFFiNE every 10 seconds. Routing everything
+including the two that have a native homepage widget (Nextcloud, Beszel).
+Native widgets cannot be rate-limited from homepage's config, and homepage's
+`customapi` widget defaults to refreshInterval = 10s — so the AFFiNE tile used
+to POST a GraphQL query at AFFiNE every 10 seconds. Routing everything
 through here means one fetch per day per service, and no API key or password
 sitting in the dashboard config.
 
@@ -63,11 +62,6 @@ and their stats likewise come from reading their database directly
 (SQLite, or Postgres as the postgres superuser via peer auth) rather than
 their HTTP API, so polling never wakes them at all and no per-app API key or
 role password is needed.
-
-AFFiNE reads its database for the second reason: it is always-on, so waking was
-never the concern, but the API token its fetcher used no longer exists in AFFiNE
-0.27.3 and cannot be re-minted. A credential that can expire under you is a
-liability for a dashboard number — see fetch_affine.
 
 State file: $STATE_DIRECTORY/stats.json (set by systemd StateDirectory=).
 Falls back to /var/lib/homepage-stats/stats.json if not in a unit.
@@ -185,11 +179,6 @@ class Config:
     rxresume_role: str = "reactive_resume"
     rxresume_pw_file: str = "/run/agenix/reactive-resume-db-password"
 
-    # AFFiNE's own Postgres (hosts/rpi5/knowledge/affine.nix). Read as the postgres superuser
-    # over the Unix socket, same as forgejo/dawarich — AFFiNE connects over that
-    # socket with no password role of its own.
-    affine_db: str = "affine"
-
     # Nextcloud (hosts/rpi5/knowledge/nextcloud.nix) is the one tile left that genuinely needs
     # an HTTP API; it's always-on, so the daily poll wakes nothing.
     nextcloud_info_url: str = (
@@ -263,7 +252,6 @@ class Config:
             rxresume_db=s("RXRESUME_DB", cls.rxresume_db),
             rxresume_role=s("RXRESUME_ROLE", cls.rxresume_role),
             rxresume_pw_file=s("RXRESUME_PW_FILE", cls.rxresume_pw_file),
-            affine_db=s("AFFINE_DB", cls.affine_db),
             hass_db=s("HASS_DB", cls.hass_db),
             nextcloud_info_url=s("NEXTCLOUD_INFO_URL", cls.nextcloud_info_url),
             nextcloud_db=s("NEXTCLOUD_DB", cls.nextcloud_db),
@@ -320,7 +308,6 @@ class Stats:
         "showmycards",
         "nextcloud",
         "calino",
-        "affine",
         "openknowledge",
         "beszel",
         "freereps",
@@ -1080,51 +1067,6 @@ def fetch_calino(cfg, run, now=None):
             dav_count(cfg, run, url, _event_body(start, end_week)) for url in event_cals
         ),
         "tasks": sum(tasks(url) for url in task_cals),
-    }
-
-
-def fetch_affine(cfg, run):
-    # Reads AFFiNE's Postgres, NOT its GraphQL — deliberately tokenless. This used
-    # to POST `{ workspaces { blobsSize docs { totalCount } } }` with the `ut_…`
-    # Bearer token in HOMEPAGE_VAR_AFFINE_TOKEN, and AFFiNE 0.27.3 removed user
-    # access tokens from its API surface altogether (of the token mutations only
-    # createMcpCredential survives, and that one is workspace-scoped to AFFiNE's own
-    # /mcp endpoint — it cannot authenticate a GraphQL query). Every request 401ed
-    # from the 0.27.3 upgrade onward, and because a failed fetcher keeps publishing
-    # its last good numbers the tile showed two-day-old counts. There is no token to
-    # rotate back in, so the dependency is gone instead.
-    #
-    # Summed across every workspace: the tile before that read workspaces[0], which
-    # is the 3-doc scratch workspace rather than the ~7.5k-doc main one (see
-    # project_affine_workspaces_courses).
-    def count(sql):
-        return int(pg_superuser(cfg, run, cfg.affine_db, sql) or 0)
-
-    return {
-        # workspace_pages is AFFiNE's registry of actual docs. `snapshots` holds a
-        # few more rows — one Yjs doc per workspace for the doc list itself — which
-        # are not docs anyone would count on a dashboard.
-        "docs": count("SELECT COUNT(*) FROM workspace_pages;"),
-        # Replaces `workspaces`, which was a 4 fixed by the four-workspace layout in
-        # project_affine_workspaces_courses and could only change if that layout did.
-        # With 7,914 docs the total is effectively a constant too — what says whether
-        # the wiki is alive is how many were touched this week (15).
-        #
-        # The timestamp lives on `snapshots`, not on workspace_pages (which has no
-        # mtime at all), so this joins the two: snapshots alone counts 17 because it
-        # includes the per-workspace doc-list Yjs docs, the same rows the `docs`
-        # count above excludes. Joining keeps both fields counting the same universe.
-        "edited_7d": count("""
-            SELECT COUNT(*) FROM snapshots s
-              JOIN workspace_pages p
-                ON p.page_id = s.guid AND p.workspace_id = s.workspace_id
-             WHERE s.updated_at > now() - interval '7 days';
-        """),
-        # deleted_at IS NULL reproduced GraphQL's blobsSize to the byte
-        # (558516275); summing every row instead over-reports by the tombstones.
-        "storage": count(
-            "SELECT COALESCE(SUM(size), 0) FROM blobs WHERE deleted_at IS NULL;"
-        ),
     }
 
 
@@ -2037,7 +1979,6 @@ FETCHERS = {
     "immich": fetch_immich,
     "nextcloud": fetch_nextcloud,
     "calino": fetch_calino,
-    "affine": fetch_affine,
     "openknowledge": fetch_openknowledge,
     "beszel": fetch_beszel,
     "karakeep": fetch_karakeep,

@@ -49,8 +49,7 @@ let
       id = "qwen3-vl:8b";
       provider = "ollama";
     }
-    # AFFiNE embeddings: its pgvector column is vector(1024) and the client
-    # doesn't reliably send the dimension.
+    # Karakeep embeddings.
     {
       id = "qwen3-embedding:8b";
       provider = "ollama";
@@ -85,19 +84,8 @@ let
     "openai/gpt-6.1-terra" = "gpt-6.1-terra";
     # Wealthfolio's baked-in thread-title model; a title is cheap, keep it local.
     "gpt-5.4-nano" = "auto";
-    # AFFiNE's hardcoded OpenAI and Gemini names.
-    "gpt-4.1-2025-04-14" = "auto";
-    "gpt-4.1-mini" = "auto";
-    "gpt-4o" = "auto";
-    "gpt-4o-mini" = "auto";
-    "gemini-2.5-flash" = "auto";
-    "gemini-2.5-pro" = "auto";
-    "gemini-2.0-flash" = "auto";
-    "gemini-2.0-flash-001" = "auto";
+    # Karakeep's EMBEDDING_TEXT_MODEL.
     "text-embedding-3-small" = "qwen3-embedding:8b";
-    "text-embedding-3-large" = "qwen3-embedding:8b";
-    "gemini-embedding-001" = "qwen3-embedding:8b";
-    "text-embedding-004" = "qwen3-embedding:8b";
   };
 
   gateModel =

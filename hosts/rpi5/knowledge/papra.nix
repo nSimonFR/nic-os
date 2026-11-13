@@ -113,7 +113,7 @@ in
       # json_schema Papra's tagger requires and tags well in French.
       # Chat-only (no embeddings), so Aperture — which rejects /v1/embeddings —
       # handles every call; that's why this can route through Aperture while
-      # karakeep/affine (embedding-using) must hit :4001 directly.
+      # karakeep (embedding-using) must hit :4001 directly.
       # NOTE: native tagging is fire-once with no retry — a doc ingested while
       # beast is asleep/down stays untagged until re-ingested (no wait-for-beast).
       AI_IS_ENABLED = true;

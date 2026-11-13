@@ -8,7 +8,7 @@
 #
 # Not behind the 443 front-proxy path-mux (front-proxy.nix): Gramps Web's SPA
 # hardcodes absolute API paths and its service worker needs root scope, so it
-# can't be reliably served from a subpath (gramps-web#531). Like AFFiNE, it keeps
+# can't be reliably served from a subpath (gramps-web#531). It keeps
 # its own origin — a dedicated Tailscale Serve port (5050, see nic.services below).
 #
 # Socket-activated lazy-start (hosts/rpi5/lib/socket-activate.nix): gunicorn binds
@@ -86,7 +86,7 @@ in
 
     # NOT behind the 443 path-mux: the SPA hardcodes absolute API paths and its
     # service worker needs root scope (gramps-web#531), so it keeps its own
-    # Tailscale Serve port — same call as AFFiNE on 8443.
+    # Tailscale Serve port.
     public = {
       order = 220;
       port = 5050;

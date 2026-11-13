@@ -19,9 +19,8 @@
 #   mounts <BrowserRouter> with no `basename`, every route (/month, /week,
 #   /contacts, …) is root-absolute, the view↔path map compares raw
 #   location.pathname against literal keys, and vite.config.ts hardcodes
-#   `base: '/'`. Vite's `base` re-roots assets, never the router. Same reason
-#   front-proxy.nix's header says "AFFiNE is NOT here anymore — its SPA router
-#   insists on root paths." Calino therefore owns an origin root: its own
+#   `base: '/'`. Vite's `base` re-roots assets, never the router. Calino
+#   therefore owns an origin root: its own
 #   `tailscale serve` port. That also makes front-proxy.nix's PWA-manifest trap
 #   inapplicable — Calino's root-absolute start_url/scope/sw.js registration are
 #   correct as built.

@@ -111,9 +111,6 @@ in
       mkdir -p /run/homepage-dashboard
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
-      # No AFFINE_TOKEN: AFFiNE 0.27.3 dropped user access tokens from its API, so
-      # the one in affine-token.age is dead and cannot be re-minted. The affine
-      # fetcher reads AFFiNE's Postgres directly instead — see fetch_affine.
       HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.agent-brokered-env.path} | cut -d= -f2)
       HOMEPAGE_VAR_HA_TOKEN=$(grep HA_TOKEN ${config.age.secrets.agent-brokered-env.path} | cut -d= -f2)
       HOMEPAGE_VAR_NEXTCLOUD_PASSWORD=$(tr -d '\r\n' < ${config.age.secrets.nextcloud-homepage-password.path})

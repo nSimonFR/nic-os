@@ -85,7 +85,7 @@ let
             Path to a file holding the role's password, read at runtime (agenix,
             so the secret never enters the world-readable Nix store). null means
             the role gets no password and no pg_hba entry — correct for services
-            that reach Postgres over the Unix socket with peer auth (affine).
+            that reach Postgres over the Unix socket with peer auth.
           '';
           example = "/run/agenix/sure-pg-password";
         };
@@ -112,7 +112,7 @@ let
           default = false;
           description = ''
             Pass `ensureClauses.login = true` through to ensureUsers, i.e. create
-            the role with LOGIN. Only affine needs it today.
+            the role with LOGIN.
           '';
         };
 
@@ -139,7 +139,7 @@ let
 
             It is `nullOr` (emitting nothing when null) purely to preserve
             existing drift: airtrail/ryot/nextcloud set `mkForce false`,
-            sure/reactive-resume/affine set nothing, and all six run. Normalising
+            sure/reactive-resume set nothing, and all five run. Normalising
             the three to `false` is the right follow-up, but it would change three
             units, so it is left as a deliberate decision rather than a side
             effect of this extraction.

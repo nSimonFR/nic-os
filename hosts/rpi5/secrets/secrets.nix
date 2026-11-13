@@ -150,21 +150,6 @@ in
     nsimon-ed25519
     rpi5-host
   ];
-  "affine-mcp-cookie.age".publicKeys = [
-    nsimon-age
-    nsimon-ed25519
-    rpi5-host
-  ];
-  "affine-gcal-oauth.age".publicKeys = [
-    nsimon-age
-    nsimon-ed25519
-    rpi5-host
-  ];
-  "affine-mcp-http-token.age".publicKeys = [
-    nsimon-age
-    nsimon-ed25519
-    rpi5-host
-  ];
   "asale-api-key.age".publicKeys = [
     nsimon-age
     nsimon-ed25519
