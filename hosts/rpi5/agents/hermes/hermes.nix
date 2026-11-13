@@ -347,6 +347,14 @@ let
       trust = "untrusted";
     };
 
+    # Nico's bridged chats (hosts/rpi5/messaging/). Reading is free; every send
+    # waits for his approval in Telegram.
+    mcp_servers.messaging = messagingMcp;
+    mcp_servers.messaging-send = messagingMcp // {
+      args = [ "--send" ];
+      trust = "untrusted";
+    };
+
     # Local shell backend so the agent can shell out to system tools (mirrors
     # picoclaw's restrict_to_workspace=false trust model: safety comes from the
     # Telegram allowlist — nSimon's DM + one group — not workspace isolation).
@@ -399,12 +407,6 @@ let
     gateway.multiplex_profiles = true;
     gateway.profile_routes = [
       {
-        name = "messagerie";
-        platform = "telegram";
-        chat_id = toString telegramChatId;
-        profile = "messagerie";
-      }
-      {
         name = "candidatures";
         platform = "telegram";
         chat_id = "-1003331502255";
@@ -440,45 +442,12 @@ let
 
   configFile = pkgs.writeText "hermes-config.yaml" (builtins.toJSON hermesConfig);
 
-  # « messagerie » profile: Nico's bridged chats (hosts/rpi5/messaging/), routed
-  # to his DM. Hermes cannot scope a tool to one chat, so the MCP lives in a
-  # profile of its own, without terminal; the groups never see it.
   messagingMcp = {
     command = "${pkgs.nicos-scripts}/bin/messaging-mcp";
     env.MATRIX_USER_ID = "@nico:${tailnetFqdn}";
+    lazy = true;
+    idle_timeout_seconds = 600;
   };
-  messagingProfileConfig = pkgs.writeText "hermes-messagerie-config.yaml" (
-    builtins.toJSON {
-      inherit (hermesConfig)
-        model
-        agent
-        custom_providers
-        model_catalog
-        compression
-        approvals
-        memory
-        ;
-      # Same holographic store as the default profile: the DM keeps its memory.
-      plugins.hermes-memory-store.db_path = "${hermesHome}/memory_store.db";
-      mcp_servers = {
-        messaging = messagingMcp;
-        # Every send waits for Nico's approval in Telegram.
-        messaging-send = messagingMcp // {
-          args = [ "--send" ];
-          trust = "untrusted";
-        };
-      };
-      platform_toolsets = lib.genAttrs [ "telegram" "cron" ] (_: [
-        "messaging"
-        "messaging-send"
-        "web"
-        "memory"
-        "skills"
-        "clarify"
-        "session_search"
-      ]);
-    }
-  );
 
   # ExecStartPre: materialise config.yaml + .env + skills/documents into
   # $HERMES_HOME. Runs on every restart, keeping state in sync with the Nix
@@ -520,12 +489,8 @@ let
     TELEGRAM_HOME_CHANNEL_NAME=nSimon
     EOF
     ${pkgs.coreutils}/bin/chmod 0600 ${hermesHome}/.env
-    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie
-    ${pkgs.coreutils}/bin/install -m 0600 ${messagingProfileConfig} ${hermesHome}/profiles/messagerie/config.yaml
-    # Profiles load plugins from their own plugins/ only.
-    ${pkgs.coreutils}/bin/mkdir -p ${hermesHome}/profiles/messagerie/plugins/holographic
-    ${pkgs.rsync}/bin/rsync -aL --checksum --delete --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
-      "${holographicPlugin}/" "${hermesHome}/profiles/messagerie/plugins/holographic/"
+    # The retired « messagerie » profile (the DM is back on the default one).
+    ${pkgs.coreutils}/bin/rm -rf ${hermesHome}/profiles/messagerie
 
     # `--checksum` on every seed below is load-bearing, not belt-and-braces. Nix
     # normalises store mtimes to epoch 1, and substituting one store path for
