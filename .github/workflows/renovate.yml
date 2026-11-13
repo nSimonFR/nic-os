@@ -3,9 +3,13 @@
 # same commit as the version bump.
 #
 # Runs on the runner, not in the renovate container, so the tasks see the Nix
-# installed below. The token is nSimonFR-ai's CLASSIC PAT (repo, workflow):
-# fine-grained PATs cannot reach a repo nSimonFR-ai only collaborates on, and a
-# push with GITHUB_TOKEN would not trigger the required checks.
+# installed below.
+#
+# Runs as its own GitHub App (nic-os-renovate), not as nSimonFR-ai: the App is
+# the only identity that may skip the required review (.github/settings.yml), so
+# the agents sharing nSimonFR-ai's account cannot. App tokens, unlike
+# GITHUB_TOKEN, start the required checks and the deploy on what they push.
+# Secrets: RENOVATE_APP_ID, RENOVATE_APP_PRIVATE_KEY.
 name: Renovate
 
 on:
@@ -30,20 +34,36 @@ jobs:
         with:
           node-version: 24
 
+      - id: app
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+
+      - name: Commit identity of the App
+        id: bot
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          SLUG: ${{ steps.app.outputs.app-slug }}
+        run: |
+          id=$(gh api "/users/${SLUG}%5Bbot%5D" --jq .id)
+          echo "author=${SLUG}[bot] <${id}+${SLUG}[bot]@users.noreply.github.com>" >>"$GITHUB_OUTPUT"
+
       - name: Run Renovate
         env:
           # renovate: datasource=npm depName=renovate
           RENOVATE_VERSION: 44.112.2
-          RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+          RENOVATE_TOKEN: ${{ steps.app.outputs.token }}
           RENOVATE_PLATFORM: github
           RENOVATE_REPOSITORIES: ${{ github.repository }}
           RENOVATE_ONBOARDING: "false"
           RENOVATE_REQUIRE_CONFIG: required
           RENOVATE_BINARY_SOURCE: global
-          RENOVATE_GIT_AUTHOR: "nSimonFR-ai <265587706+nSimonFR-ai@users.noreply.github.com>"
-          # Adopt the branches and PRs the Mend app left behind: without these,
-          # its commits read as hand edits and its PRs are not even listed.
-          RENOVATE_GIT_IGNORED_AUTHORS: '["29139614+renovate[bot]@users.noreply.github.com"]'
+          RENOVATE_GIT_AUTHOR: ${{ steps.bot.outputs.author }}
+          # Adopt the branches and PRs earlier runs left behind (the Mend app,
+          # then nSimonFR-ai): without these, their commits read as hand edits
+          # and their PRs are not even listed.
+          RENOVATE_GIT_IGNORED_AUTHORS: '["29139614+renovate[bot]@users.noreply.github.com", "265587706+nSimonFR-ai@users.noreply.github.com"]'
           RENOVATE_IGNORE_PR_AUTHOR: "true"
           RENOVATE_ALLOWED_COMMANDS: '["^python3 scripts/nix-fix-hashes\\.py --write (pkgs|hosts)/\\S+\\.nix$"]'
           LOG_LEVEL: info

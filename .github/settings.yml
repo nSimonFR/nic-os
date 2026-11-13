@@ -83,6 +83,13 @@ branches:
         # trusting.
         require_last_push_approval: true
         require_code_owner_reviews: false
+        # Renovate's own App skips the review so claude-code bumps can merge once
+        # CI is green (renovate.json). The checks still apply to it. It must stay
+        # the only entry: nSimonFR-ai is shared with the agents, and a bypass
+        # there would let any agent PR merge unreviewed to the unattended deploy.
+        bypass_pull_request_allowances:
+          apps:
+            - nic-os-renovate
       # The four jobs of .github/workflows/nix.yml, plus `hashes` from
       # nix-hashes.yml. These are the context names GitHub actually reported on
       # green runs of those workflows, not names derived from the YAML — a context
