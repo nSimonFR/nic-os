@@ -90,11 +90,14 @@
       "minimumReleaseAge": "3 days"
     },
     {
-      "description": "t3code follows nightly pre-releases on purpose: the Mac runs the T3 Code (Nightly) app, and a stable rpi5 server behind it loses access to its sessions over T3 Connect.",
+      "description": "t3code follows nightly pre-releases on purpose: the Mac runs the T3 Code (Nightly) app, and a stable rpi5 server behind it loses access to its sessions over T3 Connect. Merges itself once CI is green, which includes t3code-fork-release.yml building the fork release and pinning its hashes on the PR (Renovate waits for every check, required or not); the Renovate App bypasses the review (.github/settings.yml). minimumReleaseAge lets a broken nightly be pulled before it reaches the Pi and the Mac.",
       "matchDepNames": [
         "pingdotgg/t3code"
       ],
-      "ignoreUnstable": false
+      "ignoreUnstable": false,
+      "automerge": true,
+      "platformAutomerge": false,
+      "minimumReleaseAge": "1 day"
     },
     {
       "description": "Keep each agent CLI's Nix flake source tag and mirrored package version in one update PR.",
