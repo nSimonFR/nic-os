@@ -155,16 +155,3 @@ rulesets:
           require_extra_approval_for_unattributed_changes: true
           allowed_merge_methods:
             - rebase
-  # Disabled and inert: if this shows up under `gh api repos/nSimonFR/nic-os/rulesets`
-  # after the merge, probot applies `rulesets:`. Remove it in the next PR.
-  - name: probe
-    target: branch
-    enforcement: disabled
-    conditions:
-      ref_name:
-        include:
-          - refs/heads/probe-nonexistent
-        exclude: []
-    bypass_actors: []
-    rules:
-      - type: deletion
