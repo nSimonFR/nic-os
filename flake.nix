@@ -46,7 +46,7 @@
     #
     # Rev is nixpkgs-unstable @ 2026-10-20, home-assistant 2026.10.2. Only ever
     # replace this with a rev carrying an equal or newer HA.
-    nixpkgs-hass.url = "github:NixOS/nixpkgs/5adc50831c259f87faeb09ddf930d43597197473";
+    nixpkgs-hass.url = "github:NixOS/nixpkgs/77a6463d983e45828120b3126e5111ef3d836afe";
 
     darwin = {
       url = "github:lnl7/nix-darwin/nix-darwin-26.05";
