@@ -63,33 +63,15 @@ labels:
 branches:
   - name: main
     protection:
-      # One approval, so an armed auto-merge waits for a human as well as CI.
-      # Workable only because of the two-account split in CLAUDE.md: PRs are
-      # authored by nSimonFR-ai and approved by nSimonFR. GitHub does not let an
-      # account approve its own PR, so a PR opened by nSimonFR directly cannot be
-      # approved by anyone and will not merge — author as nSimonFR-ai.
-      required_pull_request_reviews:
-        required_approving_review_count: 1
-        # A push after approval re-opens the gate. With auto-merge armed that is
-        # the difference between "a human approved this" and "a human approved
-        # something this used to be".
-        dismiss_stale_reviews: true
-        # And the approver may not be whoever pushed last. dismiss_stale_reviews
-        # above already re-opens the gate on a new push, so this is the narrower
-        # case it does not cover: an approval standing while the person who
-        # approved is also the person who put the final commit there. On a repo
-        # whose whole review model is the two-account split — nSimonFR-ai
-        # authors, nSimonFR approves — that split is worth enforcing rather than
-        # trusting.
-        require_last_push_approval: true
-        require_code_owner_reviews: false
-        # Renovate's own App skips the review so claude-code bumps can merge once
-        # CI is green (renovate.json). The checks still apply to it. It must stay
-        # the only entry: nSimonFR-ai is shared with the agents, and a bypass
-        # there would let any agent PR merge unreviewed to the unattended deploy.
-        bypass_pull_request_allowances:
-          apps:
-            - nic-os-renovate
+      # The review lives in the repository ruleset "main" (id 14715738), not here:
+      # classic protection takes an App in its bypass list only on organisation
+      # repos, and this one is personal. The ruleset requires one approval, the
+      # last pusher may not be the approver, a push drops the approval, and the
+      # nic-os-renovate App (renovate.json automerge) is its only bypass actor.
+      # nSimonFR-ai is shared with the agents and must never be one.
+      # `null` is "do not manage": the classic rule was removed through the API.
+      # Putting a review block back here would block the App again.
+      required_pull_request_reviews: null
       # The four jobs of .github/workflows/nix.yml, plus `hashes` from
       # nix-hashes.yml. These are the context names GitHub actually reported on
       # green runs of those workflows, not names derived from the YAML — a context
