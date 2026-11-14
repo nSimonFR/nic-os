@@ -30,7 +30,6 @@ in
     pinentry-rofi
     rofi-rbw-wayland
     bemoji
-    cinny-desktop
     cliphist
     libnotify
     unstablePkgs.code-cursor

@@ -21,7 +21,6 @@
     # T3 Code desktop with the Issues page; replaces the manually installed nightly.
     packages = [
       pkgs.t3code-desktop
-      pkgs.cinny-desktop # Matrix client for the rpi5 homeserver (:4040)
       (pkgs.writeShellApplication {
         name = "entire-trusk-enable";
         runtimeInputs = [
