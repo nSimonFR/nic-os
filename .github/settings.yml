@@ -117,3 +117,54 @@ branches:
       # a deliberate act.
       enforce_admins: false
       restrictions: null
+
+# The repository ruleset, which holds the PR review rule (classic protection above
+# keeps only the checks). probot/settings matches by `name`, compares the whole
+# object with what GitHub returns, and DELETES any ruleset not listed here — so
+# keep every field, in GitHub's rule order, and add rulesets here rather than in
+# the UI.
+#
+# nic-os-renovate (App 5756929) is the only bypass actor: it lets Renovate merge
+# claude-code bumps without a review (renovate.json). nSimonFR-ai is shared with
+# the agents and must never be one.
+rulesets:
+  - name: main
+    target: branch
+    enforcement: active
+    conditions:
+      ref_name:
+        include:
+          - "~DEFAULT_BRANCH"
+        exclude: []
+    bypass_actors:
+      - actor_id: 5756929
+        actor_type: Integration
+        bypass_mode: always
+    rules:
+      - type: deletion
+      - type: non_fast_forward
+      - type: required_linear_history
+      - type: pull_request
+        parameters:
+          required_approving_review_count: 1
+          dismiss_stale_reviews_on_push: true
+          required_reviewers: []
+          require_code_owner_review: false
+          require_last_push_approval: true
+          required_review_thread_resolution: false
+          require_extra_approval_for_unattributed_changes: true
+          allowed_merge_methods:
+            - rebase
+  # Disabled and inert: if this shows up under `gh api repos/nSimonFR/nic-os/rulesets`
+  # after the merge, probot applies `rulesets:`. Remove it in the next PR.
+  - name: probe
+    target: branch
+    enforcement: disabled
+    conditions:
+      ref_name:
+        include:
+          - refs/heads/probe-nonexistent
+        exclude: []
+    bypass_actors: []
+    rules:
+      - type: deletion
