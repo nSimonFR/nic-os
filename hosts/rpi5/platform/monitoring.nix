@@ -9,6 +9,9 @@
 let
   beszelHubPort = 8090;
   beszelAgentPort = 45876;
+  # /dev/sda — Hitachi HDD over USB-SATA bridge → SAT translation
+  # /dev/sdb — HP SSD EX900 (NVMe) in Realtek USB-NVMe enclosure → sntrealtek
+  smartDevices = "/dev/sda:sat,/dev/sdb:sntrealtek";
   loadAlert = {
     value = 14;
     min = 15;
@@ -64,10 +67,8 @@ in
         "PORT=${toString beszelAgentPort}"
         "FILESYSTEM=/dev/sdb1,/dev/sdb2,/dev/sda1"
         "BESZEL_AGENT_PRIMARY_SENSOR=cpu_thermal"
-        # Pin SMART devices (smartctl --scan confirms these types):
-        #   /dev/sda — Hitachi HDD over USB-SATA bridge → SAT translation
-        #   /dev/sdb — HP SSD EX900 (NVMe) in Realtek USB-NVMe enclosure → sntrealtek
-        "SMART_DEVICES=/dev/sda:sat,/dev/sdb:sntrealtek"
+        # Pinned SMART devices (smartctl --scan confirms these types).
+        "SMART_DEVICES=${smartDevices}"
         "SMART_INTERVAL=1h"
       ];
       ProtectProc = "default";
@@ -146,22 +147,30 @@ in
     };
   };
 
-  # ── Alert: read-only filesystem ──────────────────────────────────────────────
-  systemd.services.filesystem-ro-alert = {
-    description = "Alert on read-only filesystems";
+  # ── Alert: disk health ───────────────────────────────────────────────────────
+  systemd.services.disk-health-alert = {
+    description = "Alert on read-only filesystems, ext4 errors and failing SMART counters";
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = pkgs.writeShellScript "filesystem-ro-alert" ''
-        RO_FS=$(${pkgs.gnugrep}/bin/grep -E 'ext4|xfs|btrfs' /proc/mounts \
-                | ${pkgs.gnugrep}/bin/grep -v -e '/nix/store' -e ' /var/lib/agent-db/' \
-                | ${pkgs.gnugrep}/bin/grep ' ro[, ]' || true)
-        BODY=""
-        [ -n "$RO_FS" ] && BODY="<code>$RO_FS</code>"
-        printf '%s' "$BODY" | ${telegramAlert} filesystem-ro "Read-only filesystem on rpi5"
-      '';
+      Environment = [ "SMART_DEVICES=${smartDevices}" ];
+      ExecStart = lib.getExe (
+        pkgs.writeShellApplication {
+          name = "disk-health-alert";
+          runtimeInputs = [
+            pkgs.coreutils
+            pkgs.gawk
+            pkgs.jq
+            pkgs.smartmontools
+          ];
+          text = ''
+            TELEGRAM_ALERT=${telegramAlert}
+          ''
+          + builtins.readFile ../scripts/disk-health-alert.sh;
+        }
+      );
     };
   };
-  systemd.timers.filesystem-ro-alert = {
+  systemd.timers.disk-health-alert = {
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnBootSec = "5m";
