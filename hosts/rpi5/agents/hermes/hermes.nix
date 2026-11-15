@@ -397,6 +397,11 @@ let
     # No "gateway shutting down" ping to the home DM on every restart: ~12/day
     # (deploys + earlyoom kills). Interrupted-task pings to the active chat still go out.
     platforms.telegram.gateway_restart_notification = false;
+    # Keep messages sent while the gateway was down. The default drops pending
+    # updates on every cold boot, and with several earlyoom kills a day a message
+    # sent during a restart vanished without trace (no session, no log line).
+    # Only allowlisted chats reach the gateway, so replaying them is safe.
+    platforms.telegram.extra.drop_pending_on_cold_boot = false;
     # One gateway serves every profile (multiplexing). The "candidatures" profile
     # (Alfie's job search, ~/.hermes/profiles/candidatures, deployed from the private
     # job-scout repo) has no bot of its own: routes below send it messages from the
