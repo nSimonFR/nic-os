@@ -40,6 +40,47 @@ in
   # `t3 pair`, `t3 connect status`, `t3 project …` talk to the running server.
   environment.systemPackages = [ t3code ];
 
+  # Preview tabs run the generic-Linux chrome-headless-shell T3 downloads into
+  # ~/.t3/tools; `t3 browser setup` installs these with apt, which NixOS lacks.
+  # List = its DT_NEEDED (checked on 157.0.8103.38).
+  programs.nix-ld = {
+    enable = true;
+    libraries =
+      with pkgs;
+      [
+        stdenv.cc.cc.lib
+        glib
+        nspr
+        nss
+        at-spi2-core # atk, atspi
+        dbus
+        libgbm
+        expat
+        libxkbcommon
+        systemd # libudev; already in the closure
+        alsa-lib
+      ]
+      ++ (with xorg; [
+        libX11
+        libXcomposite
+        libXdamage
+        libXext
+        libXfixes
+        libXrandr
+        libxcb
+      ]);
+  };
+
+  # T3 hands Chrome the server env, Agent Vault proxy included; Chrome drops
+  # the proxy's credentials and the proxy refuses it. Under KDE, Chrome reads
+  # kioslaverc instead of *_PROXY. Both KDE vars are required (tested).
+  systemd.tmpfiles.rules = [
+    "L+ ${homeDir}/.config/kioslaverc - - - - ${pkgs.writeText "kioslaverc" ''
+      [Proxy Settings]
+      ProxyType=0
+    ''}"
+  ];
+
   systemd.services.t3code = {
     description = "T3 Code server (T3 Connect host)";
     after = [ "network-online.target" ];
@@ -91,6 +132,9 @@ in
         "T3CODE_RELAY_URL=https://relay.t3.codes"
         "T3CODE_CLERK_PUBLISHABLE_KEY=pk_live_Y2xlcmsudDMuY29kZXMk"
         "T3CODE_CLERK_CLI_OAUTH_CLIENT_ID=hzxSgY2cH10sDU2r"
+        # Preview Chrome: proxy from kioslaverc, see tmpfiles above.
+        "XDG_CURRENT_DESKTOP=KDE"
+        "KDE_SESSION_VERSION=5"
       ];
     };
   };
