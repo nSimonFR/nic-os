@@ -16,7 +16,7 @@ let
     .${stdenv.hostPlatform.system};
 
   # renovate: datasource=github-releases depName=entireio/cli extractVersion=^v(?<version>.+)$
-  version = "0.12.2";
+  version = "0.13.4";
   # renovate: datasource=github-releases depName=entireio/entire-brain extractVersion=^v(?<version>.+)$
   brainVersion = "0.5.1";
   # renovate: datasource=github-releases depName=entireio/entire-graph extractVersion=^v(?<version>.+)$
@@ -28,8 +28,8 @@ let
     url = "https://github.com/entireio/cli/releases/download/v${version}/entire_${platform}.tar.gz";
     hash =
       {
-        linux_arm64 = "sha256-8IobjGNS0/eAdiaNxnsLJz1/YturlLFa7AKOe0JXrQw=";
-        darwin_arm64 = "sha256-7I+KMl4PjwsMF3gZBic7XiG8ElsLts+8DGHK2N/Muk8=";
+        linux_arm64 = "sha256-TXAjlPwymG0jo+DR435CaYmUQYWAvmJim66leOR2R+U=";
+        darwin_arm64 = "sha256-Grjpa1ltTs5A7PIXPVOFVnbuhZ0t/FwbRZFX4ZKxjJ4=";
       }
       .${platform};
   };
