@@ -4,7 +4,7 @@
 # private/internal URLs (MCP_HTTP_ALLOW_PRIVATE_URLS stays unset).
 { unstablePkgs, ... }:
 let
-  internalPort = 13360;
+  internalPort = 13362; # 13360 is tuwunel
   proxyPort = 8400;
 in
 {
