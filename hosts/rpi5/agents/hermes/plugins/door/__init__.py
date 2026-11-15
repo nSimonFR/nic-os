@@ -92,7 +92,7 @@ def _ha(
         return json.load(r)
 
 
-def _set_until(until: datetime | None, opener) -> None:
+def _set_until(until: datetime | None, opener, chat_id: str = "") -> None:
     _ha(
         "POST",
         f"/api/states/{SENSOR}",
@@ -102,6 +102,9 @@ def _set_until(until: datetime | None, opener) -> None:
                 "friendly_name": "Door auto-open until",
                 "device_class": "timestamp",
                 "icon": "mdi:door-open",
+                # HA's door automations reply here; the chat must be an allowed
+                # chat of HA's telegram_bot entry or the send fails.
+                "chat_id": chat_id,
             },
         },
         opener,
@@ -165,7 +168,7 @@ def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) 
             return "Usage: /door [30m|2h|1h30m|off|status] — default 1h."
         dur = min(dur, MAX)
         until = now + dur
-        _set_until(until, opener)
+        _set_until(until, opener, str(source.chat_id))
         return (
             f"🚪 Auto-open ON until {_hhmm(until)}: every ring opens the hall door. /door off to stop."
             + _health_warning(opener)
