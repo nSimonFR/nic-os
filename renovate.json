@@ -180,7 +180,8 @@
         "executionMode": "update"
       },
       "branchConcurrentLimit": 0,
-      "prConcurrentLimit": 0
+      "prConcurrentLimit": 0,
+      "minimumReleaseAgeBehaviour": "timestamp-optional"
     }
   ],
   "vulnerabilityAlerts": {
