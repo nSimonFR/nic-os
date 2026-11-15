@@ -306,7 +306,7 @@ let
     # `mcp` Python package, which the hermes-agent env already bundles.
     mcp_servers.mtg.command = "${mtgMcp}/bin/mtg-mcp";
 
-    # notes, sure, wealthfolio, airtrail, trains and freereps, aggregated by
+    # The self-hosted MCP servers, aggregated by
     # Aperture (agents/aperture-sync.nix) as mcp__aperture__<server>_<tool>. Listing
     # the tools wakes the socket-activated ones, and a cold Sure took 14s to >30s.
     mcp_servers.aperture = {
