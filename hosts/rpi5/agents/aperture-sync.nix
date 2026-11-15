@@ -53,6 +53,7 @@ let
       url = "${publicUrl "wealthfolio"}/mcp";
     }
     // bearer "WEALTHFOLIO_MCP_TOKEN";
+    # Answered by sure-mcp-front, which keeps the tool list while Sure sleeps.
     sure = {
       url = "${publicUrl "sure-root"}/sure/mcp";
     }

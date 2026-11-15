@@ -2,6 +2,7 @@
 {
   imports = [
     ./sure.nix
+    ./sure-mcp-front.nix
     ./wealthfolio.nix
     ./wealthfolio-sync.nix
     ./sumeria-mitm.nix
