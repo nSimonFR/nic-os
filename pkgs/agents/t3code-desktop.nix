@@ -36,7 +36,7 @@ stdenvNoCC.mkDerivation {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/Applications
-    cp -R "T3 Code (Nightly).app" $out/Applications/
+    cp -R ./*.app $out/Applications/
     runHook postInstall
   '';
 
