@@ -20,6 +20,10 @@ repository:
   # permission only: it never merges anything on its own, someone still has to
   # arm each PR (the button, or `gh pr merge --auto --rebase`).
   allow_auto_merge: true
+  # Alerts stay on (Renovate reads them); Dependabot's own security PRs go, because
+  # Renovate fixes the same lockfile and re-pins npmDepsHash, which Dependabot cannot.
+  enable_vulnerability_alerts: true
+  enable_automated_security_fixes: false
 
 labels:
   - name: bug

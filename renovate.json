@@ -8,7 +8,8 @@
   "enabledManagers": [
     "nix",
     "github-actions",
-    "custom.regex"
+    "custom.regex",
+    "npm"
   ],
   "nix": {
     "enabled": true
@@ -136,6 +137,63 @@
         "A package the script cannot `callPackage` with `{ }` (e.g. one fed by a flake input) is reported, not fixed — check the `hashes` log, and fix it with `lib.fakeHash` + a real build.",
         "Check the upstream changelog before merging — a major bump may also need module changes. `affine-mcp-server` 1.x → 3.x, for instance, reworks authentication."
       ]
+    },
+    {
+      "description": "npm is read only for open-knowledge's lockfile. Its own version is tracked by the regex manager on default.nix, and scripts/t3code-fork is not a Nix package, so no npm version bump is proposed.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest",
+        "bump",
+        "replacement"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Transitive fixes (hono, zod, simple-git…) land by refreshing open-knowledge's lockfile: Renovate cannot target a transitive dependency on its own, and Dependabot's PRs for them edited package-lock.json without re-pinning npmDepsHash, so build rpi5 failed and nobody merged them. Daily, in its own branch apart from flake.lock, merged once CI is green; npmDepsHash is re-pinned in the same commit. Exempt from the concurrent-branch cap (10): stale PRs fill it.",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "pkgs/services/open-knowledge/package.json"
+      ],
+      "matchUpdateTypes": [
+        "lockFileMaintenance"
+      ],
+      "branchTopic": "open-knowledge-lock",
+      "commitMessageTopic": "open-knowledge lock file",
+      "schedule": [
+        "at any time"
+      ],
+      "automerge": true,
+      "platformAutomerge": false,
+      "postUpgradeTasks": {
+        "commands": [
+          "python3 scripts/nix-fix-hashes.py --write pkgs/services/open-knowledge/default.nix"
+        ],
+        "fileFilters": [
+          "pkgs/services/open-knowledge/default.nix"
+        ],
+        "executionMode": "update"
+      },
+      "branchConcurrentLimit": 0,
+      "prConcurrentLimit": 0
     }
-  ]
+  ],
+  "vulnerabilityAlerts": {
+    "description": "Fixes for a vulnerable direct dependency merge themselves once CI is green (the App bypasses the review, .github/settings.yml).",
+    "enabled": true,
+    "automerge": true,
+    "platformAutomerge": false,
+    "minimumReleaseAge": null,
+    "labels": [
+      "security"
+    ]
+  }
 }
