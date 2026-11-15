@@ -195,5 +195,9 @@
     "labels": [
       "security"
     ]
+  },
+  "minimumReleaseAgePackageManagerSync": true,
+  "npm": {
+    "minimumReleaseAge": "3 days"
   }
 }
