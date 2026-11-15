@@ -2,7 +2,9 @@
 
 Writes the window's end to ``sensor.door_auto_open_until`` in Home Assistant; the HA
 automation ``door_auto_open`` unlocks the Intratone door on a ring while it is in the
-future. A REST-set state does not survive an HA restart, so a restart closes the window.
+future and reports a failed unlock; ``door_auto_open_shutdown`` warns when an HA
+restart closes an open window (a REST-set state is not restored). Both live in HA's
+automations.yaml, not here.
 Nico's DM and the group with Alfie only; « Alfie Postule ! » (her job-search group) stays out.
 """
 
@@ -24,13 +26,39 @@ ALLOWED_CHATS = {
 SENSOR = "sensor.door_auto_open_until"
 # Agent Vault (HTTP_PROXY) swaps the placeholder for the real token.
 TOKEN = "__ha_token__"
-# HA raises this repair when Google rotates the push token: rings stop arriving
-# while the push-channel sensor stays "on", so the window would open nothing.
-PUSH_ISSUE = "{{ issues() | list | map('join', '/') | select('match', 'intratone/fcm_token_stale') | list | count }}"
-PUSH_WARNING = (
-    "\n⚠️ Rings no longer reach Home Assistant (Intratone push token rotated), so the"
-    " door will NOT open. Re-pair: HA → Settings → Repairs."
-)
+# Everything the window depends on, as a JSON list of problems. A rotated push
+# token leaves push_channel_connected "on": only the repair says rings stopped.
+HEALTH = """{%- set ns = namespace(p=[]) -%}
+{%- for i in issues() | list | map('join', '/') | select('match', 'intratone/') -%}
+  {%- set ns.p = ns.p + ['repair:' ~ i.split('/')[1]] -%}
+{%- endfor -%}
+{%- if not is_state('binary_sensor.intratone_0612356362_push_channel_connected', 'on') -%}
+  {%- set ns.p = ns.p + ['push:' ~ states('binary_sensor.intratone_0612356362_push_channel_connected')] -%}
+{%- endif -%}
+{%- for e in ['lock.intratone_0612356362_door', 'event.intratone_0612356362_doorbell'] -%}
+  {%- if states(e) in ['unavailable', 'unknown'] -%}{%- set ns.p = ns.p + ['entity:' ~ e] -%}{%- endif -%}
+{%- endfor -%}
+{%- if not is_state('automation.door_auto_open_window', 'on') -%}
+  {%- set ns.p = ns.p + ['automation:' ~ states('automation.door_auto_open_window')] -%}
+{%- endif -%}
+{{ ns.p | to_json }}"""
+
+
+def describe(problem: str) -> str:
+    kind, _, detail = problem.partition(":")
+    if kind == "repair" and detail.startswith("fcm_token_stale"):
+        return "Rings no longer reach Home Assistant (Intratone push token rotated). Re-pair: HA → Settings → Repairs."
+    if kind == "repair":
+        return f"Intratone repair pending ({detail}): HA → Settings → Repairs."
+    if kind == "push":
+        return f"Intratone push channel is {detail}: rings won't reach Home Assistant."
+    if kind == "entity":
+        return f"{detail} is unavailable: the Intratone integration isn't running."
+    if kind == "automation":
+        return f"HA automation door_auto_open is {detail}: nothing will open on a ring."
+    return problem
+
+
 DEFAULT = timedelta(hours=1)
 MAX = timedelta(hours=12)
 
@@ -88,23 +116,29 @@ def _get_until(opener) -> datetime | None:
         return None
 
 
-def _push_warning(opener) -> str:
+def _health_warning(opener) -> str:
+    """ "" when healthy; otherwise one ⚠️ line per problem, prefixed by a newline."""
     try:
         req = urllib.request.Request(
             os.environ.get("HA_URL", "http://ha.home.arpa:8123") + "/api/template",
             method="POST",
-            data=json.dumps({"template": PUSH_ISSUE}).encode(),
+            data=json.dumps({"template": HEALTH}).encode(),
             headers={
                 "Authorization": f"Bearer {TOKEN}",
                 "Content-Type": "application/json",
             },
         )
         with opener(req, timeout=15) as r:
-            stale = r.read().decode().strip() not in ("", "0")
-    except Exception:  # noqa: BLE001 — a failed check must not block arming
-        logger.warning("door: push-health check failed", exc_info=True)
+            problems = json.loads(r.read().decode())
+    except Exception as e:  # noqa: BLE001 — a failed check must not block arming
+        logger.warning("door: health check failed", exc_info=True)
+        return f"\n⚠️ Couldn't check the intercom's health ({e}): the door may not open."
+    if not problems:
         return ""
-    return PUSH_WARNING if stale else ""
+    lines = [describe(p) for p in problems]
+    return (
+        "".join(f"\n⚠️ {line}" for line in lines) + "\nThe door will NOT open on a ring."
+    )
 
 
 def _hhmm(t: datetime) -> str:
@@ -121,8 +155,8 @@ def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) 
             until = _get_until(opener)
             if until and until > now:
                 left = int((until - now).total_seconds() // 60)
-                return f"🚪 Auto-open ON until {_hhmm(until)} ({left} min left).{_push_warning(opener)}"
-            return f"🔒 Auto-open is off.{_push_warning(opener)}"
+                return f"🚪 Auto-open ON until {_hhmm(until)} ({left} min left).{_health_warning(opener)}"
+            return f"🔒 Auto-open is off.{_health_warning(opener)}"
         if arg in ("off", "stop", "cancel", "close"):
             _set_until(None, opener)
             return "🔒 Auto-open off."
@@ -134,7 +168,7 @@ def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) 
         _set_until(until, opener)
         return (
             f"🚪 Auto-open ON until {_hhmm(until)}: every ring opens the hall door. /door off to stop."
-            + _push_warning(opener)
+            + _health_warning(opener)
         )
     except Exception as e:  # noqa: BLE001
         logger.exception("door: Home Assistant call failed")
