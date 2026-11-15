@@ -36,6 +36,14 @@ let
           show_in_sidebar: true
           filename: dashboards/mine.yaml
   '';
+
+  # Repo-owned automations sit beside the UI's automations.yaml, read-only in the
+  # editor. An id must not also exist in automations.yaml.
+  automationsInclude = pkgs.writeText "nic-os-automations.yaml" ''
+
+    # nic-os-managed: automations
+    automation nic-os: !include_dir_merge_list automations-nic-os
+  '';
 in
 {
   # ── Native Home Assistant service ─────────────────────────────────────
@@ -141,6 +149,12 @@ in
         cat ${lovelaceInclude} >> "$cfg"
         chown hass:hass "$cfg"
       fi
+    fi
+
+    ln -fns ${./automations} /var/lib/hass/automations-nic-os
+    if [ -e "$cfg" ] && ! grep -q 'nic-os-managed: automations' "$cfg"; then
+      cat ${automationsInclude} >> "$cfg"
+      chown hass:hass "$cfg"
     fi
   '';
 
