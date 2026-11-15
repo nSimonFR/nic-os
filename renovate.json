@@ -156,7 +156,7 @@
       "enabled": false
     },
     {
-      "description": "Transitive fixes (hono, zod, simple-git…) land by refreshing open-knowledge's lockfile: Renovate cannot target a transitive dependency on its own, and Dependabot's PRs for them edited package-lock.json without re-pinning npmDepsHash, so build rpi5 failed and nobody merged them. Daily, in its own branch apart from flake.lock, merged once CI is green; npmDepsHash is re-pinned in the same commit. Exempt from the concurrent-branch cap (10): stale PRs fill it.",
+      "description": "Transitive fixes (hono, zod, simple-git…) land by refreshing open-knowledge's lockfile: Renovate cannot target a transitive dependency on its own, and Dependabot's PRs for them edited package-lock.json without re-pinning npmDepsHash, so build rpi5 failed and nobody merged them. In its own branch apart from flake.lock, merged once CI is green; npmDepsHash is re-pinned in the same commit. Exempt from the concurrent-branch cap (10): stale PRs fill it.",
       "matchManagers": [
         "npm"
       ],
@@ -168,9 +168,6 @@
       ],
       "branchTopic": "open-knowledge-lock",
       "commitMessageTopic": "open-knowledge lock file",
-      "schedule": [
-        "at any time"
-      ],
       "automerge": true,
       "platformAutomerge": false,
       "postUpgradeTasks": {
@@ -198,6 +195,11 @@
   },
   "minimumReleaseAgePackageManagerSync": true,
   "npm": {
-    "minimumReleaseAge": "3 days"
+    "minimumReleaseAge": "3 days",
+    "lockFileMaintenance": {
+      "schedule": [
+        "at any time"
+      ]
+    }
   }
 }
