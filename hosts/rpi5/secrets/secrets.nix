@@ -95,6 +95,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "forgejo-mcp-token.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "airtrail-mcp-token.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

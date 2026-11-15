@@ -13,8 +13,9 @@ list cannot be read, Aperture is left untouched rather than shrunk. Writes
 only with APERTURE_APPLY=1.
 
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
-in APERTURE_CONNECTOR_SECRETS; one whose variable is unset is left out rather
-than pushed with an empty token.
+in APERTURE_CONNECTOR_SECRETS, or else the systemd credential of that name
+(raw single-value agenix files); one with neither is left out rather than
+pushed with an empty token.
 
 Env: APERTURE_URL, APERTURE_BASE_CONFIG, GATE_MODELS_URL, APERTURE_PROVIDER,
 ANTHROPIC_TOKEN_FILE, ANTHROPIC_PROVIDER, STORJ_S3_ACCESS_KEY,
@@ -64,11 +65,20 @@ class Config:
             s3_key=env_str("STORJ_S3_ACCESS_KEY", "", env),
             s3_secret=env_str("STORJ_S3_ACCESS_SECRET", "", env),
             connector_secrets={
-                name: env_str(name, "", env)
+                name: connector_secret(name, env)
                 for name in env_str("APERTURE_CONNECTOR_SECRETS", "", env).split()
             },
             apply=env_str("APERTURE_APPLY", "", env) == "1",
         )
+
+
+def connector_secret(name, env=None):
+    """`$name`, else `$CREDENTIALS_DIRECTORY/<name>`, else ""."""
+    value = env_str(name, "", env)
+    creds = env_str("CREDENTIALS_DIRECTORY", "", env)
+    if not value and creds and (path := Path(creds) / name).is_file():
+        value = read_secret(path)
+    return value
 
 
 def gate_ids(body):

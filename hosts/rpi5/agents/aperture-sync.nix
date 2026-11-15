@@ -76,6 +76,35 @@ let
       url = "${publicUrl "home-assistant"}/api/mcp";
     }
     // bearer "HA_TOKEN";
+    memos = {
+      url = "${publicUrl "memos"}/mcp";
+    }
+    // bearer "MEMOS_TOKEN";
+    rxresume = {
+      url = "${publicUrl "reactive-resume"}/mcp";
+      auth = {
+        type = "api_key";
+        secret = "env:RXRESUME_API_KEY";
+        name = "x-api-key";
+        "in" = "header";
+      };
+    }
+    // sleepy;
+    dawarich = {
+      url = "${publicUrl "dawarich"}/api/v1/mcp";
+    }
+    // bearer "DAWARICH_API_KEY"
+    // sleepy;
+    # forgejo-mcp passes this read-only token through to Forgejo.
+    forgejo = {
+      url = "${publicUrl "forgejo-mcp"}/mcp";
+    }
+    // bearer "FORGEJO_MCP_TOKEN"
+    // sleepy;
+    searxng = {
+      url = "${publicUrl "searxng-mcp"}/mcp";
+    }
+    // sleepy;
   };
   # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
   connectorGrants = lib.concatMap (id: [
@@ -87,9 +116,15 @@ let
     wealthfolio-mcp-token.path
     sure-mcp-env.path
     airtrail-mcp-token.path
-    # HA_TOKEN, shared with Agent Vault and homepage.
+    # HA_TOKEN and DAWARICH_API_KEY, shared with Agent Vault and homepage.
     agent-brokered-env.path
   ];
+  # Raw single-value secrets, read by name from $CREDENTIALS_DIRECTORY.
+  connectorCredentials = with config.age.secrets; {
+    MEMOS_TOKEN = memos-token.path;
+    RXRESUME_API_KEY = rxresume-api-key.path;
+    FORGEJO_MCP_TOKEN = forgejo-mcp-token.path;
+  };
 
   # Claude ids for the Anthropic passthrough. The base is what the claude-code
   # binary knows, which covers the short aliases it sends (`claude-haiku-4-5`)
@@ -229,13 +264,23 @@ in
       APERTURE_APPLY = "1";
       # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
       ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
-      APERTURE_CONNECTOR_SECRETS = "WEALTHFOLIO_MCP_TOKEN MCP_API_TOKEN AIRTRAIL_MCP_TOKEN HA_TOKEN";
+      APERTURE_CONNECTOR_SECRETS = lib.concatStringsSep " " (
+        [
+          "WEALTHFOLIO_MCP_TOKEN"
+          "MCP_API_TOKEN"
+          "AIRTRAIL_MCP_TOKEN"
+          "HA_TOKEN"
+          "DAWARICH_API_KEY"
+        ]
+        ++ builtins.attrNames connectorCredentials
+      );
     };
     serviceConfig = {
       Type = "oneshot";
       # STORJ_S3_ACCESS_KEY / STORJ_S3_ACCESS_SECRET for exporters.s3, then the
       # connector tokens.
       EnvironmentFile = [ "/run/agenix/aperture-s3-export" ] ++ connectorSecretFiles;
+      LoadCredential = lib.mapAttrsToList (name: path: "${name}:${path}") connectorCredentials;
       ExecStart = "${pkgs.nicos-scripts}/bin/aperture-config-sync";
     };
   };

@@ -98,6 +98,12 @@
       # Scoped AirTrail API key for its MCP connector in Aperture (aperture-sync.nix).
       mode = "0400";
     };
+    forgejo-mcp-token = {
+      file = ./secrets/forgejo-mcp-token.age;
+      # Read-only Forgejo PAT (nsimon, aperture-mcp-ro) for Aperture's forgejo
+      # connector (aperture-sync.nix): root-only.
+      mode = "0400";
+    };
     wealthfolio-mcp-token = {
       file = ./secrets/wealthfolio-mcp-token.age;
       # Read-only agent PAT (wfp_…) for the Wealthfolio MCP connector in Aperture

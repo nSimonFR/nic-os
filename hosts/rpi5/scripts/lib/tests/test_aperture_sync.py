@@ -206,3 +206,17 @@ def test_aperture_rewritten_connector_still_counts_as_unchanged(tmp_path):
 def test_connector_secrets_read_only_by_name():
     env = {"APERTURE_CONNECTOR_SECRETS": "A B", "A": "1", "C": "3"}
     assert ap.Config.from_env(env).connector_secrets == {"A": "1", "B": ""}
+
+
+def test_connector_secret_falls_back_to_the_systemd_credential(tmp_path):
+    (tmp_path / "B").write_text("from-cred\n")
+    env = {
+        "APERTURE_CONNECTOR_SECRETS": "A B C",
+        "A": "from-env",
+        "CREDENTIALS_DIRECTORY": str(tmp_path),
+    }
+    assert ap.Config.from_env(env).connector_secrets == {
+        "A": "from-env",
+        "B": "from-cred",
+        "C": "",
+    }
