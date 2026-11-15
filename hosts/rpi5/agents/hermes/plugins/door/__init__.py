@@ -24,6 +24,13 @@ ALLOWED_CHATS = {
 SENSOR = "sensor.door_auto_open_until"
 # Agent Vault (HTTP_PROXY) swaps the placeholder for the real token.
 TOKEN = "__ha_token__"
+# HA raises this repair when Google rotates the push token: rings stop arriving
+# while the push-channel sensor stays "on", so the window would open nothing.
+PUSH_ISSUE = "{{ issues() | list | map('join', '/') | select('match', 'intratone/fcm_token_stale') | list | count }}"
+PUSH_WARNING = (
+    "\n⚠️ Rings no longer reach Home Assistant (Intratone push token rotated), so the"
+    " door will NOT open. Re-pair: HA → Settings → Repairs."
+)
 DEFAULT = timedelta(hours=1)
 MAX = timedelta(hours=12)
 
@@ -81,6 +88,25 @@ def _get_until(opener) -> datetime | None:
         return None
 
 
+def _push_warning(opener) -> str:
+    try:
+        req = urllib.request.Request(
+            os.environ.get("HA_URL", "http://ha.home.arpa:8123") + "/api/template",
+            method="POST",
+            data=json.dumps({"template": PUSH_ISSUE}).encode(),
+            headers={
+                "Authorization": f"Bearer {TOKEN}",
+                "Content-Type": "application/json",
+            },
+        )
+        with opener(req, timeout=15) as r:
+            stale = r.read().decode().strip() not in ("", "0")
+    except Exception:  # noqa: BLE001 — a failed check must not block arming
+        logger.warning("door: push-health check failed", exc_info=True)
+        return ""
+    return PUSH_WARNING if stale else ""
+
+
 def _hhmm(t: datetime) -> str:
     return t.astimezone().strftime("%H:%M")
 
@@ -95,8 +121,8 @@ def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) 
             until = _get_until(opener)
             if until and until > now:
                 left = int((until - now).total_seconds() // 60)
-                return f"🚪 Auto-open ON until {_hhmm(until)} ({left} min left)."
-            return "🔒 Auto-open is off."
+                return f"🚪 Auto-open ON until {_hhmm(until)} ({left} min left).{_push_warning(opener)}"
+            return f"🔒 Auto-open is off.{_push_warning(opener)}"
         if arg in ("off", "stop", "cancel", "close"):
             _set_until(None, opener)
             return "🔒 Auto-open off."
@@ -106,7 +132,10 @@ def handle(raw_args: str, source=None, now=None, opener=urllib.request.urlopen) 
         dur = min(dur, MAX)
         until = now + dur
         _set_until(until, opener)
-        return f"🚪 Auto-open ON until {_hhmm(until)}: every ring opens the hall door. /door off to stop."
+        return (
+            f"🚪 Auto-open ON until {_hhmm(until)}: every ring opens the hall door. /door off to stop."
+            + _push_warning(opener)
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception("door: Home Assistant call failed")
         return f"⚠️ /door failed: {e}"
