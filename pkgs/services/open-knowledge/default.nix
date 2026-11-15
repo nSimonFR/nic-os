@@ -7,6 +7,7 @@
   lib,
   buildNpmPackage,
   makeWrapper,
+  importNpmLock,
   nodejs_24,
   git,
   perl,
@@ -18,7 +19,10 @@ buildNpmPackage {
   version = "0.89.1";
   src = ./.;
   nodejs = nodejs_24;
-  npmDepsHash = "sha256-cTn+JlMLnPyE/1hyWy4oQHPx8ML8mwgu+4iyCEqQBak=";
+  # Read from package-lock.json: no hash to re-pin when a lock refresh or a security
+  # bump changes it.
+  npmDeps = importNpmLock { npmRoot = ./.; };
+  inherit (importNpmLock) npmConfigHook;
   # @parcel/watcher's install script compiles from source; its prebuilt platform package
   # is already in the lock, and chokidar covers the rest.
   npmFlags = [ "--ignore-scripts" ];
