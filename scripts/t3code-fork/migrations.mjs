@@ -116,10 +116,20 @@ if (process.argv[2] === "detach") {
     t = t.replace(matrix[0], matrix[0].replace(matrix[1], `${matrix[1]}, ${firstId}`));
     fs.writeFileSync(reconcile, t);
   }
+  // Every id the tests hard-code for the block's start or end moves by the same delta.
   const sqlite = path.join(dir, "Sqlite.test.ts");
   let s = read(sqlite);
-  s = s.replace(/id >= \d+\)/, `id >= ${next})`).replace(/\$\{id - \d+\}/, `\${id - ${next - PREVIEW_START}}`);
+  s = s
+    .replace(/id >= \d+\)/, `id >= ${next})`)
+    .replace(/\$\{id - \d+\}/, `\${id - ${next - PREVIEW_START}}`)
+    .replace(/migration_id = (\d+)`/, (_, n) => `migration_id = ${Number(n) + delta}\``)
+    .replace(/migration_id: (\d+), name: "IssueAccountStorage"/, (_, n) => `migration_id: ${Number(n) + delta}, name: "IssueAccountStorage"`);
   fs.writeFileSync(sqlite, s);
+  t = read(reconcile);
+  t = t
+    .replace(/BETWEEN \d+ AND \$\{throughId \+ \d+ - startId\}/, `BETWEEN ${next} AND \${throughId + ${next} - startId}`)
+    .replace(/row\.migration_id \+ \d+ - startId/, `row.migration_id + ${next} - startId`);
+  fs.writeFileSync(reconcile, t);
   console.log(`issue migrations ${firstId} -> ${next}`);
 } else {
   console.error("usage: migrations.mjs detach|attach");
