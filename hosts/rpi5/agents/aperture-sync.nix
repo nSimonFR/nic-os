@@ -71,6 +71,11 @@ let
       url = "${publicUrl "freereps-mcp"}/mcp";
     }
     // sleepy;
+    # Assist API only: the tools act on the entities exposed to voice assistants.
+    homeassistant = {
+      url = "${publicUrl "home-assistant"}/api/mcp";
+    }
+    // bearer "HA_TOKEN";
   };
   # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
   connectorGrants = lib.concatMap (id: [
@@ -82,6 +87,8 @@ let
     wealthfolio-mcp-token.path
     sure-mcp-env.path
     airtrail-mcp-token.path
+    # HA_TOKEN, shared with Agent Vault and homepage.
+    agent-brokered-env.path
   ];
 
   # Claude ids for the Anthropic passthrough. The base is what the claude-code
@@ -222,7 +229,7 @@ in
       APERTURE_APPLY = "1";
       # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
       ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
-      APERTURE_CONNECTOR_SECRETS = "WEALTHFOLIO_MCP_TOKEN MCP_API_TOKEN AIRTRAIL_MCP_TOKEN";
+      APERTURE_CONNECTOR_SECRETS = "WEALTHFOLIO_MCP_TOKEN MCP_API_TOKEN AIRTRAIL_MCP_TOKEN HA_TOKEN";
     };
     serviceConfig = {
       Type = "oneshot";

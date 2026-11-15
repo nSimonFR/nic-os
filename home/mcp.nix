@@ -22,7 +22,7 @@ in
   # Linear, Miro and GitHub come from the claude.ai connectors.
   programs.claude-code.mcpServers = {
     # Self-hosted MCP servers (notes, sure, wealthfolio, airtrail, trains,
-    # freereps), aggregated by Aperture (hosts/rpi5/agents/aperture-sync.nix); access
+    # freereps, homeassistant), aggregated by Aperture (hosts/rpi5/agents/aperture-sync.nix); access
     # is by tailnet identity.
     aperture = {
       type = "http";
