@@ -71,6 +71,9 @@ in
       # loads in the UI. Configuration itself is done via Settings → Devices &
       # Services (YAML setup was removed in HA 2025.7).
       "telegram_bot"
+      # /api/mcp, aggregated by Aperture (agents/aperture-sync.nix). The config entry
+      # is added once in the UI (Devices & services → Model Context Protocol Server).
+      "mcp_server"
     ];
   };
 
