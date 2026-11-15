@@ -61,6 +61,15 @@ A new rpi5 service goes in `hosts/rpi5/<domain>/<name>.nix` plus one line in tha
 domain's `default.nix` — never at the top of `hosts/rpi5/`. Domains and the rule:
 `docs/adr/0009-rpi5-modules-grouped-by-domain.md`.
 
+## Home Assistant config
+
+An automation an agent writes goes in `hosts/rpi5/home-assistant/automations/<topic>.yaml`,
+never through HA's config API or editor: those land in the unversioned
+`/var/lib/hass/automations.yaml` and a rebuilt HA loses them silently. Moving one
+from the UI keeps its `id`, then delete the UI copy after the deploy. Same for
+dashboards (`dashboards/`). What only the UI can hold (config entries, Telegram
+allowed chats) gets a comment in the YAML that relies on it.
+
 ## Agent skills
 
 A skill is a **directory** — `SKILL.md` plus whatever it needs at runtime (`assets/`,
