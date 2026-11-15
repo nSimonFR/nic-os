@@ -3,8 +3,8 @@
 Writes the window's end to ``sensor.door_auto_open_until`` in Home Assistant; the HA
 automation ``door_auto_open`` unlocks the Intratone door on a ring while it is in the
 future and reports a failed unlock; ``door_auto_open_shutdown`` warns when an HA
-restart closes an open window (a REST-set state is not restored). Both live in HA's
-automations.yaml, not here.
+restart closes an open window (a REST-set state is not restored). Both are in
+hosts/rpi5/home-assistant/automations/door.yaml.
 Nico's DM and the group with Alfie only; « Alfie Postule ! » (her job-search group) stays out.
 """
 

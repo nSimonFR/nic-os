@@ -1,0 +1,73 @@
+# Hermes /door (hosts/rpi5/agents/hermes/plugins/door) writes the window's end and the
+# arming chat to sensor.door_auto_open_until; these open the door and report back.
+# Replies go to that chat, which must be an allowed chat of HA's telegram_bot entry
+# (UI-only: Settings → Devices & services → Telegram bot → Add allowed chat).
+# The plugin's health check reads automation.door_auto_open_window: keep the alias.
+
+- id: door_auto_open
+  alias: Door auto-open window
+  description: >-
+    Opens the Intratone hall door on a ring while sensor.door_auto_open_until is in
+    the future, and reports a failed unlock. Versioned in nic-os.
+  triggers:
+    - trigger: state
+      entity_id: event.intratone_0612356362_doorbell
+  conditions:
+    - condition: template
+      value_template: >-
+        {{ trigger.from_state is not none
+           and trigger.from_state.state not in ['unavailable', 'unknown']
+           and trigger.to_state.state not in ['unavailable', 'unknown']
+           and trigger.to_state.attributes.event_type == 'ring' }}
+    - condition: template
+      value_template: >-
+        {%- set until = states('sensor.door_auto_open_until') | as_datetime(none) -%}
+        {{ until is not none and now() < until }}
+  actions:
+    # A failed open raises; the lock only shows "unlocked" (for 3 s) on success.
+    - action: lock.unlock
+      target:
+        entity_id: lock.intratone_0612356362_door
+      continue_on_error: true
+    - if:
+        - condition: state
+          entity_id: lock.intratone_0612356362_door
+          state: unlocked
+      then:
+        - action: telegram_bot.send_message
+          data:
+            chat_id: "{{ state_attr('sensor.door_auto_open_until', 'chat_id') or 82389391 }}"
+            message: >-
+              <b>HA:</b> 🚪 Door auto-opened on a ring ({{ trigger.to_state.attributes.door_name }}).
+              Window until {{ as_timestamp(states('sensor.door_auto_open_until')) | timestamp_custom('%H:%M') }}.
+      else:
+        - action: telegram_bot.send_message
+          data:
+            chat_id: "{{ state_attr('sensor.door_auto_open_until', 'chat_id') or 82389391 }}"
+            message: >-
+              <b>HA:</b> ❌ Someone rang ({{ trigger.to_state.attributes.door_name }}) but the
+              door did NOT open — Intratone unlock failed (see HA logs). Open it by hand.
+  mode: single
+  max_exceeded: silent
+
+# The window is a REST-set state, which HA does not restore after a restart.
+# A crash skips the shutdown event, so it goes unreported.
+- id: door_auto_open_shutdown
+  alias: Door auto-open window closed by shutdown
+  description: Warns the arming chat when HA stops while a /door window is open. Versioned in nic-os.
+  triggers:
+    - trigger: homeassistant
+      event: shutdown
+  conditions:
+    - condition: template
+      value_template: >-
+        {%- set until = states('sensor.door_auto_open_until') | as_datetime(none) -%}
+        {{ until is not none and now() < until }}
+  actions:
+    - action: telegram_bot.send_message
+      data:
+        chat_id: "{{ state_attr('sensor.door_auto_open_until', 'chat_id') or 82389391 }}"
+        message: >-
+          <b>HA:</b> ⚠️ Home Assistant is restarting: the /door auto-open window is CLOSED.
+          Run /door again once HA is back.
+  mode: single
