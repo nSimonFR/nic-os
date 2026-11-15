@@ -156,7 +156,7 @@
       "enabled": false
     },
     {
-      "description": "Transitive fixes (hono, zod, simple-git…) land by refreshing open-knowledge's lockfile: Renovate cannot target a transitive dependency on its own, and Dependabot's PRs for them edited package-lock.json without re-pinning npmDepsHash, so build rpi5 failed and nobody merged them. In its own branch apart from flake.lock, merged once CI is green; npmDepsHash is re-pinned in the same commit. Exempt from the concurrent-branch cap (10): stale PRs fill it.",
+      "description": "Transitive fixes (hono, zod, simple-git…) land by refreshing open-knowledge's lockfile: Renovate cannot target a transitive dependency on its own, and Dependabot's PRs for them edited package-lock.json without re-pinning npmDepsHash, so build rpi5 failed and nobody merged them. In its own branch apart from flake.lock, merged once CI is green; default.nix reads the lock through importNpmLock, so no hash to re-pin, and the pkgs/** hash task is switched off for it (it would target package.json). Exempt from the concurrent-branch cap (10): stale PRs fill it.",
       "matchManagers": [
         "npm"
       ],
@@ -171,13 +171,7 @@
       "automerge": true,
       "platformAutomerge": false,
       "postUpgradeTasks": {
-        "commands": [
-          "python3 scripts/nix-fix-hashes.py --write pkgs/services/open-knowledge/default.nix"
-        ],
-        "fileFilters": [
-          "pkgs/services/open-knowledge/default.nix"
-        ],
-        "executionMode": "update"
+        "commands": []
       },
       "branchConcurrentLimit": 0,
       "prConcurrentLimit": 0
