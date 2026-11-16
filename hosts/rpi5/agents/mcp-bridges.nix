@@ -127,7 +127,11 @@ let
       command = [ "${mtgMcp}/bin/mtg-mcp" ];
       exclude = [ ];
       environment = { };
-      serviceConfig = { };
+      # It writes mtg-commander-server.log to its cwd and exits if it cannot.
+      serviceConfig = {
+        RuntimeDirectory = "mtg-mcp";
+        WorkingDirectory = "/run/mtg-mcp";
+      };
       backup = [ "none" ];
       backupNote = "stateless — Scryfall, EDHREC, Moxfield and Archidekt live";
     };
