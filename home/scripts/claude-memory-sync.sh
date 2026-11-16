@@ -3,7 +3,7 @@
 # ~/MyDocuments/TRUSK, both git repos with a memory/ folder) between machines.
 #
 #   claude-memory-sync pull   SessionStart: fast-forward to origin before the index is read
-#   claude-memory-sync push   Stop: commit memory/ only, rebase, push — in the background
+#   claude-memory-sync push   Stop: commit memory/ only, merge, push — in the background
 #
 # Silent no-op when the session is not in an area, the area is not on its default
 # branch, or local commits touch more than memory/ (never rewrites real work).
@@ -41,8 +41,7 @@ tgit() {
   timeout "$t" git -C "$area" -c commit.gpgsign=false "$@"
 }
 
-# A rebase in progress (ours interrupted, or the user's) leaves HEAD detached: the
-# branch check below then exits, so nothing here ever aborts someone else's rebase.
+# A rebase in progress leaves HEAD detached: the branch check below then exits.
 branch=$(git_ symbolic-ref --short -q HEAD) || exit 0
 # The push (backgrounded, no hook budget) asks the remote for its default branch, which
 # survives a rename; the pull (15 s SessionStart budget) trusts the local origin/HEAD.
@@ -56,21 +55,16 @@ if [ -z "$default" ]; then
 fi
 [ "$branch" = "${default:-main}" ] || exit 0
 
-rebase_in_progress() {
-  local gitdir
-  gitdir=$(git_ rev-parse --absolute-git-dir) || return 0
-  [ -d "$gitdir/rebase-merge" ] || [ -d "$gitdir/rebase-apply" ]
-}
-
 only_memory_ahead() {
   local files
-  # --name-only hides merge diffs, and a rebase would drop the merge: refuse any.
+  # --name-only hides merge diffs, so a local merge could smuggle in other files: refuse any.
   [ -z "$(git_ rev-list --merges "origin/$branch..HEAD")" ] || return 1
   files=$(git_ log --format= --name-only "origin/$branch..HEAD" 2>/dev/null | sort -u)
   [ -z "$files" ] || ! printf '%s\n' "$files" | grep -qv '^memory/'
 }
 
 sync_up() {
+  local lock ahead behind tip target wt
   lock="$area/.git/memory-sync.lock"
   if ! mkdir "$lock" 2>/dev/null; then
     [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 0
@@ -86,23 +80,45 @@ sync_up() {
     echo "$(date -Is) skip: local commits beyond memory/"
     return 0
   }
-  if rebase_in_progress; then
-    echo "$(date -Is) skip: rebase in progress"
-    return 0
+  ahead=$(git_ rev-list --count "origin/$branch..HEAD")
+  behind=$(git_ rev-list --count "HEAD..origin/$branch")
+  tip=$(git_ rev-parse HEAD)
+  target="origin/$branch"
+  if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
+    # Diverged: merge in a private worktree this run owns, so an abort can never touch
+    # the checkout, nor a rebase or merge the user started there.
+    wt="$(git_ rev-parse --absolute-git-dir)/memory-sync-wt"
+    git_ worktree remove --force "$wt" 2>/dev/null
+    git_ worktree add -q --detach "$wt" "$tip" || return 1
+    if git -C "$wt" -c commit.gpgsign=false merge -q --no-edit \
+      -m "memory: merge sync from $(hostname -s)" "origin/$branch"; then
+      tip=$(git -C "$wt" rev-parse HEAD)
+      target=$tip
+    else
+      git -C "$wt" merge --abort
+      tip=""
+    fi
+    git_ worktree remove --force "$wt"
+    [ -n "$tip" ] || {
+      echo "$(date -Is) skip: memory merge conflict"
+      return 1
+    }
   fi
-  # Only reached when this run starts the rebase, so the abort only undoes our own.
-  git_ rebase -q --autostash "origin/$branch" || {
-    git_ rebase --abort
-    return 1
-  }
-  [ -z "$(git_ rev-list "origin/$branch..HEAD")" ] || tgit 30 push -q origin "$branch"
+  if [ "$ahead" -gt 0 ]; then
+    tgit 30 push -q origin "$tip:refs/heads/$branch" || return 1
+  fi
+  # The checkout only ever fast-forwards: nothing to abort, and git refuses it on its
+  # own when HEAD left the branch or a merge/rebase is in progress there.
+  [ "$behind" -gt 0 ] || return 0
+  [ "$(git_ symbolic-ref -q HEAD)" = "refs/heads/$branch" ] || return 0
+  git_ merge -q --ff-only --autostash "$target"
 }
 
 case "$mode" in
 pull)
   {
     # Fast-forward only, bounded: it cannot outlive the hook timeout mid-rebase. When
-    # local memory commits diverge from origin, the Stop hook's sync_up rebases them.
+    # local memory commits diverge from origin, the Stop hook's sync_up merges them.
     if tgit 6 fetch -q origin "$branch"; then
       tgit 4 merge -q --ff-only --autostash "origin/$branch" || true
     fi
