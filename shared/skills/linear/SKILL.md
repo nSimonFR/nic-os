@@ -46,13 +46,6 @@ For the nsimon workspace, the default team is **nSimon**:
 
 When creating issues or searching, use this team ID unless told otherwise.
 
-## Workflow
-
-1. **Clarify scope.** Team, project, cycle, priority, labels — confirm before mutating.
-2. **Read first.** List/get to build context (queries below).
-3. **Mutate.** Create/update issues, add comments, change state. For bulk changes, explain the grouping before applying.
-4. **Summarise.** State what changed, what's outstanding, and propose next actions.
-
 ## Cheat sheet
 
 All examples use the default nsimon workspace (`$LINEAR_KEY`). For trusk, swap `$LINEAR_KEY` → `$LINEAR_KEY_TRUSK`.
@@ -121,13 +114,7 @@ Notes:
 - `priority`: 0 = none, 1 = urgent, 2 = high, 3 = medium, 4 = low.
 - `state` types: `triage`, `backlog`, `unstarted`, `started`, `completed`, `canceled`.
 
-## Common workflows
-
-- **Triage**: `viewer.assignedIssues` filtered by `priority:{lte:2}`, then `issueUpdate` to bump state to "In Progress".
-- **Sprint planning**: list current `cycle` for the nSimon team, list backlog issues, batch-create assignments.
-- **Status updates**: for each issue in a list, `commentCreate` with the latest status.
-- **Label hygiene**: `team.labels.nodes`, then `issueUpdate` with `labelIds:[…]`.
-- **Trusk work**: When the user asks about Trusk issues, swap to `$LINEAR_KEY_TRUSK` and use the trusk team IDs (e.g. `IN`, `EXTERN`).
+Trusk issues: use `$LINEAR_KEY_TRUSK` and the Trusk team keys (e.g. `CO`, `TEC`, `EXTERN`).
 
 ## Troubleshooting
 

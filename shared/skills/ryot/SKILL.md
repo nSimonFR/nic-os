@@ -73,7 +73,7 @@ and `submittedAt` (now, ISO-8601).
 
 ## Register a workout  ⭐ (the main use case)
 
-### 1. Read a similar prior workout first — mandatory
+### 1. Immediately before writing, read a similar prior workout
 
 **Before every create or correction**, list recent workouts and read at least one
 similar workout in full. Reuse its exact `exerciseId`, exercise order, and set-type
@@ -98,8 +98,6 @@ ryot_ql '{queries:{s: rows("event"; "s";
   [asc(num(prop("s"; "exerciseOrder"))), asc(num(prop("s"; "setOrder")))]; 100)}}' \
   --arg w 'wor_…' | jq -c '.data.s.items[]'
 ```
-
-Do this read **immediately before** the write, not merely earlier in the session.
 
 ### 2. Resolve the exercise id
 
@@ -166,11 +164,8 @@ ryot /plugins/ryot/fitness/operations/workout-editor-save "$P" | jq -c .result
 ```
 
 Notes:
-- **Current-workout precedence.** The user's stated set count, reps, weight, and
-  exercise order are authoritative and must be written exactly; never add, remove, or
-  normalize sets from prior history. Reuse historical data only for the verified
-  `exerciseId` and, unless the user specifies otherwise, the `setLot` pattern. Do not
-  substitute a different equipment variant.
+- Reuse historical data only for the verified `exerciseId` and, unless the user says
+  otherwise, the `setLot` pattern.
 - **`setLot`**: `normal` | `warm_up` | `drop` | `failure`. Default to `normal` only
   when the user did not specify a set type and no comparable set convention exists.
 - Optional per set: `rpe` (int 0–10), `restTime` (int seconds). Optional per

@@ -11,13 +11,13 @@ metadata:
 
 # Yuanbao Group Interaction
 
-## CRITICAL: How Messaging Works
+## How messaging works
 
 **Your text reply IS the message sent to the group/user.** The gateway automatically delivers your response text to the chat. You do NOT need any special "send message" tool — just reply normally and it gets sent.
 
 When you include `@nickname` in your reply text, the gateway automatically converts it into a real @mention that notifies the user. This is built-in — you have full @mention capability.
 
-**NEVER say you cannot send messages or @mention users. NEVER suggest the user do it manually. NEVER add disclaimers about permissions. Just reply with the text you want sent.**
+So reply with the text you want sent, mentions included, with no caveats about being unable to send or mention and no disclaimers about permissions.
 
 ## Available Tools
 
@@ -50,10 +50,10 @@ Step 2 — your reply (this gets sent to the group with a working @mention):
 **That's it.** No extra explanation needed. Keep it short and natural.
 
 **Rules:**
-- Call `yb_query_group_members` first to get the exact nickname — do NOT guess
+- Get the exact nickname from `yb_query_group_members` first.
 - The @mention format: `@nickname` with a space before the @ sign
-- Your reply text IS the message — it WILL be sent and the @mention WILL work
-- Be concise. Do NOT explain how @mention works to the user.
+- Keep the reply to the message itself.
+- Be concise, and don't explain how @mention works to the user.
 
 ## Send DM (Private Message) Workflow
 
