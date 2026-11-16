@@ -44,10 +44,16 @@ tgit() {
 # A rebase in progress (ours interrupted, or the user's) leaves HEAD detached: the
 # branch check below then exits, so nothing here ever aborts someone else's rebase.
 branch=$(git_ symbolic-ref --short -q HEAD) || exit 0
-# Refreshed in the background push only: SessionStart has a 15 s budget for the pull.
-[ "$mode" = push ] && { tgit 8 remote set-head origin --auto >/dev/null 2>&1 || true; }
-default=$(git_ symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
-default=${default#origin/}
+# The push (backgrounded, no hook budget) asks the remote for its default branch, which
+# survives a rename; the pull (15 s SessionStart budget) trusts the local origin/HEAD.
+default=""
+if [ "$mode" = push ]; then
+  default=$(tgit 8 ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub("refs/heads/", "", $2); print $2; exit}')
+fi
+if [ -z "$default" ]; then
+  default=$(git_ symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
+  default=${default#origin/}
+fi
 [ "$branch" = "${default:-main}" ] || exit 0
 
 rebase_in_progress() {
