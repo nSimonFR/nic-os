@@ -42,7 +42,6 @@ in
     brews = [
       "auth0"
       "cookcli"
-      "dbt-postgres"
       "helm"
       "omlx"
       "pinentry-touchid"
