@@ -580,5 +580,49 @@ def main(env=None, opener=None, sleep=time.sleep, log=log):
     return 1 if failed else 0
 
 
+BACKFILL_PAUSE_S = 0.5
+BACKFILL_RETRIES = 5
+
+
+def backfill_main(env=None, opener=None, sleep=time.sleep, log=log, stdin=None):
+    """Hand-run: Spotify track ids on stdin (whitespace-separated) -> their
+    artists in spotify-artists.json, 50 a call, waiting out 429s. Safe to rerun:
+    ids already cached are skipped. Run as ryot-connector with the connector's env."""
+    cfg = Config.from_env(env)
+    missing = missing_env(REQUIRED_ENV[:3], env)
+    if missing:
+        log(f"FATAL: missing env: {', '.join(missing)}")
+        return 1
+    ensure_dir(cfg.state_dir)
+    cache = load_json(cfg.artists_file, {})
+    ids = {w for w in (stdin or sys.stdin).read().split() if w.isalnum()}
+    todo = sorted(ids - cache.keys())
+    log(f"{len(ids)} ids, {len(todo)} to look up")
+    try:
+        token = get_access_token(cfg, opener=opener)
+        for n, i in enumerate(range(0, len(todo), ARTISTS_BATCH)):
+            chunk = todo[i : i + ARTISTS_BATCH]
+            for attempt in range(BACKFILL_RETRIES):
+                try:
+                    cache.update(get_tracks(token, chunk, opener=opener))
+                    break
+                except urllib.error.HTTPError as e:
+                    if e.code != 429 or attempt == BACKFILL_RETRIES - 1:
+                        raise
+                    wait = min(int(e.headers.get("Retry-After") or 30), 300)
+                    log(f"rate limited, waiting {wait}s")
+                    sleep(wait)
+            if n % 20 == 19:
+                save_json(cfg.artists_file, cache, sort_keys=True)
+            sleep(BACKFILL_PAUSE_S)
+    except (urllib.error.URLError, KeyError, ValueError) as e:
+        log(f"stopped: {e}")
+        save_json(cfg.artists_file, cache, sort_keys=True)
+        return 1
+    save_json(cfg.artists_file, cache, sort_keys=True)
+    log(f"done: {len(cache)} tracks cached")
+    return 0
+
+
 if __name__ == "__main__":
     sys.exit(main())

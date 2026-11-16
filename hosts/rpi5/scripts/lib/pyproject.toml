@@ -34,6 +34,10 @@ plex-to-ryot = "nicos_scripts.connectors.plex:main"
 ryot-bootstrap = "nicos_scripts.connectors.ryot_bootstrap:main"
 # Hand-run, once: Spotify's "Extended streaming history" export. Dry run unless --apply.
 spotify-backfill = "nicos_scripts.connectors.spotify_backfill:main"
+# Hand-run: track ids on stdin -> artists in spotify-artists.json (Ryot's import has none).
+spotify-artists-backfill = "nicos_scripts.connectors.spotify:backfill_main"
+# Hand-run: swap the "Artiste inconnu" music sections of past memos. Dry run unless --apply.
+journal-music-fix = "nicos_scripts.connectors.journal_music_fix:main"
 moxfield-sync = "nicos_scripts.connectors.moxfield:main"
 travel-cal-sync = "nicos_scripts.connectors.travel_cal:main"
 # Windows remote ICS feeds down to a date range so Calino can subscribe to them
