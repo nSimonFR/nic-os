@@ -21,7 +21,7 @@ import json
 import re
 import string
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 
@@ -321,6 +321,16 @@ def music_tracks(run, ids, db="ryot", runuser="runuser", psql="psql"):
         psql,
     )
     return {r[0]: r[1] for r in rows if r[1]}
+
+
+def with_artists(listens, found):
+    """`listens`, each one without an artist given `found[its track id]`."""
+    return [
+        replace(l, artists=found[l.track])
+        if not l.artists and found.get(l.track)
+        else l
+        for l in listens
+    ]
 
 
 def music_listens(run, lo, hi, db="ryotv2", runuser="runuser", psql="psql"):

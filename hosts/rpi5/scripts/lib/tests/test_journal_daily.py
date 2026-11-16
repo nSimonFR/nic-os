@@ -118,6 +118,7 @@ def cfg(tmp_path, **kw):
         dry_run=False,
         day="2026-10-19",
         arkose_sessions=str(tmp_path / "no-arkose.json"),
+        spotify_artists=str(tmp_path / "no-artists.json"),
     )  # never the host's real files
     base.update(kw)
     return wm.Config(**base)
@@ -1373,6 +1374,26 @@ def test_music_keeps_replays_and_fills_missing_artists_from_v1(tmp_path):
     )
     music = wm.day_music(cfg(tmp_path), pg, date(2026, 10, 19), print)
     assert music == ("3 titres · 12 min", ["- **Lomepal** · Club (2), Trop beau"])
+
+
+def test_music_fills_missing_artists_from_the_spotify_cache(tmp_path):
+    lo, _ = wm.day_bounds(date(2026, 11, 9))
+    cache = tmp_path / "artists.json"
+    cache.write_text(json.dumps({"bbb": "Lomepal, Hoshi", "ccc": ""}))
+    pg = FakePg(
+        [],
+        [],
+        music=[
+            ("Trop beau", "", 244, lo + 3600, "bbb"),
+            ("Inconnu", "", 200, lo + 7200, "ccc"),
+        ],
+    )
+    c = dataclasses.replace(cfg(tmp_path), spotify_artists=str(cache))
+    music = wm.day_music(c, pg, date(2026, 11, 9), print)
+    assert music == (
+        "2 titres · 7 min",
+        ["- **Lomepal, Hoshi** · Trop beau", "- **Artiste inconnu** · Inconnu"],
+    )
 
 
 def test_music_marks_an_artist_heard_three_days_running(tmp_path):

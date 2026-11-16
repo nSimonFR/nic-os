@@ -25,6 +25,10 @@ window spans far less than that at any realistic listening rate.
 Track -> entity: found by external id (RyotQL) else imported through the
 `music.spotify` provider, then cached in spotify-entities.json.
 
+Artists: Ryot's import stops at the base level, which carries no artist, so the
+journal would print "Artiste inconnu". spotify-artists.json maps every track we
+see (and every one pushed in the last RETAIN_DAYS) to "A, B"; journal-daily reads it.
+
 Stdlib only. Config via environment:
   SPOTIFY_CLIENT_ID       Spotify app client id                    [required]
   SPOTIFY_CLIENT_SECRET   Spotify app client secret                [required]
@@ -102,6 +106,10 @@ class Config:
     def entity_map_file(self):
         return os.path.join(self.state_dir, "spotify-entities.json")
 
+    @property
+    def artists_file(self):
+        return os.path.join(self.state_dir, "spotify-artists.json")
+
 
 # ── Spotify ───────────────────────────────────────────────────────────────────
 
@@ -129,6 +137,61 @@ def get_recently_played(token, opener=None):
     return get_json(
         url, headers={"Authorization": "Bearer " + token}, opener=opener
     ).get("items", [])
+
+
+ARTISTS_BATCH = 50  # /v1/tracks takes at most 50 ids
+ARTISTS_PER_RUN = 500
+
+
+def track_artists(track):
+    """`A, B` in Spotify's credit order, "" when it lists none."""
+    return ", ".join(a["name"] for a in track.get("artists") or [] if a.get("name"))
+
+
+def get_tracks(token, ids, opener=None):
+    """{track id: artists} for up to 50 ids; "" for one Spotify has no record of.
+
+    A batch the API refuses is retried one id at a time; 429 and 5xx propagate.
+    """
+    headers = {"Authorization": "Bearer " + token}
+    base = "https://api.spotify.com/v1/tracks"
+    try:
+        tracks = get_json(
+            f"{base}?ids={','.join(ids)}", headers=headers, opener=opener
+        ).get("tracks", [])
+    except urllib.error.HTTPError as e:
+        if e.code == 429 or e.code >= 500:
+            raise
+        tracks = []
+        for tid in ids:
+            try:
+                tracks.append(get_json(f"{base}/{tid}", headers=headers, opener=opener))
+            except urllib.error.HTTPError as e2:
+                if e2.code not in (400, 404):
+                    raise
+    out = {tid: "" for tid in ids}
+    for t in tracks:
+        if t and t.get("id") in out:
+            out[t["id"]] = track_artists(t)
+    return out
+
+
+def refresh_artists(cache, items, wanted, fetch, log=log):
+    """Add the artists of `items`, then of the `wanted` ids still missing (at
+    most ARTISTS_PER_RUN, via `fetch(ids)`). True when `cache` changed."""
+    before = dict(cache)
+    for it in items:
+        track = it.get("track") or {}
+        if track.get("id") and track_artists(track):
+            cache[track["id"]] = track_artists(track)
+    missing = sorted(set(wanted) - cache.keys())[:ARTISTS_PER_RUN]
+    for i in range(0, len(missing), ARTISTS_BATCH):
+        try:
+            cache.update(fetch(missing[i : i + ARTISTS_BATCH]))
+        except (urllib.error.URLError, ValueError) as e:
+            log(f"artists: lookup stopped ({e})")
+            break
+    return cache != before
 
 
 # ── listen identity ───────────────────────────────────────────────────────────
@@ -458,6 +521,16 @@ def main(env=None, opener=None, sleep=time.sleep, log=log):
     except (urllib.error.URLError, KeyError) as e:
         log(f"FATAL: Spotify API failed: {e}")
         return 1
+
+    artists = load_json(cfg.artists_file, {})
+    if refresh_artists(
+        artists,
+        items,
+        {k.rpartition("@")[0] for k in pushed},
+        lambda ids: get_tracks(token, ids, opener=opener),
+        log=log,
+    ):
+        save_json(cfg.artists_file, artists, sort_keys=True)
 
     listens, retired = new_listens(
         items, pushed, floor_ms=prev_newest if legacy else None
