@@ -65,17 +65,39 @@ only_memory_ahead() {
 
 # One lock for pull and push, so the pull's autostash can never interleave with the
 # push's conflict check and staging. A lock older than 10 minutes is stale.
+# Each invocation owns the lock it creates (token in lock/owner) and releases only that.
 lock="$area/.git/memory-sync.lock"
+token="$$.$RANDOM.$(date +%s)"
 take_lock() {
-  mkdir "$lock" 2>/dev/null && return 0
+  local seen moved
+  if mkdir "$lock" 2>/dev/null; then
+    printf '%s\n' "$token" >"$lock/owner"
+    return 0
+  fi
   [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 1
-  rm -rf "$lock" && mkdir "$lock"
+  # Stale takeover: rename is atomic, so of several racers only one moves the lock away;
+  # it then checks it moved the stale lock it saw, not one a racer just created.
+  seen=$(cat "$lock/owner" 2>/dev/null)
+  moved="$lock.stale.$token"
+  mv "$lock" "$moved" 2>/dev/null || return 1
+  if [ "$(cat "$moved/owner" 2>/dev/null)" != "$seen" ]; then
+    mv "$moved" "$lock" 2>/dev/null || rm -rf "$moved"
+    return 1
+  fi
+  rm -rf "$moved"
+  mkdir "$lock" 2>/dev/null || return 1
+  printf '%s\n' "$token" >"$lock/owner"
+}
+# shellcheck disable=SC2329 # invoked from the RETURN and EXIT traps
+release_lock() {
+  [ "$(cat "$lock/owner" 2>/dev/null)" = "$token" ] && rm -rf "$lock"
+  return 0
 }
 
 sync_up() {
   local ahead behind tip target wt
   take_lock || return 0
-  trap 'rm -rf "$lock"' RETURN
+  trap release_lock RETURN
   # A pull whose autostash hit a conflict leaves unmerged files or markers in memory/:
   # staging them would publish the markers as if resolved.
   if [ -n "$(git_ diff --name-only --diff-filter=U -- memory)" ] ||
@@ -130,7 +152,7 @@ sync_up() {
 case "$mode" in
 pull)
   take_lock || exit 0
-  trap 'rm -rf "$lock"' EXIT
+  trap release_lock EXIT
   {
     # Fast-forward only, bounded: it cannot outlive the hook timeout mid-rebase. When
     # local memory commits diverge from origin, the Stop hook's sync_up merges them.
