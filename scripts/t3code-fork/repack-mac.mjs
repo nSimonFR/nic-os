@@ -1,6 +1,6 @@
 // Swaps the fork's server build into upstream's macOS app and re-signs it ad hoc.
 //
-//   repack-mac.mjs <dir holding "T3 Code (Nightly).app"> <server dist dir> <out zip>
+//   repack-mac.mjs <dir holding the one T3 Code .app> <server dist dir> <out zip>
 //
 // The app's asar integrity hash covers the archive header, so it is recomputed;
 // the unpacked native modules stay unpacked. server-compile-cache goes: it is
@@ -12,7 +12,7 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 
 const [work, dist, outZip] = process.argv.slice(2);
-const app = path.join(work, "T3 Code (Nightly).app");
+const app = path.join(work, fs.readdirSync(work).find((name) => name.endsWith(".app")));
 const res = path.join(app, "Contents/Resources");
 const archive = path.join(res, "app.asar");
 const unpacked = path.join(res, "app.asar.unpacked");

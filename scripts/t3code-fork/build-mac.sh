@@ -13,8 +13,10 @@ tar -xzf dl/server-dist.tar.gz -C dist
 (cd "$here" && npm install --no-audit --no-fund --no-package-lock)
 node "$here/repack-mac.mjs" app dist "out/T3-Code-$VERSION-issues-darwin-arm64.zip"
 
-contents="app/T3 Code (Nightly).app/Contents"
-exe="$contents/MacOS/T3 Code (Nightly)"
+# Nightlies ship as "T3 Code (Nightly).app", previews as "T3 Code (Beta).app".
+bundle=$(find app -maxdepth 1 -name '*.app' -print -quit)
+contents="$bundle/Contents"
+exe=$(find "$contents/MacOS" -maxdepth 1 -type f -print -quit)
 server="$contents/Resources/app.asar/apps/server/dist/bin.mjs"
 export ELECTRON_RUN_AS_NODE=1
 got=$("$exe" "$server" --version)
