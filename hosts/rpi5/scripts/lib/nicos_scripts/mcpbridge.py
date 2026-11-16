@@ -13,6 +13,7 @@ import queue
 import subprocess
 import sys
 import threading
+import time
 
 from . import mcpstdio
 from .logs import logger
@@ -32,6 +33,7 @@ class Child:
         self.lock = threading.Lock()
 
     def _start(self):
+        self.init_result = None
         self.proc = self.popen(
             self.argv,
             stdin=subprocess.PIPE,
@@ -52,6 +54,7 @@ class Child:
             },
         )
         if "result" not in reply:
+            self.stop()
             raise RuntimeError(f"initialize failed: {reply}")
         self.init_result = reply["result"]
         self._write({"jsonrpc": "2.0", "method": "notifications/initialized"})
@@ -71,20 +74,42 @@ class Child:
         self.proc.stdin.flush()
 
     def _rpc(self, method, params):
+        """One request, one deadline: past it the child is killed, which also
+        frees a write blocked on a child that stopped reading."""
         self.next_id += 1
         rid = self.next_id
         msg = {"jsonrpc": "2.0", "id": rid, "method": method}
         if params is not None:
             msg["params"] = params
+        deadline = time.monotonic() + self.timeout
+        watchdog = threading.Timer(self.timeout, self.proc.kill)
+        watchdog.start()
+        try:
+            return self._exchange(msg, rid, deadline)
+        except TimeoutError:
+            raise
+        except OSError as e:
+            self.stop()
+            raise RuntimeError(
+                f"{method}: the MCP server stopped reading ({e})"
+            ) from None
+        finally:
+            watchdog.cancel()
+
+    def _exchange(self, msg, rid, deadline):
         self._write(msg)
         while True:
             try:
-                got = self.lines.get(timeout=self.timeout)
+                got = self.lines.get(timeout=max(0, deadline - time.monotonic()))
             except queue.Empty:
                 self.stop()
-                raise TimeoutError(f"{method}: no reply in {self.timeout}s") from None
+                raise TimeoutError(
+                    f"{msg['method']}: no reply in {self.timeout}s"
+                ) from None
             if got is None:
                 self.proc = None
+                if time.monotonic() >= deadline:
+                    raise TimeoutError(f"{msg['method']}: no reply in {self.timeout}s")
                 raise RuntimeError("the MCP server exited")
             if got.get("id") == rid and "method" not in got:
                 return got
@@ -106,7 +131,11 @@ class Child:
 
     def initialize(self):
         with self.lock:
-            if self.proc is None or self.proc.poll() is not None:
+            if (
+                self.proc is None
+                or self.proc.poll() is not None
+                or not self.init_result
+            ):
                 self._start()
             return self.init_result
 

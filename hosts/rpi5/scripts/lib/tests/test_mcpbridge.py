@@ -32,6 +32,15 @@ for line in sys.stdin:
         r = {"content": [{"type": "text", "text": m["params"]["name"]}]}
     elif m["method"] == "exit":
         sys.exit(0)
+    elif m["method"] == "chatty":
+        import time
+        for _ in range(4):
+            print(json.dumps({"jsonrpc": "2.0", "method": "notifications/progress"}), flush=True)
+            time.sleep(0.5)
+        continue
+    elif m["method"] == "deaf":
+        import time
+        time.sleep(60)
     else:
         r = {}
     print(json.dumps({"jsonrpc": "2.0", "id": m["id"], "result": r}), flush=True)
@@ -132,3 +141,49 @@ def test_parse_args_needs_a_command():
         mcpbridge.parse_args(["srv"])
     with pytest.raises(ValueError):
         mcpbridge.parse_args(["--bogus", "--", "srv"])
+
+
+def test_one_deadline_per_request_despite_notifications():
+    child = mcpbridge.Child([sys.executable, "-c", FAKE], timeout=1)
+    try:
+        started = __import__("time").monotonic()
+        with pytest.raises(TimeoutError):
+            child.call("chatty")
+        assert __import__("time").monotonic() - started < 1.8
+        assert child.call("tools/list")["result"]["tools"]
+    finally:
+        child.stop()
+
+
+def test_a_child_that_stops_reading_is_killed_at_the_deadline():
+    child = mcpbridge.Child([sys.executable, "-c", FAKE], timeout=1)
+    try:
+        child.call("tools/list")
+        with pytest.raises((TimeoutError, RuntimeError)):
+            child.call("deaf", {"blob": "x" * 2_000_000})
+        assert child.call("tools/list")["result"]["tools"]
+    finally:
+        child.stop()
+
+
+def test_a_failed_initialize_discards_the_child():
+    class Proc:
+        def __init__(self, *a, **k):
+            import io
+
+            self.stdin = io.StringIO()
+            self.stdout = io.StringIO(
+                '{"jsonrpc":"2.0","id":1,"error":{"code":-1,"message":"no"}}\n'
+            )
+            self.killed = False
+
+        def kill(self):
+            self.killed = True
+
+        def poll(self):
+            return None
+
+    child = mcpbridge.Child(["x"], popen=Proc, timeout=2)
+    with pytest.raises(RuntimeError):
+        child.initialize()
+    assert child.proc is None and child.init_result is None
