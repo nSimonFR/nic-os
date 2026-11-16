@@ -97,6 +97,8 @@ train-prices-mcp-http = "nicos_scripts.trains.mcp:main_http"
 messaging-mcp = "nicos_scripts.messaging.mcp:main"
 # A stdio MCP server behind Streamable HTTP + bearer, for Aperture (agents/mcp-bridges.nix).
 mcp-stdio-bridge = "nicos_scripts.mcpbridge:main"
+# Oneshot before karakeep-mcp: mints its Karakeep API key (agents/mcp-bridges.nix).
+karakeep-mcp-key = "nicos_scripts.connectors.karakeep_key:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
 hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in
