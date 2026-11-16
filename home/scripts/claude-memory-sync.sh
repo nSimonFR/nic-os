@@ -57,6 +57,8 @@ rebase_in_progress() {
 
 only_memory_ahead() {
   local files
+  # --name-only hides merge diffs, and a rebase would drop the merge: refuse any.
+  [ -z "$(git_ rev-list --merges "origin/$branch..HEAD")" ] || return 1
   files=$(git_ log --format= --name-only "origin/$branch..HEAD" 2>/dev/null | sort -u)
   [ -z "$files" ] || ! printf '%s\n' "$files" | grep -qv '^memory/'
 }
