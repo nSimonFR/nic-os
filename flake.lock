@@ -1682,6 +1682,23 @@
         "type": "github"
       }
     },
+    "rex": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1794854967,
+        "narHash": "sha256-MJ7PMkj4aQM30vLVPeay1gPiTx9OBylGyLvqAfnoS9E=",
+        "type": "tarball",
+        "url": "https://pkgs.superlogical.com/rex/nix/snapshot/0.0.1794854967-g57a025.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://pkgs.superlogical.com/rex/nix/snapshot.tar.gz"
+      }
+    },
     "root": {
       "inputs": {
         "airtrail-nix": "airtrail-nix",
@@ -1712,6 +1729,7 @@
         "pyproject-nix": "pyproject-nix_3",
         "ragenix": "ragenix",
         "reactive-resume-nix": "reactive-resume-nix",
+        "rex": "rex",
         "rtk-src": "rtk-src",
         "ryot-nix": "ryot-nix",
         "showmycards-src": "showmycards-src",

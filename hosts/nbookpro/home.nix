@@ -13,6 +13,7 @@
     ./entire-brain.nix
     ./sudo-agent-forward.nix
     ./agent-vault.nix
+    ./rex.nix
   ];
 
   home = {
