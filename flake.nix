@@ -255,8 +255,9 @@
     # /v1/messages body cap to 32 MiB (#18; memoryMax in tiny-llm-gate.nix follows).
     # v0.10.8 serves the Codex CLI catalog at /codex/models (#19); v0.10.9
     # discovers upstream models at runtime (#20). v0.11.0 adds Jev routers (#21).
+    # v0.11.1 retries a ChatGPT stream that answers 200 then goes silent (#22).
     tiny-llm-gate = {
-      url = "github:nSimonFR/tiny-llm-gate/v0.11.0";
+      url = "github:nSimonFR/tiny-llm-gate/v0.11.1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
