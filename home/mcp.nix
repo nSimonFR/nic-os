@@ -21,16 +21,11 @@ in
 {
   # Linear, Miro and GitHub come from the claude.ai connectors.
   programs.claude-code.mcpServers = {
-    # Self-hosted MCP servers, aggregated by Aperture (the `connectors` list in
+    # Every MCP server, aggregated by Aperture (the `connectors` list in
     # hosts/rpi5/agents/aperture-sync.nix); access is by tailnet identity.
     aperture = {
       type = "http";
       url = "${apertureUrl}/v1/mcp";
-    };
-    # OAuth sign-in happens in the client (/mcp); no token in config.
-    calcom = {
-      type = "http";
-      url = "https://mcp.cal.com/mcp";
     };
   };
 

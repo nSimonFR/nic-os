@@ -302,8 +302,8 @@ in
     }
   ) bridges;
   users.groups = lib.mapAttrs' (name: _: lib.nameValuePair "mautrix-${name}" { }) bridges // {
-    # The messaging MCP reads the double-puppet token; it runs in hermes, as nsimon.
-    matrix-mcp.members = [ "nsimon" ];
+    # The messaging MCP (messaging-mcp.nix) reads the double-puppet token.
+    matrix-mcp = { };
   };
 
   services.postgresql = {

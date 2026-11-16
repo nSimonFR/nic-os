@@ -8,7 +8,7 @@
 # All public data, no auth. Upstream ships static Go binaries, so we install those
 # rather than buildGoModule (no vendorHash, no Go toolchain).
 #
-# Used by hosts/rpi5/agents/hermes/hermes.nix. Renovate bumps `version`;
+# Served to Aperture by hosts/rpi5/agents/mcp-bridges.nix. Renovate bumps `version`;
 # scripts/nix-fix-hashes.py refreshes every per-platform hash.
 let
   # renovate: datasource=github-releases depName=nathanmartins/mtg-mcp extractVersion=^v(?<version>.+)$

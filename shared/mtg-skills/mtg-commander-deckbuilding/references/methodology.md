@@ -18,7 +18,7 @@ A Commander deck is a machine, not a top-99 list. Its 99 should still function i
 1. Retrieve the supplied public deck through MCP or parse the pasted list. Confirm commander, format, and complete command zone.
 2. Get exact commander details; extract its engine and color identity. Sharpen the existing plan unless the user asks for a pivot.
 3. Tally actual role counts and compare to the target shape. Identify the largest 2–3 gaps: mana, draw, ramp, interaction, curve, cohesion, or closing power.
-4. Ground the diagnosis in comparables. Use meaningful EDHREC recommendation/inclusion data when available. Also—or if those values are zero, missing, or malformed—search 1–2 relevant public Archidekt lists with `mcp__mtg__search_archidekt_decks`, fetch them with `mcp__mtg__get_archidekt_deck`, and compare role counts/card overlap. They are selected published examples, not aggregate inclusion-rate evidence. If neither source is usable, disclose reduced confidence and use explicit role/synergy reasoning.
+4. Ground the diagnosis in comparables. Use meaningful EDHREC recommendation/inclusion data when available. Also—or if those values are zero, missing, or malformed—search 1–2 relevant public Archidekt lists with `mcp__aperture__mtg_search_archidekt_decks`, fetch them with `mcp__aperture__mtg_get_archidekt_deck`, and compare role counts/card overlap. They are selected published examples, not aggregate inclusion-rate evidence. If neither source is usable, disclose reduced confidence and use explicit role/synergy reasoning.
 5. Reconcile the diagnosis with the user’s play experience. Their reported problems outrank a purely structural tally; raise unmentioned material gaps and ask whether they want them addressed.
 
 ## Actual bracket and target
@@ -39,7 +39,7 @@ Ask for a bracket/power target when it would change choices. Do not manufacture 
 After every accepted swap set:
 
 1. Recount roles and confirm the named gaps improved.
-2. Re-run size/singleton validation with `mcp__mtg__validate_deck`.
+2. Re-run size/singleton validation with `mcp__aperture__mtg_validate_deck`.
 3. Retrieve current bans and per-card details to confirm Commander legality and color identity; manually check special command-zone compatibility.
 4. State before → after role counts, accepted changes, spend versus cap, remaining gaps, and observed power-signal changes.
 

@@ -1,7 +1,7 @@
 ---
 name: mtg-commander-deckbuilding
 description: Use when building or upgrading a Commander deck with rigorous, interactive swaps.
-version: 1.3.0
+version: 1.4.0
 author: guuse, P47Phoenix, Nico + Hermes Agent
 license: MIT
 metadata:
@@ -29,18 +29,18 @@ Do not use for a pilot guide; load `mtg-commander-strategy` instead. For standal
 
 | Need | Installed tool |
 |---|---|
-| Public Moxfield/Archidekt deck | `mcp__mtg__get_moxfield_deck`, `mcp__mtg__get_archidekt_deck` |
-| Comparable published Archidekt lists | `mcp__mtg__search_archidekt_decks`, then `mcp__mtg__get_archidekt_deck` |
-| Oracle text, type, identity, legality | `mcp__mtg__get_card_details` |
-| Commander-legal candidate search | `mcp__mtg__search_cards` |
-| Current Commander ban list | `mcp__mtg__get_banned_list` |
-| Deck size and singleton | `mcp__mtg__validate_deck` |
-| Current per-card price snapshot | `mcp__mtg__get_card_price` |
-| Commander usage/candidate pool | `mcp__mtg__get_edhrec_recommendations`, `mcp__mtg__get_edhrec_combos` |
+| Public Moxfield/Archidekt deck | `mcp__aperture__mtg_get_moxfield_deck`, `mcp__aperture__mtg_get_archidekt_deck` |
+| Comparable published Archidekt lists | `mcp__aperture__mtg_search_archidekt_decks`, then `mcp__aperture__mtg_get_archidekt_deck` |
+| Oracle text, type, identity, legality | `mcp__aperture__mtg_get_card_details` |
+| Commander-legal candidate search | `mcp__aperture__mtg_search_cards` |
+| Current Commander ban list | `mcp__aperture__mtg_get_banned_list` |
+| Deck size and singleton | `mcp__aperture__mtg_validate_deck` |
+| Current per-card price snapshot | `mcp__aperture__mtg_get_card_price` |
+| Commander usage/candidate pool | `mcp__aperture__mtg_get_edhrec_recommendations`, `mcp__aperture__mtg_get_edhrec_combos` |
 
 - Never run upstream Python scripts, build/download a local card database, call direct Scryfall/EDHREC/Moxfield/Archidekt APIs, create a `.mtg` workspace, or sync/push user data.
 - The MCP has no Cardmarket total, average-deck endpoint, role tags, automated bracket analyzer, or file-presentation equivalent. Do not invent their output. Price only requested/high-impact cards; identify currency/source and never count unavailable prices as zero.
-- `mcp__mtg__validate_deck` verifies size and singleton only. Full Commander legality requires current ban-list plus per-card identity/legality checks. Its one-commander interface also requires manual partner/background-style command-zone verification.
+- `mcp__aperture__mtg_validate_deck` verifies size and singleton only. Full Commander legality requires current ban-list plus per-card identity/legality checks. Its one-commander interface also requires manual partner/background-style command-zone verification.
 - Assert owned-only compliance only from a supplied readable collection export or verified collection data. Otherwise say ownership is unverified.
 
 ## Upgrade: Interactive Diagnosis and Swaps
@@ -66,11 +66,11 @@ Their lived problems outrank a structural tally. Surface material unmentioned ga
 
 ### 3. Establish candidates
 
-1. Ground candidate choices in comparables. Use meaningful EDHREC recommendations/inclusion data when available. Also—or when its counts/inclusion data are zero, missing, or malformed—use `mcp__mtg__search_archidekt_decks` for 1–2 relevant public lists, then fetch them with `mcp__mtg__get_archidekt_deck` and compare role counts/card overlap. Label these as selected published examples, not aggregate inclusion-rate evidence. If neither source is usable, state reduced confidence and rely on explicit synergy/role reasoning. EDHREC is never proof of fit, legality, price, or rules.
-2. Use `mcp__mtg__search_cards` for precise role/theme searches, then retrieve exact details for each serious candidate. Every themed add must fix a named gap and normally show at least two concrete synergy contacts; structural cards are exceptions. Name those contacts.
+1. Ground candidate choices in comparables. Use meaningful EDHREC recommendations/inclusion data when available. Also—or when its counts/inclusion data are zero, missing, or malformed—use `mcp__aperture__mtg_search_archidekt_decks` for 1–2 relevant public lists, then fetch them with `mcp__aperture__mtg_get_archidekt_deck` and compare role counts/card overlap. Label these as selected published examples, not aggregate inclusion-rate evidence. If neither source is usable, state reduced confidence and rely on explicit synergy/role reasoning. EDHREC is never proof of fit, legality, price, or rules.
+2. Use `mcp__aperture__mtg_search_cards` for precise role/theme searches, then retrieve exact details for each serious candidate. Every themed add must fix a named gap and normally show at least two concrete synergy contacts; structural cards are exceptions. Name those contacts.
 3. Search only in command-zone identity (`id<=…` syntax). Confirm each selected card’s identity/Commander legality from details; never infer it from frame color or mana production.
 4. For each add, propose a cut serving the same or lower-priority role. Keep the deck at 100 cards including command zone and preserve pet cards unless the user accepts removal.
-5. Price requested candidates and plausible cap breakers with `mcp__mtg__get_card_price`. If a high-impact add exceeds budget, find a cheaper legal same-role option. If none is adequate, leave the existing card and move to the next priority; do not buy a downgrade just to spend money.
+5. Price requested candidates and plausible cap breakers with `mcp__aperture__mtg_get_card_price`. If a high-impact add exceeds budget, find a cheaper legal same-role option. If none is adequate, leave the existing card and move to the next priority; do not buy a downgrade just to spend money.
 
 ### 4. Propose, discuss, iterate
 
@@ -81,9 +81,9 @@ If the budget cannot make the deck a solid version of the requested target, say 
 ### 5. Final legality and quality gate
 
 1. Recount roles and confirm the agreed priority gaps improved.
-2. Run `mcp__mtg__validate_deck` with commander separate from the 99-card mainboard for deck size and singleton.
+2. Run `mcp__aperture__mtg_validate_deck` with commander separate from the 99-card mainboard for deck size and singleton.
 3. Retrieve the current ban list. For every nonbasic—and unusual basic—retrieve card details to confirm Commander legality and identity within the command zone. Manually verify multi-commander compatibility, quantities, and explicit restrictions.
-4. For non-obvious interactions, retrieve exact Oracle text, published rulings where useful, then the decisive Comprehensive Rule (known number: `mcp__mtg__get_rule`; unknown: `mcp__mtg__search_rules` then `get_rule`; keyword: `mcp__mtg__get_glossary_term`). Give prerequisites, ordered actions, result, disruption point, and only the evidence that decides it. Call a line a synergy rather than a combo if it is not deterministic.
+4. For non-obvious interactions, retrieve exact Oracle text, published rulings where useful, then the decisive Comprehensive Rule (known number: `mcp__aperture__mtg_get_rule`; unknown: `mcp__aperture__mtg_search_rules` then `get_rule`; keyword: `mcp__aperture__mtg_get_glossary_term`). Give prerequisites, ordered actions, result, disruption point, and only the evidence that decides it. Call a line a synergy rather than a combo if it is not deterministic.
 5. If a check fails, make only necessary corrections and repeat the whole gate. Do not call the deck legal until all checks pass.
 
 ## Collection and Theme Constraints

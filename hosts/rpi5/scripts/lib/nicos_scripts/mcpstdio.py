@@ -8,9 +8,12 @@ method of the same name per tool. A tool that raises becomes an isError result,
 never a dead server.
 """
 
+import hmac
 import json
+import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 PROTOCOL = "2025-06-18"
 
@@ -83,8 +86,17 @@ def serve(tools, handlers, server, log, stdin=None, stdout=None):
             stdout.flush()
 
 
-def http_handler(tools, handlers, server, log):
+def http_handler(tools, handlers, server, log, token=None):
     """Request handler class: POST /mcp is JSON-RPC, GET /health is readiness."""
+    return dispatch_handler(
+        lambda msg: handle(msg, tools, handlers, server, log), token
+    )
+
+
+def dispatch_handler(dispatch, token=None):
+    """POST /mcp goes to `dispatch(msg) -> reply | None`. With `token`, POST needs
+    `Authorization: Bearer <token>`; /health stays open for the readiness probe."""
+    expected = f"Bearer {token}".encode() if token else None
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -113,8 +125,12 @@ def http_handler(tools, handlers, server, log):
             if self.path != "/mcp":
                 return self._send(404)
             raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            if expected and not hmac.compare_digest(
+                (self.headers.get("Authorization") or "").encode(), expected
+            ):
+                return self._send(401, {"error": "unauthorized"})
             try:
-                reply = handle(json.loads(raw), tools, handlers, server, log)
+                reply = dispatch(json.loads(raw))
             except ValueError:
                 reply = _error(None, -32700, "JSON invalide")
             if reply is None:
@@ -124,9 +140,20 @@ def http_handler(tools, handlers, server, log):
     return Handler
 
 
-def serve_http(tools, handlers, server, log, host, port):
-    httpd = ThreadingHTTPServer(
-        (host, port), http_handler(tools, handlers, server, log)
+def serve_http(tools, handlers, server, log, host, port, token=None):
+    serve_dispatch(
+        lambda msg: handle(msg, tools, handlers, server, log), log, host, port, token
     )
-    log(f"listening on http://{host}:{port}/mcp")
+
+
+def serve_dispatch(dispatch, log, host, port, token=None):
+    httpd = ThreadingHTTPServer((host, port), dispatch_handler(dispatch, token))
+    log(f"listening on http://{host}:{port}/mcp" + (" (bearer)" if token else ""))
     httpd.serve_forever()
+
+
+def credential_token(env=None, name="token"):
+    """The bearer token systemd passed with LoadCredential=<name>:…, or None."""
+    directory = (os.environ if env is None else env).get("CREDENTIALS_DIRECTORY")
+    path = Path(directory or "/nonexistent") / name
+    return path.read_text().strip() if path.is_file() else None

@@ -1,6 +1,6 @@
-# mcp-email-server — IMAP/SMTP MCP server (Wh1isper/mcp-email-server). Hermes'
-# only mail tool: Proton through hydroxide and Gmail over IMAP, wired in
-# hosts/rpi5/agents/hermes/mail-mcp.nix.
+# mcp-email-server — IMAP/SMTP MCP server (Wh1isper/mcp-email-server): Proton
+# through hydroxide and Gmail over IMAP, served to Aperture by
+# hosts/rpi5/agents/mcp-bridges.nix.
 { python3Packages }:
 let
   # nixpkgs' aioimaplib 2.0.1 fails 2 of its own tests (test_store*, an imaplib2
