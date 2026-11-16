@@ -1,5 +1,6 @@
 # Stdio-only MCP servers behind mcp-stdio-bridge (nicos-scripts), served as
-# Streamable HTTP for Aperture's `mail` and `mtg` connectors (aperture-sync.nix).
+# Streamable HTTP for Aperture's `mail`, `mtg` and `karakeep` connectors
+# (aperture-sync.nix).
 # Socket-activated: 0 at rest; the child server starts on the first request.
 #
 # A bridge with `token = true` requires a bearer token, generated once into
@@ -11,6 +12,14 @@ let
 
   mcpEmailServer = pkgs.callPackage ../../../pkgs/agents/mcp-email-server.nix { };
   mtgMcp = pkgs.callPackage ../../../pkgs/agents/mtg-mcp.nix { };
+  karakeepMcp = pkgs.callPackage ../../../pkgs/agents/karakeep-mcp.nix { };
+  # Owned by karakeep, written by karakeep-mcp-key.service.
+  karakeepKeyFile = "/var/lib/karakeep/mcp-api-key";
+  karakeepMcpRun = pkgs.writeShellScript "karakeep-mcp-run" ''
+    KARAKEEP_API_KEY=$(< "$CREDENTIALS_DIRECTORY/apikey")
+    export KARAKEEP_API_KEY
+    exec ${karakeepMcp}/bin/karakeep-mcp
+  '';
 
   # Proton through hydroxide (loopback) and Gmail. Passwords only inline, so
   # mailSetup fills the @…@ placeholders from credentials into the state dir.
@@ -90,6 +99,7 @@ let
       publicPort = 4050;
       order = 178;
       token = true;
+      units = [ ];
       command = [
         "${mcpEmailServer}/bin/mcp-email-server"
         "stdio"
@@ -124,6 +134,7 @@ let
       publicPort = 4070;
       order = 179;
       token = false;
+      units = [ ];
       command = [ "${mtgMcp}/bin/mtg-mcp" ];
       exclude = [ ];
       environment = { };
@@ -131,19 +142,41 @@ let
       backup = [ "none" ];
       backupNote = "stateless — Scryfall, EDHREC, Moxfield and Archidekt live";
     };
+    karakeep = {
+      description = "Karakeep MCP (apps/mcp)";
+      internalPort = 13366;
+      proxyPort = 8440;
+      publicPort = 4080;
+      order = 181;
+      token = true;
+      units = [ "karakeep-mcp-key.service" ];
+      command = [ "${karakeepMcpRun}" ];
+      exclude = [
+        "delete-bookmark"
+        "delete-highlight"
+        "delete-list"
+        "delete-tag"
+      ];
+      # karakeep's socket-activate proxy (karakeep.nix): a call wakes it.
+      environment.KARAKEEP_API_ADDR = "http://127.0.0.1:8210";
+      serviceConfig.LoadCredential = [ "apikey:${karakeepKeyFile}" ];
+      backup = [ "none" ];
+      backupNote = "stateless — the bookmarks live in Karakeep";
+    };
   };
 
   mkBridge =
     name: b:
     let
       unit = "${name}-mcp";
+      deps = b.units ++ lib.optional b.token "mcp-tokens.service";
     in
     {
       systemd.services.${unit} = {
         inherit (b) description;
-        after = [ "network-online.target" ] ++ lib.optional b.token "mcp-tokens.service";
+        after = [ "network-online.target" ] ++ deps;
         wants = [ "network-online.target" ];
-        requires = lib.optional b.token "mcp-tokens.service";
+        requires = deps;
         environment = b.environment // {
           MCP_BRIDGE_HOST = "127.0.0.1";
           MCP_BRIDGE_PORT = toString b.internalPort;
@@ -199,6 +232,19 @@ in
     lib.mapAttrsToList mkBridge bridges
     ++ [
       {
+        systemd.services.karakeep-mcp-key = {
+          description = "Karakeep API key for its MCP server";
+          after = [ "karakeep-init.service" ];
+          serviceConfig = {
+            Type = "oneshot";
+            RemainAfterExit = true;
+            User = "karakeep";
+            Group = "karakeep";
+            ExecStart = "${pkgs.nicos-scripts}/bin/karakeep-mcp-key";
+          };
+          environment.KEY_FILE = karakeepKeyFile;
+        };
+
         # One random bearer per token-protected MCP server, kept across boots.
         systemd.services.mcp-tokens = {
           description = "Bearer tokens for the token-protected MCP servers";
@@ -211,8 +257,8 @@ in
             UMask = "0077";
           };
           script = ''
-            # mail here, messaging in messaging/messaging-mcp.nix.
-            for name in mail messaging; do
+            # messaging is in messaging/messaging-mcp.nix, the rest here.
+            for name in mail messaging karakeep; do
               f=${tokenDir}/$name
               [ -s "$f" ] || ${pkgs.openssl}/bin/openssl rand -hex 32 > "$f"
             done
