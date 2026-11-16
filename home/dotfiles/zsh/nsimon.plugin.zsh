@@ -6,7 +6,7 @@ source ${0:a:h}/zsh_hooks.zsh
 source ${0:a:h}/colors.zsh
 source ${0:a:h}/functions.zsh
 # Private nSimonFR/trusk checkout — Mac only.
-[[ -r ~/MyDocuments/TRUSK/trusk/zsh/trusk.zsh ]] && source ~/MyDocuments/TRUSK/trusk/zsh/trusk.zsh
+[[ -r ~/MyDocuments/TRUSK/zsh/trusk.zsh ]] && source ~/MyDocuments/TRUSK/zsh/trusk.zsh
 source ${0:a:h}/aliases.zsh
 source ${0:a:h}/bindkeys.zsh
 source ${0:a:h}/evals.zsh

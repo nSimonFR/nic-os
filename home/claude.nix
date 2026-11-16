@@ -33,8 +33,10 @@ let
   # Trusk lives in the private nSimonFR/trusk checkout (Mac only), never in this
   # public repo. Out-of-store links keep it out of the store too; without the clone
   # they just dangle. Skills are named here because nix cannot read the checkout.
-  truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK/trusk";
+  # The checkout IS ~/MyDocuments/TRUSK (the Trusk repos are its submodules).
+  truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK";
   truskSkills = [
+    "designing-schemas-and-migrations"
     "ship"
     "trusk-data-glossary"
     "trusk-preview-deploy"
@@ -42,15 +44,12 @@ let
   truskSlashCommandSkills = [ "ship" ];
   truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
 
+  # AGENTS.md and notes/ need no link: they sit in place at the checkout root, and
+  # AGENTS.md loads by walking UP the tree, so it reaches every Trusk repo and nothing
+  # else. Never add a CLAUDE.md there: Claude Code skips every AGENTS.md once a
+  # CLAUDE.md is on the path, which hid the repos' own.
   truskFiles = lib.optionalAttrs pkgs.stdenv.isDarwin (
-    {
-      # AGENTS.md loads by walking UP the tree, so it reaches every Trusk repo and
-      # nothing else; notes/ is read on demand. Claude Code skips every AGENTS.md
-      # once a CLAUDE.md is on the path: a CLAUDE.md here hid the repos' own.
-      "MyDocuments/TRUSK/AGENTS.md".source = truskLink "AGENTS.md";
-      "MyDocuments/TRUSK/notes".source = truskLink "notes";
-    }
-    // lib.listToAttrs (
+    lib.listToAttrs (
       lib.concatMap (
         name:
         map (t: lib.nameValuePair "${t}/${name}" { source = truskLink "skills/${name}"; }) skillTargets
