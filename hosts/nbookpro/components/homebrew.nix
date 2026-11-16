@@ -111,13 +111,15 @@ in
   };
 
   # Replaces onActivation.cleanup = "zap"; same content as nix-darwin's Brewfile,
-  # so the same store path.
+  # so the same store path. Non-fatal: cleanup errors on a keg whose tap dropped
+  # its formula (dbt-postgres), and `set -e` then aborted the whole deploy.
   system.activationScripts.homebrew.text = lib.mkAfter ''
     if [ -f "${cfg.prefix}/bin/brew" ]; then
       PATH="${cfg.prefix}/bin:$PATH" \
       sudo --preserve-env=PATH --user=${lib.escapeShellArg cfg.user} --set-home \
         env HOMEBREW_NO_AUTO_UPDATE=1 \
-        brew bundle cleanup --file='${pkgs.writeText "Brewfile" cfg.brewfile}' --force --zap
+        brew bundle cleanup --file='${pkgs.writeText "Brewfile" cfg.brewfile}' --force --zap \
+        || echo "warning: brew bundle cleanup failed; nothing was removed" >&2
     fi
   '';
 }
