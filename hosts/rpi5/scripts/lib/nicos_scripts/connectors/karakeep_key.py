@@ -3,8 +3,8 @@
 Karakeep makes API keys only through its UI, so this writes one the way
 packages/trpc/auth.ts does (v2: `ak2_<keyId>_<secret>`, sha256 of the secret,
 base64) into its SQLite, for the oldest admin, and keeps the plain key in
-KEY_FILE (0600). Runs as the karakeep user; a key file whose keyId is still in
-the database is left alone.
+KEY_FILE (0600). Runs as the karakeep user before each karakeep-mcp start; a
+key Karakeep still accepts is left alone.
 Env: KARAKEEP_DB (/var/lib/karakeep/db.db), KEY_FILE.
 """
 
@@ -37,24 +37,31 @@ class Config:
         )
 
 
+def digest_of(secret):
+    return base64.b64encode(hashlib.sha256(secret.encode()).digest()).decode()
+
+
 def new_key(token_hex=secrets.token_hex):
     key_id, secret = token_hex(10), token_hex(16)
-    digest = base64.b64encode(hashlib.sha256(secret.encode()).digest()).decode()
-    return key_id, f"ak2_{key_id}_{secret}", digest
+    return key_id, f"ak2_{key_id}_{secret}", digest_of(secret)
+
+
+def still_valid(con, plain):
+    """What Karakeep's v2 check accepts: prefix, keyId, sha256 of the secret."""
+    parts = plain.split("_")
+    if len(parts) != 3 or parts[0] != "ak2":
+        return False
+    row = con.execute(
+        "select keyHash from apiKey where keyId = ?", (parts[1],)
+    ).fetchone()
+    return row is not None and row[0] == digest_of(parts[2])
 
 
 def ensure(con, key_file, token_hex=secrets.token_hex):
     """'kept', 'minted', or 'no admin'."""
     path = Path(key_file)
-    if path.is_file():
-        parts = path.read_text().strip().split("_")
-        if (
-            len(parts) == 3
-            and con.execute(
-                "select 1 from apiKey where keyId = ?", (parts[1],)
-            ).fetchone()
-        ):
-            return "kept"
+    if path.is_file() and still_valid(con, path.read_text().strip()):
+        return "kept"
     row = con.execute(
         "select id from user where role = 'admin' order by rowid limit 1"
     ).fetchone()

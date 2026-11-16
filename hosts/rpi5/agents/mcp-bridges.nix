@@ -236,8 +236,8 @@ in
           description = "Karakeep API key for its MCP server";
           after = [ "karakeep-init.service" ];
           serviceConfig = {
+            # No RemainAfterExit: it re-checks the key before each karakeep-mcp start.
             Type = "oneshot";
-            RemainAfterExit = true;
             User = "karakeep";
             Group = "karakeep";
             ExecStart = "${pkgs.nicos-scripts}/bin/karakeep-mcp-key";
