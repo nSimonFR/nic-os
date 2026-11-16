@@ -1,9 +1,7 @@
-"""messaging-mcp: stdio MCP over Nico's bridged chats.
-
-Two servers from one binary, so Hermes can gate them apart:
-  messaging-mcp          read-only: list_chats, read_chat, search_messages
-  messaging-mcp --send   send_message only (Hermes marks it untrusted)
-Env: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_TOKEN_FILE.
+"""messaging-mcp: Streamable HTTP MCP over Nico's bridged chats, for Aperture's
+`messaging` connector. Hermes gates send_message by name (mcp_servers.aperture-send).
+Env: MATRIX_HOMESERVER, MATRIX_USER_ID, MATRIX_TOKEN_FILE, MESSAGING_MCP_HOST/PORT;
+the bearer token comes from LoadCredential=token.
 """
 
 import sys
@@ -13,7 +11,7 @@ from datetime import datetime, timezone
 
 from .. import mcpstdio
 from ..logs import logger
-from ..secrets import env_str
+from ..secrets import env_int, env_str
 from .matrix import BRIDGE_TYPES, Matrix, token_from_env_file
 
 log = logger("messaging-mcp", lambda: sys.stderr)
@@ -72,11 +70,16 @@ SEND_TOOLS = {
 }
 
 
+TOOLS = {**READ_TOOLS, **SEND_TOOLS}
+
+
 @dataclass(frozen=True)
 class Config:
     homeserver: str
     user_id: str
     token_file: str
+    host: str = "127.0.0.1"
+    port: int = 0
 
     @classmethod
     def from_env(cls, env=None):
@@ -88,6 +91,8 @@ class Config:
                 "/var/lib/matrix-doublepuppet/doublepuppet.env",
                 env,
             ),
+            host=env_str("MESSAGING_MCP_HOST", "127.0.0.1", env),
+            port=env_int("MESSAGING_MCP_PORT", 0, env),
         )
 
 
@@ -198,15 +203,14 @@ class Handlers:
         return {"event_id": self.matrix.send_text(room_id, text).get("event_id")}
 
 
-def main(argv=None, env=None, matrix=None, stdin=None, stdout=None):
-    argv = sys.argv[1:] if argv is None else argv
-    tools = SEND_TOOLS if "--send" in argv else READ_TOOLS
+def main(argv=None, env=None, matrix=None, serve=mcpstdio.serve_dispatch):
+    del argv
+    cfg = Config.from_env(env)
     if matrix is None:
-        cfg = Config.from_env(env)
-        if not cfg.user_id:
-            log("FATAL: MATRIX_USER_ID unset")
+        if not cfg.user_id or not cfg.port:
+            log("FATAL: MATRIX_USER_ID or MESSAGING_MCP_PORT unset")
             return 2
-        # Loopback: never through hermes' Agent Vault proxy.
+        # Loopback: never through a proxy.
         direct = urllib.request.build_opener(urllib.request.ProxyHandler({})).open
         matrix = Matrix(
             cfg.homeserver,
@@ -214,7 +218,14 @@ def main(argv=None, env=None, matrix=None, stdin=None, stdout=None):
             token_from_env_file(cfg.token_file),
             opener=direct,
         )
-    mcpstdio.serve(tools, Handlers(matrix), SERVER, log, stdin, stdout)
+    handlers = Handlers(matrix)
+    serve(
+        lambda msg: mcpstdio.handle(msg, TOOLS, handlers, SERVER, log),
+        log,
+        cfg.host,
+        cfg.port,
+        mcpstdio.credential_token(env),
+    )
     return 0
 
 

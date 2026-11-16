@@ -1,6 +1,5 @@
 """messaging-mcp: the Matrix calls it makes and what the model gets back."""
 
-import io
 import json
 import urllib.parse
 
@@ -155,19 +154,25 @@ def test_send_puts_a_text_event_and_refuses_an_empty_one():
     assert reply["result"]["isError"] is True
 
 
-def test_read_and_send_servers_expose_disjoint_tools():
-    def tools(argv):
-        out = io.StringIO()
-        mcp.main(
-            argv,
-            matrix=_matrix({})[0],
-            stdin=io.StringIO('{"id":1,"method":"tools/list"}\n'),
-            stdout=out,
-        )
-        return {t["name"] for t in json.loads(out.getvalue())["result"]["tools"]}
+def test_one_http_server_serves_read_and_send_with_the_credential_token(tmp_path):
+    (tmp_path / "token").write_text("secret\n")
+    served = {}
 
-    assert tools([]) == {"list_chats", "read_chat", "search_messages"}
-    assert tools(["--send"]) == {"send_message"}
+    def serve(dispatch, _log, host, port, token):
+        served.update(host=host, port=port, token=token)
+        served["tools"] = {
+            t["name"]
+            for t in dispatch({"id": 1, "method": "tools/list"})["result"]["tools"]
+        }
+
+    env = {"MESSAGING_MCP_PORT": "13364", "CREDENTIALS_DIRECTORY": str(tmp_path)}
+    assert mcp.main([], env=env, matrix=_matrix({})[0], serve=serve) == 0
+    assert served == {
+        "host": "127.0.0.1",
+        "port": 13364,
+        "token": "secret",
+        "tools": {"list_chats", "read_chat", "search_messages", "send_message"},
+    }
 
 
 def test_token_is_read_from_the_setup_env_file(tmp_path):

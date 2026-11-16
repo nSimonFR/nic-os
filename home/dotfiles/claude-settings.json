@@ -138,7 +138,10 @@
       "Read(**/*.enc)",
       "Read(**/*.pem)",
       "Read(**/*.key)",
-      "Read(**/*.p12)"
+      "Read(**/*.p12)",
+      "mcp__aperture__mail_send_email",
+      "mcp__aperture__mail_forward_email",
+      "mcp__aperture__messaging_send_message"
     ],
     "ask": [
       "mcp__postgres_prod_rw"
@@ -152,7 +155,7 @@
       "/Users/nsimon/.claude-rc/projects",
       "/Users/nsimon/.claude-secondary/projects"
     ],
-    "_comment_deny": "Global token-saving Read denials (home-manager managed via nic-os/home/dotfiles/claude-settings.json, wired to ~/.claude/settings.json in home/claude.nix). permissions.deny Read() rules are Claude Code's real file-exclusion mechanism — .claudeignore is NOT a native feature. Rules follow gitignore semantics and apply to Read/Grep/Glob plus cat/head/tail/sed in Bash, across every project (user-level settings = global). Unanchored patterns (no // or ~ prefix) match at any depth. Conservative: dependencies, lockfiles, build output, minified/maps, caches, logs, binaries/media, and secrets only — never real source code. Secrets entries (*.enc/*.pem/*.key/*.p12) also cover sops-encrypted Trusk deployment/configurations/<env>/secrets/ payloads. Edit to extend; deny merges across scopes and a deny at any level wins.",
+    "_comment_deny": "The mcp__aperture__*send* entries keep Claude from writing to people as Nico: Hermes asks him on Telegram for those. Global token-saving Read denials (home-manager managed via nic-os/home/dotfiles/claude-settings.json, wired to ~/.claude/settings.json in home/claude.nix). permissions.deny Read() rules are Claude Code's real file-exclusion mechanism — .claudeignore is NOT a native feature. Rules follow gitignore semantics and apply to Read/Grep/Glob plus cat/head/tail/sed in Bash, across every project (user-level settings = global). Unanchored patterns (no // or ~ prefix) match at any depth. Conservative: dependencies, lockfiles, build output, minified/maps, caches, logs, binaries/media, and secrets only — never real source code. Secrets entries (*.enc/*.pem/*.key/*.p12) also cover sops-encrypted Trusk deployment/configurations/<env>/secrets/ payloads. Edit to extend; deny merges across scopes and a deny at any level wins.",
     "_comment_transcripts": "additionalDirectories scopes reading session transcripts (~/.claude*/projects/**/*.jsonl) so `resume session <id>` and self-inspection do not prompt. Read(*)/Bash(*) were already allowed — the prompt came from the WORKSPACE BOUNDARY: transcripts live outside the project cwd, and only additionalDirectories widens that. Scoped to projects/ deliberately, NOT the whole ~/.claude: the parent holds .credentials.json. Listed under BOTH /home/nsimon and /Users/nsimon because ONE file is symlinked to every host (BeAsT + rpi5 are Linux, nBookPro is darwin) and these are absolute paths, so a single spelling silently covers only two hosts of three. That went unnoticed while the `claude()` alias passed --dangerously-skip-permissions, which skipped the boundary check outright; it surfaced the moment the flag was dropped (see home/dotfiles/zsh/aliases.zsh). A path that does not exist on a given host is inert, so listing both is free."
   },
   "model": "opus[1m]",

@@ -191,78 +191,12 @@ let
         shellcheck "$out"/*.sh
       '';
 
-  # mtg-mcp — native MCP server exposing Magic: The Gathering / Commander tools
-  # (Scryfall card search + pricing + rulings + legality, deck validation,
-  # Moxfield/Archidekt deck import, EDHREC recs/combos, comprehensive rules).
-  # All public data — no auth or API keys. Hermes' built-in MCP client
-  # (mcp_servers, below) launches it over stdio and registers its tools as
-  # mcp__mtg__* in every conversation. The package definition moved to
-  # pkgs/agents/mtg-mcp.nix.
-  mtgMcp = pkgs.callPackage ../../../../pkgs/agents/mtg-mcp.nix { };
-
-  # Mail: mcp-email-server over Proton (hydroxide, loopback) and Gmail (IMAP +
-  # app password). It only takes passwords inline, so setupScript fills the
-  # @…@ placeholders from agenix into ~/.hermes/mail-mcp/config.toml (0600).
-  mcpEmailServer = pkgs.callPackage ../../../../pkgs/agents/mcp-email-server.nix { };
-  mailMcpDir = "${hermesHome}/mail-mcp";
-  mailMcpConfig =
-    let
-      endpoint = host: port: tls: password: {
-        inherit host port password;
-        use_ssl = tls;
-        start_ssl = false;
-        verify_ssl = tls;
-      };
-      account =
-        name: address: imap: smtp: extra:
-        {
-          account_name = name;
-          email_address = address;
-          full_name = "Nicolas Simon"; # required by the TOML schema
-          # Both providers file sent mail themselves; an IMAP append would duplicate it.
-          save_to_sent = false;
-          incoming = imap // {
-            user_name = address;
-          };
-          outgoing = smtp // {
-            user_name = address;
-          };
-        }
-        // extra;
-    in
-    (pkgs.formats.toml { }).generate "mail-mcp.toml" {
-      credential_storage = "plaintext";
-      # Sending is granted here but gated in Hermes (mcp_servers.mail-send).
-      allowed_recipients = [ "*" ];
-      allowed_mutations = [
-        "draft"
-        "organize"
-        "send"
-      ];
-      emails = [
-        (account "proton" "nsimon@protonmail.com" (endpoint "127.0.0.1" 1143 false "@PROTON_PASSWORD@") (
-          endpoint
-            "127.0.0.1"
-            1025
-            false
-            "@PROTON_PASSWORD@"
-        ) { description = "Personal mail (nsimon@protonmail.com, @pm.me) via the hydroxide bridge"; })
-        (account "gmail" "hemeraude@gmail.com" (endpoint "imap.gmail.com" 993 true "@GMAIL_PASSWORD@") (
-          endpoint
-            "smtp.gmail.com"
-            465
-            true
-            "@GMAIL_PASSWORD@"
-        ) { description = "Personal Gmail (hemeraude@gmail.com)"; })
-      ];
-    };
-  mailMcpServer = {
-    command = "${mcpEmailServer}/bin/mcp-email-server";
-    args = [ "stdio" ];
-    env.MCP_EMAIL_SERVER_CONFIG_PATH = "${mailMcpDir}/config.toml";
-    lazy = true;
-    idle_timeout_seconds = 600;
-  };
+  # Aperture tools that send as Nico (mcp-bridges.nix, messaging-mcp.nix).
+  apertureSendTools = [
+    "mail_send_email"
+    "mail_forward_email"
+    "messaging_send_message"
+  ];
 
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
   jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
@@ -299,41 +233,21 @@ let
       "openai-codex"
     ];
 
-    # Native MCP client: launch mtg-mcp over stdio at startup and auto-register
-    # its tools (mcp__mtg__search_cards, __validate_deck, __get_card_price,
-    # __get_edhrec_recommendations, …) into every platform toolset. Public MTG
-    # data only, so no `env`/secrets are passed to the subprocess. Requires the
-    # `mcp` Python package, which the hermes-agent env already bundles.
-    mcp_servers.mtg.command = "${mtgMcp}/bin/mtg-mcp";
-
-    # The self-hosted MCP servers, aggregated by
-    # Aperture (agents/aperture-sync.nix) as mcp__aperture__<server>_<tool>. Listing
-    # the tools wakes the socket-activated ones, and a cold Sure took 14s to >30s.
+    # Every MCP server but T3, aggregated by Aperture (agents/aperture-sync.nix) as
+    # mcp__aperture__<connector>_<tool>. Listing the tools wakes the socket-activated
+    # ones, and a cold Sure took 14s to >30s.
     mcp_servers.aperture = {
       url = "${apertureUrl}/v1/mcp";
       connect_timeout = 120;
+      tools.exclude = apertureSendTools;
     };
-
-    # Mail (mailMcpConfig above), as two servers over one config because `trust` is
-    # per server: `mail` reads, drafts and files freely; `mail-send` holds only
-    # the sending tools and asks on Telegram before each call. Both start on
-    # first use and exit after 10 idle minutes (~70 MB each while up).
-    # email_command (raw IMAP/SMTP) and delete_emails are on neither.
-    mcp_servers.mail = mailMcpServer // {
-      tools.exclude = [
-        "send_email"
-        "forward_email"
-        "email_command"
-        "delete_emails"
-        "download_attachment"
-      ];
-    };
-    mcp_servers.mail-send = mailMcpServer // {
+    # The same gateway, holding only the tools that write as Nico to other
+    # people: `untrusted` asks him on Telegram before each call.
+    mcp_servers.aperture-send = {
+      url = "${apertureUrl}/v1/mcp";
+      connect_timeout = 120;
       trust = "untrusted";
-      tools.include = [
-        "send_email"
-        "forward_email"
-      ];
+      tools.include = apertureSendTools;
     };
 
     # T3 Code (hosts/rpi5/agents/t3code.nix): launch and follow coding threads.
@@ -344,14 +258,6 @@ let
     mcp_servers.t3 = {
       url = "http://127.0.0.1:3773/mcp";
       auth = "oauth";
-      trust = "untrusted";
-    };
-
-    # Nico's bridged chats (hosts/rpi5/messaging/). Reading is free; every send
-    # waits for his approval in Telegram.
-    mcp_servers.messaging = messagingMcp;
-    mcp_servers.messaging-send = messagingMcp // {
-      args = [ "--send" ];
       trust = "untrusted";
     };
 
@@ -447,13 +353,6 @@ let
 
   configFile = pkgs.writeText "hermes-config.yaml" (builtins.toJSON hermesConfig);
 
-  messagingMcp = {
-    command = "${pkgs.nicos-scripts}/bin/messaging-mcp";
-    env.MATRIX_USER_ID = "@nico:${tailnetFqdn}";
-    lazy = true;
-    idle_timeout_seconds = 600;
-  };
-
   # ExecStartPre: materialise config.yaml + .env + skills/documents into
   # $HERMES_HOME. Runs on every restart, keeping state in sync with the Nix
   # store. The bot token is read from /run/agenix at start time and written into
@@ -462,14 +361,6 @@ let
     set -eu
     ${pkgs.coreutils}/bin/mkdir -p ${hermesHome} ${hermesHome}/workspace ${hermesHome}/skills
     ${pkgs.coreutils}/bin/install -m 0600 ${configFile} ${hermesHome}/config.yaml
-    # Mail MCP config. A missing secret leaves that account failing its login,
-    # not Hermes failing to start.
-    ${pkgs.coreutils}/bin/install -d -m 0700 ${mailMcpDir}
-    ${pkgs.coreutils}/bin/install -m 0600 ${mailMcpConfig} ${mailMcpDir}/config.toml
-    ${pkgs.replace-secret}/bin/replace-secret @PROTON_PASSWORD@ \
-      /run/agenix/protonmail-bridge-password ${mailMcpDir}/config.toml || true
-    ${pkgs.replace-secret}/bin/replace-secret @GMAIL_PASSWORD@ \
-      /run/agenix/gmail-app-password ${mailMcpDir}/config.toml || true
     # /model list from the gate's catalog; keeps the baked one if the gate is down.
     HERMES_CONFIG=${hermesHome}/config.yaml ${pkgs.nicos-scripts}/bin/hermes-gate-models || true
 

@@ -9,6 +9,7 @@
     ./train-prices-mcp.nix
     ./forgejo-mcp.nix
     ./searxng-mcp.nix
+    ./mcp-bridges.nix
     ./claude/claude-remote-control.nix
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix

@@ -292,8 +292,8 @@
       group = "hydroxide";
       mode = "0440";
     };
-    # Gmail app password for hemeraude@gmail.com: IMAP/SMTP for Hermes' mail MCP
-    # (agents/hermes/mail-mcp.nix) and the mail digest's Gmail fetch.
+    # Gmail app password for hemeraude@gmail.com: IMAP/SMTP for the mail MCP
+    # (agents/mcp-bridges.nix) and the mail digest's Gmail fetch.
     gmail-app-password = {
       file = ./secrets/gmail-app-password.age;
       owner = "nsimon";

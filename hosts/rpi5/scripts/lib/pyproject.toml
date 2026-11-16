@@ -93,8 +93,10 @@ hermes-zen-watch = "nicos_scripts.hermes.zen_watch:main"
 # stdio; the HTTP one serves Aperture (agents/train-prices-mcp.nix).
 train-prices-mcp = "nicos_scripts.trains.mcp:main"
 train-prices-mcp-http = "nicos_scripts.trains.mcp:main_http"
-# Hermes launches this over stdio (mcp_servers.messaging / messaging-send, --send).
+# Streamable HTTP for Aperture's `messaging` connector (messaging/messaging-mcp.nix).
 messaging-mcp = "nicos_scripts.messaging.mcp:main"
+# A stdio MCP server behind Streamable HTTP + bearer, for Aperture (agents/mcp-bridges.nix).
+mcp-stdio-bridge = "nicos_scripts.mcpbridge:main"
 # Not no_agent: the pre-run script of the airbnb-pricing agent job.
 hermes-airbnb-pricing = "nicos_scripts.hermes.airbnb_pricing:main"
 # Runs in hermes' ExecStartPre, not on a schedule: the bindings it checks live in

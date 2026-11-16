@@ -5,5 +5,6 @@
     ./tuwunel.nix
     ./bridges.nix
     ./cinny.nix
+    ./messaging-mcp.nix
   ];
 }
