@@ -25,14 +25,21 @@ for a in "$HOME/MyDocuments/PERSO" "$HOME/MyDocuments/TRUSK"; do
   [ -d "$a/memory" ] && [ -e "$a/.git" ] || continue
   ra=$(cd "$a" && pwd -P)
   case "$real_cwd/|$common|$mem_link" in
-    "$ra"/*|*"|$ra"/*|*"|$ra/memory"*) area=$ra; break ;;
+  "$ra"/* | *"|$ra"/* | *"|$ra/memory"*)
+    area=$ra
+    break
+    ;;
   esac
 done
 [ -n "$area" ] || exit 0
 
 log="$area/.git/memory-sync.log"
 git_() { git -C "$area" -c commit.gpgsign=false "$@"; }
-tgit() { local t=$1; shift; timeout "$t" git -C "$area" -c commit.gpgsign=false "$@"; }
+tgit() {
+  local t=$1
+  shift
+  timeout "$t" git -C "$area" -c commit.gpgsign=false "$@"
+}
 
 branch=$(git_ symbolic-ref --short -q HEAD) || exit 0
 default=$(git_ symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
@@ -57,21 +64,27 @@ sync_up() {
     git_ commit -q --only -m "memory: sync from $(hostname -s)" -- memory
   fi
   tgit 30 fetch -q origin "$branch" || return 0
-  only_memory_ahead || { echo "$(date -Is) skip: local commits beyond memory/" ; return 0; }
-  git_ rebase -q --autostash "origin/$branch" || { git_ rebase --abort; return 1; }
+  only_memory_ahead || {
+    echo "$(date -Is) skip: local commits beyond memory/"
+    return 0
+  }
+  git_ rebase -q --autostash "origin/$branch" || {
+    git_ rebase --abort
+    return 1
+  }
   [ -z "$(git_ rev-list "origin/$branch..HEAD")" ] || tgit 30 push -q origin "$branch"
 }
 
 case "$mode" in
-  pull)
-    {
-      tgit 8 fetch -q origin "$branch" &&
-        only_memory_ahead &&
-        git_ rebase -q --autostash "origin/$branch" || git_ rebase --abort 2>/dev/null
-    } >>"$log" 2>&1
-    ;;
-  push)
-    ( sync_up >>"$log" 2>&1 & ) </dev/null >/dev/null 2>&1
-    ;;
+pull)
+  {
+    if tgit 8 fetch -q origin "$branch" && only_memory_ahead; then
+      git_ rebase -q --autostash "origin/$branch" || git_ rebase --abort
+    fi
+  } >>"$log" 2>&1
+  ;;
+push)
+  (sync_up >>"$log" 2>&1 &) </dev/null >/dev/null 2>&1
+  ;;
 esac
 exit 0
