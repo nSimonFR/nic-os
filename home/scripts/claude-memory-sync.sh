@@ -63,13 +63,18 @@ only_memory_ahead() {
   [ -z "$files" ] || ! printf '%s\n' "$files" | grep -qv '^memory/'
 }
 
+# One lock for pull and push, so the pull's autostash can never interleave with the
+# push's conflict check and staging. A lock older than 10 minutes is stale.
+lock="$area/.git/memory-sync.lock"
+take_lock() {
+  mkdir "$lock" 2>/dev/null && return 0
+  [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 1
+  rm -rf "$lock" && mkdir "$lock"
+}
+
 sync_up() {
-  local lock ahead behind tip target wt
-  lock="$area/.git/memory-sync.lock"
-  if ! mkdir "$lock" 2>/dev/null; then
-    [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 0
-    rm -rf "$lock" && mkdir "$lock" || return 0
-  fi
+  local ahead behind tip target wt
+  take_lock || return 0
   trap 'rm -rf "$lock"' RETURN
   # A pull whose autostash hit a conflict leaves unmerged files or markers in memory/:
   # staging them would publish the markers as if resolved.
@@ -124,6 +129,8 @@ sync_up() {
 
 case "$mode" in
 pull)
+  take_lock || exit 0
+  trap 'rm -rf "$lock"' EXIT
   {
     # Fast-forward only, bounded: it cannot outlive the hook timeout mid-rebase. When
     # local memory commits diverge from origin, the Stop hook's sync_up merges them.
