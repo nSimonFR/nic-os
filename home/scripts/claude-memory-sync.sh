@@ -44,7 +44,8 @@ tgit() {
 # A rebase in progress (ours interrupted, or the user's) leaves HEAD detached: the
 # branch check below then exits, so nothing here ever aborts someone else's rebase.
 branch=$(git_ symbolic-ref --short -q HEAD) || exit 0
-tgit 8 remote set-head origin --auto >/dev/null 2>&1 || true
+# Refreshed in the background push only: SessionStart has a 15 s budget for the pull.
+[ "$mode" = push ] && { tgit 8 remote set-head origin --auto >/dev/null 2>&1 || true; }
 default=$(git_ symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
 default=${default#origin/}
 [ "$branch" = "${default:-main}" ] || exit 0
@@ -96,8 +97,8 @@ pull)
   {
     # Fast-forward only, bounded: it cannot outlive the hook timeout mid-rebase. When
     # local memory commits diverge from origin, the Stop hook's sync_up rebases them.
-    if tgit 8 fetch -q origin "$branch"; then
-      tgit 5 merge -q --ff-only --autostash "origin/$branch" || true
+    if tgit 6 fetch -q origin "$branch"; then
+      tgit 4 merge -q --ff-only --autostash "origin/$branch" || true
     fi
   } >>"$log" 2>&1
   ;;
