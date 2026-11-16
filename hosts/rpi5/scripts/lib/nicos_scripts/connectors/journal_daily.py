@@ -43,7 +43,6 @@ DAWARICH_WEB_URL, PSQL_BIN, RUNUSER_BIN, TELEGRAM_SEND (the daily run sends yest
 """
 
 import base64
-import dataclasses
 import functools
 import hashlib
 import io
@@ -133,6 +132,7 @@ class Config:
     nextcloud_db: str = "nextcloud_production"
     ryot_db: str = "ryotv2"
     ryot_v1_db: str = "ryot"  # history before the V11 switch
+    spotify_artists: str = "/var/lib/ryot-connectors/spotify-artists.json"
     freereps_db: str = "freereps"
     dispatch_repos: tuple = ()
     dispatch_user: str = "nsimon"
@@ -186,6 +186,9 @@ class Config:
             ),
             ryot_db=env_str("RYOT_DB", "ryotv2", env),
             ryot_v1_db=env_str("RYOT_V1_DB", "ryot", env),
+            spotify_artists=env_str(
+                "SPOTIFY_ARTISTS", "/var/lib/ryot-connectors/spotify-artists.json", env
+            ),
             birthday_calendars=_names(
                 env_str("JOURNAL_BIRTHDAY_CALENDARS", "Contact birthdays", env)
             ),
@@ -1679,21 +1682,18 @@ def day_games(cfg, run, day, log):
 
 def day_music(cfg, run, day, log):
     """journal_sources.music_section of the day, each artist with its streak,
-    or None (no plays, or Ryot down). Artists V11 lacks come from V1."""
+    or None (no plays, or Ryot down). V11 has no artist for a track it only
+    imported: they come from spotify-to-ryot's cache, then from V1."""
     lo, hi = day_bounds(day)
     try:
         listens = src.music_listens(
             run, lo - STREAK_LOOKBACK_D * 86400, hi, cfg.ryot_db, cfg.runuser, cfg.psql
         )
+        listens = src.with_artists(listens, load_json(cfg.spotify_artists, {}))
         missing = [l.track for l in listens if not l.artists and l.track]
         if missing and cfg.ryot_v1_db:
             v1 = src.music_tracks(run, missing, cfg.ryot_v1_db, cfg.runuser, cfg.psql)
-            listens = [
-                dataclasses.replace(l, artists=v1.get(l.track, ""))
-                if not l.artists
-                else l
-                for l in listens
-            ]
+            listens = src.with_artists(listens, v1)
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{day}: music unavailable ({e})")
         return None

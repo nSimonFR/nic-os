@@ -18,8 +18,15 @@ ENV = {
 }
 
 
-def item(track_id, name, played_at):
-    return {"played_at": played_at, "track": {"id": track_id, "name": name}}
+def item(track_id, name, played_at, artists=("Art",)):
+    return {
+        "played_at": played_at,
+        "track": {
+            "id": track_id,
+            "name": name,
+            "artists": [{"name": a} for a in artists],
+        },
+    }
 
 
 def ms(iso):
@@ -601,3 +608,110 @@ def test_a_ryot_outage_keeps_the_keys_of_what_was_already_logged(tmp_path):
     )
     assert rc == 1
     assert saved_state(tmp_path)["pushed"] == [key("t1", "2026-08-06T10:00:00Z")]
+
+
+# ── artists ───────────────────────────────────────────────────────────────────
+
+
+def tracks_reply(tracks):
+    return json_reply(
+        {
+            "tracks": [
+                {"id": t, "artists": [{"name": a} for a in x]}
+                if x is not None
+                else None
+                for t, x in tracks.items()
+            ]
+        }
+    )
+
+
+def test_track_artists_joins_the_credits_in_order():
+    t = {"artists": [{"name": "Lomepal"}, {"name": "Hoshi"}, {"name": ""}]}
+    assert spotify.track_artists(t) == "Lomepal, Hoshi"
+    assert spotify.track_artists({}) == ""
+
+
+def test_get_tracks_reads_a_batch_and_blanks_an_unknown_id():
+    op = FakeOpener(
+        [json_reply({"tracks": [{"id": "a", "artists": [{"name": "A"}]}, None]})]
+    )
+    assert spotify.get_tracks("tok", ["a", "b"], opener=op) == {"a": "A", "b": ""}
+    assert op.last.full_url.endswith("/v1/tracks?ids=a,b")
+    assert op.last.get_header("Authorization") == "Bearer tok"
+
+
+def test_get_tracks_retries_a_refused_batch_one_id_at_a_time():
+    op = FakeOpener(
+        [
+            http_error(403, "forbidden"),
+            json_reply({"id": "a", "artists": [{"name": "A"}]}),
+            http_error(404, "gone"),
+        ]
+    )
+    assert spotify.get_tracks("tok", ["a", "b"], opener=op) == {"a": "A", "b": ""}
+    assert [r.full_url.rsplit("/", 1)[-1] for r in op.requests[1:]] == ["a", "b"]
+
+
+def test_get_tracks_lets_a_rate_limit_through():
+    op = FakeOpener([http_error(429, "slow down")])
+    try:
+        spotify.get_tracks("tok", ["a"], opener=op)
+    except urllib.error.HTTPError as e:
+        assert e.code == 429
+    else:
+        raise AssertionError("429 was swallowed")
+
+
+def test_refresh_artists_takes_the_window_then_fetches_only_what_is_missing():
+    cache = {"known": "K"}
+    asked = []
+
+    def fetch(ids):
+        asked.append(ids)
+        return {i: "F" for i in ids}
+
+    changed = spotify.refresh_artists(
+        cache,
+        [item("t1", "One", "2026-08-06T10:00:00Z", artists=("W",))],
+        {"t1", "known", "old"},
+        fetch,
+    )
+    assert changed and asked == [["old"]]
+    assert cache == {"known": "K", "t1": "W", "old": "F"}
+    assert not spotify.refresh_artists(cache, [], {"t1", "old"}, fetch)
+
+
+def test_refresh_artists_stops_at_a_failed_lookup_and_keeps_what_it_has():
+    lines = []
+
+    def fetch(ids):
+        raise urllib.error.URLError("down")
+
+    cache = {}
+    assert not spotify.refresh_artists(cache, [], {"a"}, fetch, log=lines.append)
+    assert "lookup stopped" in lines[0]
+
+
+def test_main_backfills_the_artists_of_recent_pushed_tracks(tmp_path):
+    state = {
+        "newest_ms": ms("2026-08-06T10:00:00Z"),
+        "pushed": [
+            key("old", "2026-08-05T10:00:00Z"),
+            key("t1", "2026-08-06T10:00:00Z"),
+        ],
+    }
+    rc, op, _ = run(
+        tmp_path,
+        [
+            json_reply({"access_token": "tok"}),
+            json_reply({"items": [item("t1", "One", "2026-08-06T10:00:00Z")]}),
+            tracks_reply({"old": ["Old Artist"]}),
+        ],
+        state=state,
+    )
+    assert rc == 0
+    assert json.loads((tmp_path / "spotify-artists.json").read_text()) == {
+        "old": "Old Artist",
+        "t1": "Art",
+    }
