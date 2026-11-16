@@ -118,7 +118,11 @@ in
       RemainAfterExit = true;
     };
     script = ''
+      # Read only by root (systemd's EnvironmentFile and homepage-stats).
+      umask 077
       mkdir -p /run/homepage-dashboard
+      chmod 700 /run/homepage-dashboard
+      rm -f /run/homepage-dashboard/env
       cat > /run/homepage-dashboard/env <<ENVEOF
       HOMEPAGE_VAR_IMMICH_KEY=$(cat ${config.age.secrets.immich-api-key.path})
       HOMEPAGE_VAR_SURE_KEY=$(grep SURE_API_KEY ${config.age.secrets.agent-brokered-env.path} | cut -d= -f2)
