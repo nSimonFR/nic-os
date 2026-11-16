@@ -121,9 +121,9 @@ in
       TRUSTED_PROXIES = "127.0.0.1";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
-      # The api_* MCP tools behind api_search + api_execute: listed, they were
-      # 724 KB of Aperture's tools/list, over Hermes' 1 MiB SSE limit.
-      MCP_API_TOOLS = "search";
+      # Every MCP tool behind api_search + api_execute (tools/list 2 KB). Listed,
+      # the api_* ones were 724 KB of Aperture's, over Hermes' 1 MiB SSE limit.
+      MCP_API_TOOLS = "search-all";
       # AI providers (Settings → AI): allow a provider baseURL on the Aperture
       # gate (http://ai.gate-mintaka.ts.net/v1 → tiny-llm-gate, so RxResume's AI
       # traffic shows up in Aperture's observability). The base URL is a per-user
