@@ -26,10 +26,9 @@ nSimonFR-ai, and `gh auth token` prints a placeholder. Elsewhere:
 - PR — `GH_TOKEN=$(gh auth token --user "$(gh auth status 2>&1 | grep -oiE 'nSimonFR-ai' | head -1)") gh pr create …`
   (per-command, keeps nSimonFR active for merging)
 
-⚠️ `--user` matches gh's `hosts.yml` key **exactly**, and gh stores whatever spelling the
-account was logged in with (`nSimonfr-ai` until 2026-09-24, now `nSimonFR-ai`). A miss
-mints an empty token and `gh pr create` silently falls back to the active account — you.
-Hence the case-insensitive lookup; `push-ai` does the same.
+`--user` matches gh's `hosts.yml` key exactly, case included, and gh stores whatever
+spelling the account was logged in with. A miss mints an empty token and `gh pr create`
+silently falls back to the active account, so the lookup is case-insensitive (as in `push-ai`).
 
 **Always print the PR's full URL** in the reply that touched it — created, pushed to,
 retitled, commented on, merged. `#638` is not a link, and the number alone is a search.
