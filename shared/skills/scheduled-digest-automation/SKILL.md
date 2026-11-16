@@ -1,6 +1,6 @@
 ---
 name: scheduled-digest-automation
-description: "Use when maintaining scheduled notification digests."
+description: "Maintain the Hermes cron jobs that deliver scheduled digests: fixture and dry-run testing, shipping the fix as a nic-os PR, raw-output delivery without scheduler framing. Use when repairing or deploying an existing digest job."
 metadata:
   created_by: agent
 ---

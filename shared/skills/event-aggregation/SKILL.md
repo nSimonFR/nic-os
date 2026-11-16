@@ -1,6 +1,6 @@
 ---
 name: event-aggregation
-description: "Use when aggregating external events into scheduled digests."
+description: "Build a watcher that scrapes upcoming events from websites (API, RSS, ICS, HTML), tracks changes between runs and sends a digest of what changed. Use for event watchers such as the weekly tabletop-events digest."
 version: 1.0.0
 ---
 
@@ -84,5 +84,3 @@ Before enabling a scheduler:
 ## Delivery
 
 Keep Telegram output compact: title, date/time, venue, price, seats, and link. Send it as a Rich Message (`telegram-send -m rich`) per the Message format section of Hermes' SOUL.md — one list, a heading only if there are several sources, and `<details>` around anything past about five events so a busy week stays one screen. Only mention source errors in operational logs unless the user asks for diagnostics.
-
-See `references/wordpress-product-events.md` for a verified WordPress product-feed investigation pattern.

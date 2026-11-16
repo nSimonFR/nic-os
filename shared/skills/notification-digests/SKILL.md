@@ -1,6 +1,6 @@
 ---
 name: notification-digests
-description: "Use when building digests. Verify links before delivery."
+description: "Turn notifications from APIs or RSS (GitHub included) into a Telegram digest without losing read state: mark read only after a confirmed send, resolve GitHub Release links through the API. Use when building or changing a digest's collector or formatter."
 ---
 
 # Notification Digests
