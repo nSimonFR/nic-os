@@ -164,8 +164,8 @@ ryot /plugins/ryot/fitness/operations/workout-editor-save "$P" | jq -c .result
 ```
 
 Notes:
-- Reuse historical data only for the verified `exerciseId` and, unless the user says
-  otherwise, the `setLot` pattern.
+- Reuse historical data only for the verified `exerciseId`, the exercise order when the
+  user gave none, and, unless the user says otherwise, the `setLot` pattern.
 - **`setLot`**: `normal` | `warm_up` | `drop` | `failure`. Default to `normal` only
   when the user did not specify a set type and no comparable set convention exists.
 - Optional per set: `rpe` (int 0–10), `restTime` (int seconds). Optional per
