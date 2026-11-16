@@ -409,17 +409,25 @@ in
     ];
     requires = [ "nextcloud-setup.service" ];
     wantedBy = [ "multi-user.target" ];
+    # The token must never reach argv: as root, nextcloud-occ goes through
+    # systemd-run (or sudo), which journals the full command line. As the
+    # nextcloud user with its credentials loaded, it execs php directly, and
+    # config:import reads the token from stdin.
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      User = "nextcloud";
+      LoadCredential = [
+        "dbpass:/run/agenix/nextcloud-pg-password"
+        "token:/run/agenix/nextcloud-homepage-password"
+      ];
     };
     script = ''
-      # The secret file has a stray trailing CR (\r); occ would store it as part
-      # of the token, but the widget's NC-Token HTTP header drops the \r → the
-      # stored token (73 bytes) wouldn't match the header (72) → 401. Strip
-      # CR/LF so the stored token is the clean 72-char value.
-      ${config.services.nextcloud.occ}/bin/nextcloud-occ config:app:set serverinfo token \
-        --value="$(tr -d '\r\n' < /run/agenix/nextcloud-homepage-password)"
+      # The secret file has a stray trailing CR (\r) that the widget's NC-Token
+      # header drops (73 bytes stored vs 72 sent → 401): strip CR/LF.
+      json=$(${pkgs.jq}/bin/jq -cn --rawfile t "$CREDENTIALS_DIRECTORY/token" \
+        '{apps: {serverinfo: {token: ($t | gsub("[\r\n]"; ""))}}}')
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ config:import <<<"$json"
     '';
   };
 
