@@ -7,6 +7,14 @@
   ...
 }:
 let
+  # Secrets homepage-dashboard-env copies into /run/homepage-dashboard/env.
+  homepageSecretFiles = map (n: config.age.secrets.${n}.file) [
+    "immich-api-key"
+    "agent-brokered-env"
+    "nextcloud-homepage-password"
+    "wealthfolio-sync-env"
+  ];
+
   # Every service that declared a public face, in `public.order`
   # (hosts/rpi5/lib/service-registration.nix). Was services-registry.nix.
   #
@@ -101,6 +109,8 @@ in
   # Oneshot: generate env file with secrets before homepage starts
   systemd.services.homepage-dashboard-env = {
     description = "Generate homepage-dashboard environment file with secrets";
+    # The script names only paths, so a rotated secret would not regenerate it.
+    restartTriggers = homepageSecretFiles;
     wantedBy = [ "multi-user.target" ];
     before = [ "homepage-dashboard.service" ];
     serviceConfig = {
@@ -131,7 +141,8 @@ in
   # together explicitly.
   systemd.services.homepage-dashboard.restartTriggers = [
     config.environment.etc."homepage-dashboard/services.yaml".source
-  ];
+  ]
+  ++ homepageSecretFiles;
 
   # Tiny stats aggregation API for homepage widgets that need data from multiple endpoints
   systemd.services.homepage-stats = {
