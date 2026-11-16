@@ -175,6 +175,26 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook pre-task",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "Agent"
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook route",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash"
       }
     ],
     "Notification": [
@@ -199,6 +219,16 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook user-prompt-submit",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ],
     "PostToolUse": [
@@ -231,6 +261,26 @@
             "timeout": 5
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook post-task",
+            "timeout": 120,
+            "type": "command"
+          }
+        ],
+        "matcher": "Agent"
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook post-task",
+            "timeout": 120,
+            "type": "command"
+          }
+        ],
+        "matcher": "Skill"
       }
     ],
     "SessionStart": [
@@ -258,6 +308,16 @@
             "timeout": 15
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook session-start",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ],
     "Stop": [
@@ -270,6 +330,63 @@
             "timeout": 10
           }
         ]
+      },
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook stop",
+            "timeout": 120,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook session-end",
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "StopFailure": [
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook stop-failure",
+            "timeout": 120,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook subagent-start",
+            "timeout": 30,
+            "type": "command"
+          }
+        ],
+        "matcher": "workflow-subagent"
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "command": "[ ! -x /run/current-system/sw/bin/entire-hub-hook ] || /run/current-system/sw/bin/entire-hub-hook subagent-stop",
+            "timeout": 120,
+            "type": "command"
+          }
+        ],
+        "matcher": ""
       }
     ]
   },
