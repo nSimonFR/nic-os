@@ -69,24 +69,28 @@ only_memory_ahead() {
 lock="$area/.git/memory-sync.lock"
 token="$$.$RANDOM.$(date +%s)"
 take_lock() {
-  local seen moved
   if mkdir "$lock" 2>/dev/null; then
     printf '%s\n' "$token" >"$lock/owner"
     return 0
   fi
   [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ] || return 1
-  # Stale takeover: rename is atomic, so of several racers only one moves the lock away;
-  # it then checks it moved the stale lock it saw, not one a racer just created.
-  seen=$(cat "$lock/owner" 2>/dev/null)
-  moved="$lock.stale.$token"
-  mv "$lock" "$moved" 2>/dev/null || return 1
-  if [ "$(cat "$moved/owner" 2>/dev/null)" != "$seen" ]; then
-    mv "$moved" "$lock" 2>/dev/null || rm -rf "$moved"
+  # Stale takeover is serialized by a second mkdir lock: its holder re-checks staleness
+  # before replacing, so a lock another hook just took over reads as fresh and is kept.
+  # A takeover lock left by a crash (older than a minute) is cleared for the next run.
+  if ! mkdir "$lock.takeover" 2>/dev/null; then
+    [ -z "$(find "$lock.takeover" -maxdepth 0 -mmin +1 2>/dev/null)" ] || rmdir "$lock.takeover" 2>/dev/null
     return 1
   fi
-  rm -rf "$moved"
-  mkdir "$lock" 2>/dev/null || return 1
-  printf '%s\n' "$token" >"$lock/owner"
+  if [ -n "$(find "$lock" -maxdepth 0 -mmin +10 2>/dev/null)" ]; then
+    rm -rf "$lock"
+  fi
+  if mkdir "$lock" 2>/dev/null; then
+    printf '%s\n' "$token" >"$lock/owner"
+    rmdir "$lock.takeover"
+    return 0
+  fi
+  rmdir "$lock.takeover"
+  return 1
 }
 # shellcheck disable=SC2329 # invoked from the RETURN and EXIT traps
 release_lock() {

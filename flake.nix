@@ -475,6 +475,30 @@
                 done
                 touch $out
               '';
+          # claude-memory-sync.sh (the Home Repo memory hook), against throwaway git repos.
+          memory-sync =
+            pkgs.runCommand "claude-memory-sync-tests"
+              {
+                nativeBuildInputs = [
+                  pkgs.git
+                  pkgs.jq
+                  pkgs.hostname
+                ];
+                src = lib.fileset.toSource {
+                  root = ./home/scripts;
+                  fileset = lib.fileset.unions [
+                    ./home/scripts/claude-memory-sync.sh
+                    ./home/scripts/tests/claude-memory-sync.test.sh
+                  ];
+                };
+              }
+              ''
+                cp -r $src src
+                chmod -R u+w src
+                patchShebangs src
+                bash src/tests/claude-memory-sync.test.sh
+                touch $out
+              '';
           # telegram-alert.sh / telegram-send.sh, against a stub curl.
           notify-scripts =
             pkgs.runCommand "notify-script-tests"
