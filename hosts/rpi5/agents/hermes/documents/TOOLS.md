@@ -4,7 +4,7 @@
 
 - OS: NixOS | Shell: zsh | Package Manager: Nix (flakes)
 - Config source: `~/nic-os/` → deploy by merging a PR to `main` (CI + Cachix agent). You have no sudo
-- **Rule:** Never edit /nix/store symlinks or /etc/ directly. Use .nix files + rebuild.
+- **Rule:** Never edit /nix/store symlinks or /etc/ directly. Change the .nix files and ship them by PR.
 - Secrets: agenix — `/run/agenix/` (read-only, system-managed). You hold no API
   key: every one is a placeholder named after it (`__tavily_api_key__`,
   `__ha_token__`, `__immich_api_key__`…), and Agent Vault (`HTTPS_PROXY`/`HTTP_PROXY`)
@@ -20,7 +20,7 @@
 
 ## Hermes Architecture
 
-Hermes is the sole agent on this host (it succeeded PicoClaw, retired 2026-07).
+Hermes is the sole agent on this host.
 It runs as an `nsimon` **user** systemd unit polling the Telegram bot; there is
 no HTTP gateway to curl.
 
@@ -51,12 +51,13 @@ no HTTP gateway to curl.
 
 | Change | Edit | Then |
 |--------|------|------|
-| Model, routing, MCP servers, memory | `~/nic-os/hosts/rpi5/agents/hermes/hermes.nix` | Rebuild |
-| Shared skill content | `~/nic-os/shared/skills/<name>/SKILL.md` | Rebuild |
-| Hermes-only skill content | `~/nic-os/hosts/rpi5/agents/hermes/skills/<name>/SKILL.md` | Rebuild |
-| Persona / these docs | `~/nic-os/hosts/rpi5/agents/hermes/documents/` | Rebuild |
-| Cron helper scripts | `~/nic-os/hosts/rpi5/agents/hermes/workspace/` | Rebuild |
-| API keys, tokens | Re-encrypt `hosts/rpi5/secrets/agent-brokered-env.age` + a service in `agent-vault.nix` | Rebuild |
+| Model, routing, MCP servers, memory | `~/nic-os/hosts/rpi5/agents/hermes/hermes.nix` | PR → merge (CI + Cachix deploy) |
+| Shared skill content | `~/nic-os/shared/skills/<name>/SKILL.md` | PR → merge (CI + Cachix deploy) |
+| Hermes-only skill content | `~/nic-os/hosts/rpi5/agents/hermes/skills/<name>/SKILL.md` | PR → merge (CI + Cachix deploy) |
+| Persona / these docs | `~/nic-os/hosts/rpi5/agents/hermes/documents/` | PR → merge (CI + Cachix deploy) |
+| Cron job bodies (`no_agent`) | `~/nic-os/hosts/rpi5/agents/hermes/cron-scripts/<name>.sh` | PR → merge (CI + Cachix deploy) |
+| Helpers and state seeds they call | `~/nic-os/hosts/rpi5/agents/hermes/workspace/` | PR → merge (CI + Cachix deploy) |
+| API keys, tokens | Re-encrypt `hosts/rpi5/secrets/agent-brokered-env.age` + a service in `agent-vault.nix` | PR → merge (CI + Cachix deploy) |
 | Cron jobs themselves | `~/.hermes/cron/jobs.json` (runtime) | No rebuild |
 
 **Deploy caveat:** the rsyncs in `hermes.nix` omit `--delete`, so a file removed
@@ -67,7 +68,7 @@ unpinned job is silently skipped when the configured model drifts. This applies
 only to LLM-driven jobs; a `no_agent` job never consults a model.
 
 **Cron scripts:** the recurring jobs run `no_agent` against
-`~/.hermes/scripts/*.sh`, seeded from `cronScripts` in `hermes.nix` — zero tokens,
+`~/.hermes/scripts/*.sh`, built from `cron-scripts/` (`cronScriptsDir` in `hermes.nix`) — zero tokens,
 so no plan-cap 429. Non-empty stdout is sent verbatim, empty stdout is silent, a
 non-zero exit is sent as an alert; the ones that send their own message redirect
 stdout to `/dev/null`.
@@ -111,6 +112,5 @@ good one otherwise.
 - `cat ~/.hermes/cron/ticker_last_success` — confirm the cron ticker is alive
 - `systemctl --user list-timers` — hermes-skill-promote (hourly)
 - `hermes cron list` — the scheduled jobs; `--script`/`no_agent` marks the
-  token-free ones. Weekly tabletop events is job `92715566fb3e`, not a systemd
-  timer (the duplicate timer was removed — both fired Mon 09:00 against one
-  SQLite state and raced over the diff)
+  token-free ones. Weekly tabletop events is job `92715566fb3e`; don't add a
+  systemd timer for it (two runners race over its SQLite state)
