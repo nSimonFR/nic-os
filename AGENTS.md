@@ -23,7 +23,7 @@ nSimonFR-ai, and `gh auth token` prints a placeholder. Elsewhere:
 
 - commit — `git -c user.name="nSimonFR-ai" commit …`
 - push — `./scripts/push-ai` (takes any `git push` args)
-- PR — `GH_TOKEN=$(gh auth token --user "$(gh auth status 2>&1 | grep -oiE 'nSimonFR-ai' | head -1)") gh pr create …`
+- PR — `GH_TOKEN=$(gh auth token --user "$(gh auth status 2>&1 | grep -oiE 'nSimonFR-ai([[:space:]]|$)' | head -1 | tr -d '[:space:]')") gh pr create …`
   (per-command, keeps nSimonFR active for merging)
 
 `--user` matches gh's `hosts.yml` key exactly, case included, and gh stores whatever

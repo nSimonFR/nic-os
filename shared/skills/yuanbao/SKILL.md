@@ -51,8 +51,9 @@ Step 2 — your reply (this gets sent to the group with a working @mention):
 
 **Rules:**
 - Get the exact nickname from `yb_query_group_members` first.
+- If `find` returns more than one candidate, do not pick one: ask the user which member to mention.
 - The @mention format: `@nickname` with a space before the @ sign
-- Keep the reply to the message itself.
+- Keep the reply to the message itself, except when asking which member was meant.
 - Be concise, and don't explain how @mention works to the user.
 
 ## Send DM (Private Message) Workflow
