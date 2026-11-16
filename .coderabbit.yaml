@@ -1,0 +1,36 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Replaces the ChatGPT Codex reviewer. Comments only: no required check yet.
+# AGENTS.md is read as the code guidelines (CodeRabbit's default file patterns).
+language: en-US
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+  review_status: true
+  collapse_walkthrough: true
+  poem: false
+  sequence_diagrams: false
+  path_filters:
+    - "!.entire/**"
+    - "!docs/reviews/**"
+    - "!**/*.age"
+    - "!flake.lock"
+    - "!**/package-lock.json"
+  path_instructions:
+    - path: "hosts/rpi5/**"
+      instructions: >-
+        rpi5 is a 3.9 GB Raspberry Pi. Flag new services placed outside
+        hosts/rpi5/<domain>/, and Python logic inlined in .nix strings
+        (it belongs in the nicos-scripts package).
+    - path: "{pkgs,hosts}/**/*.nix"
+      instructions: >-
+        A new fetch*/pullImage needs a `# renovate:` or `# no-renovate:` marker.
+  auto_review:
+    enabled: true
+    drafts: false
+    # Dependency bumps: CI and the hashes check cover them.
+    ignore_usernames:
+      - "nic-os-renovate[bot]"
+      - "dependabot[bot]"
+chat:
+  auto_reply: true
