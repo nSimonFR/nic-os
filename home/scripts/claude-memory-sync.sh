@@ -2,7 +2,7 @@
 # Claude Code hook: sync the shared auto-memory of a Home Repo (~/MyDocuments/PERSO or
 # ~/MyDocuments/TRUSK, both git repos with a memory/ folder) between machines.
 #
-#   claude-memory-sync pull   SessionStart: rebase onto origin before the index is read
+#   claude-memory-sync pull   SessionStart: fast-forward to origin before the index is read
 #   claude-memory-sync push   Stop: commit memory/ only, rebase, push — in the background
 #
 # Silent no-op when the session is not in an area, the area is not on its default
@@ -41,10 +41,19 @@ tgit() {
   timeout "$t" git -C "$area" -c commit.gpgsign=false "$@"
 }
 
+# A rebase in progress (ours interrupted, or the user's) leaves HEAD detached: the
+# branch check below then exits, so nothing here ever aborts someone else's rebase.
 branch=$(git_ symbolic-ref --short -q HEAD) || exit 0
+tgit 8 remote set-head origin --auto >/dev/null 2>&1 || true
 default=$(git_ symbolic-ref --short -q refs/remotes/origin/HEAD 2>/dev/null)
 default=${default#origin/}
 [ "$branch" = "${default:-main}" ] || exit 0
+
+rebase_in_progress() {
+  local gitdir
+  gitdir=$(git_ rev-parse --absolute-git-dir) || return 0
+  [ -d "$gitdir/rebase-merge" ] || [ -d "$gitdir/rebase-apply" ]
+}
 
 only_memory_ahead() {
   local files
@@ -68,6 +77,11 @@ sync_up() {
     echo "$(date -Is) skip: local commits beyond memory/"
     return 0
   }
+  if rebase_in_progress; then
+    echo "$(date -Is) skip: rebase in progress"
+    return 0
+  fi
+  # Only reached when this run starts the rebase, so the abort only undoes our own.
   git_ rebase -q --autostash "origin/$branch" || {
     git_ rebase --abort
     return 1
@@ -78,8 +92,10 @@ sync_up() {
 case "$mode" in
 pull)
   {
-    if tgit 8 fetch -q origin "$branch" && only_memory_ahead; then
-      git_ rebase -q --autostash "origin/$branch" || git_ rebase --abort
+    # Fast-forward only, bounded: it cannot outlive the hook timeout mid-rebase. When
+    # local memory commits diverge from origin, the Stop hook's sync_up rebases them.
+    if tgit 8 fetch -q origin "$branch"; then
+      tgit 5 merge -q --ff-only --autostash "origin/$branch" || true
     fi
   } >>"$log" 2>&1
   ;;
