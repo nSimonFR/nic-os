@@ -129,6 +129,8 @@ in
 
   systemd.services.wealthfolio = {
     description = "Wealthfolio investment tracker";
+    # EnvironmentFile is a fixed /run/agenix path: a rotated hash needs a restart.
+    restartTriggers = [ config.age.secrets.wealthfolio-env.file ];
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     wantedBy = [ "multi-user.target" ];

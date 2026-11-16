@@ -402,6 +402,7 @@ in
   # invalidates the appconfig cache; idempotent (same value each boot).
   systemd.services.nextcloud-serverinfo-token = {
     description = "Set Nextcloud serverinfo NC-Token for the homepage widget";
+    restartTriggers = [ config.age.secrets.nextcloud-homepage-password.file ];
     after = [
       "nextcloud-setup.service"
       "phpfpm-nextcloud.service"
