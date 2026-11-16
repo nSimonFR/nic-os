@@ -333,6 +333,14 @@ in
         executable = true;
       };
 
+      # SessionStart/Stop hook: sync the shared auto-memory of the Home Repos
+      # (~/MyDocuments/PERSO, ~/MyDocuments/TRUSK) between the Mac and the Pi through
+      # git — pull before the index loads, commit + push memory/ only after each turn.
+      ".claude/hooks/memory-sync" = {
+        source = ./scripts/claude-memory-sync.sh;
+        executable = true;
+      };
+
       # PostToolUse hook: emit a Wakapi heartbeat for each tool use so Claude
       # Code time-on-task lands in WakaTime stats alongside editor activity.
       ".claude/hooks/wakatime" = {

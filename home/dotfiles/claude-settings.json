@@ -251,6 +251,23 @@
             "type": "command",
             "command": "[ ! -x \"$HOME/.claude/hooks/agent-vault-env\" ] || \"$HOME/.claude/hooks/agent-vault-env\"",
             "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "[ ! -x \"$HOME/.claude/hooks/memory-sync\" ] || \"$HOME/.claude/hooks/memory-sync\" pull",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "[ ! -x \"$HOME/.claude/hooks/memory-sync\" ] || \"$HOME/.claude/hooks/memory-sync\" push",
+            "timeout": 10
           }
         ]
       }
