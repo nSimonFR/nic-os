@@ -715,3 +715,66 @@ def test_main_backfills_the_artists_of_recent_pushed_tracks(tmp_path):
         "old": "Old Artist",
         "t1": "Art",
     }
+
+
+class Stdin:
+    def __init__(self, text):
+        self._text = text
+
+    def read(self):
+        return self._text
+
+
+def backfill(tmp_path, replies, ids, cache=None, sleeps=None):
+    if cache is not None:
+        (tmp_path / "spotify-artists.json").write_text(json.dumps(cache))
+    op = FakeOpener(replies)
+    rc = spotify.backfill_main(
+        env={**ENV, "STATE_DIR": str(tmp_path)},
+        opener=op,
+        sleep=(sleeps if sleeps is not None else []).append,
+        log=lambda _l: None,
+        stdin=Stdin(ids),
+    )
+    return rc, op, json.loads((tmp_path / "spotify-artists.json").read_text())
+
+
+def test_backfill_looks_up_only_ids_not_cached_and_ignores_junk(tmp_path):
+    rc, op, cache = backfill(
+        tmp_path,
+        [json_reply({"access_token": "tok"}), tracks_reply({"b": ["B"]})],
+        "a b\nbad-id\n",
+        cache={"a": "A"},
+    )
+    assert rc == 0 and cache == {"a": "A", "b": "B"}
+    assert op.last.full_url.endswith("/v1/tracks?ids=b")
+
+
+def test_backfill_waits_out_a_rate_limit_and_retries_the_batch(tmp_path):
+    def limited():
+        raise urllib.error.HTTPError(
+            "u", 429, "slow", {"Retry-After": "7"}, io.BytesIO(b"")
+        )
+
+    sleeps = []
+    rc, _, cache = backfill(
+        tmp_path,
+        [json_reply({"access_token": "tok"}), limited, tracks_reply({"a": ["A"]})],
+        "a",
+        sleeps=sleeps,
+    )
+    assert rc == 0 and cache == {"a": "A"} and 7 in sleeps
+
+
+def test_backfill_keeps_what_it_has_when_spotify_fails(tmp_path):
+    rc, _, cache = backfill(
+        tmp_path,
+        [json_reply({"access_token": "tok"}), http_error(401, "expired")],
+        "a",
+        cache={"z": "Z"},
+    )
+    assert rc == 1 and cache == {"z": "Z"}
+
+
+def test_backfill_fails_fast_on_missing_env():
+    assert spotify.backfill_main(env={}, log=lambda _l: None, stdin=Stdin("a")) == 1
