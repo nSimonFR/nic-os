@@ -220,6 +220,13 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Superlogical's Rex multiplexer (CLI + server; the Mac app is invite-only).
+    # Bump: nix flake update rex
+    rex = {
+      url = "https://pkgs.superlogical.com/rex/nix/snapshot.tar.gz";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete's goplaces CLI: bump with
     #   sudo nix flake lock --update-input goplaces-src
     goplaces-src = {
