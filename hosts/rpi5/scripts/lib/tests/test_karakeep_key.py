@@ -56,3 +56,12 @@ def test_no_admin_writes_nothing(tmp_path):
     con.execute("update user set role = 'user'")
     assert karakeep_key.ensure(con, f) == "no admin"
     assert not f.exists()
+
+
+def test_a_key_with_the_right_id_but_a_wrong_secret_is_replaced(tmp_path):
+    con, f = _db(), tmp_path / "key"
+    karakeep_key.ensure(con, f)
+    prefix, key_id, _ = f.read_text().strip().split("_")
+    f.write_text(f"{prefix}_{key_id}_{'0' * 32}\n")
+    assert karakeep_key.ensure(con, f) == "minted"
+    assert _accepted(con, f.read_text().strip())
