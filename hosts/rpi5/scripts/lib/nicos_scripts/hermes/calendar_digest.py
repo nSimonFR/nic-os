@@ -242,28 +242,37 @@ def human_day(day, today):
     return f"{prefix} {day.day} {MONTHS_FR[day.month - 1]}"
 
 
+def _rich_text(value):
+    """Escape text for the platform's Rich Markdown parser (not MarkdownV2)."""
+    return value.replace("\\", "\\\\").replace("*", "\\*").replace("_", "\\_").replace("`", "\\`").replace("[", "\\[")
+
+
 def format_event(event):
     start, end = event["start"], event.get("end")
-    summary = event.get("summary") or "(sans titre)"
+    summary = _rich_text(event.get("summary") or "(sans titre)")
     if not isinstance(start, datetime):
-        line = f"• toute la journée · {summary}"
+        time = "Toute la journée"
     elif isinstance(end, datetime) and end > start:
-        line = f"• {start:%H:%M}–{end:%H:%M} · {summary}"
+        time = f"{start:%H:%M}–{end:%H:%M}"
     else:
-        line = f"• {start:%H:%M} · {summary}"
-    return line + (f"\n  📍 {event['location']}" if event.get("location") else "")
+        time = f"{start:%H:%M}"
+    lines = [f"**{time}**  {summary}"]
+    if event.get("location"):
+        lines.append(f"   📍 {_rich_text(event['location'])}")
+    return "\n".join(lines)
 
 
 def build_digest(events, today, days):
+    horizon = human_day(today + timedelta(days=days), today)
     if not events:
-        return f"📅 Aucun événement personnel dans les {days} prochains jours."
-    lines, current = [f"📅 Agenda personnel · {days} prochains jours", ""], None
+        return f"# 📅 Cette semaine\n\nAucun événement jusqu’au {horizon}."
+    lines, current = ["# 📅 Cette semaine", f"*Agenda · 7 prochains jours · jusqu’au {horizon}*", ""], None
     for event in sorted(events, key=sort_key):
         day = event_day(event)
         if day != current:
             if current is not None:
                 lines.append("")
-            lines.append(human_day(day, today))
+            lines.append(f"## {human_day(day, today)}")
             current = day
         lines.append(format_event(event))
     return "\n".join(lines).rstrip()
