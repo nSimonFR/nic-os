@@ -40,6 +40,7 @@ for line in sys.stdin:
         continue
     elif m["method"] == "deaf":
         import time
+        print(json.dumps({"jsonrpc": "2.0", "id": m["id"], "result": {}}), flush=True)
         time.sleep(60)
     else:
         r = {}
@@ -158,9 +159,12 @@ def test_one_deadline_per_request_despite_notifications():
 def test_a_child_that_stops_reading_is_killed_at_the_deadline():
     child = mcpbridge.Child([sys.executable, "-c", FAKE], timeout=1)
     try:
-        child.call("tools/list")
+        assert child.call("deaf") == {"jsonrpc": "2.0", "id": 2, "result": {}}
+        # The child now reads nothing: this write fills the pipe and blocks.
+        started = __import__("time").monotonic()
         with pytest.raises((TimeoutError, RuntimeError)):
-            child.call("deaf", {"blob": "x" * 2_000_000})
+            child.call("tools/list", {"blob": "x" * 2_000_000})
+        assert __import__("time").monotonic() - started < 2
         assert child.call("tools/list")["result"]["tools"]
     finally:
         child.stop()
