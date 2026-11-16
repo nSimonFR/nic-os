@@ -59,7 +59,7 @@ only_memory_ahead() {
   local files rev=${1:-HEAD}
   # --name-only hides merge diffs, so a local merge could smuggle in other files: refuse any.
   [ -z "$(git_ rev-list --merges "origin/$branch..$rev")" ] || return 1
-  files=$(git_ log --format= --name-only "origin/$branch..$rev" 2>/dev/null | sort -u)
+  files=$(git_ log --no-renames --format= --name-only "origin/$branch..$rev" 2>/dev/null | sort -u)
   [ -z "$files" ] || ! printf '%s\n' "$files" | grep -qv '^memory/'
 }
 
@@ -71,13 +71,20 @@ sync_up() {
     rm -rf "$lock" && mkdir "$lock" || return 0
   fi
   trap 'rm -rf "$lock"' RETURN
+  # A pull whose autostash hit a conflict leaves unmerged files or markers in memory/:
+  # staging them would publish the markers as if resolved.
+  if [ -n "$(git_ diff --name-only --diff-filter=U -- memory)" ] ||
+    grep -rqE '^(<<<<<<<|>>>>>>>)( |$)' "$area/memory" 2>/dev/null; then
+    echo "$(date -Is) skip: unresolved conflict in memory/"
+    return 0
+  fi
   git_ add -A -- memory
   if ! git_ diff --cached --quiet -- memory; then
     git_ commit -q --only -m "memory: sync from $(hostname -s)" -- memory
   fi
   tgit 30 fetch -q origin "$branch" || return 0
   # Every check and the merge below use this one captured commit, never a moving HEAD.
-  tip=$(git_ rev-parse HEAD)
+  tip=$(git_ rev-parse "refs/heads/$branch")
   only_memory_ahead "$tip" || {
     echo "$(date -Is) skip: local commits beyond memory/"
     return 0
