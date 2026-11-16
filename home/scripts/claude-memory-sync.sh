@@ -56,10 +56,10 @@ fi
 [ "$branch" = "${default:-main}" ] || exit 0
 
 only_memory_ahead() {
-  local files
+  local files rev=${1:-HEAD}
   # --name-only hides merge diffs, so a local merge could smuggle in other files: refuse any.
-  [ -z "$(git_ rev-list --merges "origin/$branch..HEAD")" ] || return 1
-  files=$(git_ log --format= --name-only "origin/$branch..HEAD" 2>/dev/null | sort -u)
+  [ -z "$(git_ rev-list --merges "origin/$branch..$rev")" ] || return 1
+  files=$(git_ log --format= --name-only "origin/$branch..$rev" 2>/dev/null | sort -u)
   [ -z "$files" ] || ! printf '%s\n' "$files" | grep -qv '^memory/'
 }
 
@@ -76,13 +76,14 @@ sync_up() {
     git_ commit -q --only -m "memory: sync from $(hostname -s)" -- memory
   fi
   tgit 30 fetch -q origin "$branch" || return 0
-  only_memory_ahead || {
+  # Every check and the merge below use this one captured commit, never a moving HEAD.
+  tip=$(git_ rev-parse HEAD)
+  only_memory_ahead "$tip" || {
     echo "$(date -Is) skip: local commits beyond memory/"
     return 0
   }
-  ahead=$(git_ rev-list --count "origin/$branch..HEAD")
-  behind=$(git_ rev-list --count "HEAD..origin/$branch")
-  tip=$(git_ rev-parse HEAD)
+  ahead=$(git_ rev-list --count "origin/$branch..$tip")
+  behind=$(git_ rev-list --count "$tip..origin/$branch")
   target="origin/$branch"
   if [ "$ahead" -gt 0 ] && [ "$behind" -gt 0 ]; then
     # Diverged: merge in a private worktree this run owns, so an abort can never touch
