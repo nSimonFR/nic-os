@@ -138,4 +138,28 @@ check "interleaved takeover keeps hook A's fresh lock" test "$(cat "$K/owner" 2>
 check "interleaved hook B does not sync" test ! -f "$L/memory/b.md"
 check "interleaved hook B releases the takeover lock" test ! -e "$K.takeover"
 
+# Self-heal: a new scratch thread and a repo cloned into the area get the shared store;
+# a memory dir that already holds notes is never replaced.
+setup
+mkey() { printf '%s' "$(cd "$1" && pwd -P)" | sed 's/[^A-Za-z0-9]/-/g'; }
+mkdir -p "$T/.t3/scratch/2026-11-17-thread"
+printf '{"cwd":"%s"}' "$T/.t3/scratch/2026-11-17-thread" | bash "$script" pull
+check "scratch thread links to PERSO memory" \
+  test "$(readlink "$T/.claude/projects/$(mkey "$T/.t3/scratch/2026-11-17-thread")/memory")" = "$(cd "$L/memory" && pwd -P)"
+g init -q "$L/newrepo"
+mkdir -p "$L/newrepo/src"
+printf '{"cwd":"%s"}' "$L/newrepo/src" | bash "$script" pull
+check "new repo in the area links by its root" \
+  test -L "$T/.claude/projects/$(mkey "$L/newrepo")/memory"
+mkdir -p "$T/.t3/scratch/kept"
+mkdir -p "$T/.claude/projects/$(mkey "$T/.t3/scratch/kept")/memory"
+echo note >"$T/.claude/projects/$(mkey "$T/.t3/scratch/kept")/memory/n.md"
+printf '{"cwd":"%s"}' "$T/.t3/scratch/kept" | bash "$script" pull
+check "a memory dir with notes is left alone" \
+  test -f "$T/.claude/projects/$(mkey "$T/.t3/scratch/kept")/memory/n.md"
+mkdir -p "$T/elsewhere"
+printf '{"cwd":"%s"}' "$T/elsewhere" | bash "$script" pull
+check "a session outside the areas gets no link" \
+  test ! -e "$T/.claude/projects/$(mkey "$T/elsewhere")/memory"
+
 exit "$fail"
