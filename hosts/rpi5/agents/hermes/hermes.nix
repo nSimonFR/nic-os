@@ -203,6 +203,8 @@ let
     "nextcloud_nc_calendar_bulk_operations"
     "nextcloud_nc_calendar_manage_calendar"
     "nextcloud_nc_calendar_create_meeting"
+    "nextcloud_nc_calendar_create_event"
+    "nextcloud_nc_calendar_update_event"
     "nextcloud_nc_contacts_delete_contact"
     "nextcloud_nc_contacts_delete_addressbook"
     "nextcloud_nc_share_create"
