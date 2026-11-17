@@ -307,8 +307,11 @@ in
           description = "Bearer tokens for the token-protected MCP servers";
           wantedBy = [ "multi-user.target" ];
           serviceConfig = {
+            # No RemainAfterExit: it re-runs before each dependent starts, so a
+            # name added here gets its token without a manual restart. With it,
+            # the unit stayed active across a switch and the new name was never
+            # written (nextcloud, 2026-11-17).
             Type = "oneshot";
-            RemainAfterExit = true;
             StateDirectory = "mcp-tokens";
             StateDirectoryMode = "0700";
             UMask = "0077";
