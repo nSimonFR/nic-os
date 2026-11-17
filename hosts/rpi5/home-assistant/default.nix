@@ -16,9 +16,6 @@ let
   haVoltalis = pkgs.callPackage ../../../pkgs/home-assistant/ha-voltalis.nix {
     python3Packages = haPython;
   };
-  haIntratone = pkgs.callPackage ../../../pkgs/home-assistant/ha-intratone.nix {
-    python3Packages = haPython;
-  };
   haLinky = pkgs.callPackage ../../../pkgs/home-assistant/ha-linky.nix { };
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
@@ -54,9 +51,15 @@ in
     enable = true;
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
-    customComponents = [
-      haVoltalis
-      haIntratone
+    customComponents = [ haVoltalis ];
+    # Intratone (door + doorbell) runs from a plain folder, custom_components/intratone,
+    # that the module leaves alone (it only replaces /nix/store symlinks). Upstream
+    # GuiHash/ha-intratone was taken offline in 2026-11 at the manufacturer's request,
+    # so its source can't be fetched any more; v0.9.3 is kept in a private repo
+    # (nSimonFR/ha-intratone), restore from there. Only its Python deps stay here.
+    extraPackages = ps: [
+      ps.firebase-messaging
+      ps.voip-utils
     ];
     extraComponents = [
       # Already in the module's aarch64 defaults: default_config, met, esphome, rpi_power
