@@ -61,9 +61,8 @@ jobs:
           # Every open PR into main but Renovate's (it merges through its own
           # bypass), plus the event's own; review_gate.py rejects other authors.
           prs=$( {
-            gh pr list --repo "$REPO" --base main --state open --limit 1000 \
-              --json number,author \
-              --jq '.[] | select(.author.login != "app/nic-os-renovate") | .number'
+            gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" \
+              --jq '.[] | select(.user.login != "nic-os-renovate[bot]") | .number'
             [ -n "$EVENT_PR" ] && echo "$EVENT_PR"
           } | sort -un)
           decide() {
