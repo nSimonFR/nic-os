@@ -190,6 +190,29 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
+    # Nextcloud MCP server (cbcoutinho), built from its uv.lock by
+    # pkgs/agents/nextcloud-mcp.nix: its deps (mcp 2.x, httpx2) run ahead of
+    # nixpkgs. Bump: change the tag, then `nix flake lock --update-input nextcloud-mcp-src`.
+    nextcloud-mcp-src = {
+      url = "github:cbcoutinho/nextcloud-mcp-server/v0.213.1";
+      flake = false;
+    };
+    pyproject-nix = {
+      url = "github:pyproject-nix/pyproject.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    uv2nix = {
+      url = "github:pyproject-nix/uv2nix";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    pyproject-build-systems = {
+      url = "github:pyproject-nix/build-system-pkgs";
+      inputs.pyproject-nix.follows = "pyproject-nix";
+      inputs.uv2nix.follows = "uv2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # steipete's goplaces CLI: bump with
     #   sudo nix flake lock --update-input goplaces-src
     goplaces-src = {

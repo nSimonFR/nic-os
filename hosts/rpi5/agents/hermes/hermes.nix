@@ -192,10 +192,23 @@ let
       '';
 
   # Aperture tools that send as Nico (mcp-bridges.nix, messaging-mcp.nix).
+  # Write as Nico to other people, publish, or delete (Nextcloud).
   apertureSendTools = [
     "mail_send_email"
     "mail_forward_email"
     "messaging_send_message"
+    "nextcloud_nc_webdav_delete_resource"
+    "nextcloud_nc_calendar_delete_event"
+    "nextcloud_nc_calendar_delete_todo"
+    "nextcloud_nc_calendar_bulk_operations"
+    "nextcloud_nc_calendar_manage_calendar"
+    "nextcloud_nc_calendar_create_meeting"
+    "nextcloud_nc_contacts_delete_contact"
+    "nextcloud_nc_contacts_delete_addressbook"
+    "nextcloud_nc_share_create"
+    "nextcloud_nc_share_create_public_link"
+    "nextcloud_nc_share_update"
+    "nextcloud_nc_share_delete"
   ];
 
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
@@ -241,8 +254,8 @@ let
       connect_timeout = 120;
       tools.exclude = apertureSendTools;
     };
-    # The same gateway, holding only the tools that write as Nico to other
-    # people: `untrusted` asks him on Telegram before each call.
+    # The same gateway, holding only apertureSendTools: `untrusted` asks him
+    # on Telegram before each call.
     mcp_servers.aperture-send = {
       url = "${apertureUrl}/v1/mcp";
       connect_timeout = 120;

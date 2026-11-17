@@ -1,12 +1,18 @@
 # Stdio-only MCP servers behind mcp-stdio-bridge (nicos-scripts), served as
-# Streamable HTTP for Aperture's `mail`, `mtg` and `karakeep` connectors
+# Streamable HTTP for Aperture's `mail`, `mtg`, `karakeep` and `nextcloud` connectors
 # (aperture-sync.nix).
 # Socket-activated: 0 at rest; the child server starts on the first request.
 #
 # A bridge with `token = true` requires a bearer token, generated once into
 # /var/lib/mcp-tokens/<name> by mcp-tokens.service and handed to Aperture by
 # aperture-config-sync.
-{ pkgs, lib, ... }:
+{
+  pkgs,
+  lib,
+  inputs,
+  tailnetFqdn,
+  ...
+}:
 let
   tokenDir = "/var/lib/mcp-tokens";
 
@@ -19,6 +25,20 @@ let
     KARAKEEP_API_KEY=$(< "$CREDENTIALS_DIRECTORY/apikey")
     export KARAKEEP_API_KEY
     exec ${karakeepMcp}/bin/karakeep-mcp
+  '';
+
+  nextcloudMcp = pkgs.callPackage ../../../pkgs/agents/nextcloud-mcp.nix { inherit inputs; };
+  nextcloudApps = [
+    "webdav"
+    "sharing"
+    "calendar"
+    "contacts"
+  ];
+  # nsimon's app password (shared with homepage and travel-cal-sync); may end in CRLF.
+  nextcloudMcpRun = pkgs.writeShellScript "nextcloud-mcp-run" ''
+    NEXTCLOUD_PASSWORD=$(tr -d '\r\n' < "$CREDENTIALS_DIRECTORY/password")
+    export NEXTCLOUD_PASSWORD
+    exec ${nextcloudMcp}/bin/nextcloud-mcp-server "$@"
   '';
 
   # Proton through hydroxide (loopback) and Gmail. Passwords only inline, so
@@ -167,6 +187,39 @@ let
       backup = [ "none" ];
       backupNote = "stateless — the bookmarks live in Karakeep";
     };
+    nextcloud = {
+      description = "Nextcloud MCP (nextcloud-mcp-server)";
+      internalPort = 13367;
+      proxyPort = 8450;
+      publicPort = 4090;
+      order = 182;
+      token = true;
+      units = [ ];
+      # Only the apps this instance runs; the others' tools would only fail.
+      command = [
+        "${nextcloudMcpRun}"
+        "run"
+        "--transport"
+        "stdio"
+      ]
+      ++ lib.concatMap (a: [
+        "--enable-app"
+        a
+      ]) nextcloudApps;
+      exclude = [ ];
+      environment = {
+        NEXTCLOUD_HOST = "https://${tailnetFqdn}/nextcloud";
+        NEXTCLOUD_USERNAME = "nsimon";
+        HOME = "/run/nextcloud-mcp";
+      };
+      serviceConfig = {
+        RuntimeDirectory = "nextcloud-mcp";
+        WorkingDirectory = "/run/nextcloud-mcp";
+        LoadCredential = [ "password:/run/agenix/nextcloud-homepage-password" ];
+      };
+      backup = [ "none" ];
+      backupNote = "stateless — the files, calendars and contacts live in Nextcloud";
+    };
   };
 
   mkBridge =
@@ -262,7 +315,7 @@ in
           };
           script = ''
             # messaging is in messaging/messaging-mcp.nix, the rest here.
-            for name in mail messaging karakeep; do
+            for name in mail messaging karakeep nextcloud; do
               f=${tokenDir}/$name
               [ -s "$f" ] || ${pkgs.openssl}/bin/openssl rand -hex 32 > "$f"
             done
