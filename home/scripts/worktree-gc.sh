@@ -10,7 +10,9 @@
 #   - nothing to lose: every commit at HEAD is on a remote branch.
 # Its local branch goes too when no other worktree has it and it is fully on a remote.
 # A worktree whose directory is already gone is pruned. The main checkout is never touched.
-set -uo pipefail
+# Written without errexit: guards like `[ -e x ] && ...` return 1 by design, and
+# writeShellApplication turns errexit on, so it is switched back off here.
+set +e -uo pipefail
 
 dry=0
 days=${WORKTREE_GC_DAYS:-7}
