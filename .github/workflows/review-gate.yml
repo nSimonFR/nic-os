@@ -76,15 +76,8 @@ jobs:
             gh api "repos/$REPO/pulls/$pr" > pr.json
             gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
             decide "$pr"
-            # Only fixed values leave the JSON: filenames stay inside it.
-            label=$(jq -r '.label // ""' d.json)
-            case "$label" in
-              needs-human) gh pr edit "$pr" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible ;;
-              auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
-              *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
-            esac
-            # Re-read the reviews right before approving: a dismissal during
-            # the label update must stop it.
+            # Re-read the reviews right before approving: a dismissal since the
+            # first read must stop it.
             [ "$(jq -r .approve d.json)" = true ] && decide "$pr"
             if [ "$(jq -r .approve d.json)" = true ]; then
               head=$(jq -r .head d.json)
@@ -92,5 +85,13 @@ jobs:
                 -f commit_id="$head" -f event=APPROVE \
                 -f body="Review gate: CodeRabbit approved $head, small and outside protected paths. Merges once the checks are green." > /dev/null
             fi
+            # Labels from the final decision. Only fixed values leave the JSON:
+            # filenames stay inside it.
+            label=$(jq -r '.label // ""' d.json)
+            case "$label" in
+              needs-human) gh pr edit "$pr" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible ;;
+              auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
+              *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
+            esac
             jq -c --arg pr "$pr" '{pr: $pr, ok, label, approve, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
           done
