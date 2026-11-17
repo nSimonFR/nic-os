@@ -35,7 +35,7 @@ jobs:
     # A review signal counts only when its job ran, i.e. CodeRabbit reviewed.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     # Never cancel a running gate. A queued run that a newer one replaces loses
-    # nothing: every run sweeps all open agent PRs.
+    # nothing: every run sweeps all open PRs.
     concurrency:
       group: review-gate
       cancel-in-progress: false
@@ -58,11 +58,12 @@ jobs:
           REPO: ${{ github.repository }}
           EVENT_PR: ${{ github.event.pull_request.number }}
         run: |
-          # Every open agent PR, plus the event's own PR (a human or fork one
-          # still gets its needs-human label).
+          # Every open PR into main but Renovate's (it merges through its own
+          # bypass), plus the event's own; review_gate.py rejects other authors.
           prs=$( {
-            gh pr list --repo "$REPO" --base main --author nSimonFR-ai \
-              --state open --json number --jq '.[].number'
+            gh pr list --repo "$REPO" --base main --state open --limit 1000 \
+              --json number,author \
+              --jq '.[] | select(.author.login != "app/nic-os-renovate") | .number'
             [ -n "$EVENT_PR" ] && echo "$EVENT_PR"
           } | sort -un)
           decide() {
