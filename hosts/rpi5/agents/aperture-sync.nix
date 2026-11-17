@@ -121,6 +121,11 @@ let
     }
     // bearer "KARAKEEP_MCP_TOKEN"
     // sleepy;
+    nextcloud = {
+      url = "${publicUrl "nextcloud-mcp"}/mcp";
+    }
+    // bearer "NEXTCLOUD_MCP_TOKEN"
+    // sleepy;
     messaging = {
       url = "${publicUrl "messaging-mcp"}/mcp";
     }
@@ -159,6 +164,7 @@ let
       MAIL_MCP_TOKEN = "/var/lib/mcp-tokens/mail";
       MESSAGING_MCP_TOKEN = "/var/lib/mcp-tokens/messaging";
       KARAKEEP_MCP_TOKEN = "/var/lib/mcp-tokens/karakeep";
+      NEXTCLOUD_MCP_TOKEN = "/var/lib/mcp-tokens/nextcloud";
     };
 
   # Claude ids for the Anthropic passthrough. The base is what the claude-code
