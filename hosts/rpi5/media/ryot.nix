@@ -125,6 +125,22 @@ let
     '';
   };
 
+  # SANDBOX_IMPORT_CONCURRENCY=1 gives provider imports a single slot, freed when
+  # the import's workflow completes. If the sandbox dies under it (OOM kill,
+  # reboot), it never completes and every later import stays queued. An import
+  # takes seconds, so a slot held for 30 min is dead.
+  releaseImportSlot = pkgs.writeShellApplication {
+    name = "ryot-release-import-slot";
+    runtimeInputs = [
+      config.services.postgresql.package
+      pkgs.util-linux
+    ];
+    text = ''
+      runuser -u postgres -- psql -X -q -d ryotv2 -c \
+        "delete from provider_import_admission where status = 'running' and admitted_at < now() - interval '30 minutes'"
+    '';
+  };
+
   # nspawn mounts a fresh /run, so the sandbox lock the image's provision step
   # created at build time has to be recreated before dropping to uid 1001.
   inner = lib.concatStringsSep " && " [
@@ -200,6 +216,7 @@ in
       ExecStartPre = [
         (lib.getExe prepareRootfs)
         (lib.getExe writeEnv)
+        "-${lib.getExe releaseImportSlot}"
       ];
       ExecStart = lib.escapeShellArgs [
         "${config.systemd.package}/bin/systemd-nspawn"
