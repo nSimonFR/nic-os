@@ -32,7 +32,10 @@ permissions:
 jobs:
   gate:
     runs-on: ubuntu-latest
-    # Queue, never cancel: a cancelled run could skip an approval.
+    # A review signal counts only when its job ran, i.e. CodeRabbit reviewed.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Never cancel a running gate. A queued run that a newer one replaces loses
+    # nothing: every run sweeps all open agent PRs.
     concurrency:
       group: review-gate
       cancel-in-progress: false
@@ -55,19 +58,23 @@ jobs:
           REPO: ${{ github.repository }}
           EVENT_PR: ${{ github.event.pull_request.number }}
         run: |
-          if [ -n "$EVENT_PR" ]; then
-            prs=$EVENT_PR
-          else
-            prs=$(gh pr list --repo "$REPO" --base main --author nSimonFR-ai \
-              --state open --json number --jq '.[].number')
-          fi
-          for pr in $prs; do
-            gh api "repos/$REPO/pulls/$pr" > pr.json
-            gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
-            gh api --paginate --slurp "repos/$REPO/pulls/$pr/reviews" > reviews.json
+          # Every open agent PR, plus the event's own PR (a human or fork one
+          # still gets its needs-human label).
+          prs=$( {
+            gh pr list --repo "$REPO" --base main --author nSimonFR-ai \
+              --state open --json number --jq '.[].number'
+            [ -n "$EVENT_PR" ] && echo "$EVENT_PR"
+          } | sort -un)
+          decide() {
+            gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json
             # Fail closed: a crash is needs-human.
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
               echo '{"ok":false,"reasons":["review_gate.py failed"],"label":"needs-human","approve":false,"head":""}' > d.json
+          }
+          for pr in $prs; do
+            gh api "repos/$REPO/pulls/$pr" > pr.json
+            gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
+            decide "$pr"
             # Only fixed values leave the JSON: filenames stay inside it.
             label=$(jq -r '.label // ""' d.json)
             case "$label" in
@@ -75,6 +82,9 @@ jobs:
               auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
               *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
             esac
+            # Re-read the reviews right before approving: a dismissal during
+            # the label update must stop it.
+            [ "$(jq -r .approve d.json)" = true ] && decide "$pr"
             if [ "$(jq -r .approve d.json)" = true ]; then
               head=$(jq -r .head d.json)
               GH_TOKEN=$APP_TOKEN gh api -X POST "repos/$REPO/pulls/$pr/reviews" \
