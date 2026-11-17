@@ -3,102 +3,83 @@
 #
 # CodeRabbit (.coderabbit.yaml auto_approvals) approves only once its findings
 # are resolved and its merge and security risk are low. Its approval does not
-# count for the main ruleset, so on that approval this workflow re-checks the
-# PR with .github/scripts/review_gate.py and, if it passes, approves as the
-# nic-os-renovate App. auto-merge.yml has already armed every PR, so GitHub
-# merges once the required checks are green. Everything else gets `needs-human`.
+# count for the main ruleset, so this re-checks each open agent PR with
+# .github/scripts/review_gate.py and approves it as the nic-os-renovate App,
+# pinned to the commit it checked. auto-merge.yml has already armed every PR,
+# so GitHub merges once the required checks are green. Everything else gets
+# `needs-human`.
 #
-# The gate script and this file always run from main, never from the PR head.
+# Every trigger here runs this file and the script from main, never from a PR:
+# pull_request_target (labels as soon as a PR opens or moves), workflow_run of
+# review-signal.yml (CodeRabbit submitted a review) and a schedule (sweep).
 name: Review gate
 
 on:
-  pull_request_review:
-    types: [submitted]
-  pull_request:
+  pull_request_target:
     branches: [main]
     types: [opened, reopened, ready_for_review, synchronize]
+  workflow_run:
+    workflows: [Review signal]
+    types: [completed]
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
 
 permissions:
   contents: read
   pull-requests: write
 
-concurrency:
-  group: review-gate-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
-
 jobs:
   gate:
     runs-on: ubuntu-latest
-    if: >-
-      github.event_name == 'pull_request' ||
-      (github.event.review.user.login == 'coderabbitai[bot]' &&
-       github.event.review.state == 'approved')
+    # Queue, never cancel: a cancelled run could skip an approval.
+    concurrency:
+      group: review-gate
+      cancel-in-progress: false
     steps:
       - uses: actions/checkout@v7
         with:
           # Full tree: review_gate.py checks its patterns against main's files.
           ref: main
 
-      - name: Check the PR
-        id: check
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-        run: |
-          gh api "repos/$REPO/pulls/$PR" > pr.json
-          gh api --paginate --slurp "repos/$REPO/pulls/$PR/files" > files.json
-          # Fail closed: no script on main (before this lands) or a crash is needs-human.
-          verdict=$(python3 -I .github/scripts/review_gate.py pr.json files.json) ||
-            verdict='{"ok": false, "reasons": ["review_gate.py missing or failed on main"]}'
-          echo "$verdict"
-          {
-            echo "ok=$(jq -r .ok <<<"$verdict")"
-            echo "head=$(jq -r .head.sha pr.json)"
-            echo 'reasons<<EOF'
-            jq -r '.reasons[] | "- " + .' <<<"$verdict"
-            echo EOF
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Label needs-human
-        if: steps.check.outputs.ok != 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-          REASONS: ${{ steps.check.outputs.reasons }}
-        run: |
-          gh pr edit "$PR" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible || true
-          echo "### needs-human" >> "$GITHUB_STEP_SUMMARY"
-          echo "$REASONS" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Clear needs-human
-        if: steps.check.outputs.ok == 'true' && github.event_name == 'pull_request'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
-        run: gh pr edit "$PR" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible || true
-
-      # Only on CodeRabbit's approval, and only of the commit it reviewed.
       - id: app
-        if: >-
-          steps.check.outputs.ok == 'true' &&
-          github.event_name == 'pull_request_review' &&
-          github.event.review.commit_id == steps.check.outputs.head
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.RENOVATE_APP_ID }}
           private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
 
-      - name: Approve as the App
-        if: steps.app.outcome == 'success'
+      - name: Gate open PRs
         env:
-          GH_TOKEN: ${{ steps.app.outputs.token }}
-          LABEL_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ github.token }}
+          APP_TOKEN: ${{ steps.app.outputs.token }}
           REPO: ${{ github.repository }}
-          PR: ${{ github.event.pull_request.number }}
+          EVENT_PR: ${{ github.event.pull_request.number }}
         run: |
-          gh pr review "$PR" --repo "$REPO" --approve \
-            --body "Review gate: CodeRabbit approved, small and outside protected paths. Merges once the checks are green."
-          GH_TOKEN=$LABEL_TOKEN gh pr edit "$PR" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human || true
+          if [ -n "$EVENT_PR" ]; then
+            prs=$EVENT_PR
+          else
+            prs=$(gh pr list --repo "$REPO" --base main --author nSimonFR-ai \
+              --state open --json number --jq '.[].number')
+          fi
+          for pr in $prs; do
+            gh api "repos/$REPO/pulls/$pr" > pr.json
+            gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
+            gh api --paginate --slurp "repos/$REPO/pulls/$pr/reviews" > reviews.json
+            # Fail closed: a crash is needs-human.
+            python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
+              echo '{"ok":false,"reasons":["review_gate.py failed"],"label":"needs-human","approve":false,"head":""}' > d.json
+            # Only fixed values leave the JSON: filenames stay inside it.
+            label=$(jq -r '.label // ""' d.json)
+            case "$label" in
+              needs-human) gh pr edit "$pr" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible ;;
+              auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
+              *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
+            esac
+            if [ "$(jq -r .approve d.json)" = true ]; then
+              head=$(jq -r .head d.json)
+              GH_TOKEN=$APP_TOKEN gh api -X POST "repos/$REPO/pulls/$pr/reviews" \
+                -f commit_id="$head" -f event=APPROVE \
+                -f body="Review gate: CodeRabbit approved $head, small and outside protected paths. Merges once the checks are green." > /dev/null
+            fi
+            jq -c --arg pr "$pr" '{pr: $pr, ok, label, approve, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
+          done
