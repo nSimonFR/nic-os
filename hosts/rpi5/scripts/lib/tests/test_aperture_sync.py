@@ -220,3 +220,38 @@ def test_connector_secret_falls_back_to_the_systemd_credential(tmp_path):
         "B": "from-cred",
         "C": "",
     }
+
+
+def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True},
+                "openaidocs": {"url": "http://docs/mcp"},
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    cfg = ap.Config(aperture_url="http://ap", base_config=str(p), apply=True)
+    fake = Aperture(held={"old": True})
+    calls = []
+
+    def opener(req, timeout=None):
+        calls.append((req.get_method(), req.full_url))
+        if req.full_url == "http://sure/mcp":
+            raise OSError("405")
+        return fake(req, timeout)
+
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert calls.index(("GET", "http://sure/mcp")) < calls.index(
+        ("PUT", "http://ap/api/config")
+    )
+    assert ("GET", "http://docs/mcp") not in calls
+    assert len(fake.puts) == 1
+
+    calls.clear()
+    fake.held = json.loads(fake.puts[0]["config"])
+    assert ap.run(cfg, opener=opener) == 0
+    assert ("GET", "http://sure/mcp") not in calls
