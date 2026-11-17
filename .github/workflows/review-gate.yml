@@ -1,0 +1,102 @@
+# Review gate: an agent PR merges without Nico when CodeRabbit approves it and
+# it stays small and away from protected paths.
+#
+# CodeRabbit (.coderabbit.yaml auto_approvals) approves only once its findings
+# are resolved and its merge and security risk are low. Its approval does not
+# count for the main ruleset, so on that approval this workflow re-checks the
+# PR with .github/scripts/review_gate.py and, if it passes, approves as the
+# nic-os-renovate App. auto-merge.yml has already armed every PR, so GitHub
+# merges once the required checks are green. Everything else gets `needs-human`.
+#
+# The gate script and this file always run from main, never from the PR head.
+name: Review gate
+
+on:
+  pull_request_review:
+    types: [submitted]
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: review-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.review.user.login == 'coderabbitai[bot]' &&
+       github.event.review.state == 'approved')
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+
+      - name: Check the PR
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh api "repos/$REPO/pulls/$PR" > pr.json
+          gh api --paginate --slurp "repos/$REPO/pulls/$PR/files" > files.json
+          verdict=$(python3 -I .github/scripts/review_gate.py pr.json files.json)
+          echo "$verdict"
+          {
+            echo "ok=$(jq -r .ok <<<"$verdict")"
+            echo "head=$(jq -r .head.sha pr.json)"
+            echo 'reasons<<EOF'
+            jq -r '.reasons[] | "- " + .' <<<"$verdict"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Label needs-human
+        if: steps.check.outputs.ok != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          REASONS: ${{ steps.check.outputs.reasons }}
+        run: |
+          gh pr edit "$PR" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible || true
+          echo "### needs-human" >> "$GITHUB_STEP_SUMMARY"
+          echo "$REASONS" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Clear needs-human
+        if: steps.check.outputs.ok == 'true' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible || true
+
+      # Only on CodeRabbit's approval, and only of the commit it reviewed.
+      - id: app
+        if: >-
+          steps.check.outputs.ok == 'true' &&
+          github.event_name == 'pull_request_review' &&
+          github.event.review.commit_id == steps.check.outputs.head
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RENOVATE_APP_ID }}
+          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
+
+      - name: Approve as the App
+        if: steps.app.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          LABEL_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr review "$PR" --repo "$REPO" --approve \
+            --body "Review gate: CodeRabbit approved, small and outside protected paths. Merges once the checks are green."
+          GH_TOKEN=$LABEL_TOKEN gh pr edit "$PR" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human || true

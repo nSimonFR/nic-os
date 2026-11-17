@@ -26,6 +26,13 @@ repository:
   enable_automated_security_fixes: false
 
 labels:
+  # Set by .github/workflows/review-gate.yml.
+  - name: needs-human
+    color: b60205
+    description: The review gate will not merge this; Nico reviews it
+  - name: auto-merge-eligible
+    color: 0e8a16
+    description: CodeRabbit and the review gate approved; merges once green
   - name: bug
     color: d73a4a
     description: Something isn't working
