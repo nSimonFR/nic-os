@@ -99,6 +99,12 @@ while IFS= read -r skdir; do
   smd="$skdir/SKILL.md"
   [ -f "$smd" ] || continue
 
+  # Skip read-only skills: Hermes copies its bundled skills (computer-use,
+  # dogfood, …) straight from the Nix store, mode 0444, and `skills list` may
+  # omit them so the builtin check below misses them. Skills Hermes writes
+  # itself are writable.
+  [ -w "$smd" ] || continue
+
   # Skip skills we seed from the repo (matched by directory name).
   printf '%s\n' "$seededNames" | grep -qxF "$d" && continue
 
