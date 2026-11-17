@@ -12,6 +12,10 @@ Aperture's PUT takes the current `hash` (optimistic concurrency). If either
 list cannot be read, Aperture is left untouched rather than shrunk. Writes
 only with APERTURE_APPLY=1.
 
+Before a push, every sleepy connector (`send_caller_identity`) is woken: Aperture
+re-lists connectors on a config change, and one whose backend is still cold
+comes back with no tools until the next change.
+
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
 in APERTURE_CONNECTOR_SECRETS, or else the systemd credential of that name
 (raw single-value agenix files); one with neither is left out rather than
@@ -25,6 +29,7 @@ APERTURE_APPLY.
 
 import json
 import sys
+from concurrent.futures import ThreadPoolExecutor
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -177,6 +182,24 @@ def put(cfg, config, digest, opener=None):
     return http_json(req, timeout=30, opener=opener)
 
 
+def wake(config, opener=None, timeout=90):
+    """GET each sleepy connector's URL; its socket proxy answers once the backend
+    is up. Any answer will do, an error included."""
+    opener = opener or urllib.request.urlopen
+    servers = config.get("connectors", {}).get("servers", {})
+    urls = [s["url"] for s in servers.values() if s.get("send_caller_identity")]
+
+    def hit(url):
+        try:
+            opener(urllib.request.Request(url), timeout=timeout).close()
+        except OSError:
+            pass
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        list(pool.map(hit, urls))
+    return urls
+
+
 def run(cfg, opener=None, sleep=time.sleep, attempts=5):
     base = json.loads(Path(cfg.base_config).read_text())
     try:
@@ -199,6 +222,8 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
             if not cfg.apply:
                 log(f"would push {count} gate models (dry run)")
                 return 0
+            if attempt == 1:
+                log(f"woke {len(wake(want, opener=opener))} sleepy connectors")
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):
                 log(
