@@ -53,11 +53,11 @@ age "$T/wt/locked"
 mk gone
 rm -rf "$T/wt/gone"
 
-bash "$script" --dry-run >"$T/dry.log"
+bash -e "$script" --dry-run >"$T/dry.log"
 check "dry run removes nothing" test -d "$T/wt/pushed"
 check "dry run names the candidate" grep -q "would remove .*/wt/pushed" "$T/dry.log"
 
-bash "$script" >/dev/null
+bash -e "$script" >/dev/null
 check "old, clean, pushed worktree is removed" test ! -e "$T/wt/pushed"
 check "its pushed branch is deleted" test -z "$(g -C "$P" branch --list pushed)"
 check "dirty worktree is kept" test -f "$T/wt/dirty/new.txt"
