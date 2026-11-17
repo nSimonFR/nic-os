@@ -36,8 +36,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          # Full tree: review_gate.py checks its patterns against main's files.
           ref: main
-          sparse-checkout: .github/scripts
 
       - name: Check the PR
         id: check
