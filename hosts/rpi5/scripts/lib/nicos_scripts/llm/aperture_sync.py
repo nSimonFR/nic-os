@@ -213,6 +213,7 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
         log(f"connector {cid}: secret unset, left out")
     count = len(want["providers"][cfg.provider]["models"])
 
+    woken = False
     for attempt in range(1, attempts + 1):
         try:
             have, digest = current(cfg, opener=opener)
@@ -222,8 +223,9 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
             if not cfg.apply:
                 log(f"would push {count} gate models (dry run)")
                 return 0
-            if attempt == 1:
+            if not woken:
                 log(f"woke {len(wake(want, opener=opener))} sleepy connectors")
+                woken = True
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):
                 log(

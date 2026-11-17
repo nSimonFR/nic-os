@@ -255,3 +255,33 @@ def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
     fake.held = json.loads(fake.puts[0]["config"])
     assert ap.run(cfg, opener=opener) == 0
     assert ("GET", "http://sure/mcp") not in calls
+
+
+def test_wakes_before_the_first_put_even_when_the_first_read_fails(tmp_path):
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True}
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    cfg = ap.Config(aperture_url="http://ap", base_config=str(p), apply=True)
+    fake = Aperture(held={"old": True})
+    calls, reads = [], []
+
+    def opener(req, timeout=None):
+        calls.append((req.get_method(), req.full_url))
+        if req.full_url == "http://ap/api/config" and req.get_method() == "GET":
+            reads.append(1)
+            if len(reads) == 1:
+                raise OSError("aperture restarting")
+        return fake(req, timeout)
+
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert len(fake.puts) == 1
+    assert calls.index(("GET", "http://sure/mcp")) < calls.index(
+        ("PUT", "http://ap/api/config")
+    )
