@@ -3,6 +3,8 @@
 CodeRabbit judges risk and approves (.coderabbit.yaml auto_approvals); this only
 refuses what must always reach a human, whatever an LLM says. Run from main,
 never from the PR head. Prints a JSON verdict: {"ok": bool, "reasons": [...]}.
+PROTECTED is the only path list; a pattern that matches no file on main (a
+move) refuses every PR until it is updated.
 
 Usage: review_gate.py PR_JSON FILES_JSON
   PR_JSON    `gh api repos/{repo}/pulls/{n}`
@@ -11,6 +13,8 @@ Usage: review_gate.py PR_JSON FILES_JSON
 
 import fnmatch
 import json
+import pathlib
+import subprocess
 import sys
 
 AUTHORS = {"nSimonFR-ai"}
@@ -22,7 +26,6 @@ PROTECTED = [
     ".github/*",
     ".coderabbit.yaml",
     "AGENTS.md",
-    "CLAUDE.md",
     "scripts/push-ai",
     "flake.nix",
     "flake.lock",
@@ -38,8 +41,13 @@ def protected(path):
     return any(fnmatch.fnmatch(path, pat) for pat in PROTECTED)
 
 
-def verdict(pr, files):
-    reasons = []
+def stale(tracked):
+    """Protected patterns that match nothing on main."""
+    return [p for p in PROTECTED if not any(fnmatch.fnmatch(t, p) for t in tracked)]
+
+
+def verdict(pr, files, tracked):
+    reasons = [f"protected pattern {p} matches no file on main" for p in stale(tracked)]
     author = (pr.get("user") or {}).get("login")
     if author not in AUTHORS:
         reasons.append(f"author {author} is not an agent")
@@ -59,11 +67,21 @@ def verdict(pr, files):
     return {"ok": not reasons, "reasons": sorted(set(reasons))}
 
 
-def main(argv):
+def tracked_files(run=subprocess.run):
+    root = pathlib.Path(__file__).resolve().parents[2]
+    out = run(
+        ["git", "-C", str(root), "ls-files"], capture_output=True, text=True, check=True
+    )
+    return out.stdout.splitlines()
+
+
+def main(argv, tracked=None):
     pr = json.load(open(argv[1]))
     pages = json.load(open(argv[2]))
     files = [f for page in pages for f in page]
-    print(json.dumps(verdict(pr, files)))
+    print(
+        json.dumps(verdict(pr, files, tracked_files() if tracked is None else tracked))
+    )
     return 0
 
 

@@ -13,18 +13,7 @@ reviews:
     max_security_risk: low
     # Agents author the PRs: they must not `@coderabbitai approve` their own.
     allow_author_approval: false
-    overrides:
-      - paths:
-          - ".github/**"
-          - ".coderabbit.yaml"
-          - "AGENTS.md"
-          - "flake.nix"
-          - "flake.lock"
-          - "**/secrets.nix"
-          - "hosts/*/security/**"
-          - "home/dotfiles/claude-settings.json"
-          - "hosts/rpi5/agents/hermes/hermes.nix"
-        enabled: false
+    # Protected paths are refused by .github/scripts/review_gate.py, the only list.
   high_level_summary: true
   review_status: true
   collapse_walkthrough: true
