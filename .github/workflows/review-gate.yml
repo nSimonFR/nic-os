@@ -48,7 +48,9 @@ jobs:
         run: |
           gh api "repos/$REPO/pulls/$PR" > pr.json
           gh api --paginate --slurp "repos/$REPO/pulls/$PR/files" > files.json
-          verdict=$(python3 -I .github/scripts/review_gate.py pr.json files.json)
+          # Fail closed: no script on main (before this lands) or a crash is needs-human.
+          verdict=$(python3 -I .github/scripts/review_gate.py pr.json files.json) ||
+            verdict='{"ok": false, "reasons": ["review_gate.py missing or failed on main"]}'
           echo "$verdict"
           {
             echo "ok=$(jq -r .ok <<<"$verdict")"
