@@ -28,11 +28,11 @@ let
     repo: version: src:
     pkgs.callPackage ../../../pkgs/services/mautrix-bridge.nix { inherit repo version src; };
   # renovate: datasource=github-releases depName=mautrix/meta extractVersion=^v(?<version>.+)$
-  instagramVersion = "0.2610.0";
+  instagramVersion = "0.2611.0";
   instagramSrc = pkgs.fetchurl {
     name = "mautrix-instagram-${instagramVersion}-arm64";
     url = "https://github.com/mautrix/meta/releases/download/v${instagramVersion}/mautrix-instagram-arm64";
-    hash = "sha256-EUh8lTYequZAQGt0qoksk5gi6LKir+fmt+1zwoya5zE=";
+    hash = "sha256-OBt7svQ80F47uwNqhhdoIwrpQyuM/Xk87JkrEBKqdb8=";
   };
   # renovate: datasource=github-releases depName=mautrix/discord extractVersion=^v(?<version>.+)$
   discordVersion = "0.7.7";
@@ -42,18 +42,18 @@ let
     hash = "sha256-AzwRW35c0xsVWiQuw3KwqGKWK6pUAWkNsuD6lnaJuck=";
   };
   # renovate: datasource=github-releases depName=mautrix/telegram extractVersion=^v(?<version>.+)$
-  telegramVersion = "0.2610.0";
+  telegramVersion = "0.2611.0";
   telegramSrc = pkgs.fetchurl {
     name = "mautrix-telegram-${telegramVersion}-arm64";
     url = "https://github.com/mautrix/telegram/releases/download/v${telegramVersion}/mautrix-telegram-arm64";
-    hash = "sha256-JfBXwresH4kiX1Ltp1YV/wMMM8v+RSJsWYpjYu9lFvU=";
+    hash = "sha256-T29QL+52xLl6Sw9R105HEHNdD+TV7SRZN0q0UfahsVc=";
   };
   # renovate: datasource=github-releases depName=mautrix/linkedin extractVersion=^v(?<version>.+)$
-  linkedinVersion = "0.2609.0";
+  linkedinVersion = "0.2611.0";
   linkedinSrc = pkgs.fetchurl {
     name = "mautrix-linkedin-${linkedinVersion}-arm64";
     url = "https://github.com/mautrix/linkedin/releases/download/v${linkedinVersion}/mautrix-linkedin-arm64";
-    hash = "sha256-0IAvhwycxjCFBdIILMjn6kOmUdbWtYL30UsFuCDDmo8=";
+    hash = "sha256-YeFLwCXUXN+i6ATx8b8VIc2MNeyXTw6P+48fTPpOOv8=";
   };
   # renovate: datasource=github-releases depName=mautrix/twitter extractVersion=^v(?<version>.+)$
   twitterVersion = "0.2609.0";
