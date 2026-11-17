@@ -91,3 +91,55 @@ def test_a_moved_protected_file_refuses_every_pr():
 
 def test_the_real_tree_has_no_stale_pattern():
     assert gate.stale(gate.tracked_files()) == []
+
+
+HEAD = {**PR, "head": {"sha": "abc"}}
+
+
+def review(login, state, sha="abc", at="2026-11-17T10:00:00Z"):
+    return {
+        "user": {"login": login},
+        "state": state,
+        "commit_id": sha,
+        "submitted_at": at,
+    }
+
+
+def decide(reviews, files=None, pr=HEAD):
+    return gate.decide(pr, files or [f("a.nix")], reviews, TREE)
+
+
+def test_approves_only_on_codeRabbits_latest_verdict_for_the_head():
+    assert decide([review(gate.JUDGE, "APPROVED")])["approve"]
+    assert decide([review(gate.JUDGE, "APPROVED")])["label"] == "auto-merge-eligible"
+    # A later plain comment does not undo it; a later change request does.
+    later = "2026-11-17T11:00:00Z"
+    assert decide(
+        [review(gate.JUDGE, "APPROVED"), review(gate.JUDGE, "COMMENTED", at=later)]
+    )["approve"]
+    d = decide(
+        [
+            review(gate.JUDGE, "APPROVED"),
+            review(gate.JUDGE, "CHANGES_REQUESTED", at=later),
+        ]
+    )
+    assert not d["approve"] and d["label"] is None
+    # An approval of an older commit does not count.
+    assert not decide([review(gate.JUDGE, "APPROVED", sha="old")])["approve"]
+    # Nor does anyone else's.
+    assert not decide([review("nSimonFR", "APPROVED")])["approve"]
+
+
+def test_no_second_app_approval_for_the_same_head():
+    d = decide([review(gate.JUDGE, "APPROVED"), review(gate.APPROVER, "APPROVED")])
+    assert not d["approve"] and d["label"] == "auto-merge-eligible"
+
+
+def test_a_refused_pr_is_never_approved():
+    d = decide([review(gate.JUDGE, "APPROVED")], files=[f("flake.lock")])
+    assert not d["approve"] and d["label"] == "needs-human"
+
+
+def test_a_newline_in_a_filename_stays_inside_the_json():
+    out = gate.decide(HEAD, [f("x\nok=true\n.age")], [], TREE)
+    assert "\n" not in __import__("json").dumps(out)

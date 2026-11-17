@@ -2,13 +2,17 @@
 
 CodeRabbit judges risk and approves (.coderabbit.yaml auto_approvals); this only
 refuses what must always reach a human, whatever an LLM says. Run from main,
-never from the PR head. Prints a JSON verdict: {"ok": bool, "reasons": [...]}.
+never from the PR head. Prints a JSON decision: ok, reasons, head, label
+(needs-human, auto-merge-eligible or null while CodeRabbit has not approved)
+and approve (CodeRabbit's latest verdict approves this head, and the App has
+not yet approved it).
 PROTECTED is the only path list; a pattern that matches no file on main (a
 move) refuses every PR until it is updated.
 
-Usage: review_gate.py PR_JSON FILES_JSON
-  PR_JSON    `gh api repos/{repo}/pulls/{n}`
-  FILES_JSON `gh api --paginate --slurp repos/{repo}/pulls/{n}/files`
+Usage: review_gate.py PR_JSON FILES_JSON REVIEWS_JSON
+  PR_JSON      `gh api repos/{repo}/pulls/{n}`
+  FILES_JSON   `gh api --paginate --slurp repos/{repo}/pulls/{n}/files`
+  REVIEWS_JSON `gh api --paginate --slurp repos/{repo}/pulls/{n}/reviews`
 """
 
 import fnmatch
@@ -18,6 +22,8 @@ import subprocess
 import sys
 
 AUTHORS = {"nSimonFR-ai"}
+JUDGE = "coderabbitai[bot]"
+APPROVER = "nic-os-renovate[bot]"
 MAX_LINES = 150
 MAX_FILES = 6
 
@@ -67,6 +73,40 @@ def verdict(pr, files, tracked):
     return {"ok": not reasons, "reasons": sorted(set(reasons))}
 
 
+def judge_approved(reviews, head):
+    """CodeRabbit's latest verdict (not a plain comment) approves `head`."""
+    verdicts = [
+        r
+        for r in reviews
+        if (r.get("user") or {}).get("login") == JUDGE and r.get("state") != "COMMENTED"
+    ]
+    if not verdicts:
+        return False
+    last = max(verdicts, key=lambda r: r.get("submitted_at") or "")
+    return last.get("state") == "APPROVED" and last.get("commit_id") == head
+
+
+def decide(pr, files, reviews, tracked):
+    v = verdict(pr, files, tracked)
+    head = (pr.get("head") or {}).get("sha", "")
+    judged = judge_approved(reviews, head)
+    done = any(
+        (r.get("user") or {}).get("login") == APPROVER
+        and r.get("state") == "APPROVED"
+        and r.get("commit_id") == head
+        for r in reviews
+    )
+    label = (
+        "needs-human" if not v["ok"] else ("auto-merge-eligible" if judged else None)
+    )
+    return {
+        **v,
+        "head": head,
+        "label": label,
+        "approve": v["ok"] and judged and not done,
+    }
+
+
 def tracked_files(run=subprocess.run):
     root = pathlib.Path(__file__).resolve().parents[2]
     out = run(
@@ -77,11 +117,10 @@ def tracked_files(run=subprocess.run):
 
 def main(argv, tracked=None):
     pr = json.load(open(argv[1]))
-    pages = json.load(open(argv[2]))
-    files = [f for page in pages for f in page]
-    print(
-        json.dumps(verdict(pr, files, tracked_files() if tracked is None else tracked))
-    )
+    files = [f for page in json.load(open(argv[2])) for f in page]
+    reviews = [r for page in json.load(open(argv[3])) for r in page]
+    tracked = tracked_files() if tracked is None else tracked
+    print(json.dumps(decide(pr, files, reviews, tracked)))
     return 0
 
 
