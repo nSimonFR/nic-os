@@ -1,10 +1,30 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
-# Replaces the ChatGPT Codex reviewer. Comments only: no required check yet.
+# Replaces the ChatGPT Codex reviewer. Also the judge of the review gate
+# (.github/workflows/review-gate.yml): its approval lets a small agent PR merge.
 # AGENTS.md is read as the code guidelines (CodeRabbit's default file patterns).
 language: en-US
 reviews:
   profile: chill
-  request_changes_workflow: false
+  # Requests changes on blocking findings; approves once they are resolved and
+  # its risk assessment of the latest commit is low on both axes.
+  auto_approvals:
+    enabled: true
+    max_merge_risk: low
+    max_security_risk: low
+    # Agents author the PRs: they must not `@coderabbitai approve` their own.
+    allow_author_approval: false
+    overrides:
+      - paths:
+          - ".github/**"
+          - ".coderabbit.yaml"
+          - "AGENTS.md"
+          - "flake.nix"
+          - "flake.lock"
+          - "**/secrets.nix"
+          - "hosts/*/security/**"
+          - "home/dotfiles/claude-settings.json"
+          - "hosts/rpi5/agents/hermes/hermes.nix"
+        enabled: false
   high_level_summary: true
   review_status: true
   collapse_walkthrough: true
