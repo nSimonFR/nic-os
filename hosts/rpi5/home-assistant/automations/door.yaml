@@ -11,7 +11,7 @@
     the future, and reports a failed unlock. Versioned in nic-os.
   triggers:
     - trigger: state
-      entity_id: event.intratone_0612356362_doorbell
+      entity_id: event.intratone_doorbell
   conditions:
     - condition: template
       value_template: >-
@@ -27,11 +27,11 @@
     # A failed open raises; the lock only shows "unlocked" (for 3 s) on success.
     - action: lock.unlock
       target:
-        entity_id: lock.intratone_0612356362_door
+        entity_id: lock.intratone_door
       continue_on_error: true
     - if:
         - condition: state
-          entity_id: lock.intratone_0612356362_door
+          entity_id: lock.intratone_door
           state: unlocked
       then:
         - action: telegram_bot.send_message

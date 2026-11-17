@@ -32,10 +32,10 @@ HEALTH = """{%- set ns = namespace(p=[]) -%}
 {%- for i in issues() | list | map('join', '/') | select('match', 'intratone/') -%}
   {%- set ns.p = ns.p + ['repair:' ~ i.split('/')[1]] -%}
 {%- endfor -%}
-{%- if not is_state('binary_sensor.intratone_0612356362_push_channel_connected', 'on') -%}
-  {%- set ns.p = ns.p + ['push:' ~ states('binary_sensor.intratone_0612356362_push_channel_connected')] -%}
+{%- if not is_state('binary_sensor.intratone_push_channel_connected', 'on') -%}
+  {%- set ns.p = ns.p + ['push:' ~ states('binary_sensor.intratone_push_channel_connected')] -%}
 {%- endif -%}
-{%- for e in ['lock.intratone_0612356362_door', 'event.intratone_0612356362_doorbell'] -%}
+{%- for e in ['lock.intratone_door', 'event.intratone_doorbell'] -%}
   {%- if states(e) in ['unavailable', 'unknown'] -%}{%- set ns.p = ns.p + ['entity:' ~ e] -%}{%- endif -%}
 {%- endfor -%}
 {%- if not is_state('automation.door_auto_open_window', 'on') -%}

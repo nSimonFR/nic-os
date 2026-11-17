@@ -122,14 +122,14 @@ views:
         camera_view: auto
         fit_mode: cover
         type: picture-entity
-        entity: camera.intratone_0612356362_intercom
-        camera_image: camera.intratone_0612356362_intercom
+        entity: camera.intratone_intercom
+        camera_image: camera.intratone_intercom
         grid_options:
           columns: 12
           rows: auto
         show_entity_picture: false
       - type: tile
-        entity: lock.intratone_0612356362_door
+        entity: lock.intratone_door
         show_entity_picture: false
         hide_state: false
         vertical: false
@@ -139,7 +139,7 @@ views:
       - type: logbook
         target:
           entity_id:
-          - event.intratone_0612356362_doorbell
+          - event.intratone_doorbell
         hours_to_show: 8760
         grid_options:
           columns: 15
