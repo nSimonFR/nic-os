@@ -71,6 +71,7 @@ jobs:
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
               echo '{"ok":false,"reasons":["review_gate.py failed"],"label":"needs-human","approve":false,"head":""}' > d.json
           }
+          failed=0
           for pr in $prs; do
             gh api "repos/$REPO/pulls/$pr" > pr.json
             gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
@@ -80,9 +81,13 @@ jobs:
             [ "$(jq -r .approve d.json)" = true ] && decide "$pr"
             if [ "$(jq -r .approve d.json)" = true ]; then
               head=$(jq -r .head d.json)
-              GH_TOKEN=$APP_TOKEN gh api -X POST "repos/$REPO/pulls/$pr/reviews" \
+              # A failed approval is needs-human; the sweep goes on, the job fails.
+              if ! GH_TOKEN=$APP_TOKEN gh api -X POST "repos/$REPO/pulls/$pr/reviews" \
                 -f commit_id="$head" -f event=APPROVE \
-                -f body="Review gate: CodeRabbit approved $head, small and outside protected paths. Merges once the checks are green." > /dev/null
+                -f body="Review gate: CodeRabbit approved $head, small and outside protected paths. Merges once the checks are green." > /dev/null; then
+                echo '{"ok":false,"reasons":["App approval failed"],"label":"needs-human","approve":false,"head":""}' > d.json
+                failed=1
+              fi
             fi
             # Labels from the final decision. Only fixed values leave the JSON:
             # filenames stay inside it.
@@ -94,3 +99,4 @@ jobs:
             esac
             jq -c --arg pr "$pr" '{pr: $pr, ok, label, approve, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
           done
+          exit "$failed"
