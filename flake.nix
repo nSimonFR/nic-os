@@ -522,6 +522,26 @@
                 bash src/tests/claude-memory-sync.test.sh
                 touch $out
               '';
+          # worktree-gc.sh (the daily worktree cleanup), against throwaway git repos.
+          worktree-gc =
+            pkgs.runCommand "worktree-gc-tests"
+              {
+                nativeBuildInputs = [ pkgs.git ];
+                src = lib.fileset.toSource {
+                  root = ./home/scripts;
+                  fileset = lib.fileset.unions [
+                    ./home/scripts/worktree-gc.sh
+                    ./home/scripts/tests/worktree-gc.test.sh
+                  ];
+                };
+              }
+              ''
+                cp -r $src src
+                chmod -R u+w src
+                patchShebangs src
+                bash src/tests/worktree-gc.test.sh
+                touch $out
+              '';
           # telegram-alert.sh / telegram-send.sh, against a stub curl.
           notify-scripts =
             pkgs.runCommand "notify-script-tests"

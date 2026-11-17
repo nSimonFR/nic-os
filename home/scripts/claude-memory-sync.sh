@@ -18,6 +18,31 @@ cwd=$(printf '%s' "$input" | jq -r '.cwd // empty' 2>/dev/null || true)
 real_cwd=$(cd "$cwd" && pwd -P) || exit 0
 key=$(printf '%s' "$real_cwd" | sed 's/[^A-Za-z0-9]/-/g')
 common=$(git -C "$cwd" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+
+# Self-heal at SessionStart: a session with no memory dir yet (a repo cloned into an area,
+# a new T3 scratch thread) gets its area's shared store, before Claude Code creates an
+# empty one. Claude keys memory by the canonical repo root (worktrees share the main
+# checkout's), else by the cwd. T3 scratch threads (~/.t3/scratch) share PERSO.
+# Only a missing or empty dir is replaced; anything else is left alone.
+if [ "$mode" = pull ]; then
+  root=$real_cwd
+  case "$common" in */.git) root=$(cd "${common%/.git}" && pwd -P) || root=$real_cwd ;; esac
+  store=""
+  for a in "$HOME/MyDocuments/PERSO" "$HOME/MyDocuments/TRUSK"; do
+    [ -d "$a/memory" ] && [ -e "$a/.git" ] || continue
+    ra=$(cd "$a" && pwd -P)
+    case "$root/" in "$ra"/*) store="$ra/memory" ;; esac
+  done
+  if [ -z "$store" ] && [ -d "$HOME/.t3/scratch" ] && [ -d "$HOME/MyDocuments/PERSO/memory" ]; then
+    case "$root/" in "$(cd "$HOME/.t3/scratch" && pwd -P)"/*) store=$(cd "$HOME/MyDocuments/PERSO/memory" && pwd -P) ;; esac
+  fi
+  dir="$HOME/.claude/projects/$(printf '%s' "$root" | sed 's/[^A-Za-z0-9]/-/g')/memory"
+  if [ -n "$store" ] && [ ! -L "$dir" ]; then
+    { [ -d "$dir" ] && rmdir "$dir" 2>/dev/null; } || [ ! -e "$dir" ] && {
+      mkdir -p "$(dirname "$dir")" && ln -s "$store" "$dir"
+    }
+  fi
+fi
 mem_link=$(readlink "$HOME/.claude/projects/$key/memory" 2>/dev/null || true)
 
 area=""

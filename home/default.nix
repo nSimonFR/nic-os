@@ -18,6 +18,7 @@
     ./mcp.nix
     ./ssh.nix
     ./wakatime.nix
+    ./worktree-gc.nix
     ./editors.nix
     ./pi-coding-agent
     ./rtk
