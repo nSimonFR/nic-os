@@ -57,13 +57,14 @@ jobs:
           list=$(gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number') ||
             { echo "::error::Could not list the open PRs"; exit 1; }
           prs=$( { printf '%s\n' "$list"; [ -n "$EVENT_PR" ] && echo "$EVENT_PR"; } | sort -un)
-          # One decision reads one head: PR, files and reviews, then the PR again.
-          # A push in between moves the head, and the next run decides the new one.
+          # Files come from the compare of two SHAs, so they describe the head in
+          # pr.json whatever is pushed meanwhile; reviews count only on that head.
           decide() {
             gh api "repos/$REPO/pulls/$1" > pr.json &&
-              gh api --paginate --slurp "repos/$REPO/pulls/$1/files" > files.json &&
-              gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json &&
-              [ "$(gh api "repos/$REPO/pulls/$1" --jq .head.sha)" = "$(jq -r .head.sha pr.json)" ] ||
+              gh api --paginate \
+                "repos/$REPO/compare/$(jq -r .base.sha pr.json)...$(jq -r .head.sha pr.json)?per_page=100" \
+                --jq '.files' | jq -s . > files.json &&
+              gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json ||
               return 1
             # Fail closed: a crash is pending on the head, except on Renovate's.
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
