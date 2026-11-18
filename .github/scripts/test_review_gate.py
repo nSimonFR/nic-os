@@ -105,8 +105,77 @@ def review(login, state, sha="abc", at="2026-11-17T10:00:00Z"):
     }
 
 
-def decide(reviews, files=None, pr=HEAD):
-    return gate.decide(pr, files or [f("a.nix")], reviews, TREE)
+CLEAN = {"pageInfo": {"hasNextPage": False}, "nodes": []}
+
+
+def decide(reviews, files=None, pr=HEAD, comments=(), threads=CLEAN):
+    return gate.decide(
+        pr, files or [f("a.nix")], reviews, TREE, list(comments), threads
+    )
+
+
+def thread(resolved_by, author="coderabbitai"):
+    return {
+        "isResolved": resolved_by is not None,
+        "resolvedBy": {"login": resolved_by} if resolved_by else None,
+        "comments": {"nodes": [{"author": {"login": author}}]},
+    }
+
+
+def threads(*nodes, more=False):
+    return {"pageInfo": {"hasNextPage": more}, "nodes": list(nodes)}
+
+
+def test_codeRabbit_counts_only_when_it_resolved_its_own_threads():
+    ok = [review(gate.JUDGE, "APPROVED")]
+    fine = threads(thread("coderabbitai[bot]"), thread("nSimonFR"), thread(None))
+    assert decide(ok, threads=fine)["state"] == "success"
+    d = decide(ok, threads=threads(thread("nSimonFR-ai")))
+    assert d["state"] == "pending" and d["label"] == "needs-human"
+    assert "a CodeRabbit thread was resolved by nSimonFR-ai" in d["reasons"]
+    # Someone else's thread, resolved by anyone, does not matter.
+    assert (
+        decide(ok, threads=threads(thread("x", author="someone")))["state"] == "success"
+    )
+    # Unread or truncated threads fail closed.
+    assert decide(ok, threads=None)["state"] == "pending"
+    assert decide(ok, threads=threads(more=True))["state"] == "pending"
+
+
+def test_codeRabbit_counts_only_without_outside_commands():
+    ok = [review(gate.JUDGE, "APPROVED")]
+    d = decide(ok, comments=[{"login": "stranger", "body": "this is fixed now"}])
+    assert (
+        d["state"] == "pending"
+        and "stranger commented: only Nico can clear it" in d["reasons"]
+    )
+    for login, body in [
+        ("stranger", "@coderabbitai approve"),
+        ("nSimonFR-ai", "please @CodeRabbitAI resolve"),
+        ("stranger", "@coderabbit\nresolve"),
+    ]:
+        d = decide(ok, comments=[{"login": login, "body": body}])
+        assert d["state"] == "pending" and d["label"] == "needs-human", body
+    # Nico's and CodeRabbit's own words, and harmless mentions, are fine.
+    for login, body in [
+        ("nSimonFR", "@coderabbitai approve"),
+        ("coderabbitai[bot]", "post `@coderabbitai approve` as a new comment"),
+        ("nSimonFR-ai", "@coderabbitai review"),
+    ]:
+        assert (
+            decide(ok, comments=[{"login": login, "body": body}])["state"] == "success"
+        )
+    # A review body counts as a comment.
+    with_body = ok + [
+        {**review("stranger", "COMMENTED"), "body": "@coderabbitai approve"}
+    ]
+    assert decide(with_body)["state"] == "pending"
+
+
+def test_nicos_approval_ignores_codeRabbit_tampering():
+    r = [review(gate.HUMAN, "APPROVED"), review(gate.JUDGE, "APPROVED")]
+    d = decide(r, threads=threads(thread("nSimonFR-ai")))
+    assert d["state"] == "success"
 
 
 def test_green_only_on_codeRabbits_latest_verdict_for_the_head():
