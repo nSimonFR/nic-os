@@ -101,7 +101,10 @@ def decide(pr, files, reviews, tracked):
     elif v["ok"]:
         state, description = "pending", "Waiting for CodeRabbit's approval, or Nico's"
     else:
-        state, description = "pending", "Needs Nico's approval (reasons in the gate run)"
+        state, description = (
+            "pending",
+            "Needs Nico's approval (reasons in the gate run)",
+        )
     renovate = (pr.get("user") or {}).get("login") == RENOVATE
     if renovate and state != "success":
         state = None
