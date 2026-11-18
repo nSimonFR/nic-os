@@ -6,9 +6,8 @@
 # Current local time
  date '+%Y-%m-%d %H:%M %Z'
 
-# Nextcloud personal calendar, narrow range
-python3 ~/.hermes/skills/caldav-calendar/scripts/nc-cal.py \
-  list --calendar personal --from YYYY-MM-DD --to YYYY-MM-DD --json
+# Nextcloud personal calendar, narrow range: the Aperture tool
+# nextcloud_nc_calendar_list_events (calendar_name=personal, start_date, end_date)
 
 # Driving/walking/cycling baseline (maps skill is under productivity/maps)
 python3 ~/.hermes/skills/productivity/maps/scripts/maps_client.py \

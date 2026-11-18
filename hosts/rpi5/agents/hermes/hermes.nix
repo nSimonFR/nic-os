@@ -99,7 +99,7 @@ let
   # drives the real Claude Code SDK, so it is not a third-party client.
 
   # Skill set = shared cross-agent skills (shared/skills) + Hermes' local skills
-  # (dawarich, immich-memories, caldav-calendar, mail, …) that several
+  # (dawarich, immich-memories, mail, …) that several
   # cron jobs depend on. These local skills moved here from the retired PicoClaw
   # module (hosts/rpi5/agents/hermes/skills). All descend from OpenClaw's SKILL.md format.
   #
@@ -432,11 +432,12 @@ let
     ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
 
-    # Skills dropped for the mail MCP (no --delete above, so removed by name).
+    # Skills dropped for an MCP (mail; caldav-calendar for Nextcloud's, linear
+    # for Linear's): no --delete above, so removed by name.
     # Bundled ones also go in .curator_suppressed, which Hermes' bundled-skill
     # sync never re-seeds from.
     for dropped in gog protonmail email/himalaya email/email-inbox-triage \
-      productivity/google-workspace; do
+      productivity/google-workspace caldav-calendar linear; do
       ${pkgs.coreutils}/bin/chmod -R u+w "${hermesHome}/skills/$dropped" 2>/dev/null || true
       ${pkgs.coreutils}/bin/rm -rf "${hermesHome}/skills/$dropped"
     done
