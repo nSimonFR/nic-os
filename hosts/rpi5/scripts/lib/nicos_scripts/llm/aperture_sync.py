@@ -280,7 +280,9 @@ def is_init_response(chunk):
         and isinstance(result, dict)
         and isinstance(result.get("protocolVersion"), str)
         and isinstance(result.get("capabilities"), dict)
-        and isinstance(result.get("serverInfo"), dict)
+        and isinstance(info := result.get("serverInfo"), dict)
+        and isinstance(info.get("name"), str)
+        and isinstance(info.get("version"), str)
     )
 
 
@@ -296,8 +298,37 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
         return None  # urllib then raises the 3xx as an HTTPError
 
 
+# Socket of each probe thread's open connection, from connect() on, so the wake
+# can cut it at the deadline whatever phase (headers, body) it is stuck in.
+_PROBE_SOCKETS = {}
+
+
+class _TrackedHTTP(http.client.HTTPConnection):
+    def connect(self):
+        super().connect()
+        _PROBE_SOCKETS[threading.get_ident()] = self.sock
+
+
+class _TrackedHTTPS(http.client.HTTPSConnection):
+    def connect(self):
+        super().connect()
+        _PROBE_SOCKETS[threading.get_ident()] = self.sock
+
+
+class _TrackedHTTPHandler(urllib.request.HTTPHandler):
+    def http_open(self, req):
+        return self.do_open(_TrackedHTTP, req)
+
+
+class _TrackedHTTPSHandler(urllib.request.HTTPSHandler):
+    def https_open(self, req):
+        return self.do_open(_TrackedHTTPS, req, context=self._context)
+
+
 # The wake carries each connector's credential: never to another URL.
-_open_no_redirect = urllib.request.build_opener(_NoRedirect).open
+_open_no_redirect = urllib.request.build_opener(
+    _NoRedirect, _TrackedHTTPHandler, _TrackedHTTPSHandler
+).open
 
 
 def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotonic):
@@ -342,25 +373,24 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
                 return False
             try:
                 with opener(req, timeout=max(1, left)) as r:
-                    reading[threading.get_ident()] = r
                     if answered(r) and end - clock() > 0:
                         return True
             except (OSError, http.client.HTTPException):  # IncompleteRead included
                 pass
             finally:
-                reading.pop(threading.get_ident(), None)
+                _PROBE_SOCKETS.pop(threading.get_ident(), None)
             pause = min(10, end - clock(), deadline - slept)
             if pause <= 0:
                 return False
             sleep(pause)
             slept += pause
 
-    results, reading = {}, {}
+    results = {}
 
     def probe(i, server):
         try:
             results[i] = ready(server)
-        except Exception:  # noqa: BLE001 - a read cut by _shutdown fails oddly; not ready
+        except Exception:  # noqa: BLE001 - a read cut at the deadline fails oddly; not ready
             results[i] = False
 
     threads = [
@@ -372,24 +402,16 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
     stop = time.monotonic() + deadline
     for t in threads:
         t.join(max(0, stop - time.monotonic()))
-    # A probe still reading: shut its socket so the read fails and the thread ends.
+    # A probe still on the wire: shut its socket (close alone does not wake a
+    # blocked recv), so the read fails and the thread ends.
     for t in threads:
-        if t.is_alive() and (r := reading.get(t.ident)) is not None:
-            _shutdown(r)
+        if t.is_alive() and (sock := _PROBE_SOCKETS.get(t.ident)) is not None:
+            try:
+                sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
             t.join(5)
     return [s["url"] for i, s in enumerate(sleepy) if not results.get(i)]
-
-
-def _shutdown(response):
-    """Interrupt a read blocked on `response` from another thread (close alone
-    does not wake a blocked recv)."""
-    sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
-    try:
-        if sock is not None:
-            sock.shutdown(socket.SHUT_RDWR)
-        response.close()
-    except OSError:
-        pass
 
 
 def run(cfg, opener=None, sleep=time.sleep, attempts=5):
