@@ -32,13 +32,7 @@ setup() {
   K=$L/.git/memory-sync.lock
 }
 hook() { printf '{"cwd":"%s"}' "$L" | bash "$script" "$1"; }
-push_hook() {
-  hook push
-  for _ in $(seq 1 40); do
-    [ -d "$K" ] || return 0
-    sleep 0.25
-  done
-}
+push_hook() { MEMORY_SYNC_FOREGROUND=1 hook push; }
 other_commit() { # file content
   g -C "$T/other" pull -q --no-rebase
   echo "$2" >"$T/other/memory/$1"
