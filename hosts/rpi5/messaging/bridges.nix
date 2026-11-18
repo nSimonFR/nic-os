@@ -320,8 +320,10 @@ let
     chown mautrix-${name} "$dir/tokens.env" "$dir/env"
   '';
 
+  # Non-fatal: a missing token file must not keep Tuwunel and the local bridges down.
   setupRemote = name: b: ''
-    (set -a; . ${b.tokensFile}; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml)
+    (set -a; . ${b.tokensFile}; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml) \
+      || echo "matrix-appservices-setup: no registration for ${name}" >&2
   '';
 in
 {
@@ -351,6 +353,8 @@ in
     // {
       matrix-appservices-setup = {
         description = "Matrix appservice tokens and registrations";
+        # Rotating a remote bridge's shared tokens re-renders its registration.
+        restartTriggers = [ config.age.secrets.mautrix-imessage-tokens.file ];
         wantedBy = [ "multi-user.target" ];
         before = [ "tuwunel.service" ];
         requiredBy = [ "tuwunel.service" ];
@@ -375,7 +379,9 @@ in
         '';
       };
       # A registration is only read at start.
-      tuwunel.restartTriggers = lib.attrValues registrationFiles;
+      tuwunel.restartTriggers = lib.attrValues registrationFiles ++ [
+        config.age.secrets.mautrix-imessage-tokens.file
+      ];
     };
 
   nic.services.matrix-bridges = {

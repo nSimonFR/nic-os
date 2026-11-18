@@ -23,6 +23,7 @@ let
   logs = "${home}/Library/Logs/mautrix-imessage.log";
   macIp = "100.78.185.89"; # this Mac on the tailnet; the registration in bridges.nix points here
   port = 29345;
+  tokensFile = ../../shared/mautrix-imessage-tokens.env.age;
   package = pkgs.callPackage ../../pkgs/services/mautrix-imessage.nix { };
 
   settings = {
@@ -62,9 +63,14 @@ let
     runtimeInputs = [
       pkgs.envsubst
       pkgs.coreutils
+      pkgs.gnugrep
+      pkgs.ffmpeg-headless # voice notes: Matrix opus → CAF
     ];
     text = ''
+      # Reloaded with the token pair: rotating ${tokensFile} restarts the agent.
       umask 077
+      # The listener binds the tailnet IP once, and a failed bind leaves the bridge up.
+      until /sbin/ifconfig | grep -q "inet ${macIp} "; do sleep 5; done
       mkdir -p "${stateDir}"
       cd "${stateDir}"
       set -a
@@ -77,7 +83,7 @@ let
   };
 in
 {
-  age.secrets.mautrix-imessage-tokens.file = ../../shared/mautrix-imessage-tokens.env.age;
+  age.secrets.mautrix-imessage-tokens.file = tokensFile;
 
   home.packages = [ package ];
 
