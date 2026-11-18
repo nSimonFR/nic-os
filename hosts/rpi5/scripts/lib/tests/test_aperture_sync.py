@@ -256,7 +256,7 @@ def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
     def opener(req, timeout=None):
         calls.append((req.get_method(), req.full_url))
         if req.full_url == "http://sure/mcp":
-            raise OSError("405")
+            return Resp(INIT_OK)
         return fake(req, timeout)
 
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
@@ -458,6 +458,7 @@ def test_an_unready_connector_makes_the_next_run_push_again(tmp_path):
     cold[0] = False
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
     assert len(fake.puts) == 2 and state.read_text().strip()
+    fake.held = json.loads(fake.puts[1]["config"])
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
     assert len(fake.puts) == 2
 
@@ -756,3 +757,41 @@ def test_a_new_mcp_servers_revision_changes_the_sleepy_connectors(tmp_path):
     assert ap.comparable(bumped) != ap.comparable(want)
     same = ap.desired(base, ap.gate_ids(GATE), cfg)
     assert ap.comparable(same) == ap.comparable(want)
+
+
+def test_an_unready_connector_is_pushed_pending_then_re_listed(tmp_path):
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True}
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    cfg = ap.Config(
+        aperture_url="http://ap",
+        base_config=str(p),
+        apply=True,
+        state_file=str(tmp_path / "d"),
+        servers_revision="r" * 64,
+    )
+    fake = Aperture(held={"old": True})
+    cold = [True]
+
+    def opener(req, timeout=None):
+        if req.full_url == "http://sure/mcp":
+            if cold[0]:
+                raise OSError("cold")
+            return Resp(INIT_OK)
+        return fake(req, timeout)
+
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    first = json.loads(fake.puts[0]["config"])["connectors"]["servers"]["sure"]
+    assert first["description"] == "rev " + "r" * 16 + " pending"
+    fake.held = json.loads(fake.puts[0]["config"])
+    cold[0] = False
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    second = json.loads(fake.puts[1]["config"])["connectors"]["servers"]["sure"]
+    assert second["description"] == "rev " + "r" * 16  # differs: Aperture re-lists

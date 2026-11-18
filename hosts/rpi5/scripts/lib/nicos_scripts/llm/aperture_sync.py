@@ -454,6 +454,14 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
                 unready = wake(want, opener=opener, sleep=sleep)
                 for url in unready:
                     log(f"{url} not ready; pushing again next run")
+                # An identical PUT keeps a connector's old (possibly empty) tool
+                # list, so an unready one is pushed marked "pending": the next
+                # push, once it answers, differs and makes Aperture re-list it.
+                for server in want.get("connectors", {}).get("servers", {}).values():
+                    if server.get("url") in unready:
+                        server["description"] = (
+                            f"{server.get('description', '')} pending".strip()
+                        )
                 woken = True
                 if unready and cfg.state_file:
                     # Before the PUT: a lost answer or a later write error must
