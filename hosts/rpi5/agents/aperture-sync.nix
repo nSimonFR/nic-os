@@ -234,6 +234,8 @@ let
       "list_repo_notifications"
       "get_notification_thread"
       "get_my_user_info"
+      # Called by Claude sessions (2026-11-17).
+      "list_my_orgs"
       "list_repo_labels"
       "list_repo_milestones"
       "list_wiki_pages"
@@ -257,6 +259,8 @@ let
       "attachment_list_attachments"
       "attachment_get_attachment"
       "attachment_delete_attachment"
+      # Called by a Claude session (2026-11-03).
+      "auth_get_current_user"
     ];
     # Not the skill marketplace, installer, importer, authoring palette or config.
     # exec stays: it is how notes reads documents.
