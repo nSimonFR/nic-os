@@ -132,6 +132,16 @@ let
     };
   };
 
+  # Bridges that run on another host (iMessage needs a Mac): no unit, database or
+  # port here, only the registration. Their tokens are an agenix file the other
+  # host holds too, instead of the ones minted below.
+  remoteBridges = {
+    imessage = {
+      url = "http://100.78.185.89:29345"; # nbookpro on the tailnet
+      tokensFile = config.age.secrets.mautrix-imessage-tokens.path;
+    };
+  };
+
   stateDir = name: "/var/lib/mautrix-${name}";
   dbName = name: "mautrix-${name}";
   database = name: {
@@ -146,6 +156,26 @@ let
   doublePuppetDir = "/var/lib/matrix-doublepuppet"; # appserviceDir is closed to the MCP
   doublePuppetEnv = "${doublePuppetDir}/doublepuppet.env";
   doublePuppetSecret = "as_token:$DOUBLEPUPPET_TOKEN";
+
+  appserviceRegistration = name: url: {
+    id = name;
+    inherit url;
+    as_token = "$AS_TOKEN";
+    hs_token = "$HS_TOKEN";
+    sender_localpart = "${name}bot";
+    rate_limited = false;
+    namespaces.users = [
+      {
+        regex = "^@${name}bot:${serverRe}$";
+        exclusive = true;
+      }
+      {
+        regex = "^@${name}_.*:${serverRe}$";
+        exclusive = true;
+      }
+    ];
+    receive_ephemeral = true;
+  };
 
   registrations = {
     doublepuppet = {
@@ -163,25 +193,8 @@ let
       ];
     };
   }
-  // lib.mapAttrs (name: b: {
-    id = name;
-    url = "http://127.0.0.1:${toString b.port}";
-    as_token = "$AS_TOKEN";
-    hs_token = "$HS_TOKEN";
-    sender_localpart = "${name}bot";
-    rate_limited = false;
-    namespaces.users = [
-      {
-        regex = "^@${name}bot:${serverRe}$";
-        exclusive = true;
-      }
-      {
-        regex = "^@${name}_.*:${serverRe}$";
-        exclusive = true;
-      }
-    ];
-    receive_ephemeral = true;
-  }) bridges;
+  // lib.mapAttrs (name: b: appserviceRegistration name "http://127.0.0.1:${toString b.port}") bridges
+  // lib.mapAttrs (name: b: appserviceRegistration name b.url) remoteBridges;
 
   bridgeConfig =
     name: b:
@@ -306,6 +319,10 @@ let
     install -m 0400 -o mautrix-${name} ${appserviceDir}/${name}.yaml "$dir/registration.yaml"
     chown mautrix-${name} "$dir/tokens.env" "$dir/env"
   '';
+
+  setupRemote = name: b: ''
+    (set -a; . ${b.tokensFile}; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml)
+  '';
 in
 {
   users.users = lib.mapAttrs' (
@@ -352,6 +369,7 @@ in
           chmod 0440 ${doublePuppetEnv}
           (set -a; . ${doublePuppetEnv}; ${render} -i ${registrationFiles.doublepuppet} -o ${appserviceDir}/doublepuppet.yaml)
           ${lib.concatStrings (lib.mapAttrsToList setupBridge bridges)}
+          ${lib.concatStrings (lib.mapAttrsToList setupRemote remoteBridges)}
           chgrp matrix-appservices ${appserviceDir}/*.yaml
           chmod 0640 ${appserviceDir}/*.yaml
         '';
