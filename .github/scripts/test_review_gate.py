@@ -110,7 +110,12 @@ CLEAN = {"pageInfo": {"hasNextPage": False}, "nodes": []}
 
 def decide(reviews, files=None, pr=HEAD, comments=(), threads=CLEAN):
     return gate.decide(
-        pr, files or [f("a.nix")], reviews, TREE, list(comments), threads
+        pr,
+        files or [f("a.nix")],
+        reviews,
+        TREE,
+        None if comments is None else list(comments),
+        threads,
     )
 
 
@@ -179,6 +184,8 @@ def test_nicos_approval_ignores_codeRabbit_tampering():
     r = [review(gate.HUMAN, "APPROVED"), review(gate.JUDGE, "APPROVED")]
     d = decide(r, threads=threads(thread("nSimonFR-ai")))
     assert d["state"] == "success"
+    # Unreadable comments or threads void only CodeRabbit's route.
+    assert decide(r, comments=None, threads=None)["state"] == "success"
 
 
 def test_green_only_on_codeRabbits_latest_verdict_for_the_head():
