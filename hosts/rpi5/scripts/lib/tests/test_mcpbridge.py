@@ -131,6 +131,11 @@ def test_an_include_list_hides_and_refuses_everything_else():
             }
         )
         assert refused["error"]["code"] == -32602
+        for params in ({}, None, {"name": 3}):
+            nameless = dispatch(
+                {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": params}
+            )
+            assert nameless["error"]["code"] == -32602
     finally:
         child.stop()
 
@@ -144,7 +149,12 @@ def test_a_wrong_token_is_refused_before_the_body_is_read(server):
             b"POST /mcp HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer nope\r\n"
             b"Content-Length: 1000000\r\n\r\n"
         )
-        assert s.recv(64).startswith(b"HTTP/1.0 401")
+        status = b""
+        while b"\r\n" not in status:
+            chunk = s.recv(64)
+            assert chunk, "connection closed before the status line"
+            status += chunk
+        assert status.startswith(b"HTTP/1.0 401")
 
 
 def test_a_wrong_token_is_refused_and_health_stays_open(server):

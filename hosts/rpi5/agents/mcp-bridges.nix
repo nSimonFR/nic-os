@@ -118,8 +118,14 @@ let
   immichMcpRun = pkgs.writeShellScript "immich-mcp-run" ''
     IMMICH_API_KEY=$(tr -d '\r\n' < "$CREDENTIALS_DIRECTORY/apikey")
     export IMMICH_API_KEY
-    for _ in $(seq 60); do
-      ${pkgs.curl}/bin/curl -sf -m 5 "$IMMICH_BASE_URL/api/server/ping" >/dev/null && break
+    # 60 s of wall clock, well under the bridge's 300 s call timeout; on failure
+    # exit, so the next request retries the start.
+    SECONDS=0
+    until ${pkgs.curl}/bin/curl -sf -m 5 "$IMMICH_BASE_URL/api/server/ping" >/dev/null; do
+      if [ "$SECONDS" -ge 60 ]; then
+        echo "immich-mcp-run: Immich not ready after 60 s" >&2
+        exit 1
+      fi
       sleep 1
     done
     exec ${immichMcp}/bin/immich-mcp

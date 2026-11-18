@@ -28,6 +28,9 @@ GATE = {
 }
 
 
+INIT_OK = b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
+
+
 class Aperture:
     """Fake gate + Aperture API, recording PUTs."""
 
@@ -49,6 +52,8 @@ class Aperture:
             if isinstance(self.gate, Exception):
                 raise self.gate
             return Resp(json.dumps(self.gate).encode())
+        if req.get_method() == "POST" and url.endswith("/mcp"):
+            return Resp(INIT_OK)
         if req.get_method() == "PUT":
             self.puts.append(json.loads(req.data))
             return Resp(json.dumps(self.put_result).encode())
@@ -248,7 +253,7 @@ def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
     assert calls.index(("POST", "http://sure/mcp")) < calls.index(
         ("PUT", "http://ap/api/config")
     )
-    assert ("GET", "http://docs/mcp") not in calls
+    assert "http://docs/mcp" not in [url for _, url in calls]
     assert len(fake.puts) == 1
 
     calls.clear()
@@ -321,7 +326,9 @@ def test_wake_initializes_with_the_connector_token_until_a_result():
                 raise nxt
             return Resp(nxt)
         return Resp(
-            b'event: message\ndata: {"jsonrpc": "2.0", "id": 1, "result": {}}\n'
+            # One SSE event, its JSON split over two data lines.
+            b'event: message\ndata: {"jsonrpc": "2.0", "id": 1,\n'
+            b'data: "result": {"protocolVersion": "2025-03-26"}}\n\n'
         )
 
     assert ap.wake(config, opener=opener, sleep=lambda s: None) == []
@@ -373,3 +380,78 @@ def test_a_rotated_secret_alone_forces_one_push(tmp_path):
     assert len(fake.puts) == 2
     pushed = json.loads(fake.puts[1]["config"])
     assert pushed["connectors"]["servers"]["sure"]["auth"]["secret"] == "tok2"
+
+
+def test_initialized_needs_the_response_to_initialize():
+    ok = b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
+    assert ap.initialized(ok)
+    assert not ap.initialized(b'{"result": {"protocolVersion": "x"}}')
+    assert not ap.initialized(
+        b'{"jsonrpc": "2.0", "id": 2, "result": {"protocolVersion": "x"}}'
+    )
+    assert not ap.initialized(b'{"jsonrpc": "2.0", "id": 1, "result": {}}')
+
+
+def test_wake_stops_at_the_wall_clock_deadline():
+    config = {
+        "connectors": {
+            "servers": {"s": {"url": "http://s/mcp", "send_caller_identity": True}}
+        }
+    }
+    now = [0.0]
+    timeouts = []
+
+    def opener(req, timeout=None):
+        timeouts.append(timeout)
+        now[0] += 60  # each attempt hangs until its timeout
+        raise OSError("timed out")
+
+    assert ap.wake(
+        config, opener=opener, sleep=lambda s: None, deadline=90, clock=lambda: now[0]
+    ) == ["http://s/mcp"]
+    assert now[0] <= 90 + 60 and timeouts[0] == 90 and len(timeouts) == 2
+
+
+def test_an_unready_connector_makes_the_next_run_push_again(tmp_path):
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True}
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    state = tmp_path / "secrets.sha256"
+    cfg = ap.Config(
+        aperture_url="http://ap", base_config=str(p), apply=True, state_file=str(state)
+    )
+    fake = Aperture(held={"old": True})
+    cold = [True]
+
+    def opener(req, timeout=None):
+        if req.full_url == "http://sure/mcp":
+            if cold[0]:
+                raise OSError("cold")
+            return Resp(
+                b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
+            )
+        return fake(req, timeout)
+
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert len(fake.puts) == 1 and state.read_text().strip() == ""
+    fake.held = json.loads(fake.puts[0]["config"])
+    cold[0] = False
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert len(fake.puts) == 2 and state.read_text().strip()
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert len(fake.puts) == 2
+
+
+def test_an_unwritable_digest_does_not_repeat_an_accepted_push(tmp_path):
+    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
+    cfg = ap.Config(**{**cfg.__dict__, "state_file": str(tmp_path / "missing" / "d")})
+    fake = Aperture(held={"old": True})
+    assert ap.run(cfg, opener=fake, sleep=lambda s: None) == 0
+    assert len(fake.puts) == 1
