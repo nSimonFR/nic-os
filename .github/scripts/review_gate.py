@@ -44,7 +44,8 @@ TRUSTED = {JUDGE, HUMAN}
 INSIDERS = TRUSTED | AUTHORS | {RENOVATE, "github-actions[bot]"}
 # Broad on purpose (anywhere, any wording): a false positive only sends the PR to Nico.
 COMMAND = re.compile(
-    r"@coderabbit(ai)?\b.*\b(approve|resolve)\b", re.IGNORECASE | re.DOTALL
+    r"@coderabbit(ai)?\b.*\b(approve|resolve)\b|\b(approve|resolve)\b.*@coderabbit(ai)?\b",
+    re.IGNORECASE | re.DOTALL,
 )
 MAX_LINES = 150
 MAX_FILES = 6
