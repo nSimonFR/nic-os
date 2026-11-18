@@ -75,6 +75,17 @@ check "same-file conflict leaves origin alone" test "$before" = "$(origin_at)"
 check "same-file conflict leaves no merge state" test ! -e "$L/.git/MERGE_HEAD"
 check "same-file conflict removes its worktree" test "$(g -C "$L" worktree list | wc -l)" -eq 1
 
+# The Stop hook's default, background push still lands (deadline 30 s).
+setup
+echo d >"$L/memory/d.md"
+before=$(origin_at)
+hook push
+for _ in $(seq 1 120); do
+  [ "$(origin_at)" != "$before" ] && [ ! -d "$K" ] && break
+  sleep 0.25
+done
+check "background push reaches origin" test "$(origin_at)" != "$before"
+
 # Local commits outside memory/ (plain or a rename into memory/) are never pushed.
 setup
 echo z >"$L/code.txt"
