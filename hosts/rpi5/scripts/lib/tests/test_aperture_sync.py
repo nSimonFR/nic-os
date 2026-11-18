@@ -739,8 +739,11 @@ def test_a_new_mcp_servers_revision_forces_one_push(tmp_path):
     fake = Aperture(held=held)
     no_sleep = {"sleep": lambda s: None}
     assert ap.run(cfg, opener=fake, **no_sleep) == 0  # first run records
+    assert len(fake.puts) == 1
     assert ap.run(cfg, opener=fake, **no_sleep) == 0  # same revision: no-op
-    pushes = len(fake.puts)
+    assert len(fake.puts) == 1
     bumped = ap.Config(**{**cfg.__dict__, "servers_revision": "b"})
     assert ap.run(bumped, opener=fake, **no_sleep) == 0
-    assert len(fake.puts) == pushes + 1
+    assert len(fake.puts) == 2
+    assert ap.run(bumped, opener=fake, **no_sleep) == 0
+    assert len(fake.puts) == 2
