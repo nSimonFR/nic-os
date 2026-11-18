@@ -322,7 +322,7 @@ let
 
   # Non-fatal: a missing token file must not keep Tuwunel and the local bridges down.
   setupRemote = name: b: ''
-    (set -a; . ${b.tokensFile}; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml) \
+    (set -a; . ${b.tokensFile} || exit 1; ${render} -i ${registrationFiles.${name}} -o ${appserviceDir}/${name}.yaml) \
       || echo "matrix-appservices-setup: no registration for ${name}" >&2
   '';
 in
