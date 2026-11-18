@@ -7,6 +7,7 @@
 # /var/lib/mcp-tokens/<name> by mcp-tokens.service and handed to Aperture by
 # aperture-config-sync.
 {
+  config,
   pkgs,
   lib,
   inputs,
@@ -269,6 +270,9 @@ let
         IMMICH_BASE_URL = "http://127.0.0.1:2283";
         IMMICH_ALLOW_HTTP = "1";
         IMMICH_PROFILE = "read_only";
+        # Immich has no external domain set, so its web_url links would fall back
+        # to the loopback base URL.
+        IMMICH_EXTERNAL_DOMAIN = config.nic.services.immich.public.publicUrl;
         # Its write probe POSTs to /api/assets at startup; read_only never writes anyway.
         IMMICH_WRITE_PROBE_METHOD = "GET";
         IMMICH_WRITE_PROBE_PATH = "/api/server/ping";
