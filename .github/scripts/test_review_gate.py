@@ -133,8 +133,12 @@ def threads(*nodes, more=False):
 
 def test_codeRabbit_counts_only_when_it_resolved_its_own_threads():
     ok = [review(gate.JUDGE, "APPROVED")]
-    fine = threads(thread("coderabbitai[bot]"), thread("nSimonFR"), thread(None))
+    fine = threads(thread("coderabbitai[bot]"), thread("nSimonFR"))
     assert decide(ok, threads=fine)["state"] == "success"
+    d = decide(ok, threads=threads(thread(None)))
+    assert (
+        d["state"] == "pending" and "a CodeRabbit thread is unresolved" in d["reasons"]
+    )
     d = decide(ok, threads=threads(thread("nSimonFR-ai")))
     assert d["state"] == "pending" and d["label"] == "needs-human"
     assert "a CodeRabbit thread was resolved by nSimonFR-ai" in d["reasons"]
