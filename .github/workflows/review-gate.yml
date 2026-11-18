@@ -67,17 +67,29 @@ jobs:
               return 1
             # Fail closed: a crash is pending on the head, except on Renovate's.
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
-              jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha,
+              jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha, crashed:true,
                    state:(if .user.login == "nic-os-renovate[bot]" then null else "pending" end),
                    description:"The gate failed: Nico reviews"}' pr.json > d.json
           }
+          # A PR the gate cannot read loses a green status it may no longer deserve.
+          unreadable() {
+            failed=1
+            head=$(gh api "repos/$REPO/pulls/$1" --jq 'select(.state == "open" and .base.ref == "main") | .head.sha') || return
+            [ -n "$head" ] || return
+            gh api "repos/$REPO/commits/$head/status" \
+              --jq '.statuses[] | select(.context == "review-gate") | .state' | grep -qx success || return
+            gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate -f state=pending \
+              -f description="The gate could not re-check this commit" -f target_url="$RUN_URL" > /dev/null
+          }
           failed=0
           for pr in $prs; do
-            decide "$pr" || { failed=1; continue; }
+            { decide "$pr" || decide "$pr"; } || { unreadable "$pr" || true; continue; }
             [ "$(jq -r .base.ref pr.json)" = main ] || continue
             # Decide again right before going green: a dismissal since the first
             # read must stop it.
-            if [ "$(jq -r .state d.json)" = success ]; then decide "$pr" || { failed=1; continue; }; fi
+            if [ "$(jq -r .state d.json)" = success ]; then
+              { decide "$pr" || decide "$pr"; } || { unreadable "$pr" || true; continue; }
+            fi
             head=$(jq -r .head d.json)
             state=$(jq -r '.state // ""' d.json)
             desc=$(jq -r .description d.json)
@@ -87,7 +99,7 @@ jobs:
               { failed=1; continue; }
             # Renovate gets no status until Nico approves; a withdrawn approval
             # still has to turn its green one back.
-            if [ -z "$state" ] && [ -n "$cur" ]; then
+            if [ -z "$state" ] && [ -n "$cur" ] && [ "$(jq -r '.crashed // false' d.json)" = false ]; then
               state=pending desc="Nico's approval no longer stands"
             fi
             if [ -n "$state" ] && [ "$cur" != "$state|$desc" ]; then
@@ -101,7 +113,7 @@ jobs:
               needs-human) gh pr edit "$pr" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible ;;
               auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
               *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
-            esac
+            esac || failed=1
             jq -c --arg pr "$pr" '{pr: $pr, ok, label, state, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
           done
           exit "$failed"

@@ -13,10 +13,11 @@ to the file.
 
 ---
 
-Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR: the review gate
-(`.github/workflows/review-gate.yml`) lets CodeRabbit pass only nSimonFR-ai's PRs.
-A PR merges once the required CI checks and its `review-gate` status are green, the
-latter when Nico or CodeRabbit approved its head; nSimonFR-ai can't merge without it.
+Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR. A PR merges once
+the required CI checks and its `review-gate` status (`.github/workflows/review-gate.yml`)
+are green: Nico approved its head, or CodeRabbit did and it is a small nSimonFR-ai PR
+outside the protected paths (`.github/scripts/review_gate.py`, AGENTS.md included).
+Only Renovate's App bypasses it; nSimonFR-ai can't merge without it.
 
 On rpi5, git and gh reach GitHub through Agent Vault, which attaches nSimonFR-ai's
 token (`hosts/rpi5/security/agent-vault.nix`): plain `git push` / `gh pr create` already act as
