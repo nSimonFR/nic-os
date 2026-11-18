@@ -121,7 +121,9 @@ def tampered(reviews, comments, threads):
         if (first.get("author") or {}).get("login") not in ("coderabbitai", JUDGE):
             continue
         by = (t.get("resolvedBy") or {}).get("login")
-        if t.get("isResolved") and by not in TRUSTED:
+        if not t.get("isResolved"):
+            reasons.append("a CodeRabbit thread is unresolved")
+        elif by not in TRUSTED:
             reasons.append(f"a CodeRabbit thread was resolved by {by}")
     said = list(comments) + [
         {"login": (r.get("user") or {}).get("login"), "body": r.get("body")}
