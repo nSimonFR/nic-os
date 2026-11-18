@@ -149,6 +149,10 @@
             port = 8910;
             https = "3773";
           } # T3 Code
+          {
+            port = 29345;
+            tcp = "29345";
+          } # mautrix-imessage appservice, pushed to by rpi5's Tuwunel
         ];
       }
       {
