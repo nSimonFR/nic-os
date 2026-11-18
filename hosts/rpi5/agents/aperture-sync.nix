@@ -137,13 +137,79 @@ let
       auth.type = "oauth2_dcr";
     };
     openaidocs.url = "https://developers.openai.com/mcp";
+    # Linear's hosted MCP takes a personal API key as a bearer token.
+    linear = {
+      url = "https://mcp.linear.app/mcp";
+    }
+    // bearer "LINEAR_KEY";
+    lineartrusk = {
+      url = "https://mcp.linear.app/mcp";
+    }
+    // bearer "LINEAR_KEY_TRUSK";
+  };
+  # Tools granted per connector (default: all). A grant also filters tools/list, which
+  # is what every client pays for in context: Cal.com alone serves 74 tools / 229 KB,
+  # Linear 60 / 98 KB per workspace.
+  linearTools = [
+    "get_issue"
+    "list_issues"
+    "save_issue"
+    "list_issue_statuses"
+    "get_issue_status"
+    "list_issue_labels"
+    "list_comments"
+    "save_comment"
+    "list_cycles"
+    "list_projects"
+    "get_project"
+    "save_project"
+    "list_milestones"
+    "get_milestone"
+    "list_documents"
+    "get_document"
+    "get_attachment"
+    "list_teams"
+    "get_team"
+    "list_users"
+    "get_user"
+    "get_workspace"
+  ];
+  connectorTools = {
+    calcom = [
+      "get_me"
+      "get_availability"
+      "get_busy_times"
+      "get_bookings"
+      "get_booking"
+      "get_event_types"
+      "get_event_type"
+      "get_schedules"
+      "get_default_schedule"
+      "get_connected_calendars"
+      "create_booking"
+      "cancel_booking"
+      "reschedule_booking"
+    ];
+    # Its token is read-only: the write tools could only fail.
+    forgejo = [
+      "get_*"
+      "list_*"
+      "search_*"
+      "check_*"
+      "download_*"
+    ];
+    linear = linearTools;
+    lineartrusk = linearTools;
   };
   # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
-  connectorGrants = lib.concatMap (id: [
-    "${id}/tools/**"
-    "${id}/resources/**"
-    "${id}/templates/**"
-  ]) (builtins.attrNames connectors);
+  connectorGrants = lib.concatMap (
+    id:
+    map (t: "${id}/tools/${t}") (connectorTools.${id} or [ "**" ])
+    ++ [
+      "${id}/resources/**"
+      "${id}/templates/**"
+    ]
+  ) (builtins.attrNames connectors);
   connectorSecretFiles = with config.age.secrets; [
     wealthfolio-mcp-token.path
     sure-mcp-env.path

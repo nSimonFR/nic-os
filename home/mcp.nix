@@ -19,7 +19,7 @@ let
   '';
 in
 {
-  # Linear, Miro and GitHub come from the claude.ai connectors.
+  # Miro and GitHub come from the claude.ai connectors.
   programs.claude-code.mcpServers = {
     # Every MCP server, aggregated by Aperture (the `connectors` list in
     # hosts/rpi5/agents/aperture-sync.nix); access is by tailnet identity.

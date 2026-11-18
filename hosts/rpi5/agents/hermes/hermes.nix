@@ -211,6 +211,14 @@ let
     "nextcloud_nc_share_create_public_link"
     "nextcloud_nc_share_update"
     "nextcloud_nc_share_delete"
+    # Cal.com mails the other attendees.
+    "calcom_create_booking"
+    "calcom_cancel_booking"
+    "calcom_reschedule_booking"
+    # Seen by his colleagues.
+    "lineartrusk_save_issue"
+    "lineartrusk_save_comment"
+    "lineartrusk_save_project"
   ];
 
   # Interpreter for the job-offer collector scripts of the digest cron jobs.

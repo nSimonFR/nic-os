@@ -4,7 +4,7 @@
 # (not the work tailnet), so a session-wide HTTPS_PROXY broke every host the Pi
 # can't see, with a misleading x509 (2026-11-03). A session only gets
 # AGENT_VAULT_ENV; a skill that needs a brokered key sources it in the same
-# command as its call, exactly like on the Pi (shared/skills/linear, ryot).
+# command as its call, exactly like on the Pi (shared/skills/ryot).
 # The last fetch is reused when the Pi is unreachable.
 {
   config,
