@@ -727,3 +727,20 @@ def test_a_probe_stuck_in_trickling_headers_is_stopped():
         assert not any(t.name.endswith("(probe)") for t in threading.enumerate())
     finally:
         lsock.close()
+
+
+def test_a_new_mcp_servers_revision_forces_one_push(tmp_path):
+    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
+    state = tmp_path / "secrets.sha256"
+    cfg = ap.Config(
+        **{**cfg.__dict__, "state_file": str(state), "servers_revision": "a"}
+    )
+    held = ap.desired(base, ap.gate_ids(GATE), cfg)
+    fake = Aperture(held=held)
+    no_sleep = {"sleep": lambda s: None}
+    assert ap.run(cfg, opener=fake, **no_sleep) == 0  # first run records
+    assert ap.run(cfg, opener=fake, **no_sleep) == 0  # same revision: no-op
+    pushes = len(fake.puts)
+    bumped = ap.Config(**{**cfg.__dict__, "servers_revision": "b"})
+    assert ap.run(bumped, opener=fake, **no_sleep) == 0
+    assert len(fake.puts) == pushes + 1

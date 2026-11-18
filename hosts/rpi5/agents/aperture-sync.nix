@@ -477,6 +477,16 @@ in
       APERTURE_APPLY = "1";
       # SHA-256 of the secrets last pushed; delete it to force a push.
       APERTURE_SYNC_STATE = "/var/lib/aperture-config-sync/secrets.sha256";
+      # Hash of every local MCP server's command line (package, --exclude…):
+      # its tools can change while Aperture's config does not, and Aperture
+      # never re-lists a sleepy connector on its own.
+      APERTURE_MCP_REVISION = builtins.hashString "sha256" (
+        builtins.toJSON (
+          lib.mapAttrsToList (_: s: s.serviceConfig.ExecStart or "") (
+            lib.filterAttrs (n: _: lib.hasSuffix "-mcp" n) config.systemd.services
+          )
+        )
+      );
       # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
       ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
       APERTURE_CONNECTOR_SECRETS = lib.concatStringsSep " " (
