@@ -1,5 +1,5 @@
 # Stdio-only MCP servers behind mcp-stdio-bridge (nicos-scripts), served as
-# Streamable HTTP for Aperture's `mail`, `mtg`, `karakeep` and `nextcloud` connectors
+# Streamable HTTP for Aperture's `mail`, `mtg`, `karakeep`, `nextcloud` and `immich` connectors
 # (aperture-sync.nix).
 # Socket-activated: 0 at rest; the child server starts on the first request.
 #
@@ -111,6 +111,13 @@ let
     '';
   };
 
+  immichMcp = pkgs.callPackage ../../../pkgs/agents/immich-mcp.nix { inherit inputs; };
+  immichMcpRun = pkgs.writeShellScript "immich-mcp-run" ''
+    IMMICH_API_KEY=$(tr -d '\r\n' < "$CREDENTIALS_DIRECTORY/apikey")
+    export IMMICH_API_KEY
+    exec ${immichMcp}/bin/immich-mcp
+  '';
+
   bridges = {
     mail = {
       description = "Mail MCP (mcp-email-server)";
@@ -220,6 +227,35 @@ let
       backup = [ "none" ];
       backupNote = "stateless — the files, calendars and contacts live in Nextcloud";
     };
+    # Read-only: IMMICH_PROFILE refuses every write, whatever the key may do.
+    immich = {
+      description = "Immich MCP (mcp4immich)";
+      internalPort = 13368;
+      proxyPort = 8460;
+      publicPort = 4100;
+      order = 183;
+      token = true;
+      units = [ ];
+      command = [ "${immichMcpRun}" ];
+      exclude = [ ];
+      environment = {
+        # Immich's socket-activate proxy: a call wakes it.
+        IMMICH_BASE_URL = "http://127.0.0.1:2283";
+        IMMICH_ALLOW_HTTP = "1";
+        IMMICH_PROFILE = "read_only";
+        # Its write probe POSTs to /api/assets at startup; read_only never writes anyway.
+        IMMICH_WRITE_PROBE_METHOD = "GET";
+        IMMICH_WRITE_PROBE_PATH = "/api/server/ping";
+        MCP4IMMICH_SPEC_CACHE = "/var/cache/immich-mcp";
+        MCP_TRANSPORT = "stdio";
+      };
+      serviceConfig = {
+        CacheDirectory = "immich-mcp";
+        LoadCredential = [ "apikey:/run/agenix/immich-api-key" ];
+      };
+      backup = [ "none" ];
+      backupNote = "stateless — the photos live in Immich";
+    };
   };
 
   mkBridge =
@@ -318,7 +354,7 @@ in
           };
           script = ''
             # messaging is in messaging/messaging-mcp.nix, the rest here.
-            for name in mail messaging karakeep nextcloud; do
+            for name in mail messaging karakeep nextcloud immich; do
               f=${tokenDir}/$name
               [ -s "$f" ] || ${pkgs.openssl}/bin/openssl rand -hex 32 > "$f"
             done

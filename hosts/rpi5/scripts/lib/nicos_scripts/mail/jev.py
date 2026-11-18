@@ -7,8 +7,7 @@ narrow questions about each one, and writes a ranked assignment on stdout. The
 digest text itself is still written by the agent — this only decides *which*
 messages go in which bucket, so the picks stop drifting between mornings.
 
-Zero dependencies (stdlib only), so it runs anywhere `python3` does, same as
-the caldav-calendar skill's nc-cal.py.
+Zero dependencies (stdlib only), so it runs anywhere `python3` does.
 
 Why many narrow questions instead of one "is this important": on TypeSafe's own
 phishing benchmark Jev scored 62.6% asked once and 95% split five ways, and that

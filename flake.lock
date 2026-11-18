@@ -1030,6 +1030,23 @@
         "type": "github"
       }
     },
+    "mcp4immich-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1790591932,
+        "narHash": "sha256-WgWOH+ZPS8Y/BYPqOM19js646qMmYOZpOMRbVd3qSHg=",
+        "owner": "JoeRu",
+        "repo": "mcp4immich",
+        "rev": "63de49ea763ce0f1a2e319927042f3ccd893c0ca",
+        "type": "github"
+      },
+      "original": {
+        "owner": "JoeRu",
+        "ref": "v1.1.0",
+        "repo": "mcp4immich",
+        "type": "github"
+      }
+    },
     "nextcloud-mcp-src": {
       "flake": false,
       "locked": {
@@ -1681,6 +1698,7 @@
         "linear-t3-relay": "linear-t3-relay",
         "llm-agents": "llm-agents",
         "mac-app-util": "mac-app-util",
+        "mcp4immich-src": "mcp4immich-src",
         "nextcloud-mcp-src": "nextcloud-mcp-src",
         "nix-citizen": "nix-citizen",
         "nix-flatpak": "nix-flatpak",

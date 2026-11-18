@@ -53,6 +53,9 @@ rxr alfie GET  "/cover-letters/<letterId>/exports/pdf" -o lettre.pdf
 
 ## MCP server
 
+Aperture's `rxresume_api_search` / `rxresume_api_execute` act as **Nico only**; anything about
+Alfie goes through `rxr alfie` above.
+
 Endpoint `http://rxresume.home.arpa:13336/mcp` (streamable HTTP, header `x-api-key`, same keys/vault).
 ~150 tools, e.g. `list_applications`, `update_application`, `add_application_note`,
 `attach_application_document`, `read_resume`, `download_resume_pdf`, `list_cover_letters`,

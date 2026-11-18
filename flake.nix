@@ -197,6 +197,13 @@
       url = "github:cbcoutinho/nextcloud-mcp-server/v0.213.1";
       flake = false;
     };
+    # Immich MCP server (JoeRu/mcp4immich), same uv.lock build:
+    # pkgs/agents/immich-mcp.nix. Bump: change the tag, then
+    # `nix flake lock --update-input mcp4immich-src`.
+    mcp4immich-src = {
+      url = "github:JoeRu/mcp4immich/v1.1.0";
+      flake = false;
+    };
     pyproject-nix = {
       url = "github:pyproject-nix/pyproject.nix";
       inputs.nixpkgs.follows = "nixpkgs";

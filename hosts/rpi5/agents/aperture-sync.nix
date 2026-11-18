@@ -126,6 +126,11 @@ let
     }
     // bearer "NEXTCLOUD_MCP_TOKEN"
     // sleepy;
+    immich = {
+      url = "${publicUrl "immich-mcp"}/mcp";
+    }
+    // bearer "IMMICH_MCP_TOKEN"
+    // sleepy;
     messaging = {
       url = "${publicUrl "messaging-mcp"}/mcp";
     }
@@ -200,6 +205,24 @@ let
     ];
     linear = linearTools;
     lineartrusk = linearTools;
+    # 14 of its 117 read-only tools: search, albums, people, memories. No smart search
+    # (its CLIP model runs on beast, frozen).
+    immich = map (op: "immich_${op}") [
+      "searchassets"
+      "searchrandom"
+      "searchperson"
+      "searchplaces"
+      "getsearchsuggestions"
+      "getassetsbycity"
+      "getassetinfo"
+      "getallalbums"
+      "getalbuminfo"
+      "getallpeople"
+      "getperson"
+      "searchmemories"
+      "getmemory"
+      "getalltags"
+    ];
   };
   # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
   connectorGrants = lib.concatMap (
@@ -231,6 +254,7 @@ let
       MESSAGING_MCP_TOKEN = "/var/lib/mcp-tokens/messaging";
       KARAKEEP_MCP_TOKEN = "/var/lib/mcp-tokens/karakeep";
       NEXTCLOUD_MCP_TOKEN = "/var/lib/mcp-tokens/nextcloud";
+      IMMICH_MCP_TOKEN = "/var/lib/mcp-tokens/immich";
     };
 
   # Claude ids for the Anthropic passthrough. The base is what the claude-code
