@@ -74,16 +74,17 @@ jobs:
             seen=$(jq -r .head.sha pr.json)
             gh api --paginate "repos/$REPO/compare/$(jq -r .base.sha pr.json)...$seen?per_page=100" \
               --jq '.files' | jq -s . > files.json &&
-              gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json &&
-              { gh api --paginate "repos/$REPO/issues/$1/comments?per_page=100" --jq '.[] | {login: .user.login, body}' &&
-                gh api --paginate "repos/$REPO/pulls/$1/comments?per_page=100" --jq '.[] | {login: .user.login, body}'
-              } | jq -s . > comments.json &&
-              gh api graphql -F owner="${REPO%/*}" -F name="${REPO#*/}" -F n="$1" -f query='
-                query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) {
-                  pullRequest(number: $n) { reviewThreads(first: 100) { pageInfo { hasNextPage }
-                    nodes { isResolved resolvedBy { login } comments(first: 1) { nodes { author { login } } } } } } } }' \
-                --jq .data.repository.pullRequest.reviewThreads > threads.json ||
+              gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json ||
               return 1
+            # Unreadable comments or threads are null: they void only CodeRabbit's route.
+            { gh api --paginate "repos/$REPO/issues/$1/comments?per_page=100" --jq '.[] | {login: .user.login, body}' &&
+              gh api --paginate "repos/$REPO/pulls/$1/comments?per_page=100" --jq '.[] | {login: .user.login, body}'
+            } | jq -s . > comments.json || echo null > comments.json
+            gh api graphql -F owner="${REPO%/*}" -F name="${REPO#*/}" -F n="$1" -f query='
+              query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) {
+                pullRequest(number: $n) { reviewThreads(first: 100) { pageInfo { hasNextPage }
+                  nodes { isResolved resolvedBy { login } comments(first: 1) { nodes { author { login } } } } } } } }' \
+              --jq .data.repository.pullRequest.reviewThreads > threads.json || echo null > threads.json
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json comments.json threads.json > d.json &&
               return 0
             jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha, crashed:true,
