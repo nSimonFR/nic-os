@@ -11,7 +11,8 @@
 #
 # Every trigger here runs this file and the script from main, never from a PR:
 # pull_request_target (a new head starts pending), workflow_run of
-# review-signal.yml (CodeRabbit or Nico reviewed) and a schedule (sweep).
+# review-signal.yml (CodeRabbit or Nico reviewed) and a schedule (sweep). A
+# dispatch may name any ref, so the script is always checked out from main.
 name: Review gate
 
 on:
@@ -53,35 +54,46 @@ jobs:
           EVENT_PR: ${{ github.event.pull_request.number }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          prs=$( {
-            gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number'
-            [ -n "$EVENT_PR" ] && echo "$EVENT_PR"
-          } | sort -un)
+          list=$(gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number') ||
+            { echo "::error::Could not list the open PRs"; exit 1; }
+          prs=$( { printf '%s\n' "$list"; [ -n "$EVENT_PR" ] && echo "$EVENT_PR"; } | sort -un)
+          # One decision reads one head: PR, files and reviews, then the PR again.
+          # A push in between moves the head, and the next run decides the new one.
           decide() {
-            gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json
-            # Fail closed: a crash is pending on the head.
+            gh api "repos/$REPO/pulls/$1" > pr.json &&
+              gh api --paginate --slurp "repos/$REPO/pulls/$1/files" > files.json &&
+              gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json &&
+              [ "$(gh api "repos/$REPO/pulls/$1" --jq .head.sha)" = "$(jq -r .head.sha pr.json)" ] ||
+              return 1
+            # Fail closed: a crash is pending on the head, except on Renovate's.
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
               jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha,
-                   state:"pending", description:"The gate failed: Nico reviews"}' pr.json > d.json
+                   state:(if .user.login == "nic-os-renovate[bot]" then null else "pending" end),
+                   description:"The gate failed: Nico reviews"}' pr.json > d.json
           }
           failed=0
           for pr in $prs; do
-            gh api "repos/$REPO/pulls/$pr" > pr.json
+            decide "$pr" || { failed=1; continue; }
             [ "$(jq -r .base.ref pr.json)" = main ] || continue
-            gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
-            decide "$pr"
-            # Re-read the reviews right before going green: a dismissal since the
-            # first read must stop it.
-            [ "$(jq -r .state d.json)" = success ] && decide "$pr"
+            # Decide again right before going green: a dismissal since the first
+            # read must stop it.
+            if [ "$(jq -r .state d.json)" = success ]; then decide "$pr" || { failed=1; continue; }; fi
             head=$(jq -r .head d.json)
             state=$(jq -r '.state // ""' d.json)
             desc=$(jq -r .description d.json)
             # Statuses only append: post when the latest one differs.
             cur=$(gh api "repos/$REPO/commits/$head/status" \
-              --jq '.statuses[] | select(.context == "review-gate") | .state + "|" + .description')
+              --jq '.statuses[] | select(.context == "review-gate") | .state + "|" + .description') ||
+              { failed=1; continue; }
+            # Renovate gets no status until Nico approves; a withdrawn approval
+            # still has to turn its green one back.
+            if [ -z "$state" ] && [ -n "$cur" ]; then
+              state=pending desc="Nico's approval no longer stands"
+            fi
             if [ -n "$state" ] && [ "$cur" != "$state|$desc" ]; then
               gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate \
-                -f state="$state" -f description="$desc" -f target_url="$RUN_URL" > /dev/null || failed=1
+                -f state="$state" -f description="$desc" -f target_url="$RUN_URL" > /dev/null ||
+                { failed=1; continue; }
             fi
             # Labels from the decision. Only fixed values leave the JSON:
             # filenames stay inside it.
