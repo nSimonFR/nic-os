@@ -57,39 +57,57 @@ jobs:
           list=$(gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number') ||
             { echo "::error::Could not list the open PRs"; exit 1; }
           prs=$( { printf '%s\n' "$list"; [ -n "$EVENT_PR" ] && echo "$EVENT_PR"; } | sort -un)
+          set -o pipefail
           # Files come from the compare of two SHAs, so they describe the head in
           # pr.json whatever is pushed meanwhile; reviews count only on that head.
+          # Returns 1 when a read fails, 2 when review_gate.py crashed (d.json then
+          # holds the fail-closed decision: pending, nothing on Renovate's PRs).
           decide() {
-            gh api "repos/$REPO/pulls/$1" > pr.json &&
-              gh api --paginate \
-                "repos/$REPO/compare/$(jq -r .base.sha pr.json)...$(jq -r .head.sha pr.json)?per_page=100" \
-                --jq '.files' | jq -s . > files.json &&
+            gh api "repos/$REPO/pulls/$1" > pr.json || return 1
+            seen=$(jq -r .head.sha pr.json)
+            gh api --paginate "repos/$REPO/compare/$(jq -r .base.sha pr.json)...$seen?per_page=100" \
+              --jq '.files' | jq -s . > files.json &&
               gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json ||
               return 1
-            # Fail closed: a crash is pending on the head, except on Renovate's.
-            python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
-              jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha, crashed:true,
-                   state:(if .user.login == "nic-os-renovate[bot]" then null else "pending" end),
-                   description:"The gate failed: Nico reviews"}' pr.json > d.json
+            python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json && return 0
+            jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha, crashed:true,
+                 state:(if .user.login == "nic-os-renovate[bot]" then null else "pending" end),
+                 description:"The gate failed: Nico reviews"}' pr.json > d.json && return 2
+            return 1
           }
-          # A PR the gate cannot read loses a green status it may no longer deserve.
-          unreadable() {
+          # Two tries. A crash fails the run but keeps its fail-closed decision;
+          # an unreadable PR fails the run and goes to unreadable().
+          attempt() {
+            seen='' rc=0
+            decide "$1" || rc=$?
+            [ "$rc" -eq 0 ] || { rc=0; decide "$1" || rc=$?; }
+            [ "$rc" -eq 0 ] && return 0
             failed=1
-            head=$(gh api "repos/$REPO/pulls/$1" --jq 'select(.state == "open" and .base.ref == "main") | .head.sha') || return
-            [ -n "$head" ] || return
-            gh api "repos/$REPO/commits/$head/status" \
-              --jq '.statuses[] | select(.context == "review-gate") | .state' | grep -qx success || return
-            gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate -f state=pending \
+            [ "$rc" -eq 2 ] && return 0
+            unreadable "$1" || true
+            return 1
+          }
+          # The head that could not be decided loses its green status, if the PR
+          # still points at it. Renovate's keeps it: a pending one stops its automerge.
+          unreadable() {
+            [ -n "$seen" ] || return 0
+            now=$(gh api "repos/$REPO/pulls/$1" \
+              --jq 'select(.state == "open" and .base.ref == "main" and .user.login != "nic-os-renovate[bot]") | .head.sha')
+            [ "$now" = "$seen" ] || return 0
+            st=$(gh api "repos/$REPO/commits/$seen/status" --jq '.statuses[] | select(.context == "review-gate") | .state')
+            [ "$st" = success ] || return 0
+            gh api -X POST "repos/$REPO/statuses/$seen" -f context=review-gate -f state=pending \
               -f description="The gate could not re-check this commit" -f target_url="$RUN_URL" > /dev/null
           }
           failed=0
           for pr in $prs; do
-            { decide "$pr" || decide "$pr"; } || { unreadable "$pr" || true; continue; }
+            attempt "$pr" || continue
             [ "$(jq -r .base.ref pr.json)" = main ] || continue
             # Decide again right before going green: a dismissal since the first
             # read must stop it.
             if [ "$(jq -r .state d.json)" = success ]; then
-              { decide "$pr" || decide "$pr"; } || { unreadable "$pr" || true; continue; }
+              attempt "$pr" || continue
+              [ "$(jq -r .base.ref pr.json)" = main ] || continue
             fi
             head=$(jq -r .head d.json)
             state=$(jq -r '.state // ""' d.json)
