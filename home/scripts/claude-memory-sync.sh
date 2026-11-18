@@ -191,7 +191,12 @@ pull)
   } >>"$log" 2>&1
   ;;
 push)
-  (sync_up >>"$log" 2>&1 &) </dev/null >/dev/null 2>&1
+  # Tests set MEMORY_SYNC_FOREGROUND: polling for the lock races the fork.
+  if [ -n "${MEMORY_SYNC_FOREGROUND:-}" ]; then
+    sync_up >>"$log" 2>&1 || true
+  else
+    (sync_up >>"$log" 2>&1 &) </dev/null >/dev/null 2>&1
+  fi
   ;;
 esac
 exit 0
