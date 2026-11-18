@@ -719,5 +719,11 @@ def test_a_probe_stuck_in_trickling_headers_is_stopped():
         assert ap.wake(_sleepy(url), deadline=1) == [url]
         assert time.monotonic() - t0 < 7
         assert gone.wait(5), "the probe kept reading headers after the deadline"
+        # The probe thread itself has ended (its name ends in "(probe)").
+        for _ in range(50):
+            if not any(t.name.endswith("(probe)") for t in threading.enumerate()):
+                break
+            time.sleep(0.1)
+        assert not any(t.name.endswith("(probe)") for t in threading.enumerate())
     finally:
         lsock.close()
