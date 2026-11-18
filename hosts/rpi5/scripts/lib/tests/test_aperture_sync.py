@@ -403,13 +403,16 @@ def test_wake_stops_at_the_wall_clock_deadline():
 
     def opener(req, timeout=None):
         timeouts.append(timeout)
-        now[0] += 60  # each attempt hangs until its timeout
+        now[0] += min(timeout, 60)  # hangs 60 s, or until its timeout
         raise OSError("timed out")
 
+    def sleep(s):
+        now[0] += s
+
     assert ap.wake(
-        config, opener=opener, sleep=lambda s: None, deadline=90, clock=lambda: now[0]
+        config, opener=opener, sleep=sleep, deadline=90, clock=lambda: now[0]
     ) == ["http://s/mcp"]
-    assert now[0] <= 90 + 60 and timeouts[0] == 90 and len(timeouts) == 2
+    assert timeouts == [90, 20] and now[0] <= 90
 
 
 def test_an_unready_connector_makes_the_next_run_push_again(tmp_path):
@@ -455,3 +458,89 @@ def test_an_unwritable_digest_does_not_repeat_an_accepted_push(tmp_path):
     fake = Aperture(held={"old": True})
     assert ap.run(cfg, opener=fake, sleep=lambda s: None) == 0
     assert len(fake.puts) == 1
+
+
+def test_wake_retries_a_truncated_answer():
+    import http.client
+
+    config = {
+        "connectors": {
+            "servers": {"s": {"url": "http://s/mcp", "send_caller_identity": True}}
+        }
+    }
+    answers = [http.client.IncompleteRead(b"{"), INIT_OK]
+
+    def opener(req, timeout=None):
+        nxt = answers.pop(0)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return Resp(nxt)
+
+    assert ap.wake(config, opener=opener, sleep=lambda s: None) == []
+
+
+def test_wake_never_follows_a_redirect_with_the_token():
+    import http.server
+    import threading
+
+    hits = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            hits.append((self.path, self.headers.get("Authorization")))
+            self.send_response(307)
+            self.send_header("Location", "/elsewhere")
+            self.end_headers()
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}/mcp"
+        config = {
+            "connectors": {
+                "servers": {
+                    "s": {
+                        "url": url,
+                        "send_caller_identity": True,
+                        "auth": {"type": "bearer_token", "secret": "tok"},
+                    }
+                }
+            }
+        }
+        assert ap.wake(config, sleep=lambda s: None, deadline=10) == [url]
+        assert {p for p, _ in hits} == {"/mcp"}
+    finally:
+        srv.shutdown()
+
+
+def test_an_unready_connector_clears_the_digest_before_the_put(tmp_path):
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True}
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    state = tmp_path / "secrets.sha256"
+    cfg = ap.Config(
+        aperture_url="http://ap", base_config=str(p), apply=True, state_file=str(state)
+    )
+    state.write_text(ap.secrets_digest(ap.desired(base, ap.gate_ids(GATE), cfg)) + "\n")
+    fake = Aperture(held={"old": True})
+    seen_at_put = []
+
+    def opener(req, timeout=None):
+        if req.full_url == "http://sure/mcp":
+            raise OSError("cold")
+        if req.get_method() == "PUT":
+            seen_at_put.append(state.read_text().strip())
+        return fake(req, timeout)
+
+    assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
+    assert seen_at_put == [""]
