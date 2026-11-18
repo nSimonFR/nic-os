@@ -250,7 +250,8 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90):
             sleep(10)
         return server["url"]
 
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    # All at once: the deadline then bounds the whole wake, not one batch.
+    with ThreadPoolExecutor(max_workers=max(1, len(sleepy))) as pool:
         return [u for u in pool.map(ready, sleepy) if u]
 
 
