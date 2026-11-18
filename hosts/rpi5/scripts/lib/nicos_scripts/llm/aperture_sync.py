@@ -36,6 +36,7 @@ import hashlib
 import http.client
 import json
 import os
+import socket
 import sys
 import threading
 import time
@@ -263,17 +264,23 @@ def sse_events(text):
 
 
 def is_init_response(chunk):
-    """The JSON-RPC response to INITIALIZE (id 1, a result with protocolVersion)."""
+    """The JSON-RPC response to INITIALIZE: id 1 (an integer, not `true`), and an
+    InitializeResult with a string protocolVersion and object capabilities and
+    serverInfo (MCP schema 2025-03-26)."""
     try:
         msg = json.loads(chunk)
     except ValueError:
         return False
+    if not isinstance(msg, dict) or msg.get("jsonrpc") != "2.0":
+        return False
+    rid, result = msg.get("id"), msg.get("result")
     return (
-        isinstance(msg, dict)
-        and msg.get("jsonrpc") == "2.0"
-        and msg.get("id") == 1
-        and isinstance(msg.get("result"), dict)
-        and "protocolVersion" in msg["result"]
+        type(rid) is int
+        and rid == 1
+        and isinstance(result, dict)
+        and isinstance(result.get("protocolVersion"), str)
+        and isinstance(result.get("capabilities"), dict)
+        and isinstance(result.get("serverInfo"), dict)
     )
 
 
@@ -335,20 +342,26 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
                 return False
             try:
                 with opener(req, timeout=max(1, left)) as r:
+                    reading[threading.get_ident()] = r
                     if answered(r) and end - clock() > 0:
                         return True
             except (OSError, http.client.HTTPException):  # IncompleteRead included
                 pass
+            finally:
+                reading.pop(threading.get_ident(), None)
             pause = min(10, end - clock(), deadline - slept)
             if pause <= 0:
                 return False
             sleep(pause)
             slept += pause
 
-    results = {}
+    results, reading = {}, {}
 
     def probe(i, server):
-        results[i] = ready(server)
+        try:
+            results[i] = ready(server)
+        except Exception:  # noqa: BLE001 - a read cut by _shutdown fails oddly; not ready
+            results[i] = False
 
     threads = [
         threading.Thread(target=probe, args=(i, s), daemon=True)
@@ -359,7 +372,24 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
     stop = time.monotonic() + deadline
     for t in threads:
         t.join(max(0, stop - time.monotonic()))
+    # A probe still reading: shut its socket so the read fails and the thread ends.
+    for t in threads:
+        if t.is_alive() and (r := reading.get(t.ident)) is not None:
+            _shutdown(r)
+            t.join(5)
     return [s["url"] for i, s in enumerate(sleepy) if not results.get(i)]
+
+
+def _shutdown(response):
+    """Interrupt a read blocked on `response` from another thread (close alone
+    does not wake a blocked recv)."""
+    sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+    try:
+        if sock is not None:
+            sock.shutdown(socket.SHUT_RDWR)
+        response.close()
+    except OSError:
+        pass
 
 
 def run(cfg, opener=None, sleep=time.sleep, attempts=5):
