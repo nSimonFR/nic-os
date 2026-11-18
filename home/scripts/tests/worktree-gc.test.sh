@@ -52,6 +52,15 @@ g -C "$P" worktree lock "$T/wt/locked"
 age "$T/wt/locked"
 mk gone
 rm -rf "$T/wt/gone"
+mk broken
+age "$T/wt/broken"
+rm "$T/wt/broken/.git"
+mk readonly
+mkdir -p "$T/wt/readonly/ro"
+echo z >"$T/wt/readonly/ro/f"
+echo ro >>"$P/.git/info/exclude"
+chmod -R a-w "$T/wt/readonly/ro"
+age "$T/wt/readonly"
 
 bash -e "$script" --dry-run >"$T/dry.log"
 check "dry run removes nothing" test -d "$T/wt/pushed"
@@ -65,6 +74,8 @@ check "worktree with unpushed commits is kept" test -d "$T/wt/unpushed"
 check "recently used worktree is kept" test -d "$T/wt/recent"
 check "locked worktree is kept" test -d "$T/wt/locked"
 check "missing worktree is pruned" test -z "$(g -C "$P" worktree list | grep "$T/wt/gone")"
+check "worktree with a broken .git link is kept" test -f "$T/wt/broken/README.md"
+check "worktree with read-only files is removed" test ! -e "$T/wt/readonly"
 check "main checkout is untouched" test -f "$P/README.md"
 
 exit "$fail"
