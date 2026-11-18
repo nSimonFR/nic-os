@@ -315,7 +315,15 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
                 return server["url"]
             try:
                 with opener(req, timeout=max(1, left)) as r:
-                    if initialized(r.read()):
+                    # In chunks, so a trickling body cannot outlast the deadline.
+                    body = b""
+                    while chunk := r.read(65536):
+                        body += chunk
+                        if initialized(body):
+                            return None
+                        if end - clock() <= 0:
+                            return server["url"]
+                    if initialized(body):
                         return None
             except (OSError, http.client.HTTPException):  # IncompleteRead included
                 pass
