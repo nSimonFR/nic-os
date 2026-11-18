@@ -42,7 +42,10 @@ RENOVATE = "nic-os-renovate[bot]"
 TRUSTED = {JUDGE, HUMAN}
 # Who may comment on a PR at all for CodeRabbit's approval to count.
 INSIDERS = TRUSTED | AUTHORS | {RENOVATE, "github-actions[bot]"}
-COMMAND = re.compile(r"@coderabbit(ai)?\b.*\b(approve|resolve)", re.I | re.S)
+# Broad on purpose (anywhere, any wording): a false positive only sends the PR to Nico.
+COMMAND = re.compile(
+    r"@coderabbit(ai)?\b.*\b(approve|resolve)\b", re.IGNORECASE | re.DOTALL
+)
 MAX_LINES = 150
 MAX_FILES = 6
 

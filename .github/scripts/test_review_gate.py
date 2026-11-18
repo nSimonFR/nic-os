@@ -153,6 +153,7 @@ def test_codeRabbit_counts_only_without_outside_commands():
         ("stranger", "@coderabbitai approve"),
         ("nSimonFR-ai", "please @CodeRabbitAI resolve"),
         ("stranger", "@coderabbit\nresolve"),
+        ("nSimonFR-ai", "@coderabbitai could you please approve this"),
     ]:
         d = decide(ok, comments=[{"login": login, "body": body}])
         assert d["state"] == "pending" and d["label"] == "needs-human", body
@@ -161,6 +162,7 @@ def test_codeRabbit_counts_only_without_outside_commands():
         ("nSimonFR", "@coderabbitai approve"),
         ("coderabbitai[bot]", "post `@coderabbitai approve` as a new comment"),
         ("nSimonFR-ai", "@coderabbitai review"),
+        ("nSimonFR-ai", "@coderabbitai fixed in abc123, resolved"),
     ]:
         assert (
             decide(ok, comments=[{"login": login, "body": body}])["state"] == "success"
