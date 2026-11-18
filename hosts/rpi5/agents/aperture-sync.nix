@@ -379,6 +379,8 @@ in
       APERTURE_URL = apertureUrl;
       APERTURE_BASE_CONFIG = "${configFile}";
       APERTURE_APPLY = "1";
+      # SHA-256 of the secrets last pushed; delete it to force a push.
+      APERTURE_SYNC_STATE = "/var/lib/aperture-config-sync/secrets.sha256";
       # Claude Code's OAuth token: Anthropic's /v1/models accepts it (2026-11-10).
       ANTHROPIC_TOKEN_FILE = "/run/claude-oauth/token";
       APERTURE_CONNECTOR_SECRETS = lib.concatStringsSep " " (
@@ -396,6 +398,8 @@ in
     };
     serviceConfig = {
       Type = "oneshot";
+      StateDirectory = "aperture-config-sync";
+      StateDirectoryMode = "0700";
       # STORJ_S3_ACCESS_KEY / STORJ_S3_ACCESS_SECRET for exporters.s3, then the
       # connector tokens.
       EnvironmentFile = [ "/run/agenix/aperture-s3-export" ] ++ connectorSecretFiles;

@@ -347,3 +347,29 @@ def test_wake_reports_a_connector_that_never_initializes():
     assert ap.wake(config, opener=opener, sleep=lambda s: None, deadline=30) == [
         "http://sure/mcp"
     ]
+
+
+def test_a_rotated_secret_alone_forces_one_push(tmp_path):
+    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
+    state = tmp_path / "secrets.sha256"
+    cfg = ap.Config(**{**cfg.__dict__, "state_file": str(state)})
+    held = ap.desired(base, ap.gate_ids(GATE), cfg)
+    held["connectors"]["servers"]["sure"]["auth"]["secret"] = "keyid:c:sure"
+    fake = Aperture(held=held)
+    no_sleep = {"sleep": lambda s: None}
+
+    # No state yet: the first run pushes once and records the digest.
+    assert ap.run(cfg, opener=fake, **no_sleep) == 0
+    assert len(fake.puts) == 1 and state.read_text().strip()
+    assert "tok" not in state.read_text()
+    # Same secrets: a no-op.
+    assert ap.run(cfg, opener=fake, **no_sleep) == 0
+    assert len(fake.puts) == 1
+    # Only the token changed: pushed again.
+    rotated = ap.Config(
+        **{**cfg.__dict__, "connector_secrets": {"MCP_API_TOKEN": "tok2"}}
+    )
+    assert ap.run(rotated, opener=fake, **no_sleep) == 0
+    assert len(fake.puts) == 2
+    pushed = json.loads(fake.puts[1]["config"])
+    assert pushed["connectors"]["servers"]["sure"]["auth"]["secret"] == "tok2"
