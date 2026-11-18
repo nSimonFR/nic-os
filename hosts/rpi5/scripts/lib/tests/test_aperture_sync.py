@@ -729,21 +729,30 @@ def test_a_probe_stuck_in_trickling_headers_is_stopped():
         lsock.close()
 
 
-def test_a_new_mcp_servers_revision_forces_one_push(tmp_path):
-    base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
-    state = tmp_path / "secrets.sha256"
-    cfg = ap.Config(
-        **{**cfg.__dict__, "state_file": str(state), "servers_revision": "a"}
+def test_a_new_mcp_servers_revision_changes_the_sleepy_connectors(tmp_path):
+    # An identical PUT keeps Aperture's tool lists: the revision must change
+    # the config itself, on sleepy connectors only.
+    base = {
+        **BASE,
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True},
+                "docs": {"url": "http://docs/mcp"},
+            }
+        },
+    }
+    p = tmp_path / "base.json"
+    p.write_text(json.dumps(base))
+    cfg = ap.Config(base_config=str(p), servers_revision="a" * 64)
+    want = ap.desired(base, ap.gate_ids(GATE), cfg)
+    servers = want["connectors"]["servers"]
+    assert servers["sure"]["description"] == "rev " + "a" * 16
+    assert "description" not in servers["docs"]
+    bumped = ap.desired(
+        base,
+        ap.gate_ids(GATE),
+        ap.Config(**{**cfg.__dict__, "servers_revision": "b" * 64}),
     )
-    held = ap.desired(base, ap.gate_ids(GATE), cfg)
-    fake = Aperture(held=held)
-    no_sleep = {"sleep": lambda s: None}
-    assert ap.run(cfg, opener=fake, **no_sleep) == 0  # first run records
-    assert len(fake.puts) == 1
-    assert ap.run(cfg, opener=fake, **no_sleep) == 0  # same revision: no-op
-    assert len(fake.puts) == 1
-    bumped = ap.Config(**{**cfg.__dict__, "servers_revision": "b"})
-    assert ap.run(bumped, opener=fake, **no_sleep) == 0
-    assert len(fake.puts) == 2
-    assert ap.run(bumped, opener=fake, **no_sleep) == 0
-    assert len(fake.puts) == 2
+    assert ap.comparable(bumped) != ap.comparable(want)
+    same = ap.desired(base, ap.gate_ids(GATE), cfg)
+    assert ap.comparable(same) == ap.comparable(want)
