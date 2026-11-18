@@ -382,6 +382,8 @@ in
           "AIRTRAIL_MCP_TOKEN"
           "HA_TOKEN"
           "DAWARICH_API_KEY"
+          "LINEAR_KEY"
+          "LINEAR_KEY_TRUSK"
         ]
         ++ builtins.attrNames connectorCredentials
       );
