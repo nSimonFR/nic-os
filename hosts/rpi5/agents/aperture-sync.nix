@@ -142,15 +142,19 @@ let
       auth.type = "oauth2_dcr";
     };
     openaidocs.url = "https://developers.openai.com/mcp";
-    # Linear's hosted MCP takes a personal API key as a bearer token.
+    # Linear's hosted MCP takes a personal API key as a bearer token. Sleepy, so
+    # Aperture does not poll it: polling spent the key's 2500 requests/hour and
+    # Linear answered 429 with no tools (2026-11-18).
     linear = {
       url = "https://mcp.linear.app/mcp";
     }
-    // bearer "LINEAR_KEY";
+    // bearer "LINEAR_KEY"
+    // sleepy;
     lineartrusk = {
       url = "https://mcp.linear.app/mcp";
     }
-    // bearer "LINEAR_KEY_TRUSK";
+    // bearer "LINEAR_KEY_TRUSK"
+    // sleepy;
   };
   # Tools granted per connector (default: all). A grant also filters tools/list, which
   # is what every client pays for in context: Cal.com alone serves 74 tools / 229 KB,
