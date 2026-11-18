@@ -644,10 +644,12 @@ def test_an_unready_connector_clears_the_digest_before_the_put(tmp_path):
 
 def test_an_invalid_initialize_result_is_not_ready():
     for bad in [
-        b'{"jsonrpc": "2.0", "id": true, "result": {"protocolVersion": "x", "capabilities": {}, "serverInfo": {}}}',
+        b'{"jsonrpc": "2.0", "id": true, "result": {"protocolVersion": "x", "capabilities": {}, "serverInfo": {"name": "s", "version": "1"}}}',
         b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": null, "capabilities": {}, "serverInfo": {}}}',
         b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "serverInfo": {}}}',
         b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "capabilities": {}}}',
+        b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "capabilities": {}, "serverInfo": {}}}',
+        b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "capabilities": {}, "serverInfo": {"name": "s", "version": 1}}}',
     ]:
         assert not ap.initialized(bad), bad
 
@@ -685,3 +687,37 @@ def test_a_probe_still_reading_at_the_deadline_is_stopped():
         assert threading.active_count() <= before
     finally:
         srv.shutdown()
+
+
+def test_a_probe_stuck_in_trickling_headers_is_stopped():
+    import socket
+    import threading
+    import time
+
+    gone = threading.Event()
+    lsock = socket.socket()
+    lsock.bind(("127.0.0.1", 0))
+    lsock.listen()
+
+    def serve():
+        conn, _ = lsock.accept()
+        conn.recv(65536)
+        try:
+            conn.sendall(b"HTTP/1.1 200 OK\r\n")
+            for _ in range(100):  # one header byte every 0.2 s, never the blank line
+                conn.sendall(b"X")
+                time.sleep(0.2)
+        except OSError:
+            gone.set()
+        finally:
+            conn.close()
+
+    threading.Thread(target=serve, daemon=True).start()
+    url = f"http://127.0.0.1:{lsock.getsockname()[1]}/mcp"
+    try:
+        t0 = time.monotonic()
+        assert ap.wake(_sleepy(url), deadline=1) == [url]
+        assert time.monotonic() - t0 < 7
+        assert gone.wait(5), "the probe kept reading headers after the deadline"
+    finally:
+        lsock.close()
