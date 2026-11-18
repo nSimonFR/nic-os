@@ -460,7 +460,7 @@ def test_an_unwritable_digest_does_not_repeat_an_accepted_push(tmp_path):
     assert len(fake.puts) == 1
 
 
-def test_wake_retries_a_truncated_answer():
+def test_wake_retries_a_body_cut_short():
     import http.client
 
     config = {
@@ -468,15 +468,44 @@ def test_wake_retries_a_truncated_answer():
             "servers": {"s": {"url": "http://s/mcp", "send_caller_identity": True}}
         }
     }
-    answers = [http.client.IncompleteRead(b"{"), INIT_OK]
 
-    def opener(req, timeout=None):
-        nxt = answers.pop(0)
-        if isinstance(nxt, Exception):
-            raise nxt
-        return Resp(nxt)
+    class Truncated(Resp):
+        def read(self, *a):
+            raise http.client.IncompleteRead(b"{")
 
-    assert ap.wake(config, opener=opener, sleep=lambda s: None) == []
+    answers = [Truncated(b""), Resp(INIT_OK)]
+    assert (
+        ap.wake(
+            config,
+            opener=lambda req, timeout=None: answers.pop(0),
+            sleep=lambda s: None,
+        )
+        == []
+    )
+    assert answers == []
+
+
+def test_wake_stops_reading_a_trickling_body_at_the_deadline():
+    config = {
+        "connectors": {
+            "servers": {"s": {"url": "http://s/mcp", "send_caller_identity": True}}
+        }
+    }
+    now = [0.0]
+
+    class Trickle(Resp):
+        def read(self, *a):
+            now[0] += 30  # a byte every 30 s, never a full answer
+            return b" "
+
+    assert ap.wake(
+        config,
+        opener=lambda req, timeout=None: Trickle(b""),
+        sleep=lambda s: None,
+        deadline=90,
+        clock=lambda: now[0],
+    ) == ["http://s/mcp"]
+    assert now[0] <= 90
 
 
 def test_wake_never_follows_a_redirect_with_the_token():
@@ -489,11 +518,15 @@ def test_wake_never_follows_a_redirect_with_the_token():
         def log_message(self, *a):
             pass
 
-        def do_POST(self):
-            hits.append((self.path, self.headers.get("Authorization")))
-            self.send_response(307)
+        def answer(self):
+            hits.append((self.command, self.path, self.headers.get("Authorization")))
+            # 302: urllib's default opener would re-send it as a GET to /elsewhere.
+            self.send_response(302)
             self.send_header("Location", "/elsewhere")
+            self.send_header("Content-Length", "0")
             self.end_headers()
+
+        do_POST = do_GET = answer
 
     srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), H)
     threading.Thread(target=srv.serve_forever, daemon=True).start()
@@ -511,7 +544,9 @@ def test_wake_never_follows_a_redirect_with_the_token():
             }
         }
         assert ap.wake(config, sleep=lambda s: None, deadline=10) == [url]
-        assert {p for p, _ in hits} == {"/mcp"}
+        assert hits and {(m, p, a) for m, p, a in hits} == {
+            ("POST", "/mcp", "Bearer tok")
+        }
     finally:
         srv.shutdown()
 
