@@ -160,6 +160,11 @@
       owner = "mautrix-telegram";
       mode = "0400";
     };
+    # AS_TOKEN / HS_TOKEN of the iMessage bridge running on the Mac (messaging/bridges.nix).
+    mautrix-imessage-tokens = {
+      file = ../../shared/mautrix-imessage-tokens.env.age;
+      mode = "0400";
+    };
     # AGENT_VAULT_MASTER_PASSWORD — wraps the key that encrypts the vault DB.
     # Changing it needs `agent-vault master-password change` with the server stopped.
     agent-vault-env = {

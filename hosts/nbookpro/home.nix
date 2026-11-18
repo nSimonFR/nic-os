@@ -9,6 +9,7 @@
     ./applications-patch.nix
     ./cloud-mount.nix
     ./linear-t3-relay.nix
+    ./mautrix-imessage.nix
     ./entire-brain.nix
     ./sudo-agent-forward.nix
     ./agent-vault.nix

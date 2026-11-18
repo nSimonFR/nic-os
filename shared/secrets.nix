@@ -36,4 +36,11 @@ in
     nsimon-age
     nsimon-ed25519
   ];
+  # Appservice tokens of the Mac-side iMessage bridge: the Mac (hosts/nbookpro/mautrix-imessage.nix)
+  # and rpi5's registration for it (hosts/rpi5/messaging/bridges.nix) must hold the same pair.
+  "mautrix-imessage-tokens.env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
 }
