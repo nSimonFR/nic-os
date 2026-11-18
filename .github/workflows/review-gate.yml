@@ -9,10 +9,10 @@
 # no workflow a PR triggers may hold `statuses` or `checks` write, no job may be
 # named `review-gate`, and nSimonFR-ai's token must never get the `workflow` scope.
 #
-# Every trigger here runs this file and the script from main, never from a PR:
 # pull_request_target (a new head starts pending), workflow_run of
-# review-signal.yml (CodeRabbit or Nico reviewed) and a schedule (sweep). A
-# dispatch may name any ref, so the script is always checked out from main.
+# review-signal.yml (CodeRabbit or Nico reviewed) and the schedule (sweep) run
+# this file from main. A dispatch runs it from the ref it names (dispatch with
+# `--ref main`); every trigger checks the script out from main.
 name: Review gate
 
 on:
