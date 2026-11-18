@@ -1,17 +1,17 @@
-# Wakes review-gate.yml when CodeRabbit submits a review. A review event runs
+# Wakes review-gate.yml when CodeRabbit or Nico reviews. A review event runs
 # the workflow file of the PR itself, so this one holds no token and no secret:
 # it only exists to start the gate, which runs from main and re-reads everything.
 name: Review signal
 
 on:
   pull_request_review:
-    types: [submitted]
+    types: [submitted, dismissed]
 
 permissions: {}
 
 jobs:
   signal:
-    if: github.event.review.user.login == 'coderabbitai[bot]'
+    if: contains(fromJSON('["coderabbitai[bot]", "nSimonFR"]'), github.event.review.user.login)
     runs-on: ubuntu-latest
     steps:
-      - run: echo "CodeRabbit reviewed; review-gate.yml takes it from here."
+      - run: echo "A review the gate reads changed; review-gate.yml takes it from here."

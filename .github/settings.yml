@@ -29,10 +29,10 @@ labels:
   # Set by .github/workflows/review-gate.yml.
   - name: needs-human
     color: b60205
-    description: The review gate will not merge this; Nico reviews it
+    description: The review gate will not pass this on CodeRabbit alone; Nico reviews it
   - name: auto-merge-eligible
     color: 0e8a16
-    description: CodeRabbit and the review gate approved; merges once green
+    description: CodeRabbit approved and the review gate passed it; merges once green
   - name: bug
     color: d73a4a
     description: Something isn't working
@@ -76,9 +76,9 @@ branches:
     protection:
       # The review lives in the repository ruleset "main" (id 14715738), not here:
       # classic protection takes an App in its bypass list only on organisation
-      # repos, and this one is personal. The ruleset requires one approval, the
-      # last pusher may not be the approver, a push drops the approval, and the
-      # nic-os-renovate App (renovate.json automerge) is its only bypass actor.
+      # repos, and this one is personal. The ruleset requires the `review-gate`
+      # status (review-gate.yml) instead of an approval, and the nic-os-renovate
+      # App (renovate.json automerge) is its only bypass actor.
       # nSimonFR-ai is shared with the agents and must never be one.
       # `null` is "do not manage": the classic rule was removed through the API.
       # Putting a review block back here would block the App again.
@@ -129,14 +129,16 @@ branches:
       enforce_admins: false
       restrictions: null
 
-# The repository ruleset, which holds the PR review rule (classic protection above
-# keeps only the checks). probot/settings matches by `name`, compares the whole
+# The repository ruleset, which holds the merge rule (classic protection above
+# keeps only the CI checks): no required approval, but the `review-gate` status
+# from GitHub Actions (integration 15368), which review-gate.yml posts on the PR
+# head once Nico or CodeRabbit approved it. probot/settings matches by `name`, compares the whole
 # object with what GitHub returns, and DELETES any ruleset not listed here — so
 # keep every field, in GitHub's rule order, and add rulesets here rather than in
 # the UI.
 #
 # nic-os-renovate (App 5756929) is the only bypass actor: it lets Renovate merge
-# claude-code bumps without a review (renovate.json). nSimonFR-ai is shared with
+# claude-code bumps without the gate (renovate.json). nSimonFR-ai is shared with
 # the agents and must never be one.
 rulesets:
   - name: main
@@ -157,12 +159,19 @@ rulesets:
       - type: required_linear_history
       - type: pull_request
         parameters:
-          required_approving_review_count: 1
+          required_approving_review_count: 0
           dismiss_stale_reviews_on_push: true
           required_reviewers: []
           require_code_owner_review: false
-          require_last_push_approval: true
+          require_last_push_approval: false
           required_review_thread_resolution: false
-          require_extra_approval_for_unattributed_changes: true
+          require_extra_approval_for_unattributed_changes: false
           allowed_merge_methods:
             - rebase
+      - type: required_status_checks
+        parameters:
+          strict_required_status_checks_policy: false
+          do_not_enforce_on_create: false
+          required_status_checks:
+            - context: review-gate
+              integration_id: 15368

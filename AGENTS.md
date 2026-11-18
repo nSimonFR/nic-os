@@ -13,9 +13,10 @@ to the file.
 
 ---
 
-Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR — protection rejects
-an approval from the last pusher, so pushing as nSimonFR deadlocks the PR. nSimonFR
-owns/merges; nSimonFR-ai can't self-merge.
+Author commits, pushes and PRs as **nSimonFR-ai**, never nSimonFR: the review gate
+(`.github/workflows/review-gate.yml`) lets CodeRabbit pass only nSimonFR-ai's PRs.
+A PR merges once its `review-gate` status is green, i.e. Nico or CodeRabbit approved
+its head; nSimonFR-ai can't merge without it.
 
 On rpi5, git and gh reach GitHub through Agent Vault, which attaches nSimonFR-ai's
 token (`hosts/rpi5/security/agent-vault.nix`): plain `git push` / `gh pr create` already act as
