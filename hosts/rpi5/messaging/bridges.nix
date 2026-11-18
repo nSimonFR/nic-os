@@ -63,6 +63,8 @@ let
     hash = "sha256-gNa9v3cSHAbZB+khnVJ75S6ViYO+YFXVYr4d6k4aHTM=";
   };
 
+  steamBridge = pkgs.callPackage ../../../pkgs/services/matrix-steam-bridge.nix { };
+
   # port: the bridge's appservice listener, loopback.
   bridges = {
     whatsapp = {
@@ -110,6 +112,16 @@ let
     twitter = {
       package = release "twitter" twitterVersion twitterSrc;
       port = 29327;
+    };
+    # Community bridge (not mautrix): a Go half plus a C# gRPC service it spawns
+    # from steam_bridge_path. The service binds 0.0.0.0:50051 (hardcoded, firewalled
+    # off); idle RSS measured 66 MB on 2026-11-18.
+    steam = {
+      package = steamBridge;
+      port = 29344;
+      network.steam_bridge_path = stateDir "steam";
+      # The bridge runs `<path>/steamkit-service` with cwd there: keep it writable.
+      preStart = "ln -sfn ${steamBridge.steamkit-service}/bin/steamkit-service ${stateDir "steam"}/steamkit-service";
     };
     # Pre-bridgev2 (bridgev2 is only on an unreleased branch): older config
     # layout. nixpkgs' build needs the insecure-flagged libolm; upstream's is static.
@@ -263,7 +275,10 @@ let
         ExecCondition = lib.optional (
           b ? skipUnlessSet
         ) "${pkgs.bash}/bin/sh -c '[ -n \"$$${b.skipUnlessSet}\" ] && [ \"$$${b.skipUnlessSet}\" != 0 ]'";
-        ExecStartPre = "${render} -i ${cfgFile} -o ${dir}/config.yaml";
+        ExecStartPre = [
+          "${render} -i ${cfgFile} -o ${dir}/config.yaml"
+        ]
+        ++ lib.optional (b ? preStart) "${pkgs.runtimeShell} -c '${b.preStart}'";
         ExecStart = "${lib.getExe b.package} -c ${dir}/config.yaml -r ${dir}/registration.yaml";
         Restart = "always";
         RestartSec = "30s";
