@@ -142,19 +142,19 @@ let
       auth.type = "oauth2_dcr";
     };
     openaidocs.url = "https://developers.openai.com/mcp";
-    # Linear's hosted MCP takes a personal API key as a bearer token. Sleepy, so
-    # Aperture does not poll it: polling spent the key's 2500 requests/hour and
-    # Linear answered 429 with no tools (2026-11-18).
+    # Linear's hosted MCP, per-user OAuth like Cal.com: connect each once in the
+    # Aperture portal, picking the matching workspace. Aperture polls a
+    # shared-credential connector every few seconds, which spent an API key's
+    # 2500 requests/hour (429, no tools, 2026-11-18); it does not poll per-user
+    # OAuth ones, and send_caller_identity needs a tailnet upstream.
     linear = {
       url = "https://mcp.linear.app/mcp";
-    }
-    // bearer "LINEAR_KEY"
-    // sleepy;
+      auth.type = "oauth2_dcr";
+    };
     lineartrusk = {
       url = "https://mcp.linear.app/mcp";
-    }
-    // bearer "LINEAR_KEY_TRUSK"
-    // sleepy;
+      auth.type = "oauth2_dcr";
+    };
   };
   # Tools granted per connector (default: all). A grant also filters tools/list, which
   # is what every client pays for in context: Cal.com alone serves 74 tools / 229 KB,
@@ -394,8 +394,6 @@ in
           "AIRTRAIL_MCP_TOKEN"
           "HA_TOKEN"
           "DAWARICH_API_KEY"
-          "LINEAR_KEY"
-          "LINEAR_KEY_TRUSK"
         ]
         ++ builtins.attrNames connectorCredentials
       );
