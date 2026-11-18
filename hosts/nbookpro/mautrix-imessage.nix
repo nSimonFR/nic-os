@@ -1,7 +1,9 @@
 # mautrix-imessage on the Mac: the only bridge that cannot live on rpi5, since it
 # reads Messages' chat.db and sends through AppleScript. rpi5's Tuwunel pushes
 # events to this appservice over the tailnet (registration: hosts/rpi5/messaging/
-# bridges.nix, same tokens through agenix), so no wsproxy is involved.
+# bridges.nix, same tokens through agenix), so no wsproxy is involved. The bridge
+# listens on loopback; tailmux's `serve` entry for the port (configuration.nix)
+# is what the tailnet address reaches.
 #
 # Needs, by hand and once (macOS gates them on the exact binary, so a new store
 # path after a bump asks again; check with `mautrix-imessage -p`):
@@ -21,8 +23,8 @@ let
   home = config.home.homeDirectory;
   stateDir = "${home}/Library/Application Support/mautrix-imessage";
   logs = "${home}/Library/Logs/mautrix-imessage.log";
-  macIp = "100.78.185.89"; # this Mac on the tailnet; the registration in bridges.nix points here
   port = 29345;
+  identity = builtins.head config.age.identityPaths;
   tokensFile = ../../shared/mautrix-imessage-tokens.env.age;
   package = pkgs.callPackage ../../pkgs/services/mautrix-imessage.nix { };
 
@@ -33,7 +35,7 @@ let
       websocket_proxy = null;
     };
     appservice = {
-      hostname = macIp;
+      hostname = "127.0.0.1";
       inherit port;
       id = "imessage";
       bot.username = "imessagebot";
@@ -61,21 +63,21 @@ let
   run = pkgs.writeShellApplication {
     name = "mautrix-imessage-run";
     runtimeInputs = [
+      pkgs.age
       pkgs.envsubst
       pkgs.coreutils
-      pkgs.gnugrep
       pkgs.ffmpeg-headless # voice notes: Matrix opus → CAF
     ];
     text = ''
-      # Reloaded with the token pair: rotating ${tokensFile} restarts the agent.
       umask 077
-      # The listener binds the tailnet IP once, and a failed bind leaves the bridge up.
-      until /sbin/ifconfig | grep -q "inet ${macIp} "; do sleep 5; done
       mkdir -p "${stateDir}"
       cd "${stateDir}"
+      # Decrypted from the ciphertext this build holds, in memory: reading the
+      # agenix-mounted file could race a rotation's activation and keep the old pair.
+      # The path also makes the plist change, and so restart the agent, on rotation.
+      tokens=$(age -d -i "${identity}" ${tokensFile})
       set -a
-      # shellcheck source=/dev/null
-      . "${config.age.secrets.mautrix-imessage-tokens.path}"
+      eval "$tokens"
       set +a
       envsubst < ${(pkgs.formats.yaml { }).generate "mautrix-imessage.yaml" settings} > config.yaml
       exec ${lib.getExe package} -c config.yaml
@@ -83,8 +85,6 @@ let
   };
 in
 {
-  age.secrets.mautrix-imessage-tokens.file = tokensFile;
-
   home.packages = [ package ];
 
   launchd.agents.mautrix-imessage = {
