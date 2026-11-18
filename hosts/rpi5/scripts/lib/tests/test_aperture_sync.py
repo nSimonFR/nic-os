@@ -176,7 +176,7 @@ def connector_cfg(tmp_path, secrets):
 def test_connector_secret_filled_from_env(tmp_path):
     base, cfg = connector_cfg(tmp_path, {"MCP_API_TOKEN": "tok"})
     fake = Aperture(held={"old": True})
-    assert ap.run(cfg, opener=fake) == 0
+    assert ap.run(cfg, opener=fake, sleep=lambda s: None) == 0
     servers = json.loads(fake.puts[0]["config"])["connectors"]["servers"]
     assert servers["sure"]["auth"]["secret"] == "tok"
     assert (
@@ -245,7 +245,7 @@ def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
         return fake(req, timeout)
 
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
-    assert calls.index(("GET", "http://sure/mcp")) < calls.index(
+    assert calls.index(("POST", "http://sure/mcp")) < calls.index(
         ("PUT", "http://ap/api/config")
     )
     assert ("GET", "http://docs/mcp") not in calls
@@ -254,7 +254,7 @@ def test_wakes_sleepy_connectors_before_a_push_only(tmp_path):
     calls.clear()
     fake.held = json.loads(fake.puts[0]["config"])
     assert ap.run(cfg, opener=opener) == 0
-    assert ("GET", "http://sure/mcp") not in calls
+    assert ("POST", "http://sure/mcp") not in calls
 
 
 def test_wakes_before_the_first_put_even_when_the_first_read_fails(tmp_path):
@@ -282,6 +282,68 @@ def test_wakes_before_the_first_put_even_when_the_first_read_fails(tmp_path):
 
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
     assert len(fake.puts) == 1
-    assert calls.index(("GET", "http://sure/mcp")) < calls.index(
+    assert calls.index(("POST", "http://sure/mcp")) < calls.index(
         ("PUT", "http://ap/api/config")
     )
+
+
+def test_wake_initializes_with_the_connector_token_until_a_result():
+    config = {
+        "connectors": {
+            "servers": {
+                "immich": {
+                    "url": "http://immich/mcp",
+                    "send_caller_identity": True,
+                    "auth": {"type": "bearer_token", "secret": "tok"},
+                },
+                "rx": {
+                    "url": "http://rx/mcp",
+                    "send_caller_identity": True,
+                    "auth": {
+                        "type": "api_key",
+                        "in": "header",
+                        "name": "x-api-key",
+                        "secret": "k",
+                    },
+                },
+                "docs": {"url": "http://docs/mcp"},
+            }
+        }
+    }
+    seen, answers = [], {"http://immich/mcp": [OSError("502"), b'{"error": {}}']}
+
+    def opener(req, timeout=None):
+        seen.append((req.full_url, req.get_method(), dict(req.header_items())))
+        pending = answers.get(req.full_url) or []
+        if pending:
+            nxt = pending.pop(0)
+            if isinstance(nxt, Exception):
+                raise nxt
+            return Resp(nxt)
+        return Resp(
+            b'event: message\ndata: {"jsonrpc": "2.0", "id": 1, "result": {}}\n'
+        )
+
+    assert ap.wake(config, opener=opener, sleep=lambda s: None) == []
+    immich = [h for u, m, h in seen if u == "http://immich/mcp"]
+    assert len(immich) == 3 and immich[0]["Authorization"] == "Bearer tok"
+    assert [h["X-api-key"] for u, m, h in seen if u == "http://rx/mcp"] == ["k"]
+    assert all(m == "POST" for _, m, _ in seen)
+    assert "http://docs/mcp" not in [u for u, _, _ in seen]
+
+
+def test_wake_reports_a_connector_that_never_initializes():
+    config = {
+        "connectors": {
+            "servers": {
+                "sure": {"url": "http://sure/mcp", "send_caller_identity": True}
+            }
+        }
+    }
+
+    def opener(req, timeout=None):
+        raise OSError("cold")
+
+    assert ap.wake(config, opener=opener, sleep=lambda s: None, deadline=30) == [
+        "http://sure/mcp"
+    ]

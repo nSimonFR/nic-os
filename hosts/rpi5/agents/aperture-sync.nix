@@ -205,24 +205,6 @@ let
     ];
     linear = linearTools;
     lineartrusk = linearTools;
-    # 14 of its 117 read-only tools: search, albums, people, memories. No smart search
-    # (its CLIP model runs on beast, frozen).
-    immich = map (op: "immich_${op}") [
-      "searchassets"
-      "searchrandom"
-      "searchperson"
-      "searchplaces"
-      "getsearchsuggestions"
-      "getassetsbycity"
-      "getassetinfo"
-      "getallalbums"
-      "getalbuminfo"
-      "getallpeople"
-      "getperson"
-      "searchmemories"
-      "getmemory"
-      "getalltags"
-    ];
   };
   # Not `<id>/**`: that also opens the raw `/v1/connectors/<id>/` proxy path.
   connectorGrants = lib.concatMap (

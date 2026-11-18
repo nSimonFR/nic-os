@@ -17,6 +17,16 @@ let
         lib.composeManyExtensions [
           inputs.pyproject-build-systems.overlays.wheel
           (workspace.mkPyprojectOverlay { sourcePreference = "wheel"; })
+          # Its docs://usage-guide resource reads site-packages/docs/usage-guide.md,
+          # which setuptools does not install.
+          (final: prev: {
+            mcp4immich = prev.mcp4immich.overrideAttrs (old: {
+              postInstall = (old.postInstall or "") + ''
+                install -Dm644 ${inputs.mcp4immich-src}/docs/usage-guide.md \
+                  $out/${final.python.sitePackages}/docs/usage-guide.md
+              '';
+            });
+          })
         ]
       );
   venv = pythonSet.mkVirtualEnv "immich-mcp-env" workspace.deps.default;

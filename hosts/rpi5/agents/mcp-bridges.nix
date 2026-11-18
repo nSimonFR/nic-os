@@ -112,11 +112,36 @@ let
   };
 
   immichMcp = pkgs.callPackage ../../../pkgs/agents/immich-mcp.nix { inherit inputs; };
+  # mcp4immich gives Immich 10 s per startup check; a cold Immich takes longer
+  # behind its socket-activate proxy, which allows 60 s.
   immichMcpRun = pkgs.writeShellScript "immich-mcp-run" ''
     IMMICH_API_KEY=$(tr -d '\r\n' < "$CREDENTIALS_DIRECTORY/apikey")
     export IMMICH_API_KEY
+    for _ in $(seq 60); do
+      ${pkgs.curl}/bin/curl -sf -m 5 "$IMMICH_BASE_URL/api/server/ping" >/dev/null && break
+      sleep 1
+    done
     exec ${immichMcp}/bin/immich-mcp
   '';
+  # 14 of its 117 read-only tools: search, albums, people, memories. No smart
+  # search (its CLIP model runs on beast, frozen). Enforced here, so a client
+  # holding the bridge token directly gets nothing more than Aperture serves.
+  immichTools = map (op: "immich_${op}") [
+    "searchassets"
+    "searchrandom"
+    "searchperson"
+    "searchplaces"
+    "getsearchsuggestions"
+    "getassetsbycity"
+    "getassetinfo"
+    "getallalbums"
+    "getalbuminfo"
+    "getallpeople"
+    "getperson"
+    "searchmemories"
+    "getmemory"
+    "getalltags"
+  ];
 
   bridges = {
     mail = {
@@ -238,6 +263,7 @@ let
       units = [ ];
       command = [ "${immichMcpRun}" ];
       exclude = [ ];
+      include = immichTools;
       environment = {
         # Immich's socket-activate proxy: a call wakes it.
         IMMICH_BASE_URL = "http://127.0.0.1:2283";
@@ -282,6 +308,10 @@ let
                 "--exclude"
                 t
               ]) b.exclude
+              ++ lib.concatMap (t: [
+                "--include"
+                t
+              ]) (b.include or [ ])
               ++ [ "--" ]
               ++ b.command
             );

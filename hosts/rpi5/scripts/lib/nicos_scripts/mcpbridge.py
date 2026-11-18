@@ -1,9 +1,10 @@
 """mcp-stdio-bridge: serve a stdio MCP server over Streamable HTTP, for Aperture.
 
-    mcp-stdio-bridge [--exclude TOOL]... -- COMMAND [ARG]...
+    mcp-stdio-bridge [--exclude TOOL | --include TOOL]... -- COMMAND [ARG]...
 
 One long-lived child, initialized by the bridge; requests are serialized to it.
-Excluded tools are neither listed nor callable. With a `token` credential
+Excluded tools, and with any --include every tool not included, are neither
+listed nor callable. With a `token` credential
 (LoadCredential=token:…), POST /mcp needs `Authorization: Bearer <token>`.
 Env: MCP_BRIDGE_HOST (127.0.0.1), MCP_BRIDGE_PORT.
 """
@@ -145,7 +146,10 @@ class Child:
             self.proc = None
 
 
-def dispatcher(child, exclude=frozenset()):
+def dispatcher(child, exclude=frozenset(), include=None):
+    def allowed(name):
+        return name not in exclude and (include is None or name in include)
+
     def dispatch(msg):
         method, rid = msg.get("method"), msg.get("id")
         if rid is None:
@@ -156,7 +160,7 @@ def dispatcher(child, exclude=frozenset()):
                 return {"jsonrpc": "2.0", "id": rid, "result": child.initialize()}
             if method == "ping":
                 return {"jsonrpc": "2.0", "id": rid, "result": {}}
-            if method == "tools/call" and (params or {}).get("name") in exclude:
+            if method == "tools/call" and not allowed((params or {}).get("name")):
                 return mcpstdio._error(rid, -32602, f"unknown tool: {params['name']}")
             reply = child.call(method, params)
         except (OSError, RuntimeError, TimeoutError) as e:
@@ -167,31 +171,41 @@ def dispatcher(child, exclude=frozenset()):
             tools = reply["result"].get("tools") or []
             reply["result"] = {
                 **reply["result"],
-                "tools": [t for t in tools if t.get("name") not in exclude],
+                "tools": [t for t in tools if allowed(t.get("name"))],
             }
         return reply
 
     return dispatch
 
 
+USAGE = (
+    "usage: mcp-stdio-bridge [--exclude TOOL | --include TOOL]... -- COMMAND [ARG]..."
+)
+
+
 def parse_args(argv):
+    """-> (exclude, include or None, command)."""
     if "--" not in argv:
-        raise ValueError(
-            "usage: mcp-stdio-bridge [--exclude TOOL]... -- COMMAND [ARG]..."
-        )
+        raise ValueError(USAGE)
     split = argv.index("--")
     opts, command = argv[:split], argv[split + 1 :]
-    if not command or len(opts) % 2 or any(o != "--exclude" for o in opts[::2]):
-        raise ValueError(
-            "usage: mcp-stdio-bridge [--exclude TOOL]... -- COMMAND [ARG]..."
-        )
-    return frozenset(opts[1::2]), command
+    flags = opts[::2]
+    if (
+        not command
+        or len(opts) % 2
+        or any(o not in ("--exclude", "--include") for o in flags)
+    ):
+        raise ValueError(USAGE)
+    pairs = list(zip(flags, opts[1::2]))
+    exclude = frozenset(v for f, v in pairs if f == "--exclude")
+    include = frozenset(v for f, v in pairs if f == "--include") or None
+    return exclude, include, command
 
 
 def main(argv=None, env=None):
     argv = sys.argv[1:] if argv is None else argv
     try:
-        exclude, command = parse_args(argv)
+        exclude, include, command = parse_args(argv)
     except ValueError as e:
         log(str(e))
         return 2
@@ -202,7 +216,11 @@ def main(argv=None, env=None):
         return 2
     child = Child(command)
     mcpstdio.serve_dispatch(
-        dispatcher(child, exclude), log, host, port, mcpstdio.credential_token(env)
+        dispatcher(child, exclude, include),
+        log,
+        host,
+        port,
+        mcpstdio.credential_token(env),
     )
     return 0
 
