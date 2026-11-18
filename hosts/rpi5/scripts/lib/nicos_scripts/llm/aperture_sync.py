@@ -18,7 +18,8 @@ backend is still cold comes back with no tools until the next change.
 
 Aperture hides stored secrets, so a rotated one cannot be seen in its config:
 APERTURE_SYNC_STATE keeps a SHA-256 of the secrets last pushed, and a change in
-it forces a push. Deleting that file forces the next push.
+it forces a push. It is left empty while a sleepy connector did not answer the
+wake, so the next run pushes again. Deleting that file forces the next push.
 
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
 in APERTURE_CONNECTOR_SECRETS, or else the systemd credential of that name
@@ -245,28 +246,46 @@ def auth_headers(server):
     return {}
 
 
+def sse_events(text):
+    """The data of each SSE event, its `data:` lines joined."""
+    events, data = [], []
+    for line in text.splitlines() + [""]:
+        if line.startswith("data:"):
+            data.append(line[5:].removeprefix(" "))
+        elif not line and data:
+            events.append("\n".join(data))
+            data = []
+    return events
+
+
 def initialized(body):
-    """A JSON-RPC `result` in a JSON or SSE answer."""
+    """The answer (plain JSON or SSE) holds the JSON-RPC response to INITIALIZE."""
     text = body.decode(errors="replace")
-    for chunk in [text] + [
-        ln[5:] for ln in text.splitlines() if ln.startswith("data:")
-    ]:
+    for chunk in [text, *sse_events(text)]:
         try:
-            if "result" in json.loads(chunk):
-                return True
-        except (ValueError, TypeError):
+            msg = json.loads(chunk)
+        except ValueError:
             continue
+        if (
+            isinstance(msg, dict)
+            and msg.get("jsonrpc") == "2.0"
+            and msg.get("id") == 1
+            and isinstance(msg.get("result"), dict)
+            and "protocolVersion" in msg["result"]
+        ):
+            return True
     return False
 
 
-def wake(config, opener=None, sleep=time.sleep, deadline=90):
-    """MCP-initialize each sleepy connector until it answers with a result: its
-    socket proxy wakes the backend, and the backend has started its MCP server
-    (a stdio bridge spawns its child on initialize). Returns the URLs still not
-    ready after `deadline` seconds."""
+def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotonic):
+    """MCP-initialize each sleepy connector until it answers: its socket proxy
+    wakes the backend, and the backend has started its MCP server (a stdio
+    bridge spawns its child on initialize). Returns the URLs still not ready
+    once `deadline` seconds have passed, by the clock or in sleeps."""
     opener = opener or urllib.request.urlopen
     servers = config.get("connectors", {}).get("servers", {})
     sleepy = [s for s in servers.values() if s.get("send_caller_identity")]
+    end = clock() + deadline
 
     def ready(server):
         req = urllib.request.Request(
@@ -279,15 +298,22 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90):
             },
             method="POST",
         )
-        for _ in range(max(1, deadline // 10)):
+        slept = 0
+        while True:
+            left = min(end - clock(), deadline - slept)
+            if left <= 0:
+                return server["url"]
             try:
-                with opener(req, timeout=60) as r:
+                with opener(req, timeout=max(1, left)) as r:
                     if initialized(r.read()):
                         return None
             except OSError:
                 pass
-            sleep(10)
-        return server["url"]
+            pause = min(10, end - clock(), deadline - slept)
+            if pause <= 0:
+                return server["url"]
+            sleep(pause)
+            slept += pause
 
     # All at once: the deadline then bounds the whole wake, not one batch.
     with ThreadPoolExecutor(max_workers=max(1, len(sleepy))) as pool:
@@ -307,31 +333,38 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
         log(f"connector {cid}: secret unset, left out")
     count = len(want["providers"][cfg.provider]["models"])
     secrets = secrets_digest(want)
-    rotated = bool(cfg.state_file) and pushed_digest(cfg) != secrets
+    # A new secret, or a connector left unready by the last push (no digest).
+    stale = bool(cfg.state_file) and pushed_digest(cfg) != secrets
 
     woken = False
     for attempt in range(1, attempts + 1):
         try:
             have, digest = current(cfg, opener=opener)
-            if comparable(have) == comparable(want) and not rotated:
+            if comparable(have) == comparable(want) and not stale:
                 log(f"unchanged ({count} gate models)")
                 return 0
             if not cfg.apply:
                 log(f"would push {count} gate models (dry run)")
                 return 0
             if not woken:
-                for url in wake(want, opener=opener, sleep=sleep):
-                    log(
-                        f"{url} not ready; its tools may be missing until the next push"
-                    )
+                unready = wake(want, opener=opener, sleep=sleep)
+                for url in unready:
+                    log(f"{url} not ready; pushing again next run")
                 woken = True
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):
-                record_digest(cfg, secrets)
-                why = " (secrets changed)" if rotated else ""
+                why = " (secrets changed or a connector was unready)" if stale else ""
                 log(
                     f"pushed {count} gate models{why} (hash {digest} -> {result.get('hash')})"
                 )
+                # No digest while a connector is unready: the next run pushes again
+                # and re-lists its tools.
+                try:
+                    record_digest(cfg, "" if unready else secrets)
+                except OSError as e:
+                    log(
+                        f"pushed, but {cfg.state_file} unwritable ({e}): next run pushes again"
+                    )
                 return 0
             err = (result.get("error") or {}).get("message") or result.get("message")
         except (OSError, ValueError) as e:

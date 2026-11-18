@@ -160,8 +160,10 @@ def dispatcher(child, exclude=frozenset(), include=None):
                 return {"jsonrpc": "2.0", "id": rid, "result": child.initialize()}
             if method == "ping":
                 return {"jsonrpc": "2.0", "id": rid, "result": {}}
-            if method == "tools/call" and not allowed((params or {}).get("name")):
-                return mcpstdio._error(rid, -32602, f"unknown tool: {params['name']}")
+            if method == "tools/call":
+                name = params.get("name") if isinstance(params, dict) else None
+                if not isinstance(name, str) or not allowed(name):
+                    return mcpstdio._error(rid, -32602, f"unknown tool: {name}")
             reply = child.call(method, params)
         except (OSError, RuntimeError, TimeoutError) as e:
             log(f"{method} failed: {e}")
