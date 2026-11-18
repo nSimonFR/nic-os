@@ -18,7 +18,8 @@ backend is still cold comes back with no tools until the next change.
 
 Aperture hides stored secrets, so a rotated one cannot be seen in its config:
 APERTURE_SYNC_STATE keeps a SHA-256 of the secrets last pushed, and a change in
-it forces a push. It is left empty while a sleepy connector did not answer the
+it forces a push, and so does APERTURE_MCP_REVISION (the local MCP servers'
+command lines). It is left empty while a sleepy connector did not answer the
 wake, so the next run pushes again. Deleting that file forces the next push.
 
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
@@ -65,6 +66,7 @@ class Config:
     connector_secrets: dict = field(default_factory=dict)
     apply: bool = False
     state_file: str = ""
+    servers_revision: str = ""
 
     @classmethod
     def from_env(cls, env=None):
@@ -85,6 +87,7 @@ class Config:
             },
             apply=env_str("APERTURE_APPLY", "", env) == "1",
             state_file=env_str("APERTURE_SYNC_STATE", "", env),
+            servers_revision=env_str("APERTURE_MCP_REVISION", "", env),
         )
 
 
@@ -172,7 +175,7 @@ def comparable(config):
     return out
 
 
-def secrets_digest(config):
+def secrets_digest(config, revision=""):
     """SHA-256 over every secret `comparable` drops, so it never leaves this host."""
     found = [
         (f"provider:{k}", p.get("apikey", ""))
@@ -185,6 +188,7 @@ def secrets_digest(config):
         (f"connector:{k}", (s.get("auth") or {}).get("secret", ""))
         for k, s in config.get("connectors", {}).get("servers", {}).items()
     ]
+    found.append(("servers", revision))
     return hashlib.sha256(json.dumps(sorted(found)).encode()).hexdigest()
 
 
@@ -426,7 +430,10 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
     for cid in missing_secrets(base, cfg):
         log(f"connector {cid}: secret unset, left out")
     count = len(want["providers"][cfg.provider]["models"])
-    secrets = secrets_digest(want)
+    # A local MCP server's tools can change (a new version, an --exclude) with
+    # no change in Aperture's config, and Aperture never re-lists a sleepy
+    # connector: the servers' revision forces a push (and a wake) too.
+    secrets = secrets_digest(want, cfg.servers_revision)
     # A new secret, or a connector left unready by the last push (no digest).
     stale = bool(cfg.state_file) and pushed_digest(cfg) != secrets
 
