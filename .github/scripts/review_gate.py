@@ -10,14 +10,23 @@ pending, or null: post nothing) and description.
 PROTECTED is the only path list; a pattern that matches no file on main (a
 move) refuses every agent PR until it is updated.
 
-Usage: review_gate.py PR_JSON FILES_JSON REVIEWS_JSON
-  PR_JSON      `gh api repos/{repo}/pulls/{n}`
-  FILES_JSON   `gh api --paginate --slurp repos/{repo}/pulls/{n}/files`
-  REVIEWS_JSON `gh api --paginate --slurp repos/{repo}/pulls/{n}/reviews`
+CodeRabbit's approval counts only if it reached it alone: every thread it
+opened was resolved by itself or Nico, no one but Nico asked it to approve or
+resolve, and no outsider commented (the repo is public: anyone can talk
+CodeRabbit into resolving a thread; agents author the PRs).
+
+Usage: review_gate.py PR_JSON FILES_JSON REVIEWS_JSON COMMENTS_JSON THREADS_JSON
+  PR_JSON       `gh api repos/{repo}/pulls/{n}`
+  FILES_JSON    pages of files: `gh api --paginate compare/{base}...{head} --jq .files | jq -s .`
+  REVIEWS_JSON  `gh api --paginate --slurp repos/{repo}/pulls/{n}/reviews`
+  COMMENTS_JSON [{login, body}] of the PR's issue and review comments
+  THREADS_JSON  GraphQL pullRequest.reviewThreads {pageInfo{hasNextPage},
+                nodes{isResolved resolvedBy{login} comments(first:1){nodes{author{login}}}}}
 """
 
 import fnmatch
 import json
+import re
 import pathlib
 import subprocess
 import sys
@@ -28,6 +37,12 @@ HUMAN = "nSimonFR"
 # Renovate merges through its ruleset bypass and waits on every status it
 # sees: a pending one would stop its automerge.
 RENOVATE = "nic-os-renovate[bot]"
+# Who may resolve CodeRabbit's threads or send it commands. GraphQL names
+# the bot `coderabbitai` as a comment author and `coderabbitai[bot]` as a resolver.
+TRUSTED = {JUDGE, HUMAN}
+# Who may comment on a PR at all for CodeRabbit's approval to count.
+INSIDERS = TRUSTED | AUTHORS | {RENOVATE, "github-actions[bot]"}
+COMMAND = re.compile(r"@coderabbit(ai)?\b.*\b(approve|resolve)", re.I | re.S)
 MAX_LINES = 150
 MAX_FILES = 6
 
@@ -90,10 +105,41 @@ def approved(reviews, login, head):
     return last.get("state") == "APPROVED" and last.get("commit_id") == head
 
 
-def decide(pr, files, reviews, tracked):
+def tampered(reviews, comments, threads):
+    """Why CodeRabbit's approval may not be its own; None if no reason."""
+    if threads is None or comments is None:
+        return ["CodeRabbit's threads or the comments could not be read"]
+    reasons = []
+    if (threads.get("pageInfo") or {}).get("hasNextPage"):
+        reasons.append("more review threads than the gate reads")
+    for t in threads.get("nodes") or []:
+        first = ((t.get("comments") or {}).get("nodes") or [{}])[0]
+        if (first.get("author") or {}).get("login") not in ("coderabbitai", JUDGE):
+            continue
+        by = (t.get("resolvedBy") or {}).get("login")
+        if t.get("isResolved") and by not in TRUSTED:
+            reasons.append(f"a CodeRabbit thread was resolved by {by}")
+    said = list(comments) + [
+        {"login": (r.get("user") or {}).get("login"), "body": r.get("body")}
+        for r in reviews
+    ]
+    for c in said:
+        login = c.get("login")
+        if login not in INSIDERS:
+            reasons.append(f"{login} commented: only Nico can clear it")
+        elif login not in TRUSTED and COMMAND.search(c.get("body") or ""):
+            reasons.append(f"{login} asked CodeRabbit to approve or resolve")
+    return sorted(set(reasons)) or None
+
+
+def decide(pr, files, reviews, tracked, comments=None, threads=None):
     v = verdict(pr, files, tracked)
     head = (pr.get("head") or {}).get("sha", "")
     judged = approved(reviews, JUDGE, head)
+    why = tampered(reviews, comments, threads) if judged else None
+    if why:
+        v = {"ok": False, "reasons": sorted(set(v["reasons"] + why))}
+        judged = False
     if approved(reviews, HUMAN, head):
         state, description = "success", "Nico approved this commit"
     elif v["ok"] and judged:
@@ -136,8 +182,10 @@ def main(argv, tracked=None):
     pr = json.load(open(argv[1]))
     files = [f for page in json.load(open(argv[2])) for f in page]
     reviews = [r for page in json.load(open(argv[3])) for r in page]
+    comments = json.load(open(argv[4])) if len(argv) > 4 else None
+    threads = json.load(open(argv[5])) if len(argv) > 5 else None
     tracked = tracked_files() if tracked is None else tracked
-    print(json.dumps(decide(pr, files, reviews, tracked)))
+    print(json.dumps(decide(pr, files, reviews, tracked, comments, threads)))
     return 0
 
 
