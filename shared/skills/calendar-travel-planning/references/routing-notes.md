@@ -7,7 +7,8 @@
  date '+%Y-%m-%d %H:%M %Z'
 
 # Nextcloud personal calendar, narrow range: the Aperture tool
-# nextcloud_nc_calendar_list_events (calendar_name=personal, start_date, end_date)
+# nextcloud_nc_calendar_list_events (calendar_name=personal, start_date, end_date).
+# Always pass both dates: without them recurring events are not expanded.
 
 # Driving/walking/cycling baseline (maps skill is under productivity/maps)
 python3 ~/.hermes/skills/productivity/maps/scripts/maps_client.py \

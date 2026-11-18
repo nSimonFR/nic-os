@@ -12,9 +12,9 @@ Aperture's PUT takes the current `hash` (optimistic concurrency). If either
 list cannot be read, Aperture is left untouched rather than shrunk. Writes
 only with APERTURE_APPLY=1.
 
-Before a push, every sleepy connector (`send_caller_identity`) is woken: Aperture
-re-lists connectors on a config change, and one whose backend is still cold
-comes back with no tools until the next change.
+Before a push, every sleepy connector (`send_caller_identity`) is MCP-initialized
+until it answers: Aperture re-lists connectors on a config change, and one whose
+backend is still cold comes back with no tools until the next change.
 
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
 in APERTURE_CONNECTOR_SECRETS, or else the systemd credential of that name
@@ -182,22 +182,76 @@ def put(cfg, config, digest, opener=None):
     return http_json(req, timeout=30, opener=opener)
 
 
-def wake(config, opener=None, timeout=90):
-    """GET each sleepy connector's URL; its socket proxy answers once the backend
-    is up. Any answer will do, an error included."""
+INITIALIZE = json.dumps(
+    {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-03-26",
+            "capabilities": {},
+            "clientInfo": {"name": "aperture-config-sync", "version": "1"},
+        },
+    }
+).encode()
+
+
+def auth_headers(server):
+    """The headers Aperture itself sends this connector."""
+    auth = server.get("auth") or {}
+    if auth.get("type") == "bearer_token":
+        return {"Authorization": f"Bearer {auth['secret']}"}
+    if auth.get("type") == "api_key" and auth.get("in") == "header":
+        return {auth["name"]: auth["secret"]}
+    return {}
+
+
+def initialized(body):
+    """A JSON-RPC `result` in a JSON or SSE answer."""
+    text = body.decode(errors="replace")
+    for chunk in [text] + [
+        ln[5:] for ln in text.splitlines() if ln.startswith("data:")
+    ]:
+        try:
+            if "result" in json.loads(chunk):
+                return True
+        except (ValueError, TypeError):
+            continue
+    return False
+
+
+def wake(config, opener=None, sleep=time.sleep, deadline=90):
+    """MCP-initialize each sleepy connector until it answers with a result: its
+    socket proxy wakes the backend, and the backend has started its MCP server
+    (a stdio bridge spawns its child on initialize). Returns the URLs still not
+    ready after `deadline` seconds."""
     opener = opener or urllib.request.urlopen
     servers = config.get("connectors", {}).get("servers", {})
-    urls = [s["url"] for s in servers.values() if s.get("send_caller_identity")]
+    sleepy = [s for s in servers.values() if s.get("send_caller_identity")]
 
-    def hit(url):
-        try:
-            opener(urllib.request.Request(url), timeout=timeout).close()
-        except OSError:
-            pass
+    def ready(server):
+        req = urllib.request.Request(
+            server["url"],
+            data=INITIALIZE,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json, text/event-stream",
+                **auth_headers(server),
+            },
+            method="POST",
+        )
+        for _ in range(max(1, deadline // 10)):
+            try:
+                with opener(req, timeout=60) as r:
+                    if initialized(r.read()):
+                        return None
+            except OSError:
+                pass
+            sleep(10)
+        return server["url"]
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        list(pool.map(hit, urls))
-    return urls
+        return [u for u in pool.map(ready, sleepy) if u]
 
 
 def run(cfg, opener=None, sleep=time.sleep, attempts=5):
@@ -224,7 +278,10 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
                 log(f"would push {count} gate models (dry run)")
                 return 0
             if not woken:
-                log(f"woke {len(wake(want, opener=opener))} sleepy connectors")
+                for url in wake(want, opener=opener, sleep=sleep):
+                    log(
+                        f"{url} not ready; its tools may be missing until the next push"
+                    )
                 woken = True
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):

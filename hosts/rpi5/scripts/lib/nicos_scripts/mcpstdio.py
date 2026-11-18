@@ -124,11 +124,12 @@ def dispatch_handler(dispatch, token=None):
         def do_POST(self):
             if self.path != "/mcp":
                 return self._send(404)
-            raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+            # Token first: an unauthenticated peer never gets a body read.
             if expected and not hmac.compare_digest(
                 (self.headers.get("Authorization") or "").encode(), expected
             ):
                 return self._send(401, {"error": "unauthorized"})
+            raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
             try:
                 reply = dispatch(json.loads(raw))
             except ValueError:

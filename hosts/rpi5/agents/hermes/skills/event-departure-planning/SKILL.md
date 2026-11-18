@@ -17,7 +17,7 @@ Use this workflow for prompts such as: “pour mon prochain événement, à quel
 
 ## Workflow
 
-1. **Get current time** with `date` and query the personal Nextcloud calendar live with `mcp__aperture__nextcloud_nc_calendar_list_events` (calendar `personal`).
+1. **Get current time** with `date` and query the personal Nextcloud calendar live with `mcp__aperture__nextcloud_nc_calendar_list_events` (calendar `personal`), always with both `start_date` and `end_date`: without them recurring events are not expanded and an old series start comes back instead of the next occurrence.
    - For “next event”, inspect today and the following days until a timed event with a location is found.
    - Use the current residence: 52 boulevard Arago, 75013 Paris through the end of October 2026; otherwise 82 rue Alexandre Dumas, Paris.
    - Completion: event name, start time, location, and origin are known.

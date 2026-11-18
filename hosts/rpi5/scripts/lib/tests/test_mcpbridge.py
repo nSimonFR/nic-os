@@ -1,6 +1,7 @@
 """mcp-stdio-bridge: a stdio MCP server behind the minimal HTTP transport."""
 
 import json
+import socket
 import sys
 import threading
 import urllib.error
@@ -115,6 +116,37 @@ def test_an_excluded_tool_cannot_be_called(server):
     assert reply["error"]["code"] == -32602
 
 
+def test_an_include_list_hides_and_refuses_everything_else():
+    child = mcpbridge.Child([sys.executable, "-c", FAKE], timeout=10)
+    try:
+        dispatch = mcpbridge.dispatcher(child, include=frozenset({"delete"}))
+        listed = dispatch({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+        assert [t["name"] for t in listed["result"]["tools"]] == ["delete"]
+        refused = dispatch(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "tools/call",
+                "params": {"name": "read"},
+            }
+        )
+        assert refused["error"]["code"] == -32602
+    finally:
+        child.stop()
+
+
+def test_a_wrong_token_is_refused_before_the_body_is_read(server):
+    base, _ = server
+    host, port = base.removeprefix("http://").split(":")
+    with socket.create_connection((host, int(port)), timeout=5) as s:
+        # Announces a body it never sends: the 401 must not wait for it.
+        s.sendall(
+            b"POST /mcp HTTP/1.1\r\nHost: x\r\nAuthorization: Bearer nope\r\n"
+            b"Content-Length: 1000000\r\n\r\n"
+        )
+        assert s.recv(64).startswith(b"HTTP/1.0 401")
+
+
 def test_a_wrong_token_is_refused_and_health_stays_open(server):
     base, _ = server
     with pytest.raises(urllib.error.HTTPError) as e:
@@ -136,7 +168,13 @@ def test_a_dead_child_is_restarted_on_the_next_request(server):
 def test_parse_args_needs_a_command():
     assert mcpbridge.parse_args(["--exclude", "x", "--", "srv", "stdio"]) == (
         frozenset({"x"}),
+        None,
         ["srv", "stdio"],
+    )
+    assert mcpbridge.parse_args(["--include", "a", "--include", "b", "--", "srv"]) == (
+        frozenset(),
+        frozenset({"a", "b"}),
+        ["srv"],
     )
     with pytest.raises(ValueError):
         mcpbridge.parse_args(["srv"])
