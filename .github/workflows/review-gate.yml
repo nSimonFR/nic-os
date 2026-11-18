@@ -94,7 +94,8 @@ jobs:
             now=$(gh api "repos/$REPO/pulls/$1" \
               --jq 'select(.state == "open" and .base.ref == "main" and .user.login != "nic-os-renovate[bot]") | .head.sha')
             [ "$now" = "$seen" ] || return 0
-            st=$(gh api "repos/$REPO/commits/$seen/status" --jq '.statuses[] | select(.context == "review-gate") | .state')
+            st=$(gh api "repos/$REPO/commits/$seen/status" --jq '.statuses[]
+              | select(.context == "review-gate" and .creator.login == "github-actions[bot]") | .state')
             [ "$st" = success ] || return 0
             gh api -X POST "repos/$REPO/statuses/$seen" -f context=review-gate -f state=pending \
               -f description="The gate could not re-check this commit" -f target_url="$RUN_URL" > /dev/null
@@ -112,19 +113,23 @@ jobs:
             head=$(jq -r .head d.json)
             state=$(jq -r '.state // ""' d.json)
             desc=$(jq -r .description d.json)
-            # Statuses only append: post when the latest one differs.
-            cur=$(gh api "repos/$REPO/commits/$head/status" \
-              --jq '.statuses[] | select(.context == "review-gate") | .state + "|" + .description') ||
+            # Statuses only append: post when our latest one differs. Another
+            # publisher's latest status counts as none (the ruleset ignores it).
+            cur=$(gh api "repos/$REPO/commits/$head/status" --jq '.statuses[]
+              | select(.context == "review-gate" and .creator.login == "github-actions[bot]")
+              | .state + "|" + .description') ||
               { failed=1; continue; }
             # Renovate gets no status until Nico approves; a withdrawn approval
             # still has to turn its green one back.
             if [ -z "$state" ] && [ -n "$cur" ] && [ "$(jq -r '.crashed // false' d.json)" = false ]; then
               state=pending desc="Nico's approval no longer stands"
             fi
+            posted=
             if [ -n "$state" ] && [ "$cur" != "$state|$desc" ]; then
               gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate \
                 -f state="$state" -f description="$desc" -f target_url="$RUN_URL" > /dev/null ||
                 { failed=1; continue; }
+              posted=$state
             fi
             # Labels from the decision. Only fixed values leave the JSON:
             # filenames stay inside it.
@@ -133,6 +138,6 @@ jobs:
               auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
               *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
             esac || failed=1
-            jq -c --arg pr "$pr" '{pr: $pr, ok, label, state, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
+            jq -c --arg pr "$pr" --arg posted "$posted" '{pr: $pr, ok, label, state, posted: $posted, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
           done
           exit "$failed"
