@@ -87,6 +87,14 @@ jobs:
             unreadable "$1" || true
             return 1
           }
+          # Our latest review-gate status on a commit, as state|description. Read
+          # from the full list: the combined endpoint shows only the latest of any
+          # publisher, so another one's status would hide ours.
+          ours() {
+            gh api --paginate "repos/$REPO/commits/$1/statuses?per_page=100" --jq '.[]
+              | select(.context == "review-gate" and .creator.login == "github-actions[bot]")
+              | .state + "|" + .description' | sed -n 1p
+          }
           # The head that could not be decided loses its green status, if the PR
           # still points at it. Renovate's keeps it: a pending one stops its automerge.
           unreadable() {
@@ -94,11 +102,11 @@ jobs:
             now=$(gh api "repos/$REPO/pulls/$1" \
               --jq 'select(.state == "open" and .base.ref == "main" and .user.login != "nic-os-renovate[bot]") | .head.sha')
             [ "$now" = "$seen" ] || return 0
-            st=$(gh api "repos/$REPO/commits/$seen/status" --jq '.statuses[]
-              | select(.context == "review-gate" and .creator.login == "github-actions[bot]") | .state')
-            [ "$st" = success ] || return 0
+            st=$(ours "$seen")
+            [ "${st%%|*}" = success ] || return 0
             gh api -X POST "repos/$REPO/statuses/$seen" -f context=review-gate -f state=pending \
-              -f description="The gate could not re-check this commit" -f target_url="$RUN_URL" > /dev/null
+              -f description="The gate could not re-check this commit" -f target_url="$RUN_URL" > /dev/null &&
+              jq -nc --arg pr "$1" --arg head "$seen" '{pr: $pr, head: $head, posted: "pending"}' >> "$GITHUB_STEP_SUMMARY"
           }
           failed=0
           for pr in $prs; do
@@ -113,12 +121,8 @@ jobs:
             head=$(jq -r .head d.json)
             state=$(jq -r '.state // ""' d.json)
             desc=$(jq -r .description d.json)
-            # Statuses only append: post when our latest one differs. Another
-            # publisher's latest status counts as none (the ruleset ignores it).
-            cur=$(gh api "repos/$REPO/commits/$head/status" --jq '.statuses[]
-              | select(.context == "review-gate" and .creator.login == "github-actions[bot]")
-              | .state + "|" + .description') ||
-              { failed=1; continue; }
+            # Statuses only append: post when our latest one differs.
+            cur=$(ours "$head") || { failed=1; continue; }
             # Renovate gets no status until Nico approves; a withdrawn approval
             # still has to turn its green one back.
             if [ -z "$state" ] && [ -n "$cur" ] && [ "$(jq -r '.crashed // false' d.json)" = false ]; then
@@ -130,6 +134,15 @@ jobs:
                 -f state="$state" -f description="$desc" -f target_url="$RUN_URL" > /dev/null ||
                 { failed=1; continue; }
               posted=$state
+            fi
+            # A dismissal read after the decision but before the POST: check once
+            # more and take the green back. The run it queued is the backstop.
+            if [ "$posted" = success ] && attempt "$pr" &&
+              [ "$(jq -r .head d.json)" = "$head" ] && [ "$(jq -r .state d.json)" != success ]; then
+              gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate -f state=pending \
+                -f description="Nico's approval no longer stands" -f target_url="$RUN_URL" > /dev/null ||
+                { failed=1; continue; }
+              posted=pending
             fi
             # Labels from the decision. Only fixed values leave the JSON:
             # filenames stay inside it.
