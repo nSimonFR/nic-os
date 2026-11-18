@@ -33,6 +33,7 @@ APERTURE_APPLY.
 """
 
 import hashlib
+import http.client
 import json
 import os
 import sys
@@ -277,12 +278,21 @@ def initialized(body):
     return False
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None  # urllib then raises the 3xx as an HTTPError
+
+
+# The wake carries each connector's credential: never to another URL.
+_open_no_redirect = urllib.request.build_opener(_NoRedirect).open
+
+
 def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotonic):
     """MCP-initialize each sleepy connector until it answers: its socket proxy
     wakes the backend, and the backend has started its MCP server (a stdio
     bridge spawns its child on initialize). Returns the URLs still not ready
     once `deadline` seconds have passed, by the clock or in sleeps."""
-    opener = opener or urllib.request.urlopen
+    opener = opener or _open_no_redirect
     servers = config.get("connectors", {}).get("servers", {})
     sleepy = [s for s in servers.values() if s.get("send_caller_identity")]
     end = clock() + deadline
@@ -307,7 +317,7 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
                 with opener(req, timeout=max(1, left)) as r:
                     if initialized(r.read()):
                         return None
-            except OSError:
+            except (OSError, http.client.HTTPException):  # IncompleteRead included
                 pass
             pause = min(10, end - clock(), deadline - slept)
             if pause <= 0:
@@ -351,20 +361,27 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
                 for url in unready:
                     log(f"{url} not ready; pushing again next run")
                 woken = True
+                if unready and cfg.state_file:
+                    # Before the PUT: a lost answer or a later write error must
+                    # still leave the next run pushing again.
+                    try:
+                        record_digest(cfg, "")
+                    except OSError as e:
+                        log(f"{cfg.state_file} unwritable ({e}); not pushing")
+                        return 1
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):
                 why = " (secrets changed or a connector was unready)" if stale else ""
                 log(
                     f"pushed {count} gate models{why} (hash {digest} -> {result.get('hash')})"
                 )
-                # No digest while a connector is unready: the next run pushes again
-                # and re-lists its tools.
-                try:
-                    record_digest(cfg, "" if unready else secrets)
-                except OSError as e:
-                    log(
-                        f"pushed, but {cfg.state_file} unwritable ({e}): next run pushes again"
-                    )
+                if not unready:
+                    try:
+                        record_digest(cfg, secrets)
+                    except OSError as e:
+                        log(
+                            f"pushed, but {cfg.state_file} unwritable ({e}): next run pushes again"
+                        )
                 return 0
             err = (result.get("error") or {}).get("message") or result.get("message")
         except (OSError, ValueError) as e:
