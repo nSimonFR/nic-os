@@ -5,6 +5,13 @@ from nicos_scripts.llm import aperture_sync as ap
 
 
 class Resp(io.BytesIO):
+    def __init__(self, data=b"", content_type="application/json"):
+        super().__init__(data)
+        self.headers = {"Content-Type": content_type}
+
+    def read1(self, n=-1):
+        return super().read1(n)
+
     def __enter__(self):
         return self
 
@@ -328,7 +335,8 @@ def test_wake_initializes_with_the_connector_token_until_a_result():
         return Resp(
             # One SSE event, its JSON split over two data lines.
             b'event: message\ndata: {"jsonrpc": "2.0", "id": 1,\n'
-            b'data: "result": {"protocolVersion": "2025-03-26"}}\n\n'
+            b'data: "result": {"protocolVersion": "2025-03-26"}}\n\n',
+            content_type="text/event-stream",
         )
 
     assert ap.wake(config, opener=opener, sleep=lambda s: None) == []
@@ -485,27 +493,78 @@ def test_wake_retries_a_body_cut_short():
     assert answers == []
 
 
-def test_wake_stops_reading_a_trickling_body_at_the_deadline():
-    config = {
-        "connectors": {
-            "servers": {"s": {"url": "http://s/mcp", "send_caller_identity": True}}
-        }
+def _serve(handler):
+    import http.server
+    import threading
+
+    srv = http.server.ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv, f"http://127.0.0.1:{srv.server_address[1]}/mcp"
+
+
+def _sleepy(url):
+    return {
+        "connectors": {"servers": {"s": {"url": url, "send_caller_identity": True}}}
     }
-    now = [0.0]
 
-    class Trickle(Resp):
-        def read(self, *a):
-            now[0] += 30  # a byte every 30 s, never a full answer
-            return b" "
 
-    assert ap.wake(
-        config,
-        opener=lambda req, timeout=None: Trickle(b""),
-        sleep=lambda s: None,
-        deadline=90,
-        clock=lambda: now[0],
-    ) == ["http://s/mcp"]
-    assert now[0] <= 90
+def test_wake_gives_up_on_a_trickling_body_at_the_deadline():
+    import http.server
+    import time
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "100000")
+            self.end_headers()
+            try:
+                for _ in range(100):  # a byte every 0.5 s: each read beats its timeout
+                    self.wfile.write(b" ")
+                    self.wfile.flush()
+                    time.sleep(0.5)
+            except OSError:
+                pass
+
+    srv, url = _serve(H)
+    try:
+        t0 = time.monotonic()
+        assert ap.wake(_sleepy(url), deadline=2) == [url]
+        assert time.monotonic() - t0 < 4
+    finally:
+        srv.shutdown()
+
+
+def test_wake_rejects_json_short_of_its_content_length():
+    import http.server
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(INIT_OK) + 50))
+            self.end_headers()
+            self.wfile.write(INIT_OK)  # complete-looking, then the connection closes
+            self.close_connection = True
+
+    srv, url = _serve(H)
+    try:
+        assert ap.wake(_sleepy(url), sleep=lambda s: None, deadline=3) == [url]
+    finally:
+        srv.shutdown()
+
+
+def test_an_sse_event_counts_only_once_its_blank_line_arrived():
+    event = b'data: {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}\n'
+    assert not ap.initialized(event, sse=True)
+    assert ap.initialized(event + b"\n", sse=True)
+    assert ap.initialized(event.replace(b"\n", b"\r\n") + b"\r\n", sse=True)
 
 
 def test_wake_never_follows_a_redirect_with_the_token():

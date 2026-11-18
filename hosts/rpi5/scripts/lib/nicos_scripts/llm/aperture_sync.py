@@ -37,7 +37,7 @@ import http.client
 import json
 import os
 import sys
-from concurrent.futures import ThreadPoolExecutor
+import threading
 import time
 import urllib.request
 from dataclasses import dataclass, field
@@ -248,9 +248,12 @@ def auth_headers(server):
 
 
 def sse_events(text):
-    """The data of each SSE event, its `data:` lines joined."""
+    """The data of each complete SSE event (ended by a blank line), its `data:`
+    lines joined. A trailing event without its blank line is not complete."""
     events, data = [], []
-    for line in text.splitlines() + [""]:
+    # The last piece is an unterminated line (or "" after a final newline).
+    for line in text.split("\n")[:-1]:
+        line = line.removesuffix("\r")
         if line.startswith("data:"):
             data.append(line[5:].removeprefix(" "))
         elif not line and data:
@@ -259,23 +262,26 @@ def sse_events(text):
     return events
 
 
-def initialized(body):
-    """The answer (plain JSON or SSE) holds the JSON-RPC response to INITIALIZE."""
+def is_init_response(chunk):
+    """The JSON-RPC response to INITIALIZE (id 1, a result with protocolVersion)."""
+    try:
+        msg = json.loads(chunk)
+    except ValueError:
+        return False
+    return (
+        isinstance(msg, dict)
+        and msg.get("jsonrpc") == "2.0"
+        and msg.get("id") == 1
+        and isinstance(msg.get("result"), dict)
+        and "protocolVersion" in msg["result"]
+    )
+
+
+def initialized(body, sse=False):
+    """`body` (a whole JSON answer, or an SSE stream so far) answers INITIALIZE."""
     text = body.decode(errors="replace")
-    for chunk in [text, *sse_events(text)]:
-        try:
-            msg = json.loads(chunk)
-        except ValueError:
-            continue
-        if (
-            isinstance(msg, dict)
-            and msg.get("jsonrpc") == "2.0"
-            and msg.get("id") == 1
-            and isinstance(msg.get("result"), dict)
-            and "protocolVersion" in msg["result"]
-        ):
-            return True
-    return False
+    chunks = sse_events(text) if sse else [text]
+    return any(is_init_response(c) for c in chunks)
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -290,12 +296,26 @@ _open_no_redirect = urllib.request.build_opener(_NoRedirect).open
 def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotonic):
     """MCP-initialize each sleepy connector until it answers: its socket proxy
     wakes the backend, and the backend has started its MCP server (a stdio
-    bridge spawns its child on initialize). Returns the URLs still not ready
-    once `deadline` seconds have passed, by the clock or in sleeps."""
+    bridge spawns its child on initialize). Returns the URLs not ready within
+    `deadline` seconds. Each connector is probed in a daemon thread that is not
+    waited for past the deadline, whatever its socket does."""
     opener = opener or _open_no_redirect
     servers = config.get("connectors", {}).get("servers", {})
     sleepy = [s for s in servers.values() if s.get("send_caller_identity")]
     end = clock() + deadline
+
+    def answered(r):
+        if "text/event-stream" in (r.headers.get("Content-Type") or ""):
+            body = b""
+            # read1: one socket read at most, so a complete event returns at once.
+            while chunk := r.read1(65536):
+                body += chunk
+                if initialized(body, sse=True):
+                    return True
+            return False
+        # Plain JSON: whole, so a body short of its Content-Length raises
+        # IncompleteRead instead of passing as a complete-looking prefix.
+        return initialized(r.read())
 
     def ready(server):
         req = urllib.request.Request(
@@ -312,30 +332,34 @@ def wake(config, opener=None, sleep=time.sleep, deadline=90, clock=time.monotoni
         while True:
             left = min(end - clock(), deadline - slept)
             if left <= 0:
-                return server["url"]
+                return False
             try:
                 with opener(req, timeout=max(1, left)) as r:
-                    # In chunks, so a trickling body cannot outlast the deadline.
-                    body = b""
-                    while chunk := r.read(65536):
-                        body += chunk
-                        if initialized(body):
-                            return None
-                        if end - clock() <= 0:
-                            return server["url"]
-                    if initialized(body):
-                        return None
+                    if answered(r) and end - clock() > 0:
+                        return True
             except (OSError, http.client.HTTPException):  # IncompleteRead included
                 pass
             pause = min(10, end - clock(), deadline - slept)
             if pause <= 0:
-                return server["url"]
+                return False
             sleep(pause)
             slept += pause
 
-    # All at once: the deadline then bounds the whole wake, not one batch.
-    with ThreadPoolExecutor(max_workers=max(1, len(sleepy))) as pool:
-        return [u for u in pool.map(ready, sleepy) if u]
+    results = {}
+
+    def probe(i, server):
+        results[i] = ready(server)
+
+    threads = [
+        threading.Thread(target=probe, args=(i, s), daemon=True)
+        for i, s in enumerate(sleepy)
+    ]
+    for t in threads:
+        t.start()
+    stop = time.monotonic() + deadline
+    for t in threads:
+        t.join(max(0, stop - time.monotonic()))
+    return [s["url"] for i, s in enumerate(sleepy) if not results.get(i)]
 
 
 def run(cfg, opener=None, sleep=time.sleep, attempts=5):
