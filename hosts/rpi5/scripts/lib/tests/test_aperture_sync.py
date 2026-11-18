@@ -35,7 +35,10 @@ GATE = {
 }
 
 
-INIT_OK = b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
+INIT_OK = (
+    b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x",'
+    b' "capabilities": {}, "serverInfo": {"name": "s", "version": "1"}}}'
+)
 
 
 class Aperture:
@@ -335,7 +338,8 @@ def test_wake_initializes_with_the_connector_token_until_a_result():
         return Resp(
             # One SSE event, its JSON split over two data lines.
             b'event: message\ndata: {"jsonrpc": "2.0", "id": 1,\n'
-            b'data: "result": {"protocolVersion": "2025-03-26"}}\n\n',
+            b'data: "result": {"protocolVersion": "2025-03-26", "capabilities": {},\n'
+            b'data: "serverInfo": {"name": "s", "version": "1"}}}\n\n',
             content_type="text/event-stream",
         )
 
@@ -391,7 +395,7 @@ def test_a_rotated_secret_alone_forces_one_push(tmp_path):
 
 
 def test_initialized_needs_the_response_to_initialize():
-    ok = b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
+    ok = INIT_OK
     assert ap.initialized(ok)
     assert not ap.initialized(b'{"result": {"protocolVersion": "x"}}')
     assert not ap.initialized(
@@ -445,9 +449,7 @@ def test_an_unready_connector_makes_the_next_run_push_again(tmp_path):
         if req.full_url == "http://sure/mcp":
             if cold[0]:
                 raise OSError("cold")
-            return Resp(
-                b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}'
-            )
+            return Resp(INIT_OK)
         return fake(req, timeout)
 
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
@@ -561,7 +563,7 @@ def test_wake_rejects_json_short_of_its_content_length():
 
 
 def test_an_sse_event_counts_only_once_its_blank_line_arrived():
-    event = b'data: {"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x"}}\n'
+    event = b"data: " + INIT_OK + b"\n"
     assert not ap.initialized(event, sse=True)
     assert ap.initialized(event + b"\n", sse=True)
     assert ap.initialized(event.replace(b"\n", b"\r\n") + b"\r\n", sse=True)
@@ -638,3 +640,48 @@ def test_an_unready_connector_clears_the_digest_before_the_put(tmp_path):
 
     assert ap.run(cfg, opener=opener, sleep=lambda s: None) == 0
     assert seen_at_put == [""]
+
+
+def test_an_invalid_initialize_result_is_not_ready():
+    for bad in [
+        b'{"jsonrpc": "2.0", "id": true, "result": {"protocolVersion": "x", "capabilities": {}, "serverInfo": {}}}',
+        b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": null, "capabilities": {}, "serverInfo": {}}}',
+        b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "serverInfo": {}}}',
+        b'{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "x", "capabilities": {}}}',
+    ]:
+        assert not ap.initialized(bad), bad
+
+
+def test_a_probe_still_reading_at_the_deadline_is_stopped():
+    import http.server
+    import threading
+    import time
+
+    gone = threading.Event()
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_POST(self):
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", "100000")
+            self.end_headers()
+            try:
+                for _ in range(100):
+                    self.wfile.write(b" ")
+                    self.wfile.flush()
+                    time.sleep(0.2)
+            except OSError:
+                gone.set()
+
+    srv, url = _serve(H)
+    try:
+        before = threading.active_count()
+        assert ap.wake(_sleepy(url), deadline=1) == [url]
+        assert gone.wait(5), "the probe kept reading after the deadline"
+        time.sleep(0.2)
+        assert threading.active_count() <= before
+    finally:
+        srv.shutdown()
