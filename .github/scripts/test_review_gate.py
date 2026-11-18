@@ -109,35 +109,60 @@ def decide(reviews, files=None, pr=HEAD):
     return gate.decide(pr, files or [f("a.nix")], reviews, TREE)
 
 
-def test_approves_only_on_codeRabbits_latest_verdict_for_the_head():
-    assert decide([review(gate.JUDGE, "APPROVED")])["approve"]
+def test_green_only_on_codeRabbits_latest_verdict_for_the_head():
+    assert decide([review(gate.JUDGE, "APPROVED")])["state"] == "success"
     assert decide([review(gate.JUDGE, "APPROVED")])["label"] == "auto-merge-eligible"
     # A later plain comment does not undo it; a later change request does.
     later = "2026-11-17T11:00:00Z"
-    assert decide(
-        [review(gate.JUDGE, "APPROVED"), review(gate.JUDGE, "COMMENTED", at=later)]
-    )["approve"]
+    assert (
+        decide(
+            [review(gate.JUDGE, "APPROVED"), review(gate.JUDGE, "COMMENTED", at=later)]
+        )["state"]
+        == "success"
+    )
     d = decide(
         [
             review(gate.JUDGE, "APPROVED"),
             review(gate.JUDGE, "CHANGES_REQUESTED", at=later),
         ]
     )
-    assert not d["approve"] and d["label"] is None
+    assert d["state"] == "pending" and d["label"] is None
     # An approval of an older commit does not count.
-    assert not decide([review(gate.JUDGE, "APPROVED", sha="old")])["approve"]
+    assert decide([review(gate.JUDGE, "APPROVED", sha="old")])["state"] == "pending"
     # Nor does anyone else's.
-    assert not decide([review("nSimonFR", "APPROVED")])["approve"]
+    assert decide([review("nSimonFR-ai", "APPROVED")])["state"] == "pending"
 
 
-def test_no_second_app_approval_for_the_same_head():
-    d = decide([review(gate.JUDGE, "APPROVED"), review(gate.APPROVER, "APPROVED")])
-    assert not d["approve"] and d["label"] == "auto-merge-eligible"
-
-
-def test_a_refused_pr_is_never_approved():
+def test_a_refused_pr_is_never_green_on_codeRabbit_alone():
     d = decide([review(gate.JUDGE, "APPROVED")], files=[f("flake.lock")])
-    assert not d["approve"] and d["label"] == "needs-human"
+    assert d["state"] == "pending" and d["label"] == "needs-human"
+
+
+def test_nicos_approval_of_the_head_is_green_whatever_the_pr():
+    later = "2026-11-17T11:00:00Z"
+    d = decide(
+        [
+            review(gate.HUMAN, "APPROVED"),
+            review(gate.JUDGE, "CHANGES_REQUESTED", at=later),
+        ],
+        files=[f("flake.lock")],
+    )
+    assert d["state"] == "success" and d["label"] == "needs-human"
+    # Only for the head, and only while it stands.
+    assert decide([review(gate.HUMAN, "APPROVED", sha="old")])["state"] == "pending"
+    assert (
+        decide(
+            [review(gate.HUMAN, "APPROVED"), review(gate.HUMAN, "DISMISSED", at=later)]
+        )["state"]
+        == "pending"
+    )
+
+
+def test_renovate_gets_a_status_only_once_nico_approved():
+    pr = {**HEAD, "user": {"login": gate.RENOVATE}}
+    d = decide([], pr=pr)
+    assert d["state"] is None and d["label"] is None and d["description"] == ""
+    assert decide([review(gate.HUMAN, "APPROVED")], pr=pr)["state"] == "success"
 
 
 def test_a_newline_in_a_filename_stays_inside_the_json():

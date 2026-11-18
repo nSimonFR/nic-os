@@ -1,17 +1,17 @@
-# Review gate: an agent PR merges without Nico when CodeRabbit approves it and
-# it stays small and away from protected paths.
+# Review gate: posts the `review-gate` status that ruleset `main` requires.
+# Green on the PR head when Nico approved that commit, or when CodeRabbit
+# approved an agent PR that stays small and away from protected paths
+# (.github/scripts/review_gate.py). auto-merge.yml has armed every PR, so
+# GitHub merges once this and the CI checks are green. Agent PRs it will not
+# pass get `needs-human`.
 #
-# CodeRabbit (.coderabbit.yaml auto_approvals) approves only once its findings
-# are resolved and its merge and security risk are low. Its approval does not
-# count for the main ruleset, so this re-checks each open agent PR with
-# .github/scripts/review_gate.py and approves it as the nic-os-renovate App,
-# pinned to the commit it checked. auto-merge.yml has already armed every PR,
-# so GitHub merges once the required checks are green. Everything else gets
-# `needs-human`.
+# The ruleset accepts the status only from GitHub Actions (integration 15368):
+# no workflow a PR triggers may hold `statuses` or `checks` write, no job may be
+# named `review-gate`, and nSimonFR-ai's token must never get the `workflow` scope.
 #
 # Every trigger here runs this file and the script from main, never from a PR:
-# pull_request_target (labels as soon as a PR opens or moves), workflow_run of
-# review-signal.yml (CodeRabbit submitted a review) and a schedule (sweep).
+# pull_request_target (a new head starts pending), workflow_run of
+# review-signal.yml (CodeRabbit or Nico reviewed) and a schedule (sweep).
 name: Review gate
 
 on:
@@ -28,11 +28,12 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  statuses: write
 
 jobs:
   gate:
     runs-on: ubuntu-latest
-    # A review signal counts only when its job ran, i.e. CodeRabbit reviewed.
+    # A review signal counts only when its job ran, i.e. CodeRabbit or Nico reviewed.
     if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     # Never cancel a running gate. A queued run that a newer one replaces loses
     # nothing: every run sweeps all open PRs.
@@ -45,58 +46,50 @@ jobs:
           # Full tree: review_gate.py checks its patterns against main's files.
           ref: main
 
-      - id: app
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.RENOVATE_APP_ID }}
-          private-key: ${{ secrets.RENOVATE_APP_PRIVATE_KEY }}
-
       - name: Gate open PRs
         env:
           GH_TOKEN: ${{ github.token }}
-          APP_TOKEN: ${{ steps.app.outputs.token }}
           REPO: ${{ github.repository }}
           EVENT_PR: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          # Every open PR into main but Renovate's (it merges through its own
-          # bypass), plus the event's own; review_gate.py rejects other authors.
           prs=$( {
-            gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" \
-              --jq '.[] | select(.user.login != "nic-os-renovate[bot]") | .number'
+            gh api --paginate "repos/$REPO/pulls?state=open&base=main&per_page=100" --jq '.[].number'
             [ -n "$EVENT_PR" ] && echo "$EVENT_PR"
           } | sort -un)
           decide() {
             gh api --paginate --slurp "repos/$REPO/pulls/$1/reviews" > reviews.json
-            # Fail closed: a crash is needs-human.
+            # Fail closed: a crash is pending on the head.
             python3 -I .github/scripts/review_gate.py pr.json files.json reviews.json > d.json ||
-              echo '{"ok":false,"reasons":["review_gate.py failed"],"label":"needs-human","approve":false,"head":""}' > d.json
+              jq '{ok:false, reasons:["review_gate.py failed"], label:"needs-human", head:.head.sha,
+                   state:"pending", description:"The gate failed: Nico reviews"}' pr.json > d.json
           }
           failed=0
           for pr in $prs; do
             gh api "repos/$REPO/pulls/$pr" > pr.json
+            [ "$(jq -r .base.ref pr.json)" = main ] || continue
             gh api --paginate --slurp "repos/$REPO/pulls/$pr/files" > files.json
             decide "$pr"
-            # Re-read the reviews right before approving: a dismissal since the
+            # Re-read the reviews right before going green: a dismissal since the
             # first read must stop it.
-            [ "$(jq -r .approve d.json)" = true ] && decide "$pr"
-            if [ "$(jq -r .approve d.json)" = true ]; then
-              head=$(jq -r .head d.json)
-              # A failed approval is needs-human; the sweep goes on, the job fails.
-              if ! GH_TOKEN=$APP_TOKEN gh api -X POST "repos/$REPO/pulls/$pr/reviews" \
-                -f commit_id="$head" -f event=APPROVE \
-                -f body="Review gate: CodeRabbit approved $head, small and outside protected paths. Merges once the checks are green." > /dev/null; then
-                echo '{"ok":false,"reasons":["App approval failed"],"label":"needs-human","approve":false,"head":""}' > d.json
-                failed=1
-              fi
+            [ "$(jq -r .state d.json)" = success ] && decide "$pr"
+            head=$(jq -r .head d.json)
+            state=$(jq -r '.state // ""' d.json)
+            desc=$(jq -r .description d.json)
+            # Statuses only append: post when the latest one differs.
+            cur=$(gh api "repos/$REPO/commits/$head/status" \
+              --jq '.statuses[] | select(.context == "review-gate") | .state + "|" + .description')
+            if [ -n "$state" ] && [ "$cur" != "$state|$desc" ]; then
+              gh api -X POST "repos/$REPO/statuses/$head" -f context=review-gate \
+                -f state="$state" -f description="$desc" -f target_url="$RUN_URL" > /dev/null || failed=1
             fi
-            # Labels from the final decision. Only fixed values leave the JSON:
+            # Labels from the decision. Only fixed values leave the JSON:
             # filenames stay inside it.
-            label=$(jq -r '.label // ""' d.json)
-            case "$label" in
+            case "$(jq -r '.label // ""' d.json)" in
               needs-human) gh pr edit "$pr" --repo "$REPO" --add-label needs-human --remove-label auto-merge-eligible ;;
               auto-merge-eligible) gh pr edit "$pr" --repo "$REPO" --add-label auto-merge-eligible --remove-label needs-human ;;
               *) gh pr edit "$pr" --repo "$REPO" --remove-label needs-human --remove-label auto-merge-eligible ;;
             esac
-            jq -c --arg pr "$pr" '{pr: $pr, ok, label, approve, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
+            jq -c --arg pr "$pr" '{pr: $pr, ok, label, state, reasons}' d.json >> "$GITHUB_STEP_SUMMARY"
           done
           exit "$failed"
