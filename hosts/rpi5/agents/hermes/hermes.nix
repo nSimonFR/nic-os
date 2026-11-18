@@ -432,16 +432,19 @@ let
     ${pkgs.rsync}/bin/rsync -aL --checksum --chmod=Du+rwx,Dgo+rx,Fu+rw,Fgo+r \
       "${documentsSource}/" "${hermesHome}/"
 
-    # Skills dropped for an MCP (mail; caldav-calendar for Nextcloud's, linear
-    # for Linear's): no --delete above, so removed by name.
+    # Skills dropped from the repo (mail, caldav-calendar and linear for their
+    # MCPs; four unused ones on 2026-11-18): no --delete above, so removed by
+    # name, or hermes-skill-promote would take them for self-authored ones.
     # Bundled ones also go in .curator_suppressed, which Hermes' bundled-skill
     # sync never re-seeds from.
     for dropped in gog protonmail email/himalaya email/email-inbox-triage \
-      productivity/google-workspace caldav-calendar linear; do
+      productivity/google-workspace caldav-calendar linear yuanbao \
+      jupyter-live-kernel data-science/jupyter-live-kernel hermes-desktop-plugins \
+      motion-graphics; do
       ${pkgs.coreutils}/bin/chmod -R u+w "${hermesHome}/skills/$dropped" 2>/dev/null || true
       ${pkgs.coreutils}/bin/rm -rf "${hermesHome}/skills/$dropped"
     done
-    for name in himalaya email-inbox-triage google-workspace; do
+    for name in himalaya email-inbox-triage google-workspace jupyter-live-kernel; do
       ${pkgs.gnugrep}/bin/grep -qxF "$name" "${hermesHome}/skills/.curator_suppressed" 2>/dev/null \
         || echo "$name" >>"${hermesHome}/skills/.curator_suppressed"
     done
