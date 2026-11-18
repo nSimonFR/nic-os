@@ -16,6 +16,10 @@ Before a push, every sleepy connector (`send_caller_identity`) is MCP-initialize
 until it answers: Aperture re-lists connectors on a config change, and one whose
 backend is still cold comes back with no tools until the next change.
 
+Aperture hides stored secrets, so a rotated one cannot be seen in its config:
+APERTURE_SYNC_STATE keeps a SHA-256 of the secrets last pushed, and a change in
+it forces a push. Deleting that file forces the next push.
+
 A connector whose `auth.secret` is `env:NAME` gets that variable's value, named
 in APERTURE_CONNECTOR_SECRETS, or else the systemd credential of that name
 (raw single-value agenix files); one with neither is left out rather than
@@ -27,7 +31,9 @@ STORJ_S3_ACCESS_SECRET, APERTURE_CONNECTOR_SECRETS (+ the variables it names),
 APERTURE_APPLY.
 """
 
+import hashlib
 import json
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 import time
@@ -55,6 +61,7 @@ class Config:
     s3_secret: str = ""
     connector_secrets: dict = field(default_factory=dict)
     apply: bool = False
+    state_file: str = ""
 
     @classmethod
     def from_env(cls, env=None):
@@ -74,6 +81,7 @@ class Config:
                 for name in env_str("APERTURE_CONNECTOR_SECRETS", "", env).split()
             },
             apply=env_str("APERTURE_APPLY", "", env) == "1",
+            state_file=env_str("APERTURE_SYNC_STATE", "", env),
         )
 
 
@@ -159,6 +167,37 @@ def comparable(config):
         if server.get("provider") == "Custom":
             server.pop("provider")
     return out
+
+
+def secrets_digest(config):
+    """SHA-256 over every secret `comparable` drops, so it never leaves this host."""
+    found = [
+        (f"provider:{k}", p.get("apikey", ""))
+        for k, p in config.get("providers", {}).items()
+    ]
+    found.append(
+        ("s3", config.get("exporters", {}).get("s3", {}).get("access_secret", ""))
+    )
+    found += [
+        (f"connector:{k}", (s.get("auth") or {}).get("secret", ""))
+        for k, s in config.get("connectors", {}).get("servers", {}).items()
+    ]
+    return hashlib.sha256(json.dumps(sorted(found)).encode()).hexdigest()
+
+
+def pushed_digest(cfg):
+    try:
+        return Path(cfg.state_file).read_text().strip() if cfg.state_file else ""
+    except OSError:
+        return ""
+
+
+def record_digest(cfg, digest):
+    if not cfg.state_file:
+        return
+    tmp = Path(f"{cfg.state_file}.tmp")
+    tmp.write_text(digest + "\n")
+    os.replace(tmp, cfg.state_file)
 
 
 def current(cfg, opener=None):
@@ -267,12 +306,14 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
     for cid in missing_secrets(base, cfg):
         log(f"connector {cid}: secret unset, left out")
     count = len(want["providers"][cfg.provider]["models"])
+    secrets = secrets_digest(want)
+    rotated = bool(cfg.state_file) and pushed_digest(cfg) != secrets
 
     woken = False
     for attempt in range(1, attempts + 1):
         try:
             have, digest = current(cfg, opener=opener)
-            if comparable(have) == comparable(want):
+            if comparable(have) == comparable(want) and not rotated:
                 log(f"unchanged ({count} gate models)")
                 return 0
             if not cfg.apply:
@@ -286,8 +327,10 @@ def run(cfg, opener=None, sleep=time.sleep, attempts=5):
                 woken = True
             result = put(cfg, want, digest, opener=opener)
             if result.get("success"):
+                record_digest(cfg, secrets)
+                why = " (secrets changed)" if rotated else ""
                 log(
-                    f"pushed {count} gate models (hash {digest} -> {result.get('hash')})"
+                    f"pushed {count} gate models{why} (hash {digest} -> {result.get('hash')})"
                 )
                 return 0
             err = (result.get("error") or {}).get("message") or result.get("message")
