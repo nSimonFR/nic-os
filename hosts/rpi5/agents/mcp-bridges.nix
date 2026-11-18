@@ -245,7 +245,22 @@ let
         "--enable-app"
         a
       ]) nextcloudApps;
-      exclude = [ ];
+      # Tags, versions, trash, comments and favorites: unused, ~20 KB of schemas
+      # in every client's context.
+      exclude = [
+        "nc_webdav_tag_file"
+        "nc_webdav_untag_file"
+        "nc_webdav_get_file_tags"
+        "nc_webdav_find_by_tag_name"
+        "nc_webdav_list_tags"
+        "nc_webdav_list_versions"
+        "nc_webdav_restore_version"
+        "nc_webdav_list_trash"
+        "nc_webdav_restore_from_trash"
+        "nc_webdav_create_comment"
+        "nc_webdav_list_comments"
+        "nc_webdav_list_favorites"
+      ];
       environment = {
         NEXTCLOUD_HOST = "https://${tailnetFqdn}/nextcloud";
         NEXTCLOUD_USERNAME = "nsimon";
