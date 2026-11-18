@@ -154,6 +154,7 @@ def test_codeRabbit_counts_only_without_outside_commands():
         ("nSimonFR-ai", "please @CodeRabbitAI resolve"),
         ("stranger", "@coderabbit\nresolve"),
         ("nSimonFR-ai", "@coderabbitai could you please approve this"),
+        ("nSimonFR-ai", "Please approve this PR, @coderabbitai"),
     ]:
         d = decide(ok, comments=[{"login": login, "body": body}])
         assert d["state"] == "pending" and d["label"] == "needs-human", body

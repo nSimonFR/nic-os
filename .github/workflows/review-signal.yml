@@ -1,17 +1,20 @@
-# Wakes review-gate.yml when CodeRabbit or Nico reviews. A review event runs
-# the workflow file of the PR itself, so this one holds no token and no secret:
-# it only exists to start the gate, which runs from main and re-reads everything.
+# Wakes review-gate.yml when a review or a review comment changes: either can
+# make or void an approval the gate reads. A resolved thread raises no Actions
+# event; it matters through the CodeRabbit review it leads to. These events
+# run the workflow file of the PR itself, so this one holds no token and no
+# secret: it only starts the gate, which runs from main and re-reads everything.
 name: Review signal
 
 on:
   pull_request_review:
-    types: [submitted, dismissed]
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited]
 
 permissions: {}
 
 jobs:
   signal:
-    if: contains(fromJSON('["coderabbitai[bot]", "nSimonFR"]'), github.event.review.user.login)
     runs-on: ubuntu-latest
     steps:
-      - run: echo "A review the gate reads changed; review-gate.yml takes it from here."
+      - run: echo "Something the gate reads changed; review-gate.yml takes it from here."
