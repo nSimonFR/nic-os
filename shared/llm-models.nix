@@ -32,6 +32,13 @@ let
       upstream = "gpt-5.6-sol";
       fallback = [ "gemma4:e4b" ];
     }
+    # ChatGPT Work mode's default, listed in the picker below. The gate checks
+    # picker ids against declared models at load, so it must be declared.
+    {
+      id = "gpt-5.6-sol";
+      provider = "codex";
+      fallback = [ "gemma4:e4b" ];
+    }
     # Four Hermes cron jobs (~/.hermes/cron/jobs.json).
     {
       id = "gpt-5.6-terra";
