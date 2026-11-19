@@ -36,8 +36,11 @@ let
   # The checkout IS ~/MyDocuments/TRUSK (the Trusk repos are its submodules).
   truskDir = "${config.home.homeDirectory}/MyDocuments/TRUSK";
   truskSkills = [
+    "demo-tech-slides"
     "designing-schemas-and-migrations"
+    "guarded-prod-data-fix"
     "ship"
+    "story-review"
     "trusk-data-glossary"
     "trusk-preview-deploy"
   ];
