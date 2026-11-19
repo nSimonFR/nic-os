@@ -112,6 +112,13 @@ ORDER BY observed_at DESC;
 - Silence is correct when no condition matches.
 - Alert output must include exact product/variant, current total, previous comparable price, savings in euros and percent, seller, end date when known, direct link, and verdict.
 
+## Run Outcome (cron)
+
+- Not finding a reliable or comparable offer is a normal result, not a failure: record what was read with `--unverified` (skip a product with no usable page), alert on nothing, and end the run with exactly `NO_REPLY`.
+- Never put `[CRON_FAILURE]` in the answer because a product, variant or delivery could not be verified.
+- Use `[CRON_FAILURE]` only when the run itself broke: `sync` or `record` exits non-zero, the database is unreadable, or the web tools return errors for every product.
+- A watched product missing from `products.json` is a catalogue bug: add it there (see above) instead of reporting it every day.
+
 ## Common Pitfalls
 
 1. **Editing runtime SQL conditions manually.** `sync` replaces conditions from `products.json`; edit the catalogue first.

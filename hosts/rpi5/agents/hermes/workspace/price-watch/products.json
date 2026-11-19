@@ -32,6 +32,16 @@
       ]
     },
     {
+      "slug": "meross_msp844sma_eu",
+      "name": "Meross MSP844SMA-EU",
+      "category": "power-strip",
+      "currency": "EUR",
+      "sources": ["Meross Europe", "Amazon France", "Domadoo", "Planète Domotique", "Fnac", "Darty", "Boulanger", "Cdiscount", "ManoMano", "Reichelt", "Conrad", "Alternate", "Galaxus"],
+      "conditions": [
+        { "kind": "relative_drop", "metric": "total_price", "operator": ">=", "value": 10, "baseline": "previous_comparable_price" }
+      ]
+    },
+    {
       "slug": "valerion_visionmaster_pro_2",
       "name": "Valerion VisionMaster Pro 2",
       "category": "projector",
