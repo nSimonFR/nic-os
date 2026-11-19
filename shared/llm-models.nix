@@ -112,8 +112,12 @@ in
     "gpt-6-luna"
     # tiny-llm-gate router: Jev picks Luna or Sol per user turn.
     "smart"
+    # ChatGPT's Work mode (same ~/.codex) sends `<id>-wm` and strips the
+    # suffix only if <id> is listed here; its default is gpt-5.6-sol.
+    "gpt-5.6-sol"
     "gpt-*"
-    "!gpt-5*"
+    "!gpt-5.6-luna"
+    "!gpt-5.6-terra"
     "asale-gpt-*"
     "@ollama"
     "@omlx"
