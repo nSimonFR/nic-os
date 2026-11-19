@@ -114,7 +114,7 @@ ORDER BY observed_at DESC;
 
 ## Run Outcome (cron)
 
-- Not finding a reliable or comparable offer is a normal result, not a failure: record what was read with `--unverified` (skip a product with no usable page), alert on nothing, and end the run with exactly `NO_REPLY`.
+- Not finding a reliable or comparable offer for a product is a normal result, not a failure: record what was read with `--unverified` (skip a product with no usable page) and treat only that offer as non-alerting. Keep processing every product, and let verified matching offers alert as usual. End the run with exactly `NO_REPLY` only when no product produced an alert.
 - Never put `[CRON_FAILURE]` in the answer because a product, variant or delivery could not be verified.
 - Use `[CRON_FAILURE]` only when the run itself broke: `sync` or `record` exits non-zero, the database is unreadable, or the web tools return errors for every product.
 - A watched product missing from `products.json` is a catalogue bug: add it there (see above) instead of reporting it every day.
