@@ -114,7 +114,8 @@ in
     "smart"
     # ChatGPT's Work mode (same ~/.codex) sends `<id>-wm` and strips the
     # suffix only if <id> is listed here; its default is gpt-5.6-sol.
-    "gpt-5.6-sol"
+    # A glob: a plain id must be declared, and this one is only discovered.
+    "gpt-5.6-sol*"
     "gpt-*"
     "!gpt-5.6-luna"
     "!gpt-5.6-terra"
