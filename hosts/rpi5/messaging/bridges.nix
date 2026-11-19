@@ -371,6 +371,14 @@ in
           [ -s ${doublePuppetEnv} ] || printf 'DOUBLEPUPPET_TOKEN=%s\nDOUBLEPUPPET_HS_TOKEN=%s\n' "$(rand)" "$(rand)" > ${doublePuppetEnv}
           chgrp matrix-mcp ${doublePuppetEnv}
           chmod 0440 ${doublePuppetEnv}
+          # This script is the only writer: drop what a removed bridge left, since
+          # Tuwunel loads every file here and would keep its URL and tokens.
+          for f in ${appserviceDir}/*.yaml; do
+            case "$(basename "$f" .yaml)" in
+              ${lib.concatStringsSep "|" (lib.attrNames registrationFiles)}) ;;
+              *) rm -f "$f" ;;
+            esac
+          done
           (set -a; . ${doublePuppetEnv}; ${render} -i ${registrationFiles.doublepuppet} -o ${appserviceDir}/doublepuppet.yaml)
           ${lib.concatStrings (lib.mapAttrsToList setupBridge bridges)}
           ${lib.concatStrings (lib.mapAttrsToList setupRemote remoteBridges)}
