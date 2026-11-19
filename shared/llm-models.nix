@@ -86,6 +86,10 @@ let
     "gpt-5.4-nano" = "auto";
     # Karakeep's EMBEDDING_TEXT_MODEL.
     "text-embedding-3-small" = "qwen3-embedding:8b";
+    # ChatGPT desktop's Work mode (shares the Mac's ~/.codex) sends its own
+    # `-wm` ids unchanged; ChatGPT's Codex endpoint rejects them.
+    "gpt-5.6-sol-wm" = "gpt-5.6";
+    "gpt-6.1-sol-wm" = "gpt-6.1-sol";
   };
 
   gateModel =
@@ -112,13 +116,8 @@ in
     "gpt-6-luna"
     # tiny-llm-gate router: Jev picks Luna or Sol per user turn.
     "smart"
-    # ChatGPT's Work mode (same ~/.codex) sends `<id>-wm` and strips the
-    # suffix only if <id> is listed here; its default is gpt-5.6-sol.
-    # A glob: a plain id must be declared, and this one is only discovered.
-    "gpt-5.6-sol*"
     "gpt-*"
-    "!gpt-5.6-luna"
-    "!gpt-5.6-terra"
+    "!gpt-5*"
     "asale-gpt-*"
     "@ollama"
     "@omlx"
