@@ -21,11 +21,14 @@ HOME = os.path.expanduser("~")
 SOURCES = {
     "zen": (
         f"{HOME}/Library/Application Support/zen/Profiles/*/cookies.sqlite",
-        "select host, name, value, path, originAttributes from moz_cookies where host like ?",
+        # Partitioned cookies belong to a site embedded in another: not this session.
+        "select host, name, value, path, originAttributes from moz_cookies"
+        " where host like ? and originAttributes not like '%partitionKey=%'",
     ),
     "t3": (
         f"{HOME}/Library/Application Support/t3code-v2/Partitions/t3code-preview-*/Cookies",
-        "select host_key, name, value, path, '' from cookies where host_key like ?",
+        "select host_key, name, value, path, '' from cookies"
+        " where host_key like ? and top_frame_site_key = ''",
     ),
 }
 
@@ -69,7 +72,13 @@ def main():
     args = parser.parse_args()
     pattern, query = SOURCES[args.source]
     stores = [args.store] if args.store else glob.glob(pattern)
-    found = {s: rows for s in stores if (rows := read_store(s, query, args.domain))}
+    found = {}
+    for store in stores:
+        rows = read_store(store, query, args.domain)
+        if args.context is not None:
+            rows = [r for r in rows if r[4] == args.context]
+        if rows:
+            found[store] = rows
     if not found:
         sys.exit(f"no cookie for {args.domain} in {len(stores)} store(s): log in first")
     if len(found) > 1:
@@ -77,12 +86,9 @@ def main():
         sys.exit(
             f"{args.domain} is in several stores, pick one with --store:\n{listing}"
         )
-    # Partitioned cookies belong to the site embedded in another one: not this session.
-    rows = [r for r in next(iter(found.values())) if "partitionKey=" not in r[4]]
+    rows = next(iter(found.values()))
     contexts = {r[4] for r in rows}
-    if args.context is not None:
-        rows = [r for r in rows if r[4] == args.context]
-    elif len(contexts) > 1:
+    if len(contexts) > 1:
         listing = "\n".join(f"  {c!r}" for c in sorted(contexts))
         sys.exit(
             f"{args.domain} is in several containers, pick one with --context:\n{listing}"
