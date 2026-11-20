@@ -74,6 +74,7 @@
       "mcp__plugin_slack_slack",
       "mcp__Linear",
       "mcp__Miro",
+      "mcp__claude_ai_Miro",
       "mcp__metabase",
       "mcp__trusk-steampipe",
       "mcp__toolhive-tech",
