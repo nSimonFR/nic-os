@@ -6,7 +6,9 @@
 # is what the tailnet address reaches.
 #
 # Needs, by hand and once (macOS gates them on the exact binary, so a new store
-# path after a bump asks again; check with `mautrix-imessage -p`):
+# path after a bump asks again; `mautrix-imessage -p` only tests the terminal
+# you run it from, so check the launchd agent with `lsof -c mautrix-imessage`
+# showing chat.db open):
 #   - signed in to Messages.app
 #   - Full Disk Access for the store binary (readlink -f $(which mautrix-imessage))
 #   - Contacts, and Automation → Messages, on first prompt
@@ -45,6 +47,9 @@ let
     imessage.platform = "mac";
     bridge = {
       user = "@nico:${tailnetFqdn}";
+      # Double puppeting: log in as Nico with this bridge's own appservice token
+      # (its registration covers @nico), so chat rooms join him instead of inviting.
+      login_shared_secret = "appservice";
       # Tuwunel has no MSC2716 batch send.
       backfill.enable = false;
       encryption.allow = false;

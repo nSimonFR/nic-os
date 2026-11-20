@@ -194,7 +194,24 @@ let
     };
   }
   // lib.mapAttrs (name: b: appserviceRegistration name "http://127.0.0.1:${toString b.port}") bridges
-  // lib.mapAttrs (name: b: appserviceRegistration name b.url) remoteBridges;
+  # A remote bridge logs in as Nico with its own token (`login_shared_secret:
+  # appservice`; the doublepuppet token lives only on this host), so its
+  # registration also covers @nico, shared with the other registrations.
+  // lib.mapAttrs (
+    name: b:
+    let
+      reg = appserviceRegistration name b.url;
+    in
+    reg
+    // {
+      namespaces.users = reg.namespaces.users ++ [
+        {
+          regex = "^${lib.escapeRegex owner}$";
+          exclusive = false;
+        }
+      ];
+    }
+  ) remoteBridges;
 
   bridgeConfig =
     name: b:
