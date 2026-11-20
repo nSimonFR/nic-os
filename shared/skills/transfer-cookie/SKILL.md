@@ -19,8 +19,11 @@ fails. Copy their session instead. Ask once before the first copy: it is their l
 4. `preview_navigate` to the target page and read `location.href`. Back on `/signin` or
    the IdP = refused.
 
-- `document.cookie` cannot set `HttpOnly`; servers seen so far (Elevo, Trusk BO) accept
-  the cookie anyway.
+- `document.cookie` cannot set `HttpOnly`; servers seen so far (Elevo, Malibou, Trusk BO)
+  accept the cookie anyway.
+- Clerk sites (Malibou): `__client` on `clerk.<domain>` is the long-lived one. Set it first
+  (e.g. from `https://clerk.<domain>/v1/environment`), then the app's `__client_uat` and
+  `__refresh_*`; Clerk mints a fresh `__session` itself, an expired one does not matter.
 - Chrome and Safari stores are encrypted (Keychain): not supported, use Zen.
 - The value passes through the tool call; never echo it in chat or write it outside the
   scratchpad. The script deletes its copy of the store.
