@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Print, per cookie host, the JS that recreates a browser session's cookies.
 
-usage: cookie-js.py <domain-substring> [--source zen|t3] [--store <path>]
+usage: cookie-js.py <domain-substring> [--source zen|t3] [--store <path>] [--context <ctx>]
 Copies each store (WAL included), reads it, deletes the copy, and uses the one
 store that holds cookies for the domain.
 """
 
+import argparse
 import base64
 import glob
 import json
@@ -20,17 +21,13 @@ HOME = os.path.expanduser("~")
 SOURCES = {
     "zen": (
         f"{HOME}/Library/Application Support/zen/Profiles/*/cookies.sqlite",
-        "select host, name, value, path from moz_cookies where host like ?",
+        "select host, name, value, path, originAttributes from moz_cookies where host like ?",
     ),
     "t3": (
         f"{HOME}/Library/Application Support/t3code-v2/Partitions/t3code-preview-*/Cookies",
-        "select host_key, name, value, path from cookies where host_key like ?",
+        "select host_key, name, value, path, '' from cookies where host_key like ?",
     ),
 }
-
-
-def arg(flag, default=None):
-    return sys.argv[sys.argv.index(flag) + 1] if flag in sys.argv else default
 
 
 def read_store(path, query, domain):
@@ -59,17 +56,39 @@ def rails_exp(value):
 
 
 def main():
-    domain = sys.argv[1]
-    pattern, query = SOURCES[arg("--source", "zen")]
-    stores = [arg("--store")] if "--store" in sys.argv else glob.glob(pattern)
-    found = {s: rows for s in stores if (rows := read_store(s, query, domain))}
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("domain")
+    parser.add_argument("--source", choices=SOURCES, default="zen")
+    parser.add_argument(
+        "--store", help="cookie store path, when several hold the domain"
+    )
+    parser.add_argument(
+        "--context",
+        help="Zen originAttributes (container), when several hold the domain",
+    )
+    args = parser.parse_args()
+    pattern, query = SOURCES[args.source]
+    stores = [args.store] if args.store else glob.glob(pattern)
+    found = {s: rows for s in stores if (rows := read_store(s, query, args.domain))}
     if not found:
-        sys.exit(f"no cookie for {domain} in {len(stores)} store(s): log in first")
+        sys.exit(f"no cookie for {args.domain} in {len(stores)} store(s): log in first")
     if len(found) > 1:
         listing = "\n".join(f"  {s}" for s in found)
-        sys.exit(f"{domain} is in several stores, pick one with --store:\n{listing}")
+        sys.exit(
+            f"{args.domain} is in several stores, pick one with --store:\n{listing}"
+        )
+    # Partitioned cookies belong to the site embedded in another one: not this session.
+    rows = [r for r in next(iter(found.values())) if "partitionKey=" not in r[4]]
+    contexts = {r[4] for r in rows}
+    if args.context is not None:
+        rows = [r for r in rows if r[4] == args.context]
+    elif len(contexts) > 1:
+        listing = "\n".join(f"  {c!r}" for c in sorted(contexts))
+        sys.exit(
+            f"{args.domain} is in several containers, pick one with --context:\n{listing}"
+        )
     by_host = {}
-    for host, name, value, path in next(iter(found.values())):
+    for host, name, value, path, _ in rows:
         exp = rails_exp(value)
         if exp:
             print(f"# {name}: token exp {exp}", file=sys.stderr)
