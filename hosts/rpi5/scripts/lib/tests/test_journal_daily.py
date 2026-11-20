@@ -1352,6 +1352,9 @@ def test_work_notes_read_the_owners_file_and_are_cached(tmp_path):
     assert "**api**" in notes and state["_work_dispatch"]["2026-10-19"] == notes
     assert wm.day_work_notes(c, run, state, day, print, now=after) == notes
     assert len(calls) == 2  # one sessions call, one dispatch, then the cache
+    redo = dataclasses.replace(c, redo_file=str(tmp_path / "days"))
+    wm.day_work_notes(redo, run, state, day, print, now=after)
+    assert len(calls) == 4  # a redo regenerates them
     assert (
         wm.day_work_notes(
             dataclasses.replace(c, work_owners_file=""), run, {}, day, print, now=after

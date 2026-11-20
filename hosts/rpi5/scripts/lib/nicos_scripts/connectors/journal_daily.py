@@ -1595,10 +1595,11 @@ def day_notes(cfg, run, state, day, log, now=None):
 
 
 def day_work_notes(cfg, run, state, day, log, now=None):
-    """The day's work notes, cached in state["_work_dispatch"] like day_notes."""
+    """The day's work notes, cached in state["_work_dispatch"] like day_notes. A
+    redo regenerates them: it is asked for when the rendering or the voice changed."""
     key = day.isoformat()
     cache = state.get("_work_dispatch", {})
-    if key in cache:
+    if key in cache and not cfg.redo_file:
         return cache[key]
     lo, hi = day_bounds(day)
     if not cfg.work_owners_file or hi > (now or datetime.now(timezone.utc).timestamp()):
