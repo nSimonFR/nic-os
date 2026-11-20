@@ -1669,11 +1669,11 @@
         "nixpkgs-pnpm": "nixpkgs-pnpm"
       },
       "locked": {
-        "lastModified": 1794858150,
-        "narHash": "sha256-U0+KhWfTKbK5XuoEl4LQnPzFBPiLPamOtJHbjYLef0U=",
+        "lastModified": 1795161917,
+        "narHash": "sha256-yisrQBl5FxsEu4NWF5s4nDIIxl52WFEwGKn1FOUazCk=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "5276712e32146df7dc8a479b2bd145b293645c0d",
+        "rev": "ff05bf94ef9768db23403bdb8c2de0da927f3225",
         "type": "github"
       },
       "original": {
