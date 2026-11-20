@@ -14,16 +14,23 @@ fails. Copy their session instead. Ask once before the first copy: it is their l
    `exp` of any Rails-signed token. Past `exp` = stale session, even if the cookie
    is still there: ask the user to log in again.
 3. For each `==` block: `preview_navigate` to a page on that host (the sign-in page
-   will do), then `preview_evaluate` the block. A host-only cookie can only be set from
-   its own host, so a site with an API subdomain needs two stops.
+   will do), check `location.host` is that host (or under it, for a leading-dot block),
+   then `preview_evaluate` the block. A redirect to another host = skip, do not evaluate
+   there. A host-only cookie can only be set from its own host, so a site with an API
+   subdomain needs two stops.
 4. `preview_navigate` to the target page and read `location.href`. Back on `/signin` or
    the IdP = refused.
 
 - `document.cookie` cannot set `HttpOnly`; servers seen so far (Elevo, Malibou, Trusk BO)
   accept the cookie anyway.
+- `document.cookie` cannot overwrite an `HttpOnly` cookie of the same name already in
+  the agent's profile (from an earlier login there). Still refused at step 4: redo the
+  transfer in a tab opened with `profileId: "incognito"`.
 - Clerk sites (Malibou): `__client` on `clerk.<domain>` is the long-lived one. Set it first
   (e.g. from `https://clerk.<domain>/v1/environment`), then the app's `__client_uat` and
   `__refresh_*`; Clerk mints a fresh `__session` itself, an expired one does not matter.
+  The copy lives only in the agent's local browser, but without `HttpOnly` any script on
+  the Clerk host can read that long-lived token there: browse nothing else in that tab.
 - Chrome and Safari stores are encrypted (Keychain): not supported, use Zen.
 - The value passes through the tool call; never echo it in chat or write it outside the
   scratchpad. The script deletes its copy of the store.
