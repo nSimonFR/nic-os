@@ -1603,7 +1603,7 @@ def day_work_notes(cfg, run, state, day, log, now=None):
         return cache[key]
     lo, hi = day_bounds(day)
     if not cfg.work_owners_file or hi > (now or datetime.now(timezone.utc).timestamp()):
-        return []
+        return cache.get(key, [])
     try:
         owners = _names(read_secret(cfg.work_owners_file).replace("\n", ","))
         notes = src.work_dispatch_notes(
