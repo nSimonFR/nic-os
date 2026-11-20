@@ -1355,6 +1355,11 @@ def test_work_notes_read_the_owners_file_and_are_cached(tmp_path):
     redo = dataclasses.replace(c, redo_file=str(tmp_path / "days"))
     wm.day_work_notes(redo, run, state, day, print, now=after)
     assert len(calls) == 4  # a redo regenerates them
+
+    def down(cmd):
+        raise OSError("down")
+
+    assert wm.day_work_notes(redo, down, state, day, print, now=after) == notes
     assert (
         wm.day_work_notes(
             dataclasses.replace(c, work_owners_file=""), run, {}, day, print, now=after

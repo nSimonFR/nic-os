@@ -1611,7 +1611,7 @@ def day_work_notes(cfg, run, state, day, log, now=None):
         )
     except (OSError, ValueError, subprocess.CalledProcessError) as e:
         log(f"{key}: work notes unavailable ({e})")
-        return []
+        return cache.get(key, [])  # a failed redo keeps the notes already written
     if not cfg.dry_run:
         state.setdefault("_work_dispatch", {})[key] = notes
     return notes
