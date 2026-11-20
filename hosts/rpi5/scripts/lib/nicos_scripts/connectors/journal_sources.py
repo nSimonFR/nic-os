@@ -766,13 +766,20 @@ def activity_section(totals):
 DISPATCH_VOICE = "concis, en français"
 # The cloud dispatch reports every repo it is given, idle ones included.
 # Without the opening rule, intros came out as "voici l'essentiel" filler.
+# Headlines used to read "trois services déployés dans <the deploy repo>": the
+# opening sentence must name features and tickets, never a repo.
 WORK_DISPATCH_VOICE = (
-    "concis, en français ; ouvre par une seule phrase qui nomme concrètement ce qui"
-    " a changé, sans formule creuse (« voici l'essentiel », « sans détour »,"
+    "concis, en français ; ouvre par une seule phrase qui nomme les fonctionnalités"
+    " et les tickets (CO-123) avancés ou livrés dans la journée, jamais un dépôt ni"
+    " un service, sans formule creuse (« voici l'essentiel », « sans détour »,"
     " « rien de plus ») ; ne parle que des dépôts qui ont changé, sans jamais"
     " mentionner les autres ni leur nombre ; reste générique : aucun numéro de"
     " version, tag, branche ni PR, et une mise en production se dit « déployé »"
-    " sans détailler les environnements"
+    " sans détailler les environnements ; un dépôt qui ne fait que déployer"
+    " (montées de version des services) ne se cite jamais dans l'intro : dis"
+    " plutôt quelle fonctionnalité ou quel ticket part en production ; s'il n'y a"
+    " que des déploiements, l'intro dit simplement ce qui part en production,"
+    " sans jamais dire ce qui n'a pas avancé"
 )
 WORK_DISPATCH_BATCH = 5  # `entire dispatch --repos` takes at most 5
 # 429 "dispatch rate limit" within about a minute of the previous one (measured).

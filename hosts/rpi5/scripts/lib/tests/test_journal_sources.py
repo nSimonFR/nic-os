@@ -508,6 +508,7 @@ def test_work_dispatch_notes_batch_the_repos_five_by_five():
         in dispatches[0]
     )
     assert "ne parle que des dépôts qui ont changé" in dispatches[0]
+    assert "les fonctionnalités et les tickets" in dispatches[0]
     assert notes.count("**api**") == 2 and notes[0].startswith("Une journée")
     assert js.work_dispatch_notes(run, (), lo, lo + 86400) == []
 
