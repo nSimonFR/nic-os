@@ -64,7 +64,13 @@ printf '%s\n' "${repos[@]}" | sort -u | while read -r repo; do
       if [ "$first" = 1 ]; then
         first=0
       elif [ -n "$path" ] && [ -d "$path" ] && [ "$locked" = 0 ]; then
-        gitdir=$(git -C "$path" rev-parse --absolute-git-dir 2>/dev/null)
+        # A worktree whose .git link is broken can't be checked, so it is kept.
+        gitdir=$(git -C "$path" rev-parse --absolute-git-dir 2>/dev/null) || gitdir=""
+        case "$gitdir" in */worktrees/*) ;; *)
+          path="" branch="" locked=0
+          continue
+          ;;
+        esac
         # Read the activity stamps before anything below could refresh the index.
         last=0
         for f in "$gitdir/HEAD" "$gitdir/index" "$gitdir/logs/HEAD"; do
@@ -73,13 +79,16 @@ printf '%s\n' "${repos[@]}" | sort -u | while read -r repo; do
           [ "$t" -gt "$last" ] && last=$t
         done
         if [ "$last" -lt "$cutoff" ] &&
-          [ -z "$(git -C "$path" --no-optional-locks status --porcelain --ignore-submodules=all 2>/dev/null)" ] &&
+          st=$(git -C "$path" --no-optional-locks status --porcelain --ignore-submodules=all 2>/dev/null) &&
+          [ -z "$st" ] &&
           [ -z "$(git -C "$path" rev-list -n1 HEAD --not --remotes 2>/dev/null)" ]; then
           if [ "$dry" = 1 ]; then
             say "would remove $path${branch:+ ($branch)}"
           else
             # --force: a worktree of a Home Repo holds empty submodule dirs, which git
             # otherwise refuses to remove even when clean (checked just above).
+            # Read-only files (copied out of the Nix store) would stop the removal halfway.
+            chmod -R u+w "$path" 2>/dev/null
             if git -C "$repo" worktree remove --force "$path"; then
               say "removed $path"
               if [ -n "$branch" ] && [ "$branch" != main ] && [ "$branch" != master ] &&
