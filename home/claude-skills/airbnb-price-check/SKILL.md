@@ -43,12 +43,12 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    Read back every night: any mismatch with the typed price (Airbnb can store a Sat/Sun €1
    under, or Save can fail and leave the old price), or a night below the floor, gets one
    re-edit and a new readback; if it still differs, report it, and if it is still below the
-   floor put back the price read before the edit (urgent report if that fails too). Then
-   re-run step 2.
+   floor put back the price read before the edit and read it back (urgent report if the
+   restore fails, reads back different, or can't be read). Then re-run step 2.
    `preview_snapshot` can time out: read the DOM.
 
 5. **Daily check.** `CronCreate` (session-only, 7-day expiry), off-minute like `7 9 * * *`:
    steps 1-3 plus step 4's per-night calendar read (read-only, no edit; needs the Zen login:
-   if the calendar can't be read, the result is "unverified", never "No cut needed"),
-   ≤6 lines, "No cut needed today" only when verified, else exact host prices per night,
-   then ask. For one that outlives the session, extend the Hermes `airbnb-pricing` cron.
+   a night whose calendar price can't be read is "unverified": no cut proposed for it, and
+   never "No cut needed"), ≤6 lines, "No cut needed today" only when every night is
+   verified, else exact host prices for the verified nights, then ask. For one that outlives the session, extend the Hermes `airbnb-pricing` cron.
