@@ -13,8 +13,8 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    gaps with `lead_days`, 90-night cap. Floors and lead-time ladder (-5 % ≤14 d, -10 % ≤7 d,
    -15 % ≤3 d) are in the Hermes `airbnb-pricing` skill's `rules.json`. The script's
    `prices` are rule output, not the live calendar. Any proposal is provisional: the cut test
-   is per night against its own calendar price, in step 4 (our step 2 card is a 2-night
-   average and says nothing about one night).
+   is per night against its own calendar price (step 4, and the daily check in step 5); our
+   step 2 card is a 2-night average and says nothing about one night.
 
 2. **Market, no login.** `preview_open` with `profileId: "default"`, then `fetch` from the page:
    `/s/Paris-20e-Arrondissement--France/homes?checkin=D1&checkout=D2&adults=2&currency=EUR&room_types[]=Entire home/apt&min_bedrooms=1&min_beds=1`
@@ -42,11 +42,13 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    shows a "€a - €b" button: click it first. `preview_act type` and a real click on Save fail.
    Read back every night: any mismatch with the typed price (Airbnb can store a Sat/Sun €1
    under, or Save can fail and leave the old price), or a night below the floor, gets one
-   re-edit and a new readback; if it still differs, report it. Then re-run step 2.
+   re-edit and a new readback; if it still differs, report it, and if it is still below the
+   floor put back the price read before the edit (urgent report if that fails too). Then
+   re-run step 2.
    `preview_snapshot` can time out: read the DOM.
 
 5. **Daily check.** `CronCreate` (session-only, 7-day expiry), off-minute like `7 9 * * *`:
    steps 1-3 plus step 4's per-night calendar read (read-only, no edit; needs the Zen login:
-   if the calendar can't be read, report "unverified", propose no cut), ≤6 lines, "No cut
-   needed today" or exact host prices per night, then ask. For one
-   that outlives the session, extend the Hermes `airbnb-pricing` cron.
+   if the calendar can't be read, the result is "unverified", never "No cut needed"),
+   ≤6 lines, "No cut needed today" only when verified, else exact host prices per night,
+   then ask. For one that outlives the session, extend the Hermes `airbnb-pricing` cron.
