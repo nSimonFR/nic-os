@@ -357,6 +357,11 @@ in
     };
   };
 
+  # APM 128 let the DATA_HDD park its heads ~5M times (rated ~600k); 254 stops that.
+  services.udev.extraRules = ''
+    ACTION=="add|change", SUBSYSTEM=="block", ENV{DEVTYPE}=="disk", ENV{ID_SERIAL}=="Hitachi_HTS547575A9E384_J2540054F3M9HE", RUN+="${pkgs.smartmontools}/bin/smartctl -s apm,254 -d sat /dev/%k"
+  '';
+
   zramSwap = {
     memoryPercent = 200; # 200% of 4 GiB ≈ 8 GiB virtual; actual RAM bounded by zstd compression (~3-4x)
     memoryMax = 10 * 1024 * 1024 * 1024;
