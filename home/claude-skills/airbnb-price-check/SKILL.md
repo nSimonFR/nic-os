@@ -12,10 +12,9 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
 1. **Own facts.** `ssh rpi5 '~/.hermes/scripts/airbnb-pricing.sh --no-state --force'`: open
    gaps with `lead_days`, 90-night cap. Floors and lead-time ladder (-5 % ≤14 d, -10 % ≤7 d,
    -15 % ≤3 d) are in the Hermes `airbnb-pricing` skill's `rules.json`. The script's
-   `prices` are rule output, not the live calendar. Our own card in step 2 (guest nightly
-   - 12 €) only estimates a 2-night average: a proposed cut is provisional until each night's
-   calendar price is read (step 4). A night counts as a cut only if the new price is lower than
-   its calendar price; no calendar price, no cut for that night.
+   `prices` are rule output, not the live calendar. Any proposal is provisional: the cut test
+   is per night against its own calendar price, in step 4 (our step 2 card is a 2-night
+   average and says nothing about one night).
 
 2. **Market, no login.** `preview_open` with `profileId: "default"`, then `fetch` from the page:
    `/s/Paris-20e-Arrondissement--France/homes?checkin=D1&checkout=D2&adults=2&currency=EUR&room_types[]=Entire home/apt&min_bedrooms=1&min_beds=1`
@@ -34,15 +33,17 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    stay), list it in the report and propose the min-stay change separately.
 
 4. **Apply (ask first).** `transfer-cookie` (Zen) into an **incognito** tab, delete the cookie
-   files after. First read each night's current calendar price (day buttons, "Nightly price
-   €X") and drop any night whose proposed price is not lower. One range per call:
+   files after. Before any edit read each night's own calendar price (day buttons, "Nightly
+   price €X"): keep a night only if the proposed price is lower than it; skip the rest,
+   including a night with no readable price. Edit the kept nights, one range per call:
    `https://www.airbnb.com/multicalendar/<id>/edit-selected-dates/<from>/<to>/nightly-price`
    Then in `preview_evaluate`: set `#PriceInput-nightlyPrice` (native value setter + `input`
    event), DOM-click the `Save` button, wait 3 s, read the day buttons back. A mixed-price range
    shows a "€a - €b" button: click it first. `preview_act type` and a real click on Save fail.
-   Verify by re-running step 2; a night below its target or the floor (Airbnb can store a
-   Sat/Sun €1 under): re-edit that range and read it back again. `preview_snapshot` can
-   time out: read the DOM.
+   Read back every night: any mismatch with the typed price (Airbnb can store a Sat/Sun €1
+   under, or Save can fail and leave the old price), or a night below the floor, gets one
+   re-edit and a new readback; if it still differs, report it. Then re-run step 2.
+   `preview_snapshot` can time out: read the DOM.
 
 5. **Daily check.** `CronCreate` (session-only, 7-day expiry), off-minute like `7 9 * * *`:
    steps 1-3 read-only, ≤6 lines, "No cut needed today" or exact host prices, then ask. For one
