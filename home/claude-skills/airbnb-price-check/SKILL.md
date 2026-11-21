@@ -40,8 +40,10 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    Then in `preview_evaluate`: set `#PriceInput-nightlyPrice` (native value setter + `input`
    event), DOM-click the `Save` button, wait 3 s, read the day buttons back. A mixed-price range
    shows a "€a - €b" button: click it first. `preview_act type` and a real click on Save fail.
-   Read back every night: any mismatch with the typed price (Airbnb can store a Sat/Sun €1
-   under, or Save can fail and leave the old price), or a night below the floor, gets one
+   Read back every night; a night that can't be read back has failed, never passed: report
+   it as unverified (the price may sit below the floor). Any mismatch with the typed price
+   (Airbnb can store a Sat/Sun €1 under, or Save can fail and leave the old price), or a
+   night below the floor, gets one
    re-edit and a new readback; if it still differs, report it, and if it is still below the
    floor put back the price read before the edit and read it back (urgent report if the
    restore fails, reads back different, or can't be read). Then re-run step 2.
