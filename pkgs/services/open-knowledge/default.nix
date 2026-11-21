@@ -16,7 +16,7 @@
 buildNpmPackage {
   pname = "open-knowledge";
   # renovate: datasource=npm depName=@inkeep/open-knowledge
-  version = "0.89.1";
+  version = "0.89.14";
   src = ./.;
   nodejs = nodejs_24;
   # Read from package-lock.json: no hash to re-pin when a lock refresh or a security
