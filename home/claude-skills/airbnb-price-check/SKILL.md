@@ -12,8 +12,10 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
 1. **Own facts.** `ssh rpi5 '~/.hermes/scripts/airbnb-pricing.sh --no-state --force'`: open
    gaps with `lead_days`, 90-night cap. Floors and lead-time ladder (-5 % ≤14 d, -10 % ≤7 d,
    -15 % ≤3 d) are in the Hermes `airbnb-pricing` skill's `rules.json`. The script's
-   `prices` are rule output, not the live calendar: get the current price from our own card in
-   step 2 (guest nightly - 12 €) and call it a cut only if the new price is lower.
+   `prices` are rule output, not the live calendar. Our own card in step 2 (guest nightly
+   - 12 €) only estimates a 2-night average: a proposed cut is provisional until each night's
+   calendar price is read (step 4). A night counts as a cut only if the new price is lower than
+   its calendar price; no calendar price, no cut for that night.
 
 2. **Market, no login.** `preview_open` with `profileId: "default"`, then `fetch` from the page:
    `/s/Paris-20e-Arrondissement--France/homes?checkin=D1&checkout=D2&adults=2&currency=EUR&room_types[]=Entire home/apt&min_bedrooms=1&min_beds=1`
@@ -32,7 +34,8 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    stay), list it in the report and propose the min-stay change separately.
 
 4. **Apply (ask first).** `transfer-cookie` (Zen) into an **incognito** tab, delete the cookie
-   files after. One range per call:
+   files after. First read each night's current calendar price (day buttons, "Nightly price
+   €X") and drop any night whose proposed price is not lower. One range per call:
    `https://www.airbnb.com/multicalendar/<id>/edit-selected-dates/<from>/<to>/nightly-price`
    Then in `preview_evaluate`: set `#PriceInput-nightlyPrice` (native value setter + `input`
    event), DOM-click the `Save` button, wait 3 s, read the day buttons back. A mixed-price range
