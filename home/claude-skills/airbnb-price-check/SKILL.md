@@ -11,11 +11,14 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
 
 1. **Own facts.** `ssh rpi5 '~/.hermes/scripts/airbnb-pricing.sh --no-state --force'`: open
    gaps with `lead_days`, 90-night cap. Floors and lead-time ladder (-5 % ≤14 d, -10 % ≤7 d,
-   -15 % ≤3 d) are in the Hermes `airbnb-pricing` skill's `rules.json`.
+   -15 % ≤3 d) are in the Hermes `airbnb-pricing` skill's `rules.json`. The script's
+   `prices` are rule output, not the live calendar: get the current price from our own card in
+   step 2 (guest nightly - 12 €) and call it a cut only if the new price is lower.
 
 2. **Market, no login.** `preview_open` with `profileId: "default"`, then `fetch` from the page:
    `/s/Paris-20e-Arrondissement--France/homes?checkin=D1&checkout=D2&adults=2&currency=EUR&room_types[]=Entire home/apt&min_bedrooms=1&min_beds=1`
-   (2-night stays, one midweek and one Fri/Sat per gap). In `<script id="data-deferred-state-0">`
+   (2-night stays, a midweek and a Fri/Sat one per gap where they fit; say when a gap
+   is too short for the weekend comparison). In `<script id="data-deferred-state-0">`
    take nodes with `structuredDisplayPrice` + `demandStayListing`; nightly = the "N nights x €X"
    item of `explanationData.priceDetails`; id = `atob(demandStayListing.id).split(':')[1]`.
    Keep 1-bedroom, ≥4.85 with ≥5 reviews or Guest favorite, de-duplicate by id, report
