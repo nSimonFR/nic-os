@@ -46,5 +46,7 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    `preview_snapshot` can time out: read the DOM.
 
 5. **Daily check.** `CronCreate` (session-only, 7-day expiry), off-minute like `7 9 * * *`:
-   steps 1-3 read-only, ≤6 lines, "No cut needed today" or exact host prices, then ask. For one
+   steps 1-3 plus step 4's per-night calendar read (read-only, no edit; needs the Zen login:
+   if the calendar can't be read, report "unverified", propose no cut), ≤6 lines, "No cut
+   needed today" or exact host prices per night, then ask. For one
    that outlives the session, extend the Hermes `airbnb-pricing` cron.
