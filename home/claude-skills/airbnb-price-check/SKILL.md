@@ -24,7 +24,9 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    calendar price + 12 €: compare on guest, type host.
 
 3. **Decide.** Aim near the median for a Guest favorite, weekend +10 %. Cut only while nights
-   are open and the ladder says so, never below the floor.
+   are open and the ladder says so, never below the floor. Cap binding: hold, no cut.
+   Gap with `bookable_at_min_stay: false`: no cut (a lower price can't fit the minimum
+   stay), list it in the report and propose the min-stay change separately.
 
 4. **Apply (ask first).** `transfer-cookie` (Zen) into an **incognito** tab, delete the cookie
    files after. One range per call:
@@ -32,7 +34,9 @@ tools). Listing id = `/multicalendar/<id>` in the host calendar URL; flat facts 
    Then in `preview_evaluate`: set `#PriceInput-nightlyPrice` (native value setter + `input`
    event), DOM-click the `Save` button, wait 3 s, read the day buttons back. A mixed-price range
    shows a "€a - €b" button: click it first. `preview_act type` and a real click on Save fail.
-   Verify by re-running step 2. `preview_snapshot` can time out: read the DOM.
+   Verify by re-running step 2; a night below its target or the floor (Airbnb can store a
+   Sat/Sun €1 under): re-edit that range and read it back again. `preview_snapshot` can
+   time out: read the DOM.
 
 5. **Daily check.** `CronCreate` (session-only, 7-day expiry), off-minute like `7 9 * * *`:
    steps 1-3 read-only, ≤6 lines, "No cut needed today" or exact host prices, then ask. For one
