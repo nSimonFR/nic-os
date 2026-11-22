@@ -4,8 +4,9 @@ hosts/rpi5/security/pocket-id.nix writes the declarations to a JSON file; this
 upserts each one through the admin API (STATIC_API_KEY) and keeps its secret in
 `secretFile`, readable by the consuming service's group.
 
-A client's secret is the file's content; `<secretFile>.id` records the Pocket ID
-secret id it was registered under. The value is (re)registered whenever that id
+A client's secret is the content of `secretFile`; `idFile` (kept in a separate
+directory, since client ids may contain dots) records the Pocket ID secret id it
+was registered under. The value is (re)registered whenever that id
 is not among the client's active secrets: a missing file (a new random value), a
 recreated client, or a registration interrupted on an earlier run. A restored or
 reset database so gets back the secrets the services already hold.
@@ -102,7 +103,8 @@ def desired(c):
 
 def write_secret(path, value, group, chown=shutil.chown):
     path = Path(path)
-    tmp = path.with_suffix(".tmp")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + "~")  # "~" is not valid in a client id
     fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o440)
     with os.fdopen(fd, "w") as f:
         f.write(value)
@@ -131,7 +133,7 @@ def sync_client(api, c, log, chown=shutil.chown):
     if want["isPublic"]:
         return
     path = Path(c["secretFile"])
-    id_file = path.with_name(path.name + ".id")
+    id_file = Path(c["idFile"])
     existing = path.read_text().strip() if path.exists() else ""
     if existing and current is not None and id_file.exists():
         listed = api.call("GET", f"/api/oidc/clients/{cid}/secrets")
@@ -141,6 +143,7 @@ def sync_client(api, c, log, chown=shutil.chown):
     reg = api.call("POST", f"/api/oidc/clients/{cid}/secrets", {"secret": value})
     if not existing:
         write_secret(path, value, c["secretGroup"], chown=chown)
+    id_file.parent.mkdir(parents=True, exist_ok=True)
     id_file.write_text(reg["id"])
     log(f"{cid}: secret registered")
 

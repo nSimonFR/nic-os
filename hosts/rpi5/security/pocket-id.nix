@@ -37,6 +37,7 @@ let
       lib.mapAttrsToList (id: c: {
         inherit id;
         inherit (c) name secretFile secretGroup;
+        idFile = "${secretsDir}/registered/${id}";
         callbackURLs = c.callbackUrls;
         logoutCallbackURLs = c.logoutCallbackUrls;
         launchURL = c.launchUrl;
@@ -85,7 +86,7 @@ let
         secretFile = mkOption {
           type = types.str;
           readOnly = true;
-          default = "${secretsDir}/${name}";
+          default = "${secretsDir}/secrets/${name}";
           description = "Client secret, root:secretGroup 0440, written by pocket-id-clients.";
         };
       };
