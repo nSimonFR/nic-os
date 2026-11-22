@@ -233,6 +233,11 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  "pocket-id-env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "calino-ics-feeds.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

@@ -117,6 +117,8 @@ dps-ea-bridge = "nicos_scripts.vaultwarden.ea_bridge:main"
 vault-agent = "nicos_scripts.vaultwarden.agents:main"
 # Daily: SSH keys, funnels and SSH sources that live outside the Nix config.
 security-drift = "nicos_scripts.security.drift:main"
+# After pocket-id: upsert nic.sso.clients, write each client secret (security/pocket-id.nix).
+pocket-id-clients = "nicos_scripts.security.pocket_id_clients:main"
 # Every 2 min: earlyoom kills, one Telegram message per memory-pressure episode.
 earlyoom-alert = "nicos_scripts.monitoring.earlyoom_alert:main"
 # Long-running: kernel OOM kill on a sustained PSI memory stall.

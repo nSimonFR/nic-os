@@ -6,6 +6,7 @@
     ./sudo-totp.nix
     ./sudo-ssh-agent.nix
     ./shellwatch.nix
+    ./pocket-id.nix
     ./death-plan-switch.nix
     ./vaultwarden.nix
     ./agent-vault.nix
