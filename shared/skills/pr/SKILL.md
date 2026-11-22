@@ -16,10 +16,13 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
 3. **Create.** Push, `gh pr create --base <base> --body-file -` with step 1's account and
    flags. Body from [`references/body.md`](references/body.md), folded into the repo
    template if there is one. Print the full URL.
-4. **Watch.** Note the **required** checks (`gh pr checks <n> --required`). Find the run by
-   **headSha**, not name, and wait with Monitor:
-   `until [ "$(gh run view <id> --json status -q .status)" = completed ]; do sleep 30; done`.
-   A new push means a new run ID.
+4. **Watch.** Run [`scripts/pr-watch.sh`](scripts/pr-watch.sh) `<owner/repo> <n> [deploy workflow]`
+   in the background and wait on it. It exits on the first thing to act on:
+   - `FIX`: an unanswered review-bot (CodeRabbit) thread or a red check. Fix it yourself (red:
+     step 5), push, reply under each thread with the fix (on nic-os never resolve its threads),
+     and start the watch again. Don't hand back for this.
+   - `HUMAN`: nothing left to fix, the merge waits on a human approval. Stop and hand back.
+   - `DONE`: merged (and deployed when a deploy workflow was given).
 5. **Triage red.**
    `gh run view <id> --log-failed | sed 's/\x1b\[[0-9;]*m//g' | grep -aiE "error|fail|expected|received" | head -80`
    — then name it: **your diff** (fix, push, back to 4), **environmental** (same failure on
