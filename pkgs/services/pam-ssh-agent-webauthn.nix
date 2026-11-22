@@ -19,6 +19,10 @@ rustPlatform.buildRustPackage rec {
     hash = "sha256-4678UWJ2r+MFbdxyK1vCi4KzDExjywyAkvZBOxdHQi8=";
   };
 
+  # shellwatch-agent advertises passkeys as sk-ecdsa-…; upstream only matched
+  # agent blobs typed webauthn-sk-ecdsa-…, so it saw no key.
+  patches = [ ./pam-ssh-agent-webauthn-sk-agent-blob.patch ];
+
   cargoHash = "sha256-CPljzVaJTWreFok6nlIb9WKxGzPJZjsbyy6RnMEZ3YI=";
 
   buildInputs = [ pam ];
