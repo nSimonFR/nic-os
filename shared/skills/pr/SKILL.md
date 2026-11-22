@@ -20,9 +20,12 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
    in the background and wait on it. It exits on the first thing to act on:
    - `FIX`: its output is the prompt: every open review-bot thread (CodeRabbit's own "fix all
      issues" prompt when it has one), failed-log excerpts, the steps and the restart command.
-     Do it yourself: fix, push, reply under each thread (on nic-os never resolve its threads),
-     restart the watch. Don't hand back. A `FORMAT-DRIFT` line means the bot's format changed:
-     tell the user (the script fell back to the whole comment).
+     Do it yourself, in a checkout of the PR's head branch (`gh pr checkout <n>` or its
+     worktree): fix, check the PR is still OPEN, push, reply under each thread (on nic-os never
+     resolve its threads), restart the watch. Don't hand back for a fixable finding. A red check
+     your diff can't fix (step 5: environmental) is a blocker: report it and hand back.
+     A `FORMAT-DRIFT` line means the bot's format changed: tell the user (the script fell back
+     to the whole comment).
    - `HUMAN`: nothing left for you to fix. Stop and hand back with the reason it printed
      (approval missing, approval withheld by the bot, PR closed, still blocked).
    - `DONE`: merged (and deployed when a deploy workflow was given).
