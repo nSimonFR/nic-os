@@ -223,6 +223,16 @@ in
   # {"<slug>": "<ics url>"} for ics-mirror. Encrypted because a Google
   # `private-<token>/basic.ics` URL is unexpiring read access to the whole
   # calendar — it must never be committed in clear to this PUBLIC repo.
+  "shellwatch-hydra-env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
+  "shellwatch-vapid-private-key.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    rpi5-host
+  ];
   "calino-ics-feeds.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

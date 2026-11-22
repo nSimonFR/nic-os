@@ -2,6 +2,7 @@
   config,
   pkgs,
   apertureUrl,
+  tailnetFqdn,
   ...
 }:
 let
@@ -26,6 +27,12 @@ in
     aperture = {
       type = "http";
       url = "${apertureUrl}/v1/mcp";
+    };
+    # SSH sessions approved by passkey on the phone (hosts/rpi5/security/shellwatch.nix).
+    # Not via Aperture: the OAuth token is the human's, per client.
+    shellwatch = {
+      type = "http";
+      url = "https://${tailnetFqdn}:3995/mcp";
     };
   };
 
