@@ -24,6 +24,7 @@
   config,
   lib,
   pkgs,
+  username,
   ...
 }:
 let
@@ -124,8 +125,31 @@ in
         PORT = toString port;
         TRUST_PROXY = true; # tailscale serve; bound to loopback only
         ANALYTICS_DISABLED = true;
+
+        # App settings come from here, not the admin UI (which goes read-only).
+        UI_CONFIG_DISABLED = true;
+        APP_NAME = "nic-os";
+        # Mail via hydroxide (hosts/rpi5/knowledge/hydroxide.nix): plaintext on
+        # loopback; Proton only accepts the account address as From.
+        SMTP_HOST = "127.0.0.1";
+        SMTP_PORT = "1025";
+        SMTP_TLS = "none";
+        SMTP_USER = "${username}@protonmail.com";
+        SMTP_FROM = "${username}@protonmail.com";
+        SMTP_PASSWORD_FILE = "/run/credentials/pocket-id.service/smtp-password";
+        # Mail on a sign-in from a browser it doesn't know.
+        EMAIL_LOGIN_NOTIFICATION_MODE = "browserRecognition";
+        # An admin can mail a login code (onboarding, lost passkey). Users can't
+        # request one themselves: that would make the mailbox a login factor.
+        EMAIL_ONE_TIME_ACCESS_AS_ADMIN_ENABLED = true;
       };
     };
+
+    # LoadCredential, not the hydroxide group: the agenix file stays 0440
+    # hydroxide, and systemd hands this unit a private copy.
+    systemd.services.pocket-id.serviceConfig.LoadCredential = [
+      "smtp-password:/run/agenix/protonmail-bridge-password"
+    ];
 
     # Funneled, an empty database would publish /setup (first visitor becomes
     # admin). Refuse to start without a user; for a fresh install, set funnel
