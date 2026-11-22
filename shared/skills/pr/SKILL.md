@@ -31,7 +31,8 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
      done: it submits a review on the head after your request, or its summary comment, updated
      after the request, no longer says "Currently processing" and names the head's
      "Commit: `<sha12>`". In T3 the watch wakes you on each; elsewhere Monitor on
-     `gh api repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`. Then reread its verdict.
+     `gh api --paginate repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`, and stop
+     if the PR closes or its head moves (a new head starts over). Then reread its verdict.
    - Hand back (unwatch first) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review, the PR closed,
      or a blocker you can't fix. Say which.
