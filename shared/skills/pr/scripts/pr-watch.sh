@@ -45,6 +45,27 @@ snapshot() {
   return 1
 }
 
+# Runs a read up to 3 times; fails only when every attempt failed (pipefail is on).
+try3() {
+  local _
+  for _ in 1 2 3; do
+    "$@" && return 0
+    sleep 20
+  done
+  return 1
+}
+read_failed() {
+  echo "FIX $repo#$pr: could not read $1 3 times in a row (GitHub API?). Nothing was classified;"
+  echo "look by hand, then restart:  $self $repo $pr ${deploy:+\"$deploy\"}"
+  exit 0
+}
+bot_reviews() {
+  gh api --paginate --slurp "repos/$repo/pulls/$pr/reviews" |
+    jq -c --arg bot "${bot}[bot]" --arg head "$head" \
+      '[add[] | select(.user.login==$bot and .commit_id==$head)] | last // {}'
+}
+pr_comments() { gh api --paginate --slurp "repos/$repo/issues/$pr/comments"; }
+
 # A bot's own fix prompt from a comment or review body: a <summary> naming a
 # prompt, then the first fenced block. Empty when there is none.
 body_prompt() {
@@ -181,7 +202,9 @@ while :; do
       if gh run watch "$id" --repo "$repo" --exit-status --interval 30 >/dev/null 2>&1; then
         echo "DONE merged as ${sha:0:10}; $deploy run $id succeeded"
       else
-        echo "FIX $repo#$pr merged as ${sha:0:10}, but '$deploy' run $id failed:"
+        echo "FIX $repo#$pr merged as ${sha:0:10}, but '$deploy' run $id failed. The PR is merged:"
+        echo "no push to its branch. A flake: \`gh run rerun $id --failed --repo $repo\`. A real"
+        echo "failure: fix it in a new PR from the base branch and watch that one."
         gh run view "$id" --repo "$repo" --json jobs -q '.jobs[] | select(.conclusion=="failure") | .url' |
           while read -r link; do
             echo
@@ -234,7 +257,7 @@ while :; do
     echo "  $self $repo $pr ${deploy:+\"$deploy\"}"
     exit 0
   fi
-  failed=$(awk -F'\t' '$1=="fail" {print $2"\t"$3}' <<<"$snap")
+  failed=$(awk -F'\t' '$1=="fail" || $1=="cancel" {print $2"\t"$3}' <<<"$snap")
 
   if [ -n "$threads" ] || [ -n "$failed" ]; then
     echo "FIX $repo#$pr ($branch @ ${head:0:10}): fix every issue below, then restart the watch."
@@ -263,22 +286,20 @@ while :; do
   fi
 
   pending=$(awk -F'\t' '$1=="pending"' <<<"$snap")
-  reviews=$(gh api --paginate --slurp "repos/$repo/pulls/$pr/reviews" |
-    jq -c --arg bot "${bot}[bot]" --arg head "$head" \
-      '[add[] | select(.user.login==$bot and .commit_id==$head)] | last // {}')
+  reviews=$(try3 bot_reviews) || read_failed "the reviews"
   verdict=$(jq -r '.state // ""' <<<"$reviews")
   verdict_at=$(jq -r '.submitted_at // ""' <<<"$reviews")
   review_body=$(jq -r '.body // ""' <<<"$reviews")
-  merge=$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus -q .mergeStateStatus)
+  merge=$(try3 gh pr view "$pr" --repo "$repo" --json mergeStateStatus -q .mergeStateStatus) || read_failed "the merge state"
+  comments=$(try3 pr_comments) || read_failed "the PR comments"
   # CodeRabbit can withhold approval in a PR comment instead of a review on the head
   # ("Automatic approval withheld ... Commit: `<sha12>`").
   # A newer approval of the same head supersedes it (ISO timestamps compare as text).
-  withheld=$(gh api --paginate --slurp "repos/$repo/issues/$pr/comments" |
-    jq -r --arg bot "${bot}[bot]" --arg sha "${head:0:12}" \
-      --arg verdict "$verdict" --arg at "$verdict_at" \
-      '[add[] | select(.user.login==$bot) | select(.body | test("approval withheld"; "i"))
+  withheld=$(jq -r --arg bot "${bot}[bot]" --arg sha "${head:0:12}" \
+    --arg verdict "$verdict" --arg at "$verdict_at" \
+    '[add[] | select(.user.login==$bot) | select(.body | test("approval withheld"; "i"))
         | select(.body | contains($sha))] | last
-       | if . == null or ($verdict == "APPROVED" and $at > .updated_at) then "" else .body end' |
+       | if . == null or ($verdict == "APPROVED" and $at > .updated_at) then "" else .body end' <<<"$comments" |
     sed -E 's/<[^>]+>//g' | tr -s ' \n' ' ' | head -c 800)
   # Findings outside the diff live only in the review body, with no thread to answer.
   outside=""
@@ -300,6 +321,12 @@ used the whole review body. Report this: pr-watch.sh's body_prompt needs updatin
     exit 0
   fi
 
+  # Every read above is for $head; a push meanwhile mixes heads, so skip the pass.
+  now=$(try3 gh pr view "$pr" --repo "$repo" --json headRefOid -q .headRefOid) || read_failed "the PR head"
+  if [ "$now" != "$head" ]; then
+    sleep 30
+    continue
+  fi
   [ "$settled_head" = "$head" ] || settled_at=""
   settled_head=$head
   if [ -n "$pending" ] || [ "$merge" = CLEAN ] || [ "$merge" = UNKNOWN ]; then
