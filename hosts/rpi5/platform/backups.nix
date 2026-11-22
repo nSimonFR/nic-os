@@ -27,6 +27,7 @@
   systemd.tmpfiles.rules = [
     "d /mnt/data/backups/hass 0750 hass hass -"
     "d /mnt/data/backups/vaultwarden 0750 vaultwarden vaultwarden -"
+    "d /mnt/data/backups/shellwatch 0750 shellwatch shellwatch -"
     "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
     "d /mnt/data/backups/papra 0750 papra papra -"
     "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
@@ -373,6 +374,32 @@
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 03:15:00";
+      Persistent = true;
+    };
+  };
+
+  # ── ShellWatch (passkeys, push subscription, Hydra clients) ────────────
+  systemd.services.shellwatch-backup = {
+    description = "ShellWatch + Hydra SQLite backup";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "shellwatch";
+    };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/shellwatch
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/shellwatch/shellwatch.db ".backup '$OUT/shellwatch-$STAMP.db'"
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/shellwatch/hydra.sqlite ".backup '$OUT/hydra-$STAMP.sqlite'"
+      ${pkgs.findutils}/bin/find "$OUT" \( -name "shellwatch-*.db" -o -name "hydra-*.sqlite" \) -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.shellwatch-backup = {
+    description = "Daily ShellWatch backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 03:20:00";
       Persistent = true;
     };
   };

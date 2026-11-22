@@ -5,6 +5,7 @@
     ./agent-access.nix
     ./sudo-totp.nix
     ./sudo-ssh-agent.nix
+    ./shellwatch.nix
     ./death-plan-switch.nix
     ./vaultwarden.nix
     ./agent-vault.nix

@@ -22,12 +22,14 @@ let
   extra = allowed: ports: lib.subtractLists allowed ports;
 
   # sudo may admit nsimon only on the root-only TOTP (sudo-totp.nix), optionally
-  # preceded by an SSH-agent signature checked against a root-owned key file
-  # (sudo-ssh-agent.nix); then pam_deny, with no session cache.
+  # preceded by SSH-agent signatures checked against root-owned key files
+  # (sudo-ssh-agent.nix, then shellwatch.nix with UV required); then pam_deny,
+  # with no session cache.
   sudoAuth = lib.filter (l: lib.hasPrefix "auth " l) (
     lib.splitString "\n" config.security.pam.services.sudo.text
   );
   rsshRule = "auth sufficient [^ ]*/libpam_rssh\\.so auth_key_file=/etc/ssh/sudo_keys/\\$ruser( #.*)?";
+  passkeyRule = "auth sufficient [^ ]*/pam_ssh_agent_webauthn\\.so file=/etc/ssh/sudo_passkeys verify_required=yes( #.*)?";
   totpRule = "auth sufficient [^ ]*/pam_google_authenticator\\.so secret=/var/lib/sudo-totp/\\$\\{USER} user=root( #.*)?";
   denyRule = "auth required [^ ]*/pam_deny\\.so( #.*)?";
   matches =
@@ -42,6 +44,12 @@ let
       ]
       || matches [
         rsshRule
+        totpRule
+        denyRule
+      ]
+      || matches [
+        rsshRule
+        passkeyRule
         totpRule
         denyRule
       ]
@@ -122,7 +130,7 @@ in
         );
       message =
         "security-policy: nsimon must not be in wheel or a trusted nix user, and may be in "
-        + "a sudo rule only behind sudo-totp.nix (and sudo-ssh-agent.nix) with no session cache.";
+        + "a sudo rule only behind sudo-totp.nix (and sudo-ssh-agent.nix, shellwatch.nix) with no session cache.";
     }
   ];
 }
