@@ -437,13 +437,13 @@ def test_groups_cut_at_the_longest_pauses():
     assert len(wm.groups(burst, 9)) == 1  # a burst is never split
 
 
-def test_workout_day_attaches_map_then_photos(tmp_path):
+def test_workout_day_attaches_photos_then_map(tmp_path):
     pg = FakePg([ride(W1, T1)], [("48.83", "2.34"), ("48.91", "2.33")])
     im = FakeImmich([photo(1), photo(2)])
     op = FakeOpener(
         [
-            json_reply({"name": "attachments/MAP"}),
             json_reply({"name": "attachments/COL"}),
+            json_reply({"name": "attachments/MAP"}),
             json_reply({"name": "memos/M"}),
             json_reply({"name": "memos/M"}),
         ]
@@ -466,14 +466,14 @@ def test_workout_day_attaches_map_then_photos(tmp_path):
         ),
     )
     assert [op.body_of(i)["filename"] for i in range(2)] == [
-        "map-2026-10-19.jpg",
         "photos-2026-10-19.jpg",
+        "map-2026-10-19.jpg",
     ]
     assert collages == [[("13:00", 1), ("14:00", 1)]] and im.previews == ["p1", "p2"]
     memo = op.body_of(2)
     assert [a["name"] for a in memo["attachments"]] == [
-        "attachments/MAP",
         "attachments/COL",
+        "attachments/MAP",
     ]
     assert memo["content"].startswith(
         "### 📷 Photos - 2\n\n- [13:00](https://immich/photos/p1) · Paris 13e\n"
@@ -754,8 +754,8 @@ def test_map_and_collage_carry_metadata(tmp_path):
         p["exifInfo"].update({"make": "Apple", "model": "iPhone 11 Pro"})
     op = FakeOpener(
         [
-            json_reply({"name": "attachments/MAP"}),
             json_reply({"name": "attachments/COL"}),
+            json_reply({"name": "attachments/MAP"}),
             json_reply({"name": "memos/M"}),
             json_reply({"name": "memos/M"}),
         ]
@@ -773,7 +773,7 @@ def test_map_and_collage_carry_metadata(tmp_path):
         FakeImmich([p1, p2]),
         collage_fn=lambda imgs, labels, path: no_render(None, path),
     )
-    map_meta, col_meta = (
+    col_meta, map_meta = (
         op.body_of(0)["mediaMetadata"]["photo"],
         op.body_of(1)["mediaMetadata"]["photo"],
     )
