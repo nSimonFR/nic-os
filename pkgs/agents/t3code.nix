@@ -13,9 +13,9 @@
 # app must run the same version or the app loses its sessions over T3 Connect.
 #
 # linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead: the
-# same release plus the fork's small changes (its spec.md: no notification sound
-# while the screen is locked, Claude artifact watchers). The fork carried the
-# Issues stack up to 0.1.10; upstream ships Issues since 0.1.11. A database
+# same release plus the fork's small changes (its spec.md: a setting to mute
+# notification sounds while the screen is locked, Claude artifact watchers).
+# The fork carried the Issues stack up to 0.1.10; upstream ships Issues since 0.1.11. A database
 # written by those builds needs ~/.t3/backups/t3-fork-exit.sql before its first
 # start on 0.1.11. .github/workflows/t3code-fork-release.yml builds the release
 # and pins the hashes on the bump PR.
@@ -33,7 +33,7 @@ let
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-g/t5PeK4LOUT8bFnZWKCiH2CdwC9Nky3lmd6Z1euz48=";
+      hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
