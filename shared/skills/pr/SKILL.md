@@ -34,7 +34,8 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
      `gh api --paginate repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`, and stop
      if the PR closes or its head moves (a new head starts over). Then reread its verdict.
    - Hand back (unwatch first) only when nothing is left for you: an approval is missing, the
-     bot withheld its own for another reason or again after that full review, the PR closed,
+     bot withheld its own for another reason or again after that full review (or refused it,
+     e.g. its hourly review limit), the PR closed,
      or a blocker you can't fix. Say which.
 5. **Triage red.**
    `gh run view <id> --log-failed | sed 's/\x1b\[[0-9;]*m//g' | grep -aiE "error|fail|expected|received" | head -80`
