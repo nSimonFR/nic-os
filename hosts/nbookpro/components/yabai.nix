@@ -7,18 +7,19 @@ let
 in
 {
   enable = true;
-  # macOS 27 changed Dock internals used by the scripting addition (#2822).
-  # 7.1.25 (the last release) predates it; upstream master carries the macOS 27
-  # ("Golden Gate") fixes since 2026-11. The bassepeder fork pinned before is
-  # gone (404). Back to the plain package once a release ships them.
+  # macOS 27 changed Dock internals used by the scripting addition (#2822), and
+  # upstream's payload still refuses macOS 27. AhsanFazal's fork (a small,
+  # SA-focused diff; macOS 27.2 offsets and space moves) is the one cited as
+  # working in that issue; the bassepeder fork pinned before is gone (404).
+  # Back to the plain package once upstream's SA accepts macOS 27.
   # https://github.com/asmvik/yabai/issues/2822
   package = unstablePkgs.yabai.overrideAttrs {
     src = unstablePkgs.fetchFromGitHub {
-      owner = "asmvik";
+      owner = "AhsanFazal";
       repo = "yabai";
-      # renovate: datasource=git-refs depName=https://github.com/asmvik/yabai branch=master
-      rev = "0b4818bdc4dfa641cad8cedcdfe26af3ddf334ac";
-      hash = "sha256-RYX1WvvwSaBIiZTB6xmtftkor85a7nILqoQXWrvFmF8=";
+      # renovate: datasource=git-refs depName=https://github.com/AhsanFazal/yabai branch=master
+      rev = "ad8d5adfdc39c76399599ae79a264f2525f6ca5e";
+      hash = "sha256-berfA3vYih1YuCCSBEvpocCn2EPj+ZpftPmsE65ILWo=";
     };
   };
   enableScriptingAddition = true;
