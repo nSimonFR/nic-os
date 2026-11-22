@@ -416,6 +416,10 @@ in
     # the cachix-agent's nix-store -r died mid-way, deploy after deploy.
     # Live generations are GC roots, so this frees only dead paths; the daily
     # nix.gc below drops the old generations themselves.
+    # Both only act once a generation carrying them is active: if a deploy
+    # already lacks space to restore its closure, free it by hand on the Pi
+    # (`sudo nix-collect-garbage --delete-older-than 7d`, check `df -h /`), then
+    # rerun the deploy-rpi5 workflow with force=true.
     min-free = 30 * 1024 * 1024 * 1024;
     max-free = 50 * 1024 * 1024 * 1024;
     # Keep the build-time closure of live GC roots (the running system) alive so
