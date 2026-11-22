@@ -11,7 +11,7 @@ let
   # No Secret Service on the Pi: the default keyring store fails with "The name
   # is not activatable", so login-backed commands (activity, repo, explain
   # --repo) break. Wrapped rather than a session variable so hooks run by
-  # systemd user units (T3, claude-rc) get it too.
+  # systemd units (T3) get it too.
   entire = pkgs.symlinkJoin {
     name = "entire-${entireBundle.version}";
     paths = [ entireBundle ];

@@ -65,7 +65,6 @@ python3Packages.buildPythonPackage {
     "nicos_scripts.connectors.immich_dawarich"
     "nicos_scripts.homepage.stats"
     "nicos_scripts.claude.notify_aggregator"
-    "nicos_scripts.claude.boot_resume"
     "nicos_scripts.claude.window_anchor"
     "nicos_scripts.claude.settle_retro"
     "nicos_scripts.immich.adopt"

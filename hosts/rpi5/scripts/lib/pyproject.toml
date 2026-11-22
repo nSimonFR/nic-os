@@ -55,7 +55,6 @@ journal-daily = "nicos_scripts.connectors.journal_daily:main"
 sure-to-wealthfolio = "nicos_scripts.connectors.wealthfolio:main"
 homepage-stats = "nicos_scripts.homepage.stats:main"
 claude-notify-aggregator = "nicos_scripts.claude.notify_aggregator:main"
-claude-rc-boot-resume = "nicos_scripts.claude.boot_resume:main"
 claude-context-baseline = "nicos_scripts.claude.context_baseline:main"
 claude-window-anchor = "nicos_scripts.claude.window_anchor:main"
 # T3 Code has no on-settle hook: this polls its DB and runs /retro on each settle.

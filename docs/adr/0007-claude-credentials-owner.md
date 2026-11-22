@@ -54,3 +54,11 @@ Divergence becomes harmless, not impossible; only an in-place upstream rewrite
 would fix it properly. Supersedes the
 `known_issue_claude_rc_credentials_symlink_divergence` note, which recorded the
 symptom while the cause was unknown.
+
+## Update — 2026-11-22
+
+The Remote Control bridge and boot-resume were removed from rpi5. `~/.claude-rc`
+stays on disk as account 1's credential owner: the keep-warm moved to
+`hosts/rpi5/agents/claude/claude-oauth-1.nix` with the same candidate list, and
+`claude-window-anchor` still runs with `CLAUDE_CONFIG_DIR=~/.claude-rc`. Nothing
+re-seeds that dir any more; a `/login` in it renews the tokens.

@@ -51,7 +51,7 @@ session=$(herdr pane get "$from" | jq -r '.result.pane.agent_session.value // em
 
 # `pane run`, not `agent start`: both the menu and `claude` have to be resolved
 # by the pane's own interactive zsh, where claude() is the shim that adds
-# --remote-control and the Aperture proxy (zsh/aliases.zsh). `agent start` would
+# the Aperture proxy (zsh/aliases.zsh). `agent start` would
 # wait for readiness, which this gives up — in practice the new shell has its
 # prompt well before the split returns.
 if [ -n "$session" ]; then

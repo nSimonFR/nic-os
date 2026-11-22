@@ -24,11 +24,10 @@ if (( $+commands[tailscale] )); then
 fi
 
 # Claude Code: routed through `claude-gated` (home/claude-aperture-shim.nix) so
-# interactive sessions get Aperture capture AND working Remote Control — the two
-# used to be mutually exclusive, since Remote Control refuses any base URL other
-# than api.anthropic.com. The shim keeps that URL and re-targets inference at
-# Aperture underneath. If the shim is down, claude-gated degrades to Aperture
-# direct (no Remote Control) rather than hanging.
+# interactive sessions get Aperture capture AND keep api.anthropic.com as their
+# base URL, which manual `/remote-control` requires. The shim re-targets
+# inference at Aperture underneath. If the shim is down, claude-gated degrades to
+# Aperture direct (no `/remote-control`) rather than hanging.
 #
 # Everything else still gets the gate from the Nix wrapper's ANTHROPIC_BASE_URL
 # default (claude.nix) — headless rpi5 services, the desktop app, cron — so they
@@ -36,16 +35,10 @@ fi
 # the same reason. The ANTHROPIC_* prefixes on the aliases below win over that
 # default (--set-default yields to an explicitly set value).
 #
-# A function, not an alias, so it can inject flags; a same-named alias would
-# shadow it.
-#
-# --remote-control lives HERE, not on the wrappers below, because it is only
-# valid on the shim branch (Remote Control refuses any base URL but
-# api.anthropic.com, so the degraded branch must NOT pass it). It used to sit on
-# `claude()` alone, which silently left every `cc`/`cr` session with no control
-# channel: the phone still listed them — the claude-rc host publishes every
-# `~/.claude/sessions/<pid>.json` it can see and they inherit the *host's*
-# connected status — so sends were accepted and then landed nowhere.
+# A function, not an alias, so it can inject env; a same-named alias would
+# shadow it. Remote Control is opt-in per session (`/remote-control`):
+# remoteControlAtStartup is false in claude-settings.json and no wrapper passes
+# --remote-control.
 # Port and CA path mirror home/claude-aperture-shim.nix — change both together.
 _claude_shim() {
   local ca="$HOME/.claude-aperture-shim/mitmproxy-ca-cert.pem"
@@ -56,9 +49,9 @@ _claude_shim() {
     ANTHROPIC_BASE_URL=https://api.anthropic.com \
     HTTPS_PROXY=http://127.0.0.1:18888 \
     NODE_EXTRA_CA_CERTS=$ca \
-      command claude --remote-control "$@"
+      command claude "$@"
   else
-    print -u2 "claude: Aperture shim unavailable — continuing WITHOUT Remote Control."
+    print -u2 "claude: Aperture shim unavailable — continuing WITHOUT /remote-control."
     if [[ $OSTYPE == darwin* ]]; then
       print -u2 "  restart it: launchctl kickstart -k gui/\$(id -u)/org.nix-community.home.claude-aperture-shim"
     else
@@ -122,17 +115,14 @@ claude-pane-menu() {
 # Qwen3.6-27B-4bit (~15 GB resident, reasoning model — replies via reasoning_content).
 # oMLX has its own admin auth; localhost verification is disabled (skip_api_key_verification=true),
 # so ANTHROPIC_API_KEY is a placeholder.
-alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=omlx-local ANTHROPIC_MODEL=Qwen3.6-27B-4bit command claude --dangerously-skip-permissions --remote-control'
+alias claude-local='ANTHROPIC_BASE_URL=http://localhost:8000 ANTHROPIC_API_KEY=omlx-local ANTHROPIC_MODEL=Qwen3.6-27B-4bit command claude --dangerously-skip-permissions'
 
 # claude-beast: Claude Code → Beast gemma4:e4b (RTX 3080 Ti) via litellm proxy (port 4001)
-alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=gemma4:e4b command claude --dangerously-skip-permissions --remote-control'
+alias claude-beast='ANTHROPIC_BASE_URL=http://localhost:4001 ANTHROPIC_API_KEY=litellm-local ANTHROPIC_MODEL=gemma4:e4b command claude --dangerously-skip-permissions'
 
-# claude-direct: CC → api.anthropic.com (no Aperture), which is also the ONLY way
-# Remote Control runs — it refuses any custom endpoint. A plain env prefix is
-# enough now that the gate is a wrapper default (home/claude.nix) instead of a
-# claude-settings.json env entry; the old --settings form could not win over that
-# entry, so this alias silently stayed on the gate and never got Remote Control.
-alias claude-direct='ANTHROPIC_BASE_URL=https://api.anthropic.com command claude --dangerously-skip-permissions --remote-control'
+# claude-direct: CC → api.anthropic.com (no Aperture), where `/remote-control`
+# works: Remote Control refuses any custom endpoint.
+alias claude-direct='ANTHROPIC_BASE_URL=https://api.anthropic.com command claude --dangerously-skip-permissions'
 
 # claude-asale: the session's models on Asale (tiny-llm-gate `anthropic.routes`),
 # GPT-6 Luna unless CLAUDE_ASALE_TIER=sol|astra. Haiku side calls stay on Anthropic.

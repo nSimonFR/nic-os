@@ -10,7 +10,7 @@
     ./forgejo-mcp.nix
     ./searxng-mcp.nix
     ./mcp-bridges.nix
-    ./claude/claude-remote-control.nix
+    ./claude/claude-oauth-1.nix
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix
     ./claude/claude-context-baseline.nix

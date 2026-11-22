@@ -56,7 +56,7 @@ inputs: final: _prev: {
   # library plus a console script per unit (bin/homepage-stats, bin/spotify-to-ryot,
   # …), with its pytest suite in checkPhase.
   # Consumers: rpi5 units (papra, moxfield-sync,
-  # travel-cal-sync, homepage, claude-remote-control, claude-notify-aggregator,
+  # travel-cal-sync, homepage, claude-notify-aggregator,
   # ryot connectors), and
   # `nix build .#nicos-scripts` — which is also the flake check.
   nicos-scripts = final.callPackage ./services/nicos-scripts.nix { };

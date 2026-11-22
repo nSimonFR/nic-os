@@ -4,9 +4,8 @@
 # access token from a CLAUDE_CONFIG_DIR's credentials.json to a
 # world-readable file under /run, for tiny-llm-gate's FileBearer auth.
 #
-# Used for both the primary account (claude-remote-control.nix, suffix "",
-# configDir null = default ~/.claude) and any secondary gate-only accounts
-# (claude-oauth-2.nix, suffix "-2", explicit configDir).
+# Used by claude-oauth-1.nix (account 1, suffix ""); a further gate-only
+# account takes a suffix such as "-2" and its own configDir.
 { pkgs, username }:
 {
   # Appended to service/timer/runtime-dir names (e.g. "-2") and description.
@@ -21,9 +20,6 @@
   credentialsFiles,
   # Stagger boot-time refreshes across accounts so they don't race.
   onBootSec ? "15min",
-  # Extra `after`/`wants` for the extract service (e.g. the primary account's
-  # extractor waits on claude-remote-control.service to seed credentials).
-  extractAfter ? [ ],
 }:
 let
   oauthDirName = "claude-oauth${suffix}";
@@ -105,7 +101,6 @@ in
 
     systemd.services."claude-oauth-extract${suffix}" = {
       description = "Extract Claude Code OAuth access token to ${oauthPath}";
-      after = extractAfter;
       wantedBy = [ "multi-user.target" ];
       serviceConfig = {
         Type = "oneshot";
