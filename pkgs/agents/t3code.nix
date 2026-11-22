@@ -14,7 +14,8 @@
 #
 # linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead: the
 # same release plus the fork's small changes (its spec.md: a setting to mute
-# notification sounds while the screen is locked, Claude artifact watchers).
+# notification sounds while the screen is locked, one Linear key per project,
+# Claude artifact watchers).
 # The fork carried the Issues stack up to 0.1.10; upstream ships Issues since 0.1.11. A database
 # written by those builds needs ~/.t3/backups/t3-fork-exit.sql before its first
 # start on 0.1.11. .github/workflows/t3code-fork-release.yml builds the release
@@ -33,7 +34,7 @@ let
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-pe6kVNHGW3gYbsjIBNyQ6TufVS9uzTS6aH1adr9x5WA=";
+      hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
