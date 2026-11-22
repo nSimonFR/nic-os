@@ -119,6 +119,22 @@ def test_interrupted_registration_is_retried(tmp_path):
     assert op.body_of(-1) == {"secret": HELD}
 
 
+def server_error():
+    raise urllib.error.HTTPError("u", 500, "Internal Server Error", {}, io.BytesIO(b""))
+
+
+def test_failed_post_after_recreation_is_retried_despite_a_stale_id(tmp_path):
+    c = client(tmp_path)
+    hold(tmp_path, sid="sec-1")  # id from before the database was reset
+    rc, op, _ = run(tmp_path, [c], [OK, not_found, OK, server_error])
+    assert rc == 1
+    rc, op, _ = run(tmp_path, [c], [OK, current(c), listed(), secret_created()])
+    assert rc == 0
+    assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
+    assert op.body_of(-1) == {"secret": HELD}
+    assert (tmp_path / "immich.id").read_text() == "sec-new"
+
+
 def test_update_keeps_unmanaged_fields(tmp_path):
     c = client(tmp_path, callbackURLs=["https://new/cb"])
     hold(tmp_path)
