@@ -15,8 +15,9 @@
   conditions:
     - condition: template
       value_template: >-
+        {# unknown → timestamp is a real first ring (state after a restart); unavailable → x is a reload #}
         {{ trigger.from_state is not none
-           and trigger.from_state.state not in ['unavailable', 'unknown']
+           and trigger.from_state.state != 'unavailable'
            and trigger.to_state.state not in ['unavailable', 'unknown']
            and trigger.to_state.attributes.event_type == 'ring' }}
     - condition: template
