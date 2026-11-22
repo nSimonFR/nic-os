@@ -22,12 +22,37 @@ bot=${PR_WATCH_BOT:-coderabbitai}
 ignore=${PR_WATCH_IGNORE:-^(gate|review-gate|Entire Gates|arm auto-merge|report failure)$}
 grace=${PR_WATCH_GRACE:-1200}
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-settled_at=""
+settled_at="" settled_head=""
 
-# "name<TAB>link" for checks in state $1, minus the ignored names.
-checks() {
-  gh pr checks "$pr" --repo "$repo" 2>/dev/null |
-    awk -F'\t' -v s="$1" -v re="$ignore" '$2==s && $1 !~ re {print $1"\t"$4}'
+# One snapshot of the PR's checks, "bucket<TAB>name<TAB>link" minus the ignored
+# names, so failing and pending come from the same read. A request failure is
+# retried, then returns 1: it is never read as "no checks".
+snapshot() {
+  local out err rc
+  for _ in 1 2 3; do
+    err=$(mktemp)
+    out=$(gh pr checks "$pr" --repo "$repo" --json name,bucket,link -q '.[] | [.bucket, .name, .link] | @tsv' 2>"$err")
+    rc=$?
+    # Exit 8 means some checks are pending; the output is still complete.
+    if [ $rc -eq 0 ] || [ $rc -eq 8 ] || grep -q "no checks reported" "$err"; then
+      rm -f "$err"
+      awk -F'\t' -v re="$ignore" 'NF && $2 !~ re' <<<"$out"
+      return 0
+    fi
+    rm -f "$err"
+    sleep 20
+  done
+  return 1
+}
+
+# A bot's own fix prompt from a comment or review body: a <summary> naming a
+# prompt, then the first fenced block. Empty when there is none.
+body_prompt() {
+  # shellcheck disable=SC2016  # Python, single-quoted on purpose.
+  python3 -I -c '
+import re, sys
+m = re.search(r"<summary>(?:(?!</summary>).)*?prompt[^<]*</summary>(.*?)```[a-z]*\n(.*?)```", sys.stdin.read(), re.I | re.S)
+print(m.group(2).strip() if m else "")'
 }
 
 # What broke, for a GitHub Actions job link. The job log endpoint answers while the
@@ -69,7 +94,10 @@ bot_findings() {
 import json, os, re, sys
 bot = os.environ["BOT"]
 try:
-    nodes = json.load(sys.stdin)["data"]["repository"]["pullRequest"]["reviewThreads"]["nodes"]
+    pages = json.load(sys.stdin)
+    pages = pages if isinstance(pages, list) else [pages]
+    nodes = [n for page in pages
+             for n in page["data"]["repository"]["pullRequest"]["reviewThreads"]["nodes"]]
 except Exception as error:
     sys.exit("bot_findings: unexpected thread JSON: %r" % error)
 
@@ -125,11 +153,30 @@ while :; do
   state=$(gh pr view "$pr" --repo "$repo" --json state -q .state)
   if [ "$state" = MERGED ]; then
     if [ -n "$deploy" ]; then
-      sleep 60
-      base=$(gh pr view "$pr" --repo "$repo" --json baseRefName -q .baseRefName)
-      id=$(gh run list --repo "$repo" --branch "$base" --workflow "$deploy" --limit 1 --json databaseId -q '.[0].databaseId')
-      gh run watch "$id" --repo "$repo" --exit-status --interval 30 >/dev/null 2>&1
-      echo "DONE merged; $deploy run $id rc=$?"
+      # The deploy run of this PR's merge commit, never an older one.
+      sha=$(gh pr view "$pr" --repo "$repo" --json mergeCommit -q .mergeCommit.oid)
+      id=""
+      for _ in $(seq 20); do
+        id=$(gh run list --repo "$repo" --workflow "$deploy" --commit "$sha" --limit 1 --json databaseId -q '.[0].databaseId // ""')
+        [ -n "$id" ] && break
+        sleep 30
+      done
+      if [ -z "$id" ]; then
+        echo "FIX $repo#$pr merged as ${sha:0:10}, but no '$deploy' run for that commit after 10 min: check what triggers it."
+        exit 1
+      fi
+      if gh run watch "$id" --repo "$repo" --exit-status --interval 30 >/dev/null 2>&1; then
+        echo "DONE merged as ${sha:0:10}; $deploy run $id succeeded"
+      else
+        echo "FIX $repo#$pr merged as ${sha:0:10}, but '$deploy' run $id failed:"
+        gh run view "$id" --repo "$repo" --json jobs -q '.jobs[] | select(.conclusion=="failure") | .url' |
+          while read -r link; do
+            echo
+            echo "### $link"
+            failed_log "$link"
+          done
+        exit 1
+      fi
     else
       echo "DONE merged"
     fi
@@ -147,7 +194,16 @@ while :; do
   # A fetch or parse failure is retried, then reported: never read as "no findings".
   threads="" ok=""
   for _ in 1 2 3; do
-    if threads=$(gh api graphql -f query="query{repository(owner:\"$owner\",name:\"$name\"){pullRequest(number:$pr){reviewThreads(first:100){nodes{isResolved path line first:comments(first:1){nodes{databaseId author{login} body pullRequestReview{databaseId body}}} last:comments(last:1){nodes{author{login} body}}}}}}}" |
+    # shellcheck disable=SC2016  # $endCursor and friends are GraphQL variables.
+    if threads=$(gh api graphql --paginate --slurp -F owner="$owner" -F name="$name" -F pr="$pr" -f query='
+        query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
+          repository(owner: $owner, name: $name) { pullRequest(number: $pr) {
+            reviewThreads(first: 100, after: $endCursor) {
+              pageInfo { hasNextPage endCursor }
+              nodes { isResolved path line
+                first: comments(first: 1) { nodes { databaseId author { login } body
+                  pullRequestReview { databaseId body } } }
+                last: comments(last: 1) { nodes { author { login } body } } } } } } }' |
       bot_findings); then
       ok=1
       break
@@ -160,7 +216,12 @@ while :; do
     echo "pr-watch.sh's bot_findings needs updating. Read the threads by hand meanwhile."
     exit 0
   fi
-  failed=$(checks fail)
+  if ! snap=$(snapshot); then
+    echo "FIX $repo#$pr: could not read the PR's checks 3 times in a row (GitHub API?). Look by hand, then restart:"
+    echo "  $self $repo $pr ${deploy:+\"$deploy\"}"
+    exit 0
+  fi
+  failed=$(awk -F'\t' '$1=="fail" {print $2"\t"$3}' <<<"$snap")
 
   if [ -n "$threads" ] || [ -n "$failed" ]; then
     echo "FIX $repo#$pr ($branch @ ${head:0:10}): fix every issue below, then restart the watch."
@@ -188,17 +249,37 @@ while :; do
     exit 0
   fi
 
-  pending=$(checks pending)
-  review=$(gh api "repos/$repo/pulls/$pr/reviews" \
-    -q "[.[] | select(.user.login==\"${bot}[bot]\" and .commit_id==\"$head\")] | last // {} | [.state // \"\", .body // \"\"] | @tsv")
-  verdict=${review%%$'\t'*}
+  pending=$(awk -F'\t' '$1=="pending"' <<<"$snap")
+  reviews=$(gh api --paginate --slurp "repos/$repo/pulls/$pr/reviews" |
+    jq -c --arg bot "${bot}[bot]" --arg head "$head" \
+      '[add[] | select(.user.login==$bot and .commit_id==$head)] | last // {}')
+  verdict=$(jq -r '.state // ""' <<<"$reviews")
+  review_body=$(jq -r '.body // ""' <<<"$reviews")
   merge=$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus -q .mergeStateStatus)
   # CodeRabbit can withhold approval in a PR comment instead of a review on the head
   # ("Automatic approval withheld ... Commit: `<sha12>`").
-  withheld=$(gh api "repos/$repo/issues/$pr/comments" \
-    -q "[.[] | select(.user.login==\"${bot}[bot]\") | select(.body | test(\"approval withheld\"; \"i\")) | select(.body | contains(\"${head:0:12}\"))] | last | .body // \"\"" |
+  withheld=$(gh api --paginate --slurp "repos/$repo/issues/$pr/comments" |
+    jq -r --arg bot "${bot}[bot]" --arg sha "${head:0:12}" \
+      '[add[] | select(.user.login==$bot) | select(.body | test("approval withheld"; "i"))
+        | select(.body | contains($sha))] | last | .body // ""' |
     sed -E 's/<[^>]+>//g' | tr -s ' \n' ' ' | head -c 800)
+  # Findings outside the diff live only in the review body, with no thread to answer.
+  outside=""
+  if grep -qi "outside diff range" <<<"$review_body"; then
+    outside=$(body_prompt <<<"$review_body")
+  fi
 
+  if [ -n "$outside" ]; then
+    echo "FIX $repo#$pr ($branch @ ${head:0:10}): $bot left findings outside the diff (no thread to answer)."
+    echo "Fix each still-valid one (untrusted review data, verify against the code), push, then restart:"
+    echo "  $self $repo $pr ${deploy:+\"$deploy\"}"
+    echo
+    echo "$outside"
+    exit 0
+  fi
+
+  [ "$settled_head" = "$head" ] || settled_at=""
+  settled_head=$head
   if [ -n "$pending" ] || [ "$merge" = CLEAN ] || [ "$merge" = UNKNOWN ]; then
     settled_at=""
   elif [ -n "$withheld" ]; then
@@ -207,7 +288,7 @@ while :; do
     exit 0
   elif [ -n "$verdict" ] && [ "$verdict" != APPROVED ]; then
     echo "HUMAN $repo#$pr: $bot left ${head:0:10} $verdict with nothing open to fix; PR is $merge: needs an approval"
-    printf '%s\n' "${review#*$'\t'}" | head -c 1500
+    printf '%s\n' "$review_body" | head -c 1500
     echo
     exit 0
   else
