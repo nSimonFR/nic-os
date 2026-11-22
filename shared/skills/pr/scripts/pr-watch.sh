@@ -33,7 +33,7 @@ checks() {
 # What broke, for a GitHub Actions job link. The job log endpoint answers while the
 # run is still going (--log-failed does not); no matching line -> the log's tail.
 failed_log() {
-  local job log hits
+  local job log
   job=$(sed -nE 's#.*/job/([0-9]+).*#\1#p' <<<"$1")
   [ -n "$job" ] || {
     echo "(not a GitHub Actions job: open $1)"
@@ -45,9 +45,16 @@ failed_log() {
     echo "(log not available yet: open $1)"
     return
   }
-  hits=$(grep -aiE "##\[error\]|error|fail|expected|received|mismatch|got:|SC[0-9]{4}" <<<"$log" |
-    grep -aivE "ResourceWarning|tracemalloc|^hint:" | tail -40)
-  if [ -n "$hits" ]; then echo "$hits"; else tail -30 <<<"$log"; fi
+  # The cause sits just before the first ##[error] (a formatter diff, a test's
+  # output), not at the log's end (post-job cleanup). No ##[error]: error lines.
+  local cause
+  cause=$(awk '/##\[error\]/{print; exit} {print}' <<<"$log" |
+    grep -avE "ResourceWarning|tracemalloc|^##\[(end)?group\]" | tail -45)
+  if grep -aq "##\[error\]" <<<"$log"; then
+    echo "$cause"
+  else
+    grep -aiE "error|fail|expected|received|mismatch|got:|SC[0-9]{4}" <<<"$log" | tail -40
+  fi
 }
 
 # Reads the reviewThreads GraphQL JSON on stdin; prints the open bot findings.
@@ -200,13 +207,14 @@ while :; do
     exit 0
   elif [ -n "$verdict" ] && [ "$verdict" != APPROVED ]; then
     echo "HUMAN $repo#$pr: $bot left ${head:0:10} $verdict with nothing open to fix; PR is $merge: needs an approval"
-    printf '%s\n' "${review#*$'\t'}" | head -c 1500; echo
+    printf '%s\n' "${review#*$'\t'}" | head -c 1500
+    echo
     exit 0
   else
     # Approved, or the bot said nothing on this head: everything green and answered,
     # yet still blocked. Past the grace period that is a human's call.
     settled_at=${settled_at:-$(date +%s)}
-    if [ $(( $(date +%s) - settled_at )) -gt "$grace" ]; then
+    if [ $(($(date +%s) - settled_at)) -gt "$grace" ]; then
       echo "HUMAN $repo#$pr: checks green, no open finding, ${bot} verdict '${verdict:-none}', still $merge after ${grace}s: needs an approval"
       exit 0
     fi
