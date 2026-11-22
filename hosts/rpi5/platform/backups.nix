@@ -28,6 +28,7 @@
     "d /mnt/data/backups/hass 0750 hass hass -"
     "d /mnt/data/backups/vaultwarden 0750 vaultwarden vaultwarden -"
     "d /mnt/data/backups/shellwatch 0750 shellwatch shellwatch -"
+    "d /mnt/data/backups/pocket-id 0750 pocket-id pocket-id -"
     "d /mnt/data/backups/gramps-web 0750 gramps-web gramps-web -"
     "d /mnt/data/backups/papra 0750 papra papra -"
     "d /mnt/data/backups/beaverhabits 0750 beaverhabits beaverhabits -"
@@ -400,6 +401,33 @@
     wantedBy = [ "timers.target" ];
     timerConfig = {
       OnCalendar = "*-*-* 03:20:00";
+      Persistent = true;
+    };
+  };
+
+  # ── Pocket ID (users, passkeys, OIDC clients) ──────────────────────────
+  # ENCRYPTION_KEY lives in agenix; client secrets are re-registered from
+  # /var/lib/pocket-id-clients by pocket-id-clients.
+  systemd.services.pocket-id-backup = {
+    description = "Pocket ID SQLite backup";
+    serviceConfig = {
+      Type = "oneshot";
+      User = "pocket-id";
+    };
+    script = ''
+      set -euo pipefail
+      STAMP=$(${pkgs.coreutils}/bin/date +%F)
+      OUT=/mnt/data/backups/pocket-id
+      ${pkgs.sqlite}/bin/sqlite3 /var/lib/pocket-id/data/pocket-id.db ".backup '$OUT/pocket-id-$STAMP.db'"
+      ${pkgs.findutils}/bin/find "$OUT" -name "pocket-id-*.db" -mtime +7 -delete
+    '';
+  };
+
+  systemd.timers.pocket-id-backup = {
+    description = "Daily Pocket ID backup timer";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-* 03:25:00";
       Persistent = true;
     };
   };
