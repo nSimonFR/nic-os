@@ -4,7 +4,7 @@
 # Push → Face ID). Three pieces on this host:
 #
 #   shellwatch-hydra   Ory Hydra, the OAuth authority (127.0.0.1:14444/14445)
-#   shellwatch         the server + UI + MCP (127.0.0.1:13990, served on :3995)
+#   shellwatch         the server + UI (127.0.0.1:13990, served on :3995)
 #   shellwatch-agent   nsimon's user unit: an SSH-agent socket whose only key is
 #                      the passkey; each sign request is a push to the phone
 #
@@ -38,9 +38,8 @@ let
   shellwatch-agent = pkgs.callPackage ../../../pkgs/services/shellwatch-agent.nix { };
   pamWebauthn = pkgs.callPackage ../../../pkgs/services/pam-ssh-agent-webauthn.nix { };
 
-  # The iPhone passkey (rpId = tailnetFqdn), as the agent advertises it.
-  passkey = "sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBEm05RhQsrnP53UUhsQ0Z69blDBeQsGFCkwD3w1UO52/7nLiW4gkKEpzYOCaizQH/lVpjfHVPyeWxHz3dnB4EJMAAAAYcnBpNS5nYXRlLW1pbnRha2EudHMubmV0";
-  # pam_ssh_agent_webauthn wants the same key under the webauthn-sk type name.
+  # The iPhone passkey (rpId = tailnetFqdn), under the webauthn-sk type name
+  # pam_ssh_agent_webauthn reads (the agent advertises it as sk-ecdsa-…).
   passkeyWebauthn = "webauthn-sk-ecdsa-sha2-nistp256@openssh.com AAAAK3dlYmF1dGhuLXNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBEm05RhQsrnP53UUhsQ0Z69blDBeQsGFCkwD3w1UO52/7nLiW4gkKEpzYOCaizQH/lVpjfHVPyeWxHz3dnB4EJMAAAAYcnBpNS5nYXRlLW1pbnRha2EudHMubmV0";
 
   hydraConfig = pkgs.writeText "shellwatch-hydra.json" (
@@ -252,12 +251,6 @@ in
       '';
     })
   ];
-
-  # ── MCP sessions ────────────────────────────────────────────────────────
-  # ShellWatch MCP opens SSH sessions signed by the same passkey; this lets it
-  # reach nsimon@127.0.0.1 (tailnet :22 is Tailscale SSH, not sshd).
-  services.openssh.settings.PubkeyAcceptedAlgorithms = "+webauthn-sk-ecdsa-sha2-nistp256@openssh.com";
-  users.users.nsimon.openssh.authorizedKeys.keys = [ "verify-required ${passkey} shellwatch" ];
 
   # ── Service registration ────────────────────────────────────────────────
   nic.services.shellwatch = {
