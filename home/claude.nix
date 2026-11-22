@@ -104,6 +104,9 @@ let
       ]
     }''${PATH:+:$PATH}
     export TELEGRAM_CHAT_ID=''${TELEGRAM_CHAT_ID:-${toString telegramChatId}}
+    # The script's defaults are Linux paths; home-manager agenix on darwin
+    # decrypts under $(getconf DARWIN_USER_TEMP_DIR), a shell expression here.
+    export TELEGRAM_TOKEN_FILE="''${TELEGRAM_TOKEN_FILE:-${config.nic.userSecrets.telegram-bot-token}}"
     exec ${pkgs.bash}/bin/bash ${../shared/scripts/telegram-send.sh} "$@"
   '';
 
