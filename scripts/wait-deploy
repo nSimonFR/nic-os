@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Wait for a PR to merge and for its rpi5 and nBookPro deploys to be live, then exit:
-# 0 = this PR's systems are active (or the Mac's is queued while it sleeps),
+# 0 = this PR's systems are active (or the Mac's is queued while it sleeps; each
+# host is checked locally, else over ssh, so it works from rpi5, the Mac or elsewhere),
 # 1 = closed unmerged / deploy failed / timed out.
 #
 # A T3 PR watch wakes on checks, reviews and conflicts but never on the merge or
@@ -14,6 +15,7 @@ pr=${1:?usage: wait-deploy <pr-number> [timeout-minutes]}
 deadline=$(($(date +%s) + ${2:-120} * 60))
 repo=nSimonFR/nic-os
 mac=${NBOOKPRO_SSH:-macbook-pro-appleosx-15}
+pi=${RPI5_SSH:-rpi5}
 
 say() { echo "[$(date +%H:%M:%S)] $*"; }
 tick() {
@@ -71,30 +73,32 @@ wait_run() {
 want=$(wait_run deploy-rpi5.yml "Deploy rpi5")
 want_mac=$(wait_run deploy-nbookpro.yml "Deploy nBookPro")
 
-# Not /run/current-system: nix-darwin has one too, and the Mac would wait for an
-# rpi5 generation that never lands there.
-if [ "$(hostname -s)" != rpi5 ]; then
-  say "not on rpi5: check /run/current-system on rpi5 and the Mac by hand"
-  exit 0
-fi
 if [ -z "$want" ]; then
   say "no 'System:' line in the rpi5 run log: check /run/current-system by hand"
   exit 1
 fi
+# Run a command on rpi5: locally there, over ssh from anywhere else.
+on_pi() {
+  if [ "$(hostname -s)" = rpi5 ]; then
+    bash -c "$1"
+  else
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$pi" "$1"
+  fi
+}
 # A later merge may already have replaced it; any system generation counts.
+# Not /run/current-system: nix-darwin has one too, and the Mac would wait for an
+# rpi5 generation that never lands there.
 activated() {
-  for g in /nix/var/nix/profiles/system-*-link; do
-    [ "$(readlink -f "$g")" = "$want" ] && return 0
-  done
-  return 1
+  on_pi "for g in /nix/var/nix/profiles/system-*-link; do [ \"\$(readlink -f \"\$g\")\" = $want ] && exit 0; done; exit 1" 2>/dev/null
 }
 until activated; do
-  tick "rpi5 still on $(readlink /run/current-system), waiting for $want"
+  tick "rpi5 still on $(on_pi 'readlink /run/current-system' 2>/dev/null || echo '?'), waiting for $want"
 done
-if [ "$(readlink /run/current-system)" = "$want" ]; then
+now=$(on_pi 'readlink /run/current-system' 2>/dev/null || true)
+if [ "$now" = "$want" ]; then
   say "rpi5 live: /run/current-system = $want"
 else
-  say "rpi5 activated $want, since replaced by $(readlink /run/current-system)"
+  say "rpi5 activated $want, since replaced by ${now:-?}"
 fi
 
 # The Mac's Cachix agent activates when the laptop is awake; asleep is not a failure.
@@ -102,15 +106,22 @@ if [ -z "$want_mac" ]; then
   say "no 'System:' line in the nBookPro run log: check the Mac by hand"
   exit 1
 fi
+# Run a command on the Mac: locally when this is the Mac (it can't ssh to itself).
+on_mac() {
+  if [ "$(uname)" = Darwin ]; then
+    bash -c "$1"
+  else
+    ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" "$1"
+  fi
+}
 mac_has() {
-  ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" \
-    "for g in /nix/var/nix/profiles/system-*-link; do [ \"\$(readlink \"\$g\")\" = $want_mac ] && exit 0; done; exit 1" 2>/dev/null
+  on_mac "for g in /nix/var/nix/profiles/system-*-link; do [ \"\$(readlink \"\$g\")\" = $want_mac ] && exit 0; done; exit 1" 2>/dev/null
 }
 until mac_has; do
-  if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" true 2>/dev/null; then
+  if ! on_mac true 2>/dev/null; then
     say "Mac unreachable (asleep?): $want_mac is queued for its Cachix agent"
     exit 0
   fi
-  tick "Mac still on $(ssh -o BatchMode=yes "$mac" readlink /run/current-system 2>/dev/null), waiting for $want_mac"
+  tick "Mac still on $(on_mac 'readlink /run/current-system' 2>/dev/null), waiting for $want_mac"
 done
 say "Mac activated $want_mac"
