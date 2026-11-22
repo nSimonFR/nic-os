@@ -58,7 +58,11 @@ in
     # so its source can't be fetched any more; v0.9.3 is kept in a private repo
     # (nSimonFR/ha-intratone), restore from there. Only its Python deps stay here.
     extraPackages = ps: [
-      ps.firebase-messaging
+      # Unpadded crypto-key/salt crash the listener before the ack, so FCM
+      # redelivers the message on every reconnect and rings never arrive.
+      (ps.firebase-messaging.overridePythonAttrs (old: {
+        patches = (old.patches or [ ]) ++ [ ./firebase-messaging-unpadded-b64.patch ];
+      }))
       ps.voip-utils
     ];
     extraComponents = [

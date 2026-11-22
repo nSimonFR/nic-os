@@ -39,7 +39,7 @@ HEALTH = """{%- set ns = namespace(p=[]) -%}
   {%- set ns.p = ns.p + ['entity:lock.intratone_door'] -%}
 {%- endif -%}
 {#- An event entity reads "unknown" until its first ring, e.g. after a restart. -#}
-{%- if is_state('event.intratone_doorbell', 'unavailable') -%}
+{%- if states.event.intratone_doorbell is none or is_state('event.intratone_doorbell', 'unavailable') -%}
   {%- set ns.p = ns.p + ['entity:event.intratone_doorbell'] -%}
 {%- endif -%}
 {%- if not is_state('automation.door_auto_open_window', 'on') -%}
