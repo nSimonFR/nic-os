@@ -27,7 +27,10 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
    - A red check: step 5. Your diff: fix and push. Environmental: a blocker, report it.
    - "Automatic approval withheld" with "Security architecture risk: Unavailable for this
      commit": its security pass skipped the head (not redone after your push). Comment
-     `@coderabbitai full review` once per head, never `approve`, and wait.
+     `@coderabbitai full review` once per head, never `approve`, and wait for its answer: in T3
+     the watch wakes you; elsewhere Monitor until a CodeRabbit comment changes after your request
+     (`gh api repos/<o>/<r>/issues/<n>/comments -q '[.[]|select(.user.login=="coderabbitai[bot]")|.updated_at]|max'`
+     later than the request's `created_at`), then reread its verdict for the head.
    - Hand back (unwatch first) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review, the PR closed,
      or a blocker you can't fix. Say which.
