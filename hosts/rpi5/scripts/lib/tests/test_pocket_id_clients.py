@@ -29,7 +29,8 @@ def client(tmp_path, **kw):
         "id": "immich",
         "name": "Immich",
         "callbackURLs": ["https://rpi5:10000/auth/login"],
-        "secretFile": str(tmp_path / "immich"),
+        "secretFile": str(tmp_path / "secrets" / "immich"),
+        "idFile": str(tmp_path / "registered" / "immich"),
         "secretGroup": "immich",
     }
     c.update(kw)
@@ -40,10 +41,20 @@ def current(c, **kw):
     return json_reply({"id": c["id"], **pic.desired(c), **kw})
 
 
+def secret_file(tmp_path, cid="immich"):
+    return tmp_path / "secrets" / cid
+
+
+def id_file(tmp_path, cid="immich"):
+    return tmp_path / "registered" / cid
+
+
 def hold(tmp_path, value=HELD, sid="sec-1"):
-    (tmp_path / "immich").write_text(value)
+    secret_file(tmp_path).parent.mkdir(exist_ok=True)
+    secret_file(tmp_path).write_text(value)
     if sid:
-        (tmp_path / "immich.id").write_text(sid)
+        id_file(tmp_path).parent.mkdir(exist_ok=True)
+        id_file(tmp_path).write_text(sid)
 
 
 def run(tmp_path, clients, replies, chown=lambda *a, **k: None):
@@ -76,9 +87,9 @@ def test_creates_client_and_writes_a_new_secret(tmp_path):
         ("POST", "/api/oidc/clients/immich/secrets"),
     ]
     assert op.body_of(2)["id"] == "immich" and op.body_of(2)["skipConsent"] is True
-    secret = (tmp_path / "immich").read_text()
+    secret = secret_file(tmp_path).read_text()
     assert len(secret) >= 32 and op.body_of(3) == {"secret": secret}
-    assert (tmp_path / "immich.id").read_text() == "sec-new"
+    assert id_file(tmp_path).read_text() == "sec-new"
     assert op.requests[0].headers["X-api-key"] == "k" * 32
 
 
@@ -87,8 +98,8 @@ def test_recreated_client_gets_the_secret_the_service_holds(tmp_path):
     rc, op, _ = run(tmp_path, [client(tmp_path)], [OK, not_found, OK, secret_created()])
     assert rc == 0
     assert op.body_of(3) == {"secret": HELD}
-    assert (tmp_path / "immich").read_text() == HELD
-    assert (tmp_path / "immich.id").read_text() == "sec-new"
+    assert secret_file(tmp_path).read_text() == HELD
+    assert id_file(tmp_path).read_text() == "sec-new"
 
 
 def test_registered_secret_makes_no_writes(tmp_path):
@@ -107,7 +118,7 @@ def test_other_secret_with_the_same_prefix_does_not_count(tmp_path):
     assert rc == 0
     assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
     assert op.body_of(-1) == {"secret": HELD}
-    assert (tmp_path / "immich.id").read_text() == "sec-new"
+    assert id_file(tmp_path).read_text() == "sec-new"
 
 
 def test_interrupted_registration_is_retried(tmp_path):
@@ -132,7 +143,7 @@ def test_failed_post_after_recreation_is_retried_despite_a_stale_id(tmp_path):
     assert rc == 0
     assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
     assert op.body_of(-1) == {"secret": HELD}
-    assert (tmp_path / "immich.id").read_text() == "sec-new"
+    assert id_file(tmp_path).read_text() == "sec-new"
 
 
 def test_update_keeps_unmanaged_fields(tmp_path):
@@ -152,7 +163,12 @@ def test_bad_client_does_not_stop_the_others(tmp_path):
 
     a = client(tmp_path)
     b = {"name": "no id"}
-    c = client(tmp_path, id="memos", secretFile=str(tmp_path / "memos"))
+    c = client(
+        tmp_path,
+        id="memos",
+        secretFile=str(secret_file(tmp_path, "memos")),
+        idFile=str(id_file(tmp_path, "memos")),
+    )
     rc, op, lines = run(
         tmp_path, [a, b, c], [OK, not_found, OK, secret_created()], chown=chown
     )
@@ -161,12 +177,30 @@ def test_bad_client_does_not_stop_the_others(tmp_path):
     assert any(line.startswith("<missing id>") for line in lines)
 
 
+def test_dotted_client_id_does_not_clobber_another_secret(tmp_path):
+    a = client(tmp_path)
+    b = client(
+        tmp_path,
+        id="immich.id",
+        secretFile=str(secret_file(tmp_path, "immich.id")),
+        idFile=str(id_file(tmp_path, "immich.id")),
+    )
+    replies = [OK, not_found, OK, secret_created("sec-a"), not_found, OK]
+    replies.append(secret_created("sec-b"))
+    rc, _, _ = run(tmp_path, [a, b], replies)
+    assert rc == 0
+    assert id_file(tmp_path).read_text() == "sec-a"
+    assert id_file(tmp_path, "immich.id").read_text() == "sec-b"
+    assert secret_file(tmp_path).read_text() != "sec-b"
+    assert len(secret_file(tmp_path).read_text()) >= 32
+
+
 def test_public_client_gets_no_secret(tmp_path):
     c = client(tmp_path, isPublic=True, pkceEnabled=True)
     rc, op, _ = run(tmp_path, [c], [OK, not_found, OK])
     assert rc == 0
     assert calls(op)[-1] == ("POST", "/api/oidc/clients")
-    assert not (tmp_path / "immich").exists()
+    assert not secret_file(tmp_path).exists()
 
 
 def test_missing_config_is_fatal(tmp_path):
