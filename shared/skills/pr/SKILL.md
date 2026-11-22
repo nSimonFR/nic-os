@@ -23,7 +23,8 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
      Do it yourself: fix, push, reply under each thread (on nic-os never resolve its threads),
      restart the watch. Don't hand back. A `FORMAT-DRIFT` line means the bot's format changed:
      tell the user (the script fell back to the whole comment).
-   - `HUMAN`: nothing left to fix, the merge waits on a human approval. Stop and hand back.
+   - `HUMAN`: nothing left for you to fix. Stop and hand back with the reason it printed
+     (approval missing, approval withheld by the bot, PR closed, still blocked).
    - `DONE`: merged (and deployed when a deploy workflow was given).
 5. **Triage red.**
    `gh run view <id> --log-failed | sed 's/\x1b\[[0-9;]*m//g' | grep -aiE "error|fail|expected|received" | head -80`
