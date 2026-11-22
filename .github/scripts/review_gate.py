@@ -8,7 +8,8 @@ Prints a JSON decision: ok, reasons, head, label (needs-human,
 auto-merge-eligible or null while CodeRabbit has not approved), state (success,
 pending, or null: post nothing) and description.
 PROTECTED is the only path list; a pattern that matches no file on main (a
-move) refuses every agent PR until it is updated.
+move) refuses every agent PR until it is updated. One exception: a change to
+SETTINGS that only restricts (restricts() below) counts as unprotected.
 
 CodeRabbit's approval counts only if it reached it alone: every thread it
 opened was resolved by itself or Nico, no one but Nico asked it to approve or
@@ -47,6 +48,7 @@ COMMAND = re.compile(
     r"@coderabbit(ai)?\b.*\b(approve|resolve)\b|\b(approve|resolve)\b.*@coderabbit(ai)?\b",
     re.IGNORECASE | re.DOTALL,
 )
+SETTINGS = "home/dotfiles/claude-settings.json"
 MAX_LINES = 150
 MAX_FILES = 6
 
@@ -75,7 +77,42 @@ def stale(tracked):
     return [p for p in PROTECTED if not any(fnmatch.fnmatch(t, p) for t in tracked)]
 
 
-def verdict(pr, files, tracked):
+def _set(xs):
+    return {json.dumps(x, sort_keys=True) for x in xs or []}
+
+
+def restricts(base, head):
+    """True when SETTINGS `head` only takes away from `base`: more denies, more
+    asks, fewer allows, plugins switched off. Anything else, an unreadable side
+    included, is a change Nico reviews."""
+    if not isinstance(base, dict) or not isinstance(head, dict):
+        return False
+
+    def strip(d):  # a copy: the pops below must not touch the caller's dicts
+        return json.loads(
+            json.dumps({k: v for k, v in d.items() if not k.startswith("_comment")})
+        )
+
+    b, h = strip(base), strip(head)
+    bp, hp = b.pop("permissions", {}) or {}, h.pop("permissions", {}) or {}
+    if not (
+        _set(hp.pop("deny", [])) >= _set(bp.pop("deny", []))
+        and _set(hp.pop("ask", [])) >= _set(bp.pop("ask", []))
+        and _set(hp.pop("allow", [])) <= _set(bp.pop("allow", []))
+        and hp == bp
+    ):
+        return False
+    if not _set(h.pop("deniedMcpServers", [])) >= _set(b.pop("deniedMcpServers", [])):
+        return False
+    bpl, hpl = b.pop("enabledPlugins", {}) or {}, h.pop("enabledPlugins", {}) or {}
+    for name in set(bpl) | set(hpl):
+        # A dropped key falls back to the plugin's default, which may be on.
+        if name not in hpl or (hpl[name] is not False and hpl[name] != bpl.get(name)):
+            return False
+    return h == b
+
+
+def verdict(pr, files, tracked, settings=None):
     reasons = [f"protected pattern {p} matches no file on main" for p in stale(tracked)]
     author = (pr.get("user") or {}).get("login")
     if author not in AUTHORS:
@@ -91,6 +128,10 @@ def verdict(pr, files, tracked):
         reasons.append(f"{lines} changed lines > {MAX_LINES}")
     for f in files:
         for path in {f["filename"], f.get("previous_filename") or f["filename"]}:
+            if path == SETTINGS == f["filename"] and restricts(
+                *(settings or (None, None))
+            ):
+                continue
             if protected(path):
                 reasons.append(f"protected path {path}")
     return {"ok": not reasons, "reasons": sorted(set(reasons))}
@@ -138,8 +179,8 @@ def tampered(reviews, comments, threads):
     return sorted(set(reasons)) or None
 
 
-def decide(pr, files, reviews, tracked, comments=None, threads=None):
-    v = verdict(pr, files, tracked)
+def decide(pr, files, reviews, tracked, comments=None, threads=None, settings=None):
+    v = verdict(pr, files, tracked, settings)
     head = (pr.get("head") or {}).get("sha", "")
     judged = approved(reviews, JUDGE, head)
     why = tampered(reviews, comments, threads) if judged else None
@@ -184,14 +225,43 @@ def tracked_files(run=subprocess.run):
     return out.stdout.splitlines()
 
 
-def main(argv, tracked=None):
+def settings_pair(pr, files, run=subprocess.run):
+    """SETTINGS at the PR's base and head, or None for a side that can't be read."""
+    if not any(f["filename"] == SETTINGS for f in files):
+        return None
+    repo = ((pr.get("base") or {}).get("repo") or {}).get("full_name")
+
+    def at(sha):
+        if not repo or not sha:
+            return None
+        out = run(
+            [
+                "gh",
+                "api",
+                "-H",
+                "Accept: application/vnd.github.raw",
+                f"repos/{repo}/contents/{SETTINGS}?ref={sha}",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        try:
+            return json.loads(out.stdout) if out.returncode == 0 else None
+        except ValueError:
+            return None
+
+    return at((pr.get("base") or {}).get("sha")), at((pr.get("head") or {}).get("sha"))
+
+
+def main(argv, tracked=None, run=subprocess.run):
     pr = json.load(open(argv[1]))
     files = [f for page in json.load(open(argv[2])) for f in page]
     reviews = [r for page in json.load(open(argv[3])) for r in page]
     comments = json.load(open(argv[4])) if len(argv) > 4 else None
     threads = json.load(open(argv[5])) if len(argv) > 5 else None
     tracked = tracked_files() if tracked is None else tracked
-    print(json.dumps(decide(pr, files, reviews, tracked, comments, threads)))
+    settings = settings_pair(pr, files, run)
+    print(json.dumps(decide(pr, files, reviews, tracked, comments, threads, settings)))
     return 0
 
 
