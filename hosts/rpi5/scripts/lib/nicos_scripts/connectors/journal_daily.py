@@ -1995,19 +1995,6 @@ def journal_day(
 
     moved = max([w.end for w in ws] + [t.end for t in day_trips], default=None)
     files = []
-    if lines:
-        png_path = f"{tmpdir}/day-{key}.jpg"
-        render_fn(lines, png_path)
-        with open(png_path, "rb") as f:
-            data = f.read()
-        files.append(
-            (
-                f"map-{key}.jpg",
-                "image/jpeg",
-                data,
-                media_metadata(data, moved, location=lines[-1][0][-1]),
-            )
-        )
     if photos:
         data = collage
         gps = next((g for g in map(photo_gps, reversed(photos)) if g), None)
@@ -2030,6 +2017,19 @@ def journal_day(
                     location=gps,
                     camera=next(iter(cams)) if len(cams) == 1 else None,
                 ),
+            )
+        )
+    if lines:
+        png_path = f"{tmpdir}/day-{key}.jpg"
+        render_fn(lines, png_path)
+        with open(png_path, "rb") as f:
+            data = f.read()
+        files.append(
+            (
+                f"map-{key}.jpg",
+                "image/jpeg",
+                data,
+                media_metadata(data, moved, location=lines[-1][0][-1]),
             )
         )
 
