@@ -15,28 +15,9 @@
 }:
 let
   inherit (pkgs) t3code;
-  # no-renovate: temporary bump until the nixpkgs-unstable pin carries >= 2026.10.3.
-  # T3 Connect's relay refuses cloudflared older than 2026.10.3 since T3 0.1.11
-  # ("T3CODE_CLOUDFLARED_PATH must point to cloudflared 2026.10.3 or newer"), and
-  # then the apps see this server as unreachable. release-26.05 has 2026.5.2 and
-  # the unstable pin 2026.10.1, so bump unstable's (its Go toolchain is new
-  # enough). Drop once the unstable pin carries >= 2026.10.3.
-  cloudflared = pkgs.unstablePkgs.cloudflared.overrideAttrs (_: rec {
-    version = "2026.10.7";
-    src = pkgs.fetchFromGitHub {
-      owner = "cloudflare";
-      repo = "cloudflared";
-      tag = version;
-      hash = "sha256-qyGcPCYaa4UT8ws5sUW+SXCp8QWbVniB4QFR8gGE0ds=";
-    };
-    vendorHash = "sha256-ah+kI+bWIZqsi9U+AJtWME9rfjTr6QpiLQy0RXNlDzc=";
-    ldflags = [
-      "-s"
-      "-w"
-      "-X main.Version=${version}"
-      "-X github.com/cloudflare/cloudflared/cmd/cloudflared/updater.BuiltForPackageManager=nixpkgs"
-    ];
-  });
+  # T3 Connect's relay refuses cloudflared older than 2026.10.3 since T3 0.1.11;
+  # release-26.05 has 2026.7.3, nixpkgs-unstable has a new enough one.
+  inherit (pkgs.unstablePkgs) cloudflared;
   homeDir = config.users.users.${username}.home;
   # proxy.env's NO_PROXY plus the GitHub API, so the side panel sends the
   # human's token saved in T3's Settings instead of the broker's nSimonFR-ai one.
