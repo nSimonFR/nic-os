@@ -12,6 +12,7 @@ let
     runtimeInputs = [
       pkgs.git
       pkgs.coreutils
+      pkgs.findutils
       pkgs.gawk
     ];
     text = builtins.readFile ./scripts/worktree-gc.sh;

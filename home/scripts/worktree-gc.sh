@@ -65,7 +65,10 @@ printf '%s\n' "${repos[@]}" | sort -u | while read -r repo; do
         first=0
       elif [ -n "$path" ] && [ -d "$path" ] && [ "$locked" = 0 ]; then
         # A worktree whose .git link is broken can't be checked, so it is kept.
-        gitdir=$(git -C "$path" rev-parse --absolute-git-dir 2>/dev/null) || gitdir=""
+        gitdir=""
+        if [ -f "$path/.git" ]; then
+          gitdir=$(git -C "$path" rev-parse --absolute-git-dir 2>/dev/null) || gitdir=""
+        fi
         case "$gitdir" in */worktrees/*) ;; *)
           path="" branch="" locked=0
           continue
@@ -87,8 +90,8 @@ printf '%s\n' "${repos[@]}" | sort -u | while read -r repo; do
           else
             # --force: a worktree of a Home Repo holds empty submodule dirs, which git
             # otherwise refuses to remove even when clean (checked just above).
-            # Read-only files (copied out of the Nix store) would stop the removal halfway.
-            chmod -R u+w "$path" 2>/dev/null
+            # Writable directories allow unlinking read-only files without changing their modes.
+            find "$path" -type d -exec chmod u+w {} + 2>/dev/null
             if git -C "$repo" worktree remove --force "$path"; then
               say "removed $path"
               if [ -n "$branch" ] && [ "$branch" != main ] && [ "$branch" != master ] &&
