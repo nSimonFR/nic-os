@@ -147,7 +147,7 @@ for t in nodes:
         reviews[rid] = prompt(review.get("body"))
     replied = last[0].get("databaseId") != first[0]["databaseId"]
     # A reply supersedes the review prompt: show the bot latest word.
-    own = None if replied else prompt(last[0]["body"])
+    own = prompt(last[0]["body"])
     out.append((where, first[0]["databaseId"], None if replied else rid, own, last[0]["body"]))
 
 if not out:
@@ -172,6 +172,22 @@ if drift and bot == "coderabbitai":
           "Report this: the prompt extraction in pr-watch.sh needs updating." % ", ".join(drift))
 '
 }
+
+# The open bot findings (bot_findings' output), retried; fails when every read failed.
+fetch_threads() {
+  # shellcheck disable=SC2016  # $endCursor and friends are GraphQL variables.
+  gh api graphql --paginate --slurp -F owner="$owner" -F name="$name" -F pr="$pr" -f query='
+      query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
+        repository(owner: $owner, name: $name) { pullRequest(number: $pr) {
+          reviewThreads(first: 100, after: $endCursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes { isResolved path line
+              first: comments(first: 1) { nodes { databaseId author { login } body
+                pullRequestReview { databaseId body } } }
+              last: comments(last: 1) { nodes { databaseId author { login } body } } } } } } }' |
+    bot_findings
+}
+open_threads() { try3 fetch_threads; }
 
 while :; do
   state=$(gh pr view "$pr" --repo "$repo" --json state -q .state)
@@ -228,30 +244,12 @@ while :; do
 
   # Open bot threads whose last word is still the bot's, rendered by bot_findings.
   # A fetch or parse failure is retried, then reported: never read as "no findings".
-  threads="" ok=""
-  for _ in 1 2 3; do
-    # shellcheck disable=SC2016  # $endCursor and friends are GraphQL variables.
-    if threads=$(gh api graphql --paginate --slurp -F owner="$owner" -F name="$name" -F pr="$pr" -f query='
-        query($owner: String!, $name: String!, $pr: Int!, $endCursor: String) {
-          repository(owner: $owner, name: $name) { pullRequest(number: $pr) {
-            reviewThreads(first: 100, after: $endCursor) {
-              pageInfo { hasNextPage endCursor }
-              nodes { isResolved path line
-                first: comments(first: 1) { nodes { databaseId author { login } body
-                  pullRequestReview { databaseId body } } }
-                last: comments(last: 1) { nodes { databaseId author { login } body } } } } } } }' |
-      bot_findings); then
-      ok=1
-      break
-    fi
-    sleep 20
-  done
-  if [ -z "$ok" ]; then
+  threads=$(open_threads) || {
     echo "FIX $repo#$pr: FORMAT-DRIFT: could not fetch or parse the review threads 3 times in a row."
     echo "Report this to the user: GitHub's API or $bot's thread format may have changed and"
     echo "pr-watch.sh's bot_findings needs updating. Read the threads by hand meanwhile."
     exit 0
-  fi
+  }
   if ! snap=$(snapshot); then
     echo "FIX $repo#$pr: could not read the PR's checks 3 times in a row (GitHub API?). Look by hand, then restart:"
     echo "  $self $repo $pr ${deploy:+\"$deploy\"}"
@@ -328,6 +326,13 @@ used the whole review body. Report this: pr-watch.sh's body_prompt needs updatin
     continue
   fi
   [ "$settled_head" = "$head" ] || settled_at=""
+  # A review that landed after this pass read the threads may carry new ones:
+  # read them again before any HUMAN, and let the next pass report them as FIX.
+  late=$(open_threads) || read_failed "the review threads"
+  if [ -n "$late" ]; then
+    sleep 5
+    continue
+  fi
   settled_head=$head
   if [ -n "$pending" ] || [ "$merge" = CLEAN ] || [ "$merge" = UNKNOWN ]; then
     settled_at=""
