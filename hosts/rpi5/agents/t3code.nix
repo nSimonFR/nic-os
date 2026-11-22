@@ -88,7 +88,7 @@ in
     wantedBy = [ "multi-user.target" ];
 
     # Agent sessions run in this unit's cgroup, and one of them may be the
-    # rebuild itself — same hazard as claude-remote-control. New versions land
+    # rebuild itself. New versions land
     # on `systemctl restart t3code` or the next boot.
     restartIfChanged = false;
 

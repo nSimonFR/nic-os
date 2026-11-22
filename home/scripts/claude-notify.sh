@@ -19,10 +19,6 @@
 # ~/.claude/hooks/claude-notify. That is the only entry point, so the variable
 # is always set in practice; a missing one is logged rather than silently eaten.
 #
-# State (~/.claude/state) and this hooks dir are shared with the remote-control
-# bridge (~/.claude-rc symlinks both back here), so interactive and remote
-# sessions gate off the same activity clock.
-#
 # Always exits 0 — a hook must never block the agent.
 set +e
 

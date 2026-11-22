@@ -260,8 +260,7 @@ in
       # Unified agent notify gate (see home/scripts/claude-notify.sh). Wired
       # under three hook events in claude-settings.json: UserPromptSubmit
       # (`activity`), Notification (`notification`, idle-gated), and
-      # PostToolUse/PushNotification (`push`, always through). Shared with the
-      # remote-control bridge via the ~/.claude-rc/hooks symlink.
+      # PostToolUse/PushNotification (`push`, always through).
       #
       # The script owns the idle gating only; the payload + POST to the :8088
       # aggregator is the shared seam (shared/notify.nix `agent`), handed over as
@@ -273,15 +272,6 @@ in
           exec ${pkgs.bash}/bin/bash ${./scripts/claude-notify.sh} "$@"
         '';
         executable = true;
-      };
-
-      # Wrapper for `claude remote-control` that bypasses the HM-generated
-      # --mcp-config wrapper (its variadic <configs...> arg swallows subcommands).
-      ".claude/bin/claude-rc" = {
-        executable = true;
-        source = pkgs.writeShellScript "claude-rc" ''
-          exec "${claudeCodePkg}/bin/claude" remote-control "$@"
-        '';
       };
 
       # herdr's agent-state hook: reports agent_session_id + agent_session_path on
