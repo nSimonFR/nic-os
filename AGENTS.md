@@ -94,6 +94,14 @@ A new `fetch*`/`pullImage` under `pkgs/` or `hosts/` needs a `# renovate:` marke
 or `# no-renovate: <reason>` — the `hashes` check fails otherwise. Recipe:
 `pkgs/README.md`, "Tracking a pin with Renovate".
 
+Need a newer nixpkgs package? Move the pin, don't override: if `nixpkgs` (26.05) or
+`nixpkgs-unstable` has the version, bump that input (`nix flake update <input>`) and
+take the package from it (`pkgs.unstablePkgs.<pkg>` or `inherit (unstablePkgs) <pkg>`
+in `hosts/rpi5/overlays.nix`). A version `overrideAttrs` is only for a version no pin
+carries yet, marked `# no-renovate: temporary …` with the pin that makes it go away;
+on each pin bump, drop the ones it now covers. A library stays on its tree's version
+(an unstable lib under stable consumers is an ABI mix): backport it on stable instead.
+
 ## Python scripts
 
 Never inline logic in a `.nix` string, and never wire a loose
