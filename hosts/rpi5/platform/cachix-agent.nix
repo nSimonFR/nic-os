@@ -12,4 +12,10 @@
     package = inputs.cachix.packages.${pkgs.stdenv.hostPlatform.system}.cachix; # see flake.nix
     credentialsFile = "/run/agenix/cachix-agent-token";
   };
+
+  # psi-oom spares adj < 0. On 2026-11-22 it killed the agent's `nix-store -r`
+  # (130 MiB) during a memory stall, and every nixpkgs-bump deploy died with
+  # "Failed to run nix-store -9". The client is small; the stall's real weight
+  # is in nix-daemon (frozen by psi-oom) and the services it kills instead.
+  systemd.services.cachix-agent.serviceConfig.OOMScoreAdjust = -500;
 }
