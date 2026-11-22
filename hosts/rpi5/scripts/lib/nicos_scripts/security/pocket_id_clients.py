@@ -4,11 +4,11 @@ hosts/rpi5/security/pocket-id.nix writes the declarations to a JSON file; this
 upserts each one through the admin API (STATIC_API_KEY) and keeps its secret in
 `secretFile`, readable by the consuming service's group.
 
-A client's secret is the file's content. It is (re)registered whenever none of
-the client's active secrets in Pocket ID starts with the file's prefix: a missing
-file (a new random value), a recreated client, or a registration that failed on
-an earlier run. A restored or reset database so gets back the secrets the
-services already hold.
+A client's secret is the file's content; `<secretFile>.id` records the Pocket ID
+secret id it was registered under. The value is (re)registered whenever that id
+is not among the client's active secrets: a missing file (a new random value), a
+recreated client, or a registration interrupted on an earlier run. A restored or
+reset database so gets back the secrets the services already hold.
 
 Clients that exist in Pocket ID but are not declared are left alone.
 """
@@ -111,16 +111,8 @@ def write_secret(path, value, group, chown=shutil.chown):
     tmp.replace(path)
 
 
-def holds(secrets_list, value):
-    """Whether one of the client's active secrets matches `value`.
-
-    Pocket ID only returns a 4-character clear-text prefix of each secret.
-    """
-    for sec in secrets_list or []:
-        prefix = sec.get("prefix") or ""
-        if sec.get("isActive", True) and prefix and value.startswith(prefix):
-            return True
-    return False
+def active_ids(secrets_list):
+    return {sec["id"] for sec in secrets_list or [] if sec.get("isActive", True)}
 
 
 def sync_client(api, c, log, chown=shutil.chown):
@@ -139,14 +131,17 @@ def sync_client(api, c, log, chown=shutil.chown):
     if want["isPublic"]:
         return
     path = Path(c["secretFile"])
+    id_file = path.with_name(path.name + ".id")
     existing = path.read_text().strip() if path.exists() else ""
-    if existing and current is not None:
-        if holds(api.call("GET", f"/api/oidc/clients/{cid}/secrets"), existing):
+    if existing and current is not None and id_file.exists():
+        listed = api.call("GET", f"/api/oidc/clients/{cid}/secrets")
+        if id_file.read_text().strip() in active_ids(listed):
             return
     value = existing or secrets.token_urlsafe(32)
-    api.call("POST", f"/api/oidc/clients/{cid}/secrets", {"secret": value})
+    reg = api.call("POST", f"/api/oidc/clients/{cid}/secrets", {"secret": value})
     if not existing:
         write_secret(path, value, c["secretGroup"], chown=chown)
+    id_file.write_text(reg["id"])
     log(f"{cid}: secret registered")
 
 
@@ -164,6 +159,6 @@ def main(env=None, opener=None, sleep=time.sleep, chown=shutil.chown, log=None):
         try:
             sync_client(api, c, log, chown=chown)
         except (urllib.error.URLError, OSError, ValueError, LookupError) as e:
-            log(f"{c['id']}: {e}")
+            log(f"{c.get('id', '<missing id>')}: {e}")
             failed += 1
     return 1 if failed else 0

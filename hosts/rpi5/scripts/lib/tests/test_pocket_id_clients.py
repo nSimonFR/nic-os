@@ -8,16 +8,20 @@ from conftest import FakeOpener, json_reply
 
 from nicos_scripts.security import pocket_id_clients as pic
 
-
 HELD = "h" * 24  # what the service already reads
+OK = json_reply({})
 
 
 def not_found():
     raise urllib.error.HTTPError("u", 404, "Not Found", {}, io.BytesIO(b""))
 
 
-def registered(value):
-    return json_reply([{"id": "x", "prefix": value[:4], "isActive": True}])
+def secret_created(sid="sec-new"):
+    return json_reply({"id": sid})
+
+
+def listed(*ids, prefix=HELD[:4]):
+    return json_reply([{"id": i, "prefix": prefix, "isActive": True} for i in ids])
 
 
 def client(tmp_path, **kw):
@@ -32,7 +36,17 @@ def client(tmp_path, **kw):
     return c
 
 
-def run(tmp_path, clients, replies):
+def current(c, **kw):
+    return json_reply({"id": c["id"], **pic.desired(c), **kw})
+
+
+def hold(tmp_path, value=HELD, sid="sec-1"):
+    (tmp_path / "immich").write_text(value)
+    if sid:
+        (tmp_path / "immich.id").write_text(sid)
+
+
+def run(tmp_path, clients, replies, chown=lambda *a, **k: None):
     f = tmp_path / "clients.json"
     f.write_text(json.dumps(clients))
     op = FakeOpener(replies)
@@ -41,7 +55,7 @@ def run(tmp_path, clients, replies):
         env={"STATIC_API_KEY": "k" * 32, "CLIENTS_FILE": str(f)},
         opener=op,
         sleep=lambda _: None,
-        chown=lambda *a, **k: None,
+        chown=chown,
         log=lines.append,
     )
     return rc, op, lines
@@ -53,7 +67,7 @@ def calls(op):
 
 def test_creates_client_and_writes_a_new_secret(tmp_path):
     c = client(tmp_path)
-    rc, op, _ = run(tmp_path, [c], [json_reply({}), not_found, json_reply({})])
+    rc, op, _ = run(tmp_path, [c], [OK, not_found, OK, secret_created()])
     assert rc == 0
     assert calls(op) == [
         ("GET", "/healthz"),
@@ -64,40 +78,51 @@ def test_creates_client_and_writes_a_new_secret(tmp_path):
     assert op.body_of(2)["id"] == "immich" and op.body_of(2)["skipConsent"] is True
     secret = (tmp_path / "immich").read_text()
     assert len(secret) >= 32 and op.body_of(3) == {"secret": secret}
+    assert (tmp_path / "immich.id").read_text() == "sec-new"
     assert op.requests[0].headers["X-api-key"] == "k" * 32
 
 
 def test_recreated_client_gets_the_secret_the_service_holds(tmp_path):
-    (tmp_path / "immich").write_text(HELD)
-    rc, op, _ = run(
-        tmp_path, [client(tmp_path)], [json_reply({}), not_found, json_reply({})]
-    )
+    hold(tmp_path)
+    rc, op, _ = run(tmp_path, [client(tmp_path)], [OK, not_found, OK, secret_created()])
     assert rc == 0
     assert op.body_of(3) == {"secret": HELD}
     assert (tmp_path / "immich").read_text() == HELD
+    assert (tmp_path / "immich.id").read_text() == "sec-new"
 
 
-def test_unchanged_client_with_secret_makes_no_writes(tmp_path):
+def test_registered_secret_makes_no_writes(tmp_path):
     c = client(tmp_path)
-    (tmp_path / "immich").write_text("s" * 40)
-    current = {"id": "immich", **pic.desired(c)}
-    rc, op, _ = run(
-        tmp_path, [c], [json_reply({}), json_reply(current), registered("s" * 40)]
-    )
+    hold(tmp_path)
+    rc, op, _ = run(tmp_path, [c], [OK, current(c), listed("sec-1")])
     assert rc == 0
     assert [m for m, _ in calls(op)] == ["GET", "GET", "GET"]
 
 
+def test_other_secret_with_the_same_prefix_does_not_count(tmp_path):
+    c = client(tmp_path)
+    hold(tmp_path)
+    replies = [OK, current(c), listed("sec-other"), secret_created()]
+    rc, op, _ = run(tmp_path, [c], replies)
+    assert rc == 0
+    assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
+    assert op.body_of(-1) == {"secret": HELD}
+    assert (tmp_path / "immich.id").read_text() == "sec-new"
+
+
+def test_interrupted_registration_is_retried(tmp_path):
+    c = client(tmp_path)
+    hold(tmp_path, sid=None)  # the POST failed before the id was recorded
+    rc, op, _ = run(tmp_path, [c], [OK, current(c), secret_created()])
+    assert rc == 0
+    assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
+    assert op.body_of(-1) == {"secret": HELD}
+
+
 def test_update_keeps_unmanaged_fields(tmp_path):
     c = client(tmp_path, callbackURLs=["https://new/cb"])
-    (tmp_path / "immich").write_text("s" * 40)
-    current = {"id": "immich", "hasLogo": True, **pic.desired(client(tmp_path))}
-    replies = [
-        json_reply({}),
-        json_reply(current),
-        json_reply({}),
-        registered("s" * 40),
-    ]
+    hold(tmp_path)
+    replies = [OK, current(client(tmp_path), hasLogo=True), OK, listed("sec-1")]
     rc, op, _ = run(tmp_path, [c], replies)
     assert rc == 0
     assert calls(op)[2] == ("PUT", "/api/oidc/clients/immich")
@@ -105,46 +130,24 @@ def test_update_keeps_unmanaged_fields(tmp_path):
     assert op.body_of(2)["callbackURLs"] == ["https://new/cb"]
 
 
-def test_secret_missing_from_pocket_id_is_registered_again(tmp_path):
-    c = client(tmp_path)
-    (tmp_path / "immich").write_text(HELD)
-    current = {"id": "immich", **pic.desired(c)}
-    replies = [
-        json_reply({}),
-        json_reply(current),
-        registered("x" * 40),
-        json_reply({}),
-    ]
-    rc, op, _ = run(tmp_path, [c], replies)
-    assert rc == 0
-    assert calls(op)[-1] == ("POST", "/api/oidc/clients/immich/secrets")
-    assert op.body_of(-1) == {"secret": HELD}
-
-
-def test_bad_group_does_not_stop_other_clients(tmp_path):
+def test_bad_client_does_not_stop_the_others(tmp_path):
     def chown(*a, **k):
         raise LookupError("no such group")
 
-    f = tmp_path / "clients.json"
     a = client(tmp_path)
-    b = client(tmp_path, id="memos", secretFile=str(tmp_path / "memos"))
-    f.write_text(json.dumps([a, b]))
-    op = FakeOpener([json_reply({}), not_found, json_reply({})])
-    lines = []
-    rc = pic.main(
-        env={"STATIC_API_KEY": "k" * 32, "CLIENTS_FILE": str(f)},
-        opener=op,
-        sleep=lambda _: None,
-        chown=chown,
-        log=lines.append,
+    b = {"name": "no id"}
+    c = client(tmp_path, id="memos", secretFile=str(tmp_path / "memos"))
+    rc, op, lines = run(
+        tmp_path, [a, b, c], [OK, not_found, OK, secret_created()], chown=chown
     )
     assert rc == 1
     assert sum("no such group" in line for line in lines) == 2
+    assert any(line.startswith("<missing id>") for line in lines)
 
 
 def test_public_client_gets_no_secret(tmp_path):
     c = client(tmp_path, isPublic=True, pkceEnabled=True)
-    rc, op, _ = run(tmp_path, [c], [json_reply({}), not_found, json_reply({})])
+    rc, op, _ = run(tmp_path, [c], [OK, not_found, OK])
     assert rc == 0
     assert calls(op)[-1] == ("POST", "/api/oidc/clients")
     assert not (tmp_path / "immich").exists()
