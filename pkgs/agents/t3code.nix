@@ -9,13 +9,16 @@
 # app. Bumps come from Renovate; `t3 update` must not be used, it installs a
 # second copy under ~/.t3/runtime.
 #
-# Tracks the nightly channel, matching the Mac's "T3 Code (Nightly)" app: a
-# stable server behind a nightly client loses access to its sessions.
+# Tracks the stable channel, like ./t3code-desktop.nix: the server and the Mac
+# app must run the same version or the app loses its sessions over T3 Connect.
 #
-# linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead:
-# the same nightly plus pingdotgg/t3code#19576 (Issues) and the Linear issue
-# trees from nSimonFR-ai/t3code#1, matching ./t3code-desktop.nix. A bump needs that
-# release rebuilt first; see its notes.
+# linux-arm64 comes from the nSimonFR-ai/t3code `-issues.N` release instead: the
+# same release plus the fork's small changes (its spec.md: no notification sound
+# while the screen is locked, Claude artifact watchers). The fork carried the
+# Issues stack up to 0.1.10; upstream ships Issues since 0.1.11. A database
+# written by those builds needs ~/.t3/backups/t3-fork-exit.sql before its first
+# start on 0.1.11. .github/workflows/t3code-fork-release.yml builds the release
+# and pins the hashes on the bump PR.
 {
   lib,
   stdenv,
@@ -25,16 +28,16 @@
 }:
 let
   # renovate: datasource=github-releases depName=pingdotgg/t3code extractVersion=^v(?<version>.+)$
-  version = "0.1.10-preview.20261111.4547";
+  version = "0.1.11";
   platform = if stdenv.hostPlatform.isDarwin then "darwin-arm64" else "linux-arm64";
   sources = {
     linux-arm64 = {
       url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${version}-issues.1/t3-${version}-issues-linux-arm64.tar.gz";
-      hash = "sha256-jfItPj9AdAoCAgzuawYLestoI3hsx8Esum49hR2ddEc=";
+      hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
     };
     darwin-arm64 = {
       url = "https://github.com/pingdotgg/t3code/releases/download/v${version}/t3-${version}-darwin-arm64.tar.gz";
-      hash = "sha256-BWLocgpJoJ0sj3KPw/JQk5eItBP9aV1lh/9zwLtR4lk=";
+      hash = "sha256-S8IuFqLkjYaK2MS51sjgMb4cVmzjHCgmeVXCmGpw6V8=";
     };
   };
 in

@@ -1,16 +1,15 @@
 # no-renovate: follows t3code.nix's version; .github/workflows/t3code-fork-release.yml pins the hash.
 # The T3 Code desktop app for the Mac, from the nSimonFR-ai/t3code `-issues.N`
-# release: the official nightly app with its server and web client rebuilt from
-# the nightly plus pingdotgg/t3code#19576 (Issues) and the Linear issue trees
-# from nSimonFR-ai/t3code#1. Same version as ./t3code.nix, which the rpi5
-# server runs.
+# release: the official app with its server and web client rebuilt from the same
+# release plus the fork's small changes (its spec.md). Same version as
+# ./t3code.nix, which the rpi5 server runs.
 # Build it with T3 Connect's public config (T3CODE_RELAY_URL,
 # T3CODE_CLERK_PUBLISHABLE_KEY, T3CODE_CLERK_JWT_TEMPLATE,
 # T3CODE_CLERK_CLI_OAUTH_CLIENT_ID) or the app runs with T3 Connect off.
 #
 # Ad-hoc signed and without app-update.yml, so it never updates itself back to
-# the official nightly. Same bundle id as the official "T3 Code (Nightly)" app,
-# whose copy in /Applications has to go: both would share one data folder.
+# the official build. Same bundle id as the official app, whose copy in
+# /Applications has to go: both would share one data folder.
 {
   lib,
   stdenvNoCC,
@@ -24,7 +23,7 @@ stdenvNoCC.mkDerivation {
 
   src = fetchurl {
     url = "https://github.com/nSimonFR-ai/t3code/releases/download/v${t3code.version}-issues.1/T3-Code-${t3code.version}-issues-darwin-arm64.zip";
-    hash = "sha256-M47sLbV4bugOodYNdrUhtxRx5ydAi0AfFYasaTF8whQ=";
+    hash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
   };
 
   nativeBuildInputs = [ unzip ];
@@ -41,7 +40,7 @@ stdenvNoCC.mkDerivation {
   '';
 
   meta = {
-    description = "T3 Code desktop app (nightly with the Issues page)";
+    description = "T3 Code desktop app (nic-os fork build)";
     homepage = "https://github.com/nSimonFR-ai/t3code";
     license = lib.licenses.mit;
     platforms = [ "aarch64-darwin" ];
