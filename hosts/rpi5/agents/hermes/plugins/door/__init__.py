@@ -35,9 +35,13 @@ HEALTH = """{%- set ns = namespace(p=[]) -%}
 {%- if not is_state('binary_sensor.intratone_push_channel_connected', 'on') -%}
   {%- set ns.p = ns.p + ['push:' ~ states('binary_sensor.intratone_push_channel_connected')] -%}
 {%- endif -%}
-{%- for e in ['lock.intratone_door', 'event.intratone_doorbell'] -%}
-  {%- if states(e) in ['unavailable', 'unknown'] -%}{%- set ns.p = ns.p + ['entity:' ~ e] -%}{%- endif -%}
-{%- endfor -%}
+{%- if states('lock.intratone_door') in ['unavailable', 'unknown'] -%}
+  {%- set ns.p = ns.p + ['entity:lock.intratone_door'] -%}
+{%- endif -%}
+{#- An event entity reads "unknown" until its first ring, e.g. after a restart. -#}
+{%- if is_state('event.intratone_doorbell', 'unavailable') -%}
+  {%- set ns.p = ns.p + ['entity:event.intratone_doorbell'] -%}
+{%- endif -%}
 {%- if not is_state('automation.door_auto_open_window', 'on') -%}
   {%- set ns.p = ns.p + ['automation:' ~ states('automation.door_auto_open_window')] -%}
 {%- endif -%}
