@@ -8,9 +8,9 @@ rm dl/server-dist.tar.gz
 cat >notes.md <<NOTES
 Personal build for nic-os. Not an official release.
 
-Built on \`$BRANCH\` (\`${SHA:0:10}\`): upstream \`$VERSION\` + the Issues stack and the other fork changes in \`spec.md\`, by .github/workflows/t3code-fork-release.yml in nSimonFR/nic-os.
+Built on \`$BRANCH\` (\`${SHA:0:10}\`): upstream \`$VERSION\` + the fork changes in \`spec.md\`, by .github/workflows/t3code-fork-release.yml in nSimonFR/nic-os.
 The Mac app is upstream's with the fork's server swapped in and an ad hoc signature.
-Issue migrations follow upstream's highest id; back up \`statev2.sqlite\` before running a new migration, it can't be rolled back.
+The fork adds no migrations; back up \`statev2.sqlite\` before a version bump anyway, upstream's migrations can't be rolled back.
 NOTES
 gh release create "$TAG" dl/* --repo "$FORK" --target "$SHA" --prerelease \
   --title "$TAG" --notes-file notes.md

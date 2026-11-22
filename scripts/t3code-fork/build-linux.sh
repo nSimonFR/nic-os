@@ -7,7 +7,10 @@ here=$(cd "$(dirname "$0")" && pwd)
 
 (cd t3code/apps/web && vp build)
 (cd t3code/apps/server && node scripts/cli.ts build)
-(cd t3code && node scripts/apply-web-brand-assets.ts nightly apps/server/dist/client)
+# Upstream's icons for the channel: nightly for a pre-release, production for a stable release.
+brand=production
+[[ $VERSION == *-* ]] && brand=nightly
+(cd t3code && node scripts/apply-web-brand-assets.ts "$brand" apps/server/dist/client)
 (cd t3code && node apps/server/scripts/cli.ts build-exe --verbose)
 
 mkdir -p out
