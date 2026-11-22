@@ -106,9 +106,9 @@ if [ -z "$want_mac" ]; then
   say "no 'System:' line in the nBookPro run log: check the Mac by hand"
   exit 1
 fi
-# Run a command on the Mac: locally when this is the Mac (it can't ssh to itself).
+# Run a command on the Mac: locally when this is nBookPro (it can't ssh to itself).
 on_mac() {
-  if [ "$(uname)" = Darwin ]; then
+  if [ "$(hostname -s)" = nBookPro ]; then
     bash -c "$1"
   else
     ssh -o BatchMode=yes -o ConnectTimeout=10 "$mac" "$1"
