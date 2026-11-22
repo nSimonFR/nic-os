@@ -40,6 +40,8 @@ let
 
   # The iPhone passkey (rpId = tailnetFqdn), as the agent advertises it.
   passkey = "sk-ecdsa-sha2-nistp256@openssh.com AAAAInNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBEm05RhQsrnP53UUhsQ0Z69blDBeQsGFCkwD3w1UO52/7nLiW4gkKEpzYOCaizQH/lVpjfHVPyeWxHz3dnB4EJMAAAAYcnBpNS5nYXRlLW1pbnRha2EudHMubmV0";
+  # pam_ssh_agent_webauthn wants the same key under the webauthn-sk type name.
+  passkeyWebauthn = "webauthn-sk-ecdsa-sha2-nistp256@openssh.com AAAAK3dlYmF1dGhuLXNrLWVjZHNhLXNoYTItbmlzdHAyNTZAb3BlbnNzaC5jb20AAAAIbmlzdHAyNTYAAABBBEm05RhQsrnP53UUhsQ0Z69blDBeQsGFCkwD3w1UO52/7nLiW4gkKEpzYOCaizQH/lVpjfHVPyeWxHz3dnB4EJMAAAAYcnBpNS5nYXRlLW1pbnRha2EudHMubmV0";
 
   hydraConfig = pkgs.writeText "shellwatch-hydra.json" (
     builtins.toJSON {
@@ -237,7 +239,7 @@ in
 
   # A copy, not a store symlink: the module refuses symlinks and wants root:root.
   environment.etc."ssh/sudo_passkeys" = {
-    text = "${passkey} rpi5 sudo (ShellWatch)\n";
+    text = "${passkeyWebauthn} rpi5 sudo (ShellWatch)\n";
     mode = "0444";
   };
 

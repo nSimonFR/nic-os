@@ -1,0 +1,81 @@
+diff --git a/src/agent.rs b/src/agent.rs
+index 5c5d828..7c5edda 100644
+--- a/src/agent.rs
++++ b/src/agent.rs
+@@ -18,6 +18,7 @@ const SSH_AGENT_IDENTITIES_ANSWER: u8 = 12;
+ const SSH_AGENT_SIGN_RESPONSE: u8 = 14;
+ 
+ const WEBAUTHN_SK_ALGO: &[u8] = b"webauthn-sk-ecdsa-sha2-nistp256@openssh.com";
++const SK_ALGO: &[u8] = b"sk-ecdsa-sha2-nistp256@openssh.com";
+ 
+ /// Max size for individual SSH string fields (64 KB). Prevents a malicious agent
+ /// response with len=0xFFFFFFFF from causing a huge allocation.
+@@ -175,7 +176,26 @@ fn is_webauthn_key_blob(blob: &[u8]) -> bool {
+     if blob.len() < 4 + algo_len {
+         return false;
+     }
+-    &blob[4..4 + algo_len] == WEBAUTHN_SK_ALGO
++    let algo = &blob[4..4 + algo_len];
++    algo == WEBAUTHN_SK_ALGO || algo == SK_ALGO
++}
++
++/// Agents that serve passkeys to OpenSSH (ShellWatch's shellwatch-agent)
++/// advertise the blob under `sk-ecdsa-…`; authorized_keys holds the
++/// `webauthn-sk-ecdsa-…` form. Same fields after the type string.
++pub fn canonical_webauthn_blob(blob: &[u8]) -> Vec<u8> {
++    if blob.len() < 4 {
++        return blob.to_vec();
++    }
++    let algo_len = u32::from_be_bytes([blob[0], blob[1], blob[2], blob[3]]) as usize;
++    if blob.len() < 4 + algo_len || &blob[4..4 + algo_len] != SK_ALGO {
++        return blob.to_vec();
++    }
++    let mut out = Vec::with_capacity(blob.len() + WEBAUTHN_SK_ALGO.len() - SK_ALGO.len());
++    out.extend_from_slice(&(WEBAUTHN_SK_ALGO.len() as u32).to_be_bytes());
++    out.extend_from_slice(WEBAUTHN_SK_ALGO);
++    out.extend_from_slice(&blob[4 + algo_len..]);
++    out
+ }
+ 
+ // --- Wire format helpers ---
+@@ -250,6 +270,24 @@ fn write_ssh_bytes(buf: &mut Vec<u8>, data: &[u8]) {
+ mod tests {
+     use super::*;
+ 
++    fn blob_with(algo: &[u8]) -> Vec<u8> {
++        let mut b = Vec::new();
++        b.extend_from_slice(&(algo.len() as u32).to_be_bytes());
++        b.extend_from_slice(algo);
++        b.extend_from_slice(b"\x00\x00\x00\x08nistp256rest");
++        b
++    }
++
++    #[test]
++    fn sk_blob_is_accepted_and_canonicalized() {
++        let sk = blob_with(SK_ALGO);
++        let wa = blob_with(WEBAUTHN_SK_ALGO);
++        assert!(is_webauthn_key_blob(&sk));
++        assert_eq!(canonical_webauthn_blob(&sk), wa);
++        assert_eq!(canonical_webauthn_blob(&wa), wa);
++        assert!(!is_webauthn_key_blob(&blob_with(b"ssh-ed25519")));
++    }
++
+     #[test]
+     fn test_is_webauthn_key_blob() {
+         let mut blob = Vec::new();
+diff --git a/src/lib.rs b/src/lib.rs
+index 49f08ef..e1930f2 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -392,9 +392,10 @@ fn matched_pairs<'a>(
+     agent_identities
+         .iter()
+         .flat_map(|aid| {
++            let canonical = agent::canonical_webauthn_blob(&aid.key_blob);
+             authorized_keys
+                 .iter()
+-                .filter(move |ak| ak.key_blob == aid.key_blob)
++                .filter(move |ak| ak.key_blob == canonical)
+                 .map(move |ak| (aid, ak))
+         })
+         .collect()
