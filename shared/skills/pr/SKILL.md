@@ -18,9 +18,11 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
    template if there is one. Print the full URL.
 4. **Watch.** Run [`scripts/pr-watch.sh`](scripts/pr-watch.sh) `<owner/repo> <n> [deploy workflow]`
    in the background and wait on it. It exits on the first thing to act on:
-   - `FIX`: an unanswered review-bot (CodeRabbit) thread or a red check. Fix it yourself (red:
-     step 5), push, reply under each thread with the fix (on nic-os never resolve its threads),
-     and start the watch again. Don't hand back for this.
+   - `FIX`: its output is the prompt: every open review-bot thread (CodeRabbit's own "fix all
+     issues" prompt when it has one), failed-log excerpts, the steps and the restart command.
+     Do it yourself: fix, push, reply under each thread (on nic-os never resolve its threads),
+     restart the watch. Don't hand back. A `FORMAT-DRIFT` line means the bot's format changed:
+     tell the user (the script fell back to the whole comment).
    - `HUMAN`: nothing left to fix, the merge waits on a human approval. Stop and hand back.
    - `DONE`: merged (and deployed when a deploy workflow was given).
 5. **Triage red.**
