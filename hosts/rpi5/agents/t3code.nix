@@ -15,6 +15,7 @@
 }:
 let
   inherit (pkgs) t3code;
+  # no-renovate: temporary bump until the nixpkgs-unstable pin carries >= 2026.10.3.
   # T3 Connect's relay refuses cloudflared older than 2026.10.3 since T3 0.1.11
   # ("T3CODE_CLOUDFLARED_PATH must point to cloudflared 2026.10.3 or newer"), and
   # then the apps see this server as unreachable. release-26.05 has 2026.5.2 and
