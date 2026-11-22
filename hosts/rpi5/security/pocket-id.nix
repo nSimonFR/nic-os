@@ -1,7 +1,7 @@
 # hosts/rpi5/security/pocket-id.nix
 #
-# Pocket ID: passkey-only OIDC provider for Nico and Alfie, on :8443 (a funnel
-# port, so it can later work off the tailnet like the apps it logs into). No
+# Pocket ID: passkey-only OIDC provider for Nico and Alfie, funneled on
+# :8443 so it works off the tailnet like the apps it logs into. No
 # signups; users are invited from the admin UI. Never put Vaultwarden, SSH or Tailscale behind it:
 # they are the way back in.
 #
@@ -154,9 +154,9 @@ in
         order = 910;
         port = 8443;
         backend = "http://127.0.0.1:${toString port}";
-        # Tailnet-only until the first admin exists: /setup is open to anyone
-        # before that. Flipping it keeps the origin, so passkeys stay valid.
-        funnel = false;
+        # Public so SSO works off the tailnet, like the apps behind it. Only
+        # safe once an admin exists: before that, /setup lets anyone claim it.
+        funnel = true;
         authenticated = true;
       };
     };
