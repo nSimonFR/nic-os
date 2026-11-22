@@ -47,6 +47,22 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\s+RENOVATE_VERSION: (?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "NixOS release channel: nixpkgs, nix-darwin and home-manager follow the YY.MM release branches in flake.nix. Renovate watches nixpkgs' plain YY.MM tags (cut on release day; -pre/-beta excluded) and rewrites all three refs in one PR.",
+      "managerFilePatterns": [
+        "flake.nix"
+      ],
+      "matchStrings": [
+        "\"github:nixos/nixpkgs/release-(?<currentValue>\\d+\\.\\d+)\"",
+        "\"github:lnl7/nix-darwin/nix-darwin-(?<currentValue>\\d+\\.\\d+)\"",
+        "\"github:nix-community/home-manager/release-(?<currentValue>\\d+\\.\\d+)\""
+      ],
+      "depNameTemplate": "nixos-release",
+      "packageNameTemplate": "NixOS/nixpkgs",
+      "datasourceTemplate": "github-tags",
+      "versioningTemplate": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)$"
     }
   ],
   "lockFileMaintenance": {
@@ -177,6 +193,22 @@
       "branchConcurrentLimit": 0,
       "prConcurrentLimit": 0,
       "minimumReleaseAgeBehaviour": "timestamp-optional"
+    },
+    {
+      "description": "NixOS release bump (26.05 → 26.11…): one PR rewriting the nixpkgs, nix-darwin and home-manager refs together, opened 3 days after nixpkgs tags the release so the nix-darwin and home-manager branches exist. Never merges itself: a release bump needs a human read of the release notes (Renovate gets no review, .github/settings.yml). The regex manager has no lock step, so flake.lock still names the old branches; CI re-locks in memory, so its checks test the new release.",
+      "matchDepNames": [
+        "nixos-release"
+      ],
+      "minimumReleaseAge": "3 days",
+      "automerge": false,
+      "labels": [
+        "nixos-release"
+      ],
+      "prBodyNotes": [
+        "Before merging: run `nix flake update nixpkgs darwin home-manager` on this branch and push it, so flake.lock follows the new branches (Renovate's regex manager does not touch the lock).",
+        "Read the NixOS release notes (https://nixos.org/manual/nixos/stable/release-notes) and drop the `# no-renovate: temporary` overrides and overlays the release makes redundant (AGENTS.md, Pinned dependencies). Keep `system.stateVersion` as it is.",
+        "The rpi5 deploy unpacks the whole new closure: check free space on the Pi first (see the min-free note in hosts/rpi5/configuration.nix)."
+      ]
     }
   ],
   "vulnerabilityAlerts": {
