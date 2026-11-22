@@ -127,6 +127,20 @@ in
       };
     };
 
+    # Funneled, an empty database would publish /setup (first visitor becomes
+    # admin). Refuse to start without a user; for a fresh install, set funnel
+    # to false, register the admin from the tailnet, then flip it back.
+    systemd.services.pocket-id.serviceConfig.ExecStartPre =
+      lib.mkIf config.nic.services.pocket-id.public.funnel (
+        pkgs.writeShellScript "pocket-id-require-admin" ''
+          db=/var/lib/pocket-id/data/pocket-id.db
+          n=$(${pkgs.sqlite}/bin/sqlite3 -readonly "$db" 'SELECT count(*) FROM users' 2>/dev/null || true)
+          if [ "''${n:-0}" -gt 0 ] 2>/dev/null; then exit 0; fi
+          echo "pocket-id: no user in $db while funneled; /setup would be public. Refusing to start." >&2
+          exit 1
+        ''
+      );
+
     systemd.services.pocket-id-clients = {
       description = "Sync nic.sso.clients into Pocket ID";
       after = [ "pocket-id.service" ];
@@ -154,8 +168,8 @@ in
         order = 910;
         port = 8443;
         backend = "http://127.0.0.1:${toString port}";
-        # Public so SSO works off the tailnet, like the apps behind it. Only
-        # safe once an admin exists: before that, /setup lets anyone claim it.
+        # Public so SSO works off the tailnet, like the apps behind it. The
+        # ExecStartPre above keeps it down while no admin exists.
         funnel = true;
         authenticated = true;
       };
