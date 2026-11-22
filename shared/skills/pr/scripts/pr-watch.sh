@@ -122,10 +122,12 @@ for t in nodes:
     where = "%s:%s" % (t["path"], t["line"] or "-")
     review = first[0].get("pullRequestReview") or {}
     rid = review.get("databaseId")
-    if rid is not None and rid not in reviews:
+    if rid is not None and rid not in reviews and last[0].get("databaseId") == first[0]["databaseId"]:
         reviews[rid] = prompt(review.get("body"))
-    own = prompt(last[0]["body"])
-    out.append((where, first[0]["databaseId"], rid, own, last[0]["body"]))
+    replied = last[0].get("databaseId") != first[0]["databaseId"]
+    # A reply supersedes the review prompt: show the bot latest word.
+    own = None if replied else prompt(last[0]["body"])
+    out.append((where, first[0]["databaseId"], None if replied else rid, own, last[0]["body"]))
 
 if not out:
     sys.exit(0)
@@ -141,8 +143,9 @@ for where, cid, rid, own, body in out:
     if own:
         print("\n### %s  (%s prompt)\n%s" % (where, bot, own))
     else:
-        drift.append(where)
-        print("\n### %s  (full comment)\n%s" % (where, plain(body)))
+        if rid is not None:
+            drift.append(where)
+        print("\n### %s  (%s)\n%s" % (where, "full comment" if rid is not None else "latest reply", plain(body)))
 if drift and bot == "coderabbitai":
     print("\nFORMAT-DRIFT: no CodeRabbit fix-prompt block found for %s; used the whole comment. "
           "Report this: the prompt extraction in pr-watch.sh needs updating." % ", ".join(drift))
@@ -154,7 +157,17 @@ while :; do
   if [ "$state" = MERGED ]; then
     if [ -n "$deploy" ]; then
       # The deploy run of this PR's merge commit, never an older one.
-      sha=$(gh pr view "$pr" --repo "$repo" --json mergeCommit -q .mergeCommit.oid)
+      sha=""
+      for _ in 1 2 3; do
+        sha=$(gh pr view "$pr" --repo "$repo" --json mergeCommit -q '.mergeCommit.oid // ""')
+        [[ $sha =~ ^[0-9a-f]{40}$ ]] && break
+        sha=""
+        sleep 20
+      done
+      if [ -z "$sha" ]; then
+        echo "FIX $repo#$pr merged, but its merge commit could not be read: check '$deploy' by hand."
+        exit 1
+      fi
       id=""
       for _ in $(seq 20); do
         id=$(gh run list --repo "$repo" --workflow "$deploy" --commit "$sha" --limit 1 --json databaseId -q '.[0].databaseId // ""')
@@ -203,7 +216,7 @@ while :; do
               nodes { isResolved path line
                 first: comments(first: 1) { nodes { databaseId author { login } body
                   pullRequestReview { databaseId body } } }
-                last: comments(last: 1) { nodes { author { login } body } } } } } } }' |
+                last: comments(last: 1) { nodes { databaseId author { login } body } } } } } } }' |
       bot_findings); then
       ok=1
       break
@@ -271,6 +284,11 @@ while :; do
   outside=""
   if grep -qi "outside diff range" <<<"$review_body"; then
     outside=$(body_prompt <<<"$review_body")
+    if [ -z "$outside" ]; then
+      outside="$(sed -E 's/<[^>]+>//g' <<<"$review_body" | head -c 4000)
+FORMAT-DRIFT: $bot's review lists findings outside the diff but no fix-prompt block was found;
+used the whole review body. Report this: pr-watch.sh's body_prompt needs updating."
+    fi
   fi
 
   if [ -n "$outside" ]; then
