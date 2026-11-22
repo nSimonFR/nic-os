@@ -119,16 +119,6 @@ in
     chown hass:hass /var/lib/hass/configuration.yaml /var/lib/hass/automations.yaml
   '';
 
-  # Remove real directories under custom_components left by Docker-era HA.
-  # The nixpkgs home-assistant pre-start uses `ln -fns` which cannot overwrite
-  # real directories — only symlinks. This runs before the service starts.
-  system.activationScripts.hassCleanCustomComponents.text = ''
-    if [ -d /var/lib/hass/custom_components ]; then
-      find /var/lib/hass/custom_components -maxdepth 1 -mindepth 1 -type d \
-        -exec rm -rf {} +
-    fi
-  '';
-
   # Versioned "Mine" dashboard: load the repo-tracked YAML dashboard in YAML
   # mode. The dashboard file is symlinked into the config dir at a stable path
   # so the store hash can change on rebuild without editing configuration.yaml,
