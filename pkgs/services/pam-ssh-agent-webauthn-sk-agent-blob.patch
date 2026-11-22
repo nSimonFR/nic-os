@@ -1,5 +1,5 @@
 diff --git a/src/agent.rs b/src/agent.rs
-index 5c5d828..7c5edda 100644
+index 5c5d828..7149ea2 100644
 --- a/src/agent.rs
 +++ b/src/agent.rs
 @@ -18,6 +18,7 @@ const SSH_AGENT_IDENTITIES_ANSWER: u8 = 12;
@@ -63,6 +63,18 @@ index 5c5d828..7c5edda 100644
      #[test]
      fn test_is_webauthn_key_blob() {
          let mut blob = Vec::new();
+@@ -260,6 +298,11 @@ mod tests {
+         let mut blob = Vec::new();
+         write_ssh_bytes(&mut blob, b"sk-ecdsa-sha2-nistp256@openssh.com");
+         blob.extend(b"rest-of-key-data");
++        assert!(is_webauthn_key_blob(&blob));
++
++        let mut blob = Vec::new();
++        write_ssh_bytes(&mut blob, b"ecdsa-sha2-nistp256");
++        blob.extend(b"rest-of-key-data");
+         assert!(!is_webauthn_key_blob(&blob));
+ 
+         assert!(!is_webauthn_key_blob(&[]));
 diff --git a/src/lib.rs b/src/lib.rs
 index 49f08ef..e1930f2 100644
 --- a/src/lib.rs
