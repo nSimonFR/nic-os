@@ -6,8 +6,9 @@
 # the agent (every open finding, failed-log excerpts, the steps, the restart
 # command), so the exit notification alone is enough to act on.
 #   FIX    review-bot threads the agent has not answered, or failing checks
-#   HUMAN  the bot reviewed the head and nothing is left to fix, but the merge
-#          still waits: a human approval (or the bot withholds its own)
+#   HUMAN  nothing is left to fix but the merge still waits on an approval: the bot
+#          reviewed the head without approving, withheld its approval in a PR
+#          comment, or everything stayed green and answered past PR_WATCH_GRACE
 #   DONE   merged (and, if given, the deploy workflow on the base branch finished)
 #
 # Env: PR_WATCH_BOT (default coderabbitai), PR_WATCH_IGNORE (regex of check names
@@ -21,7 +22,7 @@ bot=${PR_WATCH_BOT:-coderabbitai}
 ignore=${PR_WATCH_IGNORE:-^(gate|review-gate|Entire Gates|arm auto-merge|report failure)$}
 grace=${PR_WATCH_GRACE:-1200}
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
-approved_at=""
+settled_at=""
 
 # "name<TAB>link" for checks in state $1, minus the ignored names.
 checks() {
@@ -185,18 +186,28 @@ while :; do
     -q "[.[] | select(.user.login==\"${bot}[bot]\" and .commit_id==\"$head\")] | last // {} | [.state // \"\", .body // \"\"] | @tsv")
   verdict=${review%%$'\t'*}
   merge=$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus -q .mergeStateStatus)
+  # CodeRabbit can withhold approval in a PR comment instead of a review on the head
+  # ("Automatic approval withheld ... Commit: `<sha12>`").
+  withheld=$(gh api "repos/$repo/issues/$pr/comments" \
+    -q "[.[] | select(.user.login==\"${bot}[bot]\") | select(.body | test(\"approval withheld\"; \"i\")) | select(.body | contains(\"${head:0:12}\"))] | last | .body // \"\"" |
+    sed -E 's/<[^>]+>//g' | tr -s ' \n' ' ' | head -c 800)
 
-  if [ -z "$pending" ] && [ -n "$verdict" ] && [ "$merge" != CLEAN ] && [ "$merge" != UNKNOWN ]; then
-    if [ "$verdict" = APPROVED ]; then
-      approved_at=${approved_at:-$(date +%s)}
-      if [ $(($(date +%s) - approved_at)) -gt "$grace" ]; then
-        echo "HUMAN $repo#$pr: $bot approved ${head:0:10} but the PR is still $merge after ${grace}s: needs an approval"
-        exit 0
-      fi
-    else
-      echo "HUMAN $repo#$pr: $bot left ${head:0:10} $verdict with nothing open to fix; PR is $merge: needs an approval"
-      printf '%s\n' "${review#*$'\t'}" | head -c 1500
-      echo
+  if [ -n "$pending" ] || [ "$merge" = CLEAN ] || [ "$merge" = UNKNOWN ]; then
+    settled_at=""
+  elif [ -n "$withheld" ]; then
+    echo "HUMAN $repo#$pr: $bot withheld its approval of ${head:0:10} with nothing open to fix; PR is $merge: needs an approval"
+    echo "$withheld"
+    exit 0
+  elif [ -n "$verdict" ] && [ "$verdict" != APPROVED ]; then
+    echo "HUMAN $repo#$pr: $bot left ${head:0:10} $verdict with nothing open to fix; PR is $merge: needs an approval"
+    printf '%s\n' "${review#*$'\t'}" | head -c 1500; echo
+    exit 0
+  else
+    # Approved, or the bot said nothing on this head: everything green and answered,
+    # yet still blocked. Past the grace period that is a human's call.
+    settled_at=${settled_at:-$(date +%s)}
+    if [ $(( $(date +%s) - settled_at )) -gt "$grace" ]; then
+      echo "HUMAN $repo#$pr: checks green, no open finding, ${bot} verdict '${verdict:-none}', still $merge after ${grace}s: needs an approval"
       exit 0
     fi
   fi
