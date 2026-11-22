@@ -410,6 +410,14 @@ in
     impure-env = "NIX_CURL_FLAGS=--user-agent=nixpkgs-fetchurl";
     # A trusted user is root-equivalent for the daemon (see users.users above).
     trusted-users = [ "root" ];
+    # GC on free space, not only on the calendar: when the root disk drops below
+    # 30 GiB during a build or substitution, the daemon collects dead paths until
+    # 50 GiB are free. A nixpkgs bump unpacks ~22 GiB at once; with 24 GiB left
+    # the cachix-agent's nix-store -r died mid-way, deploy after deploy.
+    # Live generations are GC roots, so this frees only dead paths; the daily
+    # nix.gc below drops the old generations themselves.
+    min-free = 30 * 1024 * 1024 * 1024;
+    max-free = 50 * 1024 * 1024 * 1024;
     # Keep the build-time closure of live GC roots (the running system) alive so
     # GC never evicts the expensive-to-rebuild inputs of our custom flake
     # packages — chiefly reactive-resume's pnpm-deps FOD, but also airtrail /
@@ -431,7 +439,10 @@ in
   # A week, not BeAsT's month: the 171 GB root disk here also holds every custom
   # flake's build closure (keep-outputs/keep-derivations above), so old
   # generations are the first thing that has to go.
+  # Daily, not weekly: the Pi deploys several times a day, so a weekly run with a
+  # 7-day window kept up to 14 days (~110) of generations alive.
   nix.gc.options = "--delete-older-than 7d";
+  nix.gc.dates = lib.mkForce "daily";
 
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
   # See tailscale-serve.nix.
