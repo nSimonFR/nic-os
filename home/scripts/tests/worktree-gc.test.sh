@@ -55,17 +55,26 @@ rm -rf "$T/wt/gone"
 mk broken
 age "$T/wt/broken"
 rm "$T/wt/broken/.git"
+mk parent
+age "$T/wt/parent"
+g -C "$P" worktree add -q --detach "$T/wt/parent/ro" main
+rm "$T/wt/parent/ro/.git"
 mk readonly
 mkdir -p "$T/wt/readonly/ro"
-echo z >"$T/wt/readonly/ro/f"
+echo z >"$T/shared"
+ln "$T/shared" "$T/wt/readonly/ro/f"
 echo ro >>"$P/.git/info/exclude"
-chmod -R a-w "$T/wt/readonly/ro"
+chmod 444 "$T/shared"
+chmod 555 "$T/wt/readonly/ro"
 age "$T/wt/readonly"
 
 bash -e "$script" --dry-run >"$T/dry.log"
 check "dry run removes nothing" test -d "$T/wt/pushed"
 check "dry run names the candidate" grep -q "would remove .*/wt/pushed" "$T/dry.log"
+check "dry run skips a nested worktree without its own .git file" test -z "$(grep 'would remove .*/wt/parent/ro' "$T/dry.log")"
 
+# Keep the parent out of live cleanup so its ignored child can be checked separately.
+g -C "$P" worktree lock "$T/wt/parent"
 bash -e "$script" >/dev/null
 check "old, clean, pushed worktree is removed" test ! -e "$T/wt/pushed"
 check "its pushed branch is deleted" test -z "$(g -C "$P" branch --list pushed)"
@@ -76,6 +85,7 @@ check "locked worktree is kept" test -d "$T/wt/locked"
 check "missing worktree is pruned" test -z "$(g -C "$P" worktree list | grep "$T/wt/gone")"
 check "worktree with a broken .git link is kept" test -f "$T/wt/broken/README.md"
 check "worktree with read-only files is removed" test ! -e "$T/wt/readonly"
+check "file hard-linked outside the worktree keeps its mode" test -n "$(find "$T/shared" -perm 0444)"
 check "main checkout is untouched" test -f "$P/README.md"
 
 exit "$fail"
