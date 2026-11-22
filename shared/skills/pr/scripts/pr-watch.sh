@@ -254,14 +254,18 @@ while :; do
     jq -c --arg bot "${bot}[bot]" --arg head "$head" \
       '[add[] | select(.user.login==$bot and .commit_id==$head)] | last // {}')
   verdict=$(jq -r '.state // ""' <<<"$reviews")
+  verdict_at=$(jq -r '.submitted_at // ""' <<<"$reviews")
   review_body=$(jq -r '.body // ""' <<<"$reviews")
   merge=$(gh pr view "$pr" --repo "$repo" --json mergeStateStatus -q .mergeStateStatus)
   # CodeRabbit can withhold approval in a PR comment instead of a review on the head
   # ("Automatic approval withheld ... Commit: `<sha12>`").
+  # A newer approval of the same head supersedes it (ISO timestamps compare as text).
   withheld=$(gh api --paginate --slurp "repos/$repo/issues/$pr/comments" |
     jq -r --arg bot "${bot}[bot]" --arg sha "${head:0:12}" \
+      --arg verdict "$verdict" --arg at "$verdict_at" \
       '[add[] | select(.user.login==$bot) | select(.body | test("approval withheld"; "i"))
-        | select(.body | contains($sha))] | last | .body // ""' |
+        | select(.body | contains($sha))] | last
+       | if . == null or ($verdict == "APPROVED" and $at > .updated_at) then "" else .body end' |
     sed -E 's/<[^>]+>//g' | tr -s ' \n' ' ' | head -c 800)
   # Findings outside the diff live only in the review body, with no thread to answer.
   outside=""
