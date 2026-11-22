@@ -251,3 +251,91 @@ def test_renovate_gets_a_status_only_once_nico_approved():
 def test_a_newline_in_a_filename_stays_inside_the_json():
     out = gate.decide(HEAD, [f("x\nok=true\n.age")], [], TREE)
     assert "\n" not in __import__("json").dumps(out)
+
+
+# ── claude-settings.json: restricting-only changes ───────────────────────────
+BASE = {
+    "permissions": {"allow": ["Bash", "mcp__x"], "ask": ["mcp__y"], "deny": []},
+    "deniedMcpServers": [{"serverName": "Gmail"}],
+    "enabledPlugins": {"slack@o": True, "off@o": False},
+    "env": {"A": "1"},
+    "_comment_a": "x",
+}
+
+
+def settings_verdict(head, base=BASE):
+    return verdict_with(PR, [f(gate.SETTINGS, 3, 1)], (base, head))
+
+
+def verdict_with(pr, files, settings):
+    return gate.verdict(pr, files, TREE, settings)
+
+
+def with_(**kw):
+    import copy
+
+    d = copy.deepcopy(BASE)
+    for k, v in kw.items():
+        d[k] = v
+    return d
+
+
+def test_restricting_settings_changes_pass():
+    perms = BASE["permissions"]
+    for head in [
+        with_(deniedMcpServers=[{"serverName": "Gmail"}, {"serverName": "Asana"}]),
+        with_(permissions={**perms, "allow": ["Bash"]}),
+        with_(permissions={**perms, "deny": ["Bash(rm:*)"]}),
+        with_(permissions={**perms, "ask": ["mcp__y", "mcp__x"]}),
+        with_(enabledPlugins={"slack@o": False, "off@o": False, "new@o": False}),
+        with_(_comment_a="reworded", _comment_b="new"),
+    ]:
+        assert settings_verdict(head)["ok"], head
+
+
+def test_widening_settings_changes_are_refused():
+    perms = BASE["permissions"]
+    for head in [
+        with_(permissions={**perms, "allow": ["Bash", "mcp__x", "mcp__z"]}),
+        with_(permissions={**perms, "ask": []}),
+        with_(permissions={**perms, "defaultMode": "bypassPermissions"}),
+        with_(deniedMcpServers=[]),
+        with_(enabledPlugins={"slack@o": True, "off@o": True}),
+        with_(enabledPlugins={"slack@o": True, "off@o": False, "new@o": True}),
+        with_(enabledPlugins={"slack@o": True}),
+        with_(env={"A": "2"}),
+        with_(hooks={"PreToolUse": []}),
+        None,
+    ]:
+        assert not settings_verdict(head)["ok"], head
+    assert not settings_verdict(BASE, base=None)["ok"]
+    assert not verdict(PR, [f(gate.SETTINGS)])["ok"]
+
+
+def test_settings_rename_stays_protected():
+    files = [f("home/dotfiles/x.json", prev=gate.SETTINGS)]
+    assert not verdict_with(PR, files, (BASE, BASE))["ok"]
+
+
+def test_settings_pair_reads_both_sides():
+    pr = {
+        **PR,
+        "base": {"ref": "main", "sha": "b1", "repo": {"full_name": "o/r"}},
+        "head": {"sha": "h1"},
+    }
+    calls = []
+
+    class Out:
+        def __init__(self, stdout, rc=0):
+            self.stdout, self.returncode = stdout, rc
+
+    def run(cmd, **_):
+        calls.append(cmd[-1])
+        return Out('{"a": 1}') if cmd[-1].endswith("ref=b1") else Out("", 1)
+
+    assert gate.settings_pair(pr, [f(gate.SETTINGS)], run) == ({"a": 1}, None)
+    assert calls == [
+        f"repos/o/r/contents/{gate.SETTINGS}?ref=b1",
+        f"repos/o/r/contents/{gate.SETTINGS}?ref=h1",
+    ]
+    assert gate.settings_pair(pr, [f("a.nix")], run) is None
