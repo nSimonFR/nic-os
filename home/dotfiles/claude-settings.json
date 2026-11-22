@@ -197,6 +197,18 @@
     },
     {
       "serverName": "Gmail"
+    },
+    {
+      "serverName": "plugin:slack:slack"
+    },
+    {
+      "serverName": "plugin:figma:figma"
+    },
+    {
+      "serverName": "claude.ai Asana"
+    },
+    {
+      "serverName": "Asana"
     }
   ],
   "hooks": {
