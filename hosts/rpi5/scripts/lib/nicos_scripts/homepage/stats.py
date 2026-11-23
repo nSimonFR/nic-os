@@ -23,7 +23,6 @@ Endpoints (one per homepage tile, three stats each):
   /dawarich  — Dawarich (points in 7 days, trips, visits) — direct Postgres query (superuser)
   /airtrail  — AirTrail (flights, countries, hours) — direct Postgres query (superuser)
   /forgejo   — Forgejo (repositories, overdue mirrors, disk size) — direct Postgres query (superuser)
-  /beaverhabits — BeaverHabits (habits, done today, check-ins) — direct read-only SQLite (JSON blob)
   /ryot      — Ryot (media seen, hours seen, workouts) — direct Postgres query (superuser)
   /memos     — Memos journal (days, the last day's agenda and activity) — journal-daily's
                state file, read on every request (LIVE_KEYS)
@@ -154,9 +153,6 @@ class Config:
     # the same read-only-SQLite trick applies. Reading it here replaces the native beszel
     # widget, which needed a superuser password in plaintext in the tile config.
     beszel_db: str = "/var/lib/private/beszel-hub/beszel_data/data.db"
-    # BeaverHabits (hosts/rpi5/life/beaverhabits.nix): the whole habit list is one JSON blob per
-    # user in habit_list.data — read-only, so polling never wakes the idle service.
-    beaverhabits_db: str = "/var/lib/beaverhabits/habits.db"
     switch_dir: str = "/mnt/data/death-plan-switch"
     # ShowMyCards (hosts/rpi5/life/showmycards.nix): socket-activated with a 600s idle timer, so
     # the same read-only-SQLite trick applies — its HTTP API is the ONLY thing that can
@@ -244,7 +240,6 @@ class Config:
             vaultwarden_db=s("VAULTWARDEN_DB", cls.vaultwarden_db),
             wakapi_db=s("WAKAPI_DB", cls.wakapi_db),
             beszel_db=s("BESZEL_DB", cls.beszel_db),
-            beaverhabits_db=s("BEAVERHABITS_DB", cls.beaverhabits_db),
             switch_dir=s("SWITCH_DIR", cls.switch_dir),
             showmycards_db=s("SHOWMYCARDS_DB", cls.showmycards_db),
             notes_dir=s("NOTES_DIR", cls.notes_dir),
@@ -302,7 +297,6 @@ class Stats:
         "dawarich",
         "airtrail",
         "forgejo",
-        "beaverhabits",
         "ryot",
         "memos",
         "showmycards",
@@ -1180,34 +1174,6 @@ def fetch_papra(cfg, run):
     }
 
 
-def fetch_beaverhabits(cfg, run, today=None):
-    # Read-only direct SQLite query — same trick as fetch_papra, never wakes the
-    # socket-activated beaverhabits service. The habit list is a compact JSON blob
-    # per user in habit_list.data: {"habits":[{name,status,records:[{day,done}]}]}.
-    # "archive" status = habit the user retired, so it's excluded from the counts.
-    raw = run(
-        [cfg.sqlite, "-readonly", cfg.beaverhabits_db, "SELECT data FROM habit_list;"]
-    )
-    today = today or time.strftime("%Y-%m-%d")
-    habits = done_today = checkins = 0
-    for line in raw.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        active = [
-            h
-            for h in json.loads(line).get("habits", [])
-            if h.get("status") != "archive"
-        ]
-        habits += len(active)
-        for h in active:
-            recs = h.get("records", [])
-            checkins += sum(1 for r in recs if r.get("done"))
-            if any(r.get("day") == today and r.get("done") for r in recs):
-                done_today += 1
-    return {"habits": habits, "done_today": done_today, "checkins": checkins}
-
-
 # Collection value in EUR, foil-aware. Deliberately NOT ShowMyCards' own
 # total_collection_value: that reports 226.48 for this data and no combination of
 # prices.{eur,usd}{,_foil} reproduces it (eur=148.87, usd=190.13), so it is some
@@ -1992,7 +1958,6 @@ FETCHERS = {
     "dawarich": fetch_dawarich,
     "airtrail": fetch_airtrail,
     "forgejo": fetch_forgejo,
-    "beaverhabits": fetch_beaverhabits,
     "ryot": fetch_ryot,
     "memos": fetch_memos,
     "freereps": fetch_freereps,

@@ -2,7 +2,6 @@
 {
   imports = [
     ./airtrail.nix
-    ./beaverhabits.nix
     ./freereps.nix
     ./showmycards.nix
     ./moxfield-sync.nix

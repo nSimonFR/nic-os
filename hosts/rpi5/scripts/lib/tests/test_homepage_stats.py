@@ -58,7 +58,6 @@ CFG = hs.Config(
     papra_db="/db/papra",
     vaultwarden_db="/db/vw",
     wakapi_db="/db/wakapi",
-    beaverhabits_db="/db/habits",
     showmycards_db="/db/smc",
     gramps_trees_glob="/db/gramps/*/sqlite.db",
 )
@@ -77,7 +76,6 @@ def test_every_path_is_overridable_from_the_environment():
             "BESZEL_DB": "/tmp/b.db",
             "WAKAPI_DB": "/tmp/w.db",
             "VAULTWARDEN_DB": "/tmp/v.db",
-            "BEAVERHABITS_DB": "/tmp/h.db",
             "SHOWMYCARDS_DB": "/tmp/s.db",
             "OWUI_DB": "/tmp/o.db",
             "GRAMPS_TREES_GLOB": "/tmp/g/*.db",
@@ -494,39 +492,6 @@ def test_gramps_web_with_no_trees_reports_zero():
     assert out == {"people": 0, "families": 0, "events": 0}
 
 
-def test_beaverhabits_reads_the_json_blob_and_skips_archived_habits():
-    blob = json.dumps(
-        {
-            "habits": [
-                {
-                    "name": "run",
-                    "status": "active",
-                    "records": [
-                        {"day": "2026-08-06", "done": True},
-                        {"day": "2026-08-05", "done": True},
-                    ],
-                },
-                {
-                    "name": "old",
-                    "status": "archive",
-                    "records": [{"day": "2026-08-06", "done": True}],
-                },
-                {
-                    "name": "read",
-                    "records": [
-                        {"day": "2026-08-05", "done": True},
-                        {"day": "2026-08-04", "done": False},
-                    ],
-                },
-            ]
-        }
-    )
-    out = hs.fetch_beaverhabits(
-        CFG, FakeRun([("habit_list", blob + "\n")]), today="2026-08-06"
-    )
-    assert out == {"habits": 2, "done_today": 1, "checkins": 3}
-
-
 def test_openknowledge_counts_markdown_outside_dot_dirs_and_assets(tmp_path):
     import os
 
@@ -623,18 +588,6 @@ def test_a_live_key_is_fetched_on_every_request(tmp_path, monkeypatch):
         h.send_response = h.send_header = h.end_headers = lambda *a: None
         h.do_GET()
     assert json.loads(h.wfile.getvalue()) == {"days": 2}
-
-
-def test_beaverhabits_sums_across_users():
-    one = json.dumps(
-        {"habits": [{"name": "a", "records": [{"day": "x", "done": True}]}]}
-    )
-    run = FakeRun([("habit_list", one + "\n" + one + "\n\n")])
-    assert hs.fetch_beaverhabits(CFG, run, today="x") == {
-        "habits": 2,
-        "done_today": 2,
-        "checkins": 2,
-    }
 
 
 SURE_ROWS = [
