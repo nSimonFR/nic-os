@@ -37,6 +37,19 @@ let
   wakapiSsoResult = pkgs.writeShellScript "wakapi-sso-result" ''
     if [ "$SERVICE_RESULT" = success ]; then rm -f ${ssoOff}; else touch ${ssoOff}; fi
   '';
+  # Heartbeats keep Wakapi awake for hours, so a start without SSO (and with
+  # local auth disabled, without any web login) could last all day. Every
+  # 5 min: if it runs without the provider and the issuer answers again,
+  # restart it once. A clean restart clears ssoOff and re-probes.
+  wakapiSsoHeal = pkgs.writeShellScript "wakapi-sso-heal" ''
+    systemctl -q is-active wakapi.service || exit 0
+    grep -q '^WAKAPI_OIDC_PROVIDERS_0_NAME=' /run/wakapi/sso.env 2>/dev/null && exit 0
+    ${pkgs.curl}/bin/curl -fsS --max-time 5 -o /dev/null \
+      ${config.nic.sso.issuer}/.well-known/openid-configuration || exit 0
+    rm -f ${ssoOff}
+    echo "wakapi-sso-heal: issuer back, restarting wakapi for SSO"
+    systemctl restart wakapi.service
+  '';
   externalPort = 3030;
   backendPort = 3031;
 in
@@ -123,6 +136,21 @@ in
       ExecStopPost = [ "+${wakapiSsoResult}" ];
       RestartSec = "5s";
       EnvironmentFile = [ "-/run/wakapi/sso.env" ];
+    };
+  };
+
+  systemd.services.wakapi-sso-heal = {
+    description = "Restart Wakapi for SSO once Pocket ID is back";
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = wakapiSsoHeal;
+    };
+  };
+  systemd.timers.wakapi-sso-heal = {
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "5min";
+      OnUnitActiveSec = "5min";
     };
   };
 
