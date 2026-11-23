@@ -21,8 +21,9 @@ let
     text = ''
       umask 077
       mkdir -p "${stateDir}"
+      env=$(age -d -i "${identity}" ${tokenFile})
       set -a
-      eval "$(age -d -i "${identity}" ${tokenFile})"
+      eval "$env"
       set +a
       export DATA_DIR="${stateDir}"
       export HUB_URL="https://${tailnetFqdn}:3000"
