@@ -18,6 +18,13 @@ let
   };
   haLinky = pkgs.callPackage ../../../pkgs/home-assistant/ha-linky.nix { };
 
+  # Pocket ID login (hass-oidc-auth), from HA's own tree for the same ABI. Set up
+  # in the UI (Devices & services → OpenID Connect): public client `home-assistant`,
+  # discovery `<issuer>/.well-known/openid-configuration`, redirect
+  # `<publicUrl>/auth/oidc/callback`. Turn on automatic user linking for the
+  # first login only, then off. Local login stays as the fallback.
+  haAuthOidc = pkgs.hassPkgs.home-assistant-custom-components.auth_oidc;
+
   # Lovelace registration block appended once to the (otherwise unmanaged)
   # configuration.yaml. Kept as a writeText file so the activation script can
   # `cat` it in verbatim — avoids heredoc/Nix-interpolation quoting pitfalls.
@@ -51,7 +58,10 @@ in
     enable = true;
     # null = leave configuration.yaml unmanaged; HA (and the user) owns it directly
     config = null;
-    customComponents = [ haVoltalis ];
+    customComponents = [
+      haVoltalis
+      haAuthOidc
+    ];
     # Intratone (door + doorbell) runs from a plain folder, custom_components/intratone,
     # that the module leaves alone (it only replaces /nix/store symlinks). Upstream
     # GuiHash/ha-intratone was taken offline in 2026-11 at the manufacturer's request,
@@ -231,6 +241,15 @@ in
         chown ha-linky:ha-linky /etc/home-assistant/ha-linky/options.json
         chmod 0640 /etc/home-assistant/ha-linky/options.json
   '';
+
+  nic.sso.clients.home-assistant = {
+    name = "Home Assistant";
+    callbackUrls = [ "${config.nic.services.home-assistant.public.publicUrl}/auth/oidc/callback" ];
+    launchUrl = config.nic.services.home-assistant.public.publicUrl;
+    public = true;
+    pkce = true;
+    secretGroup = "hass";
+  };
 
   # ── Service registration (hosts/rpi5/lib/service-registration.nix) ──────────────
   nic.services.home-assistant = {
