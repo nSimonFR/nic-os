@@ -8,6 +8,34 @@
 }:
 let
   beszelHubPort = 8090;
+  # Root pre-start: (re)writes the Pocket ID provider into PocketBase's users
+  # collection. readfile() keeps the secret off the command line.
+  beszelSsoProvider =
+    let
+      issuer = config.nic.sso.issuer;
+      secretFile = config.nic.sso.clients.beszel.secretFile;
+      sql = pkgs.writeText "beszel-sso.sql" ''
+        UPDATE _collections SET options = json_set(options, '$.oauth2', json_object(
+          'enabled', json('true'),
+          'mappedFields', json_extract(options, '$.oauth2.mappedFields'),
+          'providers', json_array(json_object(
+            'name', 'oidc',
+            'displayName', 'Pocket ID',
+            'clientId', 'beszel',
+            'clientSecret', trim(CAST(readfile('${secretFile}') AS TEXT), char(10, 13, 32)),
+            'authURL', '${issuer}/authorize',
+            'tokenURL', '${issuer}/api/oidc/token',
+            'userInfoURL', '${issuer}/api/oidc/userinfo',
+            'pkce', json('true'),
+            'extra', json('null')))))
+        WHERE name = 'users';
+      '';
+    in
+    pkgs.writeShellScript "beszel-sso-provider" ''
+      db=/var/lib/private/beszel-hub/beszel_data/data.db
+      [ -s ${secretFile} ] && [ -f "$db" ] || exit 0
+      ${pkgs.sqlite}/bin/sqlite3 "$db" < ${sql}
+    '';
   beszelAgentPort = 45876;
   # /dev/sda — Hitachi HDD over USB-SATA bridge → SAT translation
   # /dev/sdb — HP SSD EX900 (NVMe) in Realtek USB-NVMe enclosure → sntrealtek
@@ -32,8 +60,14 @@ in
   systemd.services.beszel-hub = {
     description = "Beszel monitoring hub";
     wantedBy = [ "multi-user.target" ];
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "pocket-id-clients.service"
+    ];
+    wants = [
+      "network-online.target"
+      "pocket-id-clients.service"
+    ];
     serviceConfig = {
       ExecStart = "${pkgs.beszel}/bin/beszel-hub serve --http 127.0.0.1:${toString beszelHubPort}";
       DynamicUser = true;
@@ -42,7 +76,21 @@ in
       Restart = "on-failure";
       RestartSec = "5s";
       Environment = [ "GOMAXPROCS=2" ];
+      ExecStartPre = [ "+${beszelSsoProvider}" ];
     };
+  };
+
+  # Pocket ID login (hosts/rpi5/security/pocket-id.nix). PocketBase keeps OAuth2
+  # providers in the users collection, not in env, so the pre-start writes them
+  # there while the hub is down. Accounts link by verified email. Password login
+  # stays: beszel-smart-refresh signs in with a password, and the superuser
+  # login at /_/ is the way back in.
+  nic.sso.clients.beszel = {
+    name = "Beszel";
+    callbackUrls = [ "https://${tailnetFqdn}:3000/api/oauth2-redirect" ];
+    launchUrl = "https://${tailnetFqdn}:3000";
+    pkce = true;
+    secretGroup = "root"; # read by the root pre-start
   };
 
   # ── Beszel Agent ─────────────────────────────────────────────────────────────
