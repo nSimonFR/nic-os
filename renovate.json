@@ -4,6 +4,7 @@
     "config:recommended"
   ],
   "separateMajorMinor": true,
+  "prHourlyLimit": 0,
   "branchPrefix": "renovate/",
   "enabledManagers": [
     "nix",
@@ -73,6 +74,30 @@
     ]
   },
   "packageRules": [
+    {
+      "description": "Minor and patch bumps of pkgs/, hosts/ and GitHub Actions merge themselves once CI is green: CI builds the rpi5 and nBookPro systems, which is the check that matters for a version-and-hash bump (a reviewer only sees the hash). Three days of minimumReleaseAge give upstream time to pull a broken release. The nix manager (flake inputs, flake.lock) is left out: one lock refresh moves nixpkgs for the whole system and a green build does not prove the services run, so those stay with Nico. Rules further down override it: nixos-release never merges itself, claude-code and t3code wait 1 day. What merged shows in Hermes's 09:00 digest next to the units failing on rpi5 (hosts/rpi5/agents/hermes/workspace/daily-pending-digest.sh).",
+      "matchManagers": [
+        "custom.regex",
+        "github-actions"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "Majors wait for Nico, grouped in one PR opened on Mondays: one approval a week instead of one per dependency.",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "groupName": "major updates",
+      "schedule": [
+        "* * * * 1"
+      ],
+      "automerge": false
+    },
     {
       "description": "gramps-web-nix is pinned on purpose: a3f86d5 (gramps-web-api 3.17.0) fails pythonRuntimeDepsCheck against our nixpkgs — needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/gramps-gedcom7/flask-smorest. See the comment on the input in flake.nix. Renovate proposed it as #438, it was merged, and it broke main. Re-enable once gramps-web-nix carries those deps.",
       "matchManagers": [
