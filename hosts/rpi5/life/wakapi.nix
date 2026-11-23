@@ -18,6 +18,7 @@ let
     umask 077
     out=/run/wakapi/sso.env # the module's RuntimeDirectory
     : > "$out"
+    [ -e ${ssoOff} ] && exit 0
     secret=$(cat ${config.nic.sso.clients.wakapi.envFile} 2>/dev/null) || exit 0
     ${pkgs.curl}/bin/curl -fsS --max-time 5 -o /dev/null \
       ${config.nic.sso.issuer}/.well-known/openid-configuration || exit 0
@@ -28,6 +29,13 @@ let
       echo WAKAPI_OIDC_PROVIDERS_0_ENDPOINT=${config.nic.sso.issuer}
       echo "$secret"
     } > "$out"
+  '';
+  # Outside /run/wakapi: the RuntimeDirectory is wiped on stop.
+  ssoOff = "/run/wakapi-sso-off";
+  # A failed exit (e.g. OIDC discovery) makes the next start password-only; a
+  # clean stop (idle sleep, restart) lets the next start try SSO again.
+  wakapiSsoResult = pkgs.writeShellScript "wakapi-sso-result" ''
+    if [ "$SERVICE_RESULT" = success ]; then rm -f ${ssoOff}; else touch ${ssoOff}; fi
   '';
   externalPort = 3030;
   backendPort = 3031;
@@ -100,14 +108,15 @@ in
     # OIDC discovery at startup and exits fatally if it fails, so the provider
     # is only handed over when the issuer answers: the root pre-start writes
     # the WAKAPI_OIDC_PROVIDERS_0_* env, otherwise an empty file and Wakapi
-    # starts password-only. It sleeps when idle, so SSO is back on the next
-    # wake. Wakapi matches on provider + sub only: an existing account is
-    # linked once by hand (users.auth_type/sub).
+    # starts password-only. If discovery still fails (Pocket ID dropped after
+    # the probe), the failed exit sets ssoOff and the restart is password-only;
+    # without it the socket re-triggers until trigger-limit-hit and :3030 stays
+    # down. The next clean stop (idle sleep) clears it, so SSO is back on the
+    # following wake. Wakapi matches on provider + sub only: an existing
+    # account is linked once by hand (users.auth_type/sub).
     serviceConfig = {
       ExecStartPre = [ "+${wakapiSsoEnv}" ];
-      # If Pocket ID drops between the probe and Wakapi's own discovery, the
-      # module's Restart=always reruns the probe, which then fails and starts
-      # Wakapi password-only. 5 s apart keeps that under the start limit.
+      ExecStopPost = [ "+${wakapiSsoResult}" ];
       RestartSec = "5s";
       EnvironmentFile = [ "-/run/wakapi/sso.env" ];
     };
