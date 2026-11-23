@@ -14,6 +14,7 @@
     ./sudo-agent-forward.nix
     ./agent-vault.nix
     ./rex.nix
+    ./beszel-agent.nix
   ];
 
   home = {

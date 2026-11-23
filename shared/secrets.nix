@@ -43,4 +43,9 @@ in
     nsimon-ed25519
     rpi5-host
   ];
+  # Beszel agent token of the nBookPro system (hosts/nbookpro/beszel-agent.nix).
+  "beszel-agent-nbookpro.env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+  ];
 }
