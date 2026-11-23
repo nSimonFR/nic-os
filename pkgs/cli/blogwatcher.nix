@@ -7,7 +7,7 @@
 buildGoModule rec {
   pname = "blogwatcher";
   # renovate: datasource=github-releases depName=Hyaxia/blogwatcher extractVersion=^v(?<version>.+)$
-  version = "0.0.3";
+  version = "0.0.4";
 
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
@@ -16,7 +16,7 @@ buildGoModule rec {
     owner = "Hyaxia";
     repo = "blogwatcher";
     rev = "v${version}";
-    hash = "sha256-Zd3Pqv2gCB6EwSR5uh88aHEXtI49mmXSbKuVDf2vAGA=";
+    hash = "sha256-Wng43S7B12HO1HIACpUqORL9bUtpxtS4qGa+0i87IXg=";
   };
 
   subPackages = [ "cmd/blogwatcher" ];
