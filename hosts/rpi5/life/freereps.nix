@@ -218,7 +218,7 @@ in
     appUnits = [ "freereps.service" ];
 
     public = {
-      order = 110; # row 3, the day: Calino, here, Ryot
+      order = 110; # row 3, journal: Calino, Memos, here, Ryot
       port = 3960;
       backend = "http://127.0.0.1:${toString proxyPort}";
       funnel = false; # NEVER — there is no authentication, see the header

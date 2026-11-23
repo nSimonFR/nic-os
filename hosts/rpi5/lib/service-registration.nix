@@ -237,20 +237,19 @@ let
               so a group of three or five does not end where a row ends and the
               grid stops carrying any meaning. The first pass here grouped by
               subject alone and every boundary landed mid-row — Ryot separated from
-              FreeReps and BeaverHabits, Karakeep separated from the rest of the
+              FreeReps, Karakeep separated from the rest of the
               library, Beszel stranded at the end of a row of unrelated tiles.
 
               Each row is four tiles wide:
 
                 10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
                 50– 80  the file cabinet    — Nextcloud, Immich, Notes, Papra
-                90–120  the day             — Calino, FreeReps, Ryot
+                90–120  journal             — Calino, Memos, FreeReps, Ryot
                 130–160  kept and locked    — Home Assistant, Beszel, Karakeep,
                                               Vaultwarden
                 170–210  making             — Aperture, Wakapi, Reactive Resume,
                                               Forgejo
-                220–250  the rest           — Gramps Web, ShowMyCards, Memos,
-                                              Death Plan Switch
+                220–250  the rest           — Gramps Web, ShowMyCards, Death Plan Switch
 
               The rows are the OWNER'S CHOICE and not derivable from anything in
               the tree, which is the whole reason they are written down here. Do not
