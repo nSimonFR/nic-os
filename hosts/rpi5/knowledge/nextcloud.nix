@@ -487,6 +487,10 @@ in
       ];
     };
     script = ''
+      # ID4me goes through the same patched HTTP helper but takes a user-supplied
+      # domain on the public login page; keep it off so the local-address
+      # allowance only ever reaches the admin-set Pocket ID provider.
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ config:app:set user_oidc id4me_enabled --value=0 --type=string --lazy
       ${config.services.nextcloud.occ}/bin/nextcloud-occ user_oidc:provider pocketid \
         -c nextcloud --clientsecret-file "$CREDENTIALS_DIRECTORY/oidc" \
         -d ${config.nic.sso.issuer}/.well-known/openid-configuration \
