@@ -227,3 +227,47 @@ def test_env_file_is_written_for_an_already_registered_secret(tmp_path):
     assert rc == 0
     assert env.read_text() == f"X={HELD}\n"
     assert [m for m, _ in calls(op)] == ["GET", "GET", "GET"]
+
+
+def test_stale_env_file_is_rewritten(tmp_path):
+    env = tmp_path / "env" / "immich"
+    env.parent.mkdir()
+    env.write_text("X=old\n")
+    c = client(tmp_path, envVar="X", envFile=str(env))
+    hold(tmp_path)
+    rc, _, _ = run(tmp_path, [c], [OK, current(c), listed("sec-1")])
+    assert rc == 0 and env.read_text() == f"X={HELD}\n"
+
+
+def test_up_to_date_env_file_is_left_alone(tmp_path):
+    env = tmp_path / "env" / "immich"
+    env.parent.mkdir()
+    env.write_text(f"X={HELD}\n")
+    c = client(tmp_path, envVar="X", envFile=str(env))
+    hold(tmp_path)
+
+    def chown(*a, **k):
+        raise AssertionError("env file rewritten")
+
+    rc, _, _ = run(tmp_path, [c], [OK, current(c), listed("sec-1")], chown=chown)
+    assert rc == 0
+
+
+def test_env_file_error_is_reported_and_others_continue(tmp_path):
+    def chown(path, **k):
+        if path.parent.name == "env":
+            raise LookupError("no such group")
+
+    a = client(tmp_path, envVar="X", envFile=str(tmp_path / "env" / "immich"))
+    hold(tmp_path)
+    b = client(
+        tmp_path,
+        id="memos",
+        secretFile=str(secret_file(tmp_path, "memos")),
+        idFile=str(id_file(tmp_path, "memos")),
+    )
+    replies = [OK, current(a), listed("sec-1"), not_found, OK, secret_created()]
+    rc, _, lines = run(tmp_path, [a, b], replies, chown=chown)
+    assert rc == 1
+    assert any(line.startswith("immich: no such group") for line in lines)
+    assert secret_file(tmp_path, "memos").exists()
