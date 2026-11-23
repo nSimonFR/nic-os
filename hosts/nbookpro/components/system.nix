@@ -4,12 +4,10 @@
 
   stateVersion = 5;
 
-  # Post-rebuild: yabai scripting addition and Remote Login — mosh
+  # Post-rebuild: Remote Login — mosh
   # bootstraps over SSH, reached over the tailnet. No nix-darwin option for it,
   # and `systemsetup` needs Full Disk Access, hence the launchctl fallback.
   activationScripts.postActivation.text = ''
-    sudo yabai --load-sa 2>/dev/null || true
-
     if ! systemsetup -getremotelogin 2>/dev/null | grep -qx "Remote Login: On"; then
       systemsetup -setremotelogin on >/dev/null 2>&1 || {
         launchctl enable system/com.apple.sshd 2>/dev/null
