@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runSandbox } from "./sandbox.mjs";
-import { search, Upstream } from "./server.mjs";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { buildServer, makeLogger, search, Upstream } from "./server.mjs";
 
 const echo = async (name, input) => ({ name, input });
 
@@ -115,4 +120,34 @@ test("excluded tools are hidden and refused", async () => {
   await assert.rejects(up.call("mail_send_email", {}), /Unknown tool/);
   assert.doesNotMatch(search(await up.tools(), "send email"), /mail_send_email/);
   assert.deepEqual(await up.call("mail_list_emails", {}), { name: "mail_list_emails" });
+});
+
+test("execute logs the run and each upstream call", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "codemode-")), "calls.jsonl");
+  const up = new Upstream("http://unused", []);
+  up.client = async () => ({
+    listTools: async () => ({ tools: [{ name: "sure_get_accounts", inputSchema: { type: "object" } }] }),
+    callTool: async () => ({ content: [{ type: "text", text: '{"accounts":[1,2]}' }] }),
+  });
+  const server = await buildServer(up, makeLogger(file));
+  const [a, b] = InMemoryTransport.createLinkedPair();
+  await server.connect(a);
+  const client = new Client({ name: "test-client", version: "0" });
+  await client.connect(b);
+  const code = "async () => { await codemode.sure_get_accounts({ q: 1 }); return codemode.nope({}); }";
+  const r = await client.callTool({ name: "execute", arguments: { code } });
+  assert.equal(r.isError, true);
+  const lines = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l));
+  assert.deepEqual(
+    lines.map((l) => [l.event, l.tool, l.ok, l.client]),
+    [
+      ["call", "sure_get_accounts", true, "test-client"],
+      ["call", "nope", false, "test-client"],
+      ["execute", undefined, false, "test-client"],
+    ],
+  );
+  assert.equal(lines[0].input, '{"q":1}');
+  assert.equal(lines[2].code, code);
+  assert.equal(new Set(lines.map((l) => l.run)).size, 1);
+  await client.close();
 });
