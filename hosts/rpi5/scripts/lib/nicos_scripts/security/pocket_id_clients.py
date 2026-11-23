@@ -132,6 +132,12 @@ def sync_client(api, c, log, chown=shutil.chown):
 
     if want["isPublic"]:
         return
+    sync_secret(api, c, current, log, chown=chown)
+    write_env(c, chown=chown)
+
+
+def sync_secret(api, c, current, log, chown=shutil.chown):
+    cid = c["id"]
     path = Path(c["secretFile"])
     id_file = Path(c["idFile"])
     existing = path.read_text().strip() if path.exists() else ""
@@ -146,6 +152,17 @@ def sync_client(api, c, log, chown=shutil.chown):
     id_file.parent.mkdir(parents=True, exist_ok=True)
     id_file.write_text(reg["id"])
     log(f"{cid}: secret registered")
+
+
+def write_env(c, chown=shutil.chown):
+    """`<envVar>=<secret>` for apps that only read the secret from the env."""
+    var = c.get("envVar")
+    if not var:
+        return
+    line = f"{var}={Path(c['secretFile']).read_text().strip()}\n"
+    env = Path(c["envFile"])
+    if not env.exists() or env.read_text() != line:
+        write_secret(env, line, c["secretGroup"], chown=chown)
 
 
 def main(env=None, opener=None, sleep=time.sleep, chown=shutil.chown, log=None):

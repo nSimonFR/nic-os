@@ -58,6 +58,14 @@ in
       # the local login form entirely, and no OAuth provider is configured.
       DISABLE_SIGNUPS = "true";
 
+      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); the secret
+      # comes from nic.sso.clients.karakeep.envFile. Linking by email is safe:
+      # Pocket ID emails are admin-set and DISABLE_SIGNUPS blocks new accounts.
+      OAUTH_WELLKNOWN_URL = "${config.nic.sso.issuer}/.well-known/openid-configuration";
+      OAUTH_CLIENT_ID = "karakeep";
+      OAUTH_PROVIDER_NAME = "Pocket ID";
+      OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING = "true";
+
       # ── AI auto-tagging via local inference (tiny-llm-gate → beast Ollama) ──
       OPENAI_API_KEY = "ollama"; # value ignored by tiny-llm-gate
       OPENAI_BASE_URL = "${tinyLlmGateUrl}/v1"; # http://127.0.0.1:4001/v1
@@ -75,7 +83,22 @@ in
   # Order the search backend ahead of the consumers so a cold wake doesn't hit
   # Meilisearch before it is listening. meilisearch is a sleepWith worker below
   # (wantedBy = karakeep-web), so this only adds ordering — no dependency cycle.
-  systemd.services.karakeep-web.after = [ "meilisearch.service" ];
+  systemd.services.karakeep-web.after = [
+    "meilisearch.service"
+    "pocket-id-clients.service"
+  ];
+  systemd.services.karakeep-web.wants = [ "pocket-id-clients.service" ];
+  systemd.services.karakeep-web.serviceConfig.EnvironmentFile = [
+    "-${config.nic.sso.clients.karakeep.envFile}"
+  ];
+
+  nic.sso.clients.karakeep = {
+    name = "Karakeep";
+    callbackUrls = [ "${config.nic.services.karakeep.public.publicUrl}/api/auth/callback/custom" ];
+    launchUrl = config.nic.services.karakeep.public.publicUrl;
+    secretGroup = "karakeep";
+    envVar = "OAUTH_CLIENT_SECRET";
+  };
   systemd.services.karakeep-workers.after = [ "meilisearch.service" ];
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ─────────────

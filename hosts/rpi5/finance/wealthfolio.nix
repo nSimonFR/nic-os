@@ -110,6 +110,7 @@
   config,
   pkgs,
   lib,
+  username,
   ...
 }:
 let
@@ -120,6 +121,14 @@ let
   # below, which also derives publicUrl.
 in
 {
+  nic.sso.clients.wealthfolio = {
+    name = "Wealthfolio";
+    callbackUrls = [ "${config.nic.services.wealthfolio.public.publicUrl}/api/v1/auth/oidc/callback" ];
+    launchUrl = config.nic.services.wealthfolio.public.publicUrl;
+    secretGroup = "wealthfolio";
+    envVar = "WF_OIDC_CLIENT_SECRET";
+  };
+
   users.users.wealthfolio = {
     isSystemUser = true;
     group = "wealthfolio";
@@ -131,8 +140,14 @@ in
     description = "Wealthfolio investment tracker";
     # EnvironmentFile is a fixed /run/agenix path: a rotated hash needs a restart.
     restartTriggers = [ config.age.secrets.wealthfolio-env.file ];
-    after = [ "network-online.target" ];
-    wants = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "pocket-id-clients.service"
+    ];
+    wants = [
+      "network-online.target"
+      "pocket-id-clients.service"
+    ];
     wantedBy = [ "multi-user.target" ];
 
     environment = {
@@ -159,6 +174,12 @@ in
       # 401 after an hour of not being opened. 30 days turns "log in every
       # time" into "log in monthly". No upper bound in config.rs.
       WF_AUTH_TOKEN_TTL_MINUTES = "43200";
+      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix), next to the
+      # password. Single-user app: only Nico's (admin-set, verified) email may in.
+      WF_OIDC_ISSUER_URL = config.nic.sso.issuer;
+      WF_OIDC_CLIENT_ID = "wealthfolio";
+      WF_OIDC_REDIRECT_URL = "${config.nic.services.wealthfolio.public.publicUrl}/api/v1/auth/oidc/callback";
+      WF_OIDC_ALLOWED_EMAILS = "${username}@pm.me";
       # Agent access: the /mcp endpoint, off by default. Guarded by its own
       # bearer PAT with its own scope set — a session cookie is rejected there
       # and a PAT is rejected on /api/v1, so this grants nothing to the browser
@@ -178,7 +199,10 @@ in
     serviceConfig = {
       ExecStart = lib.getExe wealthfolio;
       # WF_SECRET_KEY + WF_AUTH_PASSWORD_HASH
-      EnvironmentFile = "/run/agenix/wealthfolio-env";
+      EnvironmentFile = [
+        "/run/agenix/wealthfolio-env"
+        "-${config.nic.sso.clients.wealthfolio.envFile}" # WF_OIDC_CLIENT_SECRET
+      ];
       User = "wealthfolio";
       Group = "wealthfolio";
       StateDirectory = "wealthfolio";
