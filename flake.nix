@@ -146,7 +146,8 @@
     # pythonRuntimeDepsCheck fails. Unpin once gramps-web-nix is compatible.
     #
     # The rev lives on branch `pin/gramps-web-api-3.2.0` (4e1740a + a
-    # pkg_resources shim — nixpkgs 26.05 dropped setuptools from the closure).
+    # pkg_resources shim — nixpkgs 26.05 dropped setuptools from the closure — + a
+    # frontend patch: CARTO tiles need an API key, now OSM).
     #
     # This is not theoretical: Renovate proposed exactly that bump (#438), it was
     # merged 2026-08-10, and `system.build.toplevel` stopped building —
@@ -158,7 +159,7 @@
     # — so the bump is now disabled in renovate.json rather than left to be
     # re-proposed and re-merged against this warning.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/030942fd285de142c1760f0ba00d91f637c747a9";
+      url = "github:nSimonFR/gramps-web-nix/d908feb2b3e024b2d3757de736c2330a86250fbf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
