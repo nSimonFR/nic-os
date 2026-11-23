@@ -83,6 +83,11 @@ test("console output is capped", async () => {
   assert.ok(r.logs.join("").length < 25_000);
 });
 
+test("empty console lines are capped too", async () => {
+  const r = await runSandbox(`async () => { for (let i = 0; i < 100000; i++) console.log(); }`, echo);
+  assert.ok(r.logs.length <= 20_001);
+});
+
 test("excluded tools are hidden and refused", async () => {
   const up = new Upstream("http://unused", ["mail_send_email"]);
   let listings = 0;

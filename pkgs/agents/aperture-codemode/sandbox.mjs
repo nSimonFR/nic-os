@@ -82,7 +82,7 @@ export async function runSandbox(fn, call, { timeoutMs = 120_000, memoryBytes = 
     const logFn = vm.newFunction("__log", (h) => {
       if (logChars > MAX_LOG_CHARS) return;
       const line = vm.getString(h);
-      logChars += line.length;
+      logChars += line.length + 1; // +1: empty lines count too
       logs.push(logChars > MAX_LOG_CHARS ? `${line.slice(0, 1000)}… (console output cut)` : line);
     });
     vm.setProp(vm.global, "__log", logFn);
