@@ -136,6 +136,11 @@ let
     }
     // bearer "MESSAGING_MCP_TOKEN"
     // sleepy;
+    beszel = {
+      url = "${publicUrl "beszel-mcp"}/mcp";
+    }
+    // bearer "BESZEL_MCP_TOKEN"
+    // sleepy;
     # Per-user OAuth: connect once under Connectors in the Aperture portal.
     calcom = {
       url = "https://mcp.cal.com/mcp";
@@ -337,6 +342,7 @@ let
       KARAKEEP_MCP_TOKEN = "/var/lib/mcp-tokens/karakeep";
       NEXTCLOUD_MCP_TOKEN = "/var/lib/mcp-tokens/nextcloud";
       IMMICH_MCP_TOKEN = "/var/lib/mcp-tokens/immich";
+      BESZEL_MCP_TOKEN = "/var/lib/mcp-tokens/beszel";
     };
 
   # Claude ids for the Anthropic passthrough. The base is what the claude-code

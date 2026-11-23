@@ -1,5 +1,5 @@
 # Stdio-only MCP servers behind mcp-stdio-bridge (nicos-scripts), served as
-# Streamable HTTP for Aperture's `mail`, `mtg`, `karakeep`, `nextcloud` and `immich` connectors
+# Streamable HTTP for Aperture's `mail`, `mtg`, `karakeep`, `nextcloud`, `immich` and `beszel` connectors
 # (aperture-sync.nix).
 # Socket-activated: 0 at rest; the child server starts on the first request.
 #
@@ -111,6 +111,8 @@ let
       replace-secret @GMAIL_PASSWORD@ "$CREDENTIALS_DIRECTORY/gmail" "$cfg" || true
     '';
   };
+
+  beszelMcp = pkgs.callPackage ../../../pkgs/agents/beszel-mcp.nix { };
 
   immichMcp = pkgs.callPackage ../../../pkgs/agents/immich-mcp.nix { inherit inputs; };
   # mcp4immich gives Immich 10 s per startup check; a cold Immich takes longer
@@ -307,6 +309,35 @@ let
       backup = [ "none" ];
       backupNote = "stateless — the photos live in Immich";
     };
+    # Read-only tools. The hub's own superuser, whose password is already in
+    # platform/monitoring.nix; the hub is loopback-only.
+    beszel = {
+      description = "Beszel MCP (maxbth/beszel-mcp)";
+      internalPort = 13369;
+      proxyPort = 8470;
+      publicPort = 4110;
+      order = 184;
+      token = true;
+      units = [ "beszel-hub.service" ];
+      command = [
+        "${beszelMcp}/bin/beszel-mcp"
+        "--stdio"
+      ];
+      exclude = [ ];
+      environment = {
+        BESZEL_URL = "http://127.0.0.1:8090";
+        BESZEL_EMAIL = "homepage@nic-os.local";
+        BESZEL_PASSWORD = "homepage-widget-pass";
+        BESZEL_SUPERUSER = "true";
+        HOME = "/run/beszel-mcp";
+      };
+      serviceConfig = {
+        RuntimeDirectory = "beszel-mcp";
+        WorkingDirectory = "/run/beszel-mcp";
+      };
+      backup = [ "none" ];
+      backupNote = "stateless — the metrics live in the Beszel hub";
+    };
   };
 
   mkBridge =
@@ -409,7 +440,7 @@ in
           };
           script = ''
             # messaging is in messaging/messaging-mcp.nix, the rest here.
-            for name in mail messaging karakeep nextcloud immich; do
+            for name in mail messaging karakeep nextcloud immich beszel; do
               f=${tokenDir}/$name
               [ -s "$f" ] || ${pkgs.openssl}/bin/openssl rand -hex 32 > "$f"
             done
