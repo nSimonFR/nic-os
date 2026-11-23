@@ -159,14 +159,14 @@ in
 
   systemd.services.forgejo-sso = {
     description = "Register Pocket ID as a Forgejo login source";
+    # Only the database is needed: wanting forgejo.service would keep it out
+    # of its idle sleep.
     after = [
-      "forgejo.service"
+      "postgresql.service"
       "pocket-id-clients.service"
     ];
-    wants = [
-      "forgejo.service"
-      "pocket-id-clients.service"
-    ];
+    wants = [ "pocket-id-clients.service" ];
+    requires = [ "postgresql.service" ];
     wantedBy = [ "multi-user.target" ];
     path = [
       config.services.forgejo.package
@@ -183,19 +183,23 @@ in
     };
     serviceConfig = {
       Type = "oneshot";
-      RemainAfterExit = true;
       User = "forgejo";
-      RuntimeDirectory = "forgejo-sso";
+      # Persistent: a pending restart survives a failed or interrupted run.
+      StateDirectory = "forgejo-sso";
       LoadCredential = "oidc:${config.nic.sso.clients.forgejo.secretFile}";
-      # As root: restart forgejo when the script left the marker.
+      # As root: apply a pending secret change. try-restart is a no-op while
+      # forgejo sleeps (its next start loads the new secret); the marker is
+      # only cleared once that succeeded.
       ExecStartPost = "+${
         lib.getExe (
           pkgs.writeShellApplication {
             name = "forgejo-sso-restart";
             runtimeInputs = [ pkgs.systemd ];
             text = ''
-              if [ -e /run/forgejo-sso/changed ]; then
+              marker=/var/lib/forgejo-sso/restart-pending
+              if [ -e "$marker" ]; then
                 systemctl try-restart forgejo.service
+                rm -f "$marker"
               fi
             '';
           }
@@ -204,7 +208,6 @@ in
     };
     script = ''
       set -euo pipefail
-      rm -f "$RUNTIME_DIRECTORY/changed"
       q() { psql -v ON_ERROR_STOP=1 -qtAX "$@"; }
       if [ -z "$(q -c "SELECT 1 FROM login_source WHERE name = 'pocket-id'")" ]; then
         forgejo admin auth add-oauth --name pocket-id --provider openidConnect \
@@ -223,7 +226,7 @@ in
       )
       if [ -n "$updated" ]; then
         echo "forgejo-sso: client secret updated"
-        touch "$RUNTIME_DIRECTORY/changed"
+        touch "$STATE_DIRECTORY/restart-pending"
       fi
     '';
   };
