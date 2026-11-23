@@ -25,6 +25,10 @@ inputs: final: _prev: {
   t3code = final.callPackage ./agents/t3code.nix { };
   t3code-desktop = final.callPackage ./agents/t3code-desktop.nix { };
 
+  # Code Mode MCP in front of Aperture. Consumers: hosts/rpi5/agents/hermes/hermes.nix
+  # and home/mcp.nix (Claude Code, Codex / ChatGPT Work).
+  aperture-codemode = final.callPackage ./agents/aperture-codemode { };
+
   # ShowMyCards (MTG collection manager) — built from the showmycards-src flake
   # input; the prebuilt upstream image is amd64-only.
   # Consumers: hosts/rpi5/life/showmycards.nix and `nix build .#showmycards`.
