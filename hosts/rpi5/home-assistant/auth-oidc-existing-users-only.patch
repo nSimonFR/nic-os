@@ -1,0 +1,13 @@
+--- a/custom_components/auth_oidc/provider.py	2026-11-23 22:18:23
++++ b/custom_components/auth_oidc/provider.py	2026-11-23 22:18:23
+@@ -383,7 +383,9 @@
+                 # Will set the credential isNew = false
+                 await self.store.async_link_user(user, credential)
+ 
+-        # If the credential is new, HA will automatically create a new user for us
++        # nic-os: only existing HA users may log in; never auto-create one.
++        if credential.is_new:
++            raise InvalidAuthError("No Home Assistant user matches this login")
+         return credential
+ 
+     async def async_user_meta_for_credentials(

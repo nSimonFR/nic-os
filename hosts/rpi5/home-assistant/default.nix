@@ -25,11 +25,13 @@ let
   # require-existing-user option and otherwise creates a fresh account (an admin
   # one, for the Pocket ID `admins` group) when `ha_username` is missing or wrong.
   haAuthOidc = pkgs.hassPkgs.home-assistant-custom-components.auth_oidc.overrideAttrs (old: {
-    postPatch = (old.postPatch or "") + ''
-      substituteInPlace custom_components/auth_oidc/provider.py --replace-fail \
-        $'        # If the credential is new, HA will automatically create a new user for us\n        return credential' \
-        $'        # nic-os: only existing HA users may log in; never auto-create one.\n        if credential.is_new:\n            raise InvalidAuthError("No Home Assistant user matches this login")\n        return credential'
-    '';
+    patches = (old.patches or [ ]) ++ [ ./auth-oidc-existing-users-only.patch ];
+    # Upstream tests that log a brand-new user in, which the patch now refuses.
+    disabledTests = (old.disabledTests or [ ]) ++ [
+      "test_full_login"
+      "test_login_with_person_create"
+      "test_login_without_person_create_does_not_create_person"
+    ];
   });
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
@@ -61,6 +63,16 @@ let
   # attaches a login to the local HA user whose username equals the
   # `ha_username` custom claim, set per user in the Pocket ID admin UI (Nico's HA
   # username differs from his Pocket ID one). A user without it cannot log in.
+  # Drops the migrated `http:` mapping: its indented settings go, top-level
+  # comments (e.g. the next block's marker) are kept, and the skip ends at the
+  # next top-level key.
+  httpStrip = pkgs.writeText "nic-os-hass-http-strip.awk" ''
+    /^http:/ { skip = 1; next }
+    skip && /^#/ { print; next }
+    skip && /^[^[:space:]]/ { skip = 0 }
+    !skip
+  '';
+
   # Drops the previous managed auth_oidc block (marker, key, indented lines and
   # the blank lines before the marker) so the current one can be appended.
   oidcStrip = pkgs.writeText "nic-os-auth-oidc-strip.awk" ''
@@ -208,11 +220,10 @@ in
     # Only once HA's own store holds the migrated proxy settings: dropping the
     # YAML before that (e.g. a restored pre-migration backup) would leave HA
     # without use_x_forwarded_for, and every proxied request would get a 400.
-    # A top-level comment (the next block's marker) ends the skip too.
     if [ -e "$cfg" ] && grep -q '^http:' "$cfg" \
       && ${pkgs.jq}/bin/jq -e '.data.yaml_migration_done == true and .data.stable.use_x_forwarded_for == true' \
         /var/lib/hass/.storage/http >/dev/null 2>&1; then
-      ${pkgs.gawk}/bin/awk '/^http:/{skip=1; next} skip && /^[^[:space:]]/{skip=0} !skip' "$cfg" > "$cfg.tmp"
+      ${pkgs.gawk}/bin/awk -f ${httpStrip} "$cfg" > "$cfg.tmp"
       chown hass:hass "$cfg.tmp"
       mv "$cfg.tmp" "$cfg"
     fi
