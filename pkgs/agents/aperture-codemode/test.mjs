@@ -84,8 +84,9 @@ test("console output is capped", async () => {
 });
 
 test("empty console lines are capped too", async () => {
-  const r = await runSandbox(`async () => { for (let i = 0; i < 100000; i++) console.log(); }`, echo);
-  assert.ok(r.logs.length <= 20_001);
+  const r = await runSandbox(`async () => { for (let i = 0; i < 100000; i++) console.log(); return "done"; }`, echo);
+  assert.equal(r.result, "done");
+  assert.ok(r.logs.length >= 19_000 && r.logs.length <= 20_001, `${r.logs.length} entries`);
 });
 
 test("excluded tools are hidden and refused", async () => {
