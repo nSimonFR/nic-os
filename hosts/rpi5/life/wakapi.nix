@@ -105,6 +105,10 @@ in
     # linked once by hand (users.auth_type/sub).
     serviceConfig = {
       ExecStartPre = [ "+${wakapiSsoEnv}" ];
+      # If Pocket ID drops between the probe and Wakapi's own discovery, the
+      # module's Restart=always reruns the probe, which then fails and starts
+      # Wakapi password-only. 5 s apart keeps that under the start limit.
+      RestartSec = "5s";
       EnvironmentFile = [ "-/run/wakapi/sso.env" ];
     };
   };
