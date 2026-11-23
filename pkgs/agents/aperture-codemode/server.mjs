@@ -3,7 +3,7 @@
 // Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide),
 // CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables).
 import { randomUUID } from "node:crypto";
-import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { appendFileSync, chmodSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
@@ -41,10 +41,14 @@ export function makeLogger(file) {
   if (!file) return () => {};
   return (entry) => {
     try {
-      mkdirSync(dirname(file), { recursive: true });
+      mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
       try {
+        // A file that already existed keeps its mode: narrow it before writing code and inputs.
+        chmodSync(file, 0o600);
         if (statSync(file).size > LOG_MAX_BYTES) renameSync(file, `${file}.1`);
-      } catch {}
+      } catch (e) {
+        if (e.code !== "ENOENT") throw e;
+      }
       appendFileSync(file, `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`, { mode: 0o600 });
     } catch (e) {
       console.error(`aperture-codemode: log write failed: ${e.message}`);

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runSandbox } from "./sandbox.mjs";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -150,4 +150,11 @@ test("execute logs the run and each upstream call", async () => {
   assert.equal(lines[2].code, code);
   assert.equal(new Set(lines.map((l) => l.run)).size, 1);
   await client.close();
+});
+
+test("an existing log file is narrowed to 0600 before writing", () => {
+  const file = join(mkdtempSync(join(tmpdir(), "codemode-")), "calls.jsonl");
+  writeFileSync(file, "", { mode: 0o644 });
+  makeLogger(file)({ event: "search", query: "x" });
+  assert.equal(statSync(file).mode & 0o777, 0o600);
 });
