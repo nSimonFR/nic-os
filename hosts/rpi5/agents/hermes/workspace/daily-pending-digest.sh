@@ -7,6 +7,8 @@ TMPDIR=${TMPDIR:-$WORKDIR/tmp}
 CHAT_ID=${TELEGRAM_CHAT_ID:-82389391}
 MAX_GH=${MAX_GH:-20}
 MAX_BW=${MAX_BW:-20}
+# Telegram caps a message at 4096 characters; the digest goes out in one.
+MAX_MERGED=${MAX_MERGED:-15}
 # Renovate PRs are identified by their generated branch, not a title convention.
 RENOVATE_REPO=${RENOVATE_REPO:-nSimonFR/nic-os}
 RENOVATE_BRANCH_PREFIX=${RENOVATE_BRANCH_PREFIX:-renovate/}
@@ -210,20 +212,28 @@ format_auto_merged() {
   elif [ "$(jq length <<<"$merged")" -eq 0 ]; then
     printf '• none\n'
   else
-    jq -r '.[] | "• <a href=\"" + .url + "\">#" + (.number|tostring) + "</a> " + (.title | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;"))' <<<"$merged"
+    jq -r --argjson max "$MAX_MERGED" '.[:$max][] | "• <a href=\"" + .url + "\">#" + (.number|tostring) + "</a> " + (.title | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;"))' <<<"$merged"
+    local n
+    n=$(jq length <<<"$merged")
+    [ "$n" -le "$MAX_MERGED" ] || printf '… +%s more\n' "$((n - MAX_MERGED))"
   fi
 
   printf '\nFailed units on rpi5:\n'
-  local failed
-  failed=$({
-    systemctl --failed --no-legend --plain 2>/dev/null
-    systemctl --user --failed --no-legend --plain 2>/dev/null
-  } |
-    awk '{print $1}' | sort -u)
-  if [ -z "$failed" ]; then
-    printf '• none\n'
-  else
+  # Each manager on its own: one that cannot be reached is reported, and the
+  # digest still goes out (set -e would stop it).
+  local scope out failed=""
+  for scope in system user; do
+    if out=$(systemctl "--$scope" --failed --no-legend --plain 2>&1); then
+      failed+=$(awk '{print $1}' <<<"$out")$'\n'
+    else
+      printf '• %s manager unreachable: %s\n' "$scope" "$(one_line <<<"$out" | cut -c1-120 | html_escape)"
+    fi
+  done
+  failed=$(sed '/^$/d' <<<"$failed" | sort -u)
+  if [ -n "$failed" ]; then
     printf '%s\n' "$failed" | html_escape | sed 's/^/• /'
+  else
+    printf '• none\n'
   fi
 }
 
