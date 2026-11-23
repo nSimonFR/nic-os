@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   lib,
   unstablePkgs,
@@ -14,6 +15,7 @@ let
   # actually binds, behind the socket-activate proxy.
   externalPort = 2283;
   backendPort = 2284;
+  origin = config.nic.services.immich.public.publicUrl;
 in
 {
   services.immich = {
@@ -45,6 +47,19 @@ in
         enabled = true;
         modelName = "buffalo_l";
       };
+    };
+
+    # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). The first
+    # OAuth login links the Immich account with the same email; nobody new is
+    # created. Password login stays on as the fallback.
+    settings.oauth = {
+      enabled = true;
+      issuerUrl = config.nic.sso.issuer;
+      clientId = "immich";
+      clientSecret._secret = config.nic.sso.clients.immich.secretFile;
+      autoRegister = false;
+      buttonText = "Login with Pocket ID";
+      accountManagementUrl = "${config.nic.sso.issuer}/settings/account";
     };
 
     # External workflow plugins (IMMICH_ALLOW_EXTERNAL_PLUGINS + the install
@@ -79,9 +94,27 @@ in
   ];
 
   # Ensure Immich starts after HDD is mounted.
+  nic.sso.clients.immich = {
+    name = "Immich";
+    callbackUrls = [
+      "${origin}/auth/login"
+      "${origin}/user-settings"
+      "app.immich:///oauth-callback"
+    ];
+    launchUrl = origin;
+    secretGroup = "immich";
+  };
+
   systemd.services.immich-server = {
-    after = [ "mnt-data.mount" ];
-    wants = [ "mnt-data.mount" ];
+    # pocket-id-clients writes the OAuth client secret read at start.
+    after = [
+      "mnt-data.mount"
+      "pocket-id-clients.service"
+    ];
+    wants = [
+      "mnt-data.mount"
+      "pocket-id-clients.service"
+    ];
     environment.MALLOC_ARENA_MAX = "2";
     serviceConfig = {
       ExecStartPre = [
