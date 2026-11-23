@@ -62,6 +62,10 @@ in
       OAUTH_SCOPE = "openid profile email";
       OAUTH_AUTO_REGISTER = "false";
       OAUTH_BUTTON_TEXT = "Log in with Pocket ID";
+      # SSO only in the UI (`/login?autoLogin=false` shows the form again).
+      # AirTrail's POST /api/users/login still takes a password: UI-only knob.
+      OAUTH_HIDE_PASSWORD_FORM = "true";
+      OAUTH_AUTO_LOGIN = "true";
     };
     serviceConfig.EnvironmentFile = lib.mkForce [
       config.services.airtrail.environmentFile
