@@ -49,8 +49,9 @@ let
 
   # Pocket ID only lets the `admins` group into this client, and its groups claim
   # carries `admins`, which auth_oidc maps to the HA admin role. User linking
-  # attaches a login to the local HA user with the same username
-  # (preferred_username), so the existing account is reused, not duplicated.
+  # attaches a login to the local HA user whose username equals the
+  # `ha_username` custom claim, set per user in the Pocket ID admin UI (Nico's HA
+  # username differs from his Pocket ID one). A user without it cannot log in.
   oidcInclude = pkgs.writeText "nic-os-auth-oidc.yaml" ''
 
     # nic-os-managed: auth_oidc
@@ -61,6 +62,8 @@ let
       features:
         automatic_user_linking: true
         automatic_person_creation: false
+      claims:
+        username: ha_username
   '';
 in
 {
