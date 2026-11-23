@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   apertureUrl,
   ...
@@ -17,6 +18,14 @@ let
     export PATH=${pkgs.uv}/bin''${PATH:+:$PATH}
     exec "$@"
   '';
+
+  # Aperture's MCP behind Code Mode (search + execute), with the send tools left out;
+  # on PATH for clients configured by hand (Codex / ChatGPT Work).
+  apertureCodemode = pkgs.writeShellScriptBin "aperture-codemode" ''
+    export APERTURE_MCP_URL=${apertureUrl}/v1/mcp
+    export CODEMODE_EXCLUDE=${lib.concatStringsSep "," (import ../shared/aperture-send-tools.nix)}
+    exec ${lib.getExe pkgs.aperture-codemode}
+  '';
 in
 {
   # Miro and GitHub come from the claude.ai connectors.
@@ -24,10 +33,11 @@ in
     # Every MCP server, aggregated by Aperture (the `connectors` list in
     # hosts/rpi5/agents/aperture-sync.nix); access is by tailnet identity.
     aperture = {
-      type = "http";
-      url = "${apertureUrl}/v1/mcp";
+      type = "stdio";
+      command = lib.getExe apertureCodemode;
     };
   };
 
   home.file.".local/libexec/mcp-env".source = mcpEnv;
+  home.packages = [ apertureCodemode ];
 }

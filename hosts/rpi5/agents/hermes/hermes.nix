@@ -191,40 +191,10 @@ let
         shellcheck "$out"/*.sh
       '';
 
-  # Aperture tools that send as Nico (mcp-bridges.nix, messaging-mcp.nix).
-  # Write as Nico to other people, publish, or delete (Nextcloud).
-  apertureSendTools = [
-    "mail_send_email"
-    "mail_forward_email"
-    "messaging_send_message"
-    "nextcloud_nc_webdav_delete_resource"
-    "nextcloud_nc_calendar_delete_event"
-    "nextcloud_nc_calendar_delete_todo"
-    "nextcloud_nc_calendar_bulk_operations"
-    "nextcloud_nc_calendar_manage_calendar"
-    "nextcloud_nc_calendar_create_meeting"
-    "nextcloud_nc_calendar_create_event"
-    "nextcloud_nc_calendar_update_event"
-    "nextcloud_nc_contacts_delete_contact"
-    "nextcloud_nc_contacts_delete_addressbook"
-    "nextcloud_nc_share_create"
-    "nextcloud_nc_share_create_public_link"
-    "nextcloud_nc_share_update"
-    "nextcloud_nc_share_delete"
-    # Cal.com mails the other attendees.
-    "calcom_create_booking"
-    "calcom_cancel_booking"
-    "calcom_reschedule_booking"
-    # Seen by his colleagues.
-    "lineartrusk_save_issue"
-    "lineartrusk_save_comment"
-    "lineartrusk_save_project"
-  ];
+  apertureSendTools = import ../../../../shared/aperture-send-tools.nix;
 
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
   jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
-
-  apertureCodemode = pkgs.callPackage ../../../../pkgs/agents/aperture-codemode { };
 
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a
@@ -263,7 +233,7 @@ let
     # runs code calling them. The full listing was 415 tools / 513 KB of context.
     # Listing the tools wakes the socket-activated ones (cold Sure: 14s to >30s).
     mcp_servers.aperture = {
-      command = lib.getExe apertureCodemode;
+      command = lib.getExe pkgs.aperture-codemode;
       env = {
         APERTURE_MCP_URL = "${apertureUrl}/v1/mcp";
         CODEMODE_EXCLUDE = lib.concatStringsSep "," apertureSendTools;
