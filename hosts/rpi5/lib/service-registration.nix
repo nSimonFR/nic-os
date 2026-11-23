@@ -244,7 +244,7 @@ let
 
                 10– 40  money, then the map — Sure, Wealthfolio, Dawarich, AirTrail
                 50– 80  the file cabinet    — Nextcloud, Immich, Notes, Papra
-                90–120  the day             — Calino, BeaverHabits, FreeReps, Ryot
+                90–120  the day             — Calino, FreeReps, Ryot
                 130–160  kept and locked    — Home Assistant, Beszel, Karakeep,
                                               Vaultwarden
                 170–210  making             — Aperture, Wakapi, Reactive Resume,

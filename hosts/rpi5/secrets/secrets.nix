@@ -293,11 +293,6 @@ in
     nsimon-ed25519
     rpi5-host
   ];
-  "beaverhabits-env.age".publicKeys = [
-    nsimon-age
-    nsimon-ed25519
-    rpi5-host
-  ];
   "gramps-web-secret.age".publicKeys = [
     nsimon-age
     nsimon-ed25519

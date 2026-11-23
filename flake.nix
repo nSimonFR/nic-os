@@ -85,7 +85,7 @@
     };
 
     # Hermes Agent (NousResearch/hermes-agent) — Python+Node AI agent, a full
-    # flake carrying its own uv2nix stack (like beaverhabits-nix, we only pin
+    # flake carrying its own uv2nix stack (we only pin
     # nixpkgs; forcing the pyproject/uv2nix inputs to follow breaks the build).
     # The rpi5 Telegram agent (succeeded PicoClaw) — see hosts/rpi5/agents/hermes/hermes.nix.
     # We use only the lean `messaging` package variant.
@@ -163,13 +163,6 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # BeaverHabits habit tracker — Python/NiceGUI, packaged via uv2nix. First
-    # Python native app here; its flake carries the uv2nix stack itself, so we
-    # only pin nixpkgs. See hosts/rpi5/life/beaverhabits.nix.
-    beaverhabits-nix = {
-      url = "github:nSimonFR/beaverhabits-nix";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     # Ryot — self-hosted media & life tracker (IgnisDa/ryot), built from source
     # (container-only upstream, not in nixpkgs). Same pattern as the others.
     # Published at github:nSimonFR/ryot-nix (self-hosted Renovate bumps the version;
@@ -694,7 +687,6 @@
           inputs.airtrail-nix.nixosModules.airtrail
           inputs.reactive-resume-nix.nixosModules.reactive-resume
           inputs.gramps-web-nix.nixosModules.gramps-web
-          inputs.beaverhabits-nix.nixosModules.beaverhabits
           inputs.ryot-nix.nixosModules.ryot
           inputs.immich-clip-filter.nixosModules.default
           {
