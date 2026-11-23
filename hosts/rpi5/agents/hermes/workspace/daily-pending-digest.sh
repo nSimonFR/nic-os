@@ -206,8 +206,11 @@ format_auto_merged() {
   printf 'Auto-merged updates (24 h):\n'
   local since merged
   since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
-  if ! merged=$(gh pr list -R "$RENOVATE_REPO" --state merged --author app/nic-os-renovate \
-    --search "merged:>=$since" --limit 50 --json number,title,url 2>/dev/null); then
+  # By branch, like the notifications above: Renovate adopts PRs other
+  # identities opened (RENOVATE_IGNORE_PR_AUTHOR), so the author would miss them.
+  if ! merged=$(gh pr list -R "$RENOVATE_REPO" --state merged --search "merged:>=$since" --limit 200 \
+    --json number,title,url,headRefName 2>/dev/null |
+    jq -c --arg prefix "$RENOVATE_BRANCH_PREFIX" '[.[] | select(.headRefName | startswith($prefix))]'); then
     printf '• error: could not list merged Renovate PRs\n'
   elif [ "$(jq length <<<"$merged")" -eq 0 ]; then
     printf '• none\n'
