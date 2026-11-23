@@ -62,6 +62,10 @@ in
       security = {
         allow_signup = false;
         oidc_allow_signup = false;
+        # SSO only: password login refused, /login goes to Pocket ID. API-key
+        # heartbeats are unaffected. While Pocket ID is down (sso-off below)
+        # nobody can open the web UI; heartbeats keep landing.
+        disable_local_auth = true;
         insecure_cookies = false;
       };
       # Disable wakapi's built-in scheduled wakatime.com importer.

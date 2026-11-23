@@ -65,6 +65,10 @@ in
       OAUTH_CLIENT_ID = "karakeep";
       OAUTH_PROVIDER_NAME = "Pocket ID";
       OAUTH_ALLOW_DANGEROUS_EMAIL_ACCOUNT_LINKING = "true";
+      # SSO only: the server rejects passwords and /signin goes straight to
+      # Pocket ID. API keys keep working (Hermes MCP); unset to recover.
+      DISABLE_PASSWORD_AUTH = "true";
+      OAUTH_AUTO_REDIRECT = "true";
 
       # ── AI auto-tagging via local inference (tiny-llm-gate → beast Ollama) ──
       OPENAI_API_KEY = "ollama"; # value ignored by tiny-llm-gate

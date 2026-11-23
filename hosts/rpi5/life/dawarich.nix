@@ -106,6 +106,8 @@ in
       OIDC_REDIRECT_URI = "${dawarichUrl}/users/auth/openid_connect/callback";
       OIDC_PROVIDER_NAME = "Pocket ID";
       OIDC_AUTO_REGISTER = "false";
+      # SSO only: web and API password sign-in refused; api_key still works.
+      ALLOW_EMAIL_PASSWORD_LOGIN = "false";
     };
     after = [ "pocket-id-clients.service" ];
     wants = [ "pocket-id-clients.service" ];
