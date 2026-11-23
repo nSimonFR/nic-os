@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { buildServer, makeLogger, search, Upstream } from "./server.mjs";
+import { Allow } from "./allow.mjs";
+import { buildServer, makeLogger, OptimizerUpstream, search, Upstream } from "./server.mjs";
 
 const echo = async (name, input) => ({ name, input });
 
@@ -101,7 +102,7 @@ test("empty console lines are capped too", async () => {
 });
 
 test("excluded tools are hidden and refused", async () => {
-  const up = new Upstream("http://unused", ["mail_send_email"]);
+  const up = new Upstream("http://unused", { exclude: ["mail_send_email"] });
   let listings = 0;
   up.client = async () => ({
     listTools: async () => {
@@ -124,7 +125,7 @@ test("excluded tools are hidden and refused", async () => {
 
 test("execute logs the run and each upstream call", async () => {
   const file = join(mkdtempSync(join(tmpdir(), "codemode-")), "calls.jsonl");
-  const up = new Upstream("http://unused", []);
+  const up = new Upstream("http://unused");
   up.client = async () => ({
     listTools: async () => ({ tools: [{ name: "sure_get_accounts", inputSchema: { type: "object" } }] }),
     callTool: async () => ({ content: [{ type: "text", text: '{"accounts":[1,2]}' }] }),
@@ -157,4 +158,64 @@ test("an existing log file is narrowed to 0600 before writing", () => {
   writeFileSync(file, "", { mode: 0o644 });
   makeLogger(file)({ event: "search", query: "x" });
   assert.equal(statSync(file).mode & 0o777, 0o600);
+});
+
+test("allowlist: globs, action restriction, schema narrowing", () => {
+  const allow = new Allow("srv-logs:search|aggregate, srv-sql_*, srv-get_app");
+  assert.equal(allow.allows("srv-sql_prod"), true);
+  assert.equal(allow.allows("srv-delete_app"), false);
+  assert.doesNotThrow(() => allow.check("srv-logs", { action: "aggregate" }));
+  assert.throws(() => allow.check("srv-logs", { action: "delete" }), /not allowed/);
+  assert.throws(() => allow.check("srv-logs", {}), /not allowed/);
+  assert.throws(() => allow.check("srv-hosts", { action: "list" }), /not allowed/);
+  const schema = { type: "object", properties: { action: { type: "string", enum: ["search", "aggregate", "delete"] } } };
+  assert.deepEqual(allow.narrow("srv-logs", schema).properties.action.enum, ["search", "aggregate"]);
+  assert.equal(new Allow("").rule("anything"), true);
+});
+
+/** A fake vMCP optimizer: find_tool returns every tool, call_tool echoes. */
+function fakeOptimizer(up, calls = []) {
+  const catalog = [
+    { name: "srv-logs", description: "Search logs", inputSchema: { type: "object", properties: { action: { type: "string", enum: ["search", "delete"] } } } },
+    { name: "srv-hosts", description: "Mute hosts", inputSchema: { type: "object" } },
+  ];
+  up.client = async () => ({
+    callTool: async ({ name, arguments: args }) => {
+      calls.push([name, args]);
+      if (name === "find_tool") return { content: [], structuredContent: { tools: catalog } };
+      return { content: [{ type: "text", text: JSON.stringify({ ran: args.tool_name, with: args.parameters }) }] };
+    },
+  });
+  return calls;
+}
+
+test("optimizer: search goes through find_tool and hides disallowed tools", async () => {
+  const up = new OptimizerUpstream("http://unused", { allow: new Allow("srv-logs:search") });
+  const calls = fakeOptimizer(up);
+  const out = await up.searchTools("logs errors", 10);
+  assert.deepEqual(calls[0], ["find_tool", { tool_description: "logs errors", tool_keywords: ["logs", "errors"] }]);
+  assert.match(out, /srv_logs/);
+  assert.doesNotMatch(out, /srv_hosts/);
+  assert.doesNotMatch(out, /"delete"/);
+  assert.match(out, /1 other match\(es\) hidden/);
+});
+
+test("optimizer: codemode calls map to call_tool, refused ones never leave", async () => {
+  const up = new OptimizerUpstream("http://unused", { allow: new Allow("srv-logs:search") });
+  const calls = fakeOptimizer(up);
+  // No prior search: the name is resolved through find_tool.
+  assert.deepEqual(await up.call("srv_logs", { action: "search" }), { ran: "srv-logs", with: { action: "search" } });
+  assert.deepEqual(calls.at(-1), ["call_tool", { tool_name: "srv-logs", parameters: { action: "search" } }]);
+  const before = calls.filter(([n]) => n === "call_tool").length;
+  await assert.rejects(up.call("srv_logs", { action: "delete" }), /not allowed/);
+  await assert.rejects(up.call("srv_hosts", {}), /Unknown or disallowed/);
+  assert.equal(calls.filter(([n]) => n === "call_tool").length, before);
+});
+
+test("a structuredContent that only wraps the text is parsed as text", async () => {
+  const up = new Upstream("http://unused");
+  up.client = async () => ({
+    callTool: async () => ({ content: [{ type: "text", text: '{"a":1}' }], structuredContent: { text: '{"a":1}' } }),
+  });
+  assert.deepEqual(await up.invoke("x", {}), { a: 1 });
 });

@@ -1,5 +1,6 @@
-# Code Mode MCP over Aperture (Cloudflare's @cloudflare/codemode, run in Node): two tools,
-# `search` and `execute`, instead of Aperture's ~400; model code runs in QuickJS (WASM).
+# Code Mode MCP (Cloudflare's @cloudflare/codemode, run in Node): two tools, `search` and
+# `execute`, instead of the upstream's catalog (Aperture's ~400, or a find_tool/call_tool
+# optimizer such as ToolHive's); model code runs in QuickJS (WASM).
 # Deps come from package-lock.json (`npm install --ignore-scripts` to refresh it).
 {
   lib,
@@ -19,6 +20,7 @@ buildNpmPackage {
       ./package-lock.json
       ./server.mjs
       ./sandbox.mjs
+      ./allow.mjs
       ./test.mjs
     ];
   };
@@ -40,7 +42,7 @@ buildNpmPackage {
   installPhase = ''
     runHook preInstall
     mkdir -p $out/lib/aperture-codemode $out/bin
-    cp -r node_modules server.mjs sandbox.mjs package.json $out/lib/aperture-codemode/
+    cp -r node_modules server.mjs sandbox.mjs allow.mjs package.json $out/lib/aperture-codemode/
     makeWrapper ${lib.getExe nodejs_24} $out/bin/aperture-codemode \
       --add-flags $out/lib/aperture-codemode/server.mjs
     runHook postInstall

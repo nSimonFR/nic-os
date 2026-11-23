@@ -39,5 +39,10 @@ in
   };
 
   home.file.".local/libexec/mcp-env".source = mcpEnv;
-  home.packages = [ apertureCodemode ];
+  home.packages = [
+    apertureCodemode
+    # The same server with no upstream baked in, for configs outside this repo that set
+    # CODEMODE_MCP_URL / CODEMODE_UPSTREAM / CODEMODE_ALLOW themselves.
+    (pkgs.writeShellScriptBin "codemode-mcp" ''exec ${lib.getExe pkgs.aperture-codemode} "$@"'')
+  ];
 }
