@@ -6,11 +6,13 @@ language: en-US
 reviews:
   profile: chill
   # Requests changes on blocking findings; approves once they are resolved and
-  # its risk assessment of the latest commit is low on both axes.
+  # its merge risk for the latest commit is low. No max_security_risk: the
+  # security architecture review often does not run on a commit (even small
+  # one-commit PRs), and the limit then withholds approval as "Unavailable".
+  # Sensitive paths still need Nico through .github/scripts/review_gate.py.
   auto_approvals:
     enabled: true
     max_merge_risk: low
-    max_security_risk: low
     # Agents author the PRs: they must not `@coderabbitai approve` their own.
     allow_author_approval: false
     # Protected paths are refused by .github/scripts/review_gate.py, the only list.
