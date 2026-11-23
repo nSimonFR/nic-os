@@ -4,9 +4,6 @@ let
     inherit (pkgs.stdenv.hostPlatform) system;
     config.allowUnfree = true;
   };
-in
-{
-  enable = true;
   # macOS 27 changed Dock internals used by the scripting addition (#2822), and
   # upstream's payload still refuses macOS 27. AhsanFazal's fork (a small,
   # SA-focused diff; macOS 27.2 offsets and space moves) is the one cited as
@@ -22,6 +19,10 @@ in
       hash = "sha256-berfA3vYih1YuCCSBEvpocCn2EPj+ZpftPmsE65ILWo=";
     };
   };
+in
+{
+  enable = true;
+  inherit package;
   enableScriptingAddition = true;
   config = {
     layout = "stack";
@@ -52,5 +53,13 @@ in
     #window_gap = 10;
     #external_bar = "all:0:0";
   };
-  extraConfig = builtins.readFile ../dotfiles/yabairc;
+  # The scripting addition lives inside Dock and dies with it, and a rebuild
+  # restarts Dock (dock defaults) after the yabai-sa daemon has loaded it.
+  # Reload it when yabai starts and on every Dock restart; the full store path
+  # matches the module's NOPASSWD sudoers rule.
+  extraConfig = ''
+    yabai -m signal --add event=dock_did_restart action="sudo ${package}/bin/yabai --load-sa"
+    sudo ${package}/bin/yabai --load-sa
+  ''
+  + builtins.readFile ../dotfiles/yabairc;
 }
