@@ -215,7 +215,10 @@ format_auto_merged() {
 
   printf '\nFailed units on rpi5:\n'
   local failed
-  failed=$({ systemctl --failed --no-legend --plain 2>/dev/null; systemctl --user --failed --no-legend --plain 2>/dev/null; } |
+  failed=$({
+    systemctl --failed --no-legend --plain 2>/dev/null
+    systemctl --user --failed --no-legend --plain 2>/dev/null
+  } |
     awk '{print $1}' | sort -u)
   if [ -z "$failed" ]; then
     printf '• none\n'
