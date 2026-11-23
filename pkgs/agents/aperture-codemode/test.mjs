@@ -50,6 +50,12 @@ test("stops a busy loop", async () => {
   assert.match(r.error, /interrupted/i);
 });
 
+test("deep recursion is a sandbox error, not a host crash", async () => {
+  const r = await runSandbox(`async () => { const f = (n) => f(n + 1) + 1; return f(0); }`, echo);
+  assert.match(r.error, /stack overflow/);
+  assert.equal((await runSandbox(`async () => 1`, echo)).result, 1);
+});
+
 test("stops a hung tool call", async () => {
   const r = await runSandbox(`async () => codemode.slow({})`, () => new Promise(() => {}), {
     timeoutMs: 300,

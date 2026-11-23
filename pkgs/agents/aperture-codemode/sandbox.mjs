@@ -33,7 +33,9 @@ export async function runSandbox(fn, call, { timeoutMs = 120_000, memoryBytes = 
   const deadline = Date.now() + timeoutMs;
   const rt = QJS.newRuntime();
   rt.setMemoryLimit(memoryBytes);
-  rt.setMaxStackSize(1 << 20);
+  // QuickJS recurses in C on V8's native stack: above ~360 KB, deep JS recursion overflows
+  // V8 first and the runtime can't be freed. 256 KB is ~1300 JS frames.
+  rt.setMaxStackSize(256 << 10);
   let sliceEnd = Infinity;
   rt.setInterruptHandler(() => Date.now() > Math.min(deadline, sliceEnd));
   const vm = rt.newContext();
