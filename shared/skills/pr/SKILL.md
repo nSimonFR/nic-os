@@ -26,8 +26,8 @@ Args: nothing (current branch), or a PR number/URL to start at step 4.
      PR is still OPEN, push, reply under the thread. On nic-os never resolve its threads.
    - A red check: step 5. Your diff: fix and push. Environmental: a blocker, report it.
    - "Automatic approval withheld" with "Security architecture risk: Unavailable for this
-     commit" (only in repos whose `.coderabbit.yaml` sets `max_security_risk`; nic-os doesn't):
-     its security pass skipped the head. Comment
+     commit" (only where a security-risk limit applies, from `.coderabbit.yaml` or inherited:
+     its "Automatic approval policy" table lists it): its security pass skipped the head. Comment
      `@coderabbitai full review` once per head, never `approve`, and wait until that review is
      done: it submits a review on the head after your request, or its summary comment, updated
      after the request, no longer says "Currently processing" and names the head's
