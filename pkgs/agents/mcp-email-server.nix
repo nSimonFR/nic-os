@@ -10,13 +10,13 @@ in
 python3Packages.buildPythonApplication rec {
   pname = "mcp-email-server";
   # renovate: datasource=pypi depName=mcp-email-server
-  version = "1.14.0";
+  version = "1.15.0";
   pyproject = true;
 
   src = python3Packages.fetchPypi {
     pname = "mcp_email_server";
     inherit version;
-    hash = "sha256-3z3rjQZF2W2MAxY95pUUy4TPp2DajgCyZC++4eJ2Amo=";
+    hash = "sha256-ycuAbHPJ+AJ6JqtIqoHgbrzSwC/g4HNqjLAHXGsOVgM=";
   };
 
   # nixpkgs trails upstream's floors (filelock 3.20 vs >=3.32); no API it uses changed.
