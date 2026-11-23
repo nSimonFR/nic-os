@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { runSandbox } from "./sandbox.mjs";
-import { search } from "./server.mjs";
+import { search, Upstream } from "./server.mjs";
 
 const echo = async (name, input) => ({ name, input });
 
@@ -68,4 +68,39 @@ test("search ranks by name and returns declarations", () => {
   assert.doesNotMatch(out, /mail_list_emails/);
   assert.match(out, /1 more matches/);
   assert.match(search(tools, ""), /sure \(2\), mail \(1\)/);
+});
+
+test("a busy loop in a pending job is cut, and the next run still works", async () => {
+  const r = await runSandbox(`async () => { await codemode.x({}); while (true) {} }`, echo, {
+    timeoutMs: 300,
+  });
+  assert.match(r.error, /interrupted/i);
+  assert.equal((await runSandbox(`async () => 1`, echo)).result, 1);
+});
+
+test("console output is capped", async () => {
+  const r = await runSandbox(`async () => { for (let i = 0; i < 100; i++) console.log("x".repeat(1000)); }`, echo);
+  assert.ok(r.logs.join("").length < 25_000);
+});
+
+test("excluded tools are hidden and refused", async () => {
+  const up = new Upstream("http://unused", ["mail_send_email"]);
+  let listings = 0;
+  up.client = async () => ({
+    listTools: async () => {
+      listings++;
+      return {
+        tools: [
+          { name: "mail_send_email", description: "Send an email", inputSchema: { type: "object" } },
+          { name: "mail_list_emails", description: "List emails", inputSchema: { type: "object" } },
+        ],
+      };
+    },
+    callTool: async ({ name }) => ({ content: [{ type: "text", text: JSON.stringify({ name }) }] }),
+  });
+  await Promise.all([up.tools(), up.tools()]);
+  assert.equal(listings, 1);
+  await assert.rejects(up.call("mail_send_email", {}), /Unknown tool/);
+  assert.doesNotMatch(search(await up.tools(), "send email"), /mail_send_email/);
+  assert.deepEqual(await up.call("mail_list_emails", {}), { name: "mail_list_emails" });
 });

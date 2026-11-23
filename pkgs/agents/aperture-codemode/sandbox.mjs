@@ -18,6 +18,10 @@ const console = {
 `;
 
 const QJS = await newQuickJSWASMModuleFromVariant(releaseSync);
+// QuickJS runs on Node's main thread: cap each synchronous slice so a busy loop
+// can't stall other calls for the whole deadline.
+const SLICE_MS = 5_000;
+const MAX_LOG_CHARS = 20_000;
 
 /**
  * @param {string} fn  an async arrow function's source (normalizeCode output)
@@ -30,11 +34,15 @@ export async function runSandbox(fn, call, { timeoutMs = 120_000, memoryBytes = 
   const rt = QJS.newRuntime();
   rt.setMemoryLimit(memoryBytes);
   rt.setMaxStackSize(1 << 20);
-  rt.setInterruptHandler(() => Date.now() > deadline);
+  let sliceEnd = Infinity;
+  rt.setInterruptHandler(() => Date.now() > Math.min(deadline, sliceEnd));
   const vm = rt.newContext();
   const deferreds = new Set();
   const pump = () => {
-    if (rt.alive) rt.executePendingJobs();
+    if (!rt.alive) return;
+    sliceEnd = Date.now() + SLICE_MS;
+    const r = rt.executePendingJobs();
+    if (r.error) r.error.dispose();
   };
   let timer;
 
@@ -64,17 +72,23 @@ export async function runSandbox(fn, call, { timeoutMs = 120_000, memoryBytes = 
           deferreds.delete(d);
           if (d.alive) d.dispose();
           pump();
-        });
+        })
+        .catch((e) => console.error("aperture-codemode: host call failed:", e));
       return d.handle;
     });
     vm.setProp(vm.global, "__call", callFn);
     callFn.dispose();
+    let logChars = 0;
     const logFn = vm.newFunction("__log", (h) => {
-      logs.push(vm.getString(h));
+      if (logChars > MAX_LOG_CHARS) return;
+      const line = vm.getString(h);
+      logChars += line.length;
+      logs.push(logChars > MAX_LOG_CHARS ? `${line.slice(0, 1000)}… (console output cut)` : line);
     });
     vm.setProp(vm.global, "__log", logFn);
     logFn.dispose();
 
+    sliceEnd = Date.now() + SLICE_MS;
     const evaluated = vm.evalCode(
       `${PRELUDE}\n(${fn})().then((v) => JSON.stringify(v === undefined ? null : v));`,
       "code.js",
@@ -104,12 +118,13 @@ export async function runSandbox(fn, call, { timeoutMs = 120_000, memoryBytes = 
   } finally {
     clearTimeout(timer);
     for (const d of deferreds) if (d.alive) d.dispose();
+    // A run cut short can leave handles QuickJS refuses to free; the next run gets a new runtime.
     try {
       vm.dispose();
+    } catch {}
+    try {
       rt.dispose();
-    } catch {
-      // A run cut short can leave handles QuickJS refuses to free; the next run gets a new runtime.
-    }
+    } catch {}
   }
 }
 
