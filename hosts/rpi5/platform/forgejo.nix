@@ -215,19 +215,24 @@ in
           --auto-discover-url ${config.nic.sso.issuer}/.well-known/openid-configuration \
           --scopes email --scopes profile
       fi
-      # Quoted heredoc: psql itself runs the backquoted cat.
-      updated=$(q <<'EOF'
+      # Quoted heredocs: psql itself runs the backquoted cat. The restart
+      # marker is created before the update commits, so an interrupted run
+      # can't apply the secret without leaving a pending restart.
+      stale=$(q <<'EOF'
+      \set s `cat "$CREDENTIALS_DIRECTORY/oidc"`
+      SELECT 1 FROM login_source
+        WHERE name = 'pocket-id' AND cfg::jsonb->>'ClientSecret' IS DISTINCT FROM :'s';
+      EOF
+      )
+      [ -n "$stale" ] || exit 0
+      touch "$STATE_DIRECTORY/restart-pending"
+      q <<'EOF'
       \set s `cat "$CREDENTIALS_DIRECTORY/oidc"`
       UPDATE login_source
         SET cfg = jsonb_set(cfg::jsonb, '{ClientSecret}', to_jsonb(:'s'::text))::text
-        WHERE name = 'pocket-id' AND cfg::jsonb->>'ClientSecret' IS DISTINCT FROM :'s'
-        RETURNING id;
+        WHERE name = 'pocket-id';
       EOF
-      )
-      if [ -n "$updated" ]; then
-        echo "forgejo-sso: client secret updated"
-        touch "$STATE_DIRECTORY/restart-pending"
-      fi
+      echo "forgejo-sso: client secret updated"
     '';
   };
 
