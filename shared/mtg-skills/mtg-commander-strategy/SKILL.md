@@ -29,11 +29,11 @@ Do not use for deck construction, upgrades, validation, or collection filtering;
 
 ## Workflow
 
-1. **Acquire and verify the list.** Fetch the supplied public deck with `mcp__aperture__mtg_get_moxfield_deck` or `mcp__aperture__mtg_get_archidekt_deck`. Confirm name, format, commander(s), command zone, and mainboard before analysing. If the commander is not clear, ask; never infer it from the first listed card.
+1. **Acquire and verify the list.** Fetch the supplied public deck with `codemode.mtg_get_moxfield_deck` or `codemode.mtg_get_archidekt_deck`. Confirm name, format, commander(s), command zone, and mainboard before analysing. If the commander is not clear, ask; never infer it from the first listed card.
 2. **Establish the play context.** Use the stated Commander bracket/power target. If absent, state that the guide assumes ordinary casual multiplayer rather than claiming a precise bracket.
 3. **Ground card claims.** Retrieve exact Oracle text for the commander and every card used in a specific line or interaction. Do not rely on memory for card behavior.
 4. **Map the deck.** Identify primary plan, secondary plan, ramp, card advantage, interaction, protection, recursion, finishers, and cards that must be kept alive. Verify each category against the actual list.
-5. **Check interactions.** For every non-obvious mechanical or rules claim, retrieve exact Oracle text with `mcp__aperture__mtg_get_card_details`, published rulings where useful with `mcp__aperture__mtg_get_card_rulings`, then decisive Comprehensive Rules evidence (`mcp__aperture__mtg_get_rule`; or `mcp__aperture__mtg_search_rules` then `get_rule`; use `mcp__aperture__mtg_get_glossary_term` for a keyword). Give only the concise verdict/citation; if evidence is unavailable, say so.
+5. **Check interactions.** For every non-obvious mechanical or rules claim, retrieve exact Oracle text with `codemode.mtg_get_card_details`, published rulings where useful with `codemode.mtg_get_card_rulings`, then decisive Comprehensive Rules evidence (`codemode.mtg_get_rule`; or `codemode.mtg_search_rules` then `get_rule`; use `codemode.mtg_get_glossary_term` for a keyword). Give only the concise verdict/citation; if evidence is unavailable, say so.
 6. **Write the primer.** Include the sections below. A section may be brief when inapplicable, but do not fabricate a combo, politics plan, or backup win condition.
 7. **Quality gate.** Re-check that every named card is in the deck, every non-obvious mechanical claim has evidence, and the output contains no upgrade recommendations.
 

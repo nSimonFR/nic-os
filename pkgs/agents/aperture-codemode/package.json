@@ -1,0 +1,16 @@
+{
+  "name": "aperture-codemode",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "aperture-codemode": "server.mjs"
+  },
+  "dependencies": {
+    "@cloudflare/codemode": "0.5.6",
+    "@modelcontextprotocol/sdk": "^1.25.0",
+    "zod": "^4.1.8",
+    "quickjs-emscripten-core": "^0.31.0",
+    "@jitl/quickjs-wasmfile-release-sync": "^0.31.0"
+  }
+}

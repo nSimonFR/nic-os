@@ -224,6 +224,8 @@ let
   # Interpreter for the job-offer collector scripts of the digest cron jobs.
   jobScoutPython = pkgs.callPackage ../../../../pkgs/agents/job-scout-python.nix { };
 
+  apertureCodemode = pkgs.callPackage ../../../../pkgs/agents/aperture-codemode { };
+
   hermesConfig = {
     # A dict-form `model` with provider=custom is how hermes 0.19 selects a
     # user-defined OpenAI-compatible endpoint (see header note).
@@ -256,13 +258,17 @@ let
       "openai-codex"
     ];
 
-    # Every MCP server but T3, aggregated by Aperture (agents/aperture-sync.nix) as
-    # mcp__aperture__<connector>_<tool>. Listing the tools wakes the socket-activated
-    # ones, and a cold Sure took 14s to >30s.
+    # Every MCP server but T3, aggregated by Aperture (agents/aperture-sync.nix), behind
+    # Code Mode: `search` returns the types of codemode.<connector>_<tool>, `execute`
+    # runs code calling them. The full listing was 415 tools / 513 KB of context.
+    # Listing the tools wakes the socket-activated ones (cold Sure: 14s to >30s).
     mcp_servers.aperture = {
-      url = "${apertureUrl}/v1/mcp";
+      command = lib.getExe apertureCodemode;
+      env = {
+        APERTURE_MCP_URL = "${apertureUrl}/v1/mcp";
+        CODEMODE_EXCLUDE = lib.concatStringsSep "," apertureSendTools;
+      };
       connect_timeout = 120;
-      tools.exclude = apertureSendTools;
     };
     # The same gateway, holding only apertureSendTools: `untrusted` asks him
     # on Telegram before each call.
