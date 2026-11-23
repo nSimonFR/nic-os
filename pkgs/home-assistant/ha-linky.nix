@@ -15,7 +15,7 @@
 buildNpmPackage rec {
   pname = "ha-linky";
   # renovate: datasource=github-releases depName=bokub/ha-linky
-  version = "1.8.0";
+  version = "1.9.0";
   src = fetchFromGitHub {
     # Version in the name so a stale `hash` fails loudly.
     # See "Fixed-output names" in pkgs/README.md.
@@ -23,9 +23,9 @@ buildNpmPackage rec {
     owner = "bokub";
     repo = "ha-linky";
     rev = version;
-    hash = "sha256-4hQ5bQ2CxlSDLw4yxakOpnij2gJ0FSyH8OWjX4iCkOE=";
+    hash = "sha256-i6RqhzlzUXWZ2kbVEgNf6KbxwyLQHC4qIP4PQo8RH1A=";
   };
-  npmDepsHash = "sha256-j8q0ouD9BSnQ3Yb2tsn+tON+YXh30fynnlDtNbtiVyQ=";
+  npmDepsHash = "sha256-ErFaImwJUCVJv2fIf/aUkIDpwy40UcOuGVNh80nrlaU=";
   # npm run build = tsc → dist/
   # Skip the default `npm install -g` install phase; we install manually.
   dontNpmInstall = true;
