@@ -21,7 +21,16 @@ let
   # Pocket ID login (hass-oidc-auth), from HA's own tree for the same ABI.
   # Configured in YAML (oidcInclude below), not the UI: public client
   # `home-assistant` with PKCE. Local login stays as the fallback.
-  haAuthOidc = pkgs.hassPkgs.home-assistant-custom-components.auth_oidc;
+  # Patched to refuse a login that matches no existing HA user: 1.2.1 has no
+  # require-existing-user option and otherwise creates a fresh account (an admin
+  # one, for the Pocket ID `admins` group) when `ha_username` is missing or wrong.
+  haAuthOidc = pkgs.hassPkgs.home-assistant-custom-components.auth_oidc.overrideAttrs (old: {
+    postPatch = (old.postPatch or "") + ''
+      substituteInPlace custom_components/auth_oidc/provider.py --replace-fail \
+        $'        # If the credential is new, HA will automatically create a new user for us\n        return credential' \
+        $'        # nic-os: only existing HA users may log in; never auto-create one.\n        if credential.is_new:\n            raise InvalidAuthError("No Home Assistant user matches this login")\n        return credential'
+    '';
+  });
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
   # configuration.yaml. Kept as a writeText file so the activation script can
@@ -196,8 +205,14 @@ in
     # HA migrated the YAML `http:` block (loopback bind, X-Forwarded-For from
     # 127.0.0.1) into its UI storage and ignores it; it stops loading in 2027.2.
     # Drop the block, up to the next top-level key.
-    if [ -e "$cfg" ] && grep -q '^http:' "$cfg"; then
-      ${pkgs.gawk}/bin/awk '/^http:/{skip=1; next} skip && /^[^[:space:]#]/{skip=0} !skip' "$cfg" > "$cfg.tmp"
+    # Only once HA's own store holds the migrated proxy settings: dropping the
+    # YAML before that (e.g. a restored pre-migration backup) would leave HA
+    # without use_x_forwarded_for, and every proxied request would get a 400.
+    # A top-level comment (the next block's marker) ends the skip too.
+    if [ -e "$cfg" ] && grep -q '^http:' "$cfg" \
+      && ${pkgs.jq}/bin/jq -e '.data.yaml_migration_done == true and .data.stable.use_x_forwarded_for == true' \
+        /var/lib/hass/.storage/http >/dev/null 2>&1; then
+      ${pkgs.gawk}/bin/awk '/^http:/{skip=1; next} skip && /^[^[:space:]]/{skip=0} !skip' "$cfg" > "$cfg.tmp"
       chown hass:hass "$cfg.tmp"
       mv "$cfg.tmp" "$cfg"
     fi
