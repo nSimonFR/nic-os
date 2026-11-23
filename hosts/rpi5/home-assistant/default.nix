@@ -52,6 +52,17 @@ let
   # attaches a login to the local HA user whose username equals the
   # `ha_username` custom claim, set per user in the Pocket ID admin UI (Nico's HA
   # username differs from his Pocket ID one). A user without it cannot log in.
+  # Drops the previous managed auth_oidc block (marker, key, indented lines and
+  # the blank lines before the marker) so the current one can be appended.
+  oidcStrip = pkgs.writeText "nic-os-auth-oidc-strip.awk" ''
+    /^[[:space:]]*$/ { if (!skip) blank = blank $0 "\n"; next }
+    /^# nic-os-managed: auth_oidc$/ { skip = 1; blank = ""; next }
+    skip && /^auth_oidc:/ { next }
+    skip && /^[^[:space:]]/ { skip = 0 }
+    skip { next }
+    { printf "%s", blank; blank = ""; print }
+  '';
+
   oidcInclude = pkgs.writeText "nic-os-auth-oidc.yaml" ''
 
     # nic-os-managed: auth_oidc
@@ -191,12 +202,20 @@ in
       mv "$cfg.tmp" "$cfg"
     fi
 
-    if [ -e "$cfg" ] && ! grep -q 'nic-os-managed: auth_oidc' "$cfg"; then
-      if grep -Eq '^auth_oidc:' "$cfg"; then
+    # Rewritten on every activation (unlike the append-once blocks above), so a
+    # change to oidcInclude reaches the file before restartTriggers restarts HA.
+    if [ -e "$cfg" ]; then
+      if ! grep -q 'nic-os-managed: auth_oidc' "$cfg" && grep -Eq '^auth_oidc:' "$cfg"; then
         echo "hass: existing 'auth_oidc:' key in configuration.yaml; skipping managed block" >&2
       else
-        cat ${oidcInclude} >> "$cfg"
-        chown hass:hass "$cfg"
+        ${pkgs.gawk}/bin/awk -f ${oidcStrip} "$cfg" > "$cfg.tmp"
+        cat ${oidcInclude} >> "$cfg.tmp"
+        if cmp -s "$cfg" "$cfg.tmp"; then
+          rm -f "$cfg.tmp"
+        else
+          chown hass:hass "$cfg.tmp"
+          mv "$cfg.tmp" "$cfg"
+        fi
       fi
     fi
   '';
