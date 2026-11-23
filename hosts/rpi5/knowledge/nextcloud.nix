@@ -203,6 +203,12 @@ in
       overwritewebroot = "/nextcloud";
       overwritecondaddr = "^127\\.0\\.0\\.1$";
 
+      # user_oidc fetches Pocket ID's discovery and token endpoints from the
+      # tailnet name, which resolves to rpi5's own 100.x address; Nextcloud's
+      # HTTP client refuses local ranges (incl. CGNAT 100.64/10) by default,
+      # so login failed with "Could not reach the OpenID Connect provider".
+      allow_local_remote_servers = true;
+
       # Default phone region for unparsed numbers in addressbooks (Contacts app
       # warning otherwise).
       default_phone_region = "FR";
