@@ -182,6 +182,15 @@ in
       chown hass:hass "$cfg"
     fi
 
+    # HA migrated the YAML `http:` block (loopback bind, X-Forwarded-For from
+    # 127.0.0.1) into its UI storage and ignores it; it stops loading in 2027.2.
+    # Drop the block, up to the next top-level key.
+    if [ -e "$cfg" ] && grep -q '^http:' "$cfg"; then
+      ${pkgs.gawk}/bin/awk '/^http:/{skip=1; next} skip && /^[^[:space:]#]/{skip=0} !skip' "$cfg" > "$cfg.tmp"
+      chown hass:hass "$cfg.tmp"
+      mv "$cfg.tmp" "$cfg"
+    fi
+
     if [ -e "$cfg" ] && ! grep -q 'nic-os-managed: auth_oidc' "$cfg"; then
       if grep -Eq '^auth_oidc:' "$cfg"; then
         echo "hass: existing 'auth_oidc:' key in configuration.yaml; skipping managed block" >&2
