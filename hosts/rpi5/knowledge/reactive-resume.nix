@@ -75,8 +75,6 @@ in
     description = "Generate Reactive Resume environment file with secrets";
     wantedBy = [ "multi-user.target" ];
     before = [ "reactive-resume.service" ];
-    after = [ "pocket-id-clients.service" ];
-    wants = [ "pocket-id-clients.service" ];
     restartTriggers = [
       config.age.secrets.reactive-resume-db-password.file
       config.age.secrets.reactive-resume-auth-secret.file
@@ -96,10 +94,6 @@ in
       AUTH_SECRET=$auth_secret
       ENCRYPTION_SECRET=$encryption_secret
       ENVEOF
-      # Without the secret the Pocket ID button stays hidden (password-only).
-      if [ -r ${sso.secretFile} ]; then
-        echo "OAUTH_CLIENT_SECRET=$(cat ${sso.secretFile})" >> ${envFile}
-      fi
       chmod 0400 ${envFile}
     '';
   };
@@ -128,8 +122,10 @@ in
       TRUSTED_PROXIES = "127.0.0.1";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
-      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); the secret is
-      # appended by reactive-resume-env. Discovery runs at sign-in, not at boot.
+      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). The secret
+      # comes from the optional sso.envFile below, read on every start (each
+      # wake from idle sleep), so a late secret is picked up on the next wake.
+      # Discovery runs at sign-in, not at boot.
       # Links by email only when the local account's email is verified.
       OAUTH_PROVIDER_NAME = "Pocket ID";
       OAUTH_CLIENT_ID = "reactive-resume";
@@ -167,6 +163,13 @@ in
     after = [
       "reactive-resume-pg-setup.service"
       "reactive-resume-env.service"
+      "pocket-id-clients.service"
+    ];
+    wants = [ "pocket-id-clients.service" ];
+    # Optional Pocket ID secret, re-read on every start (see OAUTH_* above).
+    serviceConfig.EnvironmentFile = lib.mkForce [
+      envFile
+      "-${sso.envFile}"
     ];
     requires = [
       "reactive-resume-pg-setup.service"
@@ -183,7 +186,8 @@ in
     name = "Reactive Resume";
     callbackUrls = [ "${appUrl}/api/auth/callback/custom" ];
     launchUrl = appUrl;
-    secretGroup = "root"; # read by reactive-resume-env (root)
+    secretGroup = "root"; # read by systemd (EnvironmentFile)
+    envVar = "OAUTH_CLIENT_SECRET";
   };
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ────────────
