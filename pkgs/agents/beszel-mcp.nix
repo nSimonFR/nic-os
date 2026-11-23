@@ -13,6 +13,7 @@
 let
   pname = "beszel-mcp";
   version = "0.1.0-unstable-2026-08-28";
+  # no-renovate: upstream has no tags or releases; a bump also needs the node_modules hash
   src = fetchFromGitHub {
     owner = "maxbth";
     repo = "beszel-mcp";
