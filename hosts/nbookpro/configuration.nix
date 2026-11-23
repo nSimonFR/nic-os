@@ -54,6 +54,14 @@
     options = "--delete-older-than 14d";
   };
   nix.optimise.automatic = true;
+  # GC on free space too, as on rpi5: when the disk drops below 15 GiB during a
+  # build or substitution, the daemon collects dead paths until 30 GiB are free.
+  # The weekly nix.gc alone let the disk hit 2.9 GB free on 2026-11-23 (one
+  # user-level GC then freed 14 GiB of dead paths).
+  nix.settings = {
+    min-free = 15 * 1024 * 1024 * 1024;
+    max-free = 30 * 1024 * 1024 * 1024;
+  };
 
   networking = {
     hostName = hostname;
