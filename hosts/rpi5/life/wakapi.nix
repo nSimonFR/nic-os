@@ -25,7 +25,6 @@ in
     environmentFiles = [
       "/run/agenix/wakapi-password-salt"
       "/run/agenix/wakapi-smtp-env"
-      "-${config.nic.sso.clients.wakapi.envFile}" # WAKAPI_OIDC_PROVIDERS_0_CLIENT_SECRET
     ];
     settings = {
       server = {
@@ -81,6 +80,11 @@ in
     wants = [
       "hydroxide.service"
       "pocket-id-clients.service"
+    ];
+    # Optional ("-"), so Wakapi still starts password-only without it; the
+    # module's environmentFiles only takes plain paths.
+    serviceConfig.EnvironmentFile = [
+      "-${config.nic.sso.clients.wakapi.envFile}" # WAKAPI_OIDC_PROVIDERS_0_CLIENT_SECRET
     ];
     # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). The whole
     # provider comes from env (Wakapi's documented form), so the secret from
