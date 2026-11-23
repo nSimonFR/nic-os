@@ -205,7 +205,7 @@ in
 
   nic.sso.clients.ryot = {
     name = "Ryot";
-    callbackUrls = [ "${publicUrl}/api/auth/oauth2/callback/oidc" ];
+    callbackUrls = [ "${publicUrl}/api/auth/callback/oidc" ]; # the redirect_uri V11 sends
     launchUrl = publicUrl;
     secretGroup = "root"; # read by the root ExecStartPre (writeEnv)
   };
