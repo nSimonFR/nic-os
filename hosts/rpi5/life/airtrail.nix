@@ -62,8 +62,10 @@ in
       OAUTH_SCOPE = "openid profile email";
       OAUTH_AUTO_REGISTER = "false";
       OAUTH_BUTTON_TEXT = "Log in with Pocket ID";
-      # SSO only in the UI (`/login?autoLogin=false` shows the form again).
-      # AirTrail's POST /api/users/login still takes a password: UI-only knob.
+      # SSO only in the UI. To log in with the password while Pocket ID is
+      # down, set OAUTH_HIDE_PASSWORD_FORM = "false" and redeploy
+      # (`/login?autoLogin=false` only stops the redirect). AirTrail's POST
+      # /api/users/login still takes a password: these knobs are UI only.
       OAUTH_HIDE_PASSWORD_FORM = "true";
       OAUTH_AUTO_LOGIN = "true";
     };
