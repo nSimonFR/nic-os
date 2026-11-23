@@ -38,9 +38,14 @@ jobs:
   gate:
     runs-on: ubuntu-latest
     # A review signal counts only when its job ran; a comment only on a PR.
+    # Renovate's own new heads are skipped: this run's check lands on the head,
+    # and a queued run another replaces ends `cancelled`, which Renovate counts
+    # as red and so never automerges. Skipped counts as green. Renovate gets no
+    # status until Nico approves anyway, and the other triggers still sweep it.
     if: >-
       (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success') &&
-      (github.event_name != 'issue_comment' || github.event.issue.pull_request)
+      (github.event_name != 'issue_comment' || github.event.issue.pull_request) &&
+      (github.event_name != 'pull_request_target' || github.event.pull_request.user.login != 'nic-os-renovate[bot]')
     # Never cancel a running gate. A queued run that a newer one replaces loses
     # nothing: every run sweeps all open PRs.
     concurrency:
