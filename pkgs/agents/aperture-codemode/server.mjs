@@ -51,6 +51,13 @@ export class Upstream {
   /** @returns {Promise<Map<string, object>>} sanitized name → upstream tool */
   async tools() {
     if (this.cache && Date.now() - this.cache.at < TOOLS_TTL_MS) return this.cache.tools;
+    this.listing ??= this.list().finally(() => {
+      this.listing = null;
+    });
+    return this.listing;
+  }
+
+  async list() {
     const client = await this.client();
     const tools = new Map();
     let cursor;
