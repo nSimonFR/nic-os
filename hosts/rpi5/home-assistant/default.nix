@@ -62,7 +62,10 @@ let
   # carries `admins`, which auth_oidc maps to the HA admin role. User linking
   # attaches a login to the local HA user whose username equals the
   # `ha_username` custom claim, set per user in the Pocket ID admin UI (Nico's HA
-  # username differs from his Pocket ID one). A user without it cannot log in.
+  # username differs from his Pocket ID one). The claim only matters for the
+  # first login: it links the Pocket ID subject to that HA user, and later logins
+  # are matched by subject (the stable OIDC identity), with or without the claim.
+  # A first login without a matching claim is refused (auth-oidc patch above).
   # Drops the migrated `http:` mapping: its indented settings go, top-level
   # comments (e.g. the next block's marker) are kept, and the skip ends at the
   # next top-level key.
