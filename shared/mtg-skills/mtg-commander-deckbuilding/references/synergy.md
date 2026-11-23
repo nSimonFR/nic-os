@@ -4,9 +4,9 @@ Use this when selecting themed adds. Structural slots—lands, generic ramp, bro
 
 ## Loop: read → extract → search → intersect → score
 
-1. Retrieve exact Oracle text/type for the commander and relevant engine cards with `mcp__aperture__mtg_get_card_details`.
+1. Retrieve exact Oracle text/type for the commander and relevant engine cards with `codemode.mtg_get_card_details`.
 2. Extract the deck’s actionable vocabulary: triggers, conditions, actions, types, keywords, and board axes. Examples: dies, sacrifice, tokens, ETB, artifacts, +1/+1 counters, recursion, lifegain.
-3. Search Commander-legal candidates with `mcp__aperture__mtg_search_cards`. Use precise Scryfall syntax and `id<=<identity>`—not `c:`—for color-identity filtering. Combine relevant Oracle/type/keyword terms to find intersections.
+3. Search Commander-legal candidates with `codemode.mtg_search_cards`. Use precise Scryfall syntax and `id<=<identity>`—not `c:`—for color-identity filtering. Combine relevant Oracle/type/keyword terms to find intersections.
 4. Read shortlisted candidates’ exact details. Count distinct points of contact:
    - +1 for each deck-vocabulary element it supports;
    - +1 when it materially improves a specific existing engine/card.
