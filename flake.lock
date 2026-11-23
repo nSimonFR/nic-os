@@ -1851,11 +1851,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1793640039,
-        "narHash": "sha256-jOGU0KHy2rszKAAelPd3TkIYc0kMJdwDl5aZQQFKAsc=",
+        "lastModified": 1795440224,
+        "narHash": "sha256-PcabC/2foxOGiAhf8gZnFv6kGuVcdHpnYXb9GmgcnLY=",
         "owner": "nSimonFR",
         "repo": "sure-nix",
-        "rev": "9e218d9ea0ddf68431c5ee8f0e4f1d03e7af2f58",
+        "rev": "d908747196039fbcb53db58dc2c129eab96af81d",
         "type": "github"
       },
       "original": {
