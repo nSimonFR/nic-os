@@ -4,9 +4,9 @@
 # subcommands, which is exactly the interface Cyrus's browser-use prompt addendum
 # tells the agent to call (hosts/rpi5/agents/cyrus.nix, `enableBrowserUse`).
 #
-# Why the npm tarball and not buildNpmPackage: the package has ZERO runtime
-# dependencies — the registry tarball is just a bag of prebuilt per-platform
-# binaries plus a JS launcher that picks one. There is no dependency tree to
+# Why the npm tarballs and not buildNpmPackage: the package has no JS runtime
+# dependencies — only optional per-platform packages, each holding one
+# prebuilt binary, plus a JS launcher that picks one. There is nothing to
 # lock, so `fetchurl` + pick-our-platform is the whole build. (The upstream
 # `postinstall` downloads a *Chrome for Testing* build too; we skip that — it's
 # a generic dynamically-linked ELF that cannot run on NixOS. We pass nixpkgs'
@@ -30,33 +30,30 @@
 }:
 let
   # renovate: datasource=npm depName=agent-browser
-  version = "0.34.0";
-
-  # The tarball ships one binary per platform under bin/. Map the Nix system
-  # onto upstream's naming; glibc only (the musl variants are for Alpine).
-  binaries = {
-    "aarch64-linux" = "agent-browser-linux-arm64";
-    "x86_64-linux" = "agent-browser-linux-x64";
-    "aarch64-darwin" = "agent-browser-darwin-arm64";
-    "x86_64-darwin" = "agent-browser-darwin-x64";
-  };
-  inherit (stdenvNoCC.hostPlatform) system;
-  binary = binaries.${system} or (throw "agent-browser: unsupported system ${system}");
+  version = "0.43.0";
 in
 stdenvNoCC.mkDerivation {
   pname = "agent-browser";
   inherit version;
 
+  # Since 0.43 the main tarball holds only the JS launcher and the skill docs;
+  # each platform's binary is its own optional dependency
+  # (@agent-browser/cli-<platform>). Only rpi5 runs this (Cyrus), so only
+  # aarch64-linux glibc is fetched. Both URLs are literal so
+  # scripts/nix-fix-hashes.py can recompute both hashes on a bump.
+  #
   # `name` carries the version on purpose (pkgs/README.md, "Fixed-output names"):
   # an FOD's store path is keyed on (outputHash, name), so a bumped `version`
-  # beside a stale `hash` must not be able to resolve to the old path. fetchurl
-  # would default this to the URL's basename, which happens to contain the
-  # version already — but that is the URL's shape, not a property we control, so
-  # it is stated rather than relied upon.
+  # beside a stale `hash` must not be able to resolve to the old path.
   src = fetchurl {
     name = "agent-browser-${version}.tgz";
     url = "https://registry.npmjs.org/agent-browser/-/agent-browser-${version}.tgz";
-    hash = "sha256-pHRPsYnlmEZ6vPs6zd4HEY2eXLQ9w7MXJ/hpr0651Zg=";
+    hash = "sha256-5F07lcES2ghY+KfINtVdvAt4WPrEffFQnXQK3/ZeCrs=";
+  };
+  binary = fetchurl {
+    name = "agent-browser-cli-linux-arm64-gnu-${version}.tgz";
+    url = "https://registry.npmjs.org/@agent-browser/cli-linux-arm64-gnu/-/cli-linux-arm64-gnu-${version}.tgz";
+    hash = "sha256-RlgjZIrvSpTSC8Kukb7/3vj2jWdQp5Xd28LROSgglDU=";
   };
 
   # The Rust binary needs only glibc (libc/libm/libpthread/libdl), but it is
@@ -64,18 +61,19 @@ stdenvNoCC.mkDerivation {
   # has to be rewritten. autoPatchelfHook does both.
   nativeBuildInputs = lib.optional stdenvNoCC.hostPlatform.isLinux autoPatchelfHook;
 
-  # We keep exactly one of the seven bundled binaries; the rest are ~70MB of
-  # other platforms' dead weight.
   installPhase = ''
     runHook preInstall
 
-    install -Dm755 bin/${binary} $out/bin/agent-browser
+    tar -xzf $binary --strip-components=2 package/bin/agent-browser
+    install -Dm755 agent-browser $out/bin/agent-browser
 
     # The tarball also ships the agent-facing skill docs the CLI's own
     # AGENT_BROWSER_SKILLS_DIR points at. Small, and useful to hand to an agent.
-    mkdir -p $out/share/agent-browser
-    cp -r skills $out/share/agent-browser/skills
+    # skills/agent-browser (Cyrus's user skill, hosts/rpi5/agents/cyrus.nix) was
+    # dropped upstream in 0.43; skill-data/core is the skill it pointed to.
+    mkdir -p $out/share/agent-browser/skills
     cp -r skill-data $out/share/agent-browser/skill-data
+    cp -r skill-data/core $out/share/agent-browser/skills/agent-browser
 
     runHook postInstall
   '';
@@ -93,7 +91,7 @@ stdenvNoCC.mkDerivation {
     homepage = "https://github.com/vercel-labs/agent-browser";
     license = lib.licenses.asl20;
     mainProgram = "agent-browser";
-    platforms = lib.attrNames binaries;
+    platforms = [ "aarch64-linux" ];
     sourceProvenance = [ lib.sourceTypes.binaryNativeCode ];
   };
 }
