@@ -64,7 +64,7 @@ in
       OAUTH_BUTTON_TEXT = "Log in with Pocket ID";
     };
     serviceConfig.EnvironmentFile = lib.mkForce [
-      "/run/agenix/airtrail-env"
+      config.services.airtrail.environmentFile
       "-${config.nic.sso.clients.airtrail.envFile}" # OAUTH_CLIENT_SECRET
     ];
     after = [ "pocket-id-clients.service" ];

@@ -14,6 +14,21 @@
   ...
 }:
 let
+  wakapiSsoEnv = pkgs.writeShellScript "wakapi-sso-env" ''
+    umask 077
+    out=/run/wakapi/sso.env # the module's RuntimeDirectory
+    : > "$out"
+    secret=$(cat ${config.nic.sso.clients.wakapi.envFile} 2>/dev/null) || exit 0
+    ${pkgs.curl}/bin/curl -fsS --max-time 5 -o /dev/null \
+      ${config.nic.sso.issuer}/.well-known/openid-configuration || exit 0
+    {
+      echo WAKAPI_OIDC_PROVIDERS_0_NAME=pocketid
+      echo "WAKAPI_OIDC_PROVIDERS_0_DISPLAY_NAME=Pocket ID"
+      echo WAKAPI_OIDC_PROVIDERS_0_CLIENT_ID=wakapi
+      echo WAKAPI_OIDC_PROVIDERS_0_ENDPOINT=${config.nic.sso.issuer}
+      echo "$secret"
+    } > "$out"
+  '';
   externalPort = 3030;
   backendPort = 3031;
 in
@@ -81,20 +96,16 @@ in
       "hydroxide.service"
       "pocket-id-clients.service"
     ];
-    # Optional ("-"), so Wakapi still starts password-only without it; the
-    # module's environmentFiles only takes plain paths.
-    serviceConfig.EnvironmentFile = [
-      "-${config.nic.sso.clients.wakapi.envFile}" # WAKAPI_OIDC_PROVIDERS_0_CLIENT_SECRET
-    ];
-    # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). The whole
-    # provider comes from env (Wakapi's documented form), so the secret from
-    # envFile joins the same list entry. Wakapi matches on provider + sub only:
-    # an existing account is linked once by hand (users.auth_type/sub).
-    environment = {
-      WAKAPI_OIDC_PROVIDERS_0_NAME = "pocketid";
-      WAKAPI_OIDC_PROVIDERS_0_DISPLAY_NAME = "Pocket ID";
-      WAKAPI_OIDC_PROVIDERS_0_CLIENT_ID = "wakapi";
-      WAKAPI_OIDC_PROVIDERS_0_ENDPOINT = config.nic.sso.issuer;
+    # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). Wakapi runs
+    # OIDC discovery at startup and exits fatally if it fails, so the provider
+    # is only handed over when the issuer answers: the root pre-start writes
+    # the WAKAPI_OIDC_PROVIDERS_0_* env, otherwise an empty file and Wakapi
+    # starts password-only. It sleeps when idle, so SSO is back on the next
+    # wake. Wakapi matches on provider + sub only: an existing account is
+    # linked once by hand (users.auth_type/sub).
+    serviceConfig = {
+      ExecStartPre = [ "+${wakapiSsoEnv}" ];
+      EnvironmentFile = [ "-/run/wakapi/sso.env" ];
     };
   };
 
