@@ -23,7 +23,8 @@ usage() {
 Usage: daily-pending-digest.sh [--dry-run] [--no-mark-read] [--plain] [--rich-collapsible-all]
 
 Collects GitHub notifications (PRs excluded, except Renovate branches in
-RENOVATE_REPO and claude-code bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE)
+RENOVATE_REPO and claude-code bumps named by PR_ALLOW_REPO/PR_ALLOW_TITLE),
+the Renovate PRs merged in the last 24 h with the units failing now,
 and BlogWatcher unread articles,
 formats a Telegram digest, sends it, then marks included GitHub notifications
 and BlogWatcher articles as read only after successful send.
@@ -196,6 +197,33 @@ format_github() {
   fi
 }
 
+format_auto_merged() {
+  # Renovate merges minor/patch bumps without a review (renovate.json), so the
+  # digest is where they are seen: what merged in the last day, next to what is
+  # failing now, to tie a breakage to the bump that shipped it.
+  printf 'Auto-merged updates (24 h):\n'
+  local since merged
+  since=$(date -u -d '24 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+  if ! merged=$(gh pr list -R "$RENOVATE_REPO" --state merged --author app/nic-os-renovate \
+    --search "merged:>=$since" --limit 50 --json number,title,url 2>/dev/null); then
+    printf '• error: could not list merged Renovate PRs\n'
+  elif [ "$(jq length <<<"$merged")" -eq 0 ]; then
+    printf '• none\n'
+  else
+    jq -r '.[] | "• <a href=\"" + .url + "\">#" + (.number|tostring) + "</a> " + (.title | gsub("&";"&amp;") | gsub("<";"&lt;") | gsub(">";"&gt;"))' <<<"$merged"
+  fi
+
+  printf '\nFailed units on rpi5:\n'
+  local failed
+  failed=$({ systemctl --failed --no-legend --plain 2>/dev/null; systemctl --user --failed --no-legend --plain 2>/dev/null; } |
+    awk '{print $1}' | sort -u)
+  if [ -z "$failed" ]; then
+    printf '• none\n'
+  else
+    printf '%s\n' "$failed" | html_escape | sed 's/^/• /'
+  fi
+}
+
 format_blogwatcher() {
   printf 'BlogWatcher unread articles:\n'
   if ! command -v blogwatcher >/dev/null 2>&1; then
@@ -282,6 +310,11 @@ build_rich_message() {
       else { print "<h4>GitHub notifications</h4>" }
       next
     }
+    $0 == "Auto-merged updates (24 h):" || $0 == "Failed units on rpi5:" {
+      close_details()
+      print "<h4>" substr($0, 1, length($0) - 1) "</h4>"
+      next
+    }
     $0 == "BlogWatcher unread articles:" {
       close_details()
       print "<details" (layout == "collapsible-all" ? " open" : "") "><summary>BlogWatcher unread articles</summary>"
@@ -298,6 +331,8 @@ build_message() {
     printf 'Daily pending digest\n'
     printf 'Generated: %s\n\n' "$(date '+%Y-%m-%d %H:%M %Z')"
     format_github
+    printf '\n'
+    format_auto_merged
     printf '\n'
     format_blogwatcher
   } >"$MSG_TXT"

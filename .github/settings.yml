@@ -138,7 +138,7 @@ branches:
 # the UI.
 #
 # nic-os-renovate (App 5756929) is the only bypass actor: it lets Renovate merge
-# claude-code bumps without the gate (renovate.json). nSimonFR-ai is shared with
+# its automerge bumps without the gate (renovate.json: minor/patch, claude-code, t3code). nSimonFR-ai is shared with
 # the agents and must never be one.
 rulesets:
   - name: main
