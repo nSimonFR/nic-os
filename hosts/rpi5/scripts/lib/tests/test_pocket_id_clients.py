@@ -207,3 +207,23 @@ def test_missing_config_is_fatal(tmp_path):
     lines = []
     assert pic.main(env={}, log=lines.append) == 1
     assert "FATAL" in lines[0]
+
+
+def test_env_var_client_gets_an_env_file(tmp_path):
+    env = tmp_path / "env" / "immich"
+    c = client(tmp_path, envVar="OAUTH_CLIENT_SECRET", envFile=str(env))
+    rc, _, _ = run(tmp_path, [c], [OK, not_found, OK, secret_created()])
+    assert rc == 0
+    assert (
+        env.read_text() == f"OAUTH_CLIENT_SECRET={secret_file(tmp_path).read_text()}\n"
+    )
+
+
+def test_env_file_is_written_for_an_already_registered_secret(tmp_path):
+    env = tmp_path / "env" / "immich"
+    c = client(tmp_path, envVar="X", envFile=str(env))
+    hold(tmp_path)
+    rc, op, _ = run(tmp_path, [c], [OK, current(c), listed("sec-1")])
+    assert rc == 0
+    assert env.read_text() == f"X={HELD}\n"
+    assert [m for m, _ in calls(op)] == ["GET", "GET", "GET"]

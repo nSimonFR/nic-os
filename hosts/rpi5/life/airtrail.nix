@@ -51,6 +51,33 @@ in
     # databaseUrl intentionally null — comes from environmentFile above.
   };
 
+  # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). AirTrail reads
+  # its app config from OAUTH_* env (which also locks it in the admin UI). No
+  # auto-register: an unknown identity is linked once with the local password.
+  systemd.services.airtrail = {
+    environment = {
+      OAUTH_ENABLED = "true";
+      OAUTH_ISSUER_URL = config.nic.sso.issuer;
+      OAUTH_CLIENT_ID = "airtrail";
+      OAUTH_SCOPE = "openid profile email";
+      OAUTH_AUTO_REGISTER = "false";
+      OAUTH_BUTTON_TEXT = "Log in with Pocket ID";
+    };
+    serviceConfig.EnvironmentFile = lib.mkForce [
+      "/run/agenix/airtrail-env"
+      "-${config.nic.sso.clients.airtrail.envFile}" # OAUTH_CLIENT_SECRET
+    ];
+    after = [ "pocket-id-clients.service" ];
+    wants = [ "pocket-id-clients.service" ];
+  };
+  nic.sso.clients.airtrail = {
+    name = "AirTrail";
+    callbackUrls = [ "${config.nic.services.airtrail.public.publicUrl}/login" ];
+    launchUrl = config.nic.services.airtrail.public.publicUrl;
+    secretGroup = "airtrail";
+    envVar = "OAUTH_CLIENT_SECRET";
+  };
+
   # Migrations must run after the role/password/unaccent are in place.
   systemd.services.airtrail-setup = {
     after = [ "airtrail-pg-setup.service" ];

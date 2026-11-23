@@ -25,6 +25,7 @@ in
     environmentFiles = [
       "/run/agenix/wakapi-password-salt"
       "/run/agenix/wakapi-smtp-env"
+      "-${config.nic.sso.clients.wakapi.envFile}" # WAKAPI_OIDC_PROVIDERS_0_CLIENT_SECRET
     ];
     settings = {
       server = {
@@ -38,6 +39,7 @@ in
       };
       security = {
         allow_signup = false;
+        oidc_allow_signup = false;
         insecure_cookies = false;
       };
       # Disable wakapi's built-in scheduled wakatime.com importer.
@@ -72,8 +74,32 @@ in
 
   # Wait for hydroxide before starting wakapi so SMTP is reachable.
   systemd.services.wakapi = {
-    after = [ "hydroxide.service" ];
-    wants = [ "hydroxide.service" ];
+    after = [
+      "hydroxide.service"
+      "pocket-id-clients.service"
+    ];
+    wants = [
+      "hydroxide.service"
+      "pocket-id-clients.service"
+    ];
+    # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). The whole
+    # provider comes from env (Wakapi's documented form), so the secret from
+    # envFile joins the same list entry. Wakapi matches on provider + sub only:
+    # an existing account is linked once by hand (users.auth_type/sub).
+    environment = {
+      WAKAPI_OIDC_PROVIDERS_0_NAME = "pocketid";
+      WAKAPI_OIDC_PROVIDERS_0_DISPLAY_NAME = "Pocket ID";
+      WAKAPI_OIDC_PROVIDERS_0_CLIENT_ID = "wakapi";
+      WAKAPI_OIDC_PROVIDERS_0_ENDPOINT = config.nic.sso.issuer;
+    };
+  };
+
+  nic.sso.clients.wakapi = {
+    name = "Wakapi";
+    callbackUrls = [ "https://${tailnetFqdn}:${toString externalPort}/oidc/pocketid/callback" ];
+    launchUrl = "https://${tailnetFqdn}:${toString externalPort}";
+    secretGroup = "root"; # DynamicUser: systemd reads envFile as root
+    envVar = "WAKAPI_OIDC_PROVIDERS_0_CLIENT_SECRET";
   };
 
   # PrivateUsers (nixpkgs default) needs user namespaces — unsupported on RPi5.

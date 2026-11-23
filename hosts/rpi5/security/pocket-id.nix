@@ -14,8 +14,10 @@
 #   };
 #
 # then point the app at `config.nic.sso.issuer`, client id `immich` and the
-# secret in `config.nic.sso.clients.immich.secretFile`, and order its unit
-# after `pocket-id-clients.service`. Keep the app's local login as the fallback.
+# secret in `config.nic.sso.clients.immich.secretFile` (or set `envVar` and
+# load `envFile` when the app only reads it from the environment), and order
+# its unit after `pocket-id-clients.service`. Keep the
+# app's local login as the fallback.
 #
 # Lost passkey: an admin creates a login code for the user in the admin UI; for
 # the last admin, run `pocket-id one-time-access-token <user>` as the pocket-id
@@ -37,7 +39,13 @@ let
     builtins.toJSON (
       lib.mapAttrsToList (id: c: {
         inherit id;
-        inherit (c) name secretFile secretGroup;
+        inherit (c)
+          name
+          secretFile
+          secretGroup
+          envVar
+          envFile
+          ;
         idFile = "${secretsDir}/registered/${id}";
         callbackURLs = c.callbackUrls;
         logoutCallbackURLs = c.logoutCallbackUrls;
@@ -90,6 +98,22 @@ let
           default = "${secretsDir}/secrets/${name}";
           description = "Client secret, root:secretGroup 0440, written by pocket-id-clients.";
         };
+        envVar = mkOption {
+          type = types.nullOr types.str;
+          default = null;
+          example = "OAUTH_CLIENT_SECRET";
+          description = ''
+            For apps that only read the secret from the environment: also write
+            `<envVar>=<secret>` to `envFile`, for the unit's EnvironmentFile
+            (read by systemd as root, so it works with DynamicUser too).
+          '';
+        };
+        envFile = mkOption {
+          type = types.str;
+          readOnly = true;
+          default = "${secretsDir}/env/${name}";
+          description = "Env file written when `envVar` is set (root:secretGroup 0440).";
+        };
       };
     }
   );
@@ -129,6 +153,11 @@ in
         # App settings come from here, not the admin UI (which goes read-only).
         UI_CONFIG_DISABLED = true;
         APP_NAME = "nic-os";
+        # Emails are set by the admin only, so vouch for them: apps that link an
+        # existing account by email (Karakeep, Dawarich, Sure…) require
+        # email_verified. Users editing their own email would break that.
+        EMAILS_VERIFIED = true;
+        ALLOW_OWN_ACCOUNT_EDIT = false;
         # Mail via hydroxide (hosts/rpi5/knowledge/hydroxide.nix): plaintext on
         # loopback; Proton only accepts the account address as From.
         SMTP_HOST = "127.0.0.1";

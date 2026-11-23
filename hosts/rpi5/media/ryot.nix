@@ -98,6 +98,13 @@ let
         q RYOT_PLUGIN__RYOT__MEDIA__SPOTIFY_CLIENT_SECRET "$(v1 MUSIC_SPOTIFY_CLIENT_SECRET)"
         q RYOT_PLUGIN__RYOT__MEDIA__TWITCH_CLIENT_ID "$(v1 VIDEO_GAMES_TWITCH_CLIENT_ID)"
         q RYOT_PLUGIN__RYOT__MEDIA__TWITCH_CLIENT_SECRET "$(v1 VIDEO_GAMES_TWITCH_CLIENT_SECRET)"
+        # Optional: without it Ryot starts with password login only.
+        oidc=$(cat ${config.nic.sso.clients.ryot.secretFile} 2>/dev/null || true)
+        if [ -n "$oidc" ]; then
+          q SERVER_OIDC_CLIENT_SECRET "$oidc"
+          q SERVER_OIDC_ISSUER_URL "${config.nic.sso.issuer}"
+          q SERVER_OIDC_CLIENT_ID ryot
+        fi
       } > ${envFile}
     '';
   };
@@ -196,6 +203,13 @@ in
     };
   };
 
+  nic.sso.clients.ryot = {
+    name = "Ryot";
+    callbackUrls = [ "${publicUrl}/api/auth/oauth2/callback/oidc" ];
+    launchUrl = publicUrl;
+    secretGroup = "root"; # read by the root ExecStartPre (writeEnv)
+  };
+
   systemd.services.ryot = {
     description = "Ryot V11 (pinned pre-release image in systemd-nspawn)";
     wantedBy = [ "multi-user.target" ];
@@ -203,8 +217,12 @@ in
       "network-online.target"
       "ryot-seed.service"
       "redis-ryot-v2.service"
+      "pocket-id-clients.service"
     ];
-    wants = [ "network-online.target" ];
+    wants = [
+      "network-online.target"
+      "pocket-id-clients.service"
+    ];
     requires = [
       "ryot-seed.service"
       "redis-ryot-v2.service"
@@ -237,6 +255,10 @@ in
         "--setenv=REDIS_URL=redis://127.0.0.1:${toString redisPort}/0"
         "--setenv=FRONTEND_URL=${publicUrl}"
         "--setenv=USERS_ALLOW_REGISTRATION=false"
+        # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix): issuer, id
+        # and secret come from the env file. Ryot never links by email: an existing account gets
+        # its `account` row (provider oidc, the Pocket ID sub) added once by hand.
+        "--setenv=FRONTEND_OIDC_BUTTON_LABEL=Pocket ID"
         "--setenv=DISABLE_TELEMETRY=true"
         "--setenv=FILE_STORAGE_LOCAL_DIR=/home/ryot/storage"
         "--setenv=FILE_STORAGE_LOCAL_TEMP_DIR=/home/ryot/tmp"

@@ -13,6 +13,7 @@
 let
   internalPort = 13900; # the wake socket; every caller uses this
   backendPort = 13901; # Puma, behind the proxy
+  dawarichUrl = config.nic.services.dawarich.public.publicUrl;
 in
 {
   services.dawarich = {
@@ -90,7 +91,32 @@ in
   # Geoapify reverse geocoding — drives visit suggestions (nightly sidekiq job)
   # and on-demand address lookups in the web UI.
   # Key is injected via EnvironmentFile to keep it out of the nix store.
-  systemd.services.dawarich-web.serviceConfig.EnvironmentFile = "/run/agenix/dawarich-geoapify";
+  systemd.services.dawarich-web.serviceConfig.EnvironmentFile = [
+    "/run/agenix/dawarich-geoapify"
+    "-${config.nic.sso.clients.dawarich.envFile}" # OIDC_CLIENT_SECRET
+  ];
+
+  # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). No
+  # auto-register: an unknown identity whose (verified) email matches an
+  # account is asked for that account's password once, then linked.
+  systemd.services.dawarich-web = {
+    environment = {
+      OIDC_ISSUER = config.nic.sso.issuer;
+      OIDC_CLIENT_ID = "dawarich";
+      OIDC_REDIRECT_URI = "${dawarichUrl}/users/auth/openid_connect/callback";
+      OIDC_PROVIDER_NAME = "Pocket ID";
+      OIDC_AUTO_REGISTER = "false";
+    };
+    after = [ "pocket-id-clients.service" ];
+    wants = [ "pocket-id-clients.service" ];
+  };
+  nic.sso.clients.dawarich = {
+    name = "Dawarich";
+    callbackUrls = [ "${dawarichUrl}/users/auth/openid_connect/callback" ];
+    launchUrl = dawarichUrl;
+    secretGroup = "dawarich";
+    envVar = "OIDC_CLIENT_SECRET";
+  };
   systemd.services.dawarich-sidekiq-all.serviceConfig.EnvironmentFile =
     "/run/agenix/dawarich-geoapify";
 

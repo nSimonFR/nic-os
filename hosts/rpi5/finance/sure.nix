@@ -16,6 +16,7 @@ let
   # proxy listen. backendPort: Sure's Puma binds here behind the proxy.
   externalPort = 13334;
   backendPort = 13335;
+  sureOidcCallback = "${config.nic.services.sure.public.publicUrl}/auth/openid_connect/callback";
 
   # rootVhostPort: the nginx vhost that gives Sure an origin of its own, where
   # the app sits at the root (see the vhost below). rootServePort: the tailnet
@@ -230,7 +231,21 @@ in
   systemd.services.sure-web.serviceConfig.EnvironmentFile = lib.mkForce [
     config.services.sure.environmentFile
     config.age.secrets.sure-mcp-env.path
+    "-${config.nic.sso.clients.sure.envFile}" # OIDC_CLIENT_SECRET
   ];
+  systemd.services.sure-web.after = [ "pocket-id-clients.service" ];
+  systemd.services.sure-web.wants = [ "pocket-id-clients.service" ];
+
+  # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix). link_only: an
+  # unknown identity must prove the existing account's password once, then is
+  # linked; no account is ever created from SSO. Password login stays on.
+  nic.sso.clients.sure = {
+    name = "Sure";
+    callbackUrls = [ sureOidcCallback ];
+    launchUrl = config.nic.services.sure.public.publicUrl;
+    secretGroup = config.services.sure.group;
+    envVar = "OIDC_CLIENT_SECRET";
+  };
   systemd.services.sure-web.environment = {
     WEB_CONCURRENCY = "0"; # single-process Puma (no forked workers) — saves ~80 MB on RPi5
     RAILS_MAX_THREADS = "3"; # default 5; 3 is plenty for single-user
@@ -241,6 +256,12 @@ in
     # and path-helpers prefix /sure (assets already do via relative_url_root).
     # The proxy passes /sure through UNCHANGED — URLMap does the internal strip.
     RAILS_RELATIVE_URL_ROOT = "/sure";
+
+    OIDC_ISSUER = config.nic.sso.issuer;
+    OIDC_CLIENT_ID = "sure";
+    OIDC_REDIRECT_URI = sureOidcCallback;
+    OIDC_BUTTON_LABEL = "Pocket ID";
+    AUTH_JIT_MODE = "link_only";
   }
   // sureLlmEnv;
 
