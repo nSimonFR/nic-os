@@ -240,7 +240,7 @@ in
     backupUnits = [ "memos-backup.service" ];
 
     public = {
-      order = 240;
+      order = 100; # row 3, journal: Calino, here, FreeReps, Ryot
       port = 4020;
       backend = "http://127.0.0.1:${toString internalPort}";
       authenticated = true;
