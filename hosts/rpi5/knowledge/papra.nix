@@ -57,6 +57,35 @@ let
 
   occ = "${config.services.nextcloud.occ}/bin/nextcloud-occ";
 
+  # AUTH_PROVIDERS_CUSTOMS carries the client secret, so it is written by root
+  # into a runtime env file; nothing is written while the secret is missing.
+  ssoEnvFile = "/run/papra-sso/env"; # RuntimeDirectory below
+  ssoProvider = {
+    providerId = "pocket-id";
+    providerName = "Pocket ID";
+    clientId = "papra";
+    discoveryUrl = "${config.nic.sso.issuer}/.well-known/openid-configuration";
+    type = "oidc";
+    scopes = [
+      "openid"
+      "profile"
+      "email"
+    ];
+    pkce = true;
+  };
+  papraSsoEnv = pkgs.writeShellApplication {
+    name = "papra-sso-env";
+    runtimeInputs = [ pkgs.jq ];
+    text = ''
+      umask 077
+      : > ${ssoEnvFile}
+      [ -r ${config.nic.sso.clients.papra.secretFile} ] || exit 0
+      json=$(jq -c --rawfile s ${config.nic.sso.clients.papra.secretFile} \
+        '[. + {clientSecret: ($s | rtrimstr("\n"))}]' ${pkgs.writeText "papra-sso.json" (builtins.toJSON ssoProvider)})
+      printf "AUTH_PROVIDERS_CUSTOMS='%s'\n" "$json" > ${ssoEnvFile}
+    '';
+  };
+
   archiveMountScript = pkgs.writeShellApplication {
     name = "papra-nc-archive-mount";
     runtimeInputs = [ pkgs.jq ];
@@ -121,15 +150,25 @@ in
       AI_DEFAULT_MODEL = "openai://qwen3-vl:8b";
       AUTO_TAGGING_ENABLED = true;
 
-      # First registered user becomes admin (module/app default). Registration is
-      # left enabled so the account can be created on first run; tighten later.
+      # First registered user becomes admin (module/app default).
       AUTH_FIRST_USER_AS_ADMIN = true;
+      # Accounts exist; also stops Pocket ID sign-ins from creating new users.
+      AUTH_IS_REGISTRATION_ENABLED = false;
     };
   };
 
   # Augment the upstream unit with nic-os specifics.
+  # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); email login stays.
+  # Better Auth links by email only when the local user is verified: the
+  # existing account needs users.email_verified = 1 (one-off DB fix, not here).
   systemd.services.papra = {
+    after = [ "pocket-id-clients.service" ];
+    wants = [ "pocket-id-clients.service" ];
     serviceConfig = {
+      RuntimeDirectory = "papra-sso";
+      RuntimeDirectoryMode = "0700";
+      ExecStartPre = [ "+${lib.getExe papraSsoEnv}" ];
+      EnvironmentFile = [ "-${ssoEnvFile}" ];
       # libSQL KV / tasks stores can write sqlite files relative to CWD; pin CWD
       # to the writable StateDirectory so they don't try to write under `/`.
       WorkingDirectory = "/var/lib/papra";
@@ -335,6 +374,14 @@ in
       OnUnitActiveSec = "15min";
       Persistent = true;
     };
+  };
+
+  nic.sso.clients.papra = {
+    name = "Papra";
+    callbackUrls = [ "${appUrl}/api/auth/oauth2/callback/pocket-id" ];
+    launchUrl = appUrl;
+    secretGroup = "root"; # read by the root ExecStartPre
+    pkce = true;
   };
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ────────────

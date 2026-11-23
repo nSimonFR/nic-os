@@ -49,6 +49,7 @@ let
   appUrl = "https://${tailnetFqdn}${basePath}";
 
   envFile = "/run/reactive-resume/env";
+  sso = config.nic.sso.clients.reactive-resume;
 in
 {
   # ── PostgreSQL: reactive_resume database + role ───────────────────────────
@@ -74,6 +75,8 @@ in
     description = "Generate Reactive Resume environment file with secrets";
     wantedBy = [ "multi-user.target" ];
     before = [ "reactive-resume.service" ];
+    after = [ "pocket-id-clients.service" ];
+    wants = [ "pocket-id-clients.service" ];
     restartTriggers = [
       config.age.secrets.reactive-resume-db-password.file
       config.age.secrets.reactive-resume-auth-secret.file
@@ -93,6 +96,10 @@ in
       AUTH_SECRET=$auth_secret
       ENCRYPTION_SECRET=$encryption_secret
       ENVEOF
+      # Without the secret the Pocket ID button stays hidden (password-only).
+      if [ -r ${sso.secretFile} ]; then
+        echo "OAUTH_CLIENT_SECRET=$(cat ${sso.secretFile})" >> ${envFile}
+      fi
       chmod 0400 ${envFile}
     '';
   };
@@ -121,6 +128,12 @@ in
       TRUSTED_PROXIES = "127.0.0.1";
       # Single-user instance: no public registration (existing users unaffected).
       FLAG_DISABLE_SIGNUPS = "true";
+      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); the secret is
+      # appended by reactive-resume-env. Discovery runs at sign-in, not at boot.
+      # Links by email only when the local account's email is verified.
+      OAUTH_PROVIDER_NAME = "Pocket ID";
+      OAUTH_CLIENT_ID = "reactive-resume";
+      OAUTH_DISCOVERY_URL = "${config.nic.sso.issuer}/.well-known/openid-configuration";
       # Upstream's gateway hides the api_* schemas behind search + execute;
       # curated tools stay listed without exceeding Hermes' 1 MiB SSE limit.
       MCP_API_TOOLS = "search";
@@ -164,6 +177,13 @@ in
       config.age.secrets.reactive-resume-auth-secret.file
       config.age.secrets.reactive-resume-encryption-secret.file
     ];
+  };
+
+  nic.sso.clients.reactive-resume = {
+    name = "Reactive Resume";
+    callbackUrls = [ "${appUrl}/api/auth/callback/custom" ];
+    launchUrl = appUrl;
+    secretGroup = "root"; # read by reactive-resume-env (root)
   };
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ────────────

@@ -9,6 +9,7 @@
 # activation: a Go binary at tens of MB, and MCP clients would pin it awake.
 {
   config,
+  lib,
   pkgs,
   unstablePkgs,
   tinyLlmGateUrl,
@@ -22,6 +23,54 @@ let
   # Attachments land in $MEMOS_DATA/assets (upstream default template); bound
   # from the HDD so restic covers them without a dump step.
   assetsDir = "/mnt/data/memos/assets";
+  # Memos loads memos-idp-*.json from /etc/secrets at startup and refuses to
+  # start on an invalid one, so the file is written only when the issuer's
+  # discovery answers; otherwise Memos starts password-only.
+  ssoDir = "/run/memos-sso"; # RuntimeDirectory, bound read-only to /etc/secrets
+  ssoProvider = {
+    uid = "pocket-id";
+    name = "Pocket ID";
+    type = "OAUTH2";
+    config.oauth2Config = {
+      clientId = "memos";
+      scopes = [
+        "openid"
+        "profile"
+        "email"
+      ];
+      fieldMapping = {
+        identifier = "sub";
+        displayName = "name";
+        email = "email";
+      };
+    };
+  };
+  memosSsoIdp = pkgs.writeShellApplication {
+    name = "memos-sso-idp";
+    runtimeInputs = [
+      pkgs.curl
+      pkgs.jq
+      pkgs.coreutils
+    ];
+    text = ''
+      umask 077
+      out=${ssoDir}/memos-idp-pocket-id.json
+      rm -f "$out"
+      [ -r ${config.nic.sso.clients.memos.secretFile} ] || exit 0
+      disco=$(curl -fsS --max-time 5 ${config.nic.sso.issuer}/.well-known/openid-configuration) || exit 0
+      jq --rawfile s ${config.nic.sso.clients.memos.secretFile} --argjson d "$disco" '
+        .config.oauth2Config += {
+          clientSecret: ($s | rtrimstr("\n")),
+          authUrl: $d.authorization_endpoint,
+          tokenUrl: $d.token_endpoint,
+          userInfoUrl: $d.userinfo_endpoint
+        }
+        | if [.config.oauth2Config[]] | all(. != null) then . else error("discovery incomplete") end
+      ' ${pkgs.writeText "memos-idp.json" (builtins.toJSON ssoProvider)} > "$out.tmp" || { rm -f "$out.tmp"; exit 0; }
+      chown memos:memos "$out.tmp"
+      mv "$out.tmp" "$out"
+    '';
+  };
   redoDir = "/var/lib/journal-daily-redo";
   redoFile = "${redoDir}/days";
   telegramSend = (import ../../../shared/notify.nix { inherit pkgs; }).send {
@@ -101,10 +150,19 @@ in
     "d /mnt/data/backups/memos 0750 memos memos -"
   ];
 
+  # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); password login
+  # stays. The existing account is linked once in Settings → Linked identities
+  # after a password sign-in.
   systemd.services.memos = {
+    after = [ "pocket-id-clients.service" ];
+    wants = [ "pocket-id-clients.service" ];
     unitConfig.RequiresMountsFor = [ assetsDir ];
     serviceConfig = {
       BindPaths = [ "${assetsDir}:${dataDir}/assets" ];
+      RuntimeDirectory = "memos-sso";
+      RuntimeDirectoryMode = "0700";
+      ExecStartPre = [ "+${lib.getExe memosSsoIdp}" ];
+      BindReadOnlyPaths = [ "${ssoDir}:/etc/secrets" ];
       # The module sets RestartSec but no Restart; earlyoom's SIGTERM exits 0.
       Restart = "always";
     };
@@ -164,6 +222,14 @@ in
       OnCalendar = "*-*-* 08:00:00";
       Persistent = true;
     };
+  };
+
+  nic.sso.clients.memos = {
+    name = "Memos";
+    callbackUrls = [ "${config.nic.services.memos.public.publicUrl}/auth/callback" ];
+    launchUrl = config.nic.services.memos.public.publicUrl;
+    secretGroup = "root"; # read by the root ExecStartPre
+    pkce = true;
   };
 
   nic.services.memos = {
