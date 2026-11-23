@@ -224,18 +224,19 @@ format_auto_merged() {
   printf '\nFailed units on rpi5:\n'
   # Each manager on its own: one that cannot be reached is reported, and the
   # digest still goes out (set -e would stop it).
-  local scope out failed=""
+  local scope out failed="" unreachable=0
   for scope in system user; do
     if out=$(systemctl "--$scope" --failed --no-legend --plain 2>&1); then
       failed+=$(awk '{print $1}' <<<"$out")$'\n'
     else
+      unreachable=1
       printf '• %s manager unreachable: %s\n' "$scope" "$(one_line <<<"$out" | cut -c1-120 | html_escape)"
     fi
   done
   failed=$(sed '/^$/d' <<<"$failed" | sort -u)
   if [ -n "$failed" ]; then
     printf '%s\n' "$failed" | html_escape | sed 's/^/• /'
-  else
+  elif [ "$unreachable" -eq 0 ]; then
     printf '• none\n'
   fi
 }
