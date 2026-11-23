@@ -18,7 +18,7 @@ let
   # renovate: datasource=github-releases depName=entireio/cli extractVersion=^v(?<version>.+)$
   version = "0.12.2";
   # renovate: datasource=github-releases depName=entireio/entire-brain extractVersion=^v(?<version>.+)$
-  brainVersion = "0.3.0";
+  brainVersion = "0.5.1";
   # renovate: datasource=github-releases depName=entireio/entire-graph extractVersion=^v(?<version>.+)$
   graphVersion = "0.6.0";
 
@@ -38,8 +38,8 @@ let
     url = "https://github.com/entireio/entire-brain/releases/download/v${brainVersion}/entire-brain_${brainVersion}_${platform}.tar.gz";
     hash =
       {
-        linux_arm64 = "sha256-5w9LxUAQo/HUhC6emTpD81KcBbe/ceQ/eBRvtCJ5qVQ=";
-        darwin_arm64 = "sha256-8PjkUNoRZ8Z33xInRvc4voovpAYEnniMx2jaiiJy2SY=";
+        linux_arm64 = "sha256-VmPpwwq090BWDbg/jFxV5XXcaqKvqdbWED+GABEkMzU=";
+        darwin_arm64 = "sha256-lpDOmd9aon0REupcTr8sjNTwS0KXbZQ0y61n+syNPz4=";
       }
       .${platform};
   };
