@@ -33,6 +33,8 @@ let
   # to this user's files dir below — see the systemd.mounts block.
   datadir = "/mnt/data/nextcloud";
 
+  ncUrl = config.nic.services.nextcloud.public.publicUrl;
+
   # Shared Redis DB index. 0=free (was AFFiNE), 1=Immich, 2=Sure, 3=Dawarich, 4=free (was Paperless).
   redisDb = 5;
 
@@ -56,6 +58,7 @@ let
     "bruteforcesettings" # rate-limit failed logins
     "app_api" # ExApps framework (required by core in v33+)
     "profile" # user profile pages
+    "user_oidc" # Pocket ID SSO (nextcloud-sso below)
     # ── Files (filebrowser replacement) ────────────────────────────────────
     "files_sharing" # internal share links + public links
     "files_versions" # automatic file version history
@@ -180,7 +183,12 @@ in
     # [[known_issue_nextcloud_extraapps_appstore_dup]]) — it's installed by
     # nextcloud-appstore-enable instead.
     extraApps = {
-      inherit (pkgs.nextcloud33Packages.apps) contacts calendar tasks;
+      inherit (pkgs.nextcloud33Packages.apps)
+        contacts
+        calendar
+        tasks
+        user_oidc
+        ;
     };
     extraAppsEnable = true;
 
@@ -282,7 +290,7 @@ in
       set -eu
       store_apps="${datadir}/store-apps"
       config_php="${datadir}/config/config.php"
-      for app in mail contacts calendar tasks; do
+      for app in mail contacts calendar tasks user_oidc; do
         app_dir="$store_apps/$app"
         [ -d "$app_dir" ] && [ ! -L "$app_dir" ] && rm -rf "$app_dir"
       done
@@ -428,6 +436,47 @@ in
       json=$(${pkgs.jq}/bin/jq -cn --rawfile t "$CREDENTIALS_DIRECTORY/token" \
         '{apps: {serverinfo: {token: ($t | gsub("[\r\n]"; ""))}}}')
       ${config.services.nextcloud.occ}/bin/nextcloud-occ config:import <<<"$json"
+    '';
+  };
+
+  # ── SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix) ─────────────
+  # The password form stays as the fallback: user_oidc only hides it when
+  # allow_multiple_user_backends is 0. unique-uid=0 + preferred_username maps
+  # the Pocket ID user onto the existing Nextcloud account of the same name.
+  nic.sso.clients.nextcloud = {
+    name = "Nextcloud";
+    callbackUrls = [
+      "${ncUrl}/apps/user_oidc/code"
+      "${ncUrl}/index.php/apps/user_oidc/code"
+    ];
+    launchUrl = ncUrl;
+    secretGroup = "nextcloud";
+  };
+
+  # Upserts the provider each run; the secret goes by file, never argv.
+  systemd.services.nextcloud-sso = {
+    description = "Register Pocket ID as a Nextcloud OIDC provider";
+    after = [
+      "nextcloud-disable-defaults.service"
+      "pocket-id-clients.service"
+    ];
+    requires = [ "nextcloud-disable-defaults.service" ];
+    wants = [ "pocket-id-clients.service" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "nextcloud";
+      LoadCredential = [
+        "dbpass:/run/agenix/nextcloud-pg-password"
+        "oidc:${config.nic.sso.clients.nextcloud.secretFile}"
+      ];
+    };
+    script = ''
+      ${config.services.nextcloud.occ}/bin/nextcloud-occ user_oidc:provider pocketid \
+        -c nextcloud --clientsecret-file "$CREDENTIALS_DIRECTORY/oidc" \
+        -d ${config.nic.sso.issuer}/.well-known/openid-configuration \
+        --unique-uid=0 --mapping-uid=preferred_username --check-bearer=0
     '';
   };
 
