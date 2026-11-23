@@ -21,6 +21,20 @@
   ...
 }:
 let
+  # user_oidc fetches Pocket ID's discovery, token and JWKS endpoints from the
+  # tailnet name, which resolves to rpi5's own 100.x address. Nextcloud's HTTP
+  # client refuses local ranges (incl. CGNAT 100.64/10), so login failed with
+  # "Could not reach the OpenID Connect provider". Allow local addresses on
+  # user_oidc's own requests only (to the admin-set provider), instead of the
+  # global allow_local_remote_servers, which would also open Cookbook's URL import.
+  user_oidc = pkgs.runCommand "nextcloud-app-user_oidc-local-provider" { } ''
+    cp -r ${pkgs.nextcloud33Packages.apps.user_oidc} $out
+    chmod -R u+w $out
+    substituteInPlace $out/lib/Helper/HttpClientHelper.php \
+      --replace-fail 'if ($this->shouldDisableSSLVerification()) {' \
+        "\$options['nextcloud']['allow_local_address'] = true;
+        if (\$this->shouldDisableSSLVerification()) {"
+  '';
   # Internal nginx port. Nextcloud is served at https://<tailnetFqdn>/nextcloud on the
   # public 443 Tailscale Funnel via the nginx path-mux (front-proxy.nix), which strips
   # the /nextcloud prefix and forwards to this port on 127.0.0.1. `overwritewebroot`
@@ -187,8 +201,8 @@ in
         contacts
         calendar
         tasks
-        user_oidc
         ;
+      inherit user_oidc;
     };
     extraAppsEnable = true;
 
@@ -202,12 +216,6 @@ in
       # prefix); overwritewebroot makes Nextcloud regenerate its links under /nextcloud.
       overwritewebroot = "/nextcloud";
       overwritecondaddr = "^127\\.0\\.0\\.1$";
-
-      # user_oidc fetches Pocket ID's discovery and token endpoints from the
-      # tailnet name, which resolves to rpi5's own 100.x address; Nextcloud's
-      # HTTP client refuses local ranges (incl. CGNAT 100.64/10) by default,
-      # so login failed with "Could not reach the OpenID Connect provider".
-      allow_local_remote_servers = true;
 
       # Default phone region for unparsed numbers in addressbooks (Contacts app
       # warning otherwise).
