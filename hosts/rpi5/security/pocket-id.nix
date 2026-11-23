@@ -206,6 +206,9 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        # Apps order after this unit; a hung Pocket ID must not hold them back
+        # (oneshot has no start timeout by default).
+        TimeoutStartSec = "5min";
         EnvironmentFile = config.age.secrets.pocket-id-env.path;
         StateDirectory = "pocket-id-clients";
         StateDirectoryMode = "0755";
