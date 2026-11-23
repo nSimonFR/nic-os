@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // Code Mode over Aperture's MCP gateway: two tools (search, execute) instead of ~400.
-// Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide).
+// Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide),
+// CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables).
+import { randomUUID } from "node:crypto";
+import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -26,6 +31,31 @@ const { generateTypesFromJsonSchema, normalizeCode, sanitizeToolName } = await i
 
 const MAX_CHARS = 24_000;
 const TOOLS_TTL_MS = 10 * 60_000;
+const LOG_MAX_BYTES = 10 << 20;
+
+/**
+ * Aperture logs the model's `execute` call (code and result) but not the tool calls the code
+ * makes, so every run and upstream call goes to a local JSONL file. Rotates to `.1` at 10 MB.
+ */
+export function makeLogger(file) {
+  if (!file) return () => {};
+  return (entry) => {
+    try {
+      mkdirSync(dirname(file), { recursive: true });
+      try {
+        if (statSync(file).size > LOG_MAX_BYTES) renameSync(file, `${file}.1`);
+      } catch {}
+      appendFileSync(file, `${JSON.stringify({ ts: new Date().toISOString(), ...entry })}\n`, { mode: 0o600 });
+    } catch (e) {
+      console.error(`aperture-codemode: log write failed: ${e.message}`);
+    }
+  };
+}
+
+const clip = (v, n) => {
+  const s = typeof v === "string" ? v : JSON.stringify(v);
+  return s && s.length > n ? `${s.slice(0, n)}…` : s;
+};
 
 export class Upstream {
   constructor(url, exclude = []) {
@@ -132,7 +162,7 @@ const truncate = (s) =>
 
 const text = (s, isError = false) => ({ content: [{ type: "text", text: truncate(s) }], isError });
 
-export async function buildServer(upstream) {
+export async function buildServer(upstream, log = () => {}) {
   let known = "";
   try {
     known = ` Connectors: ${connectors(await upstream.tools())}.`;
@@ -141,6 +171,7 @@ export async function buildServer(upstream) {
   }
 
   const server = new McpServer({ name: "aperture-codemode", version: "0.1.0" });
+  const clientName = () => server.server.getClientVersion()?.name ?? "unknown";
   server.registerTool(
     "search",
     {
@@ -155,6 +186,7 @@ export async function buildServer(upstream) {
       annotations: { readOnlyHint: true },
     },
     async ({ query, limit }) => {
+      log({ event: "search", client: clientName(), query });
       try {
         return text(search(await upstream.tools(), query, limit ?? 10));
       } catch (e) {
@@ -175,10 +207,33 @@ export async function buildServer(upstream) {
       inputSchema: { code: z.string().describe("An async arrow function") },
     },
     async ({ code }) => {
-      const run = await runSandbox(normalizeCode(code), (name, input) => upstream.call(name, input));
-      const logs = run.logs.length ? `\n\nconsole:\n${run.logs.join("\n")}` : "";
-      if (run.error) return text(`Error: ${run.error}${logs}`, true);
-      return text(JSON.stringify(run.result, null, 2) + logs);
+      const run = randomUUID().slice(0, 8);
+      const client = clientName();
+      const started = Date.now();
+      const out = await runSandbox(normalizeCode(code), async (tool, input) => {
+        const t = Date.now();
+        const entry = { event: "call", run, client, tool, input: clip(input, 500) };
+        try {
+          const result = await upstream.call(tool, input);
+          log({ ...entry, ms: Date.now() - t, ok: true, bytes: JSON.stringify(result ?? null).length });
+          return result;
+        } catch (e) {
+          log({ ...entry, ms: Date.now() - t, ok: false, error: clip(e.message, 300) });
+          throw e;
+        }
+      });
+      log({
+        event: "execute",
+        run,
+        client,
+        ms: Date.now() - started,
+        ok: !out.error,
+        ...(out.error && { error: clip(out.error, 300) }),
+        code: clip(code, 4000),
+      });
+      const logs = out.logs.length ? `\n\nconsole:\n${out.logs.join("\n")}` : "";
+      if (out.error) return text(`Error: ${out.error}${logs}`, true);
+      return text(JSON.stringify(out.result, null, 2) + logs);
     },
   );
   return server;
@@ -191,6 +246,9 @@ if (import.meta.main) {
     process.exit(2);
   }
   const exclude = (process.env.CODEMODE_EXCLUDE ?? "").split(",").map((s) => s.trim()).filter(Boolean);
-  const server = await buildServer(new Upstream(url, exclude));
+  const logFile =
+    process.env.CODEMODE_LOG ??
+    join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "aperture-codemode", "calls.jsonl");
+  const server = await buildServer(new Upstream(url, exclude), makeLogger(logFile === "off" ? null : logFile));
   await server.connect(new StdioServerTransport());
 }
