@@ -5,6 +5,13 @@
 #
 # First boot creates @nico with a random password printed once in the journal
 # (`journalctl -u tuwunel | grep -i password`); change it from the client.
+#
+# SSO through Pocket ID, untrusted and without registration, so it only logs
+# into accounts linked by hand. Linking @nico once: find his Pocket ID user id
+# (the `sub` claim) in the admin UI, then in the admin room run
+#   !admin query oauth associate tuwunel @nico:<serverName> --claim sub=<uuid>
+# and log in with SSO before the next restart (pending links live in memory).
+# Password login stays on as the fallback.
 {
   config,
   lib,
@@ -16,6 +23,7 @@ let
   inherit (config.nic.messaging) serverName homeserverPort appserviceDir;
   inherit (config.nic.messaging) cinnyPort;
   backupDir = "/mnt/data/backups/tuwunel";
+  inherit (config.nic.services.matrix.public) publicUrl;
 in
 {
   options.nic.messaging = {
@@ -72,6 +80,22 @@ in
         database_backup_path = backupDir;
         database_backups_to_keep = 2;
         admin_signal_execute = [ "server backup-database" ];
+
+        login_with_password = true;
+        identity_provider = [
+          {
+            brand = "Pocket ID";
+            name = "Pocket ID";
+            client_id = "tuwunel";
+            # DynamicUser: no static group can own the secret, systemd hands it over.
+            client_secret_file = "/run/credentials/tuwunel.service/sso-client-secret";
+            issuer_url = config.nic.sso.issuer;
+            callback_url = "${publicUrl}/_matrix/client/unstable/login/sso/callback/tuwunel";
+            trusted = false;
+            registration = false;
+            unique_id_fallbacks = false;
+          }
+        ];
       };
     };
 
@@ -84,8 +108,18 @@ in
       serviceConfig = {
         SupplementaryGroups = [ "matrix-appservices" ];
         ReadWritePaths = [ backupDir ];
+        LoadCredential = [ "sso-client-secret:${config.nic.sso.clients.tuwunel.secretFile}" ];
       };
       unitConfig.RequiresMountsFor = [ backupDir ];
+      after = [ "pocket-id-clients.service" ];
+      wants = [ "pocket-id-clients.service" ];
+    };
+
+    nic.sso.clients.tuwunel = {
+      name = "Matrix";
+      callbackUrls = [ "${publicUrl}/_matrix/client/unstable/login/sso/callback/tuwunel" ];
+      launchUrl = publicUrl;
+      secretGroup = "root"; # read by systemd (LoadCredential above)
     };
 
     systemd.services.tuwunel-backup = {
