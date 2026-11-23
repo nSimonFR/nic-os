@@ -18,11 +18,9 @@ let
   };
   haLinky = pkgs.callPackage ../../../pkgs/home-assistant/ha-linky.nix { };
 
-  # Pocket ID login (hass-oidc-auth), from HA's own tree for the same ABI. Set up
-  # in the UI (Devices & services → OpenID Connect): public client `home-assistant`,
-  # discovery `<issuer>/.well-known/openid-configuration`, redirect
-  # `<publicUrl>/auth/oidc/callback`. Turn on automatic user linking for the
-  # first login only, then off. Local login stays as the fallback.
+  # Pocket ID login (hass-oidc-auth), from HA's own tree for the same ABI.
+  # Configured in YAML (oidcInclude below), not the UI: public client
+  # `home-assistant` with PKCE. Local login stays as the fallback.
   haAuthOidc = pkgs.hassPkgs.home-assistant-custom-components.auth_oidc;
 
   # Lovelace registration block appended once to the (otherwise unmanaged)
@@ -47,6 +45,22 @@ let
 
     # nic-os-managed: automations
     automation nic-os: !include_dir_merge_list automations-nic-os
+  '';
+
+  # Pocket ID only lets the `admins` group into this client, and its groups claim
+  # carries `admins`, which auth_oidc maps to the HA admin role. User linking
+  # attaches a login to the local HA user with the same username
+  # (preferred_username), so the existing account is reused, not duplicated.
+  oidcInclude = pkgs.writeText "nic-os-auth-oidc.yaml" ''
+
+    # nic-os-managed: auth_oidc
+    auth_oidc:
+      client_id: home-assistant
+      discovery_url: ${config.nic.sso.issuer}/.well-known/openid-configuration
+      display_name: Pocket ID
+      features:
+        automatic_user_linking: true
+        automatic_person_creation: false
   '';
 in
 {
@@ -164,6 +178,15 @@ in
       cat ${automationsInclude} >> "$cfg"
       chown hass:hass "$cfg"
     fi
+
+    if [ -e "$cfg" ] && ! grep -q 'nic-os-managed: auth_oidc' "$cfg"; then
+      if grep -Eq '^auth_oidc:' "$cfg"; then
+        echo "hass: existing 'auth_oidc:' key in configuration.yaml; skipping managed block" >&2
+      else
+        cat ${oidcInclude} >> "$cfg"
+        chown hass:hass "$cfg"
+      fi
+    fi
   '';
 
   # ── Home Assistant RAM optimizations (RPi5 4 GB) ──────────────────────
@@ -171,6 +194,9 @@ in
   # RPi5 that wastes ~64 MB of virtual address space.  Cap at 2 arenas.
   systemd.services.home-assistant = {
     environment.MALLOC_ARENA_MAX = "2";
+    # HA reads configuration.yaml only at start; the activation script appends
+    # the auth_oidc block, so restart when it changes.
+    restartTriggers = [ oidcInclude ];
     serviceConfig.MemoryMax = "256M";
   };
 
