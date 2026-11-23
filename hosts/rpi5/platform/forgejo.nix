@@ -12,6 +12,7 @@ let
   externalPort = 3100;
   backendPort = 3101;
   sshPort = 2222;
+  rootUrl = "https://${tailnetFqdn}:${toString externalPort}/";
 
   # renovate: datasource=git-refs depName=https://github.com/Troplo/earl-grey branch=master
   earlGreyRev = "9b5769a3f10b14ffc097add553c0712e6c427ba7";
@@ -38,7 +39,7 @@ in
         HTTP_ADDR = "127.0.0.1";
         HTTP_PORT = backendPort;
         DOMAIN = tailnetFqdn;
-        ROOT_URL = "https://${tailnetFqdn}:${toString externalPort}/";
+        ROOT_URL = rootUrl;
         START_SSH_SERVER = true;
         SSH_SERVER_HOST = "127.0.0.1";
         BUILTIN_SSH_SERVER_USER = "git";
@@ -47,6 +48,14 @@ in
 
       service = {
         DISABLE_REGISTRATION = true;
+      };
+
+      # Pocket ID accounts (admin-invited only) get a Forgejo user on first
+      # login, or are linked to the existing one of the same name/email.
+      oauth2_client = {
+        ENABLE_AUTO_REGISTRATION = true;
+        ACCOUNT_LINKING = "auto";
+        USERNAME = "nickname";
       };
 
       mirror = {
@@ -135,6 +144,88 @@ in
       OnCalendar = "*-*-* 03:15:00";
       Persistent = true;
     };
+  };
+
+  # ── SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix) ─────────
+  # Password sign-in stays as the fallback. The login source is created with
+  # a placeholder secret (argv is journaled), then psql sets the real one from
+  # the credential file. Forgejo loads sources at start: restart on change.
+  nic.sso.clients.forgejo = {
+    name = "Forgejo";
+    callbackUrls = [ "${rootUrl}user/oauth2/pocket-id/callback" ];
+    launchUrl = rootUrl;
+    secretGroup = "forgejo";
+  };
+
+  systemd.services.forgejo-sso = {
+    description = "Register Pocket ID as a Forgejo login source";
+    after = [
+      "forgejo.service"
+      "pocket-id-clients.service"
+    ];
+    wants = [
+      "forgejo.service"
+      "pocket-id-clients.service"
+    ];
+    wantedBy = [ "multi-user.target" ];
+    path = [
+      config.services.forgejo.package
+      config.services.postgresql.package
+    ];
+    environment = {
+      USER = "forgejo";
+      HOME = config.services.forgejo.stateDir;
+      FORGEJO_WORK_DIR = config.services.forgejo.stateDir;
+      FORGEJO_CUSTOM = config.services.forgejo.customDir;
+      PGHOST = config.services.forgejo.database.socket;
+      PGPORT = toString config.services.forgejo.database.port;
+      PGDATABASE = config.services.forgejo.database.name;
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      User = "forgejo";
+      RuntimeDirectory = "forgejo-sso";
+      LoadCredential = "oidc:${config.nic.sso.clients.forgejo.secretFile}";
+      # As root: restart forgejo when the script left the marker.
+      ExecStartPost = "+${
+        lib.getExe (
+          pkgs.writeShellApplication {
+            name = "forgejo-sso-restart";
+            runtimeInputs = [ pkgs.systemd ];
+            text = ''
+              if [ -e /run/forgejo-sso/changed ]; then
+                systemctl try-restart forgejo.service
+              fi
+            '';
+          }
+        )
+      }";
+    };
+    script = ''
+      set -euo pipefail
+      rm -f "$RUNTIME_DIRECTORY/changed"
+      q() { psql -v ON_ERROR_STOP=1 -qtAX "$@"; }
+      if [ -z "$(q -c "SELECT 1 FROM login_source WHERE name = 'pocket-id'")" ]; then
+        forgejo admin auth add-oauth --name pocket-id --provider openidConnect \
+          --key forgejo --secret placeholder \
+          --auto-discover-url ${config.nic.sso.issuer}/.well-known/openid-configuration \
+          --scopes email --scopes profile
+      fi
+      # Quoted heredoc: psql itself runs the backquoted cat.
+      updated=$(q <<'EOF'
+      \set s `cat "$CREDENTIALS_DIRECTORY/oidc"`
+      UPDATE login_source
+        SET cfg = jsonb_set(cfg::jsonb, '{ClientSecret}', to_jsonb(:'s'::text))::text
+        WHERE name = 'pocket-id' AND cfg::jsonb->>'ClientSecret' IS DISTINCT FROM :'s'
+        RETURNING id;
+      EOF
+      )
+      if [ -n "$updated" ]; then
+        echo "forgejo-sso: client secret updated"
+        touch "$RUNTIME_DIRECTORY/changed"
+      fi
+    '';
   };
 
   # ── Socket-activated idle sleep (hosts/rpi5/lib/socket-activate.nix) ────────
