@@ -18,7 +18,11 @@ mkdir -p "$tmp/bin"
 {
   printf '#!%s\n' "$BASH"
   cat <<'STUB'
-printf '%s' "$*" | tr '\n' '|' >> "$CALL_LOG"; printf '\n' >> "$CALL_LOG"
+# The scripts pass the bot URL as a curl config on stdin (-K -): log it after the
+# argv, and keep the argv alone in ARGV_LOG to check the token never lands there.
+printf '%s\n' "$*" >> "$ARGV_LOG"
+cfg=; case " $* " in *" -K - "*) cfg=$(cat) ;; esac
+printf '%s %s' "$*" "$cfg" | tr '\n' '|' >> "$CALL_LOG"; printf '\n' >> "$CALL_LOG"
 default='{"ok":true,"result":{"message_id":'"${STUB_MESSAGE_ID:-4242}"'}}'
 printf '%s\n' "${STUB_RESPONSE:-$default}"
 STUB
@@ -27,7 +31,7 @@ chmod +x "$tmp/bin/curl"
 printf 'fake-token\n' >"$tmp/token"
 printf 'not-really-a-jpeg\n' >"$tmp/pic.jpg"
 
-export PATH="$tmp/bin:$PATH" CALL_LOG="$tmp/calls"
+export PATH="$tmp/bin:$PATH" CALL_LOG="$tmp/calls" ARGV_LOG="$tmp/argv"
 export TELEGRAM_TOKEN_FILE="$tmp/token" TELEGRAM_CHAT_ID=1234567
 : >"$CALL_LOG"
 
@@ -130,6 +134,12 @@ eq "a missing token exits 0" 0 $?
 TELEGRAM_CHAT_ID='' bash "$send" x >/dev/null 2>&1
 eq "a missing chat id exits 0" 0 $?
 eq "neither dialled out" $((before + 1)) "$(count)"
+
+if grep -q fake-token "$ARGV_LOG"; then
+  bad "the token never reaches curl's argv" "$(grep fake-token "$ARGV_LOG" | head -1)"
+else
+  ok "the token never reaches curl's argv"
+fi
 
 echo
 [ "$fails" -eq 0 ] && echo "all checks passed" || echo "$fails check(s) failed"
