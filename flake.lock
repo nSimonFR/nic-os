@@ -32,11 +32,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1793637660,
-        "narHash": "sha256-Ry1aCKnoqjJ1ULVlggM+afe9ylxzVhFYw5x6Rze3kXs=",
+        "lastModified": 1795463442,
+        "narHash": "sha256-CgoyIHTZ87io6FdcnfTMJSuaL0FzFNF7YmhFSVki46g=",
         "owner": "nSimonFR",
         "repo": "airtrail-nix",
-        "rev": "f8cd54e05ffd4c8d2a7dc3ca06edd597094e0fff",
+        "rev": "69ee173a21aa90e502b07f8c51181b241f252e0c",
         "type": "github"
       },
       "original": {
@@ -949,11 +949,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1795416666,
-        "narHash": "sha256-b1GmfrMPoZ2ANkR0we9Q9KQN6n1e+vNyDqt1p4CNEAY=",
+        "lastModified": 1795495638,
+        "narHash": "sha256-hhROWq9062PdIznKMqiQuy3L9F7l4LHwofEVrcncfZM=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "5330ee115c06d2b43f49e902130125eab579b22f",
+        "rev": "45e6e554481f962d4134021d3a63c96d8755f395",
         "type": "github"
       },
       "original": {
@@ -1298,11 +1298,11 @@
     },
     "nixpkgs-unstable": {
       "locked": {
-        "lastModified": 1795249095,
-        "narHash": "sha256-8JDgyVvWUZg5m9hNlL8Ge9aT647ng3Ukc8NPMiKNTPQ=",
+        "lastModified": 1795371335,
+        "narHash": "sha256-oa2P5WZer1A4wuhatl92JyHHEjrrOdIyuvTuI5LUi9Q=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "93a9ed0a866099a230ed5146a5bb7d16fd5c9b14",
+        "rev": "619c39f6eac5d1ed6b8f073a9414baf7034b2356",
         "type": "github"
       },
       "original": {
@@ -1410,11 +1410,11 @@
     },
     "nixpkgs_8": {
       "locked": {
-        "lastModified": 1795432987,
-        "narHash": "sha256-5LTPVCVXJ/MshPEYQCdUsGfgSWOMS951KGI2l7swc3o=",
+        "lastModified": 1795481340,
+        "narHash": "sha256-m1DFhMq8Z+TrkWJ/lPndh5E+135OFVfohQ2d6JD+Ozs=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "745e63f810a175d4524faef056b3e54cb9ebabd0",
+        "rev": "47369fd23e6779c9ee622c0775058ee9ce0f41a0",
         "type": "github"
       },
       "original": {
@@ -1574,11 +1574,11 @@
         "nixpkgs-pnpm": "nixpkgs-pnpm"
       },
       "locked": {
-        "lastModified": 1795162129,
-        "narHash": "sha256-yisrQBl5FxsEu4NWF5s4nDIIxl52WFEwGKn1FOUazCk=",
+        "lastModified": 1795463460,
+        "narHash": "sha256-vrRrL6WFVS0zhKK4fD9A7wyXHVtm4VGmpU9fXh3RfdE=",
         "owner": "nSimonFR",
         "repo": "reactive-resume-nix",
-        "rev": "583015d0aa1ef1d2585e0e6ffb5105d396a8b4cf",
+        "rev": "3a90d92cb688b66d4bc97c9edf0b4046f1e14be5",
         "type": "github"
       },
       "original": {
@@ -1594,10 +1594,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1794854967,
-        "narHash": "sha256-MJ7PMkj4aQM30vLVPeay1gPiTx9OBylGyLvqAfnoS9E=",
+        "lastModified": 1795467078,
+        "narHash": "sha256-3Q8RAtr2qBh/Kl0HvnTEhobkgm/ktPOVNmrLKWN3x9k=",
         "type": "tarball",
-        "url": "https://pkgs.superlogical.com/rex/nix/snapshot/0.0.1794854967-g57a025.tar.gz"
+        "url": "https://pkgs.superlogical.com/rex/nix/snapshot/0.1.0-snapshot.2531.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -1735,11 +1735,11 @@
         "rust-overlay": "rust-overlay_3"
       },
       "locked": {
-        "lastModified": 1786876996,
-        "narHash": "sha256-LFsw2+qXiChTXd6CdsZhWWICBAWF8R2FE/Z/bTfnw5U=",
+        "lastModified": 1795463465,
+        "narHash": "sha256-gr2D38/4Uh3WzcN47qpOtF7MOh9kDGXyZJKib4hw49Y=",
         "owner": "nSimonFR",
         "repo": "ryot-nix",
-        "rev": "a87e92b2fe9dda6fd7e021cea8a516dba12d23d3",
+        "rev": "d25137a3efbce08ad42cb09f5517edca06f9c0fd",
         "type": "github"
       },
       "original": {
@@ -1773,11 +1773,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795440224,
-        "narHash": "sha256-PcabC/2foxOGiAhf8gZnFv6kGuVcdHpnYXb9GmgcnLY=",
+        "lastModified": 1795464343,
+        "narHash": "sha256-+bhqr4X5KLMCUheLcS1kJQQ1w31wZuG/sPaPJ7ZrVWc=",
         "owner": "nSimonFR",
         "repo": "sure-nix",
-        "rev": "d908747196039fbcb53db58dc2c129eab96af81d",
+        "rev": "3392ea8fdb50100e7900cf4b7033a29352cbe281",
         "type": "github"
       },
       "original": {
