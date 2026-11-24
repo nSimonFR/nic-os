@@ -241,6 +241,7 @@ in
   # linked; no account is ever created from SSO. Password login stays on.
   nic.sso.clients.sure = {
     name = "Sure";
+    allowedGroups = [ "famille" ]; # Alfie too
     callbackUrls = [ sureOidcCallback ];
     launchUrl = config.nic.services.sure.public.publicUrl;
     secretGroup = config.services.sure.group;

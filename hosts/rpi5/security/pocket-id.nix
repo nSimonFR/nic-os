@@ -81,11 +81,13 @@ let
         };
         allowedGroups = mkOption {
           type = types.nullOr (types.listOf types.str);
-          default = null;
-          example = [ "admins" ];
+          default = [ "admins" ];
+          example = [ "famille" ];
           description = ''
-            Pocket ID group names allowed to use this client. A client with no
-            group is open to every user; null leaves the groups set in Pocket ID.
+            Pocket ID group names allowed to use this client; the client is
+            marked group-restricted, so nobody else can sign in to it. null
+            leaves the restriction and groups as set in Pocket ID (an
+            unrestricted client is open to every user).
           '';
         };
         pkce = mkOption {

@@ -312,3 +312,36 @@ def test_no_allowed_groups_leaves_them_alone(tmp_path):
     rc, op, _ = run(tmp_path, [c], [OK, cur, listed("sec-1")])
     assert rc == 0
     assert "/api/user-groups" not in " ".join(p for _, p in calls(op))
+
+
+def test_allowed_groups_restrict_a_new_client(tmp_path):
+    c = client(tmp_path, allowedGroups=["admins"])
+    replies = [OK, not_found, OK, groups(admins="g-a"), OK, secret_created()]
+    rc, op, _ = run(tmp_path, [c], replies)
+    assert rc == 0
+    assert op.body_of(2)["isGroupRestricted"] is True
+
+
+def test_unrestricted_client_gets_restricted_even_if_groups_match(tmp_path):
+    # Pocket ID ignores the groups of an unrestricted client.
+    c = client(tmp_path, allowedGroups=["admins"])
+    hold(tmp_path)
+    cur = current(
+        c, isGroupRestricted=False, allowedUserGroups=[{"id": "g-a", "name": "admins"}]
+    )
+    rc, op, lines = run(
+        tmp_path, [c], [OK, cur, OK, groups(admins="g-a"), listed("sec-1")]
+    )
+    assert rc == 0
+    assert calls(op)[2] == ("PUT", "/api/oidc/clients/immich")
+    assert op.body_of(2)["isGroupRestricted"] is True
+    assert all(not p.endswith("allowed-user-groups") for _, p in calls(op))
+
+
+def test_no_allowed_groups_leaves_the_restriction_alone(tmp_path):
+    c = client(tmp_path)
+    hold(tmp_path)
+    cur = current(c, isGroupRestricted=True)
+    rc, op, _ = run(tmp_path, [c], [OK, cur, listed("sec-1")])
+    assert rc == 0
+    assert all(m == "GET" for m, _ in calls(op))

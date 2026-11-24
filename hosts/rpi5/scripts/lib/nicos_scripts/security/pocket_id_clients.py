@@ -11,8 +11,11 @@ is not among the client's active secrets: a missing file (a new random value), a
 recreated client, or a registration interrupted on an earlier run. A restored or
 reset database so gets back the secrets the services already hold.
 
-When a client declares `allowedGroups` (Pocket ID group names), its allowed
-user groups are set to exactly those; without it they are left as they are.
+When a client declares `allowedGroups` (Pocket ID group names), it is marked
+group-restricted and its allowed user groups are set to exactly those; without
+it both are left as they are. The flag is what Pocket ID checks: an
+unrestricted client lets every user in whatever groups it lists, and any update
+that leaves the flag off clears those groups.
 
 Clients that exist in Pocket ID but are not declared are left alone.
 """
@@ -31,17 +34,6 @@ from ..logs import logger
 from ..secrets import env_str
 
 TAG = "pocket-id-clients"
-
-# Fields this script owns; everything else on the client (logo, groups) is kept.
-MANAGED = (
-    "name",
-    "callbackURLs",
-    "logoutCallbackURLs",
-    "launchURL",
-    "isPublic",
-    "pkceEnabled",
-    "skipConsent",
-)
 
 
 class Config:
@@ -93,7 +85,8 @@ def wait_ready(api, sleep=time.sleep, tries=60):
 
 
 def desired(c):
-    return {
+    """The client fields this script owns; the rest (logo, groups) is kept."""
+    want = {
         "name": c["name"],
         "callbackURLs": c["callbackURLs"],
         "logoutCallbackURLs": c.get("logoutCallbackURLs", []),
@@ -102,6 +95,9 @@ def desired(c):
         "pkceEnabled": c.get("pkceEnabled", False),
         "skipConsent": True,
     }
+    if c.get("allowedGroups") is not None:
+        want["isGroupRestricted"] = True
+    return want
 
 
 def write_secret(path, value, group, chown=shutil.chown):
@@ -129,7 +125,7 @@ def sync_client(api, c, log, chown=shutil.chown):
         log(f"{cid}: created")
     else:
         merged = {**current, **want}
-        if any(current.get(k) != merged[k] for k in MANAGED):
+        if any(current.get(k) != merged[k] for k in want):
             api.call("PUT", f"/api/oidc/clients/{cid}", merged)
             log(f"{cid}: updated")
 
