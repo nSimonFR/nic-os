@@ -184,7 +184,7 @@ in
 
   nic.sso.clients.reactive-resume = {
     name = "Reactive Resume";
-    allowedGroups = [ "famille" ]; # Alfie too
+    allowedGroups = [ "family" ]; # Alfie too
     callbackUrls = [ "${appUrl}/api/auth/callback/custom" ];
     launchUrl = appUrl;
     secretGroup = "root"; # read by systemd (EnvironmentFile)

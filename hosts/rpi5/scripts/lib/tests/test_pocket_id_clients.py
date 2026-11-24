@@ -279,7 +279,7 @@ def groups(**by_name):
 
 def test_allowed_groups_are_set_on_a_new_client(tmp_path):
     c = client(tmp_path, allowedGroups=["admins"])
-    replies = [OK, not_found, OK, groups(admins="g-a", famille="g-f"), OK]
+    replies = [OK, not_found, OK, groups(admins="g-a", family="g-f"), OK]
     replies.append(secret_created())
     rc, op, lines = run(tmp_path, [c], replies)
     assert rc == 0
