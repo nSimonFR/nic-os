@@ -10,11 +10,11 @@
 let
   jobspy = python3.pkgs.jobspy.overridePythonAttrs (_: rec {
     # renovate: datasource=pypi depName=python-jobspy
-    version = "1.4.1";
+    version = "1.5.0";
     src = python3.pkgs.fetchPypi {
       pname = "python_jobspy";
       inherit version;
-      hash = "sha256-YCaTEC5PYEhe9oEgc4bdnq96ShORSlZqlIPMKkIamO8=";
+      hash = "sha256-0ChT8/lY2Rbtn/ywSVV7IJ9cCUmHMr5r963uippPLUw=";
     };
     pythonRelaxDeps = true;
     dependencies = with python3.pkgs; [
