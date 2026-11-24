@@ -76,11 +76,12 @@
     ];
     # Use RPi5 blocky for DNS (ad/tracker/malware blocking)
     # Tailscale IP first (works everywhere), LAN second (home network),
-    # Cloudflare/Quad9 last resort if RPi5 is unreachable
+    # Cloudflare/Google last resort if RPi5 is unreachable (not Quad9: it
+    # stopped serving France on 2026-11-24 over a court blocking order)
     dns = [
       "100.122.54.2" # RPi5 – Tailscale
       "1.1.1.1" # Cloudflare – fallback
-      "9.9.9.9" # Quad9 – fallback
+      "8.8.8.8" # Google – fallback
     ];
   };
 
