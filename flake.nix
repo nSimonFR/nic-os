@@ -159,7 +159,7 @@
     # — so the bump is now disabled in renovate.json rather than left to be
     # re-proposed and re-merged against this warning.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/d908feb2b3e024b2d3757de736c2330a86250fbf";
+      url = "github:nSimonFR/gramps-web-nix/235075819c80c02602fc17d224f37d1087f0aea8";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
