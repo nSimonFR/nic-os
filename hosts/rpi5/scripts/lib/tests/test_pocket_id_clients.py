@@ -271,3 +271,44 @@ def test_env_file_error_is_reported_and_others_continue(tmp_path):
     assert rc == 1
     assert any(line.startswith("immich: no such group") for line in lines)
     assert secret_file(tmp_path, "memos").exists()
+
+
+def groups(**by_name):
+    return json_reply({"data": [{"id": i, "name": n} for n, i in by_name.items()]})
+
+
+def test_allowed_groups_are_set_on_a_new_client(tmp_path):
+    c = client(tmp_path, allowedGroups=["admins"])
+    replies = [OK, not_found, OK, groups(admins="g-a", famille="g-f"), OK]
+    replies.append(secret_created())
+    rc, op, lines = run(tmp_path, [c], replies)
+    assert rc == 0
+    assert calls(op)[4] == ("PUT", "/api/oidc/clients/immich/allowed-user-groups")
+    assert op.body_of(4) == {"userGroupIds": ["g-a"]}
+    assert any("allowed groups set to admins" in line for line in lines)
+
+
+def test_matching_allowed_groups_make_no_write(tmp_path):
+    c = client(tmp_path, allowedGroups=["admins"])
+    hold(tmp_path)
+    cur = current(c, allowedUserGroups=[{"id": "g-a", "name": "admins"}])
+    rc, op, _ = run(tmp_path, [c], [OK, cur, groups(admins="g-a"), listed("sec-1")])
+    assert rc == 0
+    assert [m for m, _ in calls(op)] == ["GET"] * 4
+
+
+def test_unknown_group_fails_the_client(tmp_path):
+    c = client(tmp_path, allowedGroups=["nope"])
+    rc, op, lines = run(tmp_path, [c], [OK, not_found, OK, groups(admins="g-a")])
+    assert rc == 1
+    assert any("unknown Pocket ID group(s): nope" in line for line in lines)
+    assert all(m != "PUT" for m, _ in calls(op))
+
+
+def test_no_allowed_groups_leaves_them_alone(tmp_path):
+    c = client(tmp_path)
+    hold(tmp_path)
+    cur = current(c, allowedUserGroups=[{"id": "g-a", "name": "admins"}])
+    rc, op, _ = run(tmp_path, [c], [OK, cur, listed("sec-1")])
+    assert rc == 0
+    assert "/api/user-groups" not in " ".join(p for _, p in calls(op))

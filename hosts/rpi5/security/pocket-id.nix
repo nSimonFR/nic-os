@@ -50,6 +50,7 @@ let
         callbackURLs = c.callbackUrls;
         logoutCallbackURLs = c.logoutCallbackUrls;
         launchURL = c.launchUrl;
+        inherit (c) allowedGroups;
         isPublic = c.public;
         pkceEnabled = c.pkce;
       }) config.nic.sso.clients
@@ -77,6 +78,15 @@ let
           type = types.nullOr types.str;
           default = null;
           description = "Where the dashboard tile links.";
+        };
+        allowedGroups = mkOption {
+          type = types.nullOr (types.listOf types.str);
+          default = null;
+          example = [ "admins" ];
+          description = ''
+            Pocket ID group names allowed to use this client. A client with no
+            group is open to every user; null leaves the groups set in Pocket ID.
+          '';
         };
         pkce = mkOption {
           type = types.bool;
