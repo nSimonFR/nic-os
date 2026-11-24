@@ -791,17 +791,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1795517303,
-        "narHash": "sha256-UObwMBD7HrN7Y3irU71Fii04CFUT9XdM/Uxw11SdJDA=",
+        "lastModified": 1795521858,
+        "narHash": "sha256-tNOSQXRjZWcNHvkKENSS9NeoKBYUgo+iLshQxfEtqp8=",
         "owner": "nSimonFR",
         "repo": "gramps-web-nix",
-        "rev": "90bc12bc8872461ccdbad0ee030903c100e19d4e",
+        "rev": "7c6981995a82fda44e6368a33ae59af057e897a4",
         "type": "github"
       },
       "original": {
         "owner": "nSimonFR",
         "repo": "gramps-web-nix",
-        "rev": "90bc12bc8872461ccdbad0ee030903c100e19d4e",
+        "rev": "7c6981995a82fda44e6368a33ae59af057e897a4",
         "type": "github"
       }
     },
