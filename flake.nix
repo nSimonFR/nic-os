@@ -269,7 +269,7 @@
     #   released. Go back to a plain tag pin as soon as upstream cuts one that
     #   contains 38c0019b.
     showmycards-src = {
-      url = "github:showmycards/showmycards/28a976a61fadca282fea6a15f86172058a933cdc";
+      url = "github:showmycards/showmycards/95ed0d5886517e286162294b9e7ee0b257f207e2";
       flake = false;
     };
 

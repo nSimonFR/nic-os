@@ -1751,17 +1751,17 @@
     "showmycards-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1784531137,
-        "narHash": "sha256-7H/2z1qJJk+rzNpYhO5d5hw53f3YpjGMwQiqVktjdQo=",
+        "lastModified": 1795473950,
+        "narHash": "sha256-ztTQGKd1DjelkPh8aIVSyq5YkwfKoHIXlNGtOKbNAOM=",
         "owner": "showmycards",
         "repo": "showmycards",
-        "rev": "28a976a61fadca282fea6a15f86172058a933cdc",
+        "rev": "95ed0d5886517e286162294b9e7ee0b257f207e2",
         "type": "github"
       },
       "original": {
         "owner": "showmycards",
         "repo": "showmycards",
-        "rev": "28a976a61fadca282fea6a15f86172058a933cdc",
+        "rev": "95ed0d5886517e286162294b9e7ee0b257f207e2",
         "type": "github"
       }
     },
