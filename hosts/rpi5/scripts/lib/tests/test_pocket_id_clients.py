@@ -345,3 +345,14 @@ def test_no_allowed_groups_leaves_the_restriction_alone(tmp_path):
     rc, op, _ = run(tmp_path, [c], [OK, cur, listed("sec-1")])
     assert rc == 0
     assert all(m == "GET" for m, _ in calls(op))
+
+
+def test_update_without_allowed_groups_keeps_the_restriction(tmp_path):
+    # The PUT carries the current flag back, so Pocket ID keeps the groups.
+    c = client(tmp_path)
+    hold(tmp_path)
+    cur = current(c, name="Old name", isGroupRestricted=True)
+    rc, op, _ = run(tmp_path, [c], [OK, cur, OK, listed("sec-1")])
+    assert rc == 0
+    assert calls(op)[2] == ("PUT", "/api/oidc/clients/immich")
+    assert op.body_of(2)["isGroupRestricted"] is True
