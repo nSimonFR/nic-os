@@ -12,23 +12,23 @@
 # scripts/nix-fix-hashes.py refreshes every per-platform hash.
 let
   # renovate: datasource=github-releases depName=nathanmartins/mtg-mcp extractVersion=^v(?<version>.+)$
-  version = "2.1.0";
+  version = "2.4.0";
   assets = {
     aarch64-darwin = {
       asset = "Darwin_arm64";
-      hash = "sha256-IdcMsmH4oFvXdcBkIpA/C80rgROx18TRizfpwXj4lio=";
+      hash = "sha256-+k1r6Xp+6ITC4BwVBJNdo+LCnfqTvy3airoG5NWOf/8=";
     };
     x86_64-darwin = {
       asset = "Darwin_x86_64";
-      hash = "sha256-8xTK20TSN2mTMzEUOkQ+fCmDcJo7hNUk/kMd77KUcB8=";
+      hash = "sha256-4kAxyeeXbmW63pOEgPWExNDLV8GB0krXhhtAKL/2Et4=";
     };
     aarch64-linux = {
       asset = "Linux_arm64";
-      hash = "sha256-NajD9ADrQoVOtQiL+X0tVjA7wR5ZI+yIZQvRQM+JHN4=";
+      hash = "sha256-g925DoMdO3MnAOyZrBYldAtjJxK+z72wtkZ9ZhPwAlI=";
     };
     x86_64-linux = {
       asset = "Linux_x86_64";
-      hash = "sha256-kZgBskCfW31WSqkK+vkFfu+Scs99cqZTmu7SIPmOX5E=";
+      hash = "sha256-0nqNEMQPeTEFa9Jr5peMO01yyaQNYfg9GO87Ih5z/SE=";
     };
   };
   inherit (stdenvNoCC.hostPlatform) system;
