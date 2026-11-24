@@ -96,7 +96,7 @@ in
   # Ensure Immich starts after HDD is mounted.
   nic.sso.clients.immich = {
     name = "Immich";
-    allowedGroups = [ "famille" ]; # Alfie too
+    allowedGroups = [ "family" ]; # Alfie too
     callbackUrls = [
       "${origin}/auth/login"
       "${origin}/user-settings"

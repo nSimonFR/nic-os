@@ -82,7 +82,7 @@ let
         allowedGroups = mkOption {
           type = types.nullOr (types.listOf types.str);
           default = [ "admins" ];
-          example = [ "famille" ];
+          example = [ "family" ];
           description = ''
             Pocket ID group names allowed to use this client; the client is
             marked group-restricted, so nobody else can sign in to it. null
