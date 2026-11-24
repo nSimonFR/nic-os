@@ -52,9 +52,6 @@ in
 
     casks = [
       "bitwarden"
-      "android-studio"
-      "arc"
-      "beekeeper-studio"
       "claude"
       "cmux"
       "cursor"
@@ -62,10 +59,8 @@ in
       "disk-inventory-x"
       "docker-desktop"
       "epic-games"
-      "firefox@developer-edition"
       "ghostty"
       "godot"
-      "google-chrome"
       "gramps"
       "iterm2"
       "keyboardcleantool"
@@ -73,14 +68,12 @@ in
       "linear"
       "maccy"
       "macmediakeyforwarder"
-      "obsidian"
       # Qualified: the bare `orca` cask is plotly's, not Stably's agent IDE.
       "stablyai/orca/orca"
       "plex"
       "postman"
       "qbittorrent"
       "raycast"
-      "rewind"
       "rocket"
       "sikarugir"
       "slack"
@@ -104,8 +97,6 @@ in
       Spark = 6445813049;
       Amphetamine = 937984704;
       TheUnarchiver = 425424353;
-      AutoMute = 1118136179;
-      Timepage = 989178902;
     };
   };
 
