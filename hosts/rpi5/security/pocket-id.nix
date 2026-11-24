@@ -86,8 +86,9 @@ let
           description = ''
             Pocket ID group names allowed to use this client; the client is
             marked group-restricted, so nobody else can sign in to it. null
-            leaves the restriction and groups as set in Pocket ID (an
-            unrestricted client is open to every user).
+            leaves the restriction as set in Pocket ID; an unrestricted client
+            is open to every user, and Pocket ID drops its (unused) groups on
+            any update.
           '';
         };
         pkce = mkOption {

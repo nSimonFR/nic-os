@@ -13,7 +13,8 @@ reset database so gets back the secrets the services already hold.
 
 When a client declares `allowedGroups` (Pocket ID group names), it is marked
 group-restricted and its allowed user groups are set to exactly those; without
-it both are left as they are. The flag is what Pocket ID checks: an
+it the restriction is left as it is (an unrestricted client's groups grant
+nothing, and Pocket ID drops them on any update). The flag is what Pocket ID checks: an
 unrestricted client lets every user in whatever groups it lists, and any update
 that leaves the flag off clears those groups.
 
