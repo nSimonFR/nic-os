@@ -142,7 +142,7 @@
     # Rev-pinned: a bump can need new python deps packaged in gramps-web-nix
     # (#438 broke main that way), so Renovate's digest PRs must pass `build rpi5`.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/7c6981995a82fda44e6368a33ae59af057e897a4";
+      url = "github:nSimonFR/gramps-web-nix/cbb61b1618207f8f995a91ae9bedb3f880446ebf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
