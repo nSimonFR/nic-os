@@ -139,27 +139,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # Gramps Web genealogy — same pattern as reactive-resume-nix / sure-nix.
-    # Held at the last rev whose gramps-web-api builds against our pinned
-    # nixpkgs. Upstream a3f86d5 bumped gramps-web-api → 3.17.0 (gramps-web v26),
-    # which needs gramps>=6.0.4, pillow<12, sifts>=1.1 plus yclade/authlib/
-    # gramps-gedcom7/flask-smorest — none satisfied by our nixpkgs — so its
-    # pythonRuntimeDepsCheck fails. Unpin once gramps-web-nix is compatible.
-    #
-    # The rev lives on branch `pin/gramps-web-api-3.2.0` (4e1740a + a
-    # pkg_resources shim — nixpkgs 26.05 dropped setuptools from the closure — + a
-    # frontend patch: CARTO tiles need an API key, now OSM).
-    #
-    # This is not theoretical: Renovate proposed exactly that bump (#438), it was
-    # merged 2026-08-10, and `system.build.toplevel` stopped building —
-    #   Checking runtime dependencies for gramps_webapi-3.17.0-py3-none-any.whl
-    #     - gramps<6.1.0,>=6.0.4 not satisfied by version 6.0.3
-    #     - pillow<12.0.0,>=9.1.0 not satisfied by version 12.2.0
-    #     - sifts>=1.1.0 not satisfied by version 1.0.0
-    #     - yclade / authlib / gramps-gedcom7 / flask-smorest not installed
-    # — so the bump is now disabled in renovate.json rather than left to be
-    # re-proposed and re-merged against this warning.
+    # Rev-pinned: a bump can need new python deps packaged in gramps-web-nix
+    # (#438 broke main that way), so Renovate's digest PRs must pass `build rpi5`.
     gramps-web-nix = {
-      url = "github:nSimonFR/gramps-web-nix/d908feb2b3e024b2d3757de736c2330a86250fbf";
+      url = "github:nSimonFR/gramps-web-nix/59e2eb8be26f5fef4eb941dd6eb05460420011f5";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

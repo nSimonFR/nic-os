@@ -11,6 +11,9 @@ is not among the client's active secrets: a missing file (a new random value), a
 recreated client, or a registration interrupted on an earlier run. A restored or
 reset database so gets back the secrets the services already hold.
 
+When a client declares `allowedGroups` (Pocket ID group names), its allowed
+user groups are set to exactly those; without it they are left as they are.
+
 Clients that exist in Pocket ID but are not declared are left alone.
 """
 
@@ -130,10 +133,36 @@ def sync_client(api, c, log, chown=shutil.chown):
             api.call("PUT", f"/api/oidc/clients/{cid}", merged)
             log(f"{cid}: updated")
 
+    sync_groups(api, c, current, log)
     if want["isPublic"]:
         return
     sync_secret(api, c, current, log, chown=chown)
     write_env(c, chown=chown)
+
+
+def group_ids(api, names):
+    listed = api.call("GET", "/api/user-groups?pagination%5Blimit%5D=100")["data"]
+    by_name = {g["name"]: g["id"] for g in listed}
+    missing = [n for n in names if n not in by_name]
+    if missing:
+        raise LookupError(f"unknown Pocket ID group(s): {', '.join(missing)}")
+    return sorted(by_name[n] for n in names)
+
+
+def sync_groups(api, c, current, log):
+    names = c.get("allowedGroups")
+    if names is None:
+        return
+    cid = c["id"]
+    want = group_ids(api, names)
+    have = sorted(g["id"] for g in (current or {}).get("allowedUserGroups") or [])
+    if want != have:
+        api.call(
+            "PUT",
+            f"/api/oidc/clients/{cid}/allowed-user-groups",
+            {"userGroupIds": want},
+        )
+        log(f"{cid}: allowed groups set to {', '.join(sorted(names)) or 'none'}")
 
 
 def sync_secret(api, c, current, log, chown=shutil.chown):

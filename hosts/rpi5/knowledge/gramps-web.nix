@@ -18,6 +18,7 @@
 # readyProbe gates the first request on /ready (unauthenticated 200) so a cold
 # gunicorn (slow Gramps GI import) isn't dropped.
 {
+  config,
   redisHost,
   redisPort,
   tailnetFqdn,
@@ -26,6 +27,8 @@
 let
   backendPort = 15051; # gunicorn bind (module's host:port)
   proxyPort = 15050; # socket-activate proxy listen; Tailscale Serve 5050 → here
+  origin = "https://${tailnetFqdn}:5050";
+  sso = config.nic.sso.clients.gramps-web;
 in
 {
   services.gramps-web = {
@@ -37,19 +40,48 @@ in
     # tree switcher; an ADMIN-role (5) user can view/manage all trees. Trees are
     # created offline via the bundled `gramps` CLI (see grampsdb dirs under dataDir).
     tree = "*";
-    baseUrl = "https://${tailnetFqdn}:5050";
+    baseUrl = origin;
     # Redis DB 6 — 1=immich, 2=sure, 3=dawarich, 5=nextcloud are taken (4 freed by Paperless removal).
     redisUrl = "redis://${redisHost}:${toString redisPort}/6";
     secretKeyFile = "/run/agenix/gramps-web-secret";
     # Multi-tree hardening: prefix media paths by tree id so one tree's media can't
     # be reached from another (gramps-web warns loudly without this in TREE_MULTI).
-    settings.GRAMPSWEB_MEDIA_PREFIX_TREE = "true";
+    settings = {
+      GRAMPSWEB_MEDIA_PREFIX_TREE = "true";
+      # SSO through Pocket ID (hosts/rpi5/security/pocket-id.nix); password
+      # login stays. Accounts match on the OIDC `sub` (oidc_accounts table),
+      # never by name or email: link an existing account once in Settings →
+      # User after a password sign-in. No OIDC_GROUP_* mapping, so SSO never
+      # changes roles; a first-time SSO user is created disabled.
+      GRAMPSWEB_OIDC_ENABLED = "true";
+      GRAMPSWEB_OIDC_ISSUER = config.nic.sso.issuer;
+      GRAMPSWEB_OIDC_CLIENT_ID = "gramps-web";
+      GRAMPSWEB_OIDC_NAME = "Pocket ID";
+      GRAMPSWEB_OIDC_PKCE = "true";
+    };
+    environmentFile = sso.envFile; # GRAMPSWEB_OIDC_CLIENT_SECRET
+  };
+
+  nic.sso.clients.gramps-web = {
+    name = "Gramps Web";
+    callbackUrls = [ "${origin}/api/oidc/callback/custom" ];
+    launchUrl = origin;
+    secretGroup = "gramps-web";
+    envVar = "GRAMPSWEB_OIDC_CLIENT_SECRET";
+    pkce = true;
+    allowedGroups = [ "admins" ];
   };
 
   # gramps-web-celery reaches Redis directly; make sure it's up first. (The web
   # unit's ordering is managed by the socket-activate proxy.)
-  systemd.services.gramps-web.after = [ "redis-shared.service" ];
-  systemd.services.gramps-web.wants = [ "redis-shared.service" ];
+  systemd.services.gramps-web.after = [
+    "redis-shared.service"
+    "pocket-id-clients.service"
+  ];
+  systemd.services.gramps-web.wants = [
+    "redis-shared.service"
+    "pocket-id-clients.service"
+  ];
   systemd.services.gramps-web-celery.after = [ "redis-shared.service" ];
   systemd.services.gramps-web-celery.wants = [ "redis-shared.service" ];
 
