@@ -22,7 +22,6 @@ title=$2
 body=$(cat)
 
 token=$(<"$TELEGRAM_TOKEN_FILE")
-api="https://api.telegram.org/bot$token"
 now=$(date '+%H:%M')
 
 mkdir -p "$ALERT_STATE_DIR"
@@ -31,15 +30,18 @@ cnt_f="$ALERT_STATE_DIR/$key.cnt"
 first_f="$ALERT_STATE_DIR/$key.first"
 
 # tg METHOD TEXT [extra curl args...]
+# The URL holds the token, so it goes to curl on stdin (-K -), never in argv,
+# where any user could read it with ps.
 tg() {
   local method=$1 text=$2
   shift 2
-  curl -sf -X POST "$api/$method" \
-    -d chat_id="$TELEGRAM_CHAT_ID" \
-    -d parse_mode=HTML \
-    -d disable_web_page_preview=true \
-    "$@" \
-    --data-urlencode "text=$text"
+  printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$token" "$method" |
+    curl -sf -K - -X POST \
+      -d chat_id="$TELEGRAM_CHAT_ID" \
+      -d parse_mode=HTML \
+      -d disable_web_page_preview=true \
+      "$@" \
+      --data-urlencode "text=$text"
 }
 
 if [ -n "${body//[[:space:]]/}" ]; then

@@ -105,7 +105,8 @@ else
     --data-urlencode "text=$text"
 fi
 
-resp=$(curl -sS --max-time 20 -X POST \
-  "https://api.telegram.org/bot$token/$method" "$@" 2>&1)
+# The URL holds the token: curl reads it on stdin (-K -), so ps never shows it.
+resp=$(printf 'url = "https://api.telegram.org/bot%s/%s"\n' "$token" "$method" |
+  curl -sS --max-time 20 -K - -X POST "$@" 2>&1)
 printf '%s\n' "$resp"
 case $resp in *'"ok":true'*) ;; *) die "send rejected: $resp" ;; esac

@@ -366,16 +366,18 @@ send_telegram() {
   if [ "$RICH" -eq 1 ]; then
     build_rich_message
     jq -n --rawfile html "$MSG_RICH" '{html: $html, skip_entity_detection: false}' >"$RICH_JSON"
-    curl -fsS -X POST "https://api.telegram.org/bot${token}/sendRichMessage" \
-      -d "chat_id=${CHAT_ID}" \
-      --data-urlencode "rich_message@$RICH_JSON" \
-      >"$response"
+    printf 'url = "https://api.telegram.org/bot%s/sendRichMessage"\n' "$token" |
+      curl -fsS -K - -X POST \
+        -d "chat_id=${CHAT_ID}" \
+        --data-urlencode "rich_message@$RICH_JSON" \
+        >"$response"
   else
-    curl -fsS -X POST "https://api.telegram.org/bot${token}/sendMessage" \
-      -d "chat_id=${CHAT_ID}" \
-      -d parse_mode=HTML \
-      --data-urlencode "text@$MSG_TXT" \
-      >"$response"
+    printf 'url = "https://api.telegram.org/bot%s/sendMessage"\n' "$token" |
+      curl -fsS -K - -X POST \
+        -d "chat_id=${CHAT_ID}" \
+        -d parse_mode=HTML \
+        --data-urlencode "text@$MSG_TXT" \
+        >"$response"
   fi
 
   jq -e '.ok == true' "$response" >/dev/null 2>&1 || {

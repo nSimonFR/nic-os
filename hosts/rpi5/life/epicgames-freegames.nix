@@ -76,9 +76,9 @@ in
       install -d -m 0750 -o epicgames-freegames -g epicgames-freegames ${stateDir}
       token=$(cat /run/agenix/telegram-bot-token)
       email=$(cat /run/agenix/epicgames-account-email)
-      ${pkgs.jq}/bin/jq -n \
+      # The token reaches jq through the environment, not argv (ps shows argv).
+      TG_TOKEN=$token ${pkgs.jq}/bin/jq -n \
         --arg email "$email" \
-        --arg token "$token" \
         --arg chatId "${toString telegramChatId}" \
         --arg baseUrl "${portalUrl}" \
         --argjson port ${toString portalPort} \
@@ -86,7 +86,7 @@ in
           logLevel: "info",
           webPortalConfig: { baseUrl: $baseUrl, listenOpts: { port: $port, host: "127.0.0.1" } },
           accounts: [ { email: $email } ],
-          notifiers: [ { type: "telegram", token: $token, chatId: $chatId } ]
+          notifiers: [ { type: "telegram", token: $ENV.TG_TOKEN, chatId: $chatId } ]
         }' > ${configFile}
       chown epicgames-freegames:epicgames-freegames ${configFile}
       chmod 0400 ${configFile}
