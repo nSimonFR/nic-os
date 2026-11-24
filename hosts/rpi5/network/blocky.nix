@@ -34,9 +34,9 @@ in
         groups = {
           default = [
             "https://one.one.one.one/dns-query" # Cloudflare
-            # Not Quad9: on 2026-11-24 it answered REFUSED to this IP, and
-            # parallel_best returns that answer instead of failing over, so
-            # most lookups failed. The threats denylist covers malware.
+            # Not Quad9: it left France on 2026-11-24 (Paris court blocking order)
+            # and answers REFUSED here; parallel_best returns that answer instead
+            # of failing over. The threats denylist covers malware.
             "https://dns.google/dns-query" # Google
           ];
         };

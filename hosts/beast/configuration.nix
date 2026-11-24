@@ -712,7 +712,7 @@ in
   services.resolved = {
     fallbackDns = [
       "1.1.1.1" # Cloudflare – last resort if RPi5 is down
-      "9.9.9.9" # Quad9 – last resort
+      "8.8.8.8" # Google – last resort (Quad9 left France 2026-11-24)
     ];
     # Don't let DHCP override our DNS settings
     dnsovertls = "opportunistic";
