@@ -244,7 +244,7 @@ in
         tile = {
           name = "Pocket ID";
           icon = "pocket-id.svg";
-          category = "Backend";
+          category = "Apps";
           description = "SSO (passkeys)";
           widget = {
             type = "customapi";
