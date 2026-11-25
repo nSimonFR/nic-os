@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Pin a deployed system in the nsimon-nicos Cachix cache, so LRU GC never
+# evicts its runtime closure (the free plan is 5 GB across caches).
+#
+#   CACHIX_AUTH_TOKEN=… scripts/cachix-pin <pin-name> <store-path> <keep-json>
+#   keep-json: '{"tag":"Revisions","contents":1}' or '{"tag":"Days","contents":14}'
+#
+# The API, not `cachix pin`: the CLI (1.11) refuses a path missing from the
+# local store, and the deploy runs that skip the build never realize it.
+# Pinning the path the latest revision already holds is skipped: each pin adds
+# a revision, so a repeat would push an older system out of the retained ones.
+set -euo pipefail
+name=$1 out=$2 keep=$3
+api=https://app.cachix.org/api/v1/cache/nsimon-nicos/pin
+auth="Authorization: Bearer $CACHIX_AUTH_TOKEN"
+
+last=$(curl -fsS --retry 5 --retry-all-errors -H "$auth" "$api" |
+  jq -r --arg n "$name" '.[] | select(.name == $n) | .lastRevision.storePath')
+if [ "$last" = "$out" ]; then
+  echo "$name already pinned to $out"
+  exit 0
+fi
+
+jq -n --arg n "$name" --arg p "$out" --argjson k "$keep" \
+  '{name: $n, storePath: $p, artifacts: [], keep: $k}' |
+  curl -fsS --retry 5 --retry-all-errors -X POST -H "$auth" \
+    -H "Content-Type: application/json" --data @- "$api"
+echo "pinned $name -> $out (keep $keep)"
