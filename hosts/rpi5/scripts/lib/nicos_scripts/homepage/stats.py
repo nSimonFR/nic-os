@@ -128,7 +128,10 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # backfill_missing fetches keys the cache has no entry for — but the bump costs one
 # refetch and removes the need to reason about it, and this same rebuild moves dsh
 # out of Backend into Apps, so the tile is new to the dashboard either way.
-STATS_SCHEMA = 16
+#
+# 17 fixes wakapi's today/last_30d (string comparisons against an integer epoch-ms
+# column, so both read 0). Same fields, different values: bump so the cached zeros go.
+STATS_SCHEMA = 17
 
 
 @dataclass(frozen=True)
@@ -1343,9 +1346,12 @@ def fetch_wakapi(cfg, run):
     # heartbeat-coalescing table (the same thing its summaries are built from), and
     # its `duration` column is NANOSECONDS — hence /3.6e12 for hours.
     #
-    # `time` values carry a UTC offset (e.g. "…21:39:51.902+02:00"), so date() on
-    # them yields a UTC date; the 'localtime' modifier on both sides makes "today"
-    # mean the local day rather than shifting by two hours after midnight.
+    # `time` is an INTEGER of epoch MILLISECONDS. It used to be an ISO string with
+    # a UTC offset, and the old string comparisons kept running against integers
+    # without an error: SQLite orders every integer before every text value, so
+    # `time >= datetime(...)` was never true and today/30d read 0 for months
+    # (found 2026-11-25; 301 h in the real 30 days). 'unixepoch' + 'localtime'
+    # makes "today" the local day, not the UTC one.
     def hours(where=""):
         ns = sqlite_count(
             cfg,
@@ -1356,8 +1362,10 @@ def fetch_wakapi(cfg, run):
         return round(ns / 3.6e12, 1)
 
     return {
-        "today": hours("WHERE date(time, 'localtime') = date('now', 'localtime')"),
-        "last_30d": hours("WHERE time >= datetime('now', '-30 day')"),
+        "today": hours(
+            "WHERE date(time / 1000, 'unixepoch', 'localtime') = date('now', 'localtime')"
+        ),
+        "last_30d": hours("WHERE time >= strftime('%s', 'now', '-30 day') * 1000"),
         "total": hours(),
     }
 
