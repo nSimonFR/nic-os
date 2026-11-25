@@ -184,12 +184,22 @@ let
     inherit (unstablePkgs) claude-code;
   };
 
-  claudeCodePkg = claudeCodeUpstream.overrideAttrs (old: {
-    nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
-    postFixup = (old.postFixup or "") + ''
+  # A thin wrapper beside the upstream binary, not an overrideAttrs of it: that
+  # rebuilt the whole 348 MB package under a new hash, so the store and Cachix
+  # held it twice (rpi5's open-knowledge uses the unwrapped one).
+  claudeCodePkg = pkgs.symlinkJoin {
+    inherit (claudeCodeUpstream)
+      name
+      version
+      meta
+      passthru
+      ;
+    paths = [ claudeCodeUpstream ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
       wrapProgram $out/bin/claude ${lib.concatStringsSep " " claudeWrapperFlags}
     '';
-  });
+  };
 
 in
 {

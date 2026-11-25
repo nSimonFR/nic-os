@@ -118,3 +118,15 @@ jobs:
         with:
           path: .deployed
           key: nbookpro-deployed-${{ steps.eval.outputs.hash }}
+
+      # Keep the deployed system's whole closure in Cachix. The free plan is 5 GB
+      # across every cache, collected LRU, and rpi5 (~3.6 GB of its own paths)
+      # plus nBookPro (~1 GB) nearly fill it: PR pushes kept evicting unchanged
+      # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
+      # keep-revisions 1 releases the previous generation once this one lands.
+      - name: Pin the deployed system in Cachix
+        if: steps.plan.outputs.activate == 'true'
+        continue-on-error: true
+        env:
+          OUT: ${{ steps.eval.outputs.out }}
+        run: cachix pin nsimon-nicos nbookpro "$OUT" --keep-revisions 1

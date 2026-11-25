@@ -51,6 +51,11 @@
   ...
 }:
 let
+  # Same expression as open-knowledge and the home-manager CLI, so all three
+  # share one store path (and one Cachix entry) instead of a second version.
+  claudeCode = pkgs.callPackage ../../../pkgs/agents/claude-code.nix {
+    inherit (unstablePkgs) claude-code;
+  };
   cfg = config.services.cyrus;
 
   # Source from the `cyrus-src` flake input (flake.nix). Locked in flake.lock
@@ -482,7 +487,7 @@ in
         # (cyrus's edge-worker doesn't surface pathToClaudeCodeExecutable).
         for bundled in node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-*/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude; do
           if [ -e "$bundled" ]; then
-            ln -sf ${unstablePkgs.claude-code}/bin/claude "$bundled"
+            ln -sf ${claudeCode}/bin/claude "$bundled"
             echo "Replaced bundled SDK claude with nixpkgs build: $bundled"
           fi
         done
@@ -643,7 +648,7 @@ in
         pkgs.pnpm_10_latest
         # @anthropic-ai/claude-agent-sdk spawns the `claude` CLI as a child.
         # Without it the SDK exits 127 ("command not found") on every session.
-        unstablePkgs.claude-code
+        claudeCode
         # Claude Code's sandbox uses these; missing them only emits warnings
         # (no fatal) but skipping them disables write-isolation.
         pkgs.socat
