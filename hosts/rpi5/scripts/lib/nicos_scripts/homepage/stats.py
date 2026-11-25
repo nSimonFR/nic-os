@@ -130,7 +130,8 @@ RETRY_INTERVAL = 60  # seconds; one more go at a key that came back empty
 # out of Backend into Apps, so the tile is new to the dashboard either way.
 #
 # 17 fixes wakapi's today/last_30d (string comparisons against an integer epoch-ms
-# column, so both read 0). Same fields, different values: bump so the cached zeros go.
+# column, so both read 0), and forgejo's stale_mirrors now means "not synced in 48 h"
+# rather than "past its 8 h interval". Same fields, new meaning: bump.
 STATS_SCHEMA = 17
 
 
@@ -1805,15 +1806,14 @@ def fetch_forgejo(cfg, run):
 
     return {
         "repositories": count("SELECT COUNT(*) FROM repository;"),
-        # next_update_unix is when Forgejo intends to sync next, so "in the past"
-        # means the scheduler has not got to it — which covers both a stalled
-        # queue and a mirror whose interval has been missed. Compared in SQL
-        # against the database's own clock rather than Python's, so the two cannot
-        # disagree.
+        # Not synced in 48 hours. It used to be `next_update_unix` in the past,
+        # but mirrors carry an 8 h interval and are synced by ONE nightly
+        # update_mirrors run (03:30), so every mirror was "overdue" by mid-
+        # afternoon and the tile read ~20 on a healthy day. 48 h is one missed
+        # night plus slack. Compared in SQL against the database's own clock.
         "stale_mirrors": count("""
             SELECT COUNT(*) FROM mirror
-             WHERE next_update_unix > 0
-               AND next_update_unix < EXTRACT(EPOCH FROM now());
+             WHERE updated_unix < EXTRACT(EPOCH FROM now() - interval '48 hours');
         """),
         # repository.size is the git directory in bytes, already maintained by
         # Forgejo — no du walk over /var/lib/forgejo needed.
