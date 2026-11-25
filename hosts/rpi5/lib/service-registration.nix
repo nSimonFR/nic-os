@@ -256,6 +256,9 @@ let
                                               Forgejo
                 220–270  the rest           — Gramps Web, ShowMyCards, Death Plan Switch,
                                               Cinny (the matrix entry, 270)
+                910      alone on row 7      — Pocket ID (owner's choice, 2026-11-25:
+                                              its own row rather than displacing
+                                              a tile from a full one)
 
               The rows are the OWNER'S CHOICE and not derivable from anything in
               the tree, which is the whole reason they are written down here. Do not
@@ -269,8 +272,8 @@ let
               row's neighbours, not appending after 250.
 
               300–380  Backend tiles and the untiled routed services. Backend is
-                       not curated in rows; Pocket ID (910) and the two
-                       externalTiles (Hermes 340, Blocky 345) close it.
+                       not curated in rows; the two externalTiles (Hermes
+                       340, Blocky 345) close it.
           '';
           example = 120;
         };
