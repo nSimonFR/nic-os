@@ -324,13 +324,33 @@ def test_wakapi_converts_nanoseconds_to_hours():
     assert hs.fetch_wakapi(CFG, run) == {"today": 1.0, "last_30d": 1.0, "total": 1.0}
 
 
-def test_wakapi_uses_local_time_for_today():
-    # date() on a value carrying a UTC offset yields the UTC date, which shifts
-    # "today" by two hours after midnight.
-    run = FakeRun([("durations", "0")])
-    hs.fetch_wakapi(CFG, run)
-    today_sql = run.commands[0]
-    assert "date(time, 'localtime') = date('now', 'localtime')" in today_sql
+def test_wakapi_windows_read_time_as_epoch_milliseconds(tmp_path):
+    # `time` is epoch ms. Comparing it with date strings silently matched nothing
+    # (every SQLite integer sorts before every text), so both windows read 0.
+    import sqlite3
+
+    db = tmp_path / "wakapi.db"
+    con = sqlite3.connect(db)
+    con.execute("CREATE TABLE durations (time INTEGER, duration INTEGER)")
+    now_ms = int(time.time() * 1000)
+    hour_ns = int(3.6e12)
+    con.executemany(
+        "INSERT INTO durations VALUES (?, ?)",
+        [(now_ms, hour_ns), (now_ms - 10 * 86400 * 1000, hour_ns), (0, hour_ns)],
+    )
+    con.commit()
+    con.close()
+
+    def run(argv, env=None):
+        sql = argv[-1]
+        c = sqlite3.connect(db)
+        try:
+            return str(c.execute(sql.rstrip(";")).fetchone()[0])
+        finally:
+            c.close()
+
+    cfg = hs.Config(wakapi_db=str(db))
+    assert hs.fetch_wakapi(cfg, run) == {"today": 1.0, "last_30d": 2.0, "total": 3.0}
 
 
 def test_airtrail_treats_flight_duration_as_seconds():
