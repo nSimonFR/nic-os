@@ -132,11 +132,13 @@ jobs:
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
       # One revision: `cachix deploy activate` above waits for the result, so the
       # pinned system is the running one.
-      # On the activating run, or on a later run that finds this system deployed
-      # but not yet pinned (the pin failed): that retries without redeploying.
+      # Always on the activating run (a marker from an earlier pin says nothing
+      # about current retention). On a later run that finds this system
+      # deployed, only if no pin of it ever succeeded: that retries a failed pin
+      # without redeploying, and never re-pins an older system over the running one.
       - name: Look up the pinned marker
         id: pinned
-        if: steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true'
+        if: steps.plan.outputs.activate != 'true' && steps.marker.outputs.cache-hit == 'true'
         uses: actions/cache/restore@v6
         with:
           path: .pinned
@@ -145,7 +147,7 @@ jobs:
 
       - name: Pin the deployed system in Cachix
         id: pin
-        if: (steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true') && steps.pinned.outputs.cache-hit != 'true'
+        if: steps.plan.outputs.activate == 'true' || (steps.marker.outputs.cache-hit == 'true' && steps.pinned.outputs.cache-hit != 'true')
         continue-on-error: true
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
