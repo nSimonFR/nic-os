@@ -132,11 +132,31 @@ jobs:
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
       # One revision: `cachix deploy activate` above waits for the result, so the
       # pinned system is the running one.
-      # Only when this run activates: a marker hit may be an older system.
+      # On the activating run, or on a later run that finds this system deployed
+      # but not yet pinned (the pin failed): that retries without redeploying.
+      - name: Look up the pinned marker
+        id: pinned
+        if: steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true'
+        uses: actions/cache/restore@v6
+        with:
+          path: .pinned
+          key: rpi5-pinned-${{ steps.eval.outputs.hash }}
+          lookup-only: true
+
       - name: Pin the deployed system in Cachix
-        if: steps.plan.outputs.activate == 'true'
+        id: pin
+        if: (steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true') && steps.pinned.outputs.cache-hit != 'true'
         continue-on-error: true
         env:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
           OUT: ${{ steps.eval.outputs.out }}
-        run: scripts/cachix-pin rpi5 "$OUT" '{"tag":"Revisions","contents":1}'
+        run: |
+          scripts/cachix-pin rpi5 "$OUT" '{"tag":"Revisions","contents":1}'
+          echo "$OUT" > .pinned
+
+      - name: Save the pinned marker
+        if: steps.pin.outcome == 'success'
+        uses: actions/cache/save@v6
+        with:
+          path: .pinned
+          key: rpi5-pinned-${{ steps.eval.outputs.hash }}
