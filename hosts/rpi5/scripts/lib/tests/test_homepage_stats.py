@@ -1494,9 +1494,9 @@ def _write_env():
     return p
 
 
-def test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past():
-    # The field earned itself on the first fetch: all 68 mirrors overdue, newest
-    # sync 2026-08-11, and nothing on the dashboard had said so.
+def test_forgejo_counts_mirrors_not_synced_in_two_days():
+    # Not "past next_update_unix": with an 8 h interval and one nightly sync,
+    # that read ~20 every afternoon on a healthy instance.
     run = FakeRun(
         [
             ("COUNT(*) FROM repository;", "167"),
@@ -1507,9 +1507,9 @@ def test_forgejo_counts_mirrors_whose_next_sync_is_in_the_past():
     out = hs.fetch_forgejo(CFG, run)
     assert out == {"repositories": 167, "stale_mirrors": 68, "size": 2308263025}
     mirror_sql = [c for c in run.commands if "FROM mirror" in c][0]
-    assert "next_update_unix <" in mirror_sql
-    # next_update_unix = 0 means "no schedule", which is not the same as overdue.
-    assert "next_update_unix > 0" in mirror_sql
+    assert "updated_unix <" in mirror_sql
+    assert "48 hours" in mirror_sql
+    assert "next_update_unix" not in mirror_sql
     # Compared against the database's clock, not Python's, so the two cannot
     # disagree about what "now" is.
     assert "now()" in mirror_sql
