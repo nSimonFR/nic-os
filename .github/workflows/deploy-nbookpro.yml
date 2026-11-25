@@ -123,10 +123,13 @@ jobs:
       # across every cache, collected LRU, and rpi5 (~3.6 GB of its own paths)
       # plus nBookPro (~1 GB) nearly fill it: PR pushes kept evicting unchanged
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
-      # keep-revisions 1 releases the previous generation once this one lands.
+      # keep-revisions 2, not 1: Activate only queues the Mac's deploy (it waits
+      # while the laptop sleeps), so the system it still runs stays pinned too.
       - name: Pin the deployed system in Cachix
-        if: steps.plan.outputs.activate == 'true'
+        # Also on runs that find the marker, so a failed pin is retried by the
+        # next run instead of waiting for the next system change.
+        if: steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true'
         continue-on-error: true
         env:
           OUT: ${{ steps.eval.outputs.out }}
-        run: cachix pin nsimon-nicos nbookpro "$OUT" --keep-revisions 1
+        run: cachix pin nsimon-nicos nbookpro "$OUT" --keep-revisions 2

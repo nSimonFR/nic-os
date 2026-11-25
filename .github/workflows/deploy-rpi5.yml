@@ -132,7 +132,9 @@ jobs:
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
       # keep-revisions 1 releases the previous generation once this one lands.
       - name: Pin the deployed system in Cachix
-        if: steps.plan.outputs.activate == 'true'
+        # Also on runs that find the marker, so a failed pin is retried by the
+        # next run instead of waiting for the next system change.
+        if: steps.plan.outputs.activate == 'true' || steps.marker.outputs.cache-hit == 'true'
         continue-on-error: true
         env:
           OUT: ${{ steps.eval.outputs.out }}
