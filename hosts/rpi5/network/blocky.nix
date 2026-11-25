@@ -16,6 +16,42 @@ let
   hagezi = name: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/wildcard/${name}.txt";
 in
 {
+  # Backend health tile, no link: blocky has no UI. Its numbers are live
+  # Prometheus counters (since the last restart) — see fetch_blocky.
+  nic.externalTiles = [
+    {
+      order = 345;
+      tile = {
+        name = "Blocky";
+        icon = "blocky.svg";
+        category = "Backend";
+        description = "DNS + ad blocking";
+        widget = {
+          type = "customapi";
+          url = "http://127.0.0.1:8087/blocky";
+          refreshInterval = 300000;
+          mappings = [
+            {
+              field = "queries";
+              label = "Queries";
+              format = "text";
+            }
+            {
+              field = "blocked";
+              label = "Blocked";
+              format = "text";
+            }
+            {
+              field = "failed";
+              label = "Failed";
+              format = "number";
+            }
+          ];
+        };
+      };
+    }
+  ];
+
   # ── Blocky: network-wide DNS ad/tracker/malware blocker ─────────────
   services.blocky = {
     enable = true;

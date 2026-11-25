@@ -67,8 +67,9 @@ let
   mkTile =
     t:
     {
-      inherit (t) icon href description;
+      inherit (t) icon description;
     }
+    // lib.optionalAttrs (t.href != null) { inherit (t) href; }
     // lib.optionalAttrs (t.widget != null) { inherit (t) widget; };
 
   # Build the services list: one attrset per category, each containing service tiles
@@ -178,6 +179,11 @@ in
         # the flake's `apertureUrl` stays the single place the tailnet name is
         # spelled — fetch_aperture's default is only there for the tests.
         "APERTURE_METRICS_URL=${apertureUrl}/metrics"
+        # Backend health tiles. Read from the owning modules so a new bridge or a
+        # moved port follows by itself.
+        "BRIDGE_DBS=${lib.concatStringsSep "," config.nic.services.matrix-bridges.postgresDatabases}"
+        "BLOCKY_METRICS_URL=http://127.0.0.1:${toString config.services.blocky.settings.ports.http}/metrics"
+        "HERMES_HOME=${config.users.users.nsimon.home}/.hermes"
       ];
     };
   };

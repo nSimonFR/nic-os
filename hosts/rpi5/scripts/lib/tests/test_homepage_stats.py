@@ -1737,3 +1737,74 @@ def test_compact_keeps_a_large_count_inside_a_tile(n, text):
     # homepage's `number` formatter renders 865900000 as "865,900,000", wider
     # than the tile it sits in.
     assert hs.compact(n) == text
+
+
+# ── Backend health tiles: Pocket ID, Matrix bridges, Blocky, Hermes ───────────
+
+
+def test_pocketid_counts_sign_ins_in_the_last_week_only():
+    run = FakeRun([("SQLITE", "3")])
+    out = hs.fetch_pocketid(CFG, run, now=1_000_000)
+    assert out == {"users": 3, "apps": 3, "sign_ins_7d": 3}
+    assert all("-readonly" in argv for argv, _ in run.calls)
+    assert any("created_at > 395200" in c for c in run.commands)
+
+
+def test_matrix_sums_bridges_and_skips_a_legacy_schema():
+    cfg = hs.Config(
+        runuser="RUNUSER", psql="PSQL", bridge_dbs=("b-ok", "b-idle", "b-old")
+    )
+
+    def run(argv, env=None):
+        db = argv[argv.index("-d") + 1]
+        if db == "b-old":
+            raise RuntimeError("psql exited 1")
+        return {"b-ok": "1|18|757\n", "b-idle": "0|2|0\n"}[db]
+
+    assert hs.fetch_matrix(cfg, run) == {
+        "linked": "1/3",
+        "chats": 20,
+        "messages_7d": 757,
+    }
+
+
+BLOCKY_METRICS = """\
+# HELP blocky_query_total Number of total queries
+blocky_query_total{client="a",type="A"} 600
+blocky_query_total{client="b",type="AAAA"} 400
+blocky_response_total{reason="BLOCKED (ads)",response_code="NXDOMAIN",response_type="BLOCKED"} 50
+blocky_response_total{reason="RESOLVED (dns.google)",response_code="NOERROR",response_type="RESOLVED"} 900
+blocky_response_total{reason="RESOLVED (quad9)",response_code="REFUSED",response_type="RESOLVED"} 48
+blocky_error_total 2
+"""
+
+
+def test_blocky_reports_blocked_share_and_upstream_refusals():
+    run = FakeRun([("metrics", BLOCKY_METRICS)])
+    assert hs.fetch_blocky(CFG, run) == {
+        "queries": "1.0k",
+        "blocked": "5%",
+        "failed": 50,
+    }
+    assert "blocky" in hs.LIVE_KEYS
+
+
+def test_hermes_counts_every_profile_and_only_active_failures(tmp_path):
+    def jobs(path, items):
+        path.mkdir(parents=True)
+        (path / "jobs.json").write_text(json.dumps({"jobs": items}))
+
+    jobs(
+        tmp_path / "cron",
+        [
+            {"enabled": True, "state": "scheduled", "last_status": "ok"},
+            {"enabled": True, "state": "scheduled", "last_status": "error"},
+            {"enabled": False, "state": "paused", "last_status": "error"},
+        ],
+    )
+    jobs(
+        tmp_path / "profiles" / "p1" / "cron",
+        [{"enabled": True, "state": "scheduled", "last_status": "ok"}],
+    )
+    cfg = hs.Config(hermes_home=str(tmp_path))
+    assert hs.fetch_hermes(cfg, FakeRun()) == {"jobs": 3, "paused": 1, "failing": 1}

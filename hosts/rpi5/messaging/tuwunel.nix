@@ -168,7 +168,36 @@ in
         port = 4040;
         backend = "http://127.0.0.1:${toString cinnyPort}";
         funnel = false;
-        tile = null;
+        # Fourth tile of the last Apps row. The stats are the bridges', not
+        # Cinny's: what reaches this client is what the bridges carry in.
+        tile = {
+          name = "Cinny";
+          icon = "cinny.svg";
+          category = "Apps";
+          description = "Matrix chat + bridges";
+          widget = {
+            type = "customapi";
+            url = "http://127.0.0.1:8087/matrix";
+            refreshInterval = 3600000;
+            mappings = [
+              {
+                field = "linked";
+                label = "Bridges";
+                format = "text";
+              }
+              {
+                field = "chats";
+                label = "Chats";
+                format = "number";
+              }
+              {
+                field = "messages_7d";
+                label = "Msgs 7d";
+                format = "number";
+              }
+            ];
+          };
+        };
       };
     };
   };

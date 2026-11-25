@@ -28,6 +28,12 @@ Endpoints (one per homepage tile, three stats each):
                state file, read on every request (LIVE_KEYS)
   /aperture  — Aperture (tokens/day, requests/day, cache-read share) — Prometheus /metrics
   /switch    — Death Plan Switch (status, next check-in, contacts confirmed) — its JSON files
+  /pocketid  — Pocket ID (users, apps, sign-ins in 7 days) — direct read-only SQLite
+  /matrix    — Cinny / Matrix bridges (bridges linked, bridged chats, messages in 7 days)
+               — each bridge's Postgres (superuser)
+  /blocky    — Blocky DNS (queries, share blocked, failed answers) — Prometheus /metrics,
+               read on every request (LIVE_KEYS)
+  /hermes    — Hermes cron jobs, every profile (active, paused, failing) — its jobs.json
 
 A NOTE ON WHAT BELONGS ON A TILE. Three of these used to spend a field on a
 number that cannot change: Nextcloud's `users` (1 on a single-user server),
@@ -219,6 +225,15 @@ class Config:
     # is also why it has no `nic.services` entry and rides `nic.externalTiles`.
     aperture_metrics_url: str = "http://ai.gate-mintaka.ts.net/metrics"
 
+    # Pocket ID (hosts/rpi5/security/pocket-id.nix): read-only SQLite, root reads
+    # past the service's own permissions like the other SQLite tiles.
+    pocketid_db: str = "/var/lib/pocket-id/data/pocket-id.db"
+    # One Postgres database per mautrix bridge (hosts/rpi5/messaging/bridges.nix);
+    # the list comes from Nix (BRIDGE_DBS) so a new bridge joins the tile by itself.
+    bridge_dbs: tuple = ()
+    blocky_metrics_url: str = "http://127.0.0.1:4000/metrics"
+    hermes_home: str = "/home/nsimon/.hermes"
+
     state_dir: str = DEFAULT_STATE_DIR
     port: int = 8087
     refresh_interval: int = REFRESH_INTERVAL
@@ -254,6 +269,10 @@ class Config:
             nextcloud_user=s("NEXTCLOUD_USER", cls.nextcloud_user),
             aperture_metrics_url=s("APERTURE_METRICS_URL", cls.aperture_metrics_url),
             calino_settings_uri=s("CALINO_SETTINGS_URI", cls.calino_settings_uri),
+            pocketid_db=s("POCKETID_DB", cls.pocketid_db),
+            bridge_dbs=tuple(d for d in s("BRIDGE_DBS", "").split(",") if d),
+            blocky_metrics_url=s("BLOCKY_METRICS_URL", cls.blocky_metrics_url),
+            hermes_home=s("HERMES_HOME", cls.hermes_home),
             # STATE_DIRECTORY is set by systemd StateDirectory=.
             state_dir=s("STATE_DIRECTORY", DEFAULT_STATE_DIR),
             port=env_int("HOMEPAGE_STATS_PORT", 8087, env),
@@ -307,6 +326,10 @@ class Stats:
         "freereps",
         "aperture",
         "switch",
+        "pocketid",
+        "matrix",
+        "blocky",
+        "hermes",
     )
 
     def __init__(self):
@@ -1935,9 +1958,105 @@ def fetch_switch(cfg, run, now=None):
     }
 
 
+def fetch_pocketid(cfg, run, now=None):
+    # Read-only SQLite, like karakeep. `sign_ins_7d` counts passkey sign-ins to
+    # Pocket ID itself (SIGN_IN), not every app hand-off (CLIENT_AUTHORIZATION):
+    # it is the number that drops to 0 when a family member stops being able to
+    # log in. created_at is unix seconds.
+    now = int(time.time() if now is None else now)
+    since = now - 7 * 86400
+    return {
+        "users": sqlite_count(cfg, run, cfg.pocketid_db, "SELECT COUNT(*) FROM users;"),
+        "apps": sqlite_count(
+            cfg, run, cfg.pocketid_db, "SELECT COUNT(*) FROM oidc_clients;"
+        ),
+        "sign_ins_7d": sqlite_count(
+            cfg,
+            run,
+            cfg.pocketid_db,
+            f"SELECT COUNT(*) FROM audit_logs WHERE event = 'SIGN_IN' AND created_at > {since};",
+        ),
+    }
+
+
+# Every mautrix bridge here is bridgev2 (Go): one `portal` row per chat, one
+# `message` row per bridged message with a NANOSECOND timestamp, one `user_login`
+# row per linked account. mautrix-discord is still the legacy schema (no
+# user_login table) — its query fails and the bridge counts as not linked
+# rather than taking the whole tile down.
+MATRIX_BRIDGE_SQL = """
+SELECT (SELECT COUNT(*) FROM user_login),
+       (SELECT COUNT(*) FROM portal WHERE mxid IS NOT NULL),
+       (SELECT COUNT(*) FROM message
+         WHERE timestamp > (EXTRACT(EPOCH FROM now() - interval '7 days') * 1e9)::bigint);
+"""
+
+
+def fetch_matrix(cfg, run):
+    # The Cinny tile: what the bridges carry into Matrix. `linked` is bridges with
+    # a logged-in account over bridges deployed — a bridge whose login expired
+    # (WhatsApp's 14-day phone check, say) drops it, and nothing else shows that.
+    linked = chats = messages = 0
+    for db in cfg.bridge_dbs:
+        try:
+            logins, portals, recent = (
+                int(x or 0)
+                for x in pg_superuser(cfg, run, db, MATRIX_BRIDGE_SQL).split("|")
+            )
+        except (RuntimeError, ValueError):
+            continue
+        linked += logins > 0
+        chats += portals
+        messages += recent
+    return {
+        "linked": f"{linked}/{len(cfg.bridge_dbs)}",
+        "chats": chats,
+        "messages_7d": messages,
+    }
+
+
+def fetch_blocky(cfg, run):
+    # Prometheus counters, so every figure is "since blocky last started" — which
+    # is also why this key is LIVE: a daily snapshot of a counter that resets on
+    # every deploy would mean nothing. `failed` is what the 2026-11-24 Quad9
+    # outage looked like: upstreams answering REFUSED/SERVFAIL, which blocky
+    # passes through as responses rather than counting in blocky_error_total.
+    metrics = parse_prometheus(curl_text(cfg, run, cfg.blocky_metrics_url))
+    queries = _prom_sum(metrics, "blocky_query_total")
+    blocked = _prom_sum(metrics, "blocky_response_total", "response_type", ("BLOCKED",))
+    failed = _prom_sum(
+        metrics, "blocky_response_total", "response_code", ("SERVFAIL", "REFUSED")
+    ) + _prom_sum(metrics, "blocky_error_total")
+    return {
+        "queries": compact(queries),
+        "blocked": f"{blocked / queries:.0%}" if queries else "-",
+        "failed": int(failed),
+    }
+
+
+def fetch_hermes(cfg, run):
+    # Hermes's cron jobs, every profile. A job that errors or gets auto-paused is
+    # otherwise silent: the scheduler just stops delivering. `failing` counts
+    # enabled jobs whose last run errored.
+    jobs = []
+    for path in sorted(
+        glob.glob(os.path.join(cfg.hermes_home, "cron", "jobs.json"))
+        + glob.glob(os.path.join(cfg.hermes_home, "profiles", "*", "cron", "jobs.json"))
+    ):
+        with open(path) as f:
+            jobs += json.load(f).get("jobs", [])
+    active = [j for j in jobs if j.get("enabled") and j.get("state") != "paused"]
+    return {
+        "jobs": len(active),
+        "paused": len(jobs) - len(active),
+        "failing": sum(1 for j in active if j.get("last_status") == "error"),
+    }
+
+
 # Fetched on every request instead of daily: a cheap local read whose value
-# changes once a day at a known time (journal-daily, 08:00).
-LIVE_KEYS = {"memos"}
+# changes once a day at a known time (journal-daily, 08:00) — or, for blocky,
+# a counter that resets on every restart, so only a live read means anything.
+LIVE_KEYS = {"memos", "blocky"}
 
 FETCHERS = {
     "sure": fetch_sure,
@@ -1963,6 +2082,10 @@ FETCHERS = {
     "freereps": fetch_freereps,
     "aperture": fetch_aperture,
     "switch": fetch_switch,
+    "pocketid": fetch_pocketid,
+    "matrix": fetch_matrix,
+    "blocky": fetch_blocky,
+    "hermes": fetch_hermes,
 }
 
 # NOTE: every published key must have a fetcher and vice versa. The two used to be

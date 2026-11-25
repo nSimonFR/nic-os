@@ -241,6 +241,34 @@ in
         # ExecStartPre above keeps it down while no admin exists.
         funnel = true;
         authenticated = true;
+        tile = {
+          name = "Pocket ID";
+          icon = "pocket-id.svg";
+          category = "Backend";
+          description = "SSO (passkeys)";
+          widget = {
+            type = "customapi";
+            url = "http://127.0.0.1:8087/pocketid";
+            refreshInterval = 3600000;
+            mappings = [
+              {
+                field = "users";
+                label = "Users";
+                format = "number";
+              }
+              {
+                field = "apps";
+                label = "Apps";
+                format = "number";
+              }
+              {
+                field = "sign_ins_7d";
+                label = "Sign-ins 7d";
+                format = "number";
+              }
+            ];
+          };
+        };
       };
     };
   };
