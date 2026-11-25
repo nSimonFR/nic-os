@@ -460,8 +460,26 @@ in
         set -e
         MARKER=/var/lib/cyrus/.built-rev
         WANT=${cyrusRev}
+        # The @anthropic-ai/claude-agent-sdk pulls a per-platform optional dep
+        # (`@anthropic-ai/claude-agent-sdk-linux-arm64`) that bundles a generic
+        # dynamically-linked claude ELF — unrunnable on NixOS (no /lib64). The
+        # SDK has no env override to point at the nixpkgs-patched binary, so we
+        # overwrite the bundled file with a symlink to the pinned claude
+        # (cyrus's edge-worker doesn't surface pathToClaudeCodeExecutable).
+        # Run on the cached path too: a claude-code bump does not change the
+        # Cyrus rev, and the old link would dangle once its store path is GC'd.
+        # -L catches a link that already dangles.
+        link_claude() {
+          for bundled in /var/lib/cyrus/src/node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-*/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude; do
+            if [ -e "$bundled" ] || [ -L "$bundled" ]; then
+              ln -sfn ${claudeCode}/bin/claude "$bundled"
+              echo "Linked bundled SDK claude to the pinned build: $bundled"
+            fi
+          done
+        }
         if [ -f "$MARKER" ] && [ "$(cat $MARKER)" = "$WANT" ] && [ -f /var/lib/cyrus/src/apps/cli/dist/src/app.js ]; then
           echo "Cyrus already built for rev $WANT — skipping"
+          link_claude
           exit 0
         fi
         echo "Building Cyrus rev $WANT"
@@ -479,18 +497,7 @@ in
         # default 5 spawns parallel postinstall scripts that thrash swap.
         pnpm install --frozen-lockfile --child-concurrency=1
         pnpm -r --filter='!@cyrus/electron' --workspace-concurrency=1 build
-        # The @anthropic-ai/claude-agent-sdk pulls a per-platform optional dep
-        # (`@anthropic-ai/claude-agent-sdk-linux-arm64`) that bundles a generic
-        # dynamically-linked claude ELF — unrunnable on NixOS (no /lib64). The
-        # SDK has no env override to point at the nixpkgs-patched binary, so we
-        # overwrite the bundled file with a symlink to pkgs.claude-code/bin/claude
-        # (cyrus's edge-worker doesn't surface pathToClaudeCodeExecutable).
-        for bundled in node_modules/.pnpm/@anthropic-ai+claude-agent-sdk-linux-*/node_modules/@anthropic-ai/claude-agent-sdk-linux-*/claude; do
-          if [ -e "$bundled" ]; then
-            ln -sf ${claudeCode}/bin/claude "$bundled"
-            echo "Replaced bundled SDK claude with nixpkgs build: $bundled"
-          fi
-        done
+        link_claude
         echo "$WANT" > $MARKER
         echo "Build complete."
       '';
