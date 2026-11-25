@@ -197,8 +197,13 @@ let
       };
 
       href = lib.mkOption {
-        type = lib.types.str;
-        description = "Absolute URL the tile links to. Not derived — this host does not route it.";
+        type = lib.types.nullOr lib.types.str;
+        default = null;
+        description = ''
+          Absolute URL the tile links to. Not derived — this host does not route it.
+          null for a health tile with nothing to open (Blocky, Hermes): the tile
+          renders its stats and is not a link.
+        '';
         example = "https://ai.gate-mintaka.ts.net/ui";
       };
 
@@ -249,7 +254,8 @@ let
                                               Vaultwarden
                 170–210  making             — Aperture, Wakapi, Reactive Resume,
                                               Forgejo
-                220–250  the rest           — Gramps Web, ShowMyCards, Death Plan Switch
+                220–270  the rest           — Gramps Web, ShowMyCards, Death Plan Switch,
+                                              Cinny (the matrix entry, 270)
 
               The rows are the OWNER'S CHOICE and not derivable from anything in
               the tree, which is the whole reason they are written down here. Do not
@@ -262,7 +268,9 @@ let
               ADDING A TILE means deciding which row it joins and renumbering that
               row's neighbours, not appending after 250.
 
-              300–380  Backend tiles and the untiled routed services.
+              300–380  Backend tiles and the untiled routed services. Backend is
+                       not curated in rows; Pocket ID (910) and the two
+                       externalTiles (Hermes 340, Blocky 345) close it.
           '';
           example = 120;
         };
@@ -527,8 +535,10 @@ in
       externalTileModule above. Declared by the module that owns the integration
       (aperture-sync.nix for Aperture) so the tile still sits next to the config
       it describes, and consumed by homepage.nix alongside `nic.publicEntries`.
-      Keep this list near-empty: anything with a unit on this box belongs in
-      `nic.services.*.public`, which also gets it routed and backed up.
+      Keep this list short: anything with a web UI on this box belongs in
+      `nic.services.*.public`, which also gets it routed and backed up. The other
+      entries are Backend health tiles for units with no UI to route (Blocky,
+      Hermes), hence the null `href`.
     '';
   };
 

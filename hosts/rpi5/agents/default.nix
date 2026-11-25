@@ -6,6 +6,7 @@
     ./t3code.nix
     ./tiny-llm-gate.nix
     ./aperture-sync.nix
+    ./hermes-tile.nix
     ./train-prices-mcp.nix
     ./forgejo-mcp.nix
     ./searxng-mcp.nix
