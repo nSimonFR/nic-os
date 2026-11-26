@@ -307,6 +307,9 @@ let
     # sent during a restart vanished without trace (no session, no log line).
     # Only allowlisted chats reach the gateway, so replaying them is safe.
     platforms.telegram.extra.drop_pending_on_cold_boot = false;
+    # One conversation per group, shared by its members (default: one per member).
+    # Gateway-wide: also applies to the main group shared by nSimon and Alfie.
+    group_sessions_per_user = false;
     # One gateway serves every profile (multiplexing). The "candidatures" profile
     # (Alfie's job search, ~/.hermes/profiles/candidatures, deployed from the private
     # job-scout repo) has no bot of its own: routes below send it messages from the
