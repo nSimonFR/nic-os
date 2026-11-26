@@ -65,7 +65,8 @@ If the user said to ask first, show findings and wait before any push or reply.
      after the request, no longer says "Currently processing" and names the head's
      "Commit: `<sha12>`". In T3 the watch wakes you on each; elsewhere Monitor on
      `gh api --paginate repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`, and stop
-     if the PR closes or its head moves (a new head starts over). Then reread its verdict.
+     if the PR closes, its head moves (a new head starts over) or `$st/end` passes (hand
+     back). Then reread its verdict.
    - Never merge, approve, enable auto-merge or bypass a gate; those are the human's.
    - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and `rm -rf -- "$st"`) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review (or refused it,
