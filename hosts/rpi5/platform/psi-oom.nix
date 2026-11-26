@@ -15,6 +15,7 @@
     # Absent until the first boot with psi=1.
     unitConfig.ConditionPathExists = "/proc/pressure/memory";
     environment.PSI_OOM_DRY_RUN = "0";
+    environment.PSI_OOM_LAST_RESORT = "hermes.service";
     serviceConfig = {
       ExecStart = "${pkgs.nicos-scripts}/bin/psi-oom";
       Restart = "always";
