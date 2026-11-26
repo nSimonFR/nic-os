@@ -42,6 +42,7 @@ let
     "story-review"
     "trusk-data-glossary"
     "trusk-preview-deploy"
+    "trusk-ship"
   ];
   truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
 
