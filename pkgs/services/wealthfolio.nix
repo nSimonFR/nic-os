@@ -33,15 +33,15 @@
 }:
 let
   # renovate: datasource=docker depName=wealthfolio/wealthfolio
-  version = "3.6.3";
+  version = "3.13.1";
 
   # docker.io/wealthfolio/wealthfolio:3.6.3, per-arch manifest digests.
   # `latest` pointed at these same digests when this was pinned.
   images = {
     aarch64-linux = {
       arch = "arm64";
-      imageDigest = "sha256:71507bb82daccc0fe5bca1ab84cc000bc10dd60e778ffd78044a3a8605e3a817";
-      hash = "sha256-x1UTAjQ+hj99yBmYL7jtXnH1mbePII5R/HGS/O45H70=";
+      imageDigest = "sha256:a51bf08440ec3c517b728e4d5a7d9134cc564e1749eec45bd4f0b7f39573336e";
+      hash = "sha256-MjLgDqROnBONMgABj+bJowFr1zQeKqI+Cz7iUmysvd8=";
     };
   };
 
