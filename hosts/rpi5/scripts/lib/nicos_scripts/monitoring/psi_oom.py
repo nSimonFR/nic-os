@@ -15,6 +15,10 @@ were killed 50 times between 10:22 and 10:47, each back within a minute,
 until the watchdog reset the Pi. Respawns are skipped while a non-respawn
 remains.
 
+Units in PSI_OOM_LAST_RESORT are taken after every other non-respawn: a
+SIGKILL mid-turn pauses a Hermes conversation until someone resends
+(7 Hermes kills 2026-11-26, each followed by Home Assistant's anyway).
+
 Not sysrq f: it picks by oom_score, where T3's agents (adj 800) and
 ryot-sandboxd (adj 1000) outrank everything. On 2026-11-11 it killed sleep,
 bash and a 1 MiB ryot-sandboxd over and over until the watchdog reset.
@@ -63,6 +67,7 @@ class Config:
     respawn_sec: int = RESPAWN_SEC
     cgroup: str = DEFERRABLE_CGROUP
     dry_run: bool = True
+    last_resort: tuple = ()
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -79,6 +84,7 @@ class Config:
             respawn_sec=env_int("PSI_OOM_RESPAWN_SEC", RESPAWN_SEC, env),
             cgroup=env_str("PSI_OOM_CGROUP", DEFERRABLE_CGROUP, env),
             dry_run=env_str("PSI_OOM_DRY_RUN", "1", env) != "0",
+            last_resort=tuple(env_str("PSI_OOM_LAST_RESORT", "", env).split()),
         )
 
     @property
@@ -143,11 +149,12 @@ def scan_procs(root="/proc", ticks=None):
         yield Proc(int(entry), parsed[0], adj, parsed[1], unit, started)
 
 
-def pick_victim(procs, min_kib, self_pid, killed=None):
+def pick_victim(procs, min_kib, self_pid, killed=None, last_resort=()):
     """Largest anon + swap process not protected by a negative oom_score_adj.
 
     killed maps unit -> when it was last killed; a process of that unit started
-    since is a respawn, taken only when nothing else qualifies. Returns
+    since is a respawn, taken only when nothing else qualifies. A process of a
+    last_resort unit is taken after every other non-respawn. Returns
     (proc, respawn) or None.
     """
     killed = killed or {}
@@ -156,11 +163,12 @@ def pick_victim(procs, min_kib, self_pid, killed=None):
         if p.pid in (1, self_pid) or p.adj < 0 or p.kib < min_kib:
             continue
         respawn = p.unit in killed and p.started >= killed[p.unit]
-        if respawn not in best or p.kib > best[respawn].kib:
-            best[respawn] = p
-    for respawn in (False, True):
-        if respawn in best:
-            return best[respawn], respawn
+        tier = 2 if respawn else 1 if p.unit in last_resort else 0
+        if tier not in best or p.kib > best[tier].kib:
+            best[tier] = p
+    for tier in (0, 1, 2):
+        if tier in best:
+            return best[tier], tier == 2
     return None
 
 
@@ -230,7 +238,11 @@ class Guard:
             u: t for u, t in self.killed.items() if now - t < self.cfg.respawn_sec
         }
         victim = pick_victim(
-            self.procs(), self.cfg.min_victim_mib * 1024, os.getpid(), self.killed
+            self.procs(),
+            self.cfg.min_victim_mib * 1024,
+            os.getpid(),
+            self.killed,
+            self.cfg.last_resort,
         )
         if victim is None:
             self.log(

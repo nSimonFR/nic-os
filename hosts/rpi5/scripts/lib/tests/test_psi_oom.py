@@ -97,6 +97,33 @@ def test_respawn_taken_when_nothing_else_qualifies():
     )
 
 
+HERMES = Proc(50, "hermes", 0, 400 * MIB, "hermes.service", 0.0)
+HASS = Proc(60, "hass", 0, 200 * MIB, "home-assistant.service", 0.0)
+
+
+def test_config_last_resort():
+    cfg = Config.from_env({"PSI_OOM_LAST_RESORT": "hermes.service  foo.service"})
+    assert cfg.last_resort == ("hermes.service", "foo.service")
+    assert Config.from_env({}).last_resort == ()
+
+
+def test_last_resort_taken_after_smaller_processes():
+    procs = [HERMES, HASS]
+    assert pick_victim(procs, 64 * MIB, 99, last_resort=("hermes.service",)) == (
+        HASS,
+        False,
+    )
+    assert pick_victim(procs, 64 * MIB, 99) == (HERMES, False)
+
+
+def test_last_resort_taken_before_respawns():
+    respawned = HASS._replace(started=150.0)
+    killed = {"home-assistant.service": 100.0}
+    assert pick_victim(
+        [HERMES, respawned], 64 * MIB, 99, killed, ("hermes.service",)
+    ) == (HERMES, False)
+
+
 def test_scan_procs(tmp_path):
     stat = "7 (bun) S " + " ".join(["1"] * 18) + " 500 0\n"
     for pid, status, adj in [
@@ -138,6 +165,13 @@ def guard(logged, procs=PROCS, busy=False, **cfg):
         log=logged,
     )
     return g, kills, cg
+
+
+def test_stall_spares_last_resort_unit(logged):
+    lines, log = logged
+    g, kills, _ = guard(log, procs=[HERMES, HASS], last_resort=("hermes.service",))
+    g.on_stall(100.0)
+    assert kills == [60]
 
 
 def test_stall_kills_largest(logged):
