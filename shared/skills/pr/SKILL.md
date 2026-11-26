@@ -40,7 +40,7 @@ If the user said to ask first, show findings and wait before any push or reply.
    snap() { local s; s=$(set -o pipefail; gh pr view <n> --json state,headRefOid,mergeStateStatus,reviewDecision,statusCheckRollup | jq -c '[.state,.headRefOid,.mergeStateStatus,.reviewDecision,[.statusCheckRollup[]|[(.name//.context),.conclusion,.status,.state,.startedAt]]]' && gh api --paginate repos/<o>/<r>/issues/<n>/comments --jq '.[]|[.id,.updated_at]|@csv' && gh api --paginate repos/<o>/<r>/pulls/<n>/reviews --jq '.[]|[.id,.state,.submitted_at]|@csv' && gh api --paginate repos/<o>/<r>/pulls/<n>/comments --jq '.[]|[.id,.updated_at]|@csv') || return 1; printf '%s' "$s" | cksum; }
    echo $(( $(date +%s) + 604800 )) > "$st/end"   # once, right after mktemp -d
    snap > "$st/b" || { echo "BLOCKED: gh failed"; exit 1; }   # each pass, before you read the PR
-   until { s=$(snap) || { echo "BLOCKED: gh failed"; break; }; [ "$s" != "$(cat "$st/b")" ] || [ "$(date +%s)" -ge "$(cat "$st/end")" ]; }; do sleep 60; done
+   until { s=$(snap) || { echo "BLOCKED: gh failed"; break; }; [ "$s" != "$(cat -- "$st/b")" ] || [ "$(date +%s)" -ge "$(cat -- "$st/end")" ]; }; do sleep 60; done
    ```
    Every page of comments and reviews is in the snapshot, with update times, so an edited comment
    counts, and a check's start time means a rerun does; a green run is a change, not a verdict. A change that lands during a pass ends the next wait at once. The
@@ -67,7 +67,7 @@ If the user said to ask first, show findings and wait before any push or reply.
      `gh api --paginate repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`, and stop
      if the PR closes or its head moves (a new head starts over). Then reread its verdict.
    - Never merge, approve, enable auto-merge or bypass a gate; those are the human's.
-   - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and `rm -rf "$st"`) only when nothing is left for you: an approval is missing, the
+   - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and `rm -rf -- "$st"`) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review (or refused it,
      e.g. its hourly review limit), the PR closed or merged, seven days passed,
      or a blocker you can't fix. Say which.
