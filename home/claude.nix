@@ -39,12 +39,10 @@ let
     "demo-tech-slides"
     "designing-schemas-and-migrations"
     "guarded-prod-data-fix"
-    "ship"
     "story-review"
     "trusk-data-glossary"
     "trusk-preview-deploy"
   ];
-  truskSlashCommandSkills = [ "ship" ];
   truskLink = path: config.lib.file.mkOutOfStoreSymlink "${truskDir}/${path}";
 
   # AGENTS.md and notes/ need no link: they sit in place at the checkout root, and
@@ -57,12 +55,6 @@ let
         name:
         map (t: lib.nameValuePair "${t}/${name}" { source = truskLink "skills/${name}"; }) skillTargets
       ) truskSkills
-    )
-    // lib.listToAttrs (
-      map (
-        name:
-        lib.nameValuePair ".claude/commands/${name}.md" { source = truskLink "skills/${name}/SKILL.md"; }
-      ) truskSlashCommandSkills
     )
   );
 
