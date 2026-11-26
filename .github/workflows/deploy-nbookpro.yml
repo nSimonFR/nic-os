@@ -119,25 +119,7 @@ jobs:
           path: .deployed
           key: nbookpro-deployed-${{ steps.eval.outputs.hash }}
 
-      # Keep the deployed system's whole closure in Cachix. The free plan is 5 GB
-      # across every cache, collected LRU, and rpi5 (~3.6 GB of its own paths)
-      # plus nBookPro (~1 GB) nearly fill it: PR pushes kept evicting unchanged
-      # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
-      # One revision, like rpi5: pins count against a separate 5 GB pin quota, and
-      # a 14-day window kept every Mac deploy (3 on 2026-11-26 alone), reaching
-      # 4.06 GB within hours. Only the newest system needs pinning: it is the one
-      # the queued deploy will fetch. The system the Mac still runs is already in
-      # its local store, so dropping its pin costs nothing.
-      # Only on the activating run: it is the one run that knows which system is
-      # running. A later retry cannot tell (a marker proves "was deployed", not
-      # "runs now") and could pin an older system over the running one. A
-      # transient failure is retried inside the step (curl --retry 5); a pin that
-      # still fails is redone by the next deploy, and costs at worst a rebuild.
-      - name: Pin the deployed system in Cachix
-        if: steps.plan.outputs.activate == 'true'
-        continue-on-error: true
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-          OUT: ${{ steps.eval.outputs.out }}
-        run: |
-          scripts/cachix-pin nbookpro "$OUT" '{"tag":"Revisions","contents":1}'
+      # No Cachix pin for nBookPro (NSI-121): pins share the free plan's 5 GB, and
+      # the rpi5 closure (~3.4 GiB) needs the headroom. The Mac's own paths are
+      # small and rebuild in a few minutes on the runner; the slow rebuilds that
+      # pins fixed were rpi5's (deploy-rpi5.yml keeps its pin).
