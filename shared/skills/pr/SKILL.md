@@ -37,9 +37,9 @@ If the user said to ask first, show findings and wait before any push or reply.
    its path down and begin every later command with `st=<that path>`, since shell variables don't
    survive between commands. Define `snap` in each command too:
    ```
-   snap() { local s; s=$(set -eo pipefail; gh pr view <n> --json state,headRefOid,mergeStateStatus,reviewDecision,comments,reviews,statusCheckRollup | jq -c '[.state,.headRefOid,.mergeStateStatus,.reviewDecision,[.comments[]|[.id,.body]],[.reviews[]|[.id,.state,.body]],[.statusCheckRollup[]|[(.name//.context),.conclusion,.status,.state]]]'; gh api --paginate repos/<o>/<r>/pulls/<n>/comments --jq '.[]|[.id,.updated_at]|@csv') || return 1; printf '%s' "$s" | cksum; }
+   snap() { local s; s=$(set -o pipefail; gh pr view <n> --json state,headRefOid,mergeStateStatus,reviewDecision,comments,reviews,statusCheckRollup | jq -c '[.state,.headRefOid,.mergeStateStatus,.reviewDecision,[.comments[]|[.id,.body]],[.reviews[]|[.id,.state,.body]],[.statusCheckRollup[]|[(.name//.context),.conclusion,.status,.state]]]' && gh api --paginate repos/<o>/<r>/pulls/<n>/comments --jq '.[]|[.id,.updated_at]|@csv') || return 1; printf '%s' "$s" | cksum; }
    echo $(( $(date +%s) + 604800 )) > $st/end   # once, right after mktemp -d
-   snap > $st/b                  # at the start of each pass, before you read the PR
+   snap > $st/b || { echo "BLOCKED: gh failed"; exit 1; }   # each pass, before you read the PR
    until { s=$(snap) || { echo "BLOCKED: gh failed"; break; }; [ "$s" != "$(cat $st/b)" ] || [ "$(date +%s)" -ge "$(cat $st/end)" ]; }; do sleep 60; done
    ```
    Bodies and update times are in the snapshot, so an edited comment counts; a green run is a
