@@ -418,7 +418,7 @@ in
     # nix.gc below drops the old generations themselves.
     # Both only act once a generation carrying them is active: if a deploy
     # already lacks space to restore its closure, free it by hand on the Pi
-    # (`sudo nix-collect-garbage --delete-older-than 7d`, check `df -h /`), then
+    # (`sudo nix-collect-garbage --delete-older-than 3d`, check `df -h /`), then
     # rerun the deploy-rpi5 workflow with force=true.
     min-free = 30 * 1024 * 1024 * 1024;
     max-free = 50 * 1024 * 1024 * 1024;
@@ -440,12 +440,16 @@ in
   # 0755 (not 1777): nix's build-dir security check rejects a world-writable dir.
   systemd.tmpfiles.rules = [ "d /mnt/data/nix-build 0755 root root -" ];
 
-  # A week, not BeAsT's month: the 171 GB root disk here also holds every custom
-  # flake's build closure (keep-outputs/keep-derivations above), so old
-  # generations are the first thing that has to go.
+  # Three days, not BeAsT's month: the 171 GB root disk here also holds every
+  # custom flake's build closure (keep-outputs/keep-derivations above), so old
+  # generations are the first thing that has to go. A 7-day window (2026-11-26)
+  # kept 41 generations: five 2 GiB copies of reactive-resume 6.1.0, three of
+  # karakeep, and only 18 GB free, under min-free, so every deploy ran two
+  # auto-GCs (~5 min) that freed nothing. Deploys land every 30 min, so three
+  # days still leaves plenty of rollback points.
   # Daily, not weekly: the Pi deploys several times a day, so a weekly run with a
   # 7-day window kept up to 14 days (~110) of generations alive.
-  nix.gc.options = "--delete-older-than 7d";
+  nix.gc.options = "--delete-older-than 3d";
   nix.gc.dates = lib.mkForce "daily";
 
   # Tailscale Serve + Funnel are now managed declaratively via TS_SERVE_CONFIG.
