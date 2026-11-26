@@ -123,9 +123,11 @@ jobs:
       # across every cache, collected LRU, and rpi5 (~3.6 GB of its own paths)
       # plus nBookPro (~1 GB) nearly fill it: PR pushes kept evicting unchanged
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
-      # 14 days, not a revision count: Activate only queues the Mac's deploy
-      # (it waits while the laptop sleeps), and two queued systems would push the
-      # one it still runs out of a revision window.
+      # One revision, like rpi5: pins count against a separate 5 GB pin quota, and
+      # a 14-day window kept every Mac deploy (3 on 2026-11-26 alone), reaching
+      # 4.06 GB within hours. Only the newest system needs pinning: it is the one
+      # the queued deploy will fetch. The system the Mac still runs is already in
+      # its local store, so dropping its pin costs nothing.
       # Only on the activating run: it is the one run that knows which system is
       # running. A later retry cannot tell (a marker proves "was deployed", not
       # "runs now") and could pin an older system over the running one. A
@@ -138,4 +140,4 @@ jobs:
           CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
           OUT: ${{ steps.eval.outputs.out }}
         run: |
-          scripts/cachix-pin nbookpro "$OUT" '{"tag":"Days","contents":14}'
+          scripts/cachix-pin nbookpro "$OUT" '{"tag":"Revisions","contents":1}'
