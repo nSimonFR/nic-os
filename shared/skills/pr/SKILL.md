@@ -33,13 +33,14 @@ If the user said to ask first, show findings and wait before any push or reply.
    the turn; it wakes you on a red check, a new comment or review, a conflict. Elsewhere, a
    Monitor loop that exits when anything on the PR changes, re-armed after every pass until a
    hand-back condition applies (that is the watch; stopping it is the unwatch below):
-   State lives in files, since shell variables don't survive between commands (`st=${TMPDIR:-/tmp}/pr-watch-<n>`;
-   define `snap` in each command):
+   State lives in a private directory made once per watch (`st=$(mktemp -d)`, mode 700): write
+   its path down and begin every later command with `st=<that path>`, since shell variables don't
+   survive between commands. Define `snap` in each command too:
    ```
    snap() { local s; s=$(set -eo pipefail; gh pr view <n> --json state,headRefOid,mergeStateStatus,reviewDecision,comments,reviews,statusCheckRollup | jq -c '[.state,.headRefOid,.mergeStateStatus,.reviewDecision,[.comments[]|[.id,.body]],[.reviews[]|[.id,.state,.body]],[.statusCheckRollup[]|[(.name//.context),.conclusion,.status,.state]]]'; gh api --paginate repos/<o>/<r>/pulls/<n>/comments --jq '.[]|[.id,.updated_at]|@csv') || return 1; printf '%s' "$s" | cksum; }
-   [ -f $st.end ] || echo $(( $(date +%s) + 604800 )) > $st.end   # once, when the watch starts
-   snap > $st.b                  # at the start of each pass, before you read the PR
-   until { s=$(snap) || { echo "BLOCKED: gh failed"; break; }; [ "$s" != "$(cat $st.b)" ] || [ "$(date +%s)" -ge "$(cat $st.end)" ]; }; do sleep 60; done
+   echo $(( $(date +%s) + 604800 )) > $st/end   # once, right after mktemp -d
+   snap > $st/b                  # at the start of each pass, before you read the PR
+   until { s=$(snap) || { echo "BLOCKED: gh failed"; break; }; [ "$s" != "$(cat $st/b)" ] || [ "$(date +%s)" -ge "$(cat $st/end)" ]; }; do sleep 60; done
    ```
    Bodies and update times are in the snapshot, so an edited comment counts; a green run is a
    change, not a verdict. A change that lands during a pass ends the next wait at once. The
@@ -66,7 +67,7 @@ If the user said to ask first, show findings and wait before any push or reply.
      `gh api --paginate repos/<o>/<r>/pulls/<n>/reviews` and `…/issues/<n>/comments`, and stop
      if the PR closes or its head moves (a new head starts over). Then reread its verdict.
    - Never merge, approve, enable auto-merge or bypass a gate; those are the human's.
-   - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and delete `$st.*`) only when nothing is left for you: an approval is missing, the
+   - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and `rm -rf $st`) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review (or refused it,
      e.g. its hourly review limit), the PR closed or merged, seven days passed,
      or a blocker you can't fix. Say which.
