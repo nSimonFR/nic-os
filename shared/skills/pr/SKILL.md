@@ -69,7 +69,7 @@ If the user said to ask first, show findings and wait before any push or reply.
    - Never merge, approve, enable auto-merge or bypass a gate; those are the human's.
    - Hand back (stop the watch first: `unwatch_pull_request` in T3, else end the loop and `rm -rf -- "$st"`) only when nothing is left for you: an approval is missing, the
      bot withheld its own for another reason or again after that full review (or refused it,
-     e.g. its hourly review limit), the PR closed or merged, seven days passed,
+     e.g. its hourly review limit), the PR closed or merged, seven days passed (the non-T3 loop's deadline; T3's watch has no timer and ends on merge, close or unwatch),
      or a blocker you can't fix. Say which.
 6. **Triage red.**
    `gh run view <id> --log-failed | sed 's/\x1b\[[0-9;]*m//g' | grep -aiE "error|fail|expected|received" | head -80`
