@@ -131,7 +131,9 @@ jobs:
       # plus nBookPro (~1 GB) nearly fill it: PR pushes kept evicting unchanged
       # packages (Immich, Hermes...), and the next deploy rebuilt ~1500 of them.
       # One revision: `cachix deploy activate` above waits for the result, so the
-      # pinned system is the running one.
+      # pinned system is the running one. Pins count against the same 5 GB, so
+      # rpi5 is the only system pinned (~3.4 GiB). If a pin fails on a large
+      # bump or Cachix warns about the quota again, see NSI-121 (Storj cache).
       # Only on the activating run: it is the one run that knows which system is
       # running. A later retry cannot tell (a marker proves "was deployed", not
       # "runs now") and could pin an older system over the running one. A
