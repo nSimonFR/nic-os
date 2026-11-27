@@ -292,7 +292,7 @@ IMMICH_API = Proc(31, "immich-api", 0, 300 * MIB, "immich-server.service", 0.0)
 SHED = ("homepage-dashboard.service", "immich-server.service")
 
 
-def shed_guard(logged, procs, fail=(), stuck=(), **cfg):
+def shed_guard(logged, procs, fail=(), stuck=(), accepted_after=0.0, **cfg):
     """A Guard whose systemctl stop removes the unit's processes, unless stuck."""
     calls = []
 
@@ -312,6 +312,7 @@ def shed_guard(logged, procs, fail=(), stuck=(), **cfg):
         deferrable=FakeCgroup(False),
         log=logged,
         systemctl=systemctl,
+        clock=lambda: g.last_action + accepted_after,
     )
     return g, calls
 
@@ -378,12 +379,26 @@ def test_failed_stop_falls_through(logged):
 def test_process_started_during_the_stall_keeps_the_deadline(logged):
     _, log = logged
     late = PROCS[2]._replace(started=100.1)  # started after on_stall(100) began
-    g, calls = shed_guard(log, [late], stuck={"immich-server.service"})
+    stuck = {"immich-server.service"}
+    g, calls = shed_guard(log, [late], stuck=stuck, accepted_after=0.2)
     g.on_stall(100.0)
     g.on_stall(110.0)
     assert calls[-1] == ("stop", "immich-server.service")  # still stopping
     g.on_stall(130.0)  # 30 s after the first request, not 40
     assert calls[-1] == ("kill", 30)
+
+
+def test_process_started_before_the_request_was_accepted_keeps_the_deadline(logged):
+    _, log = logged
+    procs = list(PROCS)
+    stuck = {"immich-server.service"}
+    g, calls = shed_guard(log, procs, stuck=stuck, accepted_after=0.2)
+    g.on_stall(100.0)  # snapshot, then stop accepted at 100.2
+    procs[2] = PROCS[2]._replace(pid=33, started=100.1)  # old one gone, new in the gap
+    g.on_stall(110.0)
+    assert calls[-1] == ("stop", "immich-server.service")  # still stopping
+    g.on_stall(130.0)
+    assert calls[-1] == ("kill", 33)
 
 
 def test_socket_wake_is_stopped_again(logged):

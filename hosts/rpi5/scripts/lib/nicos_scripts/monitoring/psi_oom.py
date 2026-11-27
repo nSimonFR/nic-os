@@ -227,12 +227,16 @@ class Cgroup:
 class Guard:
     """Freeze the deferrable cgroup first; kill only if the stall outlasts it."""
 
-    def __init__(self, cfg, *, read, procs, kill, deferrable, log, systemctl=None):
+    def __init__(
+        self, cfg, *, read, procs, kill, deferrable, log, systemctl=None, clock=None
+    ):
         self.cfg, self.read, self.procs, self.kill = cfg, read, procs, kill
         self.deferrable, self.log = deferrable, log
         self.systemctl = systemctl or (lambda *a: True)
+        self.clock = clock or (lambda: time.clock_gettime(time.CLOCK_BOOTTIME))
         self.shed = []  # units stopped by us, in order, to start again
-        # unit -> (first stop request, newest start among its processes then)
+        # unit -> (first stop request, when systemctl accepted it): processes
+        # started before the second are the ones still stopping
         self.stop_at = {}
         self.start_tries = {}  # unit -> failed start requests
         self.last_action = float("-inf")
@@ -333,8 +337,7 @@ class Guard:
             if unit in self.stop_at:
                 self.log(f"memory stall (full avg10={avg}): {what} still stopping")
                 return True
-            newest = max(p.started for p in procs if p.unit == unit)
-            self.stop_at[unit] = (now, newest)
+            self.stop_at[unit] = (now, self.clock())
             if unit not in self.shed:
                 self.shed.append(unit)
             self.log(f"memory stall (full avg10={avg}): stopped {what}")
@@ -427,6 +430,7 @@ def main(argv=None, env=None, log=None):
         deferrable=Cgroup(cfg.cgroup),
         log=log,
         systemctl=systemctl,
+        clock=now,
     )
     # A freeze left by a previous run would hold every nix client forever, and
     # `finally` only runs on SIGTERM once it raises.
