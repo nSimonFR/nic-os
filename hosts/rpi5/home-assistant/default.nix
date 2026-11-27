@@ -257,6 +257,10 @@ in
     # HA reads configuration.yaml only at start; the activation script appends
     # the auth_oidc block, so restart when it changes.
     restartTriggers = [ oidcInclude ];
+    # Intratone opens the door with a SIP MESSAGE inside the ring's call, and it
+    # hangs that call up when its audio bridge can't spawn `ffmpeg` (libopus out,
+    # libx264 for video): without it on PATH no ring ever opens the door.
+    path = [ pkgs.ffmpeg-headless ];
     serviceConfig.MemoryMax = "256M";
   };
 
