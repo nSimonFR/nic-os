@@ -92,6 +92,12 @@ sudo systemctl enable --now nic-ac-keepawake.service
 # Upstream Nix: Determinate Nix writes /usr/local/bin, read-only on SteamOS.
 if [ ! -e /nix/var/nix/profiles/default/bin/nix ]; then
   [ ! -e /nix/receipt.json ] || sudo /nix/nix-installer uninstall --no-confirm
+  # The uninstall deletes SteamOS's /nix offload dir under its live bind mount.
+  if findmnt -no SOURCE /nix | grep -q deleted; then
+    sudo umount /nix
+    sudo mkdir -p /home/.steamos/offload/nix
+    sudo systemctl start nix.mount
+  fi
   curl -sSfL https://install.determinate.systems/nix |
     sh -s -- install steam-deck --prefer-upstream-nix --no-confirm
 fi
