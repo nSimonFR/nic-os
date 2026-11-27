@@ -38,6 +38,8 @@ sudo tee /etc/ssh/sshd_config.d/10-nic-os.conf >/dev/null <<'EOF'
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PermitRootLogin no
+# Non-interactive SSH reads no rc file on SteamOS: put Nix on its PATH here.
+SetEnv PATH=/home/deck/.nix-profile/bin:/nix/var/nix/profiles/default/bin:/usr/local/sbin:/usr/local/bin:/usr/bin
 EOF
 grep -q '^Include /etc/ssh/sshd_config.d/' /etc/ssh/sshd_config ||
   sudo sed -i '1i Include /etc/ssh/sshd_config.d/*.conf' /etc/ssh/sshd_config
