@@ -371,6 +371,8 @@ def test_failed_stop_falls_through(logged):
     ]
     assert g.shed == ["homepage-dashboard.service"]
     assert "stop of immich-server.service failed" in lines[0]
+    g.on_stall(110.0)  # a failure lasts one stall: asked again, then the kill
+    assert calls[-2:] == [("stop", "immich-server.service"), ("kill", 30)]
 
 
 def test_socket_wake_is_stopped_again(logged):

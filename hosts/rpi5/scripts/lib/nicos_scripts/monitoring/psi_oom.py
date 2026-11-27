@@ -232,7 +232,7 @@ class Guard:
         self.deferrable, self.log = deferrable, log
         self.systemctl = systemctl or (lambda *a: True)
         self.shed = []  # units stopped by us, in order, to start again
-        self.stop_at = {}  # unit -> first stop request; -inf if the request failed
+        self.stop_at = {}  # unit -> first stop request
         self.start_tries = {}  # unit -> failed start requests
         self.last_action = float("-inf")
         self.last_stall = float("-inf")
@@ -300,10 +300,11 @@ class Guard:
         # Only processes older than the request are still stopping; newer ones
         # mean its socket woke it again, which is a new stop.
         stopping = {p.unit for p in procs if p.started <= self.stop_at.get(p.unit, -1)}
-        for u in [u for u, t in self.stop_at.items() if t >= 0 and u not in stopping]:
+        for u in [u for u in self.stop_at if u not in stopping]:
             del self.stop_at[u]
+        failed = set()  # this stall only: the next one asks again
         while True:
-            given_up = {
+            given_up = failed | {
                 u for u, t in self.stop_at.items() if now - t >= SHED_STOP_GRACE_SEC
             }
             picked = pick_shed(procs, self.cfg.shed, given_up)
@@ -318,7 +319,7 @@ class Guard:
                 )
                 return True
             if not self.systemctl("stop", unit):
-                self.stop_at[unit] = float("-inf")
+                failed.add(unit)
                 self.log(f"memory stall (full avg10={avg}): stop of {unit} failed")
                 continue
             self.last_action = now
