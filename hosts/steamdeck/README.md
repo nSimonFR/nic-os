@@ -1,7 +1,7 @@
 # steamdeck
 
-Stock SteamOS, not managed by Nix: Valve ships the OS and its updates. nic-os only
-puts it on the tailnet and lets rpi5 and nBookPro in over key-only SSH.
+Stock SteamOS: Valve ships the OS and its updates. nic-os puts it on the tailnet,
+lets rpi5 and nBookPro in over key-only SSH, and manages the `deck` user's Home Manager.
 
 Set up, once, on the Deck (Desktop Mode → Konsole):
 
@@ -9,8 +9,14 @@ Set up, once, on the Deck (Desktop Mode → Konsole):
 curl -fsSL https://raw.githubusercontent.com/nSimonFR/nic-os/main/hosts/steamdeck/bootstrap.sh | bash
 ```
 
-It asks for a `deck` password if none is set (sudo needs it), then shows a Tailscale
-login QR code. Afterwards: `ssh steamdeck`. It also blocks sleep while plugged in, installs Nix and applies `home.nix` (Home Manager). Later changes: `ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck`. Re-run it if a SteamOS update drops
-Tailscale or sshd.
-
+It asks for a `deck` password if none is set (sudo needs it), shows a Tailscale login
+QR code, blocks sleep while plugged in, installs Nix and applies `home.nix`.
 Then, in the Tailscale console, disable key expiry on `steamdeck`.
+
+Re-run the same command if a SteamOS update drops Tailscale, sshd or Nix.
+
+Later `home.nix` changes, from rpi5 or the Mac:
+
+```sh
+ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck
+```
