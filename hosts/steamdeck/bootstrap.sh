@@ -26,6 +26,7 @@ fi
 install -d -m 700 ~/.ssh
 touch ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
+[ -z "$(tail -c1 ~/.ssh/authorized_keys)" ] || echo >>~/.ssh/authorized_keys
 for k in "${KEYS[@]}"; do
   grep -qF "${k% *}" ~/.ssh/authorized_keys || echo "$k" >>~/.ssh/authorized_keys
 done
@@ -54,6 +55,7 @@ git -C "$src" checkout -q "$DECK_TAILSCALE_REV"
 (cd "$src" && sudo bash tailscale.sh)
 rm -rf "$src"
 
+sudo /opt/tailscale/tailscale set --operator=deck
 if ! /opt/tailscale/tailscale status >/dev/null 2>&1; then
   echo "Log in with the QR code or the URL below:"
   sudo /opt/tailscale/tailscale up --qr --operator=deck --hostname=steamdeck
