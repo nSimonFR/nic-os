@@ -768,6 +768,12 @@
             ./hosts/nbookpro/home.nix
           ];
         };
+
+        # Stock SteamOS; see hosts/steamdeck/README.md.
+        "deck@steamdeck" = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          modules = [ ./hosts/steamdeck/home.nix ];
+        };
       };
 
     };

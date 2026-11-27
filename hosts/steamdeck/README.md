@@ -10,7 +10,7 @@ curl -fsSL https://raw.githubusercontent.com/nSimonFR/nic-os/main/hosts/steamdec
 ```
 
 It asks for a `deck` password if none is set (sudo needs it), then shows a Tailscale
-login QR code. Afterwards: `ssh steamdeck`. Re-run it if a SteamOS update drops
+login QR code. Afterwards: `ssh steamdeck`. It also blocks sleep while plugged in, installs Nix and applies `home.nix` (Home Manager). Later changes: `ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck`. Re-run it if a SteamOS update drops
 Tailscale or sshd.
 
 Then, in the Tailscale console, disable key expiry on `steamdeck`.
