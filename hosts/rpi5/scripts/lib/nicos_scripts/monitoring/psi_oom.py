@@ -56,6 +56,10 @@ MIN_VICTIM_MIB = 64
 RESPAWN_SEC = 600
 # A shed unit comes back only after this long without a stall.
 SHED_RESTORE_SEC = 900
+# How long a stopping unit that still has processes holds off the kill.
+SHED_STOP_GRACE_SEC = 30
+# Start attempts per shed unit before it is left to its socket or the next boot.
+SHED_START_TRIES = 3
 DEFERRABLE_CGROUP = "/sys/fs/cgroup/system.slice/nix-daemon.service"
 
 FULL_RE = re.compile(r"^full avg10=([\d.]+)", re.M)
@@ -186,11 +190,11 @@ def pick_victim(procs, min_kib, self_pid, killed=None, last_resort=()):
     return None
 
 
-def pick_shed(procs, shed, already):
-    """(unit, KiB) of the largest running unit of shed not yet stopped, or None."""
+def pick_shed(procs, shed, excluded):
+    """(unit, KiB) of the largest unit of shed that still has processes, or None."""
     size = {}
     for p in procs:
-        if p.unit in shed and p.unit not in already:
+        if p.unit in shed and p.unit not in excluded:
             size[p.unit] = size.get(p.unit, 0) + p.kib
     if not size:
         return None
@@ -226,8 +230,10 @@ class Guard:
     def __init__(self, cfg, *, read, procs, kill, deferrable, log, systemctl=None):
         self.cfg, self.read, self.procs, self.kill = cfg, read, procs, kill
         self.deferrable, self.log = deferrable, log
-        self.systemctl = systemctl or (lambda *a: None)
-        self.shed = []  # units stopped by us, in order
+        self.systemctl = systemctl or (lambda *a: True)
+        self.shed = []  # units stopped by us, in order, to start again
+        self.stop_at = {}  # unit -> first stop request; -inf if the request failed
+        self.start_tries = {}  # unit -> failed start requests
         self.last_action = float("-inf")
         self.last_stall = float("-inf")
         self.frozen = False
@@ -257,34 +263,73 @@ class Guard:
         if self.frozen and now - self.last_stall >= self.cfg.thaw_sec:
             self.thaw()
         # One at a time, so a restore that brings the stall back stops there.
-        if self.shed and now - self.last_stall >= self.cfg.shed_restore_sec:
-            if now - self.last_action >= self.cfg.cooldown_sec:
+        if now - self.last_stall >= self.cfg.shed_restore_sec:
+            if not self.shed:
+                self.stop_at.clear()
+            elif now - self.last_action >= self.cfg.cooldown_sec:
                 self.last_action = now
                 self.restore_one()
 
     def restore_one(self):
         unit = self.shed.pop()
-        self.systemctl("start", unit)
-        self.log(f"stall over: started {unit} again")
+        if self.systemctl("start", unit):
+            self.stop_at.pop(unit, None)
+            self.start_tries.pop(unit, None)
+            self.log(f"stall over: started {unit} again")
+            return
+        tries = self.start_tries.get(unit, 0) + 1
+        if tries < SHED_START_TRIES:
+            self.start_tries[unit] = tries
+            self.shed.insert(0, unit)
+            self.log(f"stall over: start of {unit} failed, will retry")
+        else:
+            self.start_tries.pop(unit, None)
+            self.log(f"stall over: start of {unit} failed {tries} times, giving up")
 
     def restore_all(self):
         while self.shed:
             self.restore_one()
 
     def _shed(self, now, avg):
-        picked = pick_shed(self.procs(), self.cfg.shed, self.shed)
-        if picked is None:
-            return False
-        unit, kib = picked
-        self.last_action = now
-        what = f"{unit} ({kib // 1024} MiB anon+swap)"
-        if self.cfg.dry_run:
-            self.log(f"memory stall (full avg10={avg}): would stop {what} (dry run)")
+        """Stop the largest shed unit that still has processes; False to kill.
+
+        A unit asked to stop less than SHED_STOP_GRACE_SEC ago is asked again
+        (--no-block, or its socket woke it) and holds off the kill meanwhile.
+        """
+        procs = list(self.procs())
+        # Only processes older than the request are still stopping; newer ones
+        # mean its socket woke it again, which is a new stop.
+        stopping = {p.unit for p in procs if p.started <= self.stop_at.get(p.unit, -1)}
+        for u in [u for u, t in self.stop_at.items() if t >= 0 and u not in stopping]:
+            del self.stop_at[u]
+        while True:
+            given_up = {
+                u for u, t in self.stop_at.items() if now - t >= SHED_STOP_GRACE_SEC
+            }
+            picked = pick_shed(procs, self.cfg.shed, given_up)
+            if picked is None:
+                return False
+            unit, kib = picked
+            what = f"{unit} ({kib // 1024} MiB anon+swap)"
+            if self.cfg.dry_run:
+                self.last_action = now
+                self.log(
+                    f"memory stall (full avg10={avg}): would stop {what} (dry run)"
+                )
+                return True
+            if not self.systemctl("stop", unit):
+                self.stop_at[unit] = float("-inf")
+                self.log(f"memory stall (full avg10={avg}): stop of {unit} failed")
+                continue
+            self.last_action = now
+            if unit in self.stop_at:
+                self.log(f"memory stall (full avg10={avg}): {what} still stopping")
+                return True
+            self.stop_at[unit] = now
+            if unit not in self.shed:
+                self.shed.append(unit)
+            self.log(f"memory stall (full avg10={avg}): stopped {what}")
             return True
-        self.systemctl("stop", unit)
-        self.shed.append(unit)
-        self.log(f"memory stall (full avg10={avg}): stopped {what}")
-        return True
 
     def thaw(self):
         self.deferrable.freeze(False)
@@ -358,7 +403,8 @@ def main(argv=None, env=None, log=None):
 
     def systemctl(verb, unit):
         # --no-block: a stop waits on the unit's own shutdown, which a stall slows.
-        subprocess.run(["systemctl", verb, "--no-block", unit], check=False)
+        cmd = ["systemctl", verb, "--no-block", unit]
+        return subprocess.run(cmd, check=False).returncode == 0
 
     # Process start times in /proc count from boot.
     def now():

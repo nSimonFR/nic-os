@@ -292,6 +292,30 @@ IMMICH_API = Proc(31, "immich-api", 0, 300 * MIB, "immich-server.service", 0.0)
 SHED = ("homepage-dashboard.service", "immich-server.service")
 
 
+def shed_guard(logged, procs, fail=(), stuck=(), **cfg):
+    """A Guard whose systemctl stop removes the unit's processes, unless stuck."""
+    calls = []
+
+    def systemctl(verb, unit):
+        calls.append((verb, unit))
+        if (verb, unit) in fail:
+            return False
+        if verb == "stop" and unit not in stuck:
+            procs[:] = [p for p in procs if p.unit != unit]
+        return True
+
+    g = Guard(
+        Config(**{"dry_run": False, "cooldown_sec": 10, "shed": SHED, **cfg}),
+        read=lambda: PRESSURE,
+        procs=lambda: procs,
+        kill=lambda pid: calls.append(("kill", pid)),
+        deferrable=FakeCgroup(False),
+        log=logged,
+        systemctl=systemctl,
+    )
+    return g, calls
+
+
 def test_config_shed():
     cfg = Config.from_env({"PSI_OOM_SHED": "a.service b.service"})
     assert cfg.shed == ("a.service", "b.service")
@@ -301,30 +325,63 @@ def test_config_shed():
 
 def test_pick_shed_sums_a_units_processes():
     procs = PROCS + [HOMEPAGE, IMMICH_API]
-    assert pick_shed(procs, SHED, []) == ("immich-server.service", 700 * MIB)
-    assert pick_shed(procs, SHED, ["immich-server.service"]) == (
+    assert pick_shed(procs, SHED, set()) == ("immich-server.service", 700 * MIB)
+    assert pick_shed(procs, SHED, {"immich-server.service"}) == (
         "homepage-dashboard.service",
         120 * MIB,
     )
-    assert pick_shed(procs, SHED, list(SHED)) is None
-    assert pick_shed(PROCS, (), []) is None
+    assert pick_shed(procs, SHED, set(SHED)) is None
+    assert pick_shed(PROCS, (), set()) is None
 
 
 def test_shed_units_are_stopped_before_any_kill(logged):
     lines, log = logged
-    calls = []
-    procs = PROCS + [HOMEPAGE]
-    g, kills, _ = guard(log, procs=procs, calls=calls, shed=SHED)
+    g, calls = shed_guard(log, PROCS + [HOMEPAGE])
     g.on_stall(100.0)
     g.on_stall(110.0)
     assert calls == [
         ("stop", "immich-server.service"),
         ("stop", "homepage-dashboard.service"),
     ]
-    assert kills == []
     assert "stopped immich-server.service (400 MiB" in lines[0]
     g.on_stall(120.0)  # nothing left to shed: the session goes
-    assert kills == [30]
+    assert calls[-1] == ("kill", 20)
+
+
+def test_unit_still_stopping_holds_off_the_kill(logged):
+    lines, log = logged
+    g, calls = shed_guard(log, list(PROCS), stuck={"immich-server.service"})
+    g.on_stall(100.0)
+    g.on_stall(110.0)
+    g.on_stall(120.0)
+    assert calls == [("stop", "immich-server.service")] * 3
+    assert "still stopping" in lines[-1]
+    g.on_stall(130.0)  # grace over: kill
+    assert calls[-1] == ("kill", 30)
+
+
+def test_failed_stop_falls_through(logged):
+    lines, log = logged
+    fail = {("stop", "immich-server.service")}
+    g, calls = shed_guard(log, PROCS + [HOMEPAGE], fail=fail)
+    g.on_stall(100.0)
+    assert calls == [
+        ("stop", "immich-server.service"),
+        ("stop", "homepage-dashboard.service"),
+    ]
+    assert g.shed == ["homepage-dashboard.service"]
+    assert "stop of immich-server.service failed" in lines[0]
+
+
+def test_socket_wake_is_stopped_again(logged):
+    _, log = logged
+    procs = list(PROCS)
+    g, calls = shed_guard(log, procs)
+    g.on_stall(100.0)
+    procs.append(PROCS[2]._replace(pid=32, started=200.0))  # woken by its socket
+    g.on_stall(300.0)
+    assert calls == [("stop", "immich-server.service")] * 2
+    assert g.shed == ["immich-server.service"]
 
 
 def test_freeze_comes_before_shedding(logged):
@@ -339,9 +396,7 @@ def test_freeze_comes_before_shedding(logged):
 
 def test_shed_units_restored_one_by_one_after_quiet(logged):
     lines, log = logged
-    calls = []
-    procs = PROCS + [HOMEPAGE]
-    g, _, _ = guard(log, procs=procs, calls=calls, shed=SHED, shed_restore_sec=900)
+    g, calls = shed_guard(log, PROCS + [HOMEPAGE], shed_restore_sec=900)
     g.on_stall(100.0)
     g.on_stall(110.0)
     calls.clear()
@@ -353,20 +408,20 @@ def test_shed_units_restored_one_by_one_after_quiet(logged):
     assert len(calls) == 1
     g.on_quiet(1020.0)
     assert calls[-1] == ("start", "immich-server.service")
-    assert g.shed == []
+    assert (g.shed, g.stop_at) == ([], {})
     assert "started immich-server.service again" in lines[-1]
 
 
-def test_restore_all(logged):
-    _, log = logged
-    calls = []
-    g, _, _ = guard(log, calls=calls, shed=SHED)
+def test_failed_start_retried_then_given_up(logged):
+    lines, log = logged
+    fail = {("start", "immich-server.service")}
+    g, calls = shed_guard(log, list(PROCS), fail=fail)
     g.on_stall(100.0)
     g.restore_all()
-    assert calls == [
-        ("stop", "immich-server.service"),
-        ("start", "immich-server.service"),
-    ]
+    assert calls.count(("start", "immich-server.service")) == 3
+    assert g.shed == []
+    assert "giving up" in lines[-1]
+    assert "started" not in lines[-1]
 
 
 def test_dry_run_never_stops(logged):
