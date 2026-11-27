@@ -15,6 +15,11 @@
           IdentityAgent = "~/.bitwarden-ssh-agent.sock";
         };
       };
+      # Stock SteamOS, set up by hosts/steamdeck/bootstrap.sh.
+      steamdeck = {
+        hostname = "steamdeck";
+        user = "deck";
+      };
     };
   };
 }
