@@ -375,6 +375,17 @@ def test_failed_stop_falls_through(logged):
     assert calls[-2:] == [("stop", "immich-server.service"), ("kill", 30)]
 
 
+def test_process_started_during_the_stall_keeps_the_deadline(logged):
+    _, log = logged
+    late = PROCS[2]._replace(started=100.1)  # started after on_stall(100) began
+    g, calls = shed_guard(log, [late], stuck={"immich-server.service"})
+    g.on_stall(100.0)
+    g.on_stall(110.0)
+    assert calls[-1] == ("stop", "immich-server.service")  # still stopping
+    g.on_stall(130.0)  # 30 s after the first request, not 40
+    assert calls[-1] == ("kill", 30)
+
+
 def test_socket_wake_is_stopped_again(logged):
     _, log = logged
     procs = list(PROCS)
