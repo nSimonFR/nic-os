@@ -58,7 +58,8 @@ git -C "$src" checkout -q "$DECK_TAILSCALE_REV"
 (cd "$src" && sudo bash tailscale.sh)
 rm -rf "$src"
 
-sudo /opt/tailscale/tailscale set --operator=deck
+# tailscaled was just restarted: wait for it before reading its state.
+for _ in $(seq 20); do sudo /opt/tailscale/tailscale set --operator=deck 2>/dev/null && break; sleep 1; done
 if ! /opt/tailscale/tailscale status >/dev/null 2>&1; then
   echo "Log in with the QR code or the URL below:"
   sudo /opt/tailscale/tailscale up --qr --operator=deck --hostname=steamdeck
@@ -88,8 +89,11 @@ sudo systemctl enable --now nic-ac-keepawake.service
 
 # 5. Nix (Determinate's installer keeps /nix in /home, so it survives SteamOS updates),
 #    then Home Manager from nic-os.
+# Upstream Nix: Determinate Nix writes /usr/local/bin, read-only on SteamOS.
 if [ ! -e /nix/var/nix/profiles/default/bin/nix ]; then
-  curl -sSfL https://install.determinate.systems/nix | sh -s -- install steam-deck --no-confirm
+  [ ! -e /nix/receipt.json ] || sudo /nix/nix-installer uninstall --no-confirm
+  curl -sSfL https://install.determinate.systems/nix |
+    sh -s -- install steam-deck --prefer-upstream-nix --no-confirm
 fi
 # shellcheck disable=SC1091
 . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
