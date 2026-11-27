@@ -30,7 +30,7 @@
 }:
 let
   # renovate: datasource=npm depName=agent-browser
-  version = "0.43.0";
+  version = "0.44.0";
 in
 stdenvNoCC.mkDerivation {
   pname = "agent-browser";
@@ -48,12 +48,12 @@ stdenvNoCC.mkDerivation {
   src = fetchurl {
     name = "agent-browser-${version}.tgz";
     url = "https://registry.npmjs.org/agent-browser/-/agent-browser-${version}.tgz";
-    hash = "sha256-5F07lcES2ghY+KfINtVdvAt4WPrEffFQnXQK3/ZeCrs=";
+    hash = "sha256-XCZSLkh21VF6EqqHjzV92lNTlngrQlOAvCMUnlyFzAw=";
   };
   binary = fetchurl {
     name = "agent-browser-cli-linux-arm64-gnu-${version}.tgz";
     url = "https://registry.npmjs.org/@agent-browser/cli-linux-arm64-gnu/-/cli-linux-arm64-gnu-${version}.tgz";
-    hash = "sha256-RlgjZIrvSpTSC8Kukb7/3vj2jWdQp5Xd28LROSgglDU=";
+    hash = "sha256-ffKaAc7ENPZq71hzILSH+DOqtw6kECVQfMs4GnIBhVU=";
   };
 
   # The Rust binary needs only glibc (libc/libm/libpthread/libdl), but it is
