@@ -335,6 +335,8 @@ class Guard:
                 continue
             self.last_action = now
             if unit in self.stop_at:
+                # The deadline stays; the repeat covers what runs now.
+                self.stop_at[unit] = (self.stop_at[unit][0], self.clock())
                 self.log(f"memory stall (full avg10={avg}): {what} still stopping")
                 return True
             self.stop_at[unit] = (now, self.clock())

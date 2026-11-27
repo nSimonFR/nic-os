@@ -401,6 +401,20 @@ def test_process_started_before_the_request_was_accepted_keeps_the_deadline(logg
     assert calls[-1] == ("kill", 33)
 
 
+def test_repeat_stop_moves_the_cutoff_not_the_deadline(logged):
+    _, log = logged
+    procs = list(PROCS)
+    g, calls = shed_guard(log, procs, stuck={"immich-server.service"})
+    g.on_stall(100.0)  # accepted at 100
+    procs.append(PROCS[2]._replace(pid=34, started=105.0))
+    g.on_stall(110.0)  # repeat accepted at 110
+    procs[:] = [p for p in procs if p.pid != 30]  # the first one exits
+    g.on_stall(120.0)
+    assert calls[-1] == ("stop", "immich-server.service")  # still stopping
+    g.on_stall(130.0)
+    assert calls[-1] == ("kill", 34)
+
+
 def test_socket_wake_is_stopped_again(logged):
     _, log = logged
     procs = list(PROCS)
