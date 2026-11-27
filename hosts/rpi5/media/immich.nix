@@ -106,6 +106,9 @@ in
     secretGroup = "immich";
   };
 
+  # ~700 MiB awake and socket-activated: a stall stops it, the next request wakes it.
+  nic.psiOom.shed = [ "immich-server.service" ];
+
   systemd.services.immich-server = {
     # pocket-id-clients writes the OAuth client secret read at start.
     after = [

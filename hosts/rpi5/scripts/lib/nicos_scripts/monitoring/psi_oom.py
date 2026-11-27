@@ -19,6 +19,13 @@ Units in PSI_OOM_LAST_RESORT are taken after every other non-respawn: a
 SIGKILL mid-turn pauses a Hermes conversation until someone resends
 (7 Hermes kills 2026-11-26, each followed by Home Assistant's anyway).
 
+Units in PSI_OOM_SHED are expendable: after the freeze and before any kill,
+the largest running one is stopped cleanly (`systemctl stop`, so Restart=
+does not bring it back), one per cooldown. They are started again one by one
+once the trigger has stayed quiet for PSI_OOM_SHED_RESTORE_SEC. Without them
+the largest process was a T3 agent session (adj is ignored above 0): 4
+sessions SIGKILLed 2026-11-27 17:46-18:33, then a watchdog reset at 18:51.
+
 Not sysrq f: it picks by oom_score, where T3's agents (adj 800) and
 ryot-sandboxd (adj 1000) outrank everything. On 2026-11-11 it killed sleep,
 bash and a 1 MiB ryot-sandboxd over and over until the watchdog reset.
@@ -29,6 +36,7 @@ import os
 import re
 import select
 import signal
+import subprocess
 import time
 from collections import namedtuple
 
@@ -46,6 +54,8 @@ COOLDOWN_SEC = 10
 MIN_VICTIM_MIB = 64
 # How long a unit's kill marks its later processes as respawns.
 RESPAWN_SEC = 600
+# A shed unit comes back only after this long without a stall.
+SHED_RESTORE_SEC = 900
 DEFERRABLE_CGROUP = "/sys/fs/cgroup/system.slice/nix-daemon.service"
 
 FULL_RE = re.compile(r"^full avg10=([\d.]+)", re.M)
@@ -68,6 +78,8 @@ class Config:
     cgroup: str = DEFERRABLE_CGROUP
     dry_run: bool = True
     last_resort: tuple = ()
+    shed: tuple = ()
+    shed_restore_sec: int = SHED_RESTORE_SEC
 
     def __init__(self, **kw):
         for k, v in kw.items():
@@ -85,6 +97,8 @@ class Config:
             cgroup=env_str("PSI_OOM_CGROUP", DEFERRABLE_CGROUP, env),
             dry_run=env_str("PSI_OOM_DRY_RUN", "1", env) != "0",
             last_resort=tuple(env_str("PSI_OOM_LAST_RESORT", "", env).split()),
+            shed=tuple(env_str("PSI_OOM_SHED", "", env).split()),
+            shed_restore_sec=env_int("PSI_OOM_SHED_RESTORE_SEC", SHED_RESTORE_SEC, env),
         )
 
     @property
@@ -172,6 +186,18 @@ def pick_victim(procs, min_kib, self_pid, killed=None, last_resort=()):
     return None
 
 
+def pick_shed(procs, shed, already):
+    """(unit, KiB) of the largest running unit of shed not yet stopped, or None."""
+    size = {}
+    for p in procs:
+        if p.unit in shed and p.unit not in already:
+            size[p.unit] = size.get(p.unit, 0) + p.kib
+    if not size:
+        return None
+    unit = max(size, key=size.get)
+    return unit, size[unit]
+
+
 class Cgroup:
     """The deferrable work: freezable through cgroup v2, no memory controller needed."""
 
@@ -197,9 +223,11 @@ class Cgroup:
 class Guard:
     """Freeze the deferrable cgroup first; kill only if the stall outlasts it."""
 
-    def __init__(self, cfg, *, read, procs, kill, deferrable, log):
+    def __init__(self, cfg, *, read, procs, kill, deferrable, log, systemctl=None):
         self.cfg, self.read, self.procs, self.kill = cfg, read, procs, kill
         self.deferrable, self.log = deferrable, log
+        self.systemctl = systemctl or (lambda *a: None)
+        self.shed = []  # units stopped by us, in order
         self.last_action = float("-inf")
         self.last_stall = float("-inf")
         self.frozen = False
@@ -221,11 +249,42 @@ class Guard:
             self.frozen = True
             self.log(f"memory stall (full avg10={avg}): froze nix-daemon")
             return
+        if self._shed(now, avg):
+            return
         self._kill(now, avg)
 
     def on_quiet(self, now):
         if self.frozen and now - self.last_stall >= self.cfg.thaw_sec:
             self.thaw()
+        # One at a time, so a restore that brings the stall back stops there.
+        if self.shed and now - self.last_stall >= self.cfg.shed_restore_sec:
+            if now - self.last_action >= self.cfg.cooldown_sec:
+                self.last_action = now
+                self.restore_one()
+
+    def restore_one(self):
+        unit = self.shed.pop()
+        self.systemctl("start", unit)
+        self.log(f"stall over: started {unit} again")
+
+    def restore_all(self):
+        while self.shed:
+            self.restore_one()
+
+    def _shed(self, now, avg):
+        picked = pick_shed(self.procs(), self.cfg.shed, self.shed)
+        if picked is None:
+            return False
+        unit, kib = picked
+        self.last_action = now
+        what = f"{unit} ({kib // 1024} MiB anon+swap)"
+        if self.cfg.dry_run:
+            self.log(f"memory stall (full avg10={avg}): would stop {what} (dry run)")
+            return True
+        self.systemctl("stop", unit)
+        self.shed.append(unit)
+        self.log(f"memory stall (full avg10={avg}): stopped {what}")
+        return True
 
     def thaw(self):
         self.deferrable.freeze(False)
@@ -297,6 +356,10 @@ def main(argv=None, env=None, log=None):
     def kill(pid):
         os.kill(pid, signal.SIGKILL)
 
+    def systemctl(verb, unit):
+        # --no-block: a stop waits on the unit's own shutdown, which a stall slows.
+        subprocess.run(["systemctl", verb, "--no-block", unit], check=False)
+
     # Process start times in /proc count from boot.
     def now():
         return time.clock_gettime(time.CLOCK_BOOTTIME)
@@ -308,6 +371,7 @@ def main(argv=None, env=None, log=None):
         kill=kill,
         deferrable=Cgroup(cfg.cgroup),
         log=log,
+        systemctl=systemctl,
     )
     # A freeze left by a previous run would hold every nix client forever, and
     # `finally` only runs on SIGTERM once it raises.
@@ -323,6 +387,8 @@ def main(argv=None, env=None, log=None):
             guard.on_quiet(now())
     finally:
         guard.thaw()
+        # A restart would forget them, leaving them down until the next boot.
+        guard.restore_all()
 
 
 if __name__ == "__main__":

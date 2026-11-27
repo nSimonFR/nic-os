@@ -7,6 +7,7 @@ from nicos_scripts.monitoring.psi_oom import (
     parse_started,
     parse_status,
     parse_unit,
+    pick_shed,
     pick_victim,
     scan_procs,
 )
@@ -153,7 +154,7 @@ class FakeCgroup:
         self.writes.append(on)
 
 
-def guard(logged, procs=PROCS, busy=False, **cfg):
+def guard(logged, procs=PROCS, busy=False, calls=None, **cfg):
     kills = []
     cg = FakeCgroup(busy)
     g = Guard(
@@ -163,6 +164,7 @@ def guard(logged, procs=PROCS, busy=False, **cfg):
         kill=kills.append,
         deferrable=cg,
         log=logged,
+        systemctl=(lambda *a: calls.append(a)) if calls is not None else None,
     )
     return g, kills, cg
 
@@ -283,3 +285,94 @@ def test_cgroup_busy_and_freeze(tmp_path):
     cg.freeze(False)
     assert (tmp_path / "cgroup.freeze").read_text() == "0"
     Cgroup(str(tmp_path / "missing")).freeze(True)  # no error
+
+
+HOMEPAGE = Proc(70, "next-server", 0, 120 * MIB, "homepage-dashboard.service", 0.0)
+IMMICH_API = Proc(31, "immich-api", 0, 300 * MIB, "immich-server.service", 0.0)
+SHED = ("homepage-dashboard.service", "immich-server.service")
+
+
+def test_config_shed():
+    cfg = Config.from_env({"PSI_OOM_SHED": "a.service b.service"})
+    assert cfg.shed == ("a.service", "b.service")
+    assert Config.from_env({}).shed == ()
+    assert Config.from_env({"PSI_OOM_SHED_RESTORE_SEC": "60"}).shed_restore_sec == 60
+
+
+def test_pick_shed_sums_a_units_processes():
+    procs = PROCS + [HOMEPAGE, IMMICH_API]
+    assert pick_shed(procs, SHED, []) == ("immich-server.service", 700 * MIB)
+    assert pick_shed(procs, SHED, ["immich-server.service"]) == (
+        "homepage-dashboard.service",
+        120 * MIB,
+    )
+    assert pick_shed(procs, SHED, list(SHED)) is None
+    assert pick_shed(PROCS, (), []) is None
+
+
+def test_shed_units_are_stopped_before_any_kill(logged):
+    lines, log = logged
+    calls = []
+    procs = PROCS + [HOMEPAGE]
+    g, kills, _ = guard(log, procs=procs, calls=calls, shed=SHED)
+    g.on_stall(100.0)
+    g.on_stall(110.0)
+    assert calls == [
+        ("stop", "immich-server.service"),
+        ("stop", "homepage-dashboard.service"),
+    ]
+    assert kills == []
+    assert "stopped immich-server.service (400 MiB" in lines[0]
+    g.on_stall(120.0)  # nothing left to shed: the session goes
+    assert kills == [30]
+
+
+def test_freeze_comes_before_shedding(logged):
+    _, log = logged
+    calls = []
+    g, kills, cg = guard(log, busy=True, calls=calls, shed=SHED)
+    g.on_stall(100.0)
+    assert (calls, cg.writes) == ([], [True])
+    g.on_stall(110.0)
+    assert calls == [("stop", "immich-server.service")]
+
+
+def test_shed_units_restored_one_by_one_after_quiet(logged):
+    lines, log = logged
+    calls = []
+    procs = PROCS + [HOMEPAGE]
+    g, _, _ = guard(log, procs=procs, calls=calls, shed=SHED, shed_restore_sec=900)
+    g.on_stall(100.0)
+    g.on_stall(110.0)
+    calls.clear()
+    g.on_quiet(1000.0)
+    assert calls == []  # 890 s quiet
+    g.on_quiet(1010.0)
+    assert calls == [("start", "homepage-dashboard.service")]
+    g.on_quiet(1015.0)  # cooldown between starts
+    assert len(calls) == 1
+    g.on_quiet(1020.0)
+    assert calls[-1] == ("start", "immich-server.service")
+    assert g.shed == []
+    assert "started immich-server.service again" in lines[-1]
+
+
+def test_restore_all(logged):
+    _, log = logged
+    calls = []
+    g, _, _ = guard(log, calls=calls, shed=SHED)
+    g.on_stall(100.0)
+    g.restore_all()
+    assert calls == [
+        ("stop", "immich-server.service"),
+        ("start", "immich-server.service"),
+    ]
+
+
+def test_dry_run_never_stops(logged):
+    lines, log = logged
+    calls = []
+    g, kills, _ = guard(log, calls=calls, shed=SHED, dry_run=True)
+    g.on_stall(100.0)
+    assert (calls, kills, g.shed) == ([], [], [])
+    assert "would stop immich-server.service" in lines[0]
