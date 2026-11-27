@@ -41,6 +41,8 @@ grep -q '^Include /etc/ssh/sshd_config.d/' /etc/ssh/sshd_config ||
 # Keep these /etc files across SteamOS updates.
 printf '%s\n' /etc/ssh/sshd_config /etc/ssh/sshd_config.d/10-nic-os.conf |
   sudo tee /etc/atomic-update.conf.d/nic-os.conf >/dev/null
+# A new Deck has no host keys until sshd first starts; `sshd -t` needs them.
+sudo ssh-keygen -A
 sudo sshd -t
 sudo systemctl enable --now sshd
 sudo systemctl reload sshd
