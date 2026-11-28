@@ -11,6 +11,7 @@
     ./forgejo-mcp.nix
     ./searxng-mcp.nix
     ./mcp-bridges.nix
+    ./aperture-codemode.nix
     ./claude/claude-oauth-1.nix
     ./claude/claude-account-healthcheck.nix
     ./claude/claude-notify-aggregator.nix
