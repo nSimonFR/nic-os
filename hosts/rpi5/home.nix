@@ -1,5 +1,6 @@
 {
   inputs,
+  osConfig,
   lib,
   pkgs,
   username,
@@ -34,6 +35,13 @@ in
   # Agent Vault's included. secrets-zsh (real Linear and Trusk tokens) is not
   # declared on this host at all.
   nic.userSecretsFromSystem = true;
+
+  # The Pi's shared Code Mode server (agents/aperture-codemode.nix) instead of a stdio
+  # copy per session (home/mcp.nix): ~60 MiB saved per concurrent Claude session.
+  programs.claude-code.mcpServers.aperture = lib.mkForce {
+    type = "http";
+    url = "http://${lib.head osConfig.services.socketActivate.aperture-codemode.listen}/mcp?client=claude-code";
+  };
 
   home.packages = with pkgs; [
     nodejs_22

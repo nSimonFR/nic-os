@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // Code Mode over Aperture's MCP gateway: two tools (search, execute) instead of ~400.
 // Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide),
-// CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables).
+// CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables),
+// CODEMODE_HTTP_PORT (serve stateless Streamable HTTP on CODEMODE_HTTP_HOST:port/mcp instead of
+// stdio, so every client shares one process, one upstream connection and one tool cache).
 import { randomUUID } from "node:crypto";
+import { createServer } from "node:http";
 import { appendFileSync, chmodSync, mkdirSync, renameSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
 import { homedir } from "node:os";
@@ -11,6 +14,7 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { runSandbox } from "./sandbox.mjs";
 
@@ -91,6 +95,16 @@ export class Upstream {
     return this.listing;
   }
 
+  /**
+   * The listing for tool descriptions: a stale cache is returned at once and refreshed in
+   * the background, so a shared server never holds a request on a slow upstream listing.
+   */
+  async known() {
+    if (!this.cache) return this.tools();
+    if (Date.now() - this.cache.at >= TOOLS_TTL_MS) this.tools().catch(() => {});
+    return this.cache.tools;
+  }
+
   async list() {
     const client = await this.client();
     const tools = new Map();
@@ -166,16 +180,27 @@ const truncate = (s) =>
 
 const text = (s, isError = false) => ({ content: [{ type: "text", text: truncate(s) }], isError });
 
-export async function buildServer(upstream, log = () => {}) {
+export async function buildServer(upstream, log = () => {}, client = "unknown", listWaitMs = Infinity) {
   let known = "";
   try {
-    known = ` Connectors: ${connectors(await upstream.tools())}.`;
+    // A cold upstream listing wakes sleeping connectors (30 s+): past listWaitMs the
+    // description goes without the connector list rather than holding the client.
+    const listed = upstream.known();
+    listed.catch(() => {});
+    const tools = await (listWaitMs === Infinity
+      ? listed
+      : Promise.race([
+          listed,
+          new Promise((_, no) => setTimeout(() => no(new Error("listing still running")), listWaitMs).unref()),
+        ]));
+    known = ` Connectors: ${connectors(tools)}.`;
   } catch (e) {
     console.error(`aperture-codemode: tool listing failed at start: ${e.message}`);
   }
 
   const server = new McpServer({ name: "aperture-codemode", version: "0.1.0" });
-  const clientName = () => server.server.getClientVersion()?.name ?? "unknown";
+  // Over stateless HTTP only the initialize request carries clientInfo; the URL names the client.
+  const clientName = () => server.server.getClientVersion()?.name ?? client;
   server.registerTool(
     "search",
     {
@@ -243,6 +268,36 @@ export async function buildServer(upstream, log = () => {}) {
   return server;
 }
 
+/**
+ * Stateless Streamable HTTP: a fresh McpServer per POST /mcp, all sharing `upstream`.
+ * Stateless, so a restart (socket-activated idle exit) never strands a client's session.
+ * `?client=<name>` labels the call log. GET /health answers for readiness probes.
+ */
+export function serveHttp(upstream, log = () => {}) {
+  return createServer(async (req, res) => {
+    const url = new URL(req.url ?? "/", "http://localhost");
+    if (url.pathname === "/health") return res.writeHead(200).end("ok\n");
+    if (url.pathname !== "/mcp") return res.writeHead(404).end();
+    if (req.method !== "POST") return res.writeHead(405, { Allow: "POST" }).end();
+    try {
+      const server = await buildServer(upstream, log, url.searchParams.get("client") ?? "unknown", 10_000);
+      const transport = new StreamableHTTPServerTransport({
+        sessionIdGenerator: undefined,
+        enableJsonResponse: true,
+      });
+      res.on("close", () => {
+        transport.close();
+        server.close();
+      });
+      await server.connect(transport);
+      await transport.handleRequest(req, res);
+    } catch (e) {
+      console.error(`aperture-codemode: request failed: ${e.message}`);
+      if (!res.headersSent) res.writeHead(500).end();
+    }
+  });
+}
+
 if (import.meta.main) {
   const url = process.env.APERTURE_MCP_URL;
   if (!url) {
@@ -253,6 +308,17 @@ if (import.meta.main) {
   const logFile =
     process.env.CODEMODE_LOG ??
     join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "aperture-codemode", "calls.jsonl");
-  const server = await buildServer(new Upstream(url, exclude), makeLogger(logFile === "off" ? null : logFile));
-  await server.connect(new StdioServerTransport());
+  const upstream = new Upstream(url, exclude);
+  const log = makeLogger(logFile === "off" ? null : logFile);
+  const port = process.env.CODEMODE_HTTP_PORT;
+  if (port) {
+    const host = process.env.CODEMODE_HTTP_HOST || "127.0.0.1";
+    serveHttp(upstream, log).listen(Number(port), host, () =>
+      console.error(`aperture-codemode: serving http://${host}:${port}/mcp`),
+    );
+    // Warm the tool cache so the first client doesn't wait on the upstream listing.
+    upstream.tools().catch((e) => console.error(`aperture-codemode: tool listing failed: ${e.message}`));
+  } else {
+    await (await buildServer(upstream, log)).connect(new StdioServerTransport());
+  }
 }

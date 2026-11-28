@@ -6,7 +6,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
-import { buildServer, makeLogger, search, Upstream } from "./server.mjs";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { buildServer, makeLogger, search, serveHttp, Upstream } from "./server.mjs";
 
 const echo = async (name, input) => ({ name, input });
 
@@ -157,4 +158,48 @@ test("an existing log file is narrowed to 0600 before writing", () => {
   writeFileSync(file, "", { mode: 0o644 });
   makeLogger(file)({ event: "search", query: "x" });
   assert.equal(statSync(file).mode & 0o777, 0o600);
+});
+
+test("http mode: concurrent clients share one upstream listing, labelled by ?client=", async () => {
+  const file = join(mkdtempSync(join(tmpdir(), "codemode-")), "calls.jsonl");
+  const up = new Upstream("http://unused", []);
+  let listings = 0;
+  let release;
+  const gate = new Promise((r) => (release = r));
+  up.client = async () => ({
+    listTools: async () => {
+      listings++;
+      return { tools: [{ name: "sure_get_accounts", inputSchema: { type: "object" } }] };
+    },
+    // The first call waits until the second has finished: requests must not be serialized.
+    callTool: async ({ arguments: a }) => {
+      if (a.slow) await gate;
+      else release();
+      return { content: [{ type: "text", text: JSON.stringify(a) }] };
+    },
+  });
+  const http = serveHttp(up, makeLogger(file));
+  await new Promise((r) => http.listen(0, "127.0.0.1", r));
+  const base = `http://127.0.0.1:${http.address().port}`;
+  const connect = async (client) => {
+    const c = new Client({ name: client, version: "0" });
+    await c.connect(new StreamableHTTPClientTransport(new URL(`${base}/mcp?client=${client}`)));
+    return c;
+  };
+  try {
+    assert.equal(await (await fetch(`${base}/health`)).text(), "ok\n");
+    const [a, b] = await Promise.all([connect("one"), connect("two")]);
+    assert.deepEqual((await a.listTools()).tools.map((t) => t.name).sort(), ["execute", "search"]);
+    const run = (c, slow) =>
+      c.callTool({ name: "execute", arguments: { code: `async () => codemode.sure_get_accounts({ slow: ${slow} })` } });
+    const [ra, rb] = await Promise.all([run(a, true), run(b, false)]);
+    assert.deepEqual(JSON.parse(ra.content[0].text), { slow: true });
+    assert.deepEqual(JSON.parse(rb.content[0].text), { slow: false });
+    assert.equal(listings, 1);
+    const clients = readFileSync(file, "utf8").trim().split("\n").map((l) => JSON.parse(l).client);
+    assert.deepEqual([...new Set(clients)].sort(), ["one", "two"]);
+    await Promise.all([a.close(), b.close()]);
+  } finally {
+    http.close();
+  }
 });

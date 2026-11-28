@@ -1,5 +1,6 @@
 {
   config,
+  osConfig,
   lib,
   pkgs,
   inputs,
@@ -232,12 +233,9 @@ let
     # Code Mode: `search` returns the types of codemode.<connector>_<tool>, `execute`
     # runs code calling them. The full listing was 415 tools / 513 KB of context.
     # Listing the tools wakes the socket-activated ones (cold Sure: 14s to >30s).
+    # The Pi's shared server (agents/aperture-codemode.nix), which hides apertureSendTools.
     mcp_servers.aperture = {
-      command = lib.getExe pkgs.aperture-codemode;
-      env = {
-        APERTURE_MCP_URL = "${apertureUrl}/v1/mcp";
-        CODEMODE_EXCLUDE = lib.concatStringsSep "," apertureSendTools;
-      };
+      url = "http://${lib.head osConfig.services.socketActivate.aperture-codemode.listen}/mcp?client=hermes";
       connect_timeout = 120;
     };
     # The same gateway, holding only apertureSendTools: `untrusted` asks him
