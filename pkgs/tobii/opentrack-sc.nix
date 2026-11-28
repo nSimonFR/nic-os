@@ -62,6 +62,10 @@ stdenv.mkDerivation rec {
   # (harmless) shell command — keep it exactly as-is so the derivation hash is
   # unchanged by the move out of hosts/beast/tobii-native.nix.
   postPatch = ''
+    # procps 4.0.4+ takes PIDS_VAL(rel, type, stack), the pinned source still passes
+    # the old 4th `info` argument. Without this the build stops in process_detector.cpp.
+    substituteInPlace compat/process-list.hpp \
+      --replace-fail "PIDS_VAL(rel_cmdline, strv,  stack, info)" "PIDS_VAL(rel_cmdline, strv, stack)"
           cat > tracker-tobii/CMakeLists.txt <<'EOF'
     if(WIN32)
         set(SDK_TOBII "" CACHE PATH "Tobii Stream Engine path")
