@@ -61,7 +61,10 @@ git -C "$src" checkout -q "$DECK_TAILSCALE_REV"
 rm -rf "$src"
 
 # tailscaled was just restarted: wait for it before reading its state.
-for _ in $(seq 20); do sudo /opt/tailscale/tailscale set --operator=deck 2>/dev/null && break; sleep 1; done
+for _ in $(seq 20); do
+  sudo /opt/tailscale/tailscale set --operator=deck 2>/dev/null && break
+  sleep 1
+done
 if ! /opt/tailscale/tailscale status >/dev/null 2>&1; then
   echo "Log in with the QR code or the URL below:"
   sudo /opt/tailscale/tailscale up --qr --operator=deck --hostname=steamdeck
