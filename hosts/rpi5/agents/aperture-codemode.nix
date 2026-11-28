@@ -25,6 +25,8 @@ in
       CODEMODE_EXCLUDE = lib.concatStringsSep "," (import ../../../shared/aperture-send-tools.nix);
       CODEMODE_HTTP_HOST = "127.0.0.1";
       CODEMODE_HTTP_PORT = toString internalPort;
+      # The proxy forwards the stream unchanged, so clients' Host names the proxy port.
+      CODEMODE_HTTP_ALLOWED_HOSTS = "127.0.0.1:${toString proxyPort}";
       # Readable by the agents (nsimon) when debugging a run.
       CODEMODE_LOG = "/var/lib/aperture-codemode/calls.jsonl";
     };
