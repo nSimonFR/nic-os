@@ -3,6 +3,11 @@
 #   home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck
 { pkgs, ... }:
 {
+  imports = [
+    ./auto-update.nix
+    ./beszel-agent.nix
+  ];
+
   home = {
     username = "deck";
     homeDirectory = "/home/deck";
