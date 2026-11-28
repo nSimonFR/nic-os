@@ -24,7 +24,10 @@ if [ "$(passwd -S deck | awk '{print $2}')" != P ]; then
   passwd </dev/tty
 fi
 
-# 2. Key-only SSH.
+# 2. Key-only SSH. The deck user's own key decrypts its agenix secrets (README).
+[ -f ~/.ssh/id_ed25519 ] || ssh-keygen -q -t ed25519 -N "" -C deck@steamdeck -f ~/.ssh/id_ed25519
+# User units (beszel-agent, nic-os-update) run without a session.
+loginctl enable-linger deck
 install -d -m 700 ~/.ssh
 touch ~/.ssh/authorized_keys
 chmod 600 ~/.ssh/authorized_keys
