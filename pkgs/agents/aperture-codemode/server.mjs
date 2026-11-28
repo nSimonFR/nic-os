@@ -3,7 +3,8 @@
 // Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide),
 // CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables),
 // CODEMODE_HTTP_PORT (serve stateless Streamable HTTP on CODEMODE_HTTP_HOST:port/mcp instead of
-// stdio, so every client shares one process, one upstream connection and one tool cache).
+// stdio, so every client shares one process, one upstream connection and one tool cache),
+// CODEMODE_HTTP_ALLOWED_HOSTS (comma-separated Host values accepted over HTTP; all if unset).
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { appendFileSync, chmodSync, mkdirSync, renameSync, statSync } from "node:fs";
@@ -272,12 +273,22 @@ export async function buildServer(upstream, log = () => {}, client = "unknown", 
  * Stateless Streamable HTTP: a fresh McpServer per POST /mcp, all sharing `upstream`.
  * Stateless, so a restart (socket-activated idle exit) never strands a client's session.
  * `?client=<name>` labels the call log. GET /health answers for readiness probes.
+ * DNS rebinding: a browser page must not drive the loopback listener, so a request with an
+ * Origin (agents send none) or a Host outside `allowedHosts` (when given) gets 403.
  */
-export function serveHttp(upstream, log = () => {}) {
+export function serveHttp(upstream, log = () => {}, allowedHosts = []) {
+  const hosts = new Set(allowedHosts);
   return createServer(async (req, res) => {
-    const url = new URL(req.url ?? "/", "http://localhost");
+    let url;
+    try {
+      url = new URL(req.url ?? "/", "http://localhost");
+    } catch {
+      return res.writeHead(400).end();
+    }
     if (url.pathname === "/health") return res.writeHead(200).end("ok\n");
     if (url.pathname !== "/mcp") return res.writeHead(404).end();
+    if (req.headers.origin !== undefined || (hosts.size > 0 && !hosts.has(req.headers.host)))
+      return res.writeHead(403).end();
     if (req.method !== "POST") return res.writeHead(405, { Allow: "POST" }).end();
     try {
       const server = await buildServer(upstream, log, url.searchParams.get("client") ?? "unknown", 10_000);
@@ -313,7 +324,8 @@ if (import.meta.main) {
   const port = process.env.CODEMODE_HTTP_PORT;
   if (port) {
     const host = process.env.CODEMODE_HTTP_HOST || "127.0.0.1";
-    serveHttp(upstream, log).listen(Number(port), host, () =>
+    const allowed = (process.env.CODEMODE_HTTP_ALLOWED_HOSTS ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+    serveHttp(upstream, log, allowed).listen(Number(port), host, () =>
       console.error(`aperture-codemode: serving http://${host}:${port}/mcp`),
     );
     // Warm the tool cache so the first client doesn't wait on the upstream listing.

@@ -203,3 +203,31 @@ test("http mode: concurrent clients share one upstream listing, labelled by ?cli
     http.close();
   }
 });
+
+test("http mode refuses browser origins, foreign Hosts and bad request targets", async () => {
+  const up = new Upstream("http://unused", []);
+  up.client = async () => ({ listTools: async () => ({ tools: [] }) });
+  const http = serveHttp(up, () => {}, ["127.0.0.1:8480"]);
+  await new Promise((r) => http.listen(0, "127.0.0.1", r));
+  const { port } = http.address();
+  const { request } = await import("node:http");
+  const status = (path, headers) =>
+    new Promise((ok, no) => {
+      const r = request({ host: "127.0.0.1", port, path, method: "POST", headers }, (res) => {
+        res.resume();
+        ok(res.statusCode);
+      });
+      r.on("error", no);
+      r.end("{}");
+    });
+  try {
+    assert.equal(await status("/mcp", { host: "evil.example:8480" }), 403);
+    assert.equal(await status("/mcp", { host: "127.0.0.1:8480", origin: "http://evil.example" }), 403);
+    assert.equal(await status("//", { host: "127.0.0.1:8480" }), 400);
+    // Allowed Host, no Origin: reaches the MCP transport (which wants an Accept header).
+    assert.notEqual(await status("/mcp", { host: "127.0.0.1:8480" }), 403);
+    assert.equal(await (await fetch(`http://127.0.0.1:${port}/health`)).text(), "ok\n");
+  } finally {
+    http.close();
+  }
+});
