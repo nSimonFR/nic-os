@@ -1,6 +1,7 @@
 let
   nsimon-age = "age1x99u04m887emqp9dp44r4ey8ky8m8gtuwx07z2fm89u8xu6jfa2sxjux9w";
   nsimon-ed25519 = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBZ7wzLFXmWeZ52SWjvsfXSZr+LbvpZYt/EE/tzVZnFd";
+  steamdeck-deck = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIPpb3O+TYeds6qfTE9VZX6iX7p2GSb9DPt9SJ9s4zJT"; # the Deck's deck user, for hosts/steamdeck
   rpi5-host = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFeBo33hUAosqezYSzFOdVnzwnz0ShD0jnjysuU8LSCg"; # only for what the rpi5 decrypts (hosts/rpi5/secrets.nix)
 in
 {
@@ -47,5 +48,11 @@ in
   "beszel-agent-nbookpro.env.age".publicKeys = [
     nsimon-age
     nsimon-ed25519
+  ];
+  # Beszel agent token of the steamdeck system (hosts/steamdeck/beszel-agent.nix).
+  "beszel-agent-steamdeck.env.age".publicKeys = [
+    nsimon-age
+    nsimon-ed25519
+    steamdeck-deck
   ];
 }
