@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Code Mode over Aperture's MCP gateway: two tools (search, execute) instead of ~400.
 // Env: APERTURE_MCP_URL (required), CODEMODE_EXCLUDE (comma-separated tool names to hide),
+// CODEMODE_INCLUDE (comma-separated: expose only these),
 // CODEMODE_LOG (JSONL call log; default $XDG_STATE_HOME/aperture-codemode/calls.jsonl, "off" disables),
 // CODEMODE_HTTP_PORT (serve stateless Streamable HTTP on CODEMODE_HTTP_HOST:port/mcp instead of
 // stdio, so every client shares one process, one upstream connection and one tool cache),
@@ -67,9 +68,10 @@ const clip = (v, n) => {
 };
 
 export class Upstream {
-  constructor(url, exclude = []) {
+  constructor(url, exclude = [], include = []) {
     this.url = url;
     this.exclude = new Set(exclude);
+    this.include = new Set(include);
     this.cache = null;
   }
 
@@ -112,7 +114,10 @@ export class Upstream {
     let cursor;
     do {
       const page = await client.listTools(cursor ? { cursor } : undefined, { timeout: 120_000 });
-      for (const t of page.tools) if (!this.exclude.has(t.name)) tools.set(sanitizeToolName(t.name), t);
+      for (const t of page.tools) {
+        if (this.exclude.has(t.name) || (this.include.size && !this.include.has(t.name))) continue;
+        tools.set(sanitizeToolName(t.name), t);
+      }
       cursor = page.nextCursor;
     } while (cursor);
     this.cache = { at: Date.now(), tools };
@@ -316,10 +321,11 @@ if (import.meta.main) {
     process.exit(2);
   }
   const exclude = (process.env.CODEMODE_EXCLUDE ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  const include = (process.env.CODEMODE_INCLUDE ?? "").split(",").map((s) => s.trim()).filter(Boolean);
   const logFile =
     process.env.CODEMODE_LOG ??
     join(process.env.XDG_STATE_HOME || join(homedir(), ".local", "state"), "aperture-codemode", "calls.jsonl");
-  const upstream = new Upstream(url, exclude);
+  const upstream = new Upstream(url, exclude, include);
   const log = makeLogger(logFile === "off" ? null : logFile);
   const port = process.env.CODEMODE_HTTP_PORT;
   if (port) {

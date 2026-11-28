@@ -101,6 +101,21 @@ test("empty console lines are capped too", async () => {
   assert.ok(r.logs.length >= 19_000 && r.logs.length <= 20_001, `${r.logs.length} entries`);
 });
 
+test("an include list exposes only those tools", async () => {
+  const up = new Upstream("http://unused", [], ["messaging_send_message"]);
+  up.client = async () => ({
+    listTools: async () => ({
+      tools: [
+        { name: "messaging_send_message", description: "Send", inputSchema: { type: "object" } },
+        { name: "messaging_read_chat", description: "Read", inputSchema: { type: "object" } },
+      ],
+    }),
+    callTool: async ({ name }) => ({ content: [{ type: "text", text: JSON.stringify({ name }) }] }),
+  });
+  assert.deepEqual([...(await up.tools()).keys()], ["messaging_send_message"]);
+  await assert.rejects(up.call("messaging_read_chat", {}), /Unknown tool/);
+});
+
 test("excluded tools are hidden and refused", async () => {
   const up = new Upstream("http://unused", ["mail_send_email"]);
   let listings = 0;
