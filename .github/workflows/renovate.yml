@@ -52,7 +52,7 @@ jobs:
       - name: Run Renovate
         env:
           # renovate: datasource=npm depName=renovate
-          RENOVATE_VERSION: 44.257.9
+          RENOVATE_VERSION: 44.262.1
           RENOVATE_TOKEN: ${{ steps.app.outputs.token }}
           RENOVATE_PLATFORM: github
           RENOVATE_REPOSITORIES: ${{ github.repository }}
