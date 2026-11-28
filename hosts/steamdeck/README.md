@@ -24,7 +24,13 @@ ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck
 ## Secrets
 
 `beszel-agent.nix` decrypts `shared/beszel-agent-steamdeck.env.age` with the deck
-user's `~/.ssh/id_ed25519`, the `steamdeck-deck` recipient in `shared/secrets.nix`.
-bootstrap.sh creates that key if missing; on a new or reinstalled Deck, put its
-`~/.ssh/id_ed25519.pub` in `steamdeck-deck` and re-encrypt (`agenix -r`), or the
-agent fails to start.
+user's `~/.ssh/id_ed25519` (no passphrase: units read it unattended), the
+`steamdeck-deck` recipient in `shared/secrets.nix`. bootstrap.sh creates that key if
+missing. On a new or reinstalled Deck, or after replacing that key:
+
+1. put its `~/.ssh/id_ed25519.pub` in `steamdeck-deck`;
+2. re-encrypt (`agenix -r`) on a machine holding an existing recipient (the Mac);
+3. merge to main, then apply on the Deck: the hourly `nic-os-update` does it when on
+   AC, or `ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck`.
+
+Until then the agent fails to start.

@@ -26,6 +26,10 @@ fi
 
 # 2. Key-only SSH. The deck user's own key decrypts its agenix secrets (README).
 [ -f ~/.ssh/id_ed25519 ] || ssh-keygen -q -t ed25519 -N "" -C deck@steamdeck -f ~/.ssh/id_ed25519
+ssh-keygen -y -P "" -f ~/.ssh/id_ed25519 >/dev/null 2>&1 || {
+  echo "$HOME/.ssh/id_ed25519 has a passphrase: services can't decrypt with it (README, Secrets)" >&2
+  exit 1
+}
 # User units (beszel-agent, nic-os-update) run without a session.
 loginctl enable-linger deck
 install -d -m 700 ~/.ssh
