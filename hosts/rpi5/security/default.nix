@@ -3,9 +3,8 @@
   imports = [
     ./security-policy.nix
     ./agent-access.nix
-    ./sudo-totp.nix
+    ./sudo-password.nix
     ./sudo-ssh-agent.nix
-    ./shellwatch.nix
     ./pocket-id.nix
     ./death-plan-switch.nix
     ./vaultwarden.nix
