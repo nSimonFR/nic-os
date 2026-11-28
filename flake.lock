@@ -210,11 +210,11 @@
     "cyrus-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1795021178,
-        "narHash": "sha256-vRAXzd0v6nAACgG6aA16Qmw3t7gUIovKV0bAwN6qGaY=",
+        "lastModified": 1795540215,
+        "narHash": "sha256-CjB+8l/2PLtK2315igolOQiaUvSqxA7eGqoanIBtt6o=",
         "owner": "cyrusagents",
         "repo": "cyrus",
-        "rev": "4e2e513599fd4774ddcdbb6d6da2bbbde18e3517",
+        "rev": "da90887284cb8e301ab90c993485bfb94e2886ff",
         "type": "github"
       },
       "original": {
@@ -949,11 +949,11 @@
         "treefmt-nix": "treefmt-nix_2"
       },
       "locked": {
-        "lastModified": 1795495638,
-        "narHash": "sha256-hhROWq9062PdIznKMqiQuy3L9F7l4LHwofEVrcncfZM=",
+        "lastModified": 1795534330,
+        "narHash": "sha256-HUVg1F7c3btLD++JDjdTsSAwp50NvrciqTMFdCKEfAg=",
         "owner": "numtide",
         "repo": "llm-agents.nix",
-        "rev": "45e6e554481f962d4134021d3a63c96d8755f395",
+        "rev": "d70dfebdbd4616aa852fdb47c16588ec1ba8fc6f",
         "type": "github"
       },
       "original": {
@@ -1410,11 +1410,11 @@
     },
     "nixpkgs_8": {
       "locked": {
-        "lastModified": 1795481340,
-        "narHash": "sha256-m1DFhMq8Z+TrkWJ/lPndh5E+135OFVfohQ2d6JD+Ozs=",
+        "lastModified": 1795542479,
+        "narHash": "sha256-qpgUp3NpVDbB2o+rCo1JNFCgwBLv+ErHrBVtX13EAEo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "47369fd23e6779c9ee622c0775058ee9ce0f41a0",
+        "rev": "1da256fd14307dbff797a82fbd234bc5b483502e",
         "type": "github"
       },
       "original": {
@@ -1594,10 +1594,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1795467078,
-        "narHash": "sha256-3Q8RAtr2qBh/Kl0HvnTEhobkgm/ktPOVNmrLKWN3x9k=",
+        "lastModified": 1795542034,
+        "narHash": "sha256-msr2W5hA+hrPtjhU6m19YXDJte24R/C3cmUXmodbxzM=",
         "type": "tarball",
-        "url": "https://pkgs.superlogical.com/rex/nix/snapshot/0.1.0-snapshot.2531.tar.gz"
+        "url": "https://pkgs.superlogical.com/rex/nix/snapshot/0.1.0-snapshot.2562.tar.gz"
       },
       "original": {
         "type": "tarball",
@@ -2107,11 +2107,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1795434855,
-        "narHash": "sha256-R2BZyn0NAM3maHw1GfzEtHFpUPAuJyg4t8I6Dbuzsjg=",
+        "lastModified": 1795509874,
+        "narHash": "sha256-rGtp5IIchBAs1SL6UCWRpSJOGNnSwQwV0beeQcd8emc=",
         "owner": "0xc000022070",
         "repo": "zen-browser-flake",
-        "rev": "e2e4f8220406ce60d64395cfbf91e2189c894769",
+        "rev": "21385ea8b9e0c32b0962029b0836af2b621b7800",
         "type": "github"
       },
       "original": {
