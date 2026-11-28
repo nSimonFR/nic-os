@@ -171,7 +171,10 @@
       "mcp__aperture__calcom_reschedule_booking",
       "mcp__plugin_claude-code-home-manager_aperture__calcom_reschedule_booking"
     ],
-    "ask": [],
+    "ask": [
+      "mcp__aperture-send__execute",
+      "mcp__plugin_claude-code-home-manager_aperture-send__execute"
+    ],
     "defaultMode": "default",
     "additionalDirectories": [
       "/home/nsimon/.claude/projects",

@@ -26,6 +26,15 @@ let
     export CODEMODE_EXCLUDE=${lib.concatStringsSep "," (import ../shared/aperture-send-tools.nix)}
     exec ${lib.getExe pkgs.aperture-codemode}
   '';
+
+  # Code Mode limited to messaging_send_message: every `execute` is a send, so the `ask`
+  # rule in claude-settings.json shows its code (room and text) before anything goes out.
+  # The `aperture` server above keeps the send tools hidden.
+  apertureSend = pkgs.writeShellScriptBin "aperture-send" ''
+    export APERTURE_MCP_URL=${apertureUrl}/v1/mcp
+    export CODEMODE_INCLUDE=messaging_send_message
+    exec ${lib.getExe pkgs.aperture-codemode}
+  '';
 in
 {
   # Miro and GitHub come from the claude.ai connectors.
@@ -35,6 +44,10 @@ in
     aperture = {
       type = "stdio";
       command = lib.getExe apertureCodemode;
+    };
+    aperture-send = {
+      type = "stdio";
+      command = lib.getExe apertureSend;
     };
   };
 
