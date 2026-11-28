@@ -20,3 +20,11 @@ Later `home.nix` changes, from rpi5 or the Mac:
 ```sh
 ssh steamdeck home-manager switch --flake github:nSimonFR/nic-os#deck@steamdeck
 ```
+
+## Secrets
+
+`beszel-agent.nix` decrypts `shared/beszel-agent-steamdeck.env.age` with the deck
+user's `~/.ssh/id_ed25519`, the `steamdeck-deck` recipient in `shared/secrets.nix`.
+bootstrap.sh creates that key if missing; on a new or reinstalled Deck, put its
+`~/.ssh/id_ed25519.pub` in `steamdeck-deck` and re-encrypt (`agenix -r`), or the
+agent fails to start.
