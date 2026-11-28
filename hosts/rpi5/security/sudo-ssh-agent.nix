@@ -4,9 +4,9 @@
 # the Mac reverse-forwards its Bitwarden agent to a per-connection
 # `sudo-agent.<epoch>.sock` (hosts/nbookpro/sudo-agent-forward.nix) and
 # `mac-sudo cmd` points pam_rssh at the newest one. Plain `sudo` never asks
-# the Mac, so the phone's TOTP path (sudo-totp.nix) can't stall on a prompt
+# the Mac, so the password path (sudo-password.nix) can't stall on a prompt
 # nobody is there to answer; a refused or missing signature falls through to
-# TOTP.
+# the password.
 #
 # The tunnel comes in over Tailscale SSH, so tailscaled (root) owns the socket:
 # only root, i.e. pam_rssh, can reach the agent. Bitwarden must still ask on

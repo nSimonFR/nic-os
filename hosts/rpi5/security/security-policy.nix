@@ -21,16 +21,15 @@ let
 
   extra = allowed: ports: lib.subtractLists allowed ports;
 
-  # sudo may admit nsimon only on the root-only TOTP (sudo-totp.nix), optionally
-  # preceded by SSH-agent signatures checked against root-owned key files
-  # (sudo-ssh-agent.nix, then shellwatch.nix with UV required); then pam_deny,
-  # with no session cache.
+  # sudo may admit nsimon only on the Unix password, never an empty one
+  # (sudo-password.nix), optionally preceded by an SSH-agent signature checked
+  # against a root-owned key file (sudo-ssh-agent.nix); then pam_deny, with no
+  # session cache.
   sudoAuth = lib.filter (l: lib.hasPrefix "auth " l) (
     lib.splitString "\n" config.security.pam.services.sudo.text
   );
   rsshRule = "auth sufficient [^ ]*/libpam_rssh\\.so auth_key_file=/etc/ssh/sudo_keys/\\$ruser( #.*)?";
-  passkeyRule = "auth sufficient [^ ]*/pam_ssh_agent_webauthn\\.so file=/etc/ssh/sudo_passkeys verify_required=yes( #.*)?";
-  totpRule = "auth sufficient [^ ]*/pam_google_authenticator\\.so secret=/var/lib/sudo-totp/\\$\\{USER} user=root( #.*)?";
+  unixRule = "auth sufficient [^ ]*/pam_unix\\.so likeauth try_first_pass( #.*)?";
   denyRule = "auth required [^ ]*/pam_deny\\.so( #.*)?";
   matches =
     rules:
@@ -39,18 +38,12 @@ let
   sudoHumanOnly =
     (
       matches [
-        totpRule
+        unixRule
         denyRule
       ]
       || matches [
         rsshRule
-        totpRule
-        denyRule
-      ]
-      || matches [
-        rsshRule
-        passkeyRule
-        totpRule
+        unixRule
         denyRule
       ]
     )
@@ -118,7 +111,7 @@ in
       message = "security-policy: root must have no SSH authorized keys.";
     }
     # Agents run as nsimon and Agent Vault's keys are root-only, so nsimon must
-    # have no path to root but a TOTP code or Mac-approved signature from the user.
+    # have no path to root but the user's password or a Mac-approved signature.
     {
       # extraRules always holds NixOS's own %wheel rule, so look for nsimon by name.
       assertion =
@@ -130,7 +123,7 @@ in
         );
       message =
         "security-policy: nsimon must not be in wheel or a trusted nix user, and may be in "
-        + "a sudo rule only behind sudo-totp.nix (and sudo-ssh-agent.nix, shellwatch.nix) with no session cache.";
+        + "a sudo rule only behind sudo-password.nix (and sudo-ssh-agent.nix) with no session cache.";
     }
   ];
 }

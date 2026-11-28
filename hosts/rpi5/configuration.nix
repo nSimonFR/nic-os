@@ -300,6 +300,7 @@ in
   };
 
   environment.systemPackages = with pkgs; [
+    nicos-scripts # hand-run CLIs (immich-adopt, sure-derive-rules, …)
     vim
     wget
     usbutils
